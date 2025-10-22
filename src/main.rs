@@ -6,7 +6,8 @@ mod config;
 mod gameplay;
 mod assets;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     config::load();
     gameplay::profile::load();
     if let Err(e) = core::audio::init() {
@@ -15,5 +16,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     core::network::init();
     // env_logger is initialized in app::run()
-    app::run()
+    app::run().await
 }
