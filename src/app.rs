@@ -683,7 +683,7 @@ impl ApplicationHandler for App {
                     self.metrics = space::metrics_for_window(new_size.width, new_size.height);
                     space::set_current_metrics(self.metrics);
                     if let Some(backend) = &mut self.backend {
-                        renderer::resize(backend, new_size.width, new_size.height);
+                        backend.resize(new_size.width, new_size.height);
                     }
                 }
             }
@@ -968,7 +968,7 @@ impl ApplicationHandler for App {
                 self.update_fps_title(&window, now);
 
                 if let Some(backend) = &mut self.backend {
-                    match renderer::draw(backend, &screen, &self.asset_manager.textures) {
+                    match backend.draw(&screen, &self.asset_manager.textures) {
                         Ok(vpf) => self.current_frame_vpf = vpf,
                         Err(e) => {
                             error!("Failed to draw frame: {}", e);
@@ -993,8 +993,8 @@ impl ApplicationHandler for App {
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
         if let Some(backend) = &mut self.backend {
             self.asset_manager.destroy_dynamic_assets(backend);
-            renderer::dispose_textures(backend, &mut self.asset_manager.textures);
-            renderer::cleanup(backend);
+            backend.dispose_textures(&mut self.asset_manager.textures);
+            backend.cleanup();
         }
     }
 }

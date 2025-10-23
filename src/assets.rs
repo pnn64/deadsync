@@ -1,4 +1,4 @@
-use crate::core::gfx::{self as renderer, Backend, Texture as GfxTexture};
+use crate::core::gfx::{Backend, Texture as GfxTexture};
 use crate::ui::font::{self, Font, FontLoadData};
 use image::RgbaImage;
 use log::{info, warn};
@@ -163,7 +163,7 @@ impl AssetManager {
 
         // Load __white texture
         let white_img = RgbaImage::from_raw(1, 1, vec![255, 255, 255, 255]).unwrap();
-        let white_tex = renderer::create_texture(backend, &white_img)?;
+        let white_tex = backend.create_texture(&white_img)?;
         self.textures.insert("__white".to_string(), white_tex);
         register_texture_dims("__white", 1, 1);
         info!("Loaded built-in texture: __white");
@@ -205,14 +205,14 @@ impl AssetManager {
         for h in handles {
             match h.join().expect("texture decode thread panicked") {
                 Ok((key, rgba)) => {
-                    let texture = renderer::create_texture(backend, &rgba)?;
+                    let texture = backend.create_texture(&rgba)?;
                     self.textures.insert(key.to_string(), texture);
                     register_texture_dims(key, rgba.width(), rgba.height());
                     info!("Loaded texture: {}", key);
                 }
                 Err((key, msg)) => {
                     warn!("Failed to load texture for key '{}': {}. Using fallback.", key, msg);
-                    let texture = renderer::create_texture(backend, &fallback_image)?;
+                    let texture = backend.create_texture(&fallback_image)?;
                     self.textures.insert(key.to_string(), texture);
                     register_texture_dims(key, fallback_image.width(), fallback_image.height());
                 }
@@ -252,7 +252,7 @@ impl AssetManager {
                 let key = canonical_texture_key(tex_path);
                 if !self.textures.contains_key(&key) {
                     let image_data = image::open(tex_path)?.to_rgba8();
-                    let texture = renderer::create_texture(backend, &image_data)?;
+                    let texture = backend.create_texture(&image_data)?;
                     register_texture_dims(&key, image_data.width(), image_data.height());
                     self.textures.insert(key.clone(), texture);
                     info!("Loaded font texture: {}", key);
@@ -264,26 +264,14 @@ impl AssetManager {
         Ok(())
     }
 
-    // --- Dynamic Asset Management (moved from app.rs) ---
+    // --- Dynamic Asset Management ---
 
     pub fn destroy_dynamic_assets(&mut self, backend: &mut Backend) {
-        if let Some((key, _)) = self.current_dynamic_banner.take() {
-            if let Backend::Vulkan(vk_state) = backend {
-                if let Some(device) = &vk_state.device { unsafe { let _ = device.device_wait_idle(); } }
-            }
-            self.textures.remove(&key);
-        }
-        if let Some((key, _)) = self.current_density_graph.take() {
-            if let Backend::Vulkan(vk_state) = backend {
-                if let Some(device) = &vk_state.device { unsafe { let _ = device.device_wait_idle(); } }
-            }
-            self.textures.remove(&key);
-        }
-        if let Some((key, _)) = self.current_dynamic_background.take() {
-            if let Backend::Vulkan(vk_state) = backend {
-                if let Some(device) = &vk_state.device { unsafe { let _ = device.device_wait_idle(); } }
-            }
-            self.textures.remove(&key);
+        if self.current_dynamic_banner.is_some() || self.current_density_graph.is_some() || self.current_dynamic_background.is_some() {
+            backend.wait_for_idle(); // Wait for GPU to finish using old textures
+            if let Some((key, _)) = self.current_dynamic_banner.take() { self.textures.remove(&key); }
+            if let Some((key, _)) = self.current_density_graph.take() { self.textures.remove(&key); }
+            if let Some((key, _)) = self.current_dynamic_background.take() { self.textures.remove(&key); }
         }
     }
 
@@ -298,7 +286,7 @@ impl AssetManager {
             match image::open(&path) {
                 Ok(img) => {
                     let rgba = img.to_rgba8();
-                    match renderer::create_texture(backend, &rgba) {
+                    match backend.create_texture(&rgba) {
                         Ok(texture) => {
                             let key = path.to_string_lossy().into_owned();
                             self.textures.insert(key.clone(), texture);
@@ -331,7 +319,6 @@ impl AssetManager {
         const FALLBACK_KEY: &str = "__white";
 
         if let Some((key, graph_data)) = data {
-            // The cache check key is the second item in the tuple.
             if self.current_density_graph.as_ref().map_or(false, |(_, cache_key)| cache_key == &key) {
                 return self.current_density_graph.as_ref().unwrap().0.clone();
             }
@@ -346,9 +333,8 @@ impl AssetManager {
                 }
             };
 
-            match renderer::create_texture(backend, &rgba_image) {
+            match backend.create_texture(&rgba_image) {
                 Ok(texture) => {
-                    // The texture key is the same as the cache key.
                     self.textures.insert(key.clone(), texture);
                     register_texture_dims(&key, rgba_image.width(), rgba_image.height());
                     self.current_density_graph = Some((key.clone(), key.clone()));
@@ -378,7 +364,7 @@ impl AssetManager {
             match image::open(&path) {
                 Ok(img) => {
                     let rgba = img.to_rgba8();
-                    match renderer::create_texture(backend, &rgba) {
+                    match backend.create_texture(&rgba) {
                         Ok(texture) => {
                             let key = path.to_string_lossy().into_owned();
                             self.textures.insert(key.clone(), texture);
@@ -405,27 +391,21 @@ impl AssetManager {
 
     fn destroy_current_dynamic_banner(&mut self, backend: &mut Backend) {
         if let Some((key, _)) = self.current_dynamic_banner.take() {
-            if let Backend::Vulkan(vk_state) = backend {
-                if let Some(device) = &vk_state.device { unsafe { let _ = device.device_wait_idle(); } }
-            }
+            backend.wait_for_idle();
             self.textures.remove(&key);
         }
     }
 
     fn destroy_current_density_graph(&mut self, backend: &mut Backend) {
         if let Some((key, _)) = self.current_density_graph.take() {
-            if let Backend::Vulkan(vk_state) = backend {
-                if let Some(device) = &vk_state.device { unsafe { let _ = device.device_wait_idle(); } }
-            }
+            backend.wait_for_idle();
             self.textures.remove(&key);
         }
     }
 
     fn destroy_current_dynamic_background(&mut self, backend: &mut Backend) {
         if let Some((key, _)) = self.current_dynamic_background.take() {
-            if let Backend::Vulkan(vk_state) = backend {
-                if let Some(device) = &vk_state.device { unsafe { let _ = device.device_wait_idle(); } }
-            }
+            backend.wait_for_idle();
             self.textures.remove(&key);
         }
     }
