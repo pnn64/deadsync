@@ -2,19 +2,22 @@ use crate::gameplay::{
     chart::ChartData,
     song::{set_song_cache, SongData, SongPack},
 };
-use log::{info, warn};
+use log::{info, trace, warn};
 use rssp::{analyze, AnalysisOptions};
-use std::fs;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::fs;
+use tokio::io::AsyncReadExt;
 
-use serde::{Deserialize, Serialize};
-use std::io::{Read, Write};
-use twox_hash::XxHash64;
-use std::hash::Hasher;
 use bincode::{Decode, Encode};
+use futures::{future::BoxFuture, stream, StreamExt};
+use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::hash::Hasher;
+use twox_hash::XxHash64;
 
-// --- SERIALIZABLE MIRROR STRUCTS ---
+// --- SERIALIZABLE MIRROR STRUCTS (Unchanged) ---
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 struct CachedArrowStats {
@@ -253,15 +256,14 @@ struct CachedSong {
     data: SerializableSongData,
 }
 
-// --- CACHING HELPER FUNCTIONS ---
+// --- ASYNC HELPERS ---
 
-fn get_content_hash(path: &Path) -> Result<u64, std::io::Error> {
-    let mut file = fs::File::open(path)?;
+async fn get_content_hash(path: &Path) -> Result<u64, std::io::Error> {
+    let mut file = fs::File::open(path).await?;
     let mut hasher = XxHash64::with_seed(0);
-    // Using a buffer is much more memory-efficient than reading the whole file at once.
     let mut buffer = [0; 8192];
     loop {
-        let bytes_read = file.read(&mut buffer)?;
+        let bytes_read = file.read(&mut buffer).await?;
         if bytes_read == 0 {
             break;
         }
@@ -271,7 +273,7 @@ fn get_content_hash(path: &Path) -> Result<u64, std::io::Error> {
 }
 
 fn get_cache_path(simfile_path: &Path) -> Result<PathBuf, std::io::Error> {
-    let canonical_path = simfile_path.canonicalize()?;
+    let canonical_path = std::fs::canonicalize(simfile_path)?;
     let mut hasher = XxHash64::with_seed(0);
     hasher.write(canonical_path.to_string_lossy().as_bytes());
     let path_hash = hasher.finish();
@@ -281,190 +283,214 @@ fn get_cache_path(simfile_path: &Path) -> Result<PathBuf, std::io::Error> {
     Ok(cache_dir.join(file_name))
 }
 
+fn find_simfiles_recursive<'a>(
+    dir: PathBuf,
+    simfiles: &'a mut Vec<PathBuf>,
+) -> BoxFuture<'a, ()> {
+    Box::pin(async move {
+        let mut read_dir = match fs::read_dir(dir).await {
+            Ok(rd) => rd,
+            Err(_) => return,
+        };
 
-/// Scans the provided root directory (e.g., "songs/") for simfiles,
-/// parses them, and populates the global cache. This should be run once at startup.
-pub fn scan_and_load_songs(root_path_str: &'static str) {
-    info!("Starting simfile scan in '{}'...", root_path_str);
+        while let Some(entry) = read_dir.next_entry().await.ok().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                find_simfiles_recursive(path, simfiles).await;
+            } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                if ext.eq_ignore_ascii_case("sm") || ext.eq_ignore_ascii_case("ssc") {
+                    simfiles.push(path);
+                }
+            }
+        }
+    })
+}
 
+/// The result of the asynchronous I/O phase for a single simfile.
+enum LoadAttempt {
+    Cached(SongData),
+    NeedsParsing {
+        path: PathBuf,
+        content: Vec<u8>,
+        content_hash: u64,
+    },
+    Error(String),
+}
+
+/// Phase 1: Asynchronously check cache or read file content for parsing.
+async fn load_or_prepare_parse(path: PathBuf, fastload: bool) -> LoadAttempt {
+    if !fastload {
+        return match fs::read(&path).await {
+            Ok(content) => {
+                let content_hash = get_content_hash(&path).await.unwrap_or(0);
+                LoadAttempt::NeedsParsing { path, content, content_hash }
+            }
+            Err(e) => LoadAttempt::Error(format!("Failed to read file {:?}: {}", path, e)),
+        };
+    }
+
+    let cache_path_res = get_cache_path(&path);
+    let content_hash_res = get_content_hash(&path).await;
+
+    if let (Ok(cp), Ok(ch)) = (&cache_path_res, &content_hash_res) {
+        if let Ok(cache_bytes) = fs::read(cp).await {
+            // Decoding can be slow, move to a blocking thread.
+            let cached_song_res = tokio::task::spawn_blocking(move || {
+                bincode::decode_from_slice::<CachedSong, _>(&cache_bytes, bincode::config::standard())
+            }).await;
+
+            if let Ok(Ok((cached_song, _))) = cached_song_res {
+                if cached_song.source_hash == *ch {
+                    return LoadAttempt::Cached(cached_song.data.into());
+                }
+            }
+        }
+    }
+
+    // Cache miss or error, read the file for parsing.
+    match fs::read(&path).await {
+        Ok(content) => {
+            let content_hash = content_hash_res.unwrap_or(0);
+            LoadAttempt::NeedsParsing { path, content, content_hash }
+        }
+        Err(e) => LoadAttempt::Error(format!("Failed to read file {:?}: {}", path, e)),
+    }
+}
+
+pub async fn scan_and_load_songs(root_path_str: &'static str) {
+    info!("Starting async simfile scan in '{}'...", root_path_str);
+    let start_time = std::time::Instant::now();
     let config = crate::config::get();
 
-    // Ensure the cache directory exists before we start scanning.
+    // Setup cache dir
     let cache_dir = Path::new("cache/songs");
-    if let Err(e) = fs::create_dir_all(cache_dir) {
+    if let Err(e) = fs::create_dir_all(cache_dir).await {
         warn!("Could not create cache directory '{}': {}. Caching will be disabled.", cache_dir.to_string_lossy(), e);
     }
 
+    // Find all simfiles
     let root_path = Path::new(root_path_str);
-    if !root_path.exists() || !root_path.is_dir() {
+    if !root_path.exists() {
         warn!("Songs directory '{}' not found. No songs will be loaded.", root_path_str);
         return;
     }
+    let mut all_simfile_paths = Vec::new();
+    find_simfiles_recursive(root_path.to_path_buf(), &mut all_simfile_paths).await;
+    info!("Found {} potential simfiles. Starting concurrent I/O phase...", all_simfile_paths.len());
 
-    let mut loaded_packs = Vec::new();
+    // --- Phase 1: Concurrent I/O (Cache check / File read) ---
+    let io_results: Vec<LoadAttempt> = stream::iter(all_simfile_paths)
+        .map(|path| load_or_prepare_parse(path, config.fastload))
+        .buffer_unordered(256) // High concurrency for I/O
+        .collect()
+        .await;
 
-    // Each directory inside the root is considered a "pack"
-    for pack_dir_entry in fs::read_dir(root_path).into_iter().flatten().flatten() {
-        let pack_path = pack_dir_entry.path();
-        if !pack_path.is_dir() {
-            continue;
+    let mut songs_from_cache: Vec<Arc<SongData>> = Vec::new();
+    let mut to_be_parsed = Vec::new();
+    for result in io_results {
+        match result {
+            LoadAttempt::Cached(song) => songs_from_cache.push(Arc::new(song)),
+            LoadAttempt::NeedsParsing { path, content, content_hash } => to_be_parsed.push((path, content, content_hash)),
+            LoadAttempt::Error(e) => warn!("{}", e),
         }
+    }
+    info!("I/O phase complete. {} songs loaded from cache, {} need parsing.", songs_from_cache.len(), to_be_parsed.len());
 
-        let pack_name = pack_path.file_name().unwrap_or_default().to_string_lossy().to_string();
-        let mut current_pack = SongPack { name: pack_name, songs: Vec::new() };
-        info!("Scanning pack: {}", current_pack.name);
-
-        // Each subdirectory in a pack is a song folder
-        for song_dir_entry in fs::read_dir(pack_path).into_iter().flatten().flatten() {
-            let song_path = song_dir_entry.path();
-            if !song_path.is_dir() {
-                continue;
-            }
-
-            // Find the .sm or .ssc file within the song folder
-            if let Ok(files) = fs::read_dir(&song_path) {
-                for file in files.flatten() {
-                    let file_path = file.path();
-                    if let Some(ext) = file_path.extension().and_then(|s| s.to_str()) {
-                        if ext.eq_ignore_ascii_case("sm") || ext.eq_ignore_ascii_case("ssc") {
-                            match load_song_from_file(&file_path, config.fastload, config.cachesongs) {
-                                Ok(song_data) => {
-                                    current_pack.songs.push(Arc::new(song_data));
+    // --- Phase 2: Parallel CPU Processing (Parsing & Caching) ---
+    let newly_parsed_songs = if !to_be_parsed.is_empty() {
+        tokio::task::spawn_blocking(move || {
+            to_be_parsed
+                .par_iter()
+                .filter_map(|(path, content, content_hash)| {
+                    match parse_and_process_song_file_sync(path, content) {
+                        Ok(song_data) => {
+                            if config.cachesongs {
+                                if let Ok(cp) = get_cache_path(path) {
+                                    let serializable_data: SerializableSongData = (&song_data).into();
+                                    let cached_song = CachedSong { source_hash: *content_hash, data: serializable_data };
+                                    if let Ok(encoded) = bincode::encode_to_vec(&cached_song, bincode::config::standard()) {
+                                        if let Err(e) = std::fs::write(cp, &encoded) {
+                                            warn!("Failed to write cache file: {}", e);
+                                        }
+                                    }
                                 }
-                                Err(e) => warn!("Failed to load '{:?}': {}", file_path, e),
                             }
-                            // Found the simfile, move to the next song directory
-                            break;
+                            Some(song_data)
+                        }
+                        Err(e) => {
+                            warn!("Failed to parse '{:?}': {}", path, e);
+                            None
                         }
                     }
+                })
+                .collect::<Vec<SongData>>()
+        })
+        .await
+        .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    info!("CPU phase complete. {} new songs parsed.", newly_parsed_songs.len());
+
+    // --- Phase 3: Combine & Finalize ---
+    let mut all_loaded_songs: Vec<Arc<SongData>> = songs_from_cache;
+    all_loaded_songs.extend(newly_parsed_songs.into_iter().map(Arc::new));
+
+    let mut packs_map: HashMap<PathBuf, Vec<Arc<SongData>>> = HashMap::new();
+    for song in all_loaded_songs {
+        if let Some(music_path) = &song.music_path {
+            if let Some(song_dir) = music_path.parent() {
+                if let Some(pack_dir) = song_dir.parent() {
+                    packs_map.entry(pack_dir.to_path_buf()).or_default().push(song.clone());
                 }
             }
-        }
-
-        if !current_pack.songs.is_empty() {
-            // Sort songs within the pack with a more natural order, grouping songs
-            // that start with non-alphanumeric characters (like '[Marathon]') at the end.
-            current_pack.songs.sort_by(|a, b| {
-                let a_title = a.title.to_lowercase();
-                let b_title = b.title.to_lowercase();
-
-                let a_first_char = a_title.chars().next();
-                let b_first_char = b_title.chars().next();
-
-                // Treat a title as "special" if it starts with a non-alphanumeric character.
-                let a_is_special = a_first_char.map_or(false, |c| !c.is_alphanumeric());
-                let b_is_special = b_first_char.map_or(false, |c| !c.is_alphanumeric());
-
-                if a_is_special == b_is_special {
-                    // If both are special or both are not, sort them alphabetically.
-                    a_title.cmp(&b_title)
-                } else if a_is_special {
-                    // `a` is special and `b` is not, so `b` should come first.
-                    std::cmp::Ordering::Greater
-                } else {
-                    // `b` is special and `a` is not, so `a` should come first.
-                    std::cmp::Ordering::Less
-                }
-            });
-            loaded_packs.push(current_pack);
         }
     }
 
-    // Sort the packs themselves alphabetically by name for consistent ordering.
+    let mut loaded_packs: Vec<SongPack> = packs_map
+        .into_iter()
+        .map(|(pack_path, mut songs)| {
+            songs.sort_by(|a, b| {
+                let a_title = a.title.to_lowercase();
+                let b_title = b.title.to_lowercase();
+                let a_is_special = a_title.chars().next().map_or(false, |c| !c.is_alphanumeric());
+                let b_is_special = b_title.chars().next().map_or(false, |c| !c.is_alphanumeric());
+
+                if a_is_special == b_is_special { a_title.cmp(&b_title) } 
+                else if a_is_special { std::cmp::Ordering::Greater } 
+                else { std::cmp::Ordering::Less }
+            });
+            SongPack {
+                name: pack_path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+                songs,
+            }
+        })
+        .collect();
+    
     loaded_packs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
 
-    info!("Finished scan. Found {} packs.", loaded_packs.len());
+    info!(
+        "Finished full scan in {:.2}s. Loaded {} packs.",
+        start_time.elapsed().as_secs_f32(),
+        loaded_packs.len()
+    );
     set_song_cache(loaded_packs);
 }
 
-/// Helper function to parse a single simfile, using a cache if available and valid.
-fn load_song_from_file(path: &Path, fastload: bool, cachesongs: bool) -> Result<SongData, String> {
-    let cache_path = match get_cache_path(path) {
-        Ok(p) => Some(p),
-        Err(e) => {
-            warn!("Could not generate cache path for {:?}: {}. Caching disabled for this file.", path, e);
-            None
-        }
-    };
-
-    let content_hash = match get_content_hash(path) {
-        Ok(h) => Some(h),
-        Err(e) => {
-            warn!("Could not hash content of {:?}: {}. Caching disabled for this file.", path, e);
-            None
-        }
-    };
-
-    // --- CACHE CHECK ---
-    if fastload {
-        if let (Some(cp), Some(ch)) = (cache_path.as_ref(), content_hash) {
-            if cp.exists() {
-                if let Ok(mut file) = fs::File::open(cp) {
-                    let mut buffer = Vec::new();
-                    if file.read_to_end(&mut buffer).is_ok() {
-                        if let Ok((cached_song, _)) = bincode::decode_from_slice::<CachedSong, _>(&buffer, bincode::config::standard()) {
-                            if cached_song.source_hash == ch {
-                                info!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
-                                return Ok(cached_song.data.into());
-                            } else {
-                                info!("Cache stale for: {:?}", path.file_name().unwrap_or_default());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // --- CACHE MISS: PARSE AND WRITE ---
-    if fastload {
-        info!("Cache miss for: {:?}", path.file_name().unwrap_or_default());
-    } else {
-        info!("Parsing (fastload disabled): {:?}", path.file_name().unwrap_or_default());
-    }
-    let song_data = parse_and_process_song_file(path)?;
-
-    if cachesongs {
-        if let (Some(cp), Some(ch)) = (cache_path, content_hash) {
-            let serializable_data: SerializableSongData = (&song_data).into();
-            let cached_song = CachedSong {
-                source_hash: ch,
-                data: serializable_data,
-            };
-            
-            if let Ok(encoded) = bincode::encode_to_vec(&cached_song, bincode::config::standard()) {
-                if let Ok(mut file) = fs::File::create(&cp) {
-                    if file.write_all(&encoded).is_err() {
-                        warn!("Failed to write cache file for {:?}", cp);
-                    }
-                } else {
-                     warn!("Failed to create cache file for {:?}", cp);
-                }
-            }
-        }
-    }
-
-    Ok(song_data)
-}
-
-
-/// The original parsing logic, now separated to be called on a cache miss.
-fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
-    let simfile_data = fs::read(path).map_err(|e| format!("Could not read file: {}", e))?;
+/// Synchronous version of the parsing logic, designed to be run in `spawn_blocking`.
+fn parse_and_process_song_file_sync(path: &Path, simfile_data: &[u8]) -> Result<SongData, String> {
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    let options = AnalysisOptions::default(); // Use default parsing options
+    let options = AnalysisOptions::default();
 
-    let summary = analyze(&simfile_data, extension, options)?;
+    let summary = analyze(simfile_data, extension, options)?;
 
     let charts: Vec<ChartData> = summary
         .charts
         .into_iter()
         .map(|c| {
-            info!(
+            trace!(
                 "  Chart '{}' [{}] loaded with {} bytes of note data.",
-                c.difficulty_str,
-                c.rating_str,
-                c.minimized_note_data.len()
+                c.difficulty_str, c.rating_str, c.minimized_note_data.len()
             );
             ChartData {
                 chart_type: c.step_type_str,
@@ -488,7 +514,6 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
 
     let simfile_dir = path.parent().ok_or_else(|| "Could not determine simfile directory".to_string())?;
 
-    // --- Background Path Logic (with autodetection) ---
     let mut background_path_opt: Option<PathBuf> = if !summary.background_path.is_empty() {
         let p = simfile_dir.join(&summary.background_path);
         if p.exists() { Some(p) } else { None }
@@ -497,8 +522,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
     };
 
     if background_path_opt.is_none() {
-        info!("'{}' - BG path is missing or empty, attempting autodetection.", summary.title_str);
-        if let Ok(entries) = fs::read_dir(simfile_dir) {
+        if let Ok(entries) = std::fs::read_dir(simfile_dir) {
             let image_files: Vec<PathBuf> = entries
                 .filter_map(Result::ok)
                 .map(|e| e.path())
@@ -511,8 +535,6 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
                 .collect();
             
             let mut found_bg: Option<String> = None;
-
-            // Hint-based search first
             for file in &image_files {
                 if let Some(file_name) = file.file_name().and_then(|s| s.to_str()) {
                     let file_name_lower = file_name.to_lowercase();
@@ -523,14 +545,13 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
                 }
             }
 
-            // Dimension-based search if no hint match
             if found_bg.is_none() {
                 for file in &image_files {
                     if let Some(file_name) = file.file_name().and_then(|s| s.to_str()) {
                          if let Ok((w, h)) = image::image_dimensions(file) {
                              if w >= 320 && h >= 240 {
                                 let aspect = if h > 0 { w as f32 / h as f32 } else { 0.0 };
-                                if aspect < 2.0 { // Banners are usually wider than 2:1
+                                if aspect < 2.0 {
                                     found_bg = Some(file_name.to_string());
                                     break;
                                 }
@@ -541,7 +562,6 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
             }
             
             if let Some(bg_filename) = found_bg {
-                info!("Autodetected background: '{}'", bg_filename);
                 background_path_opt = Some(simfile_dir.join(bg_filename));
             }
         }
@@ -564,7 +584,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
         title: summary.title_str,
         subtitle: summary.subtitle_str,
         artist: summary.artist_str,
-        banner_path, // Keep original logic for banner
+        banner_path,
         background_path: background_path_opt,
         offset: summary.offset as f32,
         sample_start: if summary.sample_start > 0.0 { Some(summary.sample_start as f32) } else { None },

@@ -999,7 +999,7 @@ impl ApplicationHandler for App {
     }
 }
 
-pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let _ = env_logger::builder().filter_level(log::LevelFilter::Info).try_init();
     let config = crate::config::get();
     let backend_type = config.video_renderer;
@@ -1008,7 +1008,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let show_stats = config.show_stats;
     let color_index = config.simply_love_color;
 
-    song_loading::scan_and_load_songs("songs");
+    song_loading::scan_and_load_songs("songs").await;
     let event_loop = EventLoop::new()?;
     let mut app = App::new(backend_type, vsync_enabled, fullscreen_enabled, show_stats, color_index);
     event_loop.run_app(&mut app)?;
