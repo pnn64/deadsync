@@ -29,6 +29,7 @@ use crate::assets::AssetManager;
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::chart::ChartData;
+use rssp::bpm::parse_bpm_map;
 
 
 /* ---------------------------- transitions ---------------------------- */
@@ -47,6 +48,125 @@ const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(200);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(40);
 const PREVIEW_DELAY_SECONDS: f32 = 0.25;
 const PREVIEW_FADE_OUT_SECONDS: f64 = 1.5;
+const DEFAULT_PREVIEW_LENGTH: f64 = 12.0; // ITGmania default when unspecified
+
+// --- Preview helpers (mirror ITGmania behavior for missing/zero values) ---
+fn sec_at_beat_from_bpms(normalized_bpms: &str, target_beat: f64) -> f64 {
+    if !target_beat.is_finite() || target_beat <= 0.0 {
+        return 0.0;
+    }
+    let mut bpm_map = parse_bpm_map(normalized_bpms);
+    if bpm_map.is_empty() {
+        bpm_map.push((0.0, 120.0));
+    }
+    if bpm_map.first().map_or(true, |(b, _)| *b != 0.0) {
+        let first_bpm = bpm_map[0].1;
+        bpm_map.insert(0, (0.0, first_bpm));
+    }
+    let mut time = 0.0;
+    let mut last_beat = 0.0;
+    let mut last_bpm = bpm_map[0].1;
+    for &(beat, bpm) in &bpm_map {
+        if target_beat <= beat {
+            // target lies before this change
+            let delta_beats = (target_beat - last_beat).max(0.0);
+            if last_bpm > 0.0 { time += (delta_beats * 60.0) / last_bpm; }
+            return time.max(0.0);
+        }
+        // advance fully to this change
+        if beat > last_beat && last_bpm > 0.0 {
+            time += ((beat - last_beat) * 60.0) / last_bpm;
+        }
+        last_beat = beat;
+        last_bpm = bpm;
+    }
+    // past last change
+    if last_bpm > 0.0 {
+        time += ((target_beat - last_beat).max(0.0) * 60.0) / last_bpm;
+    }
+    time.max(0.0)
+}
+
+fn beat_at_sec_from_bpms(normalized_bpms: &str, target_sec: f64) -> f64 {
+    if !target_sec.is_finite() || target_sec <= 0.0 {
+        return 0.0;
+    }
+    let mut bpm_map = parse_bpm_map(normalized_bpms);
+    if bpm_map.is_empty() {
+        bpm_map.push((0.0, 120.0));
+    }
+    if bpm_map.first().map_or(true, |(b, _)| *b != 0.0) {
+        let first_bpm = bpm_map[0].1;
+        bpm_map.insert(0, (0.0, first_bpm));
+    }
+    let mut elapsed = 0.0;
+    let mut last_beat = 0.0;
+    let mut last_bpm = bpm_map[0].1;
+    for &(beat, bpm) in &bpm_map {
+        let delta_beats = (beat - last_beat).max(0.0);
+        let delta_sec = if last_bpm > 0.0 { (delta_beats * 60.0) / last_bpm } else { 0.0 };
+        if elapsed + delta_sec >= target_sec {
+            let remain = (target_sec - elapsed).max(0.0);
+            let add_beats = if last_bpm > 0.0 { remain * last_bpm / 60.0 } else { 0.0 };
+            return (last_beat + add_beats).max(0.0);
+        }
+        elapsed += delta_sec;
+        last_beat = beat;
+        last_bpm = bpm;
+    }
+    // beyond last change; continue with last BPM
+    let remain = (target_sec - elapsed).max(0.0);
+    let add_beats = if last_bpm > 0.0 { remain * last_bpm / 60.0 } else { 0.0 };
+    (last_beat + add_beats).max(0.0)
+}
+
+fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cut)> {
+    let path = song.music_path.clone()?;
+    // Start with raw tags (treat missing as 0)
+    let mut start = song.sample_start.unwrap_or(0.0) as f64;
+    let mut length = song.sample_length.unwrap_or(0.0) as f64;
+    let total_len = song.total_length_seconds.max(0) as f64;
+
+    // If length is not valid, mirror ITGmania defaults
+    if !(length.is_sign_positive() && length.is_finite()) || length == 0.0 {
+        // First try beat 100
+        let at_beat_100 = sec_at_beat_from_bpms(&song.normalized_bpms, 100.0);
+        // If that would overflow the track, back off to a sensible aligned point
+        start = if total_len > 0.0 && at_beat_100 + DEFAULT_PREVIEW_LENGTH > total_len {
+            let last_beat = beat_at_sec_from_bpms(&song.normalized_bpms, total_len);
+            // Round to half of last beat, align to 4-beat boundary
+            let mut i_beat = (last_beat / 2.0).round();
+            if i_beat.is_finite() {
+                // align down to multiple of 4
+                i_beat -= i_beat % 4.0;
+            } else {
+                i_beat = 0.0;
+            }
+            sec_at_beat_from_bpms(&song.normalized_bpms, i_beat)
+        } else {
+            at_beat_100
+        };
+        length = DEFAULT_PREVIEW_LENGTH;
+    } else {
+        // Length is valid; if start+length overflows total, adjust start similar to ITGmania
+        if total_len > 0.0 && (start + length) > total_len {
+            let last_beat = beat_at_sec_from_bpms(&song.normalized_bpms, total_len);
+            let mut i_beat = (last_beat / 2.0).round();
+            if i_beat.is_finite() {
+                i_beat -= i_beat % 4.0;
+            } else {
+                i_beat = 0.0;
+            }
+            start = sec_at_beat_from_bpms(&song.normalized_bpms, i_beat);
+        }
+    }
+
+    if !start.is_finite() || start < 0.0 { start = 0.0; }
+    if !length.is_finite() || length <= 0.0 { length = DEFAULT_PREVIEW_LENGTH; }
+
+    let cut = audio::Cut { start_sec: start, length_sec: length, fade_out_sec: PREVIEW_FADE_OUT_SECONDS, ..Default::default() };
+    Some((path, cut))
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum NavDirection { Left, Right }
@@ -649,23 +769,16 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.currently_playing_preview_path = music_path_for_preview;
             let mut played = false;
             if let Some(song) = &selected_song {
-                if let (Some(path), Some(start), Some(length)) = (&song.music_path, song.sample_start, song.sample_length) {
-                    if length > 0.0 {
-                        info!("Playing preview for '{}' at {:.2}s for {:.2}s", song.title, start, length);
-                        let cut = audio::Cut {
-                            start_sec: start as f64,
-                            length_sec: length as f64,
-                            fade_out_sec: PREVIEW_FADE_OUT_SECONDS,
-                            ..Default::default()
-                        };
-                        audio::play_music(path.clone(), cut, true);
-                        played = true;
-                    }
+                if let Some((path, cut)) = compute_preview_cut(song) {
+                    info!(
+                        "Playing preview for '{}' at {:.2}s for {:.2}s",
+                        song.title, cut.start_sec, cut.length_sec
+                    );
+                    audio::play_music(path, cut, true);
+                    played = true;
                 }
             }
-            if !played {
-                audio::stop_music();
-            }
+            if !played { audio::stop_music(); }
         }
         
         // Update displayed chart for UI and Graph
