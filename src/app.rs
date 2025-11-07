@@ -783,6 +783,16 @@ impl ApplicationHandler for App {
                         if *elapsed >= FADE_OUT_DURATION {
                             let prev = self.current_screen;
                             self.current_screen = *target;
+                            // Only SelectColor has looping BGM; stop elsewhere
+                            if *target == CurrentScreen::SelectColor {
+                                crate::core::audio::play_music(
+                                    std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
+                                    crate::core::audio::Cut::default(),
+                                    true,
+                                );
+                            } else {
+                                crate::core::audio::stop_music();
+                            }
 
                             if *target == CurrentScreen::Menu {
                                 let current_color_index = self.menu_state.active_color_index;
@@ -907,6 +917,16 @@ impl ApplicationHandler for App {
                 if let Some(target) = finished_fading_out_to {
                     let prev = self.current_screen;
                     self.current_screen = target;
+                    // Only SelectColor has looping BGM; stop elsewhere
+                    if target == CurrentScreen::SelectColor {
+                        crate::core::audio::play_music(
+                            std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
+                            crate::core::audio::Cut::default(),
+                            true,
+                        );
+                    } else {
+                        crate::core::audio::stop_music();
+                    }
                     
                     // When leaving gameplay, stop music and unload the dynamic background
                     if prev == CurrentScreen::Gameplay { 

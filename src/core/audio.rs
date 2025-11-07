@@ -522,22 +522,16 @@ fn music_decoder_thread_loop(
             break 'main_loop;
         }
 
-        // Push 0.5 seconds of silence into the ring buffer to create a delay.
-        let silence_samples = (0.5 * out_hz as f64 * out_ch as f64).round() as usize;
-        if silence_samples > 0 {
-            let silence_buf = vec![0i16; silence_samples];
-            let mut off = 0;
-            while off < silence_buf.len() {
-                if stop.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
-                let pushed = internal::ring_push(&ring, &silence_buf[off..]);
-                if pushed == 0 { thread::sleep(std::time::Duration::from_micros(300)); } else { off += pushed; }
+        // Re-open the file for the next loop iteration (more robust across files) — gapless.
+        match File::open(&path).ok().and_then(|f| OggStreamReader::new(BufReader::new(f)).ok()) {
+            Some(new_reader) => {
+                info!("Looping music: restarted {:?}", path);
+                ogg = new_reader;
             }
-        }
-
-        // Rewind the Ogg stream to the beginning for the next loop iteration.
-        if ogg.seek_absgp_pg(0).is_err() {
-            warn!("Could not rewind OGG stream for looping: {:?}", path);
-            break 'main_loop;
+            None => {
+                warn!("Could not reopen OGG stream for looping: {:?}", path);
+                break 'main_loop;
+            }
         }
     }
 
