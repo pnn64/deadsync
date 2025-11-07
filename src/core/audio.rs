@@ -3,6 +3,7 @@ use cpal::{Sample, SampleFormat, StreamConfig};
 use lewton::inside_ogg::OggStreamReader;
 use log::{error, info, warn};
 use once_cell::sync::Lazy;
+use rubato::{Resampler, SincFixedOut, SincInterpolationParameters, SincInterpolationType, WindowFunction};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
@@ -362,12 +363,27 @@ fn music_decoder_thread_loop(
     }
 
     'main_loop: loop {
-        let mut st = internal::poly_init(in_hz, out_hz, in_ch, out_ch, internal::BASE_TAPS, internal::BETA);
+        // --- rubato SincFixedOut setup ---
+        const OUT_FRAMES_PER_CALL: usize = 512;
+        let ratio = out_hz as f64 / in_hz as f64;
+        let iparams = SincInterpolationParameters {
+            sinc_len: 256,
+            f_cutoff: 0.95,
+            interpolation: SincInterpolationType::Linear,
+            oversampling_factor: 128,
+            window: WindowFunction::BlackmanHarris2,
+        };
+        let mut resampler = SincFixedOut::<f32>::new(
+            ratio,
+            1.0,
+            iparams,
+            OUT_FRAMES_PER_CALL,
+            in_ch,
+        )?;
 
         // --- v1-style start & pre-roll ---
         let start_frame_f = (cut.start_sec * in_hz as f64).max(0.0);
         let start_floor   = start_frame_f.floor() as u64;
-        let start_frac    = start_frame_f - start_floor as f64;
 
         // Try to seek a little before start to fill FIR, else fall back to decode+drop
         let mut seek_ok = true;
@@ -378,13 +394,7 @@ fn music_decoder_thread_loop(
             }
         }
 
-        // Fractional phase align only if seek worked (same as v1)
-        if seek_ok && start_floor > 0 {
-            internal::poly_set_fractional_phase(&mut st, start_frac);
-        }
-
         // How many output frames to throw away to finish pre-roll?
-        let ratio = out_hz as f64 / in_hz as f64;
         let mut preroll_out_frames: u64 =
             if seek_ok && start_floor > 0 {
                 (internal::PREROLL_IN_FRAMES as f64 * ratio).ceil() as u64
@@ -435,7 +445,100 @@ fn music_decoder_thread_loop(
             false
         }
 
-        let mut out_tmp: Vec<i16> = Vec::with_capacity(1 << 15);
+        let mut out_tmp: Vec<i16> = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
+
+        // Accumulates decoded input per channel for rubato
+        let mut in_planar: Vec<Vec<f32>> = vec![Vec::with_capacity(4096); in_ch];
+
+        // Helper: push interleaved i16 samples into planar f32
+        #[inline(always)]
+        fn deinterleave_accum(planar: &mut [Vec<f32>], interleaved: &[i16], channels: usize) {
+            let frames = interleaved.len() / channels;
+            for f in 0..frames {
+                let base = f * channels;
+                for c in 0..channels {
+                    planar[c].push(interleaved[base + c] as f32 / 32768.0);
+                }
+            }
+        }
+
+        // Produce blocks as long as enough input frames are buffered for the next call.
+        #[inline(always)]
+        fn try_produce_blocks(
+            resampler: &mut SincFixedOut<f32>,
+            in_planar: &mut [Vec<f32>],
+            out_ch: usize,
+            out_tmp: &mut Vec<i16>,
+            preroll_out_frames: &mut u64,
+            frames_emitted_total: &mut u64,
+            fade_spec: Option<(u64, u64)>,
+            frames_left_out: &mut Option<u64>,
+            push_block: &mut dyn FnMut(&[i16]) -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
+        ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+            let mut produced_any = false;
+            loop {
+                let need = resampler.input_frames_next();
+                if in_planar.iter().any(|ch| ch.len() < need) {
+                    break;
+                }
+                // Build slice-of-slices without copying
+                let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
+                for ch in in_planar.iter() {
+                    input_slices.push(&ch[..need]);
+                }
+                let out = resampler.process(&input_slices, None)?;
+                // Drain consumed input
+                for ch in in_planar.iter_mut() {
+                    ch.drain(0..need);
+                }
+                if out.is_empty() {
+                    break;
+                }
+                let produced_frames = out[0].len();
+                out_tmp.clear();
+                out_tmp.reserve(produced_frames * out_ch);
+                for f in 0..produced_frames {
+                    for c in 0..out_ch {
+                        let src = out[c % out.len()][f];
+                        let s = (src * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
+                        out_tmp.push(s);
+                    }
+                }
+                // Preroll discard
+                if *preroll_out_frames > 0 {
+                    let frames = out_tmp.len() / out_ch;
+                    let drop_frames = (*preroll_out_frames as usize).min(frames);
+                    let drop_samples = drop_frames * out_ch;
+                    if drop_samples > 0 {
+                        out_tmp.drain(0..drop_samples);
+                        *preroll_out_frames = (*preroll_out_frames).saturating_sub(drop_frames as u64);
+                    }
+                }
+                // Cut length cap
+                let mut finished = false;
+                if let Some(left) = frames_left_out {
+                    let frames = out_tmp.len() / out_ch;
+                    if *left == 0 {
+                        out_tmp.clear();
+                        finished = true;
+                    } else if (frames as u64) > *left {
+                        out_tmp.truncate((*left as usize) * out_ch);
+                        *left = 0;
+                        finished = true;
+                    } else {
+                        *left -= frames as u64;
+                    }
+                }
+                if !out_tmp.is_empty() {
+                    apply_fade_envelope(out_tmp, out_ch, *frames_emitted_total, fade_spec);
+                    *frames_emitted_total = (*frames_emitted_total).saturating_add((out_tmp.len() / out_ch) as u64);
+                    push_block(out_tmp)?;
+                    produced_any = true;
+                }
+                if finished { break; }
+            }
+            Ok(produced_any)
+        }
 
         // --- Main decode loop ---
         while let Ok(pkt_opt) = ogg.read_dec_packet_itl() {
@@ -457,63 +560,101 @@ fn music_decoder_thread_loop(
                 }
             }
 
-            out_tmp.clear();
-            internal::poly_push_produce(&mut st, slice, &mut out_tmp);
+            // Accumulate input, then try to resample one or more chunks
+            deinterleave_accum(&mut in_planar, slice, in_ch);
+            let mut finished = false;
+            let _ = try_produce_blocks(
+                &mut resampler,
+                &mut in_planar,
+                out_ch,
+                &mut out_tmp,
+                &mut preroll_out_frames,
+                &mut frames_emitted_total,
+                fade_spec,
+                &mut frames_left_out,
+                &mut |block: &[i16]| {
+                    let mut off = 0;
+                    while off < block.len() {
+                        if stop.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
+                        let pushed = internal::ring_push(&ring, &block[off..]);
+                        if pushed == 0 { thread::sleep(std::time::Duration::from_micros(300)); } else { off += pushed; }
+                    }
+                    Ok(())
+                },
+            )?;
+            finished = matches!(frames_left_out, Some(0));
 
-            // Discard pre-roll output first (fills FIR)
-            if preroll_out_frames > 0 {
-                let frames = out_tmp.len() / out_ch;
-                let drop_frames = (preroll_out_frames as usize).min(frames);
-                let drop_samples = drop_frames * out_ch;
-                if drop_samples > 0 {
-                    out_tmp.drain(0..drop_samples);
-                    preroll_out_frames = preroll_out_frames.saturating_sub(drop_frames as u64);
-                    if out_tmp.is_empty() { continue; }
-                }
-            }
-
-            let finished = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
-
-            if !out_tmp.is_empty() {
-                apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
-                frames_emitted_total = frames_emitted_total.saturating_add((out_tmp.len() / out_ch) as u64);
-            }
-
-            // Push to ring (producer thread), back off if full (like v1)
-            let mut off = 0;
-            while off < out_tmp.len() {
-                if stop.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
-                let pushed = internal::ring_push(&ring, &out_tmp[off..]);
-                if pushed == 0 { thread::sleep(std::time::Duration::from_micros(300)); } else { off += pushed; }
-            }
-
+            // Stop if cut length has been reached
             if finished { break; }
         }
 
-        // --- Flush remainder & finish any pre-roll ---
-        out_tmp.clear();
-        internal::poly_push_produce(&mut st, &[], &mut out_tmp);
-
-        if preroll_out_frames > 0 {
-            let frames = out_tmp.len() / out_ch;
-            let drop_frames = (preroll_out_frames as usize).min(frames);
-            let drop_samples = drop_frames * out_ch;
-            if drop_samples > 0 { out_tmp.drain(0..drop_samples); }
+        // --- Flush remainder ---
+        if !in_planar.iter().all(|v| v.is_empty()) {
+            // Process the final short chunk using process_partial
+            let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
+            let remain = in_planar.iter().map(|v| v.len()).min().unwrap_or(0);
+            for ch in in_planar.iter() {
+                input_slices.push(&ch[..remain]);
+            }
+            let out = resampler.process_partial(Some(&input_slices), None)?;
+            for ch in in_planar.iter_mut() { ch.clear(); }
+            if !out.is_empty() {
+                let produced_frames = out[0].len();
+                out_tmp.clear();
+                out_tmp.reserve(produced_frames * out_ch);
+                for f in 0..produced_frames {
+                    for c in 0..out_ch {
+                        let v = out[c % out.len()][f];
+                        let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
+                        out_tmp.push(s);
+                    }
+                }
+                if preroll_out_frames > 0 {
+                    let frames = out_tmp.len() / out_ch;
+                    let drop_frames = (preroll_out_frames as usize).min(frames);
+                    let drop_samples = drop_frames * out_ch;
+                    if drop_samples > 0 {
+                        out_tmp.drain(0..drop_samples);
+                        preroll_out_frames = (preroll_out_frames).saturating_sub(drop_frames as u64);
+                    }
+                }
+                if !out_tmp.is_empty() {
+                    apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
+                    frames_emitted_total = (frames_emitted_total).saturating_add((out_tmp.len() / out_ch) as u64);
+                    let mut off = 0;
+                    while off < out_tmp.len() {
+                        if stop.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
+                        let pushed = internal::ring_push(&ring, &out_tmp[off..]);
+                        if pushed == 0 { thread::sleep(std::time::Duration::from_micros(300)); } else { off += pushed; }
+                    }
+                }
+            }
+        }
+        // Final tail flush from the resampler
+        // Tail flush of delayed frames
+        let out_tail = resampler.process_partial::<&[f32]>(None, None)?;
+        if !out_tail.is_empty() {
+            let produced_frames = out_tail[0].len();
+            out_tmp.clear();
+            out_tmp.reserve(produced_frames * out_ch);
+            for f in 0..produced_frames {
+                for c in 0..out_ch {
+                    let v = out_tail[c % out_tail.len()][f];
+                    let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
+                    out_tmp.push(s);
+                }
+            }
+            let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
+            if !out_tmp.is_empty() {
+                let mut off = 0;
+                while off < out_tmp.len() {
+                    if stop.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
+                    let pushed = internal::ring_push(&ring, &out_tmp[off..]);
+                    if pushed == 0 { thread::sleep(std::time::Duration::from_micros(300)); } else { off += pushed; }
+                }
+            }
         }
 
-        let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
-
-        if !out_tmp.is_empty() {
-            apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
-        }
-
-        let mut off = 0;
-        while off < out_tmp.len() {
-            if stop.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
-            let pushed = internal::ring_push(&ring, &out_tmp[off..]);
-            if pushed == 0 { thread::sleep(std::time::Duration::from_micros(300)); } else { off += pushed; }
-        }
-        
         // --- Looping logic ---
         if !looping {
             break 'main_loop;
@@ -522,7 +663,7 @@ fn music_decoder_thread_loop(
             break 'main_loop;
         }
 
-        // Re-open the file for the next loop iteration (more robust across files) — gapless.
+        // Re-open the file for the next loop iteration (gapless enough; continue with fresh resampler)
         match File::open(&path).ok().and_then(|f| OggStreamReader::new(BufReader::new(f)).ok()) {
             Some(new_reader) => {
                 info!("Looping music: restarted {:?}", path);
@@ -545,17 +686,92 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
     let in_ch = ogg.ident_hdr.audio_channels as usize;
     let in_hz = ogg.ident_hdr.audio_sample_rate;
 
-    let mut st = internal::poly_init(
-        in_hz, ENGINE.device_sample_rate,
-        in_ch, ENGINE.device_channels,
-        internal::BASE_TAPS, internal::BETA
-    );
+    let out_ch = ENGINE.device_channels;
+    let out_hz = ENGINE.device_sample_rate;
 
-    let mut resampled_data = Vec::new();
+    const OUT_FRAMES_PER_CALL: usize = 512;
+    let ratio = out_hz as f64 / in_hz as f64;
+    let iparams = SincInterpolationParameters {
+        sinc_len: 256,
+        f_cutoff: 0.95,
+        interpolation: SincInterpolationType::Linear,
+        oversampling_factor: 128,
+        window: WindowFunction::BlackmanHarris2,
+    };
+    let mut resampler = SincFixedOut::<f32>::new(
+        ratio,
+        1.0,
+        iparams,
+        OUT_FRAMES_PER_CALL,
+        in_ch,
+    )?;
+
+    let mut resampled_data: Vec<i16> = Vec::new();
+    let mut in_planar: Vec<Vec<f32>> = vec![Vec::with_capacity(4096); in_ch];
+
     while let Some(pkt) = ogg.read_dec_packet_itl()? {
-        internal::poly_push_produce(&mut st, &pkt, &mut resampled_data);
+        let frames = pkt.len() / in_ch;
+        if frames == 0 { continue; }
+        // Push into planar
+        for f in 0..frames {
+            let base = f * in_ch;
+            for c in 0..in_ch {
+                in_planar[c].push(pkt[base + c] as f32 / 32768.0);
+            }
+        }
+        // Produce as many blocks as possible based on required input
+        loop {
+            let need = resampler.input_frames_next();
+            if in_planar.iter().any(|ch| ch.len() < need) { break; }
+            let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
+            for ch in in_planar.iter() { input_slices.push(&ch[..need]); }
+            let out = resampler.process(&input_slices, None)?;
+            for ch in in_planar.iter_mut() { ch.drain(0..need); }
+            if out.is_empty() { break; }
+            let produced_frames = out[0].len();
+            resampled_data.reserve(produced_frames * out_ch);
+            for f in 0..produced_frames {
+                for c in 0..out_ch {
+                    let v = out[c % out.len()][f];
+                    let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
+                    resampled_data.push(s);
+                }
+            }
+        }
     }
-    internal::poly_push_produce(&mut st, &[], &mut resampled_data); // flush
+
+    // Flush any remaining samples
+    if !in_planar.iter().all(|v| v.is_empty()) {
+        let remain = in_planar.iter().map(|v| v.len()).min().unwrap_or(0);
+        let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
+        for ch in in_planar.iter() { input_slices.push(&ch[..remain]); }
+        let out = resampler.process_partial(Some(&input_slices), None)?;
+        if !out.is_empty() {
+            let produced_frames = out[0].len();
+            resampled_data.reserve(produced_frames * out_ch);
+            for f in 0..produced_frames {
+                for c in 0..out_ch {
+                    let v = out[c % out.len()][f];
+                    let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
+                    resampled_data.push(s);
+                }
+            }
+        }
+        for ch in in_planar.iter_mut() { ch.clear(); }
+    }
+    // Tail flush
+    let out_tail = resampler.process_partial::<&[f32]>(None, None)?;
+    if !out_tail.is_empty() {
+        let produced_frames = out_tail[0].len();
+        resampled_data.reserve(produced_frames * out_ch);
+        for f in 0..produced_frames {
+            for c in 0..out_ch {
+                let v = out_tail[c % out_tail.len()][f];
+                let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
+                resampled_data.push(s);
+            }
+        }
+    }
 
     Ok(Arc::new(resampled_data))
 }
