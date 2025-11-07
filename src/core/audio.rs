@@ -562,7 +562,7 @@ fn music_decoder_thread_loop(
 
             // Accumulate input, then try to resample one or more chunks
             deinterleave_accum(&mut in_planar, slice, in_ch);
-            let mut finished = false;
+            // Stop if cut length has been reached
             let _ = try_produce_blocks(
                 &mut resampler,
                 &mut in_planar,
@@ -582,9 +582,7 @@ fn music_decoder_thread_loop(
                     Ok(())
                 },
             )?;
-            finished = matches!(frames_left_out, Some(0));
-
-            // Stop if cut length has been reached
+            let finished = matches!(frames_left_out, Some(0));
             if finished { break; }
         }
 
@@ -615,12 +613,12 @@ fn music_decoder_thread_loop(
                     let drop_samples = drop_frames * out_ch;
                     if drop_samples > 0 {
                         out_tmp.drain(0..drop_samples);
-                        preroll_out_frames = (preroll_out_frames).saturating_sub(drop_frames as u64);
+                        // No need to update preroll_out_frames after flush
                     }
                 }
                 if !out_tmp.is_empty() {
                     apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
-                    frames_emitted_total = (frames_emitted_total).saturating_add((out_tmp.len() / out_ch) as u64);
+                    // No need to update frames_emitted_total after flush
                     let mut off = 0;
                     while off < out_tmp.len() {
                         if stop.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
@@ -781,12 +779,9 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
 mod internal {
     use super::*;
     use std::cell::UnsafeCell;
-    use std::collections::VecDeque;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    // Match v1 defaults (safe to reduce later once everything’s stable)
-    pub const BASE_TAPS: usize = 8;
-    pub const BETA: f64 = 8.0;
+    // Pre-roll input frames and ring capacity
     pub const PREROLL_IN_FRAMES: u64 = 8;
     pub const RING_CAP_SAMPLES: usize = 1 << 18; // interleaved i16 samples
 
@@ -861,143 +856,6 @@ mod internal {
                 break;
             }
             filled += got;
-        }
-    }
-
-    /* ----------------------------- Math utils ----------------------------- */
-
-    #[inline(always)] fn gcd(mut a: u32, mut b: u32) -> u32 { while b != 0 { let r = a % b; a = b; b = r; } a }
-    #[inline(always)] fn reduce_ratio(out_hz: u32, in_hz: u32) -> (u32, u32) { let g = gcd(out_hz, in_hz); (out_hz / g, in_hz / g) }
-
-    #[inline(always)]
-    fn i0(mut x: f64) -> f64 { x*=0.5; let (mut t, mut s)=(1.0,1.0); for k in 1..=10 { t *= (x*x)/((k as f64)*(k as f64)); s+=t; } s }
-
-    /* -------------------------- Polyphase FIR -------------------------- */
-
-    fn design_kaiser_sinc(n: usize, fc: f64, beta: f64) -> Vec<f64> {
-        let m = (n - 1) as f64 / 2.0; let denom = i0(beta); let two_fc = 2.0 * fc;
-        (0..n).map(|u| {
-            let x = u as f64 - m;
-            let sinc = if x == 0.0 { 1.0 } else { (std::f64::consts::PI * two_fc * x).sin() / (std::f64::consts::PI * x) };
-            let w = i0(beta * (1.0 - (x / m).powi(2)).max(0.0).sqrt()) / denom;
-            two_fc * sinc * w
-        }).collect()
-    }
-
-    fn build_polyphase(l: usize, m: usize, base_taps: usize, beta: f64) -> (Vec<f32>, usize) {
-        let n = base_taps * l;
-        let mut h = design_kaiser_sinc(n, 0.5f64 / (l.max(m) as f64), beta);
-
-        // Normalize DC gain
-        let scale = (l as f64) / h.iter().sum::<f64>();
-        h.iter_mut().for_each(|v| *v *= scale);
-
-        let tpp = n / l;
-        let mut phases = vec![0.0f32; n];
-        for p in 0..l {
-            // phase taps are h[p + k*l], most-recent-first
-            let mut t: Vec<f32> = (0..tpp).map(|k| h[p + k * l] as f32).collect();
-            t.reverse();
-            phases[p * tpp .. (p + 1) * tpp].copy_from_slice(&t);
-        }
-        (phases, tpp)
-    }
-
-    #[inline(always)]
-    fn dot8(a: &[f32;8], b: &[f32;8]) -> f32 {
-        a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3] + a[4]*b[4] + a[5]*b[5] + a[6]*b[6] + a[7]*b[7]
-    }
-
-    pub struct PolyState {
-        pub l: usize, pub m: usize,
-        pub in_ch: usize, pub out_ch: usize,
-        pub tpp: usize, pub phase: usize,
-        phases: Vec<f32>,
-        delay8: Option<Vec<[f32;8]>>,
-        delay: Vec<f32>,
-        inbuf: VecDeque<f32>,
-        mapped: Vec<i16>,
-        acc_frame: Vec<f32>,
-    }
-
-    pub fn poly_init(in_hz: u32, out_hz: u32, in_ch: usize, out_ch: usize, base_taps: usize, beta: f64) -> PolyState {
-        let (l_u, m_u) = reduce_ratio(out_hz, in_hz);
-        let (phases, tpp) = build_polyphase(l_u as usize, m_u as usize, base_taps, beta);
-        PolyState {
-            l: l_u as usize, m: m_u as usize, in_ch, out_ch, tpp, phase: 0,
-            phases,
-            delay8: if tpp == 8 { Some(vec![[0.0;8]; in_ch]) } else { None },
-            delay:  if tpp != 8 { vec![0.0; in_ch * tpp] } else { Vec::new() },
-            inbuf: VecDeque::with_capacity(1<<15),
-            mapped: vec![0; out_ch], acc_frame: vec![0.0; in_ch],
-        }
-    }
-
-    #[inline(always)]
-    pub fn poly_set_fractional_phase(st: &mut PolyState, frac: f64) {
-        // frac in [0,1); nearest phase like v1
-        let p = ((frac * st.l as f64).round() as usize) % st.l;
-        st.phase = p;
-    }
-
-    #[inline(always)] fn poly_need_input(st: &PolyState) -> bool { st.phase >= st.l }
-
-    fn poly_shift_in(st: &mut PolyState) -> bool {
-        if st.inbuf.len() < st.in_ch { return false; }
-        if let Some(d8) = &mut st.delay8 {
-            for c in 0..st.in_ch {
-                d8[c].rotate_right(1);
-                d8[c][0] = st.inbuf.pop_front().unwrap();
-            }
-        } else {
-            let tpp = st.tpp;
-            for c in 0..st.in_ch {
-                let base = c * tpp;
-                // FIX: rotate only this channel’s slice
-                st.delay[base .. base + tpp].rotate_right(1);
-                st.delay[base] = st.inbuf.pop_front().unwrap();
-            }
-        }
-        true
-    }
-
-    /// Push decoded input (i16) and produce as many output frames as possible (i16, interleaved).
-    pub fn poly_push_produce(st: &mut PolyState, input: &[i16], out_tmp: &mut Vec<i16>) {
-        // Extend input buffer
-        st.inbuf.extend(input.iter().map(|&s| s as f32 / 32768.0));
-
-        loop {
-            while poly_need_input(st) {
-                st.phase -= st.l;
-                if !poly_shift_in(st) { return; }
-            }
-            let p = st.phase;
-
-            // Convolution
-            if st.tpp == 8 {
-                let coeffs: &[f32;8] = st.phases[p*8 .. (p+1)*8].try_into().unwrap();
-                let d8 = st.delay8.as_ref().unwrap();
-                for c in 0..st.in_ch { st.acc_frame[c] = dot8(coeffs, &d8[c]); }
-            } else {
-                let tpp = st.tpp;
-                let coeffs = &st.phases[p * tpp .. (p+1) * tpp];
-                for c in 0..st.in_ch {
-                    let base = c * tpp;
-                    let mut acc = 0.0f32;
-                    for k in 0..tpp { acc += coeffs[k] * st.delay[base + k]; }
-                    st.acc_frame[c] = acc;
-                }
-            }
-
-            // Channel map -> i16 (match v1’s behavior)
-            for c in 0..st.out_ch {
-                let s = (st.acc_frame[c % st.in_ch] * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
-                st.mapped[c] = s;
-            }
-            out_tmp.extend_from_slice(&st.mapped);
-
-            st.phase += st.m;
-            if poly_need_input(st) && st.inbuf.len() < st.in_ch { return; }
         }
     }
 }
