@@ -15,6 +15,7 @@ use crate::game::scores;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 use crate::game::scroll::ScrollSpeedSetting;
+use crate::game::timing_stats;
 use crate::assets::AssetManager;
 use crate::ui::font;
 
@@ -43,6 +44,15 @@ pub struct ScoreInfo {
     pub rolls_total: u32,
     pub mines_avoided: u32,
     pub mines_total: u32,
+    // Aggregate timing stats for non-miss tap judgments
+    pub timing: timing_stats::TimingStats,
+    // Prepared scatter plot points (time, offset), like Simply Love
+    pub scatter: Vec<timing_stats::ScatterPoint>,
+    // Prepared histogram in 1ms bins
+    pub histogram: timing_stats::HistogramMs,
+    // Time range used to scale scatter/NPS graph (FirstSecond..LastSecond)
+    pub graph_first_second: f32,
+    pub graph_last_second: f32,
 }
 
 pub struct State {
@@ -55,6 +65,14 @@ pub struct State {
 
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     let score_info = gameplay_results.map(|gs| {
+        // Compute timing statistics across all non-miss tap judgments
+        let stats = timing_stats::compute_note_timing_stats(&gs.notes);
+        // Prepare scatter points and histogram bins
+        let scatter = timing_stats::build_scatter_points(&gs.notes, &gs.note_time_cache);
+        let histogram = timing_stats::build_histogram_ms(&gs.notes);
+        let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
+        let graph_last_second = gs.song.total_length_seconds as f32;
+
         let score_percent = judgment::calculate_itg_score_percent(
             &gs.scoring_counts,
             gs.holds_held_for_score,
@@ -83,6 +101,11 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             rolls_total: gs.rolls_total,
             mines_avoided: gs.mines_avoided,
             mines_total: gs.mines_total,
+            timing: stats,
+            scatter,
+            histogram,
+            graph_first_second,
+            graph_last_second,
         }
     });
 
@@ -331,11 +354,11 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
 }
 
 /// Builds the timing statistics pane for P2 (or P1 in single player).
-fn build_p2_timing_pane(_state: &State) -> Vec<Actor> {
-    let pane_width = 300.0;
-    let pane_height = 180.0;
-    let topbar_height = 26.0;
-    let bottombar_height = 13.0;
+fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
+    let pane_width: f32 = 300.0;
+    let pane_height: f32 = 180.0;
+    let topbar_height: f32 = 26.0;
+    let bottombar_height: f32 = 13.0;
 
     let frame_x = screen_center_x() + 5.0;
     let frame_y = screen_center_y() - 56.0;
@@ -357,7 +380,7 @@ fn build_p2_timing_pane(_state: &State) -> Vec<Actor> {
 
     // Center line of graph area
     children.push(act!(quad:
-        align(0.5, 0.0): xy(pane_width / 2.0, topbar_height):
+        align(0.5, 0.0): xy(pane_width / 2.0_f32, topbar_height):
         setsize(1.0, pane_height - topbar_height - bottombar_height):
         diffuse(1.0, 1.0, 1.0, 0.666)
     ));
@@ -374,57 +397,119 @@ fn build_p2_timing_pane(_state: &State) -> Vec<Actor> {
     ));
 
     // Bottom bar judgment labels
-    let bottom_bar_center_y = pane_height - (bottombar_height / 2.0);
+    let bottom_bar_center_y = pane_height - (bottombar_height / 2.0_f32);
     let judgment_labels = [("Fan", 0), ("Ex", 1), ("Gr", 2), ("Dec", 3), ("WO", 4)];
-    let timing_windows = [21.5, 43.0, 102.0, 135.0, 180.0]; // ms
+    let timing_windows: [f32; 5] = [21.5_f32, 43.0_f32, 102.0_f32, 135.0_f32, 180.0_f32]; // ms
     let worst_window = timing_windows[timing_windows.len() - 1];
 
     for (i, (label, grade_idx)) in judgment_labels.iter().enumerate() {
         let color = color::rgba_hex(color::JUDGMENT_HEX[*grade_idx]);
         let window_ms = if i > 0 { timing_windows[i-1] } else { 0.0 };
         let next_window_ms = timing_windows[i];
-        let mid_point_ms = (window_ms + next_window_ms) / 2.0;
+        let mid_point_ms = (window_ms + next_window_ms) / 2.0_f32;
         
         // Scale position from ms to pane coordinates
-        let x_offset = (mid_point_ms / worst_window) * (pane_width / 2.0);
+        let x_offset = (mid_point_ms / worst_window) * (pane_width / 2.0_f32);
 
         if i == 0 { // "Fan" is centered
             children.push(act!(text: font("miso"): settext(*label):
-                align(0.5, 0.5): xy(pane_width / 2.0, bottom_bar_center_y):
+                align(0.5, 0.5): xy(pane_width / 2.0_f32, bottom_bar_center_y):
                 zoom(0.65): diffuse(color[0], color[1], color[2], color[3])
             ));
         } else { // Others are symmetric
             children.push(act!(text: font("miso"): settext(*label):
-                align(0.5, 0.5): xy(pane_width / 2.0 - x_offset, bottom_bar_center_y):
+                align(0.5, 0.5): xy(pane_width / 2.0_f32 - x_offset, bottom_bar_center_y):
                 zoom(0.65): diffuse(color[0], color[1], color[2], color[3])
             ));
             children.push(act!(text: font("miso"): settext(*label):
-                align(0.5, 0.5): xy(pane_width / 2.0 + x_offset, bottom_bar_center_y):
+                align(0.5, 0.5): xy(pane_width / 2.0_f32 + x_offset, bottom_bar_center_y):
                 zoom(0.65): diffuse(color[0], color[1], color[2], color[3])
             ));
+        }
+    }
+
+    // Histogram bars (aggregate timing offsets)
+    if let Some(score_info) = &state.score_info {
+        let graph_area_height = (pane_height - topbar_height - bottombar_height).max(1.0_f32);
+        let y_bottom = pane_height - bottombar_height;
+        let worst_bin = (score_info.histogram.worst_window_ms / 1.0_f32).round() as i32; // 1ms bins
+        let total_bins = (worst_bin * 2 + 1).max(1) as i32;
+        let bar_w = pane_width / (total_bins as f32);
+
+        use std::collections::HashMap;
+        let mut count_map: HashMap<i32, u32> = HashMap::with_capacity(score_info.histogram.bins.len());
+        for (bin, cnt) in &score_info.histogram.bins {
+            count_map.insert(*bin, *cnt);
+        }
+
+        let max_count = score_info.histogram.max_count.max(1);
+
+        let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
+            if abs_ms <= 21.5 { color::rgba_hex(color::JUDGMENT_HEX[0]) }
+            else if abs_ms <= 43.0 { color::rgba_hex(color::JUDGMENT_HEX[1]) }
+            else if abs_ms <= 102.0 { color::rgba_hex(color::JUDGMENT_HEX[2]) }
+            else if abs_ms <= 135.0 { color::rgba_hex(color::JUDGMENT_HEX[3]) }
+            else { color::rgba_hex(color::JUDGMENT_HEX[4]) }
+        };
+
+        let mut draw_bin = |bin_idx: i32, count: u32| {
+            if count == 0 { return; }
+            let x = (bin_idx - (-worst_bin)) as f32 * bar_w;
+            let abs_ms = (bin_idx as f32).abs();
+            let col = color_for_abs_ms(abs_ms);
+            let h = (count as f32 / max_count as f32) * (graph_area_height * 0.75);
+            if h <= 0.0 { return; }
+            children.push(act!(quad:
+                align(0.0, 1.0): xy(x, y_bottom):
+                setsize(bar_w.max(1.0_f32), h):
+                diffuse(col[0], col[1], col[2], 1.0)
+            ));
+        };
+
+        for bin_idx in (-worst_bin)..=(worst_bin) {
+            let count = *count_map.get(&bin_idx).unwrap_or(&0);
+            draw_bin(bin_idx, count);
         }
     }
 
     // Top bar stats
     let top_label_y = 2.0;
     let top_value_y = 13.0;
-    let value_text = "0.0ms".to_string(); // Static placeholder
     let label_zoom = 0.575;
     let value_zoom = 0.8;
 
-    let labels_and_x = [
-        ("mean abs error", 40.0),
-        ("mean", 40.0 + (pane_width - 80.0) / 3.0),
-        ("std dev * 3", 40.0 + (pane_width - 80.0) / 3.0 * 2.0),
-        ("max error", pane_width - 40.0),
+    let max_error_text = state
+        .score_info
+        .as_ref()
+        .map(|s| format!("{:.1}ms", s.timing.max_abs_ms))
+        .unwrap_or_else(|| "0.0ms".to_string());
+
+    let stats = state.score_info.as_ref();
+    let mean_abs_text = stats.map(|s| format!("{:.1}ms", s.timing.mean_abs_ms)).unwrap_or_else(|| "0.0ms".to_string());
+    let mean_text = stats.map(|s| format!("{:.1}ms", s.timing.mean_ms)).unwrap_or_else(|| "0.0ms".to_string());
+    let stddev3_text = stats.map(|s| format!("{:.1}ms", s.timing.stddev_ms * 3.0)).unwrap_or_else(|| "0.0ms".to_string());
+
+    let labels_and_values = [
+        ("mean abs error", 40.0, mean_abs_text),
+        (
+            "mean",
+            40.0 + (pane_width - 80.0_f32) / 3.0_f32,
+            mean_text,
+        ),
+        (
+            "std dev * 3",
+            40.0 + (pane_width - 80.0_f32) / 3.0_f32 * 2.0_f32,
+            stddev3_text,
+        ),
+        ("max error", pane_width - 40.0, max_error_text),
     ];
 
-    for (label, x) in labels_and_x {
+    for (label, x, value) in labels_and_values {
         children.push(act!(text: font("miso"): settext(label):
             align(0.5, 0.0): xy(x, top_label_y):
             zoom(label_zoom)
         ));
-        children.push(act!(text: font("miso"): settext(value_text.clone()):
+        children.push(act!(text: font("miso"): settext(value):
             align(0.5, 0.0): xy(x, top_value_y):
             zoom(value_zoom)
         ));
@@ -717,11 +802,65 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 // The horizontal zero-line, centered vertically in the panel.
                 act!(quad:
                     align(0.5, 0.5): 
-                    xy(GRAPH_WIDTH / 2.0, GRAPH_HEIGHT / 2.0):
+                    xy(GRAPH_WIDTH / 2.0_f32, GRAPH_HEIGHT / 2.0_f32):
                     setsize(GRAPH_WIDTH, 1.0):
                     diffusealpha(0.1): 
                     z(2)
                 ),
+                // Scatter plot overlay (judgment offsets over time)
+                {
+                    // Build actors for scatter lazily here
+                    let mut scatter_children: Vec<Actor> = Vec::new();
+                    if let Some(si) = &state.score_info {
+                        let first = si.graph_first_second;
+                        let last = si.graph_last_second.max(first + 0.001_f32);
+                        let dur = (last - first).max(0.001_f32);
+                        let worst = si.histogram.worst_window_ms.max(1.0_f32);
+
+                        let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
+                            if abs_ms <= 21.5 { color::rgba_hex(color::JUDGMENT_HEX[0]) }
+                            else if abs_ms <= 43.0 { color::rgba_hex(color::JUDGMENT_HEX[1]) }
+                            else if abs_ms <= 102.0 { color::rgba_hex(color::JUDGMENT_HEX[2]) }
+                            else if abs_ms <= 135.0 { color::rgba_hex(color::JUDGMENT_HEX[3]) }
+                            else { color::rgba_hex(color::JUDGMENT_HEX[4]) }
+                        };
+
+                        for sp in &si.scatter {
+                            let x = ((sp.time_sec - first) / dur).clamp(0.0, 1.0) * GRAPH_WIDTH;
+                            match sp.offset_ms {
+                                Some(off_ms) => {
+                                    // Map offset to vertical position; center is at GRAPH_HEIGHT/2
+                                    let t = ((worst - off_ms) / (2.0 * worst)).clamp(0.0, 1.0);
+                                    let y = t * GRAPH_HEIGHT;
+                                    let c = color_for_abs_ms(off_ms.abs());
+                                    scatter_children.push(act!(quad:
+                                        align(0.0, 0.0): xy(x, y):
+                                        setsize(1.5, 1.5):
+                                        diffuse(c[0], c[1], c[2], 0.666):
+                                        z(3)
+                                    ));
+                                }
+                                None => {
+                                    // Miss: draw a thin red column
+                                    scatter_children.push(act!(quad:
+                                        align(0.0, 0.0): xy(x, 0.0):
+                                        setsize(1.0, GRAPH_HEIGHT):
+                                        diffuse(1.0, 0.0, 0.0, 0.47):
+                                        z(3)
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    Actor::Frame {
+                        align: [0.0, 0.0],
+                        offset: [0.0, 0.0],
+                        size: [SizeSpec::Px(GRAPH_WIDTH), SizeSpec::Px(GRAPH_HEIGHT)],
+                        background: None,
+                        z: 3,
+                        children: scatter_children,
+                    }
+                },
             ],
         };
         actors.push(graph_frame);
