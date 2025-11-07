@@ -1038,9 +1038,11 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
     } else {
         judgments_in_row
             .iter()
+            // Use absolute magnitude to determine the worst (furthest from 0ms)
             .max_by(|a, b| {
                 a.time_error_ms
-                    .partial_cmp(&b.time_error_ms)
+                    .abs()
+                    .partial_cmp(&b.time_error_ms.abs())
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
             .cloned()

@@ -71,7 +71,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         let scatter = timing_stats::build_scatter_points(&gs.notes, &gs.note_time_cache);
         let histogram = timing_stats::build_histogram_ms(&gs.notes);
         let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
-        let graph_last_second = gs.song.total_length_seconds as f32;
+        // Pad right bound slightly (0.05s) to match SL visual alignment.
+        let graph_last_second = gs.song.total_length_seconds as f32 + 0.05;
 
         let score_percent = judgment::calculate_itg_score_percent(
             &gs.scoring_counts,
@@ -399,7 +400,7 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
     // Bottom bar judgment labels
     let bottom_bar_center_y = pane_height - (bottombar_height / 2.0_f32);
     let judgment_labels = [("Fan", 0), ("Ex", 1), ("Gr", 2), ("Dec", 3), ("WO", 4)];
-    let timing_windows: [f32; 5] = [21.5_f32, 43.0_f32, 102.0_f32, 135.0_f32, 180.0_f32]; // ms
+    let timing_windows: [f32; 5] = crate::game::timing_windows::effective_windows_ms(); // ms, with +1.5ms
     let worst_window = timing_windows[timing_windows.len() - 1];
 
     for (i, (label, grade_idx)) in judgment_labels.iter().enumerate() {
@@ -445,10 +446,10 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
         let max_count = score_info.histogram.max_count.max(1);
 
         let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
-            if abs_ms <= 21.5 { color::rgba_hex(color::JUDGMENT_HEX[0]) }
-            else if abs_ms <= 43.0 { color::rgba_hex(color::JUDGMENT_HEX[1]) }
-            else if abs_ms <= 102.0 { color::rgba_hex(color::JUDGMENT_HEX[2]) }
-            else if abs_ms <= 135.0 { color::rgba_hex(color::JUDGMENT_HEX[3]) }
+            if abs_ms <= timing_windows[0] { color::rgba_hex(color::JUDGMENT_HEX[0]) }
+            else if abs_ms <= timing_windows[1] { color::rgba_hex(color::JUDGMENT_HEX[1]) }
+            else if abs_ms <= timing_windows[2] { color::rgba_hex(color::JUDGMENT_HEX[2]) }
+            else if abs_ms <= timing_windows[3] { color::rgba_hex(color::JUDGMENT_HEX[3]) }
             else { color::rgba_hex(color::JUDGMENT_HEX[4]) }
         };
 
@@ -818,15 +819,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let worst = si.histogram.worst_window_ms.max(1.0_f32);
 
                         let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
-                            if abs_ms <= 21.5 { color::rgba_hex(color::JUDGMENT_HEX[0]) }
-                            else if abs_ms <= 43.0 { color::rgba_hex(color::JUDGMENT_HEX[1]) }
-                            else if abs_ms <= 102.0 { color::rgba_hex(color::JUDGMENT_HEX[2]) }
-                            else if abs_ms <= 135.0 { color::rgba_hex(color::JUDGMENT_HEX[3]) }
+                            let tw = crate::game::timing_windows::effective_windows_ms();
+                            if abs_ms <= tw[0] { color::rgba_hex(color::JUDGMENT_HEX[0]) }
+                            else if abs_ms <= tw[1] { color::rgba_hex(color::JUDGMENT_HEX[1]) }
+                            else if abs_ms <= tw[2] { color::rgba_hex(color::JUDGMENT_HEX[2]) }
+                            else if abs_ms <= tw[3] { color::rgba_hex(color::JUDGMENT_HEX[3]) }
                             else { color::rgba_hex(color::JUDGMENT_HEX[4]) }
                         };
 
                         for sp in &si.scatter {
-                            let x = ((sp.time_sec - first) / dur).clamp(0.0, 1.0) * GRAPH_WIDTH;
+                            // For non-miss offsets, shift x by the offset amount (align to actual tap time).
+                            // For misses, shift by the current worst window to mimic SL.
+                            let x_time = match sp.offset_ms {
+                                Some(off_ms) => sp.time_sec - (off_ms / 1000.0),
+                                None => sp.time_sec - (worst / 1000.0),
+                            };
+                            // SL pads the right bound slightly by +0.05 seconds.
+                            let x = ((x_time - first) / (dur + 0.05)).clamp(0.0, 1.0) * GRAPH_WIDTH;
                             match sp.offset_ms {
                                 Some(off_ms) => {
                                     // Map offset to vertical position; center is at GRAPH_HEIGHT/2
