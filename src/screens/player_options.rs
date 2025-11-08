@@ -210,7 +210,17 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         },
     };
 
-    let rows = build_rows(&song, &speed_mod, chart_difficulty_index);
+    let mut rows = build_rows(&song, &speed_mod, chart_difficulty_index);
+
+    // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Background Filter") {
+        row.selected_choice_index = match profile.background_filter {
+            crate::game::profile::BackgroundFilter::Off => 0,
+            crate::game::profile::BackgroundFilter::Dark => 1,
+            crate::game::profile::BackgroundFilter::Darker => 2,
+            crate::game::profile::BackgroundFilter::Darkest => 3,
+        };
+    }
 
     State {
         song,
@@ -311,6 +321,16 @@ fn change_choice(state: &mut State, delta: isize) {
                         speed_mod_row.choices[0] = speed_mod_value_str;
                     }
                 }
+            } else if row.name == "Background Filter" {
+                // Persist the new filter level to the profile
+                let setting = match row.selected_choice_index {
+                    0 => crate::game::profile::BackgroundFilter::Off,
+                    1 => crate::game::profile::BackgroundFilter::Dark,
+                    2 => crate::game::profile::BackgroundFilter::Darker,
+                    3 => crate::game::profile::BackgroundFilter::Darkest,
+                    _ => crate::game::profile::BackgroundFilter::Darkest,
+                };
+                crate::game::profile::update_background_filter(setting);
             } else if row.name == "Stepchart" {
                 // Update the state's difficulty index to match the newly selected choice
                 if let Some(diff_indices) = &row.choice_difficulty_indices {

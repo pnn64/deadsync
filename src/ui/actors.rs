@@ -91,4 +91,12 @@ pub enum Actor {
         background: Option<Background>,
         z: i16,
     },
+
+    /// Shadow wrapper: draws child's objects once more with an offset and tint,
+    /// matching StepMania's `shadowlength*` and `shadowcolor` behavior.
+    Shadow {
+        len: [f32; 2],        // (x, y) shadow length in screen units
+        color: [f32; 4],      // shadow color; alpha multiplies the child's alpha
+        child: Box<Actor>,    // wrapped actor
+    },
 }

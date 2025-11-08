@@ -1307,7 +1307,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.push(act!(text:
             font("wendy_combo"): settext(state.miss_combo.to_string()):
             align(0.5, 0.5): xy(playfield_center_x, screen_center_y() + 30.0):
-            zoom(0.75): horizalign(center):
+            zoom(0.75): horizalign(center): shadowlength(1.0):
             diffuse(1.0, 0.0, 0.0, 1.0):
             z(90)
         ));
@@ -1337,7 +1337,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.push(act!(text:
             font("wendy_combo"): settext(state.combo.to_string()):
             align(0.5, 0.5): xy(playfield_center_x, screen_center_y() + 30.0):
-            zoom(0.75): horizalign(center):
+            zoom(0.75): horizalign(center): shadowlength(1.0):
             diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
             z(90)
         ));

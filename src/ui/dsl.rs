@@ -79,6 +79,16 @@ pub enum Mod<'a> {
 
     // runtime/tween plumbing
     Tween(&'a [anim::Step]),
+
+    // --- Shadow (SM-compatible) ---
+    /// `shadowlength(f)` — sets both X and Y to f.
+    ShadowLenBoth(f32),
+    /// `shadowlengthx(f)` — sets horizontal shadow length.
+    ShadowLenX(f32),
+    /// `shadowlengthy(f)` — sets vertical shadow length.
+    ShadowLenY(f32),
+    /// `shadowcolor(r,g,b,a)` — sets shadow tint; default is (0,0,0,0.5).
+    ShadowColor([f32; 4]),
 }
 
 /* ======================== SPRITE/QUAD CORE ======================== */
@@ -112,6 +122,10 @@ fn build_sprite_like<'a>(
 
     // StepMania zoom (scale factors). Keep signs until we fold to flips.
     let (mut sx, mut sy) = (1.0_f32, 1.0_f32);
+
+    // shadow defaults (StepMania): length 0 (disabled), color semi-black 0.5 alpha
+    let (mut shx, mut shy) = (0.0_f32, 0.0_f32);
+    let mut shc = [0.0_f32, 0.0_f32, 0.0_f32, 0.5_f32];
 
     // fold mods in order
     for m in mods {
@@ -191,6 +205,14 @@ fn build_sprite_like<'a>(
             }
             Mod::Animate(v) => { anim_enable = *v; }
             Mod::StateDelay(s) => { state_delay = (*s).max(0.0); }
+
+            // shadow
+            // StepMania coordinates have +Y downward. Our world has +Y upward.
+            // Flip Y to keep the shadow visually down-right for positive inputs.
+            Mod::ShadowLenBoth(v) => { shx = *v; shy = -*v; }
+            Mod::ShadowLenX(v)    => { shx = *v; }
+            Mod::ShadowLenY(v)    => { shy = -*v; }
+            Mod::ShadowColor(c)   => { shc = *c; }
         }
     }
 
@@ -262,7 +284,7 @@ fn build_sprite_like<'a>(
         [sx, sy]
     };
 
-    Actor::Sprite {
+    let base = Actor::Sprite {
         align: [hx, vy],
         offset: [x, y],
         size: [SizeSpec::Px(w), SizeSpec::Px(h)],
@@ -289,6 +311,12 @@ fn build_sprite_like<'a>(
         animate: anim_enable,
         state_delay,
         scale: scale_carry, // NEW
+    };
+
+    if shx != 0.0 || shy != 0.0 {
+        Actor::Shadow { len: [shx, shy], color: shc, child: Box::new(base) }
+    } else {
+        base
     }
 }
 
@@ -326,6 +354,10 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
     // text respects blend mode
     let mut blend = BlendMode::Alpha;
     let mut tw: Option<&[anim::Step]> = None;
+
+    // shadow defaults (StepMania)
+    let (mut shx, mut shy) = (0.0_f32, 0.0_f32);
+    let mut shc = [0.0_f32, 0.0_f32, 0.0_f32, 0.5_f32];
 
     for m in mods {
         match m {
@@ -391,6 +423,13 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
             Mod::Blend(bm) => { blend = *bm; }
             Mod::Tween(steps) => { tw = Some(steps); }
 
+            // shadow
+            // Match StepMania (+Y down) by flipping sign on Y in our (+Y up) world.
+            Mod::ShadowLenBoth(v) => { shx = *v; shy = -*v; }
+            Mod::ShadowLenX(v)    => { shx = *v; }
+            Mod::ShadowLenY(v)    => { shy = -*v; }
+            Mod::ShadowColor(c)   => { shc = *c; }
+
             // ignore sprite-only/text-irrelevant
             _ => {}
         }
@@ -425,7 +464,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
         sy = s.scale[1];
     }
 
-    Actor::Text {
+    let base = Actor::Text {
         align: [hx, vy],
         offset: [x, y],
         color,
@@ -441,6 +480,12 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
         max_w_pre_zoom,
         max_h_pre_zoom,
         blend,
+    };
+
+    if shx != 0.0 || shy != 0.0 {
+        Actor::Shadow { len: [shx, shy], color: shc, child: Box::new(base) }
+    } else {
+        base
     }
 }
 
@@ -645,6 +690,20 @@ macro_rules! __dsl_apply_one {
         } else {
             $mods.push($crate::ui::dsl::Mod::Alpha(($a) as f32));
         }
+    }};
+
+    // --- Shadows (SM parity) ---------------------------------------
+    (shadowlength ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::ShadowLenBoth(($v) as f32));
+    }};
+    (shadowlengthx ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::ShadowLenX(($v) as f32));
+    }};
+    (shadowlengthy ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::ShadowLenY(($v) as f32));
+    }};
+    (shadowcolor ($r:expr, $g:expr, $b:expr, $a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::ShadowColor([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
     }};
 
     // --- StepMania zoom semantics (scale) ---

@@ -260,6 +260,11 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
                 apply_alpha_to_actor(child, alpha);
             }
         }
+        Actor::Shadow { color, child, .. } => {
+            // Apply alpha to the shadow tint and recurse to the child.
+            color[3] *= alpha;
+            apply_alpha_to_actor(child, alpha);
+        }
     }
 }
 

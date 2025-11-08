@@ -87,6 +87,10 @@ fn estimate_object_count(
                 }
                 stack.extend(children.iter());
             }
+            Actor::Shadow { child, .. } => {
+                // Shadow duplicates its child's objects; count by visiting the child.
+                stack.push(child);
+            }
         }
     }
     total
@@ -226,6 +230,52 @@ fn build_actor_recursive(
                     *order_counter += 1;
                     o
                 };
+            }
+        }
+
+        actors::Actor::Shadow { len, color, child } => {
+            // Build the child first to push its objects; then duplicate those objects
+            // with a pre-multiplied world translation and shadow tint at z-1.
+            let start = out.len();
+            build_actor_recursive(
+                child,
+                parent,
+                m,
+                fonts,
+                base_z,
+                order_counter,
+                out,
+                total_elapsed,
+            );
+
+            // Prepare world-space translation matrix that matches StepMania's
+            // DISPLAY->TranslateWorld behavior.
+            let t_world = Matrix4::from_translation(Vector3::new(len[0], len[1], 0.0));
+
+            // Duplicate each object produced for the child as a shadow pass.
+            let end = out.len();
+            for i in start..end {
+                let obj = &out[i];
+                // Only sprites are emitted by our pipeline; clone safely.
+                let mut obj_type = obj.object_type.clone();
+                match &mut obj_type {
+                    renderer::ObjectType::Sprite { tint, .. } => {
+                        // Multiply alpha like SM: shadow.a *= child_alpha
+                        let mut shadow_tint = *color;
+                        shadow_tint[3] *= (*tint)[3];
+                        *tint = shadow_tint;
+                    }
+                }
+
+                out.push(renderer::RenderObject {
+                    object_type: obj_type,
+                    transform: t_world * obj.transform,
+                    blend: obj.blend,
+                    // Draw behind the original to ensure correct order without
+                    // having to rewind the global order counter.
+                    z: obj.z.saturating_sub(1),
+                    order: obj.order, // order doesn't matter since z is lower
+                });
             }
         }
 

@@ -284,3 +284,14 @@ pub fn update_scroll_speed(setting: ScrollSpeedSetting) {
     }
     save_profile_ini();
 }
+
+pub fn update_background_filter(setting: BackgroundFilter) {
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        if profile.background_filter == setting {
+            return;
+        }
+        profile.background_filter = setting;
+    }
+    save_profile_ini();
+}
