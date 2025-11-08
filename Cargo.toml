@@ -39,7 +39,7 @@ rubato = "0.16.2"
 regex = "1.12.2"
 
 # Networking
-ureq = { version = "3.1.2", features = ["json", "rustls"] }
+ureq = { version = "3.1.4", features = ["json", "rustls"] }
 
 # Song cache
 bincode = "2.0.1"
