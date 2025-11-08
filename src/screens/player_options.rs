@@ -37,7 +37,7 @@ pub struct Row {
     pub selected_choice_index: usize,
     pub help: Vec<String>,
     // Optional: map each choice to a FILE_DIFFICULTY_NAMES index (used for Stepchart)
-    pub choice_difficulty_indices: Option<Vec<usize>>, 
+    pub choice_difficulty_indices: Option<Vec<usize>>,
 }
 
 pub struct SpeedMod {
@@ -142,6 +142,27 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
             choices: vec!["cel".to_string(), "metal".to_string(), "note".to_string()],
             selected_choice_index: 0,
             help: vec!["Change the appearance of the arrows.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Judgement Font".to_string(),
+            choices: vec!["Love".to_string(), "Chromatic".to_string(), "ITG2".to_string()],
+            selected_choice_index: 0,
+            help: vec!["Pick your judgement font.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Combo Font".to_string(),
+            choices: vec!["Wendy".to_string(), "Arial Rounded".to_string(), "Asap".to_string()],
+            selected_choice_index: 0,
+            help: vec!["Choose the font to count your combo. Also used for the measure counter if enabled.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Hold Judgement".to_string(),
+            choices: vec!["Love".to_string(), "mute".to_string(), "ITG2".to_string()],
+            selected_choice_index: 0,
+            help: vec!["Change the judgement graphics displayed for hold notes.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
@@ -498,11 +519,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let help_box_x = widescale(13.0, 30.666);
     let help_box_bottom_y = screen_height() - 36.0;
 
-    // Row layout constants
+    // --- Row Layout Constants & Scrolling ---
+    const VISIBLE_ROWS: usize = 10;
+    const ANCHOR_ROW: usize = 4; // Keep selection on the 5th visible row
     const ROW_START_OFFSET: f32 = -164.0;
     const ROW_HEIGHT: f32 = 33.0;
     // Make the first column a bit wider to match SL
     const TITLE_BG_WIDTH: f32 = 140.0;
+
+    let total_rows = state.rows.len();
+    let max_offset = total_rows.saturating_sub(VISIBLE_ROWS);
+    let offset_rows = if total_rows <= VISIBLE_ROWS {
+        0
+    } else {
+        state.selected_row.saturating_sub(ANCHOR_ROW).min(max_offset)
+    };
 
     let frame_h = ROW_HEIGHT;
 
@@ -513,8 +544,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // where y0 is the first row center, H is row height, N is number of rows.
     let first_row_center_y = screen_center_y() + ROW_START_OFFSET;
     let help_top_y = help_box_bottom_y - help_box_h;
-    let n_rows_f = state.rows.len() as f32;
-    // Guard against degenerate cases; clamp to 0.0 minimum to avoid overlaps.
+    // Use VISIBLE_ROWS for gap calculation
+    let n_rows_f = VISIBLE_ROWS as f32;
     let mut row_gap = if n_rows_f > 0.0 {
         (help_top_y - first_row_center_y - ((n_rows_f - 0.5) * frame_h)) / n_rows_f
     } else {
@@ -532,12 +563,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Title text x: slightly less padding so text sits further left
     let title_x = row_left + widescale(8.0, 14.0);
 
-    // Start first row exactly at the requested offset
-    let mut current_row_y = first_row_center_y;
+    for i_vis in 0..VISIBLE_ROWS {
+        let item_idx = offset_rows + i_vis;
+        if item_idx >= total_rows {
+            break;
+        }
 
-    for i in 0..state.rows.len() {
-        let is_active = i == state.selected_row;
-        let row = &state.rows[i];
+        let current_row_y = first_row_center_y + (i_vis as f32) * (frame_h + row_gap);
+        let is_active = item_idx == state.selected_row;
+        let row = &state.rows[item_idx];
 
         let active_bg = color::rgba_hex("#333333");
         let inactive_bg_base = color::rgba_hex("#071016");
@@ -791,8 +825,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 z(101)
             ));
         }
-
-        current_row_y += frame_h + row_gap;
     }
 
     // Help Text Box (render) — uses the same geometry the rows used
