@@ -9,5 +9,3 @@ pub mod scores;
 pub mod scroll;
 pub mod song;
 pub mod timing;
-pub mod timing_stats;
-pub mod timing_windows;

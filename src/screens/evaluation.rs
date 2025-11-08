@@ -15,7 +15,7 @@ use crate::game::scores;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 use crate::game::scroll::ScrollSpeedSetting;
-use crate::game::timing_stats;
+use crate::game::timing as timing_stats;
 use crate::assets::AssetManager;
 use crate::ui::font;
 
@@ -400,7 +400,7 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
     // Bottom bar judgment labels
     let bottom_bar_center_y = pane_height - (bottombar_height / 2.0_f32);
     let judgment_labels = [("Fan", 0), ("Ex", 1), ("Gr", 2), ("Dec", 3), ("WO", 4)];
-    let timing_windows: [f32; 5] = crate::game::timing_windows::effective_windows_ms(); // ms, with +1.5ms
+    let timing_windows: [f32; 5] = crate::game::timing::effective_windows_ms(); // ms, with +1.5ms
     let worst_window = timing_windows[timing_windows.len() - 1];
 
     for (i, (label, grade_idx)) in judgment_labels.iter().enumerate() {
@@ -830,7 +830,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let worst = si.histogram.worst_window_ms.max(1.0_f32);
 
                         let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
-                            let tw = crate::game::timing_windows::effective_windows_ms();
+                            let tw = crate::game::timing::effective_windows_ms();
                             if abs_ms <= tw[0] { color::rgba_hex(color::JUDGMENT_HEX[0]) }
                             else if abs_ms <= tw[1] { color::rgba_hex(color::JUDGMENT_HEX[1]) }
                             else if abs_ms <= tw[2] { color::rgba_hex(color::JUDGMENT_HEX[2]) }

@@ -9,7 +9,6 @@ use crate::game::parsing::notes as note_parser;
 use crate::game::parsing::noteskin::{self, Noteskin, Style};
 use crate::game::song::SongData;
 use crate::game::timing::TimingData;
-use crate::game::timing_windows;
 use crate::game::{
     life::{LifeChange, REGEN_COMBO_AFTER_MISS},
     profile,
@@ -32,7 +31,7 @@ const MIN_SECONDS_TO_STEP: f32 = 6.0;
 const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
 const M_MOD_HIGH_CAP: f32 = 600.0;
 
-// Timing windows now sourced from game::timing_windows
+// Timing windows now sourced from game::timing
 
 pub const RECEPTOR_Y_OFFSET_FROM_CENTER: f32 = -125.0;
 pub const DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER: f32 = 1.5;
@@ -443,7 +442,7 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32)
             acc.max(end)
         });
     let music_end_time = last_relevant_second
-        + timing_windows::effective_windows_s()[4]
+        + crate::game::timing::effective_windows_s()[4]
         + TRANSITION_OUT_DURATION;
 
     State {
@@ -599,7 +598,7 @@ fn handle_mine_hit(
     time_error: f32,
 ) -> bool {
     let abs_time_error = time_error.abs();
-    let mine_window = timing_windows::mine_window_s();
+    let mine_window = crate::game::timing::mine_window_s();
     if abs_time_error > mine_window {
         return false;
     }
@@ -916,7 +915,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             return false;
         }
 
-        let windows = timing_windows::effective_windows_s();
+        let windows = crate::game::timing::effective_windows_s();
         let fantastic_window = windows[0];
         let excellent_window = windows[1];
         let great_window = windows[2];
@@ -1296,7 +1295,7 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
 
 #[inline(always)]
 fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f32) {
-    let way_off_window = timing_windows::effective_windows_s()[4];
+    let way_off_window = crate::game::timing::effective_windows_s()[4];
     for (col_idx, col_arrows) in state.arrows.iter_mut().enumerate() {
         let Some(next_arrow_index) = col_arrows
             .iter()
@@ -1316,7 +1315,7 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                 Some(MineResult::Hit) => { col_arrows.remove(next_arrow_index); }
                 Some(MineResult::Avoided) => {}
                 None => {
-                    let mine_window = timing_windows::mine_window_s();
+                    let mine_window = crate::game::timing::mine_window_s();
                     if music_time_sec - note_time > mine_window {
                         state.notes[note_index].mine_result = Some(MineResult::Avoided);
                         state.mines_avoided = state.mines_avoided.saturating_add(1);
