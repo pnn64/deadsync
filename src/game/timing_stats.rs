@@ -1,5 +1,6 @@
-use crate::game::note::Note;
+use crate::game::note::{Note, NoteType};
 use crate::game::judgment::JudgeGrade;
+use crate::game::timing_windows;
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct TimingStats {
@@ -75,12 +76,12 @@ const DEFAULT_WORST_WINDOW_MS: f32 = 180.0; // ITG W5
 pub fn build_scatter_points(notes: &[Note], note_time_cache: &[f32]) -> Vec<ScatterPoint> {
     let mut out = Vec::with_capacity(notes.len());
     for (idx, n) in notes.iter().enumerate() {
+        if matches!(n.note_type, NoteType::Mine) { continue; }
         let t = note_time_cache.get(idx).copied().unwrap_or(0.0);
-        let offset_ms = n
-            .result
-            .as_ref()
-            .map(|j| if j.grade == JudgeGrade::Miss { None } else { Some(j.time_error_ms) })
-            .unwrap_or(None);
+        let offset_ms = match n.result.as_ref() {
+            Some(j) => if j.grade == JudgeGrade::Miss { None } else { Some(j.time_error_ms) },
+            None => continue, // do not include unjudged notes
+        };
         out.push(ScatterPoint { time_sec: t, offset_ms });
     }
     out
@@ -104,6 +105,7 @@ pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
     for n in notes {
         let Some(j) = n.result.as_ref() else { continue; };
         if j.grade == JudgeGrade::Miss { continue; }
+        if matches!(n.note_type, NoteType::Mine) { continue; }
         let e = j.time_error_ms;
         let b = bin_index_ms(e);
         let c = counts.entry(b).or_insert(0);
@@ -125,12 +127,13 @@ pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
     let mut bins: Vec<(i32, u32)> = counts.into_iter().collect();
     bins.sort_unstable_by_key(|(bin, _)| *bin);
 
+    let eff = timing_windows::effective_windows_ms();
     let worst_window_ms: f32 = match worst_window_index {
-        1 => 21.5,
-        2 => 43.0,
-        3 => 102.0,
-        4 => 135.0,
-        _ => 180.0,
+        1 => eff[0],
+        2 => eff[1],
+        3 => eff[2],
+        4 => eff[3],
+        _ => eff[4],
     };
 
     HistogramMs {
