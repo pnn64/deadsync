@@ -557,16 +557,27 @@ impl App {
                         },
                         CurrentScreen::PlayerOptions => {
                             if let Some(pos) = &self.player_options_state {
-                                if pos.rows[pos.selected_row].name == "Exit" {
-                                    if pos.rows[pos.selected_row].selected_choice_index == 0 {
-                                        ScreenAction::Navigate(Screen::Gameplay)
+                                let num_rows = pos.rows.len();
+                                if num_rows > 0 && pos.selected_row == num_rows - 1 {
+                                    if let Some(what_comes_next_row) = pos.rows.get(num_rows - 2) {
+                                        if what_comes_next_row.name == "What comes next?" {
+                                            match what_comes_next_row.selected_choice_index {
+                                                0 => ScreenAction::Navigate(Screen::Gameplay),
+                                                1 => ScreenAction::Navigate(Screen::SelectMusic),
+                                                _ => ScreenAction::None,
+                                            }
+                                        } else {
+                                            ScreenAction::None
+                                        }
                                     } else {
-                                        ScreenAction::Navigate(Screen::SelectMusic)
+                                        ScreenAction::None
                                     }
                                 } else {
                                     ScreenAction::None
                                 }
-                            } else { ScreenAction::None }
+                            } else {
+                                ScreenAction::None
+                            }
                         }
                         CurrentScreen::Evaluation => {
                             play_sound = false; // No sound when leaving eval
@@ -605,11 +616,25 @@ impl App {
                             },
                             CurrentScreen::PlayerOptions => {
                                 if let Some(pos) = &self.player_options_state {
-                                    if pos.rows[pos.selected_row].name == "Exit" {
-                                        if pos.rows[pos.selected_row].selected_choice_index == 0 {
-                                            ScreenAction::Navigate(Screen::Gameplay)
+                                    let num_rows = pos.rows.len();
+                                    if num_rows > 0 && pos.selected_row == num_rows - 1 {
+                                        if let Some(what_comes_next_row) = pos.rows.get(num_rows - 2) {
+                                            if what_comes_next_row.name == "What comes next?" {
+                                                match what_comes_next_row.selected_choice_index {
+                                                    0 => ScreenAction::Navigate(Screen::Gameplay),
+                                                    1 => ScreenAction::Navigate(Screen::SelectMusic),
+                                                    _ => {
+                                                        play_sound = false; // No action, no sound
+                                                        ScreenAction::None
+                                                    }
+                                                }
+                                            } else {
+                                                play_sound = false;
+                                                ScreenAction::None
+                                            }
                                         } else {
-                                            ScreenAction::Navigate(Screen::SelectMusic)
+                                            play_sound = false;
+                                            ScreenAction::None
                                         }
                                     } else {
                                         play_sound = false;

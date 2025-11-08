@@ -205,8 +205,20 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
             choice_difficulty_indices: Some(stepchart_choice_indices),
         },
         Row {
-            name: "Exit".to_string(),
-            choices: vec!["Start Game".to_string(), "Go Back".to_string()],
+            name: "What comes next?".to_string(),
+            choices: vec![
+                "Gameplay".to_string(),
+                "Choose a Different Song".to_string(),
+                "Advanced Modifiers".to_string(),
+                "Uncommon Modifiers".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Go back and choose a different song or change additional modifiers.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "".to_string(),
+            choices: vec!["Exit".to_string()],
             selected_choice_index: 0,
             help: vec!["".to_string()],
             choice_difficulty_indices: None,
@@ -409,12 +421,17 @@ pub fn handle_key_press(state: &mut State, e: &KeyEvent) -> ScreenAction {
                 state.nav_key_last_scrolled_at = Some(Instant::now());
             }
             KeyCode::Enter => {
-                if num_rows > 0 && state.rows[state.selected_row].name == "Exit" {
-                    return if state.rows[state.selected_row].selected_choice_index == 0 {
-                        ScreenAction::Navigate(Screen::Gameplay)
-                    } else {
-                        ScreenAction::Navigate(Screen::SelectMusic)
-                    };
+                if num_rows > 0 && state.selected_row == num_rows - 1 {
+                    // Last row is selected
+                    if let Some(what_comes_next_row) = state.rows.get(num_rows - 2) {
+                        if what_comes_next_row.name == "What comes next?" {
+                            match what_comes_next_row.selected_choice_index {
+                                0 => return ScreenAction::Navigate(Screen::Gameplay),
+                                1 => return ScreenAction::Navigate(Screen::SelectMusic),
+                                _ => {} // No-op
+                            }
+                        }
+                    }
                 }
             }
             _ => {}
@@ -575,9 +592,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         let active_bg = color::rgba_hex("#333333");
         let inactive_bg_base = color::rgba_hex("#071016");
-        let exit_bg = color::simply_love_rgba(state.active_color_index);
         let bg_color = if is_active {
-            if row.name == "Exit" { exit_bg } else { active_bg }
+            active_bg
         } else {
             [inactive_bg_base[0], inactive_bg_base[1], inactive_bg_base[2], 0.8]
         };
@@ -590,7 +606,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             z(100)
         ));
 
-        if row.name != "Exit" {
+        if !row.name.is_empty() {
             actors.push(act!(quad:
                 align(0.5, 0.5): xy(title_bg_center_x, current_row_y):
                 zoomto(TITLE_BG_WIDTH, frame_h):
@@ -599,16 +615,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
         }
 
-        // Left column (row titles): use Simply Love active color for the active row,
-        // default to white otherwise. For the Exit row when active, keep high contrast.
+        // Left column (row titles)
         let title_color = if is_active {
-            if row.name == "Exit" {
-                [0.0, 0.0, 0.0, 1.0]
-            } else {
-                let mut c = color::simply_love_rgba(state.active_color_index);
-                c[3] = 1.0;
-                c
-            }
+            let mut c = color::simply_love_rgba(state.active_color_index);
+            c[3] = 1.0;
+            c
         } else {
             [1.0, 1.0, 1.0, 1.0]
         };
@@ -628,9 +639,56 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         // Some rows should display all choices inline
         let show_all_choices_inline = row.name == "Perspective"
             || row.name == "Background Filter"
-            || row.name == "Stepchart";
+            || row.name == "Stepchart"
+            || row.name == "What comes next?";
 
-        if show_all_choices_inline {
+        if row.name.is_empty() {
+            // Special case for the last "Exit" row
+            let choice_text = &row.choices[row.selected_choice_index];
+            let choice_color = if is_active { [1.0, 1.0, 1.0, 1.0] } else { sl_gray };
+            actors.push(act!(text: font("miso"): settext(choice_text.clone()):
+                align(0.5, 0.5): xy(row_center_x, current_row_y): zoom(0.8):
+                diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+                z(101)
+            ));
+
+            // Draw the selection cursor for the centered "Exit" text when active
+            if is_active {
+                let value_zoom = 0.8;
+                asset_manager.with_fonts(|all_fonts| {
+                    asset_manager.with_font("miso", |metrics_font| {
+                        let mut text_w = crate::ui::font::measure_line_width_logical(metrics_font, choice_text, all_fonts) as f32;
+                        if !text_w.is_finite() || text_w <= 0.0 { text_w = 1.0; }
+                        let text_h = (metrics_font.height as f32).max(1.0);
+                        let draw_w = text_w * value_zoom;
+                        let draw_h = text_h * value_zoom;
+                        let pad_y = widescale(6.0, 8.0);
+                        let min_pad_x = widescale(2.0, 3.0);
+                        let max_pad_x = widescale(22.0, 28.0);
+                        let width_ref = widescale(180.0, 220.0);
+                        let t = (draw_w / width_ref).clamp(0.0, 1.0);
+                        let pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
+                        let border_w = widescale(2.0, 2.5);
+                        let ring_w = draw_w + pad_x * 2.0;
+                        let ring_h = draw_h + pad_y * 2.0;
+
+                        let center_x = row_center_x; // Centered within the row
+                        let left = center_x - ring_w * 0.5;
+                        let right = center_x + ring_w * 0.5;
+                        let top = current_row_y - ring_h * 0.5;
+                        let bottom = current_row_y + ring_h * 0.5;
+                        let mut ring_color = color::simply_love_rgba(state.active_color_index);
+                        ring_color[3] = 1.0;
+
+                        // Top, Bottom, Left, Right borders
+                        actors.push(act!(quad: align(0.5, 0.5): xy(center_x, top + border_w * 0.5): zoomto(ring_w, border_w): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
+                        actors.push(act!(quad: align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5): zoomto(ring_w, border_w): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
+                        actors.push(act!(quad: align(0.5, 0.5): xy(left + border_w * 0.5, current_row_y): zoomto(border_w, ring_h): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
+                        actors.push(act!(quad: align(0.5, 0.5): xy(right - border_w * 0.5, current_row_y): zoomto(border_w, ring_h): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
+                    });
+                });
+            }
+        } else if show_all_choices_inline {
             // Render every option horizontally; when active, all options should be white.
             // The selected option gets an underline (quad) drawn just below the text.
             let value_zoom = 0.8;
@@ -756,7 +814,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Single value display (default behavior)
             let choice_text = &row.choices[row.selected_choice_index];
             let choice_color = if is_active {
-                if row.name == "Exit" { [0.0, 0.0, 0.0, 1.0] } else { [1.0, 1.0, 1.0, 1.0] }
+                [1.0, 1.0, 1.0, 1.0]
             } else {
                 sl_gray
             };
@@ -827,7 +885,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
-    // Help Text Box (render) — uses the same geometry the rows used
+    // ------------------- Description content (selected) -------------------
     actors.push(act!(quad:
         align(0.0, 1.0): xy(help_box_x, help_box_bottom_y):
         zoomto(help_box_w, help_box_h):
