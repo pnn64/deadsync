@@ -49,22 +49,30 @@ static CONFIG: Lazy<Mutex<Config>> = Lazy::new(|| Mutex::new(Config::default()))
 
 fn create_default_config_file() -> Result<(), std::io::Error> {
     info!("'{}' not found, creating with default values.", CONFIG_PATH);
-    let mut conf = Ini::new();
     let default = Config::default();
 
-    conf.set("Options", "Vsync", Some((if default.vsync { "1" } else { "0" }).to_string()));
-    conf.set("Options", "Windowed", Some((if default.windowed { "1" } else { "0" }).to_string()));
-    conf.set("Options", "ShowStats", Some((if default.show_stats { "1" } else { "0" }).to_string()));
-    conf.set("Options", "DisplayWidth", Some(default.display_width.to_string()));
-    conf.set("Options", "DisplayHeight", Some(default.display_height.to_string()));
-    conf.set("Options", "VideoRenderer", Some(default.video_renderer.to_string()));
-    conf.set("Options", "GlobalOffsetSeconds", Some(default.global_offset_seconds.to_string()));
-    conf.set("Options", "FastLoad", Some((if default.fastload { "1" } else { "0" }).to_string()));
-    conf.set("Options", "CacheSongs", Some((if default.cachesongs { "1" } else { "0" }).to_string()));
-    conf.set("Options", "SmoothHistogram", Some((if default.smooth_histogram { "1" } else { "0" }).to_string()));
-    conf.set("Theme", "SimplyLoveColor", Some(default.simply_love_color.to_string()));
+    let mut content = String::new();
 
-    conf.write(CONFIG_PATH)
+    // [Options] section - keys in alphabetical order
+    content.push_str("[Options]\n");
+    content.push_str(&format!("CacheSongs={}\n", if default.cachesongs { "1" } else { "0" }));
+    content.push_str(&format!("DisplayHeight={}\n", default.display_height));
+    content.push_str(&format!("DisplayWidth={}\n", default.display_width));
+    content.push_str(&format!("FastLoad={}\n", if default.fastload { "1" } else { "0" }));
+    content.push_str(&format!("GlobalOffsetSeconds={}\n", default.global_offset_seconds));
+    content.push_str(&format!("ShowStats={}\n", if default.show_stats { "1" } else { "0" }));
+    content.push_str(&format!("SmoothHistogram={}\n", if default.smooth_histogram { "1" } else { "0" }));
+    content.push_str(&format!("VideoRenderer={}\n", default.video_renderer));
+    content.push_str(&format!("Vsync={}\n", if default.vsync { "1" } else { "0" }));
+    content.push_str(&format!("Windowed={}\n", if default.windowed { "1" } else { "0" }));
+    content.push('\n');
+
+    // [Theme] section
+    content.push_str("[Theme]\n");
+    content.push_str(&format!("SimplyLoveColor={}\n", default.simply_love_color));
+    content.push('\n');
+
+    std::fs::write(CONFIG_PATH, content)
 }
 
 pub fn load() {
@@ -114,21 +122,29 @@ pub fn load() {
 
 fn save() {
     let cfg = CONFIG.lock().unwrap();
-    let mut conf = Ini::new();
-
-    conf.set("Options", "Vsync", Some((if cfg.vsync { "1" } else { "0" }).to_string()));
-    conf.set("Options", "Windowed", Some((if cfg.windowed { "1" } else { "0" }).to_string()));
-    conf.set("Options", "ShowStats", Some((if cfg.show_stats { "1" } else { "0" }).to_string()));
-    conf.set("Options", "DisplayWidth", Some(cfg.display_width.to_string()));
-    conf.set("Options", "DisplayHeight", Some(cfg.display_height.to_string()));
-    conf.set("Options", "VideoRenderer", Some(cfg.video_renderer.to_string()));
-    conf.set("Options", "GlobalOffsetSeconds", Some(cfg.global_offset_seconds.to_string()));
-    conf.set("Options", "FastLoad", Some((if cfg.fastload { "1" } else { "0" }).to_string()));
-    conf.set("Options", "CacheSongs", Some((if cfg.cachesongs { "1" } else { "0" }).to_string()));
-    conf.set("Options", "SmoothHistogram", Some((if cfg.smooth_histogram { "1" } else { "0" }).to_string()));
-    conf.set("Theme", "SimplyLoveColor", Some(cfg.simply_love_color.to_string()));
     
-    if let Err(e) = conf.write(CONFIG_PATH) {
+    let mut content = String::new();
+
+    // [Options] section - keys in alphabetical order
+    content.push_str("[Options]\n");
+    content.push_str(&format!("CacheSongs={}\n", if cfg.cachesongs { "1" } else { "0" }));
+    content.push_str(&format!("DisplayHeight={}\n", cfg.display_height));
+    content.push_str(&format!("DisplayWidth={}\n", cfg.display_width));
+    content.push_str(&format!("FastLoad={}\n", if cfg.fastload { "1" } else { "0" }));
+    content.push_str(&format!("GlobalOffsetSeconds={}\n", cfg.global_offset_seconds));
+    content.push_str(&format!("ShowStats={}\n", if cfg.show_stats { "1" } else { "0" }));
+    content.push_str(&format!("SmoothHistogram={}\n", if cfg.smooth_histogram { "1" } else { "0" }));
+    content.push_str(&format!("VideoRenderer={}\n", cfg.video_renderer));
+    content.push_str(&format!("Vsync={}\n", if cfg.vsync { "1" } else { "0" }));
+    content.push_str(&format!("Windowed={}\n", if cfg.windowed { "1" } else { "0" }));
+    content.push('\n');
+
+    // [Theme] section
+    content.push_str("[Theme]\n");
+    content.push_str(&format!("SimplyLoveColor={}\n", cfg.simply_love_color));
+    content.push('\n');
+
+    if let Err(e) = std::fs::write(CONFIG_PATH, content) {
         warn!("Failed to save config file: {}", e);
     }
 }

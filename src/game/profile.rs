@@ -93,38 +93,33 @@ fn create_default_files() -> Result<(), std::io::Error> {
 
     // Create profile.ini
     if !Path::new(PROFILE_INI_PATH).exists() {
-        let mut profile_conf = Ini::new();
         let default_profile = Profile::default();
-        profile_conf.set(
-            "userprofile",
-            "DisplayName",
-            Some(default_profile.display_name),
-        );
-        profile_conf.set(
-            "userprofile",
-            "PlayerInitials",
-            Some(default_profile.player_initials),
-        );
-        profile_conf.set(
-            "PlayerOptions",
-            "BackgroundFilter",
-            Some(default_profile.background_filter.to_string()),
-        );
-        profile_conf.set(
-            "PlayerOptions",
-            "ScrollSpeed",
-            Some(default_profile.scroll_speed.to_string()),
-        );
-        profile_conf.write(PROFILE_INI_PATH)?;
+        let mut content = String::new();
+
+        content.push_str("[PlayerOptions]\n");
+        content.push_str(&format!("BackgroundFilter = {}\n", default_profile.background_filter));
+        content.push_str(&format!("ScrollSpeed = {}\n", default_profile.scroll_speed));
+        content.push('\n');
+
+        content.push_str("[userprofile]\n");
+        content.push_str(&format!("DisplayName = {}\n", default_profile.display_name));
+        content.push_str(&format!("PlayerInitials = {}\n", default_profile.player_initials));
+        content.push('\n');
+
+        fs::write(PROFILE_INI_PATH, content)?;
     }
 
     // Create groovestats.ini
     if !Path::new(GROOVESTATS_INI_PATH).exists() {
-        let mut gs_conf = Ini::new();
-        gs_conf.set("GrooveStats", "ApiKey", Some("".to_string()));
-        gs_conf.set("GrooveStats", "IsPadPlayer", Some("0".to_string()));
-        gs_conf.set("GrooveStats", "Username", Some("".to_string()));
-        gs_conf.write(GROOVESTATS_INI_PATH)?;
+        let mut content = String::new();
+
+        content.push_str("[GrooveStats]\n");
+        content.push_str("ApiKey = \n");
+        content.push_str("IsPadPlayer = 0\n");
+        content.push_str("Username = \n");
+        content.push('\n');
+
+        fs::write(GROOVESTATS_INI_PATH, content)?;
     }
 
     Ok(())
@@ -132,64 +127,34 @@ fn create_default_files() -> Result<(), std::io::Error> {
 
 fn save_profile_ini() {
     let profile = PROFILE.lock().unwrap();
-    let mut conf = Ini::new();
+    let mut content = String::new();
 
-    // Set all known values from the struct back into the ini object
-    // to ensure the file is complete, even if it didn't exist.
-    conf.set(
-        "userprofile",
-        "DisplayName",
-        Some(profile.display_name.clone()),
-    );
-    conf.set(
-        "userprofile",
-        "PlayerInitials",
-        Some(profile.player_initials.clone()),
-    );
-    conf.set(
-        "PlayerOptions",
-        "BackgroundFilter",
-        Some(profile.background_filter.to_string()),
-    );
-    conf.set(
-        "PlayerOptions",
-        "ScrollSpeed",
-        Some(profile.scroll_speed.to_string()),
-    );
+    content.push_str("[PlayerOptions]\n");
+    content.push_str(&format!("BackgroundFilter={}\n", profile.background_filter));
+    content.push_str(&format!("ScrollSpeed={}\n", profile.scroll_speed));
+    content.push('\n');
 
-    if let Err(e) = conf.write(PROFILE_INI_PATH) {
+    content.push_str("[userprofile]\n");
+    content.push_str(&format!("DisplayName={}\n", profile.display_name));
+    content.push_str(&format!("PlayerInitials={}\n", profile.player_initials));
+    content.push('\n');
+
+    if let Err(e) = fs::write(PROFILE_INI_PATH, content) {
         warn!("Failed to save {}: {}", PROFILE_INI_PATH, e);
     }
 }
 
 fn save_groovestats_ini() {
     let profile = PROFILE.lock().unwrap();
-    let mut conf = Ini::new();
+    let mut content = String::new();
 
-    conf.set(
-        "GrooveStats",
-        "ApiKey",
-        Some(profile.groovestats_api_key.clone()),
-    );
-    conf.set(
-        "GrooveStats",
-        "IsPadPlayer",
-        Some(
-            (if profile.groovestats_is_pad_player {
-                "1"
-            } else {
-                "0"
-            })
-            .to_string(),
-        ),
-    );
-    conf.set(
-        "GrooveStats",
-        "Username",
-        Some(profile.groovestats_username.clone()),
-    );
+    content.push_str("[GrooveStats]\n");
+    content.push_str(&format!("ApiKey={}\n", profile.groovestats_api_key));
+    content.push_str(&format!("IsPadPlayer={}\n", if profile.groovestats_is_pad_player { "1" } else { "0" }));
+    content.push_str(&format!("Username={}\n", profile.groovestats_username));
+    content.push('\n');
 
-    if let Err(e) = conf.write(GROOVESTATS_INI_PATH) {
+    if let Err(e) = fs::write(GROOVESTATS_INI_PATH, content) {
         warn!("Failed to save {}: {}", GROOVESTATS_INI_PATH, e);
     }
 }
