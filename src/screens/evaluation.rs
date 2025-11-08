@@ -182,17 +182,16 @@ static JUDGMENT_ORDER: [JudgeGrade; 6] = [
 struct JudgmentDisplayInfo {
     label: &'static str,
     color: [f32; 4],
-    dim_color: [f32; 4],
 }
 
 static JUDGMENT_INFO: LazyLock<HashMap<JudgeGrade, JudgmentDisplayInfo>> = LazyLock::new(|| {
     HashMap::from([
-        (JudgeGrade::Fantastic, JudgmentDisplayInfo { label: "FANTASTIC", color: color::rgba_hex(color::JUDGMENT_HEX[0]), dim_color: color::rgba_hex("#08363E") }),
-        (JudgeGrade::Excellent, JudgmentDisplayInfo { label: "EXCELLENT", color: color::rgba_hex(color::JUDGMENT_HEX[1]), dim_color: color::rgba_hex("#3C2906") }),
-        (JudgeGrade::Great,     JudgmentDisplayInfo { label: "GREAT",     color: color::rgba_hex(color::JUDGMENT_HEX[2]), dim_color: color::rgba_hex("#1B3516") }),
-        (JudgeGrade::Decent,    JudgmentDisplayInfo { label: "DECENT",    color: color::rgba_hex(color::JUDGMENT_HEX[3]), dim_color: color::rgba_hex("#301844") }),
-        (JudgeGrade::WayOff,    JudgmentDisplayInfo { label: "WAY OFF",   color: color::rgba_hex(color::JUDGMENT_HEX[4]), dim_color: color::rgba_hex("#352319") }),
-        (JudgeGrade::Miss,      JudgmentDisplayInfo { label: "MISS",      color: color::rgba_hex(color::JUDGMENT_HEX[5]), dim_color: color::rgba_hex("#440C0C") }),
+        (JudgeGrade::Fantastic, JudgmentDisplayInfo { label: "FANTASTIC", color: color::rgba_hex(color::JUDGMENT_HEX[0]) }),
+        (JudgeGrade::Excellent, JudgmentDisplayInfo { label: "EXCELLENT", color: color::rgba_hex(color::JUDGMENT_HEX[1]) }),
+        (JudgeGrade::Great,     JudgmentDisplayInfo { label: "GREAT",     color: color::rgba_hex(color::JUDGMENT_HEX[2]) }),
+        (JudgeGrade::Decent,    JudgmentDisplayInfo { label: "DECENT",    color: color::rgba_hex(color::JUDGMENT_HEX[3]) }),
+        (JudgeGrade::WayOff,    JudgmentDisplayInfo { label: "WAY OFF",   color: color::rgba_hex(color::JUDGMENT_HEX[4]) }),
+        (JudgeGrade::Miss,      JudgmentDisplayInfo { label: "MISS",      color: color::rgba_hex(color::JUDGMENT_HEX[5]) }),
     ])
 });
 
@@ -242,13 +241,13 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
             let label_local_y = (i as f32 * 28.0) - 16.0;
             actors.push(act!(text: font("miso"): settext(info.label):
                 align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
-                maxwidth(76.0): zoom(label_zoom):
+                maxwidth(76.0): zoom(label_zoom): horizalign(right):
                 diffuse(info.color[0], info.color[1], info.color[2], info.color[3]): z(101)
             ));
 
             // Number (digit by digit for dimming)
             let bright_color = info.color;
-            let dim_color = info.dim_color;
+            let dim_color = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[i]);
             let number_str = format!("{:0width$}", count, width = digits_to_fmt);
             let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
             
@@ -286,7 +285,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
             let label_local_x = -160.0;
             let label_local_y = (i as f32 * 28.0) + 41.0;
             actors.push(act!(text: font("miso"): settext(label.to_string()):
-                align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y): zoom(0.833): z(101)
+                align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y): horizalign(right): zoom(0.833): z(101)
             ));
 
             let possible_clamped = possible.min(999);

@@ -311,48 +311,12 @@ struct JudgmentDisplayInfo {
 
 static JUDGMENT_INFO: LazyLock<HashMap<JudgeGrade, JudgmentDisplayInfo>> = LazyLock::new(|| {
     HashMap::from([
-        (
-            JudgeGrade::Fantastic,
-            JudgmentDisplayInfo {
-                label: "FANTASTIC",
-                color: color::rgba_hex(color::JUDGMENT_HEX[0]),
-            },
-        ),
-        (
-            JudgeGrade::Excellent,
-            JudgmentDisplayInfo {
-                label: "EXCELLENT",
-                color: color::rgba_hex(color::JUDGMENT_HEX[1]),
-            },
-        ),
-        (
-            JudgeGrade::Great,
-            JudgmentDisplayInfo {
-                label: "GREAT",
-                color: color::rgba_hex(color::JUDGMENT_HEX[2]),
-            },
-        ),
-        (
-            JudgeGrade::Decent,
-            JudgmentDisplayInfo {
-                label: "DECENT",
-                color: color::rgba_hex(color::JUDGMENT_HEX[3]),
-            },
-        ),
-        (
-            JudgeGrade::WayOff,
-            JudgmentDisplayInfo {
-                label: "WAY OFF",
-                color: color::rgba_hex(color::JUDGMENT_HEX[4]),
-            },
-        ),
-        (
-            JudgeGrade::Miss,
-            JudgmentDisplayInfo {
-                label: "MISS",
-                color: color::rgba_hex(color::JUDGMENT_HEX[5]),
-            },
-        ),
+        (JudgeGrade::Fantastic, JudgmentDisplayInfo { label: "FANTASTIC", color: color::rgba_hex(color::JUDGMENT_HEX[0]) }),
+        (JudgeGrade::Excellent, JudgmentDisplayInfo { label: "EXCELLENT", color: color::rgba_hex(color::JUDGMENT_HEX[1]) }),
+        (JudgeGrade::Great,     JudgmentDisplayInfo { label: "GREAT",     color: color::rgba_hex(color::JUDGMENT_HEX[2]) }),
+        (JudgeGrade::Decent,    JudgmentDisplayInfo { label: "DECENT",    color: color::rgba_hex(color::JUDGMENT_HEX[3]) }),
+        (JudgeGrade::WayOff,    JudgmentDisplayInfo { label: "WAY OFF",   color: color::rgba_hex(color::JUDGMENT_HEX[4]) }),
+        (JudgeGrade::Miss,      JudgmentDisplayInfo { label: "MISS",      color: color::rgba_hex(color::JUDGMENT_HEX[5]) }),
     ])
 });
 
@@ -1813,7 +1777,7 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
 
             let bright = info.color;
-            let dim = [bright[0]*0.35, bright[1]*0.35, bright[2]*0.35, bright[3]];
+            let dim = color::rgba_hex(color::JUDGMENT_DIM_HEX[index]);
             let full_number_str = format!("{:0width$}", count, width = digits);
 
             for (i, ch) in full_number_str.chars().enumerate() {

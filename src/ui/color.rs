@@ -80,6 +80,26 @@ pub const JUDGMENT_HEX: [&str; 6] = [
     "#FF3030", // Miss
 ];
 
+/// Dimmed judgment colors for leading zeros in stats displays.
+pub const JUDGMENT_DIM_HEX: [&str; 6] = [
+    "#0C4E59",
+    "#593D09",
+    "#2D5925",
+    "#3F2059",
+    "#593B29",
+    "#591010",
+];
+
+/// Dimmed judgment colors for the evaluation screen stats.
+pub const JUDGMENT_DIM_EVAL_HEX: [&str; 6] = [
+    "#08363E",
+    "#3C2906",
+    "#1B3516",
+    "#301844",
+    "#352319",
+    "#440C0C",
+];
+
 /// Difficulty names as they appear in simfiles. Used for parsing and lookups.
 pub const FILE_DIFFICULTY_NAMES: [&str; 5] = ["Beginner", "Easy", "Medium", "Hard", "Challenge"];
 /// Difficulty names as they should be displayed in the UI.
