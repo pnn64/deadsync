@@ -64,13 +64,16 @@ pub struct ScatterPoint {
 
 #[derive(Clone, Debug, Default)]
 pub struct HistogramMs {
-    pub bins: Vec<(i32, u32)>, // (bin_ms, count), sorted by bin
-    pub max_count: u32,
-    pub worst_window_ms: f32, // for scaling (-worst..+worst)
+    pub bins: Vec<(i32, u32)>,        // raw counts (bin_ms, count), sorted by bin
+    pub smoothed: Vec<(i32, f32)>,    // Gaussian-smoothed counts (bin_ms, value)
+    pub max_count: u32,               // peak of raw counts
+    pub worst_observed_ms: f32,       // max |offset| actually observed
+    pub worst_window_ms: f32,         // for scaling (-worst..+worst)
 }
 
 const HIST_BIN_MS: f32 = 1.0; // 1ms bins, like Simply Love using 0.001s
-const DEFAULT_WORST_WINDOW_MS: f32 = 180.0; // ITG W5
+// Gaussian-like kernel used by Simply Love to soften the histogram
+const GAUSS7: [f32; 7] = [0.045, 0.090, 0.180, 0.370, 0.180, 0.090, 0.045];
 
 #[inline(always)]
 pub fn build_scatter_points(notes: &[Note], note_time_cache: &[f32]) -> Vec<ScatterPoint> {
@@ -101,6 +104,7 @@ pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
     let mut max_abs: f32 = 0.0;
     // Determine worst timing window seen (at least W3 per Simply Love histogram)
     let mut worst_window_index = 3; // 1=W1..5=W5
+    let mut worst_observed_bin_abs: i32 = 0;
 
     for n in notes {
         let Some(j) = n.result.as_ref() else { continue; };
@@ -113,6 +117,7 @@ pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
         if *c > max_count { max_count = *c; }
         let a = e.abs();
         if a > max_abs { max_abs = a; }
+        if b.abs() > worst_observed_bin_abs { worst_observed_bin_abs = b.abs(); }
 
         match j.grade {
             JudgeGrade::WayOff => worst_window_index = worst_window_index.max(5),
@@ -136,9 +141,30 @@ pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
         _ => eff[4],
     };
 
+    // Build smoothed distribution across the whole timing window range (1ms steps)
+    let worst_window_bin = (worst_window_ms / HIST_BIN_MS).round() as i32;
+    let mut smoothed: Vec<(i32, f32)> = Vec::with_capacity((worst_window_bin * 2 + 1).max(1) as usize);
+
+    // Rebuild a fast lookup for counts
+    let mut count_map: HashMap<i32, u32> = HashMap::with_capacity(bins.len());
+    for (bin, c) in &bins { count_map.insert(*bin, *c); }
+
+    for i in -worst_window_bin..=worst_window_bin {
+        let mut y = 0.0_f32;
+        for (j, w) in GAUSS7.iter().enumerate() {
+            let offset = j as i32 - 3; // -3..+3
+            let k = (i + offset).clamp(-worst_window_bin, worst_window_bin);
+            let c = *count_map.get(&k).unwrap_or(&0) as f32;
+            y += c * *w;
+        }
+        smoothed.push((i, y));
+    }
+
     HistogramMs {
         bins,
+        smoothed,
         max_count,
+        worst_observed_ms: (worst_observed_bin_abs as f32) * HIST_BIN_MS,
         worst_window_ms: worst_window_ms.max(max_abs),
     }
 }

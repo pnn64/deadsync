@@ -19,6 +19,8 @@ pub struct Config {
     pub global_offset_seconds: f32,
     pub fastload: bool,
     pub cachesongs: bool,
+    // Whether to apply Gaussian smoothing to the eval histogram (Simply Love style)
+    pub smooth_histogram: bool,
 }
 
 impl Default for Config {
@@ -34,6 +36,7 @@ impl Default for Config {
             global_offset_seconds: -0.008,
             fastload: true,
             cachesongs: true,
+            smooth_histogram: true,
         }
     }
 }
@@ -58,6 +61,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     conf.set("Options", "GlobalOffsetSeconds", Some(default.global_offset_seconds.to_string()));
     conf.set("Options", "FastLoad", Some((if default.fastload { "1" } else { "0" }).to_string()));
     conf.set("Options", "CacheSongs", Some((if default.cachesongs { "1" } else { "0" }).to_string()));
+    conf.set("Options", "SmoothHistogram", Some((if default.smooth_histogram { "1" } else { "0" }).to_string()));
     conf.set("Theme", "SimplyLoveColor", Some(default.simply_love_color.to_string()));
 
     conf.write(CONFIG_PATH)
@@ -91,6 +95,7 @@ pub fn load() {
                 cfg.global_offset_seconds = conf.get("Options", "GlobalOffsetSeconds").and_then(|v| v.parse().ok()).unwrap_or(default.global_offset_seconds);
                 cfg.fastload = conf.get("Options", "FastLoad").and_then(|v| v.parse::<u8>().ok()).map_or(default.fastload, |v| v != 0);
                 cfg.cachesongs = conf.get("Options", "CacheSongs").and_then(|v| v.parse::<u8>().ok()).map_or(default.cachesongs, |v| v != 0);
+                cfg.smooth_histogram = conf.get("Options", "SmoothHistogram").and_then(|v| v.parse::<u8>().ok()).map_or(default.smooth_histogram, |v| v != 0);
                 cfg.simply_love_color = conf.get("Theme", "SimplyLoveColor").and_then(|v| v.parse().ok()).unwrap_or(default.simply_love_color);
                 
                 info!("Configuration loaded from '{}'.", CONFIG_PATH);
@@ -120,6 +125,7 @@ fn save() {
     conf.set("Options", "GlobalOffsetSeconds", Some(cfg.global_offset_seconds.to_string()));
     conf.set("Options", "FastLoad", Some((if cfg.fastload { "1" } else { "0" }).to_string()));
     conf.set("Options", "CacheSongs", Some((if cfg.cachesongs { "1" } else { "0" }).to_string()));
+    conf.set("Options", "SmoothHistogram", Some((if cfg.smooth_histogram { "1" } else { "0" }).to_string()));
     conf.set("Theme", "SimplyLoveColor", Some(cfg.simply_love_color.to_string()));
     
     if let Err(e) = conf.write(CONFIG_PATH) {

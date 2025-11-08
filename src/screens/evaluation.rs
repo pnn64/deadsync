@@ -437,13 +437,21 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
         let total_bins = (worst_bin * 2 + 1).max(1) as i32;
         let bar_w = pane_width / (total_bins as f32);
 
+        let use_smoothing = crate::config::get().smooth_histogram;
         use std::collections::HashMap;
-        let mut count_map: HashMap<i32, u32> = HashMap::with_capacity(score_info.histogram.bins.len());
-        for (bin, cnt) in &score_info.histogram.bins {
-            count_map.insert(*bin, *cnt);
-        }
-
-        let max_count = score_info.histogram.max_count.max(1);
+        let worst_observed = score_info.histogram.worst_observed_ms.max(0.0);
+        // Choose source (smoothed vs raw)
+        let (height_scale_peak, get_value_at_bin): (f32, Box<dyn Fn(i32) -> f32>) = if use_smoothing {
+            let mut smooth_map: HashMap<i32, f32> = HashMap::with_capacity(score_info.histogram.smoothed.len());
+            for (bin, val) in &score_info.histogram.smoothed { smooth_map.insert(*bin, *val); }
+            let raw_peak = score_info.histogram.max_count.max(1) as f32;
+            (raw_peak, Box::new(move |b| *smooth_map.get(&b).unwrap_or(&0.0)))
+        } else {
+            let mut count_map: HashMap<i32, u32> = HashMap::with_capacity(score_info.histogram.bins.len());
+            for (bin, cnt) in &score_info.histogram.bins { count_map.insert(*bin, *cnt); }
+            let max_count = score_info.histogram.max_count.max(1) as f32;
+            (max_count, Box::new(move |b| *count_map.get(&b).unwrap_or(&0) as f32))
+        };
 
         let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
             if abs_ms <= timing_windows[0] { color::rgba_hex(color::JUDGMENT_HEX[0]) }
@@ -453,12 +461,15 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
             else { color::rgba_hex(color::JUDGMENT_HEX[4]) }
         };
 
-        let mut draw_bin = |bin_idx: i32, count: u32| {
-            if count == 0 { return; }
+        let mut draw_bin = |bin_idx: i32, y_val: f32| {
+            if y_val <= 0.0 { return; }
             let x = (bin_idx - (-worst_bin)) as f32 * bar_w;
             let abs_ms = (bin_idx as f32).abs();
+            // Don't draw beyond the worst observed offset, matching SL's behavior
+            if abs_ms > worst_observed { return; }
             let col = color_for_abs_ms(abs_ms);
-            let h = (count as f32 / max_count as f32) * (graph_area_height * 0.75);
+            // Scale value by peak to 75% of graph area
+            let h = (y_val / height_scale_peak) * (graph_area_height * 0.75);
             if h <= 0.0 { return; }
             children.push(act!(quad:
                 align(0.0, 1.0): xy(x, y_bottom):
@@ -468,8 +479,8 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
         };
 
         for bin_idx in (-worst_bin)..=(worst_bin) {
-            let count = *count_map.get(&bin_idx).unwrap_or(&0);
-            draw_bin(bin_idx, count);
+            let y = get_value_at_bin(bin_idx);
+            draw_bin(bin_idx, y);
         }
     }
 
