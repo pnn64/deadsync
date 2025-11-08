@@ -703,7 +703,6 @@ pub struct TimingStats {
     pub mean_ms: f32,
     pub stddev_ms: f32,
     pub max_abs_ms: f32,
-    pub count: usize,
 }
 
 #[inline(always)]
@@ -746,7 +745,7 @@ pub fn compute_note_timing_stats(notes: &[Note]) -> TimingStats {
         (sum_diff_sq / ((count as f32) - 1.0)).sqrt()
     } else { 0.0 };
 
-    TimingStats { mean_abs_ms, mean_ms, stddev_ms, max_abs_ms: max_abs, count }
+    TimingStats { mean_abs_ms, mean_ms, stddev_ms, max_abs_ms: max_abs }
 }
 
 #[derive(Copy, Clone, Debug)]
