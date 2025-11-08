@@ -1110,23 +1110,30 @@ fn create_instance(entry: &Entry, window: &Window) -> Result<Instance, Box<dyn E
         .engine_name(ffi::CStr::from_bytes_with_nul(b"DeadSync Engine\0")?)
         .engine_version(vk::make_api_version(0, 1, 0, 0))
         .api_version(vk::API_VERSION_1_3);
-
+ 
     let mut extension_names = ash_window::enumerate_required_extensions(window.display_handle()?.as_raw())?.to_vec();
     if cfg!(debug_assertions) {
         extension_names.push(ash::ext::debug_utils::NAME.as_ptr());
     }
-
+ 
+    let mut create_flags = vk::InstanceCreateFlags::empty();
+    if cfg!(target_os = "macos") {
+        extension_names.push(ash::khr::portability_enumeration::NAME.as_ptr());
+        create_flags |= vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR;
+    }
+ 
     let layers_names_raw: Vec<*const ffi::c_char> = if cfg!(debug_assertions) {
         vec![ffi::CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0")?.as_ptr()]
     } else {
         vec![]
     };
-
+ 
     let create_info = vk::InstanceCreateInfo::default()
         .application_info(&app_info)
         .enabled_extension_names(&extension_names)
-        .enabled_layer_names(&layers_names_raw);
-
+        .enabled_layer_names(&layers_names_raw)
+        .flags(create_flags);
+ 
     unsafe { Ok(entry.create_instance(&create_info, None)?) }
 }
 
