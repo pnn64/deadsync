@@ -13,7 +13,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // The game can run without audio; log the error and continue.
         log::error!("Failed to initialize audio engine: {}", e);
     }
-    core::network::init();
     // env_logger is initialized in app::run()
     app::run()
 }

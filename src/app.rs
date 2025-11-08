@@ -722,6 +722,8 @@ impl ApplicationHandler for App {
                 error!("Failed to initialize graphics: {}", e);
                 event_loop.exit();
             }
+            // After all initial loading is complete, start network checks.
+            crate::core::network::init();
         }
     }
 
