@@ -473,7 +473,7 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
             if h <= 0.0 { return; }
             children.push(act!(quad:
                 align(0.0, 1.0): xy(x, y_bottom):
-                setsize(bar_w.max(1.0_f32), h):
+                setsize(bar_w, h):
                 diffuse(col[0], col[1], col[2], 1.0)
             ));
         };
