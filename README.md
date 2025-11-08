@@ -1,6 +1,6 @@
 # DeadSync
 
-A StepMania/ITG rhythm game engine written entirely in Rust.
+DeadSync, as in "dead on sync", is a StepMania/ITG engine with Vulkan/OpenGL backends, focused on perfect sync and competitive-level performance, written entirely in Rust. It runs on **Windows, Linux, BSD, and macOS**, on both **x86_64** and **ARM64** (including Apple Silicon).
 
 ## Prerequisites
 
