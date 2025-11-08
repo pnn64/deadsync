@@ -353,8 +353,20 @@ fn create_opengl_context(
     
     #[cfg(not(target_os = "windows"))]
     let (display, vsync_logic) = {
-        info!("Using EGL for OpenGL context.");
-        let preference = DisplayApiPreference::Egl;
+        // Select the appropriate DisplayApiPreference based on the OS
+        #[cfg(target_os = "macos")]
+        let preference = {
+            info!("Using CGL for OpenGL context.");
+            DisplayApiPreference::Cgl
+        };
+
+        #[cfg(all(unix, not(target_os = "macos")))]
+        let preference = {
+            info!("Using EGL for OpenGL context.");
+            DisplayApiPreference::Egl
+        };
+
+        // The rest of the logic is common for macOS and Linux/BSD
         let display = unsafe { Display::new(display_handle, preference)? };
         
         let vsync_logic = move |_display: &Display, surface: &Surface<WindowSurface>, context: &PossiblyCurrentContext| {
