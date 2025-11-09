@@ -396,9 +396,8 @@ fn change_choice(state: &mut State, delta: isize) {
         row.choices[0] = speed_mod_value_str;
         audio::play_sfx("assets/sounds/change_value.ogg");
     } else if row.name == "Music Rate" {
-        // Adjust music playback rate (0.50x .. 3.00x in 0.01 steps)
         let increment = 0.01f32;
-        let min_rate = 0.50f32;
+        let min_rate = 0.05f32;
         let max_rate = 3.00f32;
         state.music_rate += delta as f32 * increment;
         state.music_rate = (state.music_rate / increment).round() * increment;
