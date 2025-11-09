@@ -396,7 +396,7 @@ fn music_decoder_thread_loop(
 
     'main_loop: loop {
         // --- rubato SincFixedOut setup ---
-        const OUT_FRAMES_PER_CALL: usize = 512;
+        const OUT_FRAMES_PER_CALL: usize = 256;
         // Adjust ratio by 1/rate to speed up (rate>1) or slow down (rate<1)
         let mut current_rate_f32 = f32::from_bits(rate_bits.load(Ordering::Relaxed));
         if !current_rate_f32.is_finite() || current_rate_f32 <= 0.0 { current_rate_f32 = 1.0; }
@@ -746,7 +746,7 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
     let out_ch = ENGINE.device_channels;
     let out_hz = ENGINE.device_sample_rate;
 
-    const OUT_FRAMES_PER_CALL: usize = 512;
+    const OUT_FRAMES_PER_CALL: usize = 256;
     let ratio = out_hz as f64 / in_hz as f64;
     let iparams = SincInterpolationParameters {
         sinc_len: 256,
@@ -842,7 +842,7 @@ mod internal {
 
     // Pre-roll input frames and ring capacity
     pub const PREROLL_IN_FRAMES: u64 = 8;
-    pub const RING_CAP_SAMPLES: usize = 1 << 18; // interleaved i16 samples
+    pub const RING_CAP_SAMPLES: usize = 1 << 16; // interleaved i16 samples (smaller = snappier)
 
     /* ----------------------------- SPSC ring ----------------------------- */
 
