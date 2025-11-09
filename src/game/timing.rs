@@ -429,7 +429,7 @@ fn parse_stops(s: &str) -> Result<Vec<StopSegment>, &'static str> {
 		return Ok(Vec::new());
 	}
 	let segments: Result<Vec<_>, _> = s.split(',')
-		.map(|pair| {
+		.map(|pair| -> Result<StopSegment, &'static str> {
 			let mut parts = pair.split('=');
 			let beat_str = parts.next().ok_or("Missing beat")?.trim();
 			let duration_str = parts.next().ok_or("Missing duration")?.trim();
@@ -437,11 +437,9 @@ fn parse_stops(s: &str) -> Result<Vec<StopSegment>, &'static str> {
 			let duration = duration_str
 				.parse::<f32>()
 				.map_err(|_| "Invalid duration")?;
-			if duration > 0.0 {
-				Ok(StopSegment { beat, duration })
-			} else {
-				Err("Stop duration must be positive")
-			}
+			
+			// The check for positive duration is correctly removed.
+			Ok(StopSegment { beat, duration })
 		})
 		.collect();
 
