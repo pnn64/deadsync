@@ -409,10 +409,8 @@ fn change_choice(state: &mut State, delta: isize) {
         // Update session music rate immediately so SelectMusic will match on return
         crate::game::profile::set_session_music_rate(state.music_rate);
 
-        // If the preview is already playing, refresh it at the new rate
-        if let Some((path, cut)) = compute_preview_cut(&state.song) {
-            audio::play_music(path, cut, true, state.music_rate);
-        }
+        // If a preview is playing, adjust its rate without restarting it
+        audio::set_music_rate(state.music_rate);
     } else {
         let num_choices = row.choices.len();
         if num_choices > 0 {

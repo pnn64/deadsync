@@ -3,6 +3,7 @@ use cpal::{Sample, SampleFormat, StreamConfig};
 use lewton::inside_ogg::OggStreamReader;
 use log::{error, info, warn};
 use once_cell::sync::Lazy;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use rubato::{Resampler, SincFixedOut, SincInterpolationParameters, SincInterpolationType, WindowFunction};
 use std::collections::HashMap;
 use std::fs::File;
@@ -38,6 +39,8 @@ enum AudioCommand {
     // Path, cut, looping, rate (1.0 = normal)
     PlayMusic(PathBuf, Cut, bool, f32),
     StopMusic,
+    // Change rate of currently playing music without restarting
+    SetMusicRate(f32),
 }
 
 // Global engine (initialized once)
@@ -53,7 +56,8 @@ struct AudioEngine {
 /// A handle to a streaming music track.
 struct MusicStream {
     thread: thread::JoinHandle<()>,
-    stop_signal: Arc<std::sync::atomic::AtomicBool>,
+    stop_signal: Arc<AtomicBool>,
+    rate_bits: Arc<AtomicU32>,
 }
 
 /* ============================ Public functions ============================ */
@@ -96,6 +100,12 @@ pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
 /// Stops the currently playing music track.
 pub fn stop_music() {
     let _ = ENGINE.command_sender.send(AudioCommand::StopMusic);
+}
+
+/// Adjusts the playback rate for the current music stream, if any.
+pub fn set_music_rate(rate: f32) {
+    let rate = if rate.is_finite() && rate > 0.0 { rate } else { 1.0 };
+    let _ = ENGINE.command_sender.send(AudioCommand::SetMusicRate(rate));
 }
 
 /* ============================ Engine internals ============================ */
@@ -243,13 +253,21 @@ fn audio_manager_thread(command_receiver: Receiver<AudioCommand>) {
                     let _ = old.thread.join();
                 }
                 internal::ring_clear(&music_ring);
-                music_stream = Some(spawn_music_decoder_thread(path, cut, looping, rate, music_ring.clone()));
+                let rate_bits = Arc::new(AtomicU32::new(rate.to_bits()));
+                music_stream = Some(spawn_music_decoder_thread(path, cut, looping, rate_bits, music_ring.clone()));
             }
             Ok(AudioCommand::StopMusic) => {
                 if let Some(old) = music_stream.take() {
                     old.stop_signal.store(true, std::sync::atomic::Ordering::Relaxed);
                     let _ = old.thread.join();
                 }
+                internal::ring_clear(&music_ring);
+            }
+            Ok(AudioCommand::SetMusicRate(new_rate)) => {
+                if let Some(ms) = &music_stream {
+                    ms.rate_bits.store(new_rate.to_bits(), Ordering::Relaxed);
+                }
+                // Drop buffered old-rate samples so the change is heard immediately.
                 internal::ring_clear(&music_ring);
             }
             Err(_) => break, // main dropped; exit thread
@@ -260,17 +278,24 @@ fn audio_manager_thread(command_receiver: Receiver<AudioCommand>) {
 /* ========================= Music decode + resample ========================= */
 
 /// Spawn a thread to decode & resample one music file into the ring buffer.
-fn spawn_music_decoder_thread(path: PathBuf, cut: Cut, looping: bool, rate: f32, ring: Arc<internal::SpscRingI16>) -> MusicStream {
-    let stop_signal = Arc::new(std::sync::atomic::AtomicBool::new(false));
+fn spawn_music_decoder_thread(
+    path: PathBuf,
+    cut: Cut,
+    looping: bool,
+    rate_bits: Arc<AtomicU32>,
+    ring: Arc<internal::SpscRingI16>,
+) -> MusicStream {
+    let stop_signal = Arc::new(AtomicBool::new(false));
     let stop_signal_clone = stop_signal.clone();
+    let rate_bits_clone = rate_bits.clone();
 
     let thread = thread::spawn(move || {
-        if let Err(e) = music_decoder_thread_loop(path, cut, looping, rate, ring, stop_signal_clone) {
+        if let Err(e) = music_decoder_thread_loop(path, cut, looping, rate_bits_clone, ring, stop_signal_clone) {
             error!("Music decoder thread failed: {}", e);
         }
     });
 
-    MusicStream { thread, stop_signal }
+    MusicStream { thread, stop_signal, rate_bits }
 }
 
 #[inline]
@@ -339,7 +364,12 @@ fn apply_fade_envelope(samples: &mut [i16], channels: usize, start_frame: u64, f
 
 /// The decoder loop, mirrored from v1 (seek+preroll, cut capping, flush).
 fn music_decoder_thread_loop(
-    path: PathBuf, cut: Cut, looping: bool, rate: f32, ring: Arc<internal::SpscRingI16>, stop: Arc<std::sync::atomic::AtomicBool>
+    path: PathBuf,
+    cut: Cut,
+    looping: bool,
+    rate_bits: Arc<AtomicU32>,
+    ring: Arc<internal::SpscRingI16>,
+    stop: Arc<AtomicBool>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let file = File::open(&path)?;
     let mut ogg = OggStreamReader::new(BufReader::new(file))?;
@@ -368,19 +398,19 @@ fn music_decoder_thread_loop(
         // --- rubato SincFixedOut setup ---
         const OUT_FRAMES_PER_CALL: usize = 512;
         // Adjust ratio by 1/rate to speed up (rate>1) or slow down (rate<1)
-        let rate = if rate.is_finite() && rate > 0.0 { rate as f64 } else { 1.0 };
-        let ratio = (out_hz as f64 / in_hz as f64) / rate;
-        let iparams = SincInterpolationParameters {
-            sinc_len: 256,
-            f_cutoff: 0.95,
-            interpolation: SincInterpolationType::Linear,
-            oversampling_factor: 128,
-            window: WindowFunction::BlackmanHarris2,
-        };
+        let mut current_rate_f32 = f32::from_bits(rate_bits.load(Ordering::Relaxed));
+        if !current_rate_f32.is_finite() || current_rate_f32 <= 0.0 { current_rate_f32 = 1.0; }
+        let mut ratio = (out_hz as f64 / in_hz as f64) / (current_rate_f32 as f64);
         let mut resampler = SincFixedOut::<f32>::new(
             ratio,
             1.0,
-            iparams,
+            SincInterpolationParameters {
+                sinc_len: 256,
+                f_cutoff: 0.95,
+                interpolation: SincInterpolationType::Linear,
+                oversampling_factor: 128,
+                window: WindowFunction::BlackmanHarris2,
+            },
             OUT_FRAMES_PER_CALL,
             in_ch,
         )?;
@@ -566,6 +596,31 @@ fn music_decoder_thread_loop(
 
             // Accumulate input, then try to resample one or more chunks
             deinterleave_accum(&mut in_planar, slice, in_ch);
+
+            // Check for dynamic rate changes and rebuild resampler if needed
+            let desired_rate = f32::from_bits(rate_bits.load(Ordering::Relaxed));
+            let mut desired_rate = if desired_rate.is_finite() && desired_rate > 0.0 { desired_rate } else { 1.0 };
+            // Avoid very tiny thrash around last digit
+            if (desired_rate - current_rate_f32).abs() > 0.0005 {
+                // Clamp to sane bounds
+                if desired_rate < 0.05 { desired_rate = 0.05; }
+                if desired_rate > 8.0 { desired_rate = 8.0; }
+                current_rate_f32 = desired_rate;
+                ratio = (out_hz as f64 / in_hz as f64) / (current_rate_f32 as f64);
+                resampler = SincFixedOut::<f32>::new(
+                    ratio,
+                    1.0,
+                    SincInterpolationParameters {
+                        sinc_len: 256,
+                        f_cutoff: 0.95,
+                        interpolation: SincInterpolationType::Linear,
+                        oversampling_factor: 128,
+                        window: WindowFunction::BlackmanHarris2,
+                    },
+                    OUT_FRAMES_PER_CALL,
+                    in_ch,
+                )?;
+            }
             // Stop if cut length has been reached
             let _ = try_produce_blocks(
                 &mut resampler,
