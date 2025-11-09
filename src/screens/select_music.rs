@@ -209,7 +209,7 @@ pub(crate) fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usi
     if difficulty_index >= color::FILE_DIFFICULTY_NAMES.len() { return false; }
     let target_difficulty_name = color::FILE_DIFFICULTY_NAMES[difficulty_index];
     song.charts.iter().any(|c| {
-        c.difficulty.eq_ignore_ascii_case(target_difficulty_name) && !c.notes.is_empty()
+        c.chart_type.eq_ignore_ascii_case("dance-single") && c.difficulty.eq_ignore_ascii_case(target_difficulty_name) && !c.notes.is_empty()
     })
 }
 
@@ -1606,7 +1606,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut meters: [Option<i32>; 5] = [None, None, None, None, None];
     if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
         for (i, name) in color::FILE_DIFFICULTY_NAMES.iter().enumerate() {
-            if let Some(chart) = song.charts.iter().find(|c| c.difficulty.eq_ignore_ascii_case(name)) {
+            if let Some(chart) = song.charts.iter().find(|c| c.chart_type.eq_ignore_ascii_case("dance-single") && c.difficulty.eq_ignore_ascii_case(name)) {
                 meters[i] = Some(chart.meter as i32);
             }
         }
