@@ -432,20 +432,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let compute_lane_y = |beat: f32| -> f32 {
             match state.scroll_speed {
                 ScrollSpeedSetting::CMod(c_bpm) => {
-                    // C-Mod is time-based. Visual scroll speed is constant and must ignore #SPEEDS.
-                    let pps = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING;
-
-                    // note_time correctly includes offsets from stops/delays.
-                    let note_time = state.timing.get_time_for_beat(beat);
-
-                    // current_music_time is monotonic and does not pause during stops.
-                    // The difference decreases constantly, making notes scroll through stops.
-                    // To keep C-mod constant under Music Rate, compute using chart time
-                    // by unscaling the music timeline back to chart seconds.
+                    // C-Mod is time-based; keep visual speed constant in real time regardless of Music Rate.
+                    // Use px per chart-second then divide the chart-time delta by rate to convert to real seconds.
+                    let pps_chart = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING;
+                    let note_time_chart = state.timing.get_time_for_beat(beat);
                     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
-                    let chart_time_now = current_time / rate;
-                    let time_diff = note_time - chart_time_now;
-                    receptor_y + time_diff * pps
+                    let time_diff_real = (note_time_chart - current_time) / rate;
+                    receptor_y + time_diff_real * pps_chart
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => { // Beat-based mods
                     // This logic is correct for both frozen and non-frozen states for beat-based mods.

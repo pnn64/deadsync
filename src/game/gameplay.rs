@@ -1281,9 +1281,9 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
 
 #[inline(always)]
 fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
-    // Convert travel time (real seconds) to chart-time seconds by multiplying with music_rate
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
-    let lookahead_time = music_time_sec + state.scroll_travel_time * rate;
+    // scroll_travel_time is in chart-time seconds; current_music_time is also chart-time.
+    // Do not scale by rate here, or arrows will spawn too late/early at high/low rates.
+    let lookahead_time = music_time_sec + state.scroll_travel_time;
     let lookahead_beat = state.timing.get_beat_for_time(lookahead_time);
     while state.note_spawn_cursor < state.notes.len()
         && state.notes[state.note_spawn_cursor].beat < lookahead_beat
@@ -1399,13 +1399,11 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
 
             let y_pos = match state.scroll_speed {
                 ScrollSpeedSetting::CMod(_) => {
-                    let pps = cmod_pps_opt.expect("cmod pps computed");
-                    let note_time = state.note_time_cache[arrow.note_index];
-                    // Unscale to chart time for C-Mod so visual speed stays constant under rate
+                    let pps_chart = cmod_pps_opt.expect("cmod pps computed");
+                    let note_time_chart = state.note_time_cache[arrow.note_index];
                     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
-                    let chart_time_now = music_time_sec / rate;
-                    let time_diff = note_time - chart_time_now;
-                    receptor_y + time_diff * pps
+                    let time_diff_real = (note_time_chart - music_time_sec) / rate;
+                    receptor_y + time_diff_real * pps_chart
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
