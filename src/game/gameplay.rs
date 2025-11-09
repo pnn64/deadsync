@@ -409,19 +409,19 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         reference_bpm = initial_bpm.max(120.0);
     }
 
-    let mut pixels_per_second = scroll_speed.pixels_per_second(initial_bpm, reference_bpm);
+    let mut pixels_per_second = scroll_speed.pixels_per_second(initial_bpm, reference_bpm, music_rate);
     if !pixels_per_second.is_finite() || pixels_per_second <= 0.0 {
         warn!(
             "Scroll speed {} produced non-positive velocity; falling back to default.",
             scroll_speed
         );
         pixels_per_second =
-            ScrollSpeedSetting::default().pixels_per_second(initial_bpm, reference_bpm);
+            ScrollSpeedSetting::default().pixels_per_second(initial_bpm, reference_bpm, music_rate);
     }
     let draw_distance_before_targets = screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER;
     let draw_distance_after_targets = DRAW_DISTANCE_AFTER_TARGETS;
     let mut travel_time =
-        scroll_speed.travel_time_seconds(draw_distance_before_targets, initial_bpm, reference_bpm);
+        scroll_speed.travel_time_seconds(draw_distance_before_targets, initial_bpm, reference_bpm, music_rate);
     if !travel_time.is_finite() || travel_time <= 0.0 {
         travel_time = draw_distance_before_targets / pixels_per_second;
     }
@@ -429,7 +429,7 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         "Scroll speed set to {} (ref BPM: {:.2}, effective BPM at start: {:.2}), {:.2} px/s",
         scroll_speed,
         reference_bpm,
-        scroll_speed.effective_bpm(initial_bpm, reference_bpm),
+        scroll_speed.effective_bpm(initial_bpm, reference_bpm, music_rate),
         pixels_per_second
     );
 
@@ -1281,7 +1281,9 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
 
 #[inline(always)]
 fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
-    let lookahead_time = music_time_sec + state.scroll_travel_time;
+    // Convert travel time (real seconds) to chart-time seconds by multiplying with music_rate
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+    let lookahead_time = music_time_sec + state.scroll_travel_time * rate;
     let lookahead_beat = state.timing.get_beat_for_time(lookahead_time);
     while state.note_spawn_cursor < state.notes.len()
         && state.notes[state.note_spawn_cursor].beat < lookahead_beat
@@ -1376,7 +1378,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                 .get_speed_multiplier(state.current_beat, state.current_music_time);
             let player_multiplier = state
                 .scroll_speed
-                .beat_multiplier(state.scroll_reference_bpm);
+                .beat_multiplier(state.scroll_reference_bpm, state.music_rate);
             (None, curr_disp, player_multiplier * speed_multiplier)
         }
     };
@@ -1399,7 +1401,10 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                 ScrollSpeedSetting::CMod(_) => {
                     let pps = cmod_pps_opt.expect("cmod pps computed");
                     let note_time = state.note_time_cache[arrow.note_index];
-                    let time_diff = note_time - music_time_sec;
+                    // Unscale to chart time for C-Mod so visual speed stays constant under rate
+                    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+                    let chart_time_now = music_time_sec / rate;
+                    let time_diff = note_time - chart_time_now;
                     receptor_y + time_diff * pps
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
@@ -1453,10 +1458,10 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
 
     let mut dynamic_speed = state
         .scroll_speed
-        .pixels_per_second(current_bpm, state.scroll_reference_bpm);
+        .pixels_per_second(current_bpm, state.scroll_reference_bpm, state.music_rate);
     if !dynamic_speed.is_finite() || dynamic_speed <= 0.0 {
         dynamic_speed = ScrollSpeedSetting::default()
-            .pixels_per_second(current_bpm, state.scroll_reference_bpm);
+            .pixels_per_second(current_bpm, state.scroll_reference_bpm, state.music_rate);
     }
     state.scroll_pixels_per_second = dynamic_speed;
 
@@ -1467,6 +1472,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         draw_distance_before_targets,
         current_bpm,
         state.scroll_reference_bpm,
+        state.music_rate,
     );
     if !travel_time.is_finite() || travel_time <= 0.0 {
         travel_time = draw_distance_before_targets / dynamic_speed;

@@ -440,7 +440,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                     // current_music_time is monotonic and does not pause during stops.
                     // The difference decreases constantly, making notes scroll through stops.
-                    let time_diff = note_time - current_time;
+                    // To keep C-mod constant under Music Rate, compute using chart time
+                    // by unscaling the music timeline back to chart seconds.
+                    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+                    let chart_time_now = current_time / rate;
+                    let time_diff = note_time - chart_time_now;
                     receptor_y + time_diff * pps
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => { // Beat-based mods
@@ -450,7 +454,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let curr_disp_beat = state.timing.get_displayed_beat(state.current_beat);
                     let beat_diff_disp = note_disp_beat - curr_disp_beat;
 
-                    let player_multiplier = state.scroll_speed.beat_multiplier(state.scroll_reference_bpm);
+                    let player_multiplier = state.scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
                     let final_multiplier = player_multiplier * speed_multiplier;
                     receptor_y + (beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * final_multiplier)
                 }
@@ -1432,14 +1436,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Current BPM Display (1:1 with Simply Love)
     {
-        let bpm_value = state.timing.get_bpm_for_beat(state.current_beat);
-        let bpm_display = if bpm_value.is_finite() {
-            bpm_value.round() as i32
+        let base_bpm = state.timing.get_bpm_for_beat(state.current_beat);
+        let display_bpm = if base_bpm.is_finite() {
+            (base_bpm * if state.music_rate.is_finite() { state.music_rate } else { 1.0 }).round() as i32
         } else {
             0
         };
 
-        let bpm_text = bpm_display.to_string();
+        let bpm_text = display_bpm.to_string();
 
         // Final world-space positions derived from analyzing the SM Lua transforms.
         // The parent frame is bottom-aligned to y=52, and its children are positioned
@@ -1463,9 +1467,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             zoom(bpm_final_zoom): horizalign(center): z(90)
         ));
 
-        let music_rate = 1.0_f32; // Placeholder until dynamic music rate support exists
-        let rate_text = if (music_rate - 1.0).abs() > 0.001 {
-            format!("{music_rate:.2}x rate")
+        let rate = if state.music_rate.is_finite() { state.music_rate } else { 1.0 };
+        let rate_text = if (rate - 1.0).abs() > 0.001 {
+            format!("{rate:.2}x rate")
         } else {
             String::new()
         };

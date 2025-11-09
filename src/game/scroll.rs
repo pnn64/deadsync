@@ -97,7 +97,9 @@ impl FromStr for ScrollSpeedSetting {
 impl ScrollSpeedSetting {
     pub const ARROW_SPACING: f32 = 64.0;
 
-    pub fn effective_bpm(self, current_chart_bpm: f32, reference_bpm: f32) -> f32 {
+    pub fn effective_bpm(self, current_chart_bpm: f32, reference_bpm: f32, _music_rate: f32) -> f32 {
+        // Effective BPM is expressed per chart-second. Music rate scales beats per real second,
+        // not this chart-time value. Keep X/M independent of rate here.
         match self {
             ScrollSpeedSetting::CMod(bpm) => bpm,
             ScrollSpeedSetting::XMod(multiplier) => current_chart_bpm * multiplier,
@@ -111,22 +113,23 @@ impl ScrollSpeedSetting {
         }
     }
 
-    pub fn beat_multiplier(self, reference_bpm: f32) -> f32 {
+    pub fn beat_multiplier(self, reference_bpm: f32, music_rate: f32) -> f32 {
+        // Pixel speed per real second for beat-based mods depends on d(beat)/dt.
+        // Since d(beat)/dt scales with Music Rate, apply:
+        // - XMod: multiplier only (rate is already implicit via d(beat)/dt)
+        // - MMod: (target/reference) divided by rate to hold constant under rate
         match self {
             ScrollSpeedSetting::XMod(multiplier) => multiplier,
             ScrollSpeedSetting::MMod(target_bpm) => {
-                if reference_bpm > 0.0 {
-                    target_bpm / reference_bpm
-                } else {
-                    1.0
-                }
+                let r = if music_rate.is_finite() && music_rate > 0.0 { music_rate } else { 1.0 };
+                if reference_bpm > 0.0 { (target_bpm / reference_bpm) / r } else { 1.0 / r }
             }
             _ => 1.0,
         }
     }
 
-    pub fn pixels_per_second(self, current_chart_bpm: f32, reference_bpm: f32) -> f32 {
-        let bpm = self.effective_bpm(current_chart_bpm, reference_bpm);
+    pub fn pixels_per_second(self, current_chart_bpm: f32, reference_bpm: f32, music_rate: f32) -> f32 {
+        let bpm = self.effective_bpm(current_chart_bpm, reference_bpm, music_rate);
         if !bpm.is_finite() || bpm <= 0.0 {
             0.0
         } else {
@@ -139,8 +142,9 @@ impl ScrollSpeedSetting {
         draw_distance: f32,
         current_chart_bpm: f32,
         reference_bpm: f32,
+        music_rate: f32,
     ) -> f32 {
-        let speed = self.pixels_per_second(current_chart_bpm, reference_bpm);
+        let speed = self.pixels_per_second(current_chart_bpm, reference_bpm, music_rate);
         if speed <= 0.0 {
             0.0
         } else {

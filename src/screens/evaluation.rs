@@ -53,6 +53,7 @@ pub struct ScoreInfo {
     // Time range used to scale scatter/NPS graph (FirstSecond..LastSecond)
     pub graph_first_second: f32,
     pub graph_last_second: f32,
+    pub music_rate: f32,
 }
 
 pub struct State {
@@ -107,6 +108,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             histogram,
             graph_first_second,
             graph_last_second,
+            music_rate: if gs.music_rate.is_finite() && gs.music_rate > 0.0 { gs.music_rate } else { 1.0 },
         }
     });
 
@@ -668,9 +670,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         // --- SongFeatures Group ---
         let bpm_text = {
-            let min = score_info.song.min_bpm.round() as i32;
-            let max = score_info.song.max_bpm.round() as i32;
-            if (score_info.song.min_bpm - score_info.song.max_bpm).abs() < 1e-6 { format!("{} bpm", min) } else { format!("{} - {} bpm", min, max) }
+            let rate_f64 = score_info.music_rate as f64;
+            let min = (score_info.song.min_bpm * rate_f64).round() as i32;
+            let max = (score_info.song.max_bpm * rate_f64).round() as i32;
+            let base = if (score_info.song.min_bpm - score_info.song.max_bpm).abs() < 1e-6 {
+                format!("{} bpm", min)
+            } else {
+                format!("{} - {} bpm", min, max)
+            };
+            if (score_info.music_rate - 1.0).abs() > 0.001 { format!("{} ({}x Music Rate)", base, format!("{:.2}", score_info.music_rate)) } else { base }
         };
 
         let length_text = {
