@@ -774,7 +774,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                         "Playing preview for '{}' at {:.2}s for {:.2}s",
                         song.title, cut.start_sec, cut.length_sec
                     );
-                    audio::play_music(path, cut, true);
+                    audio::play_music(path, cut, true, crate::game::profile::get_session_music_rate());
                     played = true;
                 }
             }

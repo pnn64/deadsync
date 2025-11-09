@@ -53,13 +53,14 @@ pub struct State {
     pub prev_selected_row: usize,
     pub active_color_index: i32,
     pub speed_mod: SpeedMod,
+    pub music_rate: f32,
     bg: heart_bg::State,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     nav_key_last_scrolled_at: Option<Instant>,
 }
 
-fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: usize) -> Vec<Row> {
+fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: usize, session_music_rate: f32) -> Vec<Row> {
     let speed_mod_value_str = match speed_mod.mod_type.as_str() {
         "X" => format!("{:.2}x", speed_mod.value),
         "C" => format!("C{}", speed_mod.value as i32),
@@ -192,7 +193,7 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
         },
         Row {
             name: "Music Rate".to_string(),
-            choices: vec!["1.00x".to_string()],
+            choices: vec![format!("{:.2}x", session_music_rate.clamp(0.5, 3.0))],
             selected_choice_index: 0,
             help: vec!["Change the native speed of the music itself.".to_string()],
             choice_difficulty_indices: None,
@@ -228,6 +229,7 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
 
 pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_index: i32) -> State {
     let profile = crate::game::profile::get();
+    let session_music_rate = crate::game::profile::get_session_music_rate();
     let speed_mod = match profile.scroll_speed {
         crate::game::scroll::ScrollSpeedSetting::CMod(bpm) => SpeedMod {
             mod_type: "C".to_string(),
@@ -243,7 +245,7 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         },
     };
 
-    let mut rows = build_rows(&song, &speed_mod, chart_difficulty_index);
+    let mut rows = build_rows(&song, &speed_mod, chart_difficulty_index, session_music_rate);
 
     // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Background Filter") {
@@ -263,6 +265,7 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         prev_selected_row: 0,
         active_color_index,
         speed_mod,
+        music_rate: session_music_rate,
         bg: heart_bg::State::new(),
         nav_key_held_direction: None,
         nav_key_held_since: None,
@@ -313,6 +316,16 @@ fn change_choice(state: &mut State, delta: isize) {
             _ => "".to_string(),
         };
         row.choices[0] = speed_mod_value_str;
+        audio::play_sfx("assets/sounds/change_value.ogg");
+    } else if row.name == "Music Rate" {
+        // Adjust music playback rate (0.50x .. 3.00x in 0.01 steps)
+        let increment = 0.01f32;
+        let min_rate = 0.50f32;
+        let max_rate = 3.00f32;
+        state.music_rate += delta as f32 * increment;
+        state.music_rate = (state.music_rate / increment).round() * increment;
+        state.music_rate = state.music_rate.clamp(min_rate, max_rate);
+        row.choices[0] = format!("{:.2}x", state.music_rate);
         audio::play_sfx("assets/sounds/change_value.ogg");
     } else {
         let num_choices = row.choices.len();

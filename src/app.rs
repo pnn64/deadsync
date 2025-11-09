@@ -810,14 +810,17 @@ impl ApplicationHandler for App {
                         if *elapsed >= FADE_OUT_DURATION {
                             let prev = self.current_screen;
                             self.current_screen = *target;
-                            // Only SelectColor has looping BGM; stop elsewhere
+                            // Only SelectColor has its own looping BGM; keep SelectMusic preview
+                            // playing when moving to/from PlayerOptions.
                             if *target == CurrentScreen::SelectColor {
                                 crate::core::audio::play_music(
                                     std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
                                     crate::core::audio::Cut::default(),
                                     true,
+                                    1.0,
                                 );
-                            } else {
+                            } else if !((prev == CurrentScreen::SelectMusic && *target == CurrentScreen::PlayerOptions)
+                                || (prev == CurrentScreen::PlayerOptions && *target == CurrentScreen::SelectMusic)) {
                                 crate::core::audio::stop_music();
                             }
 
@@ -944,14 +947,17 @@ impl ApplicationHandler for App {
                 if let Some(target) = finished_fading_out_to {
                     let prev = self.current_screen;
                     self.current_screen = target;
-                    // Only SelectColor has looping BGM; stop elsewhere
+                    // Only SelectColor has looping BGM; keep SelectMusic preview when moving
+                    // between SelectMusic and PlayerOptions.
                     if target == CurrentScreen::SelectColor {
                         crate::core::audio::play_music(
                             std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
                             crate::core::audio::Cut::default(),
                             true,
+                            1.0,
                         );
-                    } else {
+                    } else if !((prev == CurrentScreen::SelectMusic && target == CurrentScreen::PlayerOptions)
+                        || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic)) {
                         crate::core::audio::stop_music();
                     }
                     
@@ -984,6 +990,10 @@ impl ApplicationHandler for App {
                                         po_state.speed_mod.mod_type
                                     );
                                 }
+
+                                // Persist session music rate
+                                crate::game::profile::set_session_music_rate(po_state.music_rate);
+                                info!("Session music rate set to {:.2}x", po_state.music_rate);
 
                                 // Reflect difficulty changes back to SelectMusic
                                 self.preferred_difficulty_index = po_state.chart_difficulty_index;
@@ -1046,7 +1056,7 @@ impl ApplicationHandler for App {
                             let chart = Arc::new(chart_ref.clone());
 
                             let color_index = po_state.active_color_index;
-                            let mut gs = gameplay::init(song_arc, chart, color_index);
+                            let mut gs = gameplay::init(song_arc, chart, color_index, po_state.music_rate);
                             
                             if let Some(backend) = self.backend.as_mut() {
                                 gs.background_texture_key = self.asset_manager.set_dynamic_background(backend, gs.song.background_path.clone());

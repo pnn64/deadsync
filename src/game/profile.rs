@@ -83,6 +83,14 @@ impl Default for Profile {
 // Global static for the current profile.
 static PROFILE: Lazy<Mutex<Profile>> = Lazy::new(|| Mutex::new(Profile::default()));
 
+// --- Session-scoped state (not persisted) ---
+#[derive(Debug)]
+struct SessionState {
+    music_rate: f32,
+}
+
+static SESSION: Lazy<Mutex<SessionState>> = Lazy::new(|| Mutex::new(SessionState { music_rate: 1.0 }));
+
 /// Creates the default profile directory and .ini files if they don't exist.
 fn create_default_files() -> Result<(), std::io::Error> {
     info!(
@@ -237,6 +245,18 @@ pub fn get() -> Profile {
 pub fn set_avatar_texture_key(key: Option<String>) {
     let mut profile = PROFILE.lock().unwrap();
     profile.avatar_texture_key = key;
+}
+
+// --- Session helpers ---
+pub fn get_session_music_rate() -> f32 {
+    let s = SESSION.lock().unwrap();
+    let r = s.music_rate;
+    if r.is_finite() && r > 0.0 { r } else { 1.0 }
+}
+
+pub fn set_session_music_rate(rate: f32) {
+    let mut s = SESSION.lock().unwrap();
+    s.music_rate = if rate.is_finite() && rate > 0.0 { rate.clamp(0.5, 3.0) } else { 1.0 };
 }
 
 pub fn update_scroll_speed(setting: ScrollSpeedSetting) {

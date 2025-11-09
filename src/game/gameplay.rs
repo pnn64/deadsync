@@ -125,6 +125,7 @@ pub struct State {
     pub note_display_beat_cache: Vec<f32>,
     pub hold_end_time_cache: Vec<Option<f32>>,
     pub music_end_time: f32,
+    pub music_rate: f32,
 
     pub combo: u32,
     pub miss_combo: u32,
@@ -253,7 +254,7 @@ fn get_reference_bpm_from_display_tag(display_bpm_str: &str) -> Option<f32> {
     s.parse::<f32>().ok()
 }
 
-pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32) -> State {
+pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32, music_rate: f32) -> State {
     info!("Initializing Gameplay Screen...");
     info!(
         "Loaded song '{}' and chart '{}'",
@@ -382,7 +383,7 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32)
             length_sec: f64::INFINITY,
             ..Default::default()
         };
-        audio::play_music(music_path.clone(), cut, false);
+        audio::play_music(music_path.clone(), cut, false, music_rate.max(0.01));
     } else {
         warn!("No music path found for song '{}'", song.title);
     }
@@ -461,6 +462,7 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32)
         note_display_beat_cache,
         hold_end_time_cache,
         music_end_time,
+        music_rate: if music_rate.is_finite() && music_rate > 0.0 { music_rate } else { 1.0 },
         judgment_counts: HashMap::from_iter([
             (JudgeGrade::Fantastic, 0),
             (JudgeGrade::Excellent, 0),
@@ -833,21 +835,22 @@ fn update_active_holds(state: &mut State, inputs: &[bool; 4], current_time: f32,
                             if pressed {
                                 active.life = MAX_HOLD_LIFE;
                             } else if window > 0.0 {
-                                active.life -= delta_time / window;
+                                // Degrade life in music-time seconds
+                                active.life -= (delta_time * state.music_rate) / window;
                             } else {
                                 active.life = 0.0;
                             }
                         }
                         NoteType::Roll => {
                             if window > 0.0 {
-                                active.life -= delta_time / window;
+                                active.life -= (delta_time * state.music_rate) / window;
                             } else {
                                 active.life = 0.0;
                             }
                         }
                         _ => {
                             if window > 0.0 {
-                                active.life -= delta_time / window;
+                                active.life -= (delta_time * state.music_rate) / window;
                             } else {
                                 active.life = 0.0;
                             }
@@ -1193,7 +1196,8 @@ fn process_input_edges(state: &mut State, music_time_sec: f32, now: Instant) {
 
         if edge.pressed && is_down && !was_down {
             let elapsed = now.saturating_duration_since(edge.timestamp).as_secs_f32();
-            let event_music_time = music_time_sec - elapsed;
+            // Convert real-time elapsed to music timeline seconds by scaling with music_rate
+            let event_music_time = music_time_sec - elapsed * state.music_rate;
             let hit_note = judge_a_tap(state, lane_idx, event_music_time);
             refresh_roll_life_on_step(state, lane_idx);
             if !hit_note {
@@ -1435,8 +1439,9 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             .saturating_duration_since(now)
             .as_secs_f32())
     } else {
+        // Scale positive elapsed by music rate to keep gameplay in sync with audio speed
         now.saturating_duration_since(state.song_start_instant)
-            .as_secs_f32()
+            .as_secs_f32() * state.music_rate
     };
     state.current_music_time = music_time_sec;
 	let beat_info = state.timing.get_beat_info_from_time(music_time_sec);

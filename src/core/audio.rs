@@ -35,7 +35,8 @@ impl Default for Cut {
 // Commands to the audio engine
 enum AudioCommand {
     PlaySfx(Arc<Vec<i16>>),
-    PlayMusic(PathBuf, Cut, bool), // bool is for looping
+    // Path, cut, looping, rate (1.0 = normal)
+    PlayMusic(PathBuf, Cut, bool, f32),
     StopMusic,
 }
 
@@ -87,8 +88,9 @@ pub fn play_sfx(path: &str) {
 }
 
 /// Plays a music track from a file path.
-pub fn play_music(path: PathBuf, cut: Cut, looping: bool) {
-    let _ = ENGINE.command_sender.send(AudioCommand::PlayMusic(path, cut, looping));
+pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
+    let rate = if rate.is_finite() && rate > 0.0 { rate } else { 1.0 };
+    let _ = ENGINE.command_sender.send(AudioCommand::PlayMusic(path, cut, looping, rate));
 }
 
 /// Stops the currently playing music track.
@@ -235,13 +237,13 @@ fn audio_manager_thread(command_receiver: Receiver<AudioCommand>) {
     loop {
         match command_receiver.recv() {
             Ok(AudioCommand::PlaySfx(data)) => { let _ = sfx_sender.send(data); },
-            Ok(AudioCommand::PlayMusic(path, cut, looping)) => {
+            Ok(AudioCommand::PlayMusic(path, cut, looping, rate)) => {
                 if let Some(old) = music_stream.take() {
                     old.stop_signal.store(true, std::sync::atomic::Ordering::Relaxed);
                     let _ = old.thread.join();
                 }
                 internal::ring_clear(&music_ring);
-                music_stream = Some(spawn_music_decoder_thread(path, cut, looping, music_ring.clone()));
+                music_stream = Some(spawn_music_decoder_thread(path, cut, looping, rate, music_ring.clone()));
             }
             Ok(AudioCommand::StopMusic) => {
                 if let Some(old) = music_stream.take() {
@@ -258,12 +260,12 @@ fn audio_manager_thread(command_receiver: Receiver<AudioCommand>) {
 /* ========================= Music decode + resample ========================= */
 
 /// Spawn a thread to decode & resample one music file into the ring buffer.
-fn spawn_music_decoder_thread(path: PathBuf, cut: Cut, looping: bool, ring: Arc<internal::SpscRingI16>) -> MusicStream {
+fn spawn_music_decoder_thread(path: PathBuf, cut: Cut, looping: bool, rate: f32, ring: Arc<internal::SpscRingI16>) -> MusicStream {
     let stop_signal = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let stop_signal_clone = stop_signal.clone();
 
     let thread = thread::spawn(move || {
-        if let Err(e) = music_decoder_thread_loop(path, cut, looping, ring, stop_signal_clone) {
+        if let Err(e) = music_decoder_thread_loop(path, cut, looping, rate, ring, stop_signal_clone) {
             error!("Music decoder thread failed: {}", e);
         }
     });
@@ -337,7 +339,7 @@ fn apply_fade_envelope(samples: &mut [i16], channels: usize, start_frame: u64, f
 
 /// The decoder loop, mirrored from v1 (seek+preroll, cut capping, flush).
 fn music_decoder_thread_loop(
-    path: PathBuf, cut: Cut, looping: bool, ring: Arc<internal::SpscRingI16>, stop: Arc<std::sync::atomic::AtomicBool>
+    path: PathBuf, cut: Cut, looping: bool, rate: f32, ring: Arc<internal::SpscRingI16>, stop: Arc<std::sync::atomic::AtomicBool>
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let file = File::open(&path)?;
     let mut ogg = OggStreamReader::new(BufReader::new(file))?;
@@ -365,7 +367,9 @@ fn music_decoder_thread_loop(
     'main_loop: loop {
         // --- rubato SincFixedOut setup ---
         const OUT_FRAMES_PER_CALL: usize = 512;
-        let ratio = out_hz as f64 / in_hz as f64;
+        // Adjust ratio by 1/rate to speed up (rate>1) or slow down (rate<1)
+        let rate = if rate.is_finite() && rate > 0.0 { rate as f64 } else { 1.0 };
+        let ratio = (out_hz as f64 / in_hz as f64) / rate;
         let iparams = SincInterpolationParameters {
             sinc_len: 256,
             f_cutoff: 0.95,
