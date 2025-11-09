@@ -1866,7 +1866,8 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // --- Peak NPS Display (as seen in Simply Love's Step Statistics) ---
     if is_wide() {
-        let peak_nps_text = format!("Peak NPS: {:.2}", state.chart.max_nps);
+        let scaled_peak = (state.chart.max_nps as f32 * state.music_rate).max(0.0) as f32;
+        let peak_nps_text = format!("Peak NPS: {:.2}", scaled_peak);
 
         // Positioned based on visual parity with Simply Love's Step Statistics pane
         // for Player 1, which is on the right side of the screen.

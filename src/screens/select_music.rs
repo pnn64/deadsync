@@ -962,6 +962,60 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         z(51)
     ));
 
+    // Music Rate badge overlay (top-left of banner) when rate != 1.00x
+    {
+        let rate = crate::game::profile::get_session_music_rate();
+        if (rate - 1.0).abs() > 0.001 {
+            let text = format!("{:.2}x", rate);
+            // Compute top-left corner of the banner in screen space
+            let banner_w = BANNER_NATIVE_WIDTH * banner_zoom;
+            let banner_h = BANNER_NATIVE_HEIGHT * banner_zoom;
+            let top_left_x = banner_cx - 0.5 * banner_w;
+            let top_left_y = banner_cy - 0.5 * banner_h;
+
+            // Measure text to size the badge nicely
+            let mut badge_children: Vec<Actor> = Vec::new();
+            let pad_x = 6.0f32;
+            let pad_y = 3.5f32;
+            let badge_zoom = 0.7f32;
+            let font_name = "miso";
+            let mut badge_w = 44.0f32; // default if metrics unavailable
+            let mut badge_h = 16.0f32;
+            asset_manager.with_fonts(|all_fonts| {
+                asset_manager.with_font(font_name, |font| {
+                    let logical_w = crate::ui::font::measure_line_width_logical(font, &text, all_fonts) as f32;
+                    let logical_h = (font.height as f32).max(1.0);
+                    let draw_w = logical_w * badge_zoom;
+                    let draw_h = logical_h * badge_zoom;
+                    badge_w = (draw_w + pad_x * 2.0).max(28.0);
+                    badge_h = (draw_h + pad_y * 2.0).max(14.0);
+                });
+            });
+
+            let badge_x = top_left_x + 6.0 + badge_w * 0.5;
+            let badge_y = top_left_y + 6.0 + badge_h * 0.5;
+
+            // Background
+            badge_children.push(act!(quad:
+                align(0.5, 0.5): xy(0.0, 0.0): setsize(badge_w, badge_h): diffuse(0.0, 0.0, 0.0, 0.7)
+            ));
+            // Label
+            badge_children.push(act!(text:
+                font(font_name): settext(text): align(0.5, 0.5): xy(0.0, 0.0): zoom(badge_zoom): diffuse(1.0, 1.0, 1.0, 1.0)
+            ));
+
+            let badge = Actor::Frame {
+                align: [0.5, 0.5],
+                offset: [badge_x, badge_y],
+                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                background: None,
+                z: 52,
+                children: badge_children,
+            };
+            actors.push(badge);
+        }
+    }
+
 // --- ARTIST / BPM / LENGTH INFO BOX (Verbatim Implementation) ---
     let (box_width, frame_x, frame_y) = if is_wide() {
         (320.0, screen_center_x() - 170.0, screen_center_y() - 55.0)
@@ -976,7 +1030,41 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             MusicWheelEntry::Song(song) => {
                 let minutes = song.total_length_seconds / 60;
                 let seconds = song.total_length_seconds % 60;
-                let formatted_bpm = song.formatted_display_bpm();
+                let formatted_bpm = {
+                    // Rate-aware BPM display: scale #DISPLAYBPM or computed min/max by session music rate
+                    let rate = crate::game::profile::get_session_music_rate();
+                    if (rate - 1.0).abs() <= 0.001 {
+                        song.formatted_display_bpm()
+                    } else {
+                        let s = song.display_bpm.trim();
+                        if !s.is_empty() && s != "*" {
+                            let parts: Vec<&str> = s.split(|c| c == ':' || c == '-').map(str::trim).collect();
+                            if parts.len() == 2 {
+                                let min = parts[0].parse::<f32>().ok();
+                                let max = parts[1].parse::<f32>().ok();
+                                if let (Some(min), Some(max)) = (min, max) {
+                                    let min_i = (min * rate).round() as i32;
+                                    let max_i = (max * rate).round() as i32;
+                                    if min_i == max_i { format!("{}", min_i) } else { format!("{} - {}", min_i.min(max_i), min_i.max(max_i)) }
+                                } else {
+                                    let min_i = (song.min_bpm as f32 * rate).round() as i32;
+                                    let max_i = (song.max_bpm as f32 * rate).round() as i32;
+                                    if min_i == max_i { format!("{}", min_i) } else { format!("{} - {}", min_i, max_i) }
+                                }
+                            } else if let Ok(val) = s.parse::<f32>() {
+                                format!("{}", (val * rate).round() as i32)
+                            } else {
+                                let min_i = (song.min_bpm as f32 * rate).round() as i32;
+                                let max_i = (song.max_bpm as f32 * rate).round() as i32;
+                                if min_i == max_i { format!("{}", min_i) } else { format!("{} - {}", min_i, max_i) }
+                            }
+                        } else {
+                            let min_i = (song.min_bpm as f32 * rate).round() as i32;
+                            let max_i = (song.max_bpm as f32 * rate).round() as i32;
+                            if min_i == max_i { format!("{}", min_i) } else { format!("{} - {}", min_i, max_i) }
+                        }
+                    }
+                };
                 (
                     song.artist.clone(),
                     formatted_bpm,
@@ -1095,7 +1183,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
 
     let step_artist_text = immediate_chart_data.as_ref().map_or("".to_string(), |c| c.step_artist.clone());
-    let peak_nps_text = displayed_chart_data.map_or("".to_string(), |c| format!("Peak NPS: {:.1}", c.max_nps));
+    let peak_nps_text = displayed_chart_data.map_or("".to_string(), |c| {
+        let rate = crate::game::profile::get_session_music_rate() as f64;
+        let scaled = if rate.is_finite() { c.max_nps * rate } else { c.max_nps };
+        format!("Peak NPS: {:.1}", scaled)
+    });
     let breakdown_text = if let Some(chart) = displayed_chart_data {
         asset_manager.with_fonts(|all_fonts| asset_manager.with_font("miso", |miso_font| -> Option<String> {
             let panel_w = if is_wide() { 286.0 } else { 276.0 };
