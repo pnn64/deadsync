@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
+use rssp::bpm::parse_bpm_map;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -58,6 +59,83 @@ pub struct State {
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     nav_key_last_scrolled_at: Option<Instant>,
+}
+
+// Compute the same preview cut as used by SelectMusic (local copy)
+fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cut)> {
+    let path = song.music_path.clone()?;
+    let mut start = song.sample_start.unwrap_or(0.0) as f64;
+    let mut length = song.sample_length.unwrap_or(0.0) as f64;
+    let total_len = song.total_length_seconds.max(0) as f64;
+
+    fn sec_at_beat_from_bpms(normalized_bpms: &str, target_beat: f64) -> f64 {
+        if !target_beat.is_finite() || target_beat <= 0.0 { return 0.0; }
+        let mut bpm_map = parse_bpm_map(normalized_bpms);
+        if bpm_map.is_empty() { bpm_map.push((0.0, 120.0)); }
+        if bpm_map.first().map_or(true, |(b, _)| *b != 0.0) {
+            let first_bpm = bpm_map[0].1; bpm_map.insert(0, (0.0, first_bpm));
+        }
+        let mut time = 0.0; let mut last_beat = 0.0; let mut last_bpm = bpm_map[0].1;
+        for &(beat, bpm) in &bpm_map {
+            if target_beat <= beat {
+                let delta_beats = (target_beat - last_beat).max(0.0);
+                if last_bpm > 0.0 { time += (delta_beats * 60.0) / last_bpm; }
+                return time.max(0.0);
+            }
+            if beat > last_beat && last_bpm > 0.0 { time += ((beat - last_beat) * 60.0) / last_bpm; }
+            last_beat = beat; last_bpm = bpm;
+        }
+        if last_bpm > 0.0 { time += ((target_beat - last_beat).max(0.0) * 60.0) / last_bpm; }
+        time.max(0.0)
+    }
+
+    fn beat_at_sec_from_bpms(normalized_bpms: &str, target_sec: f64) -> f64 {
+        if !target_sec.is_finite() || target_sec <= 0.0 { return 0.0; }
+        let mut bpm_map = parse_bpm_map(normalized_bpms);
+        if bpm_map.is_empty() { bpm_map.push((0.0, 120.0)); }
+        if bpm_map.first().map_or(true, |(b, _)| *b != 0.0) {
+            let first_bpm = bpm_map[0].1; bpm_map.insert(0, (0.0, first_bpm));
+        }
+        let mut elapsed = 0.0; let mut last_beat = 0.0; let mut last_bpm = bpm_map[0].1;
+        for &(beat, bpm) in &bpm_map {
+            let delta_beats = (beat - last_beat).max(0.0);
+            let delta_sec = if last_bpm > 0.0 { (delta_beats * 60.0) / last_bpm } else { 0.0 };
+            if elapsed + delta_sec >= target_sec {
+                let remain = (target_sec - elapsed).max(0.0);
+                let add_beats = if last_bpm > 0.0 { remain * last_bpm / 60.0 } else { 0.0 };
+                return (last_beat + add_beats).max(0.0);
+            }
+            elapsed += delta_sec; last_beat = beat; last_bpm = bpm;
+        }
+        let remain = (target_sec - elapsed).max(0.0);
+        let add_beats = if last_bpm > 0.0 { remain * last_bpm / 60.0 } else { 0.0 };
+        (last_beat + add_beats).max(0.0)
+    }
+
+    const PREVIEW_FADE_OUT_SECONDS: f64 = 1.5;
+    const DEFAULT_PREVIEW_LENGTH: f64 = 12.0;
+
+    if !(length.is_sign_positive() && length.is_finite()) || length == 0.0 {
+        let at_beat_100 = sec_at_beat_from_bpms(&song.normalized_bpms, 100.0);
+        start = if total_len > 0.0 && at_beat_100 + DEFAULT_PREVIEW_LENGTH > total_len {
+            let last_beat = beat_at_sec_from_bpms(&song.normalized_bpms, total_len);
+            let mut i_beat = (last_beat / 2.0).round();
+            if i_beat.is_finite() { i_beat -= i_beat % 4.0; } else { i_beat = 0.0; }
+            sec_at_beat_from_bpms(&song.normalized_bpms, i_beat)
+        } else { at_beat_100 };
+        length = DEFAULT_PREVIEW_LENGTH;
+    } else if total_len > 0.0 && (start + length) > total_len {
+        let last_beat = beat_at_sec_from_bpms(&song.normalized_bpms, total_len);
+        let mut i_beat = (last_beat / 2.0).round();
+        if i_beat.is_finite() { i_beat -= i_beat % 4.0; } else { i_beat = 0.0; }
+        start = sec_at_beat_from_bpms(&song.normalized_bpms, i_beat);
+    }
+
+    if !start.is_finite() || start < 0.0 { start = 0.0; }
+    if !length.is_finite() || length <= 0.0 { length = DEFAULT_PREVIEW_LENGTH; }
+
+    let cut = audio::Cut { start_sec: start, length_sec: length, fade_out_sec: PREVIEW_FADE_OUT_SECONDS, ..Default::default() };
+    Some((path, cut))
 }
 
 fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: usize, session_music_rate: f32) -> Vec<Row> {
@@ -327,6 +405,14 @@ fn change_choice(state: &mut State, delta: isize) {
         state.music_rate = state.music_rate.clamp(min_rate, max_rate);
         row.choices[0] = format!("{:.2}x", state.music_rate);
         audio::play_sfx("assets/sounds/change_value.ogg");
+
+        // Update session music rate immediately so SelectMusic will match on return
+        crate::game::profile::set_session_music_rate(state.music_rate);
+
+        // If the preview is already playing, refresh it at the new rate
+        if let Some((path, cut)) = compute_preview_cut(&state.song) {
+            audio::play_music(path, cut, true, state.music_rate);
+        }
     } else {
         let num_choices = row.choices.len();
         if num_choices > 0 {

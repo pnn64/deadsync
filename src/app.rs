@@ -1000,7 +1000,10 @@ impl ApplicationHandler for App {
                                 info!("Updated preferred difficulty index to {} from PlayerOptions", self.preferred_difficulty_index);
                             }
                         }
-                        crate::core::audio::stop_music();
+                        // Keep preview alive when returning to SelectMusic/PlayerOptions.
+                        if !(target == CurrentScreen::SelectMusic || target == CurrentScreen::PlayerOptions) {
+                            crate::core::audio::stop_music();
+                        }
                     }
 
                     if prev == CurrentScreen::SelectMusic {
