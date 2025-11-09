@@ -1281,21 +1281,58 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
 
 #[inline(always)]
 fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
-    // scroll_travel_time is in chart-time seconds; current_music_time is also chart-time.
-    // Do not scale by rate here, or arrows will spawn too late/early at high/low rates.
-    let lookahead_time = music_time_sec + state.scroll_travel_time;
-    let lookahead_beat = state.timing.get_beat_for_time(lookahead_time);
-    while state.note_spawn_cursor < state.notes.len()
-        && state.notes[state.note_spawn_cursor].beat < lookahead_beat
-    {
-        let note = &state.notes[state.note_spawn_cursor];
-        state.arrows[note.column].push(Arrow {
-            beat: note.beat,
-            column: note.column,
-            note_type: note.note_type.clone(),
-            note_index: state.note_spawn_cursor,
-        });
-        state.note_spawn_cursor += 1;
+    match state.scroll_speed {
+        ScrollSpeedSetting::CMod(_) => {
+            // C-Mod is time-based. The original time-based lookahead is correct here.
+            // scroll_travel_time is in chart-time seconds; current_music_time is also chart-time.
+            // Do not scale by rate here, or arrows will spawn too late/early at high/low rates.
+            let lookahead_time = music_time_sec + state.scroll_travel_time;
+            let lookahead_beat = state.timing.get_beat_for_time(lookahead_time);
+            while state.note_spawn_cursor < state.notes.len()
+                && state.notes[state.note_spawn_cursor].beat < lookahead_beat
+            {
+                let note = &state.notes[state.note_spawn_cursor];
+                state.arrows[note.column].push(Arrow {
+                    beat: note.beat,
+                    column: note.column,
+                    note_type: note.note_type.clone(),
+                    note_index: state.note_spawn_cursor,
+                });
+                state.note_spawn_cursor += 1;
+            }
+        }
+        ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+            // X/M-Mods are beat-based. We calculate the lookahead in "displayed beats".
+            let speed_multiplier = state.timing.get_speed_multiplier(state.current_beat, state.current_music_time);
+            let player_multiplier = state.scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
+            let final_multiplier = player_multiplier * speed_multiplier;
+
+            if final_multiplier > 0.0 {
+                let pixels_per_beat = ScrollSpeedSetting::ARROW_SPACING * final_multiplier;
+                let lookahead_in_displayed_beats = state.draw_distance_before_targets / pixels_per_beat;
+                let current_displayed_beat = state.timing.get_displayed_beat(state.current_beat);
+                let target_displayed_beat = current_displayed_beat + lookahead_in_displayed_beats;
+                
+                while state.note_spawn_cursor < state.notes.len() {
+                    // Check against the pre-calculated displayed beat for this note.
+                    let note_disp_beat = state.note_display_beat_cache[state.note_spawn_cursor];
+                    
+                    if note_disp_beat < target_displayed_beat {
+                        let note = &state.notes[state.note_spawn_cursor];
+                        state.arrows[note.column].push(Arrow {
+                            beat: note.beat,
+                            column: note.column,
+                            note_type: note.note_type.clone(),
+                            note_index: state.note_spawn_cursor,
+                        });
+                        state.note_spawn_cursor += 1;
+                    } else {
+                        // Notes are sorted, so we can stop once we find one outside the lookahead window.
+                        break;
+                    }
+                }
+            }
+        }
     }
 }
 
