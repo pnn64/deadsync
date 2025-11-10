@@ -1,6 +1,7 @@
 use crate::act;
 use crate::core::space::*;
 use crate::screens::{Screen, ScreenAction};
+use crate::core::input::{VirtualAction, InputEvent};
 use crate::ui::actors::Actor;
 use crate::ui::components::heart_bg;
 use crate::ui::color;
@@ -69,16 +70,14 @@ pub fn init() -> State {
 
 /* -------------------------- input -> nav ----------------------- */
 
-pub fn handle_key_press(_: &mut State, event: &KeyEvent) -> ScreenAction {
-    if event.state != ElementState::Pressed {
-        return ScreenAction::None;
-    }
-    match event.physical_key {
-        PhysicalKey::Code(KeyCode::Enter) | PhysicalKey::Code(KeyCode::Escape) => {
-            ScreenAction::Navigate(Screen::Menu)
+pub fn handle_input(_: &mut State, ev: &InputEvent) -> ScreenAction {
+    if ev.pressed {
+        match ev.action {
+            VirtualAction::P1_Start | VirtualAction::P1_Back => return ScreenAction::Navigate(Screen::Menu),
+            _ => {}
         }
-        _ => ScreenAction::None,
     }
+    ScreenAction::None
 }
 
 /* ---------------------------- update --------------------------- */

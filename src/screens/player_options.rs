@@ -3,6 +3,8 @@ use crate::core::audio;
 use crate::core::space::*;
 use crate::game::song::SongData;
 use crate::screens::{Screen, ScreenAction};
+use crate::core::input::{VirtualAction, InputEvent};
+// Screen navigation is handled in app.rs via the dispatcher
 use crate::ui::actors::Actor;
 use crate::assets::AssetManager;
 use crate::ui::color;
@@ -12,8 +14,7 @@ use crate::ui::components::screen_bar::{
 };
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use winit::event::{ElementState, KeyEvent};
-use winit::keyboard::{KeyCode, PhysicalKey};
+// Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -24,7 +25,7 @@ const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(300);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum NavDirection {
+pub enum NavDirection {
     Up,
     Down,
     Left,
@@ -55,9 +56,9 @@ pub struct State {
     pub speed_mod: SpeedMod,
     pub music_rate: f32,
     bg: heart_bg::State,
-    nav_key_held_direction: Option<NavDirection>,
-    nav_key_held_since: Option<Instant>,
-    nav_key_last_scrolled_at: Option<Instant>,
+    pub nav_key_held_direction: Option<NavDirection>,
+    pub nav_key_held_since: Option<Instant>,
+    pub nav_key_last_scrolled_at: Option<Instant>,
 }
 
 fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: usize, session_music_rate: f32) -> Vec<Row> {
@@ -395,81 +396,12 @@ fn change_choice(state: &mut State, delta: isize) {
     }
 }
 
-pub fn handle_key_press(state: &mut State, e: &KeyEvent) -> ScreenAction {
-    let num_rows = state.rows.len();
-    let key_code = if let PhysicalKey::Code(code) = e.physical_key {
-        code
-    } else {
-        return ScreenAction::None;
-    };
-
-    if e.state == ElementState::Pressed {
-        if e.repeat {
-            return ScreenAction::None;
-        }
-
-        match key_code {
-            KeyCode::Escape => return ScreenAction::Navigate(Screen::SelectMusic),
-            KeyCode::ArrowUp | KeyCode::KeyW => {
-                if num_rows > 0 {
-                    state.selected_row = (state.selected_row + num_rows - 1) % num_rows;
-                }
-                state.nav_key_held_direction = Some(NavDirection::Up);
-                state.nav_key_held_since = Some(Instant::now());
-                state.nav_key_last_scrolled_at = Some(Instant::now());
-            }
-            KeyCode::ArrowDown | KeyCode::KeyS => {
-                if num_rows > 0 {
-                    state.selected_row = (state.selected_row + 1) % num_rows;
-                }
-                state.nav_key_held_direction = Some(NavDirection::Down);
-                state.nav_key_held_since = Some(Instant::now());
-                state.nav_key_last_scrolled_at = Some(Instant::now());
-            }
-            KeyCode::ArrowLeft | KeyCode::KeyA => {
-                change_choice(state, -1);
-                state.nav_key_held_direction = Some(NavDirection::Left);
-                state.nav_key_held_since = Some(Instant::now());
-                state.nav_key_last_scrolled_at = Some(Instant::now());
-            }
-            KeyCode::ArrowRight | KeyCode::KeyD => {
-                change_choice(state, 1);
-                state.nav_key_held_direction = Some(NavDirection::Right);
-                state.nav_key_held_since = Some(Instant::now());
-                state.nav_key_last_scrolled_at = Some(Instant::now());
-            }
-            KeyCode::Enter => {
-                if num_rows > 0 && state.selected_row == num_rows - 1 {
-                    // Last row is selected
-                    if let Some(what_comes_next_row) = state.rows.get(num_rows - 2) {
-                        if what_comes_next_row.name == "What comes next?" {
-                            match what_comes_next_row.selected_choice_index {
-                                0 => return ScreenAction::Navigate(Screen::Gameplay),
-                                1 => return ScreenAction::Navigate(Screen::SelectMusic),
-                                _ => {} // No-op
-                            }
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    } else if e.state == ElementState::Released {
-        let direction_to_clear = match key_code {
-            KeyCode::ArrowUp | KeyCode::KeyW => Some(NavDirection::Up),
-            KeyCode::ArrowDown | KeyCode::KeyS => Some(NavDirection::Down),
-            KeyCode::ArrowLeft | KeyCode::KeyA => Some(NavDirection::Left),
-            KeyCode::ArrowRight | KeyCode::KeyD => Some(NavDirection::Right),
-            _ => None,
-        };
-        if state.nav_key_held_direction == direction_to_clear {
-            state.nav_key_held_direction = None;
-            state.nav_key_held_since = None;
-            state.nav_key_last_scrolled_at = None;
-        }
-    }
-    ScreenAction::None
+// Public wrapper so app dispatcher can invoke a single step change without exposing internals.
+pub fn apply_choice_delta(state: &mut State, delta: isize) {
+    change_choice(state, delta);
 }
+
+// Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
 pub fn update(state: &mut State, _dt: f32) {
     if let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
@@ -509,6 +441,73 @@ pub fn update(state: &mut State, _dt: f32) {
         }
         state.prev_selected_row = state.selected_row;
     }
+}
+
+// Helpers for hold-to-scroll controlled by the app dispatcher
+pub fn on_nav_press(state: &mut State, dir: NavDirection) {
+    state.nav_key_held_direction = Some(dir);
+    state.nav_key_held_since = Some(Instant::now());
+    state.nav_key_last_scrolled_at = Some(Instant::now());
+}
+
+pub fn on_nav_release(state: &mut State, dir: NavDirection) {
+    if state.nav_key_held_direction == Some(dir) {
+        state.nav_key_held_direction = None;
+        state.nav_key_held_since = None;
+        state.nav_key_last_scrolled_at = None;
+    }
+}
+
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    match ev.action {
+        VirtualAction::P1_Back if ev.pressed => return ScreenAction::Navigate(Screen::SelectMusic),
+        VirtualAction::P1_Up | VirtualAction::P1_MenuUp => {
+            if let Some(_) = state.rows.get(0) {
+                if ev.pressed {
+                    let num_rows = state.rows.len();
+                    state.selected_row = (state.selected_row + num_rows - 1) % num_rows;
+                    on_nav_press(state, NavDirection::Up);
+                } else {
+                    on_nav_release(state, NavDirection::Up);
+                }
+            }
+        }
+        VirtualAction::P1_Down | VirtualAction::P1_MenuDown => {
+            if let Some(_) = state.rows.get(0) {
+                if ev.pressed {
+                    let num_rows = state.rows.len();
+                    state.selected_row = (state.selected_row + 1) % num_rows;
+                    on_nav_press(state, NavDirection::Down);
+                } else {
+                    on_nav_release(state, NavDirection::Down);
+                }
+            }
+        }
+        VirtualAction::P1_Left | VirtualAction::P1_MenuLeft => {
+            if ev.pressed { apply_choice_delta(state, -1); on_nav_press(state, NavDirection::Left); }
+            else { on_nav_release(state, NavDirection::Left); }
+        }
+        VirtualAction::P1_Right | VirtualAction::P1_MenuRight => {
+            if ev.pressed { apply_choice_delta(state, 1); on_nav_press(state, NavDirection::Right); }
+            else { on_nav_release(state, NavDirection::Right); }
+        }
+        VirtualAction::P1_Start if ev.pressed => {
+            let num_rows = state.rows.len();
+            if num_rows > 0 && state.selected_row == num_rows - 1 {
+                if let Some(what_comes_next_row) = state.rows.get(num_rows - 2) {
+                    if what_comes_next_row.name == "What comes next?" {
+                        match what_comes_next_row.selected_choice_index {
+                            0 => return ScreenAction::Navigate(Screen::Gameplay),
+                            1 => return ScreenAction::Navigate(Screen::SelectMusic),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    ScreenAction::None
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {

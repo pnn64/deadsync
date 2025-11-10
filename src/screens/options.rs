@@ -1,7 +1,9 @@
 use crate::act;
 use crate::core::space::*;
-use crate::screens::{Screen, ScreenAction};
+// Screen navigation is handled in app.rs via the dispatcher
 use crate::core::audio;
+use crate::screens::{Screen, ScreenAction};
+use crate::core::input::{VirtualAction, InputEvent};
 use std::time::{Duration, Instant};
 
 use crate::ui::actors::Actor;
@@ -18,8 +20,7 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(300);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
 
-use winit::event::{ElementState, KeyEvent};
-use winit::keyboard::{KeyCode, PhysicalKey};
+// Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
 /// Bars in `screen_bar.rs` use 32.0 px height.
 const BAR_H: f32 = 32.0;
@@ -79,7 +80,7 @@ pub const ITEMS: &[Item] = &[
     Item { name: "Exit",                            help: &["Return to the main menu."] },
 ];
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum NavDirection {
+pub enum NavDirection {
     Up,
     Down,
 }
@@ -132,51 +133,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 /* --------------------------------- input --------------------------------- */
 
-pub fn handle_key_press(state: &mut State, e: &KeyEvent) -> ScreenAction {
-    let total = ITEMS.len();
-    let key_code = if let PhysicalKey::Code(code) = e.physical_key { code } else { return ScreenAction::None };
-
-    if e.state == ElementState::Pressed {
-        if e.repeat { return ScreenAction::None; } // We handle our own repeats in `update`
-
-        match key_code {
-            KeyCode::Escape => return ScreenAction::Navigate(Screen::Menu),
-            KeyCode::ArrowUp | KeyCode::KeyW => {
-                if total > 0 {
-                    state.selected = if state.selected == 0 { total - 1 } else { state.selected - 1 };
-                }
-                state.nav_key_held_direction = Some(NavDirection::Up);
-                state.nav_key_held_since = Some(Instant::now());
-                state.nav_key_last_scrolled_at = Some(Instant::now());
-            }
-            KeyCode::ArrowDown | KeyCode::KeyS => {
-                if total > 0 {
-                    state.selected = (state.selected + 1) % total;
-                }
-                state.nav_key_held_direction = Some(NavDirection::Down);
-                state.nav_key_held_since = Some(Instant::now());
-                state.nav_key_last_scrolled_at = Some(Instant::now());
-            }
-            KeyCode::Enter => {
-                // If the last item ("Exit") is selected, go back to main menu.
-                if total > 0 && state.selected == total - 1 {
-                    return ScreenAction::Navigate(Screen::Menu);
-                }
-            }
-            _ => {}
-        }
-    } else if e.state == ElementState::Released {
-        match key_code {
-            KeyCode::ArrowUp | KeyCode::KeyW | KeyCode::ArrowDown | KeyCode::KeyS => {
-                state.nav_key_held_direction = None;
-                state.nav_key_held_since = None;
-                state.nav_key_last_scrolled_at = None;
-            }
-            _ => {}
-        }
-    }
-    ScreenAction::None
-}
+// Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
 pub fn update(state: &mut State, _dt: f32) {
     if let (Some(direction), Some(held_since), Some(last_scrolled_at)) =
@@ -205,6 +162,57 @@ pub fn update(state: &mut State, _dt: f32) {
         audio::play_sfx("assets/sounds/change.ogg");
         state.prev_selected = state.selected;
     }
+}
+
+// Small helpers to let the app dispatcher manage hold-to-scroll without exposing fields
+pub fn on_nav_press(state: &mut State, dir: NavDirection) {
+    state.nav_key_held_direction = Some(dir);
+    state.nav_key_held_since = Some(Instant::now());
+    state.nav_key_last_scrolled_at = Some(Instant::now());
+}
+
+pub fn on_nav_release(state: &mut State, dir: NavDirection) {
+    if state.nav_key_held_direction == Some(dir) {
+        state.nav_key_held_direction = None;
+        state.nav_key_held_since = None;
+        state.nav_key_last_scrolled_at = None;
+    }
+}
+
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    match ev.action {
+        VirtualAction::P1_Back if ev.pressed => return ScreenAction::Navigate(Screen::Menu),
+        VirtualAction::P1_Up | VirtualAction::P1_MenuUp => {
+            if ev.pressed {
+                let total = ITEMS.len();
+                if total > 0 {
+                    state.selected = if state.selected == 0 { total - 1 } else { state.selected - 1 };
+                }
+                on_nav_press(state, NavDirection::Up);
+            } else {
+                on_nav_release(state, NavDirection::Up);
+            }
+        }
+        VirtualAction::P1_Down | VirtualAction::P1_MenuDown => {
+            if ev.pressed {
+                let total = ITEMS.len();
+                if total > 0 {
+                    state.selected = (state.selected + 1) % total;
+                }
+                on_nav_press(state, NavDirection::Down);
+            } else {
+                on_nav_release(state, NavDirection::Down);
+            }
+        }
+        VirtualAction::P1_Start if ev.pressed => {
+            let total = ITEMS.len();
+            if total > 0 && state.selected == total - 1 {
+                return ScreenAction::Navigate(Screen::Menu);
+            }
+        }
+        _ => {}
+    }
+    ScreenAction::None
 }
 
 /* --------------------------------- layout -------------------------------- */

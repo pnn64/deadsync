@@ -1,6 +1,6 @@
 use crate::act;
 use crate::core::space::*;
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::Screen;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use crate::ui::components::{heart_bg, pad_display, screen_bar};
@@ -20,8 +20,9 @@ use crate::assets::AssetManager;
 use crate::ui::font;
 
 use crate::game::profile;
-use winit::event::{ElementState, KeyEvent};
-use winit::keyboard::{KeyCode, PhysicalKey};
+use crate::core::input::{VirtualAction, InputEvent};
+use crate::screens::ScreenAction;
+// Keyboard handling is centralized in app.rs via virtual actions
 use chrono::Local;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -121,14 +122,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     }
 }
 
-pub fn handle_key_press(_state: &mut State, event: &KeyEvent) -> ScreenAction {
-    if event.state == ElementState::Pressed {
-        if let PhysicalKey::Code(KeyCode::Escape) | PhysicalKey::Code(KeyCode::Enter) = event.physical_key {
-            return ScreenAction::Navigate(Screen::SelectMusic);
-        }
-    }
-    ScreenAction::None
-}
+// Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
 // This screen doesn't have any dynamic state updates yet, but we keep the function for consistency.
 pub fn update(_state: &mut State, _dt: f32) {
@@ -172,6 +166,16 @@ fn format_session_time(seconds_total: f32) -> String {
     } else {
         format!("{:02}:{:02}", minutes, seconds)
     }
+}
+
+pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if ev.pressed {
+        match ev.action {
+            VirtualAction::P1_Back | VirtualAction::P1_Start => return ScreenAction::Navigate(Screen::SelectMusic),
+            _ => {}
+        }
+    }
+    ScreenAction::None
 }
 
 // --- Statics and helper function for the P1 stats pane ---

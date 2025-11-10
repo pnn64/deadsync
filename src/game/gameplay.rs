@@ -1,6 +1,6 @@
 // ===== PROJECT: deadsync FILE: src/game/gameplay.rs =====
 use crate::core::audio;
-use crate::core::input::{lane_from_keycode, InputEdge, InputSource, Lane};
+use crate::core::input::{lane_from_keycode, InputEdge, InputSource, Lane, InputEvent, VirtualAction, lane_from_action};
 use crate::core::space::*;
 use crate::game::chart::ChartData;
 use crate::game::judgment::{self, JudgeGrade, Judgment};
@@ -1007,6 +1007,36 @@ pub fn handle_key_press(state: &mut State, event: &KeyEvent, timestamp: Instant)
                 }
             }
         }
+    }
+    ScreenAction::None
+}
+
+// Event-driven input via virtual keymaps (preferred path)
+pub fn handle_input_event(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if let Some(lane) = lane_from_action(ev.action) {
+        queue_input_edge(state, ev.source, lane, ev.pressed, ev.timestamp);
+        return ScreenAction::None;
+    }
+    match ev.action {
+        VirtualAction::P1_Start => {
+            if ev.pressed {
+                state.hold_to_exit_key = Some(KeyCode::Enter);
+                state.hold_to_exit_start = Some(ev.timestamp);
+            } else if state.hold_to_exit_key == Some(KeyCode::Enter) {
+                state.hold_to_exit_key = None;
+                state.hold_to_exit_start = None;
+            }
+        }
+        VirtualAction::P1_Back => {
+            if ev.pressed {
+                state.hold_to_exit_key = Some(KeyCode::Escape);
+                state.hold_to_exit_start = Some(ev.timestamp);
+            } else if state.hold_to_exit_key == Some(KeyCode::Escape) {
+                state.hold_to_exit_key = None;
+                state.hold_to_exit_start = None;
+            }
+        }
+        _ => {}
     }
     ScreenAction::None
 }

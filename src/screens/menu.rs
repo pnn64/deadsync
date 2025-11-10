@@ -1,12 +1,12 @@
 use crate::act;
+// Screen navigation is handled in app.rs
+use crate::core::input::{VirtualAction, InputEvent};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
 use crate::ui::components::logo::{self, LogoParams};
 use crate::ui::components::menu_list::{self};
 use crate::ui::components::{heart_bg, screen_bar};
-use winit::event::{ElementState, KeyEvent};
-use winit::keyboard::{KeyCode, PhysicalKey};
 use crate::game::song::get_song_cache;
 use crate::core::network::{self, ConnectionStatus};
 
@@ -48,37 +48,7 @@ pub fn init() -> State {
     }
 }
 
-pub fn handle_key_press(state: &mut State, event: &KeyEvent) -> ScreenAction {
-    if event.state != ElementState::Pressed { return ScreenAction::None; }
-
-    match event.physical_key {
-        PhysicalKey::Code(KeyCode::Enter) => {
-            crate::core::audio::play_sfx("assets/sounds/start.ogg");
-            match state.selected_index {
-                0 => ScreenAction::Navigate(Screen::SelectColor),
-                1 => ScreenAction::Navigate(Screen::Options),
-                2 => ScreenAction::Exit,
-                _ => ScreenAction::None,
-            }
-        },
-        // Escape is now handled globally in app.rs but we can leave this for clarity
-        PhysicalKey::Code(KeyCode::Escape) => ScreenAction::Exit,
-        _ => {
-            let delta: isize = match event.physical_key {
-                PhysicalKey::Code(KeyCode::ArrowUp) | PhysicalKey::Code(KeyCode::KeyW) => -1,
-                PhysicalKey::Code(KeyCode::ArrowDown) | PhysicalKey::Code(KeyCode::KeyS) => 1,
-                _ => 0,
-            };
-            if delta != 0 {
-                crate::core::audio::play_sfx("assets/sounds/change.ogg");
-                let n = OPTION_COUNT as isize;
-                let cur = state.selected_index as isize;
-                state.selected_index = ((cur + delta + n) % n) as usize;
-            }
-            ScreenAction::None
-        }
-    }
-}
+// Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
     let actor = act!(quad:
@@ -252,4 +222,36 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     actors.extend(groovestats_actors);
 
     actors
+}
+
+// Event-driven virtual input handler
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if !ev.pressed { return ScreenAction::None; }
+    match ev.action {
+        VirtualAction::P1_Start => {
+            crate::core::audio::play_sfx("assets/sounds/start.ogg");
+            match state.selected_index {
+                0 => ScreenAction::Navigate(Screen::SelectColor),
+                1 => ScreenAction::Navigate(Screen::Options),
+                2 => ScreenAction::Exit,
+                _ => ScreenAction::None,
+            }
+        }
+        VirtualAction::P1_Back => ScreenAction::Exit,
+        VirtualAction::P1_Up | VirtualAction::P1_MenuUp => {
+            let n = OPTION_COUNT as isize;
+            let cur = state.selected_index as isize;
+            state.selected_index = ((cur - 1 + n) % n) as usize;
+            crate::core::audio::play_sfx("assets/sounds/change.ogg");
+            ScreenAction::None
+        }
+        VirtualAction::P1_Down | VirtualAction::P1_MenuDown => {
+            let n = OPTION_COUNT as isize;
+            let cur = state.selected_index as isize;
+            state.selected_index = ((cur + 1 + n) % n) as usize;
+            crate::core::audio::play_sfx("assets/sounds/change.ogg");
+            ScreenAction::None
+        }
+        _ => ScreenAction::None,
+    }
 }

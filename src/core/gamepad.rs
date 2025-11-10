@@ -1,12 +1,12 @@
 use gilrs::{Axis, Button, Event, EventType, GamepadId, Gilrs};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PadDir { Up, Down, Left, Right }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PadButton { Confirm, Back, F7 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FaceBtn { SouthA, EastB, WestX, NorthY }
 
 #[derive(Clone, Copy, Debug)]

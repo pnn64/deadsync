@@ -1,9 +1,9 @@
 use crate::act;
 use crate::core::space::*;
 use crate::screens::{Screen, ScreenAction};
+use crate::core::input::{VirtualAction, InputEvent};
 use crate::ui::actors::Actor;
-use winit::event::{ElementState, KeyEvent};
-use winit::keyboard::{KeyCode, PhysicalKey};
+// Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -17,14 +17,7 @@ pub fn init() -> State {
     State { elapsed: 0.0 }
 }
 
-pub fn handle_key_press(_state: &mut State, event: &KeyEvent) -> ScreenAction {
-    if event.state == ElementState::Pressed {
-        if let PhysicalKey::Code(KeyCode::Escape) | PhysicalKey::Code(KeyCode::F4) = event.physical_key {
-            return ScreenAction::Navigate(Screen::Menu);
-        }
-    }
-    ScreenAction::None
-}
+// Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
 pub fn update(state: &mut State, dt: f32) {
     state.elapsed += dt;
@@ -137,4 +130,14 @@ pub fn get_actors(_state: &State) -> Vec<Actor> {
     ));
 
     actors
+}
+
+pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if ev.pressed {
+        match ev.action {
+            VirtualAction::P1_Back => return ScreenAction::Navigate(Screen::Menu),
+            _ => {}
+        }
+    }
+    ScreenAction::None
 }

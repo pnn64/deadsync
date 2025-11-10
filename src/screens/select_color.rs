@@ -1,13 +1,13 @@
 use crate::act;
-use crate::core::{audio, space::*};
-use crate::screens::{Screen, ScreenAction};
+use crate::core::space::*;
+// Screen navigation handled in app.rs
 use crate::ui::actors::Actor;
 use crate::ui::color;
 use crate::ui::components::{heart_bg, screen_bar};
 use crate::ui::components::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
-use winit::event::{ElementState, KeyEvent};
-use winit::keyboard::{KeyCode, PhysicalKey};
-use crate::config;
+// Keyboard handling is centralized in app.rs via virtual actions
+use crate::core::input::{VirtualAction, InputEvent};
+use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -67,55 +67,7 @@ pub fn init() -> State {
     }
 }
 
-pub fn handle_key_press(state: &mut State, e: &KeyEvent) -> ScreenAction {
-    // Only react to the initial key press; ignore OS key auto-repeat
-    if e.state != ElementState::Pressed || e.repeat {
-        return ScreenAction::None;
-    }
-
-    let num_colors = color::DECORATIVE_HEX.len() as i32;
-
-    match e.physical_key {
-        PhysicalKey::Code(KeyCode::ArrowRight) | PhysicalKey::Code(KeyCode::KeyD) => {
-            state.active_color_index += 1;
-            audio::play_sfx("assets/sounds/expand.ogg");
-            // When saving, pass the correctly wrapped value.
-            config::update_simply_love_color(state.active_color_index.rem_euclid(num_colors));
-            
-            // start a new cross-fade from what's effectively on screen now
-            let showing_now = if state.bg_fade_t < BG_FADE_DURATION {
-                let a = (state.bg_fade_t / BG_FADE_DURATION).clamp(0.0, 1.0);
-                if (1.0 - a) >= a { state.bg_from_index } else { state.bg_to_index }
-            } else {
-                state.bg_to_index
-            };
-            state.bg_from_index = showing_now;
-            state.bg_to_index   = state.active_color_index;
-            state.bg_fade_t     = 0.0;
-            ScreenAction::None
-        }
-        PhysicalKey::Code(KeyCode::ArrowLeft) | PhysicalKey::Code(KeyCode::KeyA) => {
-            state.active_color_index -= 1;
-            audio::play_sfx("assets/sounds/expand.ogg");
-            // When saving, pass the correctly wrapped value.
-            config::update_simply_love_color(state.active_color_index.rem_euclid(num_colors));
-
-            let showing_now = if state.bg_fade_t < BG_FADE_DURATION {
-                let a = (state.bg_fade_t / BG_FADE_DURATION).clamp(0.0, 1.0);
-                if (1.0 - a) >= a { state.bg_from_index } else { state.bg_to_index }
-            } else {
-                state.bg_to_index
-            };
-            state.bg_from_index = showing_now;
-            state.bg_to_index   = state.active_color_index;
-            state.bg_fade_t     = 0.0;
-            ScreenAction::None
-        }
-        PhysicalKey::Code(KeyCode::Enter) => ScreenAction::Navigate(Screen::SelectMusic),
-        PhysicalKey::Code(KeyCode::Escape) => ScreenAction::Navigate(Screen::Menu),
-        _ => ScreenAction::None,
-    }
-}
+// Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
 /* ------------------------------- drawing ------------------------------- */
 
@@ -369,5 +321,42 @@ pub fn update(state: &mut State, dt: f32) {
     // drive background cross-fade
     if state.bg_fade_t < BG_FADE_DURATION {
         state.bg_fade_t = (state.bg_fade_t + dt).min(BG_FADE_DURATION);
+    }
+}
+
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if !ev.pressed { return ScreenAction::None; }
+    match ev.action {
+        VirtualAction::P1_Left | VirtualAction::P1_MenuLeft => {
+            let num_colors = color::DECORATIVE_HEX.len() as i32;
+            state.active_color_index -= 1;
+            crate::core::audio::play_sfx("assets/sounds/expand.ogg");
+            crate::config::update_simply_love_color(state.active_color_index.rem_euclid(num_colors));
+            let showing_now = if state.bg_fade_t < BG_FADE_DURATION {
+                let a = (state.bg_fade_t / BG_FADE_DURATION).clamp(0.0, 1.0);
+                if (1.0 - a) >= a { state.bg_from_index } else { state.bg_to_index }
+            } else { state.bg_to_index };
+            state.bg_from_index = showing_now;
+            state.bg_to_index = state.active_color_index;
+            state.bg_fade_t = 0.0;
+            ScreenAction::None
+        }
+        VirtualAction::P1_Right | VirtualAction::P1_MenuRight => {
+            let num_colors = color::DECORATIVE_HEX.len() as i32;
+            state.active_color_index += 1;
+            crate::core::audio::play_sfx("assets/sounds/expand.ogg");
+            crate::config::update_simply_love_color(state.active_color_index.rem_euclid(num_colors));
+            let showing_now = if state.bg_fade_t < BG_FADE_DURATION {
+                let a = (state.bg_fade_t / BG_FADE_DURATION).clamp(0.0, 1.0);
+                if (1.0 - a) >= a { state.bg_from_index } else { state.bg_to_index }
+            } else { state.bg_to_index };
+            state.bg_from_index = showing_now;
+            state.bg_to_index = state.active_color_index;
+            state.bg_fade_t = 0.0;
+            ScreenAction::None
+        }
+        VirtualAction::P1_Start => ScreenAction::Navigate(Screen::SelectMusic),
+        VirtualAction::P1_Back => ScreenAction::Navigate(Screen::Menu),
+        _ => ScreenAction::None,
     }
 }
