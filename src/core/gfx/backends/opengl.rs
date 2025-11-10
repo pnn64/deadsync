@@ -389,6 +389,7 @@ fn create_opengl_context(
     let template = ConfigTemplateBuilder::new()
         .with_alpha_size(8)
         .with_stencil_size(8)
+        .with_transparency(false)
         .build();
 
     let config = unsafe { display.find_configs(template)?.next() }

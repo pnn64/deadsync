@@ -298,7 +298,8 @@ impl App {
     fn init_graphics(&mut self, event_loop: &ActiveEventLoop) -> Result<(), Box<dyn Error>> {
         let mut window_attributes = Window::default_attributes()
             .with_title(format!("DeadSync - {:?}", self.backend_type))
-            .with_resizable(true);
+            .with_resizable(true)
+            .with_transparent(false);
 
         let window_width = self.display_width;
         let window_height = self.display_height;
@@ -325,6 +326,8 @@ impl App {
         }
 
         let window = Arc::new(event_loop.create_window(window_attributes)?);
+        // Re-assert the opaque hint so compositors do not apply alpha-based blending.
+        window.set_transparent(false);
         let sz = window.inner_size();
         self.metrics = crate::core::space::metrics_for_window(sz.width, sz.height);
         crate::core::space::set_current_metrics(self.metrics);
