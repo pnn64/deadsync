@@ -468,7 +468,7 @@ impl App {
     fn dispatch_virtual_action(&mut self, event_loop: &ActiveEventLoop, action: crate::core::input::VirtualAction, pressed: bool) {
         use crate::core::input::VirtualAction as A;
         match action {
-            A::P1_Up | A::P1_MenuUp => {
+            A::p1_up | A::p1_menu_up => {
                 self.apply_dir_from_pad(event_loop, PadDir::Up, pressed);
                 match self.current_screen {
                     CurrentScreen::Menu => {
@@ -507,7 +507,7 @@ impl App {
                     _ => {}
                 }
             }
-            A::P1_Down | A::P1_MenuDown => {
+            A::p1_down | A::p1_menu_down => {
                 self.apply_dir_from_pad(event_loop, PadDir::Down, pressed);
                 match self.current_screen {
                     CurrentScreen::Menu => {
@@ -546,7 +546,7 @@ impl App {
                     _ => {}
                 }
             }
-            A::P1_Left | A::P1_MenuLeft => {
+            A::p1_left | A::p1_menu_left => {
                 self.apply_dir_from_pad(event_loop, PadDir::Left, pressed);
                 match self.current_screen {
                     CurrentScreen::SelectColor => {
@@ -578,7 +578,7 @@ impl App {
                     _ => {}
                 }
             }
-            A::P1_Right | A::P1_MenuRight => {
+            A::p1_right | A::p1_menu_right => {
                 self.apply_dir_from_pad(event_loop, PadDir::Right, pressed);
                 match self.current_screen {
                     CurrentScreen::SelectColor => {
@@ -610,7 +610,7 @@ impl App {
                     _ => {}
                 }
             }
-            A::P1_Start => {
+            A::p1_start => {
                 if pressed {
                     // Reuse Start-button logic
                     let mut play_sound = true;
@@ -652,7 +652,7 @@ impl App {
                     if self.current_screen == CurrentScreen::Gameplay { if let Some(gs) = &mut self.gameplay_state { if gs.hold_to_exit_key == Some(winit::keyboard::KeyCode::Enter) { gs.hold_to_exit_key = None; gs.hold_to_exit_start = None; } } }
                 }
             }
-            A::P1_Back => {
+            A::p1_back => {
                 if pressed {
                     crate::core::audio::play_sfx("assets/sounds/back.ogg");
                     let action = match self.current_screen {
@@ -666,7 +666,7 @@ impl App {
                 }
             }
             // Not implemented actions are no-ops for now
-            A::P1_Select | A::P1_Operator | A::P1_Restart => {}
+            A::p1_select | A::p1_operator | A::p1_restart => {}
         }
     }
 

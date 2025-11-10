@@ -40,62 +40,26 @@ pub struct InputEdge {
     pub timestamp: Instant,
 }
 
-#[derive(Default)]
-pub struct InputState {
-    pub up: bool,
-    pub down: bool,
-    pub left: bool,
-    pub right: bool,
-}
-
-pub fn init_state() -> InputState {
-    InputState::default()
-}
-
-pub fn handle_keyboard_input(event: &KeyEvent, state: &mut InputState) {
-    if let PhysicalKey::Code(code) = event.physical_key {
-        let is_pressed = event.state == ElementState::Pressed;
-        let target = match code {
-            KeyCode::ArrowUp | KeyCode::KeyW => Some(&mut state.up),
-            KeyCode::ArrowDown | KeyCode::KeyS => Some(&mut state.down),
-            KeyCode::ArrowLeft | KeyCode::KeyA => Some(&mut state.left),
-            KeyCode::ArrowRight | KeyCode::KeyD => Some(&mut state.right),
-            _ => None,
-        };
-        if let Some(slot) = target {
-            *slot = is_pressed;
-        }
-    }
-}
-
-#[inline(always)]
-pub fn lane_from_keycode(code: KeyCode) -> Option<Lane> {
-    match code {
-        KeyCode::ArrowLeft | KeyCode::KeyD => Some(Lane::Left),
-        KeyCode::ArrowDown | KeyCode::KeyF => Some(Lane::Down),
-        KeyCode::ArrowUp | KeyCode::KeyJ => Some(Lane::Up),
-        KeyCode::ArrowRight | KeyCode::KeyK => Some(Lane::Right),
-        _ => None,
-    }
-}
+// Removed legacy per-key state helpers in favor of virtual action mapping.
 
 /* ------------------------ Virtual Keymap system ------------------------ */
 
+#[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum VirtualAction {
-    P1_Up,
-    P1_Down,
-    P1_Left,
-    P1_Right,
-    P1_Start,
-    P1_Back,
-    P1_MenuUp,
-    P1_MenuDown,
-    P1_MenuLeft,
-    P1_MenuRight,
-    P1_Select,
-    P1_Operator,
-    P1_Restart,
+    p1_up,
+    p1_down,
+    p1_left,
+    p1_right,
+    p1_start,
+    p1_back,
+    p1_menu_up,
+    p1_menu_down,
+    p1_menu_left,
+    p1_menu_right,
+    p1_select,
+    p1_operator,
+    p1_restart,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -120,26 +84,26 @@ pub fn set_keymap(new_map: Keymap) { *KEYMAP.lock().unwrap() = new_map; }
 fn default_keymap() -> Keymap {
     let mut km = Keymap { map: HashMap::with_capacity(16) };
     use VirtualAction as A;
-    km.bind(A::P1_Up,    &[
+    km.bind(A::p1_up,    &[
         InputBinding::Key(KeyCode::ArrowUp), InputBinding::Key(KeyCode::KeyW),
         InputBinding::PadDir(PadDir::Up),
     ]);
-    km.bind(A::P1_Down,  &[
+    km.bind(A::p1_down,  &[
         InputBinding::Key(KeyCode::ArrowDown), InputBinding::Key(KeyCode::KeyS),
         InputBinding::PadDir(PadDir::Down),
     ]);
-    km.bind(A::P1_Left,  &[
+    km.bind(A::p1_left,  &[
         InputBinding::Key(KeyCode::ArrowLeft), InputBinding::Key(KeyCode::KeyA),
         InputBinding::PadDir(PadDir::Left),
     ]);
-    km.bind(A::P1_Right, &[
+    km.bind(A::p1_right, &[
         InputBinding::Key(KeyCode::ArrowRight), InputBinding::Key(KeyCode::KeyD),
         InputBinding::PadDir(PadDir::Right),
     ]);
-    km.bind(A::P1_Start, &[
+    km.bind(A::p1_start, &[
         InputBinding::Key(KeyCode::Enter), InputBinding::PadButton(PadButton::Confirm)
     ]);
-    km.bind(A::P1_Back, &[
+    km.bind(A::p1_back, &[
         InputBinding::Key(KeyCode::Escape), InputBinding::PadButton(PadButton::Back)
     ]);
 
@@ -190,25 +154,25 @@ impl Keymap {
 
 // ---- INI parsing / writing for [keymaps] ----
 
-const SECTION: &str = "keymaps"; // [keymaps]
+const SECTION: &str = "Keymaps"; // [Keymaps]
 
 #[inline(always)]
 fn parse_action_key(k: &str) -> Option<VirtualAction> {
     use VirtualAction::*;
     match k {
-        "P1_Up" => Some(P1_Up),
-        "P1_Down" => Some(P1_Down),
-        "P1_Left" => Some(P1_Left),
-        "P1_Right" => Some(P1_Right),
-        "P1_Start" => Some(P1_Start),
-        "P1_Back" => Some(P1_Back),
-        "P1_MenuUp" => Some(P1_MenuUp),
-        "P1_MenuDown" => Some(P1_MenuDown),
-        "P1_MenuLeft" => Some(P1_MenuLeft),
-        "P1_MenuRight" => Some(P1_MenuRight),
-        "P1_Select" => Some(P1_Select),
-        "P1_Operator" => Some(P1_Operator),
-        "P1_Restart" => Some(P1_Restart),
+        "P1_Up" => Some(p1_up),
+        "P1_Down" => Some(p1_down),
+        "P1_Left" => Some(p1_left),
+        "P1_Right" => Some(p1_right),
+        "P1_Start" => Some(p1_start),
+        "P1_Back" => Some(p1_back),
+        "P1_MenuUp" => Some(p1_menu_up),
+        "P1_MenuDown" => Some(p1_menu_down),
+        "P1_MenuLeft" => Some(p1_menu_left),
+        "P1_MenuRight" => Some(p1_menu_right),
+        "P1_Select" => Some(p1_select),
+        "P1_Operator" => Some(p1_operator),
+        "P1_Restart" => Some(p1_restart),
         _ => None,
     }
 }
@@ -275,7 +239,12 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
 
 pub fn load_keymap_from_ini(conf: &Ini) -> Keymap {
     let mut km = default_keymap();
-    if let Some(section) = conf.get_map_ref().get(SECTION) {
+    // Accept both [Keymaps] (preferred) and legacy [keymaps]
+    if let Some(section) = conf
+        .get_map_ref()
+        .get(SECTION)
+        .or_else(|| conf.get_map_ref().get("keymaps"))
+    {
         for (k, v_opt) in section {
             if let Some(action) = parse_action_key(k) {
                 let mut bindings = Vec::new();
@@ -295,7 +264,7 @@ pub fn load_keymap_from_ini(conf: &Ini) -> Keymap {
 pub fn keymap_to_ini_section_string(km: &Keymap) -> String {
     use VirtualAction as A;
     let mut out = String::new();
-    out.push_str("[keymaps]\n");
+    out.push_str("[Keymaps]\n");
 
     let emit = |b: &InputBinding| -> &'static str {
         match *b {
@@ -336,16 +305,17 @@ pub fn keymap_to_ini_section_string(km: &Keymap) -> String {
         out.push_str(&format!("{}={}\n", name, parts.join(";")));
     };
 
-    push_row("P1_Back", km.map.get(&A::P1_Back));
-    push_row("P1_Down", km.map.get(&A::P1_Down));
-    push_row("P1_Left", km.map.get(&A::P1_Left));
-    push_row("P1_Right", km.map.get(&A::P1_Right));
-    push_row("P1_Start", km.map.get(&A::P1_Start));
-    push_row("P1_Up", km.map.get(&A::P1_Up));
+    // Emit keys in strict alphabetical order
+    push_row("P1_Back", km.map.get(&A::p1_back));
+    push_row("P1_Down", km.map.get(&A::p1_down));
+    push_row("P1_Left", km.map.get(&A::p1_left));
+    push_row("P1_Operator", km.map.get(&A::p1_operator));
+    push_row("P1_Restart", km.map.get(&A::p1_restart));
+    push_row("P1_Right", km.map.get(&A::p1_right));
+    push_row("P1_Select", km.map.get(&A::p1_select));
+    push_row("P1_Start", km.map.get(&A::p1_start));
+    push_row("P1_Up", km.map.get(&A::p1_up));
     // Do not emit Menu* aliases into the INI by default
-    push_row("P1_Select", km.map.get(&A::P1_Select));
-    push_row("P1_Operator", km.map.get(&A::P1_Operator));
-    push_row("P1_Restart", km.map.get(&A::P1_Restart));
     out.push('\n');
     out
 }
@@ -393,10 +363,10 @@ pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
 #[inline(always)]
 pub fn lane_from_action(act: VirtualAction) -> Option<Lane> {
     match act {
-        VirtualAction::P1_Left | VirtualAction::P1_MenuLeft => Some(Lane::Left),
-        VirtualAction::P1_Down | VirtualAction::P1_MenuDown => Some(Lane::Down),
-        VirtualAction::P1_Up   | VirtualAction::P1_MenuUp   => Some(Lane::Up),
-        VirtualAction::P1_Right| VirtualAction::P1_MenuRight=> Some(Lane::Right),
+        VirtualAction::p1_left | VirtualAction::p1_menu_left => Some(Lane::Left),
+        VirtualAction::p1_down | VirtualAction::p1_menu_down => Some(Lane::Down),
+        VirtualAction::p1_up   | VirtualAction::p1_menu_up   => Some(Lane::Up),
+        VirtualAction::p1_right| VirtualAction::p1_menu_right=> Some(Lane::Right),
         _ => None,
     }
 }

@@ -460,8 +460,8 @@ pub fn on_nav_release(state: &mut State, dir: NavDirection) {
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match ev.action {
-        VirtualAction::P1_Back if ev.pressed => return ScreenAction::Navigate(Screen::SelectMusic),
-        VirtualAction::P1_Up | VirtualAction::P1_MenuUp => {
+        VirtualAction::p1_back if ev.pressed => return ScreenAction::Navigate(Screen::SelectMusic),
+        VirtualAction::p1_up | VirtualAction::p1_menu_up => {
             if let Some(_) = state.rows.get(0) {
                 if ev.pressed {
                     let num_rows = state.rows.len();
@@ -472,7 +472,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 }
             }
         }
-        VirtualAction::P1_Down | VirtualAction::P1_MenuDown => {
+        VirtualAction::p1_down | VirtualAction::p1_menu_down => {
             if let Some(_) = state.rows.get(0) {
                 if ev.pressed {
                     let num_rows = state.rows.len();
@@ -483,15 +483,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 }
             }
         }
-        VirtualAction::P1_Left | VirtualAction::P1_MenuLeft => {
+        VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             if ev.pressed { apply_choice_delta(state, -1); on_nav_press(state, NavDirection::Left); }
             else { on_nav_release(state, NavDirection::Left); }
         }
-        VirtualAction::P1_Right | VirtualAction::P1_MenuRight => {
+        VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             if ev.pressed { apply_choice_delta(state, 1); on_nav_press(state, NavDirection::Right); }
             else { on_nav_release(state, NavDirection::Right); }
         }
-        VirtualAction::P1_Start if ev.pressed => {
+        VirtualAction::p1_start if ev.pressed => {
             let num_rows = state.rows.len();
             if num_rows > 0 && state.selected_row == num_rows - 1 {
                 if let Some(what_comes_next_row) = state.rows.get(num_rows - 2) {

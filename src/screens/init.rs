@@ -5,8 +5,6 @@ use crate::core::input::{VirtualAction, InputEvent};
 use crate::ui::actors::Actor;
 use crate::ui::components::heart_bg;
 use crate::ui::color;
-use winit::event::{ElementState, KeyEvent};
-use winit::keyboard::{KeyCode, PhysicalKey};
 
 /* ----------------------- timing & layout ----------------------- */
 
@@ -73,7 +71,7 @@ pub fn init() -> State {
 pub fn handle_input(_: &mut State, ev: &InputEvent) -> ScreenAction {
     if ev.pressed {
         match ev.action {
-            VirtualAction::P1_Start | VirtualAction::P1_Back => return ScreenAction::Navigate(Screen::Menu),
+            VirtualAction::p1_start | VirtualAction::p1_back => return ScreenAction::Navigate(Screen::Menu),
             _ => {}
         }
     }

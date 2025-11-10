@@ -129,28 +129,31 @@ pub fn load() {
             let km = crate::core::input::load_keymap_from_ini(&conf);
             crate::core::input::set_keymap(km);
 
-            // Ensure [keymaps] exist with primary bindings if missing; do not overwrite existing keys.
+            // Ensure [Keymaps] exist with primary bindings if missing; do not overwrite existing keys.
             let mut need_write_keymaps = false;
             let mut conf2 = conf.clone();
-            let section_present = conf.get_map_ref().get("keymaps").is_some();
+            let has_keymaps_new = conf.get_map_ref().get("Keymaps").is_some();
+            let has_keymaps_old = conf.get_map_ref().get("keymaps").is_some();
+            let section_present = has_keymaps_new || has_keymaps_old;
+            let sec_name = if has_keymaps_new { "Keymaps" } else if has_keymaps_old { "keymaps" } else { "Keymaps" };
             let ensure = |ini: &mut Ini, key: &str, val: &str| -> bool {
-                let cur = ini.get("keymaps", key);
+                let cur = ini.get(sec_name, key);
                 if cur.is_none() {
-                    ini.set("keymaps", key, Some(val.to_string()));
+                    ini.set(sec_name, key, Some(val.to_string()));
                     true
                 } else { false }
             };
             if !section_present {
                 // Seed the whole section
-                conf2.set("keymaps", "P1_Back", Some("KeyCode::Escape;PadButton::Back".to_string()));
-                conf2.set("keymaps", "P1_Start", Some("KeyCode::Enter;PadButton::Confirm".to_string()));
-                conf2.set("keymaps", "P1_Up", Some("KeyCode::ArrowUp;KeyCode::KeyW;PadDir::Up".to_string()));
-                conf2.set("keymaps", "P1_Down", Some("KeyCode::ArrowDown;KeyCode::KeyS;PadDir::Down".to_string()));
-                conf2.set("keymaps", "P1_Left", Some("KeyCode::ArrowLeft;KeyCode::KeyA;PadDir::Left".to_string()));
-                conf2.set("keymaps", "P1_Right", Some("KeyCode::ArrowRight;KeyCode::KeyD;PadDir::Right".to_string()));
-                conf2.set("keymaps", "P1_Select", Some("".to_string()));
-                conf2.set("keymaps", "P1_Operator", Some("".to_string()));
-                conf2.set("keymaps", "P1_Restart", Some("".to_string()));
+                conf2.set("Keymaps", "P1_Back", Some("KeyCode::Escape;PadButton::Back".to_string()));
+                conf2.set("Keymaps", "P1_Start", Some("KeyCode::Enter;PadButton::Confirm".to_string()));
+                conf2.set("Keymaps", "P1_Up", Some("KeyCode::ArrowUp;KeyCode::KeyW;PadDir::Up".to_string()));
+                conf2.set("Keymaps", "P1_Down", Some("KeyCode::ArrowDown;KeyCode::KeyS;PadDir::Down".to_string()));
+                conf2.set("Keymaps", "P1_Left", Some("KeyCode::ArrowLeft;KeyCode::KeyA;PadDir::Left".to_string()));
+                conf2.set("Keymaps", "P1_Right", Some("KeyCode::ArrowRight;KeyCode::KeyD;PadDir::Right".to_string()));
+                conf2.set("Keymaps", "P1_Select", Some("".to_string()));
+                conf2.set("Keymaps", "P1_Operator", Some("".to_string()));
+                conf2.set("Keymaps", "P1_Restart", Some("".to_string()));
                 need_write_keymaps = true;
             } else {
                 // Add only missing keys
@@ -198,10 +201,10 @@ fn save_without_keymaps() {
     // Manual writer that keeps [Options]/[Theme] sorted and preserves existing [keymaps] block.
     let cfg = CONFIG.lock().unwrap();
 
-    // Try to extract existing [keymaps] block verbatim
+    // Try to extract existing [Keymaps] (or legacy [keymaps]) block verbatim
     let existing = std::fs::read_to_string(CONFIG_PATH).unwrap_or_default();
     let mut keymaps_block = String::new();
-    if let Some(start) = existing.find("[keymaps]") {
+    if let Some(start) = existing.find("[Keymaps]").or_else(|| existing.find("[keymaps]")) {
         // find next section header or EOF
         let rest = &existing[start..];
         let mut end_idx = rest.len();

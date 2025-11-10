@@ -181,8 +181,8 @@ pub fn on_nav_release(state: &mut State, dir: NavDirection) {
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match ev.action {
-        VirtualAction::P1_Back if ev.pressed => return ScreenAction::Navigate(Screen::Menu),
-        VirtualAction::P1_Up | VirtualAction::P1_MenuUp => {
+        VirtualAction::p1_back if ev.pressed => return ScreenAction::Navigate(Screen::Menu),
+        VirtualAction::p1_up | VirtualAction::p1_menu_up => {
             if ev.pressed {
                 let total = ITEMS.len();
                 if total > 0 {
@@ -193,7 +193,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 on_nav_release(state, NavDirection::Up);
             }
         }
-        VirtualAction::P1_Down | VirtualAction::P1_MenuDown => {
+        VirtualAction::p1_down | VirtualAction::p1_menu_down => {
             if ev.pressed {
                 let total = ITEMS.len();
                 if total > 0 {
@@ -204,7 +204,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 on_nav_release(state, NavDirection::Down);
             }
         }
-        VirtualAction::P1_Start if ev.pressed => {
+        VirtualAction::p1_start if ev.pressed => {
             let total = ITEMS.len();
             if total > 0 && state.selected == total - 1 {
                 return ScreenAction::Navigate(Screen::Menu);

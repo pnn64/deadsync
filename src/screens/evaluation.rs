@@ -171,7 +171,7 @@ fn format_session_time(seconds_total: f32) -> String {
 pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
     if ev.pressed {
         match ev.action {
-            VirtualAction::P1_Back | VirtualAction::P1_Start => return ScreenAction::Navigate(Screen::SelectMusic),
+            VirtualAction::p1_back | VirtualAction::p1_start => return ScreenAction::Navigate(Screen::SelectMusic),
             _ => {}
         }
     }

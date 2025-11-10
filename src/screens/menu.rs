@@ -228,7 +228,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if !ev.pressed { return ScreenAction::None; }
     match ev.action {
-        VirtualAction::P1_Start => {
+        VirtualAction::p1_start => {
             crate::core::audio::play_sfx("assets/sounds/start.ogg");
             match state.selected_index {
                 0 => ScreenAction::Navigate(Screen::SelectColor),
@@ -237,15 +237,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 _ => ScreenAction::None,
             }
         }
-        VirtualAction::P1_Back => ScreenAction::Exit,
-        VirtualAction::P1_Up | VirtualAction::P1_MenuUp => {
+        VirtualAction::p1_back => ScreenAction::Exit,
+        VirtualAction::p1_up | VirtualAction::p1_menu_up => {
             let n = OPTION_COUNT as isize;
             let cur = state.selected_index as isize;
             state.selected_index = ((cur - 1 + n) % n) as usize;
             crate::core::audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
-        VirtualAction::P1_Down | VirtualAction::P1_MenuDown => {
+        VirtualAction::p1_down | VirtualAction::p1_menu_down => {
             let n = OPTION_COUNT as isize;
             let cur = state.selected_index as isize;
             state.selected_index = ((cur + 1 + n) % n) as usize;

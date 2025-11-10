@@ -135,7 +135,7 @@ pub fn get_actors(_state: &State) -> Vec<Actor> {
 pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
     if ev.pressed {
         match ev.action {
-            VirtualAction::P1_Back => return ScreenAction::Navigate(Screen::Menu),
+            VirtualAction::p1_back => return ScreenAction::Navigate(Screen::Menu),
             _ => {}
         }
     }

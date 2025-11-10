@@ -563,21 +563,21 @@ pub fn handle_pad_button(state: &mut State, btn: PadButton, pressed: bool) -> Sc
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match ev.action {
-        VirtualAction::P1_Left | VirtualAction::P1_MenuLeft => {
+        VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             // route as D-Pad Left
             handle_pad_dir(state, PadDir::Left, ev.pressed)
         }
-        VirtualAction::P1_Right | VirtualAction::P1_MenuRight => {
+        VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             handle_pad_dir(state, PadDir::Right, ev.pressed)
         }
-        VirtualAction::P1_Up | VirtualAction::P1_MenuUp => {
+        VirtualAction::p1_up | VirtualAction::p1_menu_up => {
             handle_pad_dir(state, PadDir::Up, ev.pressed)
         }
-        VirtualAction::P1_Down | VirtualAction::P1_MenuDown => {
+        VirtualAction::p1_down | VirtualAction::p1_menu_down => {
             handle_pad_dir(state, PadDir::Down, ev.pressed)
         }
-        VirtualAction::P1_Start if ev.pressed => handle_pad_button(state, PadButton::Confirm, true),
-        VirtualAction::P1_Back if ev.pressed => handle_pad_button(state, PadButton::Back, true),
+        VirtualAction::p1_start if ev.pressed => handle_pad_button(state, PadButton::Confirm, true),
+        VirtualAction::p1_back if ev.pressed => handle_pad_button(state, PadButton::Back, true),
         _ => ScreenAction::None,
     }
 }

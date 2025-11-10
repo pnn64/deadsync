@@ -1,6 +1,6 @@
 // ===== PROJECT: deadsync FILE: src/game/gameplay.rs =====
 use crate::core::audio;
-use crate::core::input::{lane_from_keycode, InputEdge, InputSource, Lane, InputEvent, VirtualAction, lane_from_action};
+use crate::core::input::{InputEdge, InputSource, Lane, InputEvent, VirtualAction, lane_from_action};
 use crate::core::space::*;
 use crate::game::chart::ChartData;
 use crate::game::judgment::{self, JudgeGrade, Judgment};
@@ -21,8 +21,7 @@ use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use winit::event::{ElementState, KeyEvent};
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::keyboard::KeyCode;
 
 pub const TRANSITION_IN_DURATION: f32 = 0.4;
 pub const TRANSITION_OUT_DURATION: f32 = 0.4;
@@ -981,35 +980,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     false
 }
 
-pub fn handle_key_press(state: &mut State, event: &KeyEvent, timestamp: Instant) -> ScreenAction {
-    if let PhysicalKey::Code(key_code) = event.physical_key {
-        if event.state == ElementState::Pressed && event.repeat {
-            return ScreenAction::None;
-        }
-
-        if let Some(lane) = lane_from_keycode(key_code) {
-            let pressed = event.state == ElementState::Pressed;
-            queue_input_edge(state, InputSource::Keyboard, lane, pressed, timestamp);
-        }
-
-        match event.state {
-            ElementState::Pressed => {
-                if key_code == KeyCode::Escape || key_code == KeyCode::Enter {
-                    state.hold_to_exit_key = Some(key_code);
-                    state.hold_to_exit_start = Some(timestamp);
-                    return ScreenAction::None;
-                }
-            }
-            ElementState::Released => {
-                if state.hold_to_exit_key == Some(key_code) {
-                    state.hold_to_exit_key = None;
-                    state.hold_to_exit_start = None;
-                }
-            }
-        }
-    }
-    ScreenAction::None
-}
+// Legacy raw key handler removed in favor of virtual action path.
 
 // Event-driven input via virtual keymaps (preferred path)
 pub fn handle_input_event(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -1018,7 +989,7 @@ pub fn handle_input_event(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
     match ev.action {
-        VirtualAction::P1_Start => {
+        VirtualAction::p1_start => {
             if ev.pressed {
                 state.hold_to_exit_key = Some(KeyCode::Enter);
                 state.hold_to_exit_start = Some(ev.timestamp);
@@ -1027,7 +998,7 @@ pub fn handle_input_event(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 state.hold_to_exit_start = None;
             }
         }
-        VirtualAction::P1_Back => {
+        VirtualAction::p1_back => {
             if ev.pressed {
                 state.hold_to_exit_key = Some(KeyCode::Escape);
                 state.hold_to_exit_start = Some(ev.timestamp);

@@ -327,7 +327,7 @@ pub fn update(state: &mut State, dt: f32) {
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if !ev.pressed { return ScreenAction::None; }
     match ev.action {
-        VirtualAction::P1_Left | VirtualAction::P1_MenuLeft => {
+        VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             let num_colors = color::DECORATIVE_HEX.len() as i32;
             state.active_color_index -= 1;
             crate::core::audio::play_sfx("assets/sounds/expand.ogg");
@@ -341,7 +341,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.bg_fade_t = 0.0;
             ScreenAction::None
         }
-        VirtualAction::P1_Right | VirtualAction::P1_MenuRight => {
+        VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             let num_colors = color::DECORATIVE_HEX.len() as i32;
             state.active_color_index += 1;
             crate::core::audio::play_sfx("assets/sounds/expand.ogg");
@@ -355,8 +355,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.bg_fade_t = 0.0;
             ScreenAction::None
         }
-        VirtualAction::P1_Start => ScreenAction::Navigate(Screen::SelectMusic),
-        VirtualAction::P1_Back => ScreenAction::Navigate(Screen::Menu),
+        VirtualAction::p1_start => ScreenAction::Navigate(Screen::SelectMusic),
+        VirtualAction::p1_back => ScreenAction::Navigate(Screen::Menu),
         _ => ScreenAction::None,
     }
 }

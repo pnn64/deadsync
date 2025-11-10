@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex};
 
-pub use crate::game::gameplay::{handle_key_press, init, update, State};
+pub use crate::game::gameplay::{init, update, State};
 use crate::game::gameplay::active_hold_is_engaged;
 use crate::game::gameplay::{
     ComboMilestoneKind, COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION,
