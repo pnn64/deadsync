@@ -151,6 +151,7 @@ fn audio_manager_thread(command_receiver: Receiver<AudioCommand>) {
 
     // Reusable buffers captured by the callback to avoid allocations
     let mut mix_i16: Vec<i16> = Vec::new();
+    let mut mix_f32: Vec<f32> = Vec::new();
     let mut active_sfx_for_callback: Vec<(Arc<Vec<i16>>, usize)> = Vec::new();
 
     // Build the output stream matching device sample format (like v1)
@@ -158,28 +159,41 @@ fn audio_manager_thread(command_receiver: Receiver<AudioCommand>) {
         SampleFormat::I16 => device.build_output_stream(
             &stream_config,
             move |out: &mut [i16], _| {
+                let config = crate::config::get();
+                let master_vol = (config.master_volume.clamp(0, 100) as f32) / 100.0;
+                let music_vol = (config.music_volume.clamp(0, 100) as f32) / 100.0;
+                let sfx_vol = (config.sfx_volume.clamp(0, 100) as f32) / 100.0;
+                let final_music_vol = master_vol * music_vol;
+                let final_sfx_vol = master_vol * sfx_vol;
+
                 if mix_i16.len() != out.len() { mix_i16.resize(out.len(), 0); }
+                if mix_f32.len() != out.len() { mix_f32.resize(out.len(), 0.0); }
 
                 // Pull music samples
                 internal::callback_fill_from_ring_i16(&music_ring_for_callback, &mut mix_i16[..]);
 
-                // Ingest any new SFX references without allocating in RT
+                // Convert music to f32 with volume
+                for (f, s) in mix_f32.iter_mut().zip(&mix_i16) {
+                    *f = s.to_sample::<f32>() * final_music_vol;
+                }
+
                 for new_sfx in sfx_receiver.try_iter() {
                     active_sfx_for_callback.push((new_sfx, 0));
                 }
 
-                // Mix SFX (saturating add) into i16 domain
                 active_sfx_for_callback.retain_mut(|(data, cursor)| {
-                    let n = (data.len().saturating_sub(*cursor)).min(mix_i16.len());
+                    let n = (data.len().saturating_sub(*cursor)).min(mix_f32.len());
                     for i in 0..n {
-                        mix_i16[i] = mix_i16[i].saturating_add(data[*cursor + i]);
+                        let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * final_sfx_vol;
+                        mix_f32[i] = (mix_f32[i] + sfx_sample_f32).clamp(-1.0, 1.0);
                     }
                     *cursor += n;
                     *cursor < data.len()
                 });
 
-                // Write to device
-                out.copy_from_slice(&mix_i16);
+                for (o, f) in out.iter_mut().zip(&mix_f32) {
+                    *o = i16::from_sample(*f);
+                }
             },
             |err| error!("Audio stream error: {}", err),
             None,
@@ -187,25 +201,38 @@ fn audio_manager_thread(command_receiver: Receiver<AudioCommand>) {
         SampleFormat::U16 => device.build_output_stream(
             &stream_config,
             move |out: &mut [u16], _| {
+                let config = crate::config::get();
+                let master_vol = (config.master_volume.clamp(0, 100) as f32) / 100.0;
+                let music_vol = (config.music_volume.clamp(0, 100) as f32) / 100.0;
+                let sfx_vol = (config.sfx_volume.clamp(0, 100) as f32) / 100.0;
+                let final_music_vol = master_vol * music_vol;
+                let final_sfx_vol = master_vol * sfx_vol;
+
                 if mix_i16.len() != out.len() { mix_i16.resize(out.len(), 0); }
+                if mix_f32.len() != out.len() { mix_f32.resize(out.len(), 0.0); }
 
                 internal::callback_fill_from_ring_i16(&music_ring_for_callback, &mut mix_i16[..]);
+
+                for (f, s) in mix_f32.iter_mut().zip(&mix_i16) {
+                    *f = s.to_sample::<f32>() * final_music_vol;
+                }
 
                 for new_sfx in sfx_receiver.try_iter() {
                     active_sfx_for_callback.push((new_sfx, 0));
                 }
 
                 active_sfx_for_callback.retain_mut(|(data, cursor)| {
-                    let n = (data.len().saturating_sub(*cursor)).min(mix_i16.len());
+                    let n = (data.len().saturating_sub(*cursor)).min(mix_f32.len());
                     for i in 0..n {
-                        mix_i16[i] = mix_i16[i].saturating_add(data[*cursor + i]);
+                        let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * final_sfx_vol;
+                        mix_f32[i] = (mix_f32[i] + sfx_sample_f32).clamp(-1.0, 1.0);
                     }
                     *cursor += n;
                     *cursor < data.len()
                 });
 
-                for (o, s) in out.iter_mut().zip(&mix_i16) {
-                    *o = (i32::from(*s) + 32768) as u16;
+                for (o, f) in out.iter_mut().zip(&mix_f32) {
+                    *o = u16::from_sample(*f);
                 }
             },
             |err| error!("Audio stream error: {}", err),
@@ -214,26 +241,34 @@ fn audio_manager_thread(command_receiver: Receiver<AudioCommand>) {
         SampleFormat::F32 => device.build_output_stream(
             &stream_config,
             move |out: &mut [f32], _| {
+                let config = crate::config::get();
+                let master_vol = (config.master_volume.clamp(0, 100) as f32) / 100.0;
+                let music_vol = (config.music_volume.clamp(0, 100) as f32) / 100.0;
+                let sfx_vol = (config.sfx_volume.clamp(0, 100) as f32) / 100.0;
+                let final_music_vol = master_vol * music_vol;
+                let final_sfx_vol = master_vol * sfx_vol;
+
                 if mix_i16.len() != out.len() { mix_i16.resize(out.len(), 0); }
 
                 internal::callback_fill_from_ring_i16(&music_ring_for_callback, &mut mix_i16[..]);
+
+                for (o, s) in out.iter_mut().zip(&mix_i16) {
+                    *o = s.to_sample::<f32>() * final_music_vol;
+                }
 
                 for new_sfx in sfx_receiver.try_iter() {
                     active_sfx_for_callback.push((new_sfx, 0));
                 }
 
                 active_sfx_for_callback.retain_mut(|(data, cursor)| {
-                    let n = (data.len().saturating_sub(*cursor)).min(mix_i16.len());
+                    let n = (data.len().saturating_sub(*cursor)).min(out.len());
                     for i in 0..n {
-                        mix_i16[i] = mix_i16[i].saturating_add(data[*cursor + i]);
+                        let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * final_sfx_vol;
+                        out[i] = (out[i] + sfx_sample_f32).clamp(-1.0, 1.0);
                     }
                     *cursor += n;
                     *cursor < data.len()
                 });
-
-                for (o, s) in out.iter_mut().zip(&mix_i16) {
-                    *o = (*s).to_sample::<f32>();
-                }
             },
             |err| error!("Audio stream error: {}", err),
             None,
