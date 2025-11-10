@@ -144,25 +144,25 @@ pub fn load() {
                 } else { false }
             };
             if !section_present {
-                // Seed the whole section
-                conf2.set("Keymaps", "P1_Back", Some("KeyCode::Escape;PadButton::Back".to_string()));
-                conf2.set("Keymaps", "P1_Start", Some("KeyCode::Enter;PadButton::Confirm".to_string()));
-                conf2.set("Keymaps", "P1_Up", Some("KeyCode::ArrowUp;KeyCode::KeyW;PadDir::Up".to_string()));
-                conf2.set("Keymaps", "P1_Down", Some("KeyCode::ArrowDown;KeyCode::KeyS;PadDir::Down".to_string()));
-                conf2.set("Keymaps", "P1_Left", Some("KeyCode::ArrowLeft;KeyCode::KeyA;PadDir::Left".to_string()));
-                conf2.set("Keymaps", "P1_Right", Some("KeyCode::ArrowRight;KeyCode::KeyD;PadDir::Right".to_string()));
+                // Seed the whole section (no default pad bindings)
+                conf2.set("Keymaps", "P1_Back", Some("KeyCode::Escape".to_string()));
+                conf2.set("Keymaps", "P1_Start", Some("KeyCode::Enter".to_string()));
+                conf2.set("Keymaps", "P1_Up", Some("KeyCode::ArrowUp;KeyCode::KeyW".to_string()));
+                conf2.set("Keymaps", "P1_Down", Some("KeyCode::ArrowDown;KeyCode::KeyS".to_string()));
+                conf2.set("Keymaps", "P1_Left", Some("KeyCode::ArrowLeft;KeyCode::KeyA".to_string()));
+                conf2.set("Keymaps", "P1_Right", Some("KeyCode::ArrowRight;KeyCode::KeyD".to_string()));
                 conf2.set("Keymaps", "P1_Select", Some("".to_string()));
                 conf2.set("Keymaps", "P1_Operator", Some("".to_string()));
                 conf2.set("Keymaps", "P1_Restart", Some("".to_string()));
                 need_write_keymaps = true;
             } else {
                 // Add only missing keys
-                need_write_keymaps |= ensure(&mut conf2, "P1_Back", "KeyCode::Escape;PadButton::Back");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Start", "KeyCode::Enter;PadButton::Confirm");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Up", "KeyCode::ArrowUp;KeyCode::KeyW;PadDir::Up");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Down", "KeyCode::ArrowDown;KeyCode::KeyS;PadDir::Down");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Left", "KeyCode::ArrowLeft;KeyCode::KeyA;PadDir::Left");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Right", "KeyCode::ArrowRight;KeyCode::KeyD;PadDir::Right");
+                need_write_keymaps |= ensure(&mut conf2, "P1_Back", "KeyCode::Escape");
+                need_write_keymaps |= ensure(&mut conf2, "P1_Start", "KeyCode::Enter");
+                need_write_keymaps |= ensure(&mut conf2, "P1_Up", "KeyCode::ArrowUp;KeyCode::KeyW");
+                need_write_keymaps |= ensure(&mut conf2, "P1_Down", "KeyCode::ArrowDown;KeyCode::KeyS");
+                need_write_keymaps |= ensure(&mut conf2, "P1_Left", "KeyCode::ArrowLeft;KeyCode::KeyA");
+                need_write_keymaps |= ensure(&mut conf2, "P1_Right", "KeyCode::ArrowRight;KeyCode::KeyD");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Select", "");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Operator", "");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Restart", "");

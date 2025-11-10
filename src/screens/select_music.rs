@@ -11,7 +11,7 @@ use crate::ui::components::screen_bar::{
 };
 use crate::ui::actors::SizeSpec;
 use crate::core::space::is_wide;
-use crate::core::gamepad::{PadDir, PadButton};
+use crate::core::input::{PadDir, PadButton};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock};
 use std::path::PathBuf;

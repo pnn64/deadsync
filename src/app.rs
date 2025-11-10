@@ -19,8 +19,8 @@ use std::{error::Error, sync::Arc, time::Instant};
 
 use crate::ui::actors::Actor;
 /* -------------------- gamepad -------------------- */
-use crate::core::gamepad;
-use crate::core::gamepad::{GpSystemEvent, PadEvent, PadDir, PadButton};
+use crate::core::input::{self as gamepad};
+use crate::core::input::{GpSystemEvent, PadEvent, PadDir, PadButton};
 use gilrs::{Gilrs, GamepadId};
 
 /* -------------------- transition timing constants -------------------- */
