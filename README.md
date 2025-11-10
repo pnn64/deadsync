@@ -2,6 +2,8 @@
 
 DeadSync, as in "dead on sync", is a StepMania/ITG engine with Vulkan/OpenGL backends, focused on perfect sync and competitive-level performance, written entirely in Rust. Cross-platform: Windows / Linux / BSD / macOS – x86_64 & ARM64.
 
+⚠️ **DeadSync is under heavy development. Bugs are expected, features may change, and things *will* break. You have been warned.**
+
 ## Prerequisites
 
 Before building, ensure you have the following installed on your system:
