@@ -1,5 +1,5 @@
 use crate::act;
-use crate::core::space::*;
+use crate::core::{audio, space::*};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
@@ -78,6 +78,7 @@ pub fn handle_key_press(state: &mut State, e: &KeyEvent) -> ScreenAction {
     match e.physical_key {
         PhysicalKey::Code(KeyCode::ArrowRight) | PhysicalKey::Code(KeyCode::KeyD) => {
             state.active_color_index += 1;
+            audio::play_sfx("assets/sounds/expand.ogg");
             // When saving, pass the correctly wrapped value.
             config::update_simply_love_color(state.active_color_index.rem_euclid(num_colors));
             
@@ -95,6 +96,7 @@ pub fn handle_key_press(state: &mut State, e: &KeyEvent) -> ScreenAction {
         }
         PhysicalKey::Code(KeyCode::ArrowLeft) | PhysicalKey::Code(KeyCode::KeyA) => {
             state.active_color_index -= 1;
+            audio::play_sfx("assets/sounds/expand.ogg");
             // When saving, pass the correctly wrapped value.
             config::update_simply_love_color(state.active_color_index.rem_euclid(num_colors));
 
