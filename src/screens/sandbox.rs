@@ -4,6 +4,15 @@ use crate::screens::{Screen, ScreenAction};
 use crate::core::input::{VirtualAction, InputEvent};
 use crate::ui::actors::Actor;
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
+use std::collections::VecDeque;
+use std::time::{Instant};
+use crate::core::input::PadEvent;
+use winit::event::{KeyEvent, ElementState};
+
+/* ---------------------------- constants ---------------------------- */
+
+const INPUT_LOG_MAX_ITEMS: usize = 10;
+const INPUT_LOG_FADE_DURATION: f32 = 5.0; // seconds to fade out
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -11,16 +20,21 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 
 pub struct State {
     pub elapsed: f32,
+    pub last_inputs: VecDeque<(String, Instant)>,
 }
 
 pub fn init() -> State {
-    State { elapsed: 0.0 }
+    State {
+        elapsed: 0.0,
+        last_inputs: VecDeque::with_capacity(INPUT_LOG_MAX_ITEMS),
+    }
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
 pub fn update(state: &mut State, dt: f32) {
     state.elapsed += dt;
+    state.last_inputs.retain(|(_, timestamp)| timestamp.elapsed().as_secs_f32() < INPUT_LOG_FADE_DURATION);
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -45,89 +59,65 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     (vec![actor], TRANSITION_OUT_DURATION)
 }
 
-pub fn get_actors(_state: &State) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(10);
+pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) {
+    if key_event.state == ElementState::Pressed && !key_event.repeat {
+        if let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key {
+            let key_str = format!("Keyboard: KeyCode::{:?}", code);
+            state.last_inputs.push_front((key_str, Instant::now()));
+            if state.last_inputs.len() > INPUT_LOG_MAX_ITEMS {
+                state.last_inputs.pop_back();
+            }
+        }
+    }
+}
+
+pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
+    // We only care about press events for the log
+    let pressed = match pad_event {
+        PadEvent::Dir { pressed, .. } => *pressed,
+        PadEvent::Button { pressed, .. } => *pressed,
+        PadEvent::Face { pressed, .. } => *pressed,
+    };
+
+    if pressed {
+        let pad_str = format!("Gamepad: {:?}", pad_event);
+        state.last_inputs.push_front((pad_str, Instant::now()));
+        if state.last_inputs.len() > INPUT_LOG_MAX_ITEMS {
+            state.last_inputs.pop_back();
+        }
+    }
+}
+
+pub fn get_actors(state: &State) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(10 + INPUT_LOG_MAX_ITEMS);
 
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), 20.0):
-        zoomtoheight(15.0): font("wendy"): settext("Actor System Sandbox"): horizalign(center)
+        zoomtoheight(15.0): font("wendy"): settext("Actor System & Input Sandbox"): horizalign(center)
     ));
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), 60.0):
         zoomtoheight(15.0): font("miso"): settext("Press ESC or F4 to return to Menu"): horizalign(center)
     ));
-    //actors.push(act!(text:
-    //    align(1.0, 1.0): xy(screen_width() - 10.0, screen_height() - 10.0):
-    //    zoomtoheight(15.0): font("miso"): settext(format!("Elapsed: {:.2}", state.elapsed)): horizalign(right)
-    //));
 
-    // Test 1
-    //actors.push(act!(quad:
-    //    diffuse(0,1,0,1)
-    //));
+    // Display the input log
+    let start_y = 100.0;
+    let line_height = 20.0;
+    for (i, (text, timestamp)) in state.last_inputs.iter().enumerate() {
+        let age = timestamp.elapsed().as_secs_f32();
+        let alpha = 1.0 - (age / INPUT_LOG_FADE_DURATION).clamp(0.0, 1.0);
 
-    // Test 2
-    //actors.push(act!(quad:
-    //    zoomto(100,100):
-    //));
-
-    // Test 3
-    //actors.push(act!(quad:
-    //    zoomto(100,100):diffuse(1,0,0,1)
-    //));
-
-    // Test S1
-    //actors.push(act!(sprite("logo.png"):
-    //    zoom(2.0)
-    //));
-
-    // S1 - using Center
-    //actors.push(act!(sprite("logo.png"):
-    //    Center(): setsize(300,180)
-    //));
-
-    //C1 - using align and xy
-    //actors.push(act!(sprite("logo.png"):
-    //    align(0.5,0.5): xy(cx, cy): setsize(300,180)
-    //));
-
-    // C2 - using align and x and y
-    // actors.push(act!(sprite("logo.png"):
-    //    align(0.5,0.5): x(cx): y(cy): setsize(300,180)
-    //));
-
-    // C3 - using align and x and y
-    //actors.push(act!(sprite("logo.png"):
-    //    CenterX(): CenterY(): setsize(300,180)
-    //));
-
-    // TXT1 - Test text in center with miso
-    //actors.push(act!(text:
-    //    font("miso"): Center(): settext("Test")
-    //));
-
-    // TXT2 - Test text in center with wendy
-    // actors.push(act!(text:
-    //     font("wendy"): Center(): settext("Test")
-    // ));
-
-    // MW1 - maxheight(80) vs none (centered)
-    // actors.push(act!(text:
-    //     xy(screen_center_x(), screen_center_y()-60.0): halign(0.5): zoom(1): font("wendy"): settext("SELECT A COLOR")
-    // ));
-
-    // actors.push(act!(text:
-    //     xy(screen_center_x(), screen_center_y()+60.0): halign(0.5): zoom(1): font("wendy"): settext("SELECT A COLOR"): maxwidth(220)
-    // ));
-
-    // MW2 - maxheight(80)
-    actors.push(act!(text:
-        xy(360,360): font("wendy"): settext("THIS STRING IS LONG"):
-    ));
-
-    actors.push(act!(text:
-        xy(360,420): font("wendy"): settext("THIS STRING IS LONG"): maxwidth(240):
-    ));
+        actors.push(act!(text:
+            font("miso"):
+            settext(text.clone()):
+            align(0.5, 0.0):
+            xy(screen_center_x(), start_y + (i as f32 * line_height)):
+            zoom(0.8):
+            horizalign(center):
+            diffusealpha(alpha):
+            z(200)
+        ));
+    }
 
     actors
 }

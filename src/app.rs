@@ -370,6 +370,9 @@ impl App {
         event_loop: &ActiveEventLoop,
         key_event: winit::event::KeyEvent,
     ) {
+        if self.current_screen == CurrentScreen::Sandbox {
+            crate::screens::sandbox::handle_raw_key_event(&mut self.sandbox_state, &key_event);
+        }
         let is_transitioning = !matches!(self.transition, TransitionState::Idle);
         let _event_timestamp = Instant::now();
 
@@ -381,6 +384,9 @@ impl App {
             if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F4) = key_event.physical_key {
                 if self.current_screen == CurrentScreen::Menu {
                     let _ = self.handle_action(ScreenAction::Navigate(CurrentScreen::Sandbox), event_loop);
+                    return;
+                } else if self.current_screen == CurrentScreen::Sandbox {
+                    let _ = self.handle_action(ScreenAction::Navigate(CurrentScreen::Menu), event_loop);
                     return;
                 }
             }
@@ -693,6 +699,9 @@ impl App {
         }
 
         for ev in pad_events {
+            if self.current_screen == CurrentScreen::Sandbox {
+                crate::screens::sandbox::handle_raw_pad_event(&mut self.sandbox_state, &ev);
+            }
             self.handle_pad_event(event_loop, ev);
         }
     }
