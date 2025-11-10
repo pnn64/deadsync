@@ -1,4 +1,6 @@
 use crate::core::gfx::BackendType;
+use crate::core::input::{Keymap, VirtualAction, InputBinding};
+use winit::keyboard::KeyCode;
 use configparser::ini::Ini;
 use log::{info, warn};
 use once_cell::sync::Lazy;
@@ -81,9 +83,17 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!("SimplyLoveColor={}\n", default.simply_love_color));
     content.push('\n');
 
-    // [keymaps] section with sane defaults
-    let km = crate::core::input::get_keymap();
-    content.push_str(&crate::core::input::keymap_to_ini_section_string(&km));
+    // [Keymaps] section with sane defaults (comma-separated)
+    content.push_str("[Keymaps]\n");
+    content.push_str("P1_Back=KeyCode::Escape\n");
+    content.push_str("P1_Down=KeyCode::ArrowDown,KeyCode::KeyS\n");
+    content.push_str("P1_Left=KeyCode::ArrowLeft,KeyCode::KeyA\n");
+    content.push_str("P1_Operator=\n");
+    content.push_str("P1_Restart=\n");
+    content.push_str("P1_Right=KeyCode::ArrowRight,KeyCode::KeyD\n");
+    content.push_str("P1_Select=\n");
+    content.push_str("P1_Start=KeyCode::Enter\n");
+    content.push_str("P1_Up=KeyCode::ArrowUp,KeyCode::KeyW\n\n");
 
     std::fs::write(CONFIG_PATH, content)
 }
@@ -126,7 +136,7 @@ pub fn load() {
             } // Lock on CONFIG is released here.
 
             // Load keymaps from the same INI and publish globally
-            let km = crate::core::input::load_keymap_from_ini(&conf);
+            let km = load_keymap_from_ini_local(&conf);
             crate::core::input::set_keymap(km);
 
             // Ensure [Keymaps] exist with primary bindings if missing; do not overwrite existing keys.
@@ -147,10 +157,10 @@ pub fn load() {
                 // Seed the whole section (no default pad bindings)
                 conf2.set("Keymaps", "P1_Back", Some("KeyCode::Escape".to_string()));
                 conf2.set("Keymaps", "P1_Start", Some("KeyCode::Enter".to_string()));
-                conf2.set("Keymaps", "P1_Up", Some("KeyCode::ArrowUp;KeyCode::KeyW".to_string()));
-                conf2.set("Keymaps", "P1_Down", Some("KeyCode::ArrowDown;KeyCode::KeyS".to_string()));
-                conf2.set("Keymaps", "P1_Left", Some("KeyCode::ArrowLeft;KeyCode::KeyA".to_string()));
-                conf2.set("Keymaps", "P1_Right", Some("KeyCode::ArrowRight;KeyCode::KeyD".to_string()));
+                conf2.set("Keymaps", "P1_Up", Some("KeyCode::ArrowUp,KeyCode::KeyW".to_string()));
+                conf2.set("Keymaps", "P1_Down", Some("KeyCode::ArrowDown,KeyCode::KeyS".to_string()));
+                conf2.set("Keymaps", "P1_Left", Some("KeyCode::ArrowLeft,KeyCode::KeyA".to_string()));
+                conf2.set("Keymaps", "P1_Right", Some("KeyCode::ArrowRight,KeyCode::KeyD".to_string()));
                 conf2.set("Keymaps", "P1_Select", Some("".to_string()));
                 conf2.set("Keymaps", "P1_Operator", Some("".to_string()));
                 conf2.set("Keymaps", "P1_Restart", Some("".to_string()));
@@ -159,10 +169,10 @@ pub fn load() {
                 // Add only missing keys
                 need_write_keymaps |= ensure(&mut conf2, "P1_Back", "KeyCode::Escape");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Start", "KeyCode::Enter");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Up", "KeyCode::ArrowUp;KeyCode::KeyW");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Down", "KeyCode::ArrowDown;KeyCode::KeyS");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Left", "KeyCode::ArrowLeft;KeyCode::KeyA");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Right", "KeyCode::ArrowRight;KeyCode::KeyD");
+                need_write_keymaps |= ensure(&mut conf2, "P1_Up", "KeyCode::ArrowUp,KeyCode::KeyW");
+                need_write_keymaps |= ensure(&mut conf2, "P1_Down", "KeyCode::ArrowDown,KeyCode::KeyS");
+                need_write_keymaps |= ensure(&mut conf2, "P1_Left", "KeyCode::ArrowLeft,KeyCode::KeyA");
+                need_write_keymaps |= ensure(&mut conf2, "P1_Right", "KeyCode::ArrowRight,KeyCode::KeyD");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Select", "");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Operator", "");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Restart", "");
@@ -195,6 +205,104 @@ pub fn load() {
             warn!("Failed to load '{}': {}. Using default values.", CONFIG_PATH, e);
         }
     }
+}
+
+// --- Keymap defaults and parsing (kept in config to avoid coupling input.rs to config) ---
+
+fn default_keymap_local() -> Keymap {
+    use VirtualAction as A;
+    let mut km = Keymap::default();
+    km.bind(A::p1_up,    &[
+        InputBinding::Key(KeyCode::ArrowUp), InputBinding::Key(KeyCode::KeyW),
+    ]);
+    km.bind(A::p1_down,  &[
+        InputBinding::Key(KeyCode::ArrowDown), InputBinding::Key(KeyCode::KeyS),
+    ]);
+    km.bind(A::p1_left,  &[
+        InputBinding::Key(KeyCode::ArrowLeft), InputBinding::Key(KeyCode::KeyA),
+    ]);
+    km.bind(A::p1_right, &[
+        InputBinding::Key(KeyCode::ArrowRight), InputBinding::Key(KeyCode::KeyD),
+    ]);
+    km.bind(A::p1_start, &[
+        InputBinding::Key(KeyCode::Enter)
+    ]);
+    km.bind(A::p1_back, &[
+        InputBinding::Key(KeyCode::Escape)
+    ]);
+    km
+}
+
+#[inline(always)]
+fn parse_action_key_lower(k: &str) -> Option<VirtualAction> {
+    use VirtualAction::*;
+    match k {
+        "p1_up" => Some(p1_up),
+        "p1_down" => Some(p1_down),
+        "p1_left" => Some(p1_left),
+        "p1_right" => Some(p1_right),
+        "p1_start" => Some(p1_start),
+        "p1_back" => Some(p1_back),
+        "p1_menuup" => Some(p1_menu_up),
+        "p1_menudown" => Some(p1_menu_down),
+        "p1_menuleft" => Some(p1_menu_left),
+        "p1_menuright" => Some(p1_menu_right),
+        "p1_select" => Some(p1_select),
+        "p1_operator" => Some(p1_operator),
+        "p1_restart" => Some(p1_restart),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn parse_binding_token_simple(tok: &str) -> Option<InputBinding> {
+    let t = tok.trim();
+    if let Some(rest) = t.strip_prefix("KeyCode::") {
+        let code = match rest {
+            // Special keys
+            "Enter" => KeyCode::Enter,
+            "Escape" => KeyCode::Escape,
+            "ArrowUp" => KeyCode::ArrowUp,
+            "ArrowDown" => KeyCode::ArrowDown,
+            "ArrowLeft" => KeyCode::ArrowLeft,
+            "ArrowRight" => KeyCode::ArrowRight,
+            // Letter keys A-Z
+            "KeyA" => KeyCode::KeyA, "KeyB" => KeyCode::KeyB, "KeyC" => KeyCode::KeyC, "KeyD" => KeyCode::KeyD,
+            "KeyE" => KeyCode::KeyE, "KeyF" => KeyCode::KeyF, "KeyG" => KeyCode::KeyG, "KeyH" => KeyCode::KeyH,
+            "KeyI" => KeyCode::KeyI, "KeyJ" => KeyCode::KeyJ, "KeyK" => KeyCode::KeyK, "KeyL" => KeyCode::KeyL,
+            "KeyM" => KeyCode::KeyM, "KeyN" => KeyCode::KeyN, "KeyO" => KeyCode::KeyO, "KeyP" => KeyCode::KeyP,
+            "KeyQ" => KeyCode::KeyQ, "KeyR" => KeyCode::KeyR, "KeyS" => KeyCode::KeyS, "KeyT" => KeyCode::KeyT,
+            "KeyU" => KeyCode::KeyU, "KeyV" => KeyCode::KeyV, "KeyW" => KeyCode::KeyW, "KeyX" => KeyCode::KeyX,
+            "KeyY" => KeyCode::KeyY, "KeyZ" => KeyCode::KeyZ,
+            _ => return None,
+        };
+        return Some(InputBinding::Key(code));
+    }
+    None
+}
+
+fn load_keymap_from_ini_local(conf: &Ini) -> Keymap {
+    let section = conf
+        .get_map_ref()
+        .get("Keymaps")
+        .or_else(|| conf.get_map_ref().get("keymaps"));
+    if let Some(section) = section {
+        let mut km = Keymap::default();
+        for (k, v_opt) in section {
+            let key = k.to_ascii_lowercase();
+            if let Some(action) = parse_action_key_lower(&key) {
+                let mut bindings = Vec::new();
+                if let Some(value) = v_opt.as_deref() {
+                    for tok in value.split(',') {
+                        if let Some(b) = parse_binding_token_simple(tok) { bindings.push(b); }
+                    }
+                }
+                km.bind(action, &bindings);
+            }
+        }
+        return km;
+    }
+    default_keymap_local()
 }
 
 fn save_without_keymaps() {
