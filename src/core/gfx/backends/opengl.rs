@@ -387,7 +387,7 @@ fn create_opengl_context(
     };
 
     let template = ConfigTemplateBuilder::new()
-        .with_alpha_size(8)
+        .with_alpha_size(0)
         .with_stencil_size(8)
         .with_transparency(false)
         .build();
