@@ -362,7 +362,8 @@ pub fn map_key_event(ev: &KeyEvent) -> Vec<InputEvent> {
         return out;
     }
     let km = get_keymap();
-    let actions = km.actions_for_key_event(ev);
+    let mut actions = km.actions_for_key_event(ev);
+    dedup_menu_variants(&mut actions);
     if actions.is_empty() { return out; }
     let timestamp = Instant::now();
     for (act, pressed) in actions {
@@ -375,7 +376,8 @@ pub fn map_key_event(ev: &KeyEvent) -> Vec<InputEvent> {
 pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
     let mut out = Vec::with_capacity(2);
     let km = get_keymap();
-    let actions = km.actions_for_pad_event(ev);
+    let mut actions = km.actions_for_pad_event(ev);
+    dedup_menu_variants(&mut actions);
     if actions.is_empty() { return out; }
     let timestamp = Instant::now();
     for (act, pressed) in actions {
@@ -387,10 +389,26 @@ pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
 #[inline(always)]
 pub fn lane_from_action(act: VirtualAction) -> Option<Lane> {
     match act {
-        VirtualAction::p1_left | VirtualAction::p1_menu_left => Some(Lane::Left),
-        VirtualAction::p1_down | VirtualAction::p1_menu_down => Some(Lane::Down),
-        VirtualAction::p1_up   | VirtualAction::p1_menu_up   => Some(Lane::Up),
-        VirtualAction::p1_right| VirtualAction::p1_menu_right=> Some(Lane::Right),
+        VirtualAction::p1_left  => Some(Lane::Left),
+        VirtualAction::p1_down  => Some(Lane::Down),
+        VirtualAction::p1_up    => Some(Lane::Up),
+        VirtualAction::p1_right => Some(Lane::Right),
         _ => None,
     }
+}
+
+#[inline(always)]
+fn dedup_menu_variants(actions: &mut Vec<(VirtualAction, bool)>) {
+    use VirtualAction as A;
+    // If both menu and non-menu variants for the same direction are present with the same
+    // pressed state, drop the menu variant to avoid double-triggering navigation.
+    let snapshot = actions.clone();
+    let has = |a: A, p: bool| snapshot.iter().any(|(act, pr)| *act == a && *pr == p);
+    actions.retain(|(act, pr)| match *act {
+        A::p1_menu_up    => !(has(A::p1_up,    *pr)),
+        A::p1_menu_down  => !(has(A::p1_down,  *pr)),
+        A::p1_menu_left  => !(has(A::p1_left,  *pr)),
+        A::p1_menu_right => !(has(A::p1_right, *pr)),
+        _ => true,
+    });
 }

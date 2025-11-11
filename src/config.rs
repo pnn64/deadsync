@@ -88,6 +88,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str("P1_Back=KeyCode::Escape\n");
     content.push_str("P1_Down=KeyCode::ArrowDown,KeyCode::KeyS\n");
     content.push_str("P1_Left=KeyCode::ArrowLeft,KeyCode::KeyA\n");
+    content.push_str("P1_MenuDown=\n");
+    content.push_str("P1_MenuLeft=\n");
+    content.push_str("P1_MenuRight=\n");
+    content.push_str("P1_MenuUp=\n");
     content.push_str("P1_Operator=\n");
     content.push_str("P1_Restart=\n");
     content.push_str("P1_Right=KeyCode::ArrowRight,KeyCode::KeyD\n");
@@ -161,6 +165,10 @@ pub fn load() {
                 conf2.set("Keymaps", "P1_Down", Some("KeyCode::ArrowDown,KeyCode::KeyS".to_string()));
                 conf2.set("Keymaps", "P1_Left", Some("KeyCode::ArrowLeft,KeyCode::KeyA".to_string()));
                 conf2.set("Keymaps", "P1_Right", Some("KeyCode::ArrowRight,KeyCode::KeyD".to_string()));
+                conf2.set("Keymaps", "P1_MenuUp", Some("".to_string()));
+                conf2.set("Keymaps", "P1_MenuDown", Some("".to_string()));
+                conf2.set("Keymaps", "P1_MenuLeft", Some("".to_string()));
+                conf2.set("Keymaps", "P1_MenuRight", Some("".to_string()));
                 conf2.set("Keymaps", "P1_Select", Some("".to_string()));
                 conf2.set("Keymaps", "P1_Operator", Some("".to_string()));
                 conf2.set("Keymaps", "P1_Restart", Some("".to_string()));
@@ -173,6 +181,10 @@ pub fn load() {
                 need_write_keymaps |= ensure(&mut conf2, "P1_Down", "KeyCode::ArrowDown,KeyCode::KeyS");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Left", "KeyCode::ArrowLeft,KeyCode::KeyA");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Right", "KeyCode::ArrowRight,KeyCode::KeyD");
+                need_write_keymaps |= ensure(&mut conf2, "P1_MenuUp", "");
+                need_write_keymaps |= ensure(&mut conf2, "P1_MenuDown", "");
+                need_write_keymaps |= ensure(&mut conf2, "P1_MenuLeft", "");
+                need_write_keymaps |= ensure(&mut conf2, "P1_MenuRight", "");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Select", "");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Operator", "");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Restart", "");
