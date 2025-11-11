@@ -140,7 +140,7 @@ impl App {
             CurrentScreen::Init => crate::screens::init::handle_input(&mut self.init_state, &ev),
             CurrentScreen::Gameplay => {
                 if let Some(gs) = &mut self.gameplay_state {
-                    crate::game::gameplay::handle_input_event(gs, &ev)
+                    crate::game::gameplay::handle_input(gs, &ev)
                 } else { ScreenAction::None }
             }
         };
@@ -401,16 +401,7 @@ impl App {
                 self.show_overlay = !self.show_overlay;
                 log::info!("Overlay {}", if self.show_overlay { "ON" } else { "OFF" });
             }
-            // F4 menu/sandbox toggle moved to screen raw handlers
-            if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) = key_event.physical_key {
-                if self.current_screen == CurrentScreen::Menu {
-                    if let Err(e) = self.handle_action(ScreenAction::Exit, event_loop) {
-                        log::error!("Failed to handle exit action: {}", e);
-                        event_loop.exit();
-                    }
-                    return;
-                }
-            }
+            // Screen-specific Escape handling resides in per-screen raw handlers now
         }
 
         if is_transitioning { return; }

@@ -54,8 +54,14 @@ pub fn init() -> State {
 // Screen-specific raw keyboard handling for Menu (e.g., F4 to Sandbox)
 pub fn handle_raw_key_event(_state: &mut State, key: &KeyEvent) -> ScreenAction {
     if key.state != ElementState::Pressed { return ScreenAction::None; }
-    if let winit::keyboard::PhysicalKey::Code(KeyCode::F4) = key.physical_key {
-        return ScreenAction::Navigate(Screen::Sandbox);
+    match key.physical_key {
+        winit::keyboard::PhysicalKey::Code(KeyCode::F4) => {
+            return ScreenAction::Navigate(Screen::Sandbox);
+        }
+        winit::keyboard::PhysicalKey::Code(KeyCode::Escape) => {
+            return ScreenAction::Exit;
+        }
+        _ => {}
     }
     ScreenAction::None
 }

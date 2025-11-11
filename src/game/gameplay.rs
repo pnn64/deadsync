@@ -983,7 +983,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
 // Legacy raw key handler removed in favor of virtual action path.
 
 // Event-driven input via virtual keymaps (preferred path)
-pub fn handle_input_event(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if let Some(lane) = lane_from_action(ev.action) {
         queue_input_edge(state, ev.source, lane, ev.pressed, ev.timestamp);
         return ScreenAction::None;
