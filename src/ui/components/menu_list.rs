@@ -43,6 +43,7 @@ pub fn build_vertical_menu(p: MenuParams) -> Vec<Actor> {
             zoomtoheight(MENU_BASE_PX):
             zoom(zoom_factor):
             diffuse(color[0], color[1], color[2], color[3]):
+            shadowlength(0.8):
             font(p.font):
             settext(*label):
             horizalign(center)
