@@ -899,6 +899,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                 z(101)
             ));
+
+            // Add judgment preview for "Judgement Font" row showing Fantastic frame
+            if row.name == "Judgement Font" && choice_text == "Love" {
+                // Love judgment sprite is 2x7 (2 columns, 7 rows) at double resolution
+                // Fantastic is the first frame (top-left, column 0, row 0)
+                // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
+                let preview_x = choice_inner_left + widescale(80.0, 100.0);
+                actors.push(act!(sprite("judgements/Love 2x7 (doubleres).png"):
+                    align(0.0, 0.5):
+                    xy(preview_x, current_row_y):
+                    setstate(0):
+                    zoom(0.2):
+                    z(102)
+                ));
+            }
         }
     }
 

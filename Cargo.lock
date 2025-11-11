@@ -744,7 +744,7 @@ checksum = "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f"
 
 [[package]]
 name = "deadsync"
-version = "0.1.207"
+version = "0.1.208"
 dependencies = [
  "ash",
  "ash-window",
@@ -2650,7 +2650,7 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rssp"
-version = "0.2.160"
+version = "0.2.161"
 dependencies = [
  "png",
  "sha1",
