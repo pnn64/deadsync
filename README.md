@@ -56,6 +56,18 @@ After running the game for the first time, configuration files and a `save` dire
 ### Game Settings
 You can edit `deadsync.ini` to change various settings, including renderer, video resolution, VSync, and the default theme color.
 
+### Input bindings
+
+You can fully customize keyboard and gamepad controls in the `[Keymaps]` section of `deadsync.ini`. DeadSync maps **physical inputs** to **virtual actions**, which the game then uses internally.
+
+Gamepad controls (e.g. Xbox controllers) can be bound with:
+
+- `PadN::Dir::Up|Down|Left|Right`
+- `PadN::Button::Confirm|Back`
+- `PadN::Face::SouthA|EastB|WestX|NorthY`
+
+Here `N` is the gamepad index (Pad0, Pad1, …).
+
 ### Profile & Online Features
 A `save` directory is also created to store your personal data.
 
