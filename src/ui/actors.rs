@@ -40,6 +40,7 @@ pub enum Actor {
         size: [SizeSpec; 2],
         source: SpriteSource,
         tint: [f32; 4],
+        glow: [f32; 4],
         z: i16,
         cell: Option<(u32, u32)>,
         grid: Option<(u32, u32)>,
@@ -68,6 +69,7 @@ pub enum Actor {
         align: [f32; 2],         // halign/valign pivot inside line box
         offset: [f32; 2],        // parent top-left space
         color: [f32; 4],
+        glow: [f32; 4],
         font: &'static str,
         content: String,
         align_text: TextAlign,   // talign: left/center/right

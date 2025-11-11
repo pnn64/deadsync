@@ -97,6 +97,7 @@ pub struct TweenState {
     pub hx: f32,
     pub vy: f32,
     pub tint: [f32; 4],
+    pub glow: [f32; 4],
     pub visible: bool,
     pub flip_x: bool,
     pub flip_y: bool,
@@ -118,6 +119,7 @@ impl Default for TweenState {
             x: 0.0, y: 0.0, w: 0.0, h: 0.0,
             hx: 0.5, vy: 0.5,
             tint: [1.0, 1.0, 1.0, 1.0],
+            glow: [1.0, 1.0, 1.0, 0.0],
             visible: true,
             flip_x: false,
             flip_y: false,
@@ -172,18 +174,19 @@ impl Step {
                         BuildOp::ZoomX(t)   => { mix(&mut h, 15); mix_t(&mut h, t); }
                         BuildOp::ZoomY(t)   => { mix(&mut h, 16); mix_t(&mut h, t); }
                         BuildOp::Tint(r,g,b,a)=>{ mix(&mut h, 17); mix_t(&mut h,r); mix_t(&mut h,g); mix_t(&mut h,b); mix_t(&mut h,a); }
-                        BuildOp::Visible(v) => { mix(&mut h, 18); mix(&mut h, u64::from(*v)); }
-                        BuildOp::FlipX(v)   => { mix(&mut h, 19); mix(&mut h, u64::from(*v)); }
-                        BuildOp::FlipY(v)   => { mix(&mut h, 20); mix(&mut h, u64::from(*v)); }
-                        BuildOp::RotZ(t)    => { mix(&mut h, 21); mix_t(&mut h, t); }
-                        BuildOp::CropL(t)   => { mix(&mut h, 22); mix_t(&mut h, t); }
-                        BuildOp::CropR(t)   => { mix(&mut h, 23); mix_t(&mut h, t); }
-                        BuildOp::CropT(t)   => { mix(&mut h, 24); mix_t(&mut h, t); }
-                        BuildOp::CropB(t)   => { mix(&mut h, 25); mix_t(&mut h, t); }
-                        BuildOp::FadeL(t)   => { mix(&mut h, 26); mix_t(&mut h, t); }
-                        BuildOp::FadeR(t)   => { mix(&mut h, 27); mix_t(&mut h, t); }
-                        BuildOp::FadeT(t)   => { mix(&mut h, 28); mix_t(&mut h, t); }
-                        BuildOp::FadeB(t)   => { mix(&mut h, 29); mix_t(&mut h, t); }
+                        BuildOp::Glow(r,g,b,a)=>{ mix(&mut h, 18); mix_t(&mut h,r); mix_t(&mut h,g); mix_t(&mut h,b); mix_t(&mut h,a); }
+                        BuildOp::Visible(v) => { mix(&mut h, 19); mix(&mut h, u64::from(*v)); }
+                        BuildOp::FlipX(v)   => { mix(&mut h, 20); mix(&mut h, u64::from(*v)); }
+                        BuildOp::FlipY(v)   => { mix(&mut h, 21); mix(&mut h, u64::from(*v)); }
+                        BuildOp::RotZ(t)    => { mix(&mut h, 22); mix_t(&mut h, t); }
+                        BuildOp::CropL(t)   => { mix(&mut h, 23); mix_t(&mut h, t); }
+                        BuildOp::CropR(t)   => { mix(&mut h, 24); mix_t(&mut h, t); }
+                        BuildOp::CropT(t)   => { mix(&mut h, 25); mix_t(&mut h, t); }
+                        BuildOp::CropB(t)   => { mix(&mut h, 26); mix_t(&mut h, t); }
+                        BuildOp::FadeL(t)   => { mix(&mut h, 27); mix_t(&mut h, t); }
+                        BuildOp::FadeR(t)   => { mix(&mut h, 28); mix_t(&mut h, t); }
+                        BuildOp::FadeT(t)   => { mix(&mut h, 29); mix_t(&mut h, t); }
+                        BuildOp::FadeB(t)   => { mix(&mut h, 30); mix_t(&mut h, t); }
                     }
                 }
             }
@@ -208,6 +211,7 @@ enum BuildOp {
     ZoomX(Target),
     ZoomY(Target),
     Tint(Target, Target, Target, Target),
+    Glow(Target, Target, Target, Target),
     Visible(bool),
     FlipX(bool),
     FlipY(bool),
@@ -236,6 +240,7 @@ enum PreparedKind {
     ScaleX { from: f32, to: f32 },
     ScaleY { from: f32, to: f32 },
     Tint { from: [f32; 4], to: [f32; 4] },
+    Glow { from: [f32; 4], to: [f32; 4] },
     Visible(bool),
     FlipX(bool),
     FlipY(bool),
@@ -247,7 +252,7 @@ enum PreparedKind {
     FadeL { from: f32, to: f32 },
     FadeR { from: f32, to: f32 },
     FadeT { from: f32, to: f32 },
-    FadeB { from: f32, to: f32 }, 
+    FadeB { from: f32, to: f32 },
 }
 
 impl OpPrepared {
@@ -262,6 +267,9 @@ impl OpPrepared {
             PreparedKind::ScaleY { from, to } => s.scale[1] = from + (to - from) * a,
             PreparedKind::Tint { from, to } => {
                 for i in 0..4 { s.tint[i] = from[i] + (to[i] - from[i]) * a; }
+            }
+            PreparedKind::Glow { from, to } => {
+                for i in 0..4 { s.glow[i] = from[i] + (to[i] - from[i]) * a; }
             }
             PreparedKind::Visible(v) => s.visible = v,
             PreparedKind::FlipX(v) => s.flip_x = v,
@@ -349,6 +357,13 @@ impl Segment {
                     let to2 = match tb { Target::Abs(v) => v, Target::Rel(dv) => s.tint[2] + dv };
                     let to3 = match ta { Target::Abs(v) => v, Target::Rel(dv) => s.tint[3] + dv };
                     self.prepared.push(OpPrepared { kind: PreparedKind::Tint { from: s.tint, to: [to0, to1, to2, to3] } });
+                }
+                BuildOp::Glow(gr, gg, gb, ga) => {
+                    let to0 = match gr { Target::Abs(v) => v, Target::Rel(dv) => s.glow[0] + dv };
+                    let to1 = match gg { Target::Abs(v) => v, Target::Rel(dv) => s.glow[1] + dv };
+                    let to2 = match gb { Target::Abs(v) => v, Target::Rel(dv) => s.glow[2] + dv };
+                    let to3 = match ga { Target::Abs(v) => v, Target::Rel(dv) => s.glow[3] + dv };
+                    self.prepared.push(OpPrepared { kind: PreparedKind::Glow { from: s.glow, to: [to0, to1, to2, to3] } });
                 }
                 BuildOp::Visible(v) => {
                     self.prepared.push(OpPrepared { kind: PreparedKind::Visible(v) });
@@ -485,6 +500,20 @@ impl SegmentBuilder {
     }
     pub fn alpha(mut self, a: f32) -> Self {
         self.ops.push(BuildOp::Tint(Target::Rel(0.0), Target::Rel(0.0), Target::Rel(0.0), Target::Abs(a)));
+        self
+    }
+
+    // --- glow ---
+    pub fn glow(mut self, r: f32, g: f32, b: f32, a: f32) -> Self {
+        self.ops.push(BuildOp::Glow(Target::Abs(r), Target::Abs(g), Target::Abs(b), Target::Abs(a)));
+        self
+    }
+    pub fn glow_rgb(mut self, r: f32, g: f32, b: f32) -> Self {
+        self.ops.push(BuildOp::Glow(Target::Abs(r), Target::Abs(g), Target::Abs(b), Target::Rel(0.0)));
+        self
+    }
+    pub fn glow_alpha(mut self, a: f32) -> Self {
+        self.ops.push(BuildOp::Glow(Target::Rel(0.0), Target::Rel(0.0), Target::Rel(0.0), Target::Abs(a)));
         self
     }
 

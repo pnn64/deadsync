@@ -22,6 +22,7 @@ pub enum Mod<'a> {
     Z(i16),
     Tint([f32; 4]),
     Alpha(f32),
+    Glow([f32; 4]),
     Blend(BlendMode),
 
     // absolute size (pre-zoom) in SM TL space
@@ -105,6 +106,7 @@ fn build_sprite_like<'a>(
     let (mut x, mut y, mut w, mut h) = (0.0, 0.0, 0.0, 0.0);
     let (mut hx, mut vy) = (0.5, 0.5);
     let mut tint = [1.0, 1.0, 1.0, 1.0];
+    let mut glow = [1.0, 1.0, 1.0, 0.0];
     let mut z: i16 = 0;
     let (mut vis, mut fx, mut fy) = (true, false, false);
     let (mut cl, mut cr, mut ct, mut cb) = (0.0, 0.0, 0.0, 0.0);
@@ -143,6 +145,7 @@ fn build_sprite_like<'a>(
             Mod::Z(v) => { z = *v; }
             Mod::Tint(rgba) => { tint = *rgba; }
             Mod::Alpha(a) => { tint[3] = *a; }
+            Mod::Glow(rgba) => { glow = *rgba; }
             Mod::Blend(bm) => { blend = *bm; }
 
             Mod::SizePx(a, b) => { w = *a; h = *b; }
@@ -221,6 +224,7 @@ fn build_sprite_like<'a>(
         init.x = x; init.y = y; init.w = w; init.h = h;
         init.hx = hx; init.vy = vy;
         init.tint = tint;
+        init.glow = glow;
         init.visible = vis; init.flip_x = fx; init.flip_y = fy;
         init.rot_z = rot;
         init.fade_l = fl; init.fade_r = fr; init.fade_t = ft; init.fade_b = fb;
@@ -246,6 +250,7 @@ fn build_sprite_like<'a>(
             mix(&mut h, f32b(init.hx)); mix(&mut h, f32b(init.vy));
             mix(&mut h, f32b(init.rot_z));
             for c in init.tint { mix(&mut h, f32b(c)); }
+            for c in init.glow { mix(&mut h, f32b(c)); }
             mix(&mut h, u64::from(init.visible));
             mix(&mut h, u64::from(init.flip_x));
             mix(&mut h, u64::from(init.flip_y));
@@ -264,7 +269,7 @@ fn build_sprite_like<'a>(
 
         x = s.x; y = s.y; w = s.w; h = s.h;
         hx = s.hx; vy = s.vy;
-        tint = s.tint; vis = s.visible; fx = s.flip_x; fy = s.flip_y;
+        tint = s.tint; glow = s.glow; vis = s.visible; fx = s.flip_x; fy = s.flip_y;
         rot = s.rot_z;
         fl = s.fade_l; fr = s.fade_r; ft = s.fade_t; fb = s.fade_b;
         cl = s.crop_l; cr = s.crop_r; ct = s.crop_t; cb = s.crop_b;
@@ -290,6 +295,7 @@ fn build_sprite_like<'a>(
         size: [SizeSpec::Px(w), SizeSpec::Px(h)],
         source,
         tint,
+        glow,
         z,
         cell,
         grid,
@@ -337,6 +343,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
     let (mut x, mut y) = (0.0, 0.0);
     let (mut hx, mut vy) = (0.5, 0.5);
     let mut color = [1.0, 1.0, 1.0, 1.0];
+    let mut glow = [1.0, 1.0, 1.0, 0.0];
     let mut font: &'static str = "miso";
     let mut content: Cow<'a, str> = Cow::Borrowed("");
     let mut talign = TextAlign::Left;
@@ -375,6 +382,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
             // color/font/text/align
             Mod::Tint(r)     => { color = *r; }
             Mod::Alpha(a)    => { color[3] = *a; }
+            Mod::Glow(r)     => { glow = *r; }
             Mod::Font(f)     => { font = *f; }
             Mod::Content(s)  => { content = s.clone(); }
             Mod::TAlign(a)   => { talign = *a; }
@@ -440,6 +448,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
         init.x = x;
         init.y = y;
         init.tint = color;
+        init.glow = glow;
         init.scale = [sx, sy];
 
         // Create a salt for the tween state based on the text content to ensure
@@ -460,6 +469,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
         x = s.x;
         y = s.y;
         color = s.tint;
+        glow = s.glow;
         sx = s.scale[0];
         sy = s.scale[1];
     }
@@ -468,6 +478,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
         align: [hx, vy],
         offset: [x, y],
         color,
+        glow,
         font,
         content: content.into_owned(),
         align_text: talign,
@@ -689,6 +700,16 @@ macro_rules! __dsl_apply_one {
             $cur = ::core::option::Option::Some(seg);
         } else {
             $mods.push($crate::ui::dsl::Mod::Alpha(($a) as f32));
+        }
+    }};
+
+    // --- Glow (SM/ITG parity) ---------------------------------------
+    (glow ($r:expr,$g:expr,$b:expr,$a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        if let ::core::option::Option::Some(mut seg) = $cur.take() {
+            seg = seg.glow(($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32);
+            $cur = ::core::option::Option::Some(seg);
+        } else {
+            $mods.push($crate::ui::dsl::Mod::Glow([($r) as f32,($g) as f32,($b) as f32,($a) as f32]));
         }
     }};
 

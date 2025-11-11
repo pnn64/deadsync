@@ -136,6 +136,7 @@ fn build_actor_recursive(
             croptop,
             cropbottom,
             blend,
+            glow,
             fadeleft,
             faderight,
             fadetop,
@@ -296,6 +297,7 @@ fn build_actor_recursive(
             max_w_pre_zoom,
             max_h_pre_zoom,
             blend,
+            glow,
         } => {
             if let Some(fm) = fonts.get(font) {
                 let mut objects = layout_text(
