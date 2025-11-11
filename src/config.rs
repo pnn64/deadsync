@@ -1,5 +1,5 @@
 use crate::core::gfx::BackendType;
-use crate::core::input::{Keymap, VirtualAction, InputBinding};
+use crate::core::input::{Keymap, VirtualAction, InputBinding, PadDir, PadButton, FaceBtn};
 use winit::keyboard::KeyCode;
 use configparser::ini::Ini;
 use log::{info, warn};
@@ -255,8 +255,9 @@ fn parse_action_key_lower(k: &str) -> Option<VirtualAction> {
 }
 
 #[inline(always)]
-fn parse_binding_token_simple(tok: &str) -> Option<InputBinding> {
+fn parse_binding_token(tok: &str) -> Option<InputBinding> {
     let t = tok.trim();
+    // Keyboard
     if let Some(rest) = t.strip_prefix("KeyCode::") {
         let code = match rest {
             // Special keys
@@ -278,6 +279,67 @@ fn parse_binding_token_simple(tok: &str) -> Option<InputBinding> {
         };
         return Some(InputBinding::Key(code));
     }
+
+    // Gamepad (any pad): PadDir::Up, PadButton::Confirm, Face::WestX
+    if let Some(rest) = t.strip_prefix("PadDir::") {
+        let dir = match rest { "Up" => PadDir::Up, "Down" => PadDir::Down, "Left" => PadDir::Left, "Right" => PadDir::Right, _ => return None };
+        return Some(InputBinding::PadDir(dir));
+    }
+    if let Some(rest) = t.strip_prefix("PadButton::") {
+        let btn = match rest { "Confirm" => PadButton::Confirm, "Back" => PadButton::Back, _ => return None };
+        return Some(InputBinding::PadButton(btn));
+    }
+    if let Some(rest) = t.strip_prefix("Face::") {
+        let btn = match rest { "SouthA" => FaceBtn::SouthA, "EastB" => FaceBtn::EastB, "WestX" => FaceBtn::WestX, "NorthY" => FaceBtn::NorthY, _ => return None };
+        return Some(InputBinding::Face(btn));
+    }
+
+    // Gamepad (device-specific): Pad0::Dir::Up, Pad1::Button::Confirm, Pad0::Face::WestX
+    // Also accept Pad::... as any pad (handled above) but keep here for clarity.
+    // Split by "::"
+    let parts: Vec<&str> = t.split("::").collect();
+    if parts.len() == 3 {
+        let (pad_part, kind, name) = (parts[0], parts[1], parts[2]);
+        // Parse device index from PadN
+        if pad_part.starts_with("Pad") {
+            let dev_str = &pad_part[3..];
+            if dev_str.is_empty() {
+                // Treat as any-pad; handled at top via PadDir/PadButton/Face prefixes.
+                // But allow here too for flexibility.
+                return match kind {
+                    "Dir" => match name { "Up" => Some(InputBinding::PadDir(PadDir::Up)), "Down" => Some(InputBinding::PadDir(PadDir::Down)), "Left" => Some(InputBinding::PadDir(PadDir::Left)), "Right" => Some(InputBinding::PadDir(PadDir::Right)), _ => None },
+                    "Button" => match name { "Confirm" => Some(InputBinding::PadButton(PadButton::Confirm)), "Back" => Some(InputBinding::PadButton(PadButton::Back)), _ => None },
+                    "Face" => match name { "SouthA" => Some(InputBinding::Face(FaceBtn::SouthA)), "EastB" => Some(InputBinding::Face(FaceBtn::EastB)), "WestX" => Some(InputBinding::Face(FaceBtn::WestX)), "NorthY" => Some(InputBinding::Face(FaceBtn::NorthY)), _ => None },
+                    _ => None,
+                };
+            }
+            if let Ok(device) = dev_str.parse::<usize>() {
+                return match kind {
+                    "Dir" => match name {
+                        "Up" => Some(InputBinding::PadDirOn { device, dir: PadDir::Up }),
+                        "Down" => Some(InputBinding::PadDirOn { device, dir: PadDir::Down }),
+                        "Left" => Some(InputBinding::PadDirOn { device, dir: PadDir::Left }),
+                        "Right" => Some(InputBinding::PadDirOn { device, dir: PadDir::Right }),
+                        _ => None,
+                    },
+                    "Button" => match name {
+                        "Confirm" => Some(InputBinding::PadButtonOn { device, btn: PadButton::Confirm }),
+                        "Back" => Some(InputBinding::PadButtonOn { device, btn: PadButton::Back }),
+                        _ => None,
+                    },
+                    "Face" => match name {
+                        "SouthA" => Some(InputBinding::FaceOn { device, btn: FaceBtn::SouthA }),
+                        "EastB" => Some(InputBinding::FaceOn { device, btn: FaceBtn::EastB }),
+                        "WestX" => Some(InputBinding::FaceOn { device, btn: FaceBtn::WestX }),
+                        "NorthY" => Some(InputBinding::FaceOn { device, btn: FaceBtn::NorthY }),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+            }
+        }
+    }
+
     None
 }
 
@@ -294,7 +356,7 @@ fn load_keymap_from_ini_local(conf: &Ini) -> Keymap {
                 let mut bindings = Vec::new();
                 if let Some(value) = v_opt.as_deref() {
                     for tok in value.split(',') {
-                        if let Some(b) = parse_binding_token_simple(tok) { bindings.push(b); }
+                        if let Some(b) = parse_binding_token(tok) { bindings.push(b); }
                     }
                 }
                 km.bind(action, &bindings);

@@ -262,6 +262,9 @@ pub enum InputBinding {
     PadDir(PadDir),
     PadButton(PadButton),
     Face(FaceBtn),
+    PadDirOn { device: usize, dir: PadDir },
+    PadButtonOn { device: usize, btn: PadButton },
+    FaceOn { device: usize, btn: FaceBtn },
 }
 
 #[derive(Clone, Debug, Default)]
@@ -297,20 +300,41 @@ impl Keymap {
     #[inline(always)]
     pub fn actions_for_pad_event(&self, ev: &PadEvent) -> Vec<(VirtualAction, bool)> {
         let mut out = Vec::with_capacity(2);
-        match ev {
-            PadEvent::Dir { dir, pressed, .. } => {
+        match *ev {
+            PadEvent::Dir { id, dir, pressed } => {
+                let dev = usize::from(id);
                 for (act, binds) in &self.map {
-                    for b in binds { if *b == InputBinding::PadDir(*dir) { out.push((*act, *pressed)); break; } }
+                    for b in binds {
+                        match *b {
+                            InputBinding::PadDir(d) if d == dir => { out.push((*act, pressed)); break; }
+                            InputBinding::PadDirOn { device, dir: d } if d == dir && device == dev => { out.push((*act, pressed)); break; }
+                            _ => {}
+                        }
+                    }
                 }
             }
-            PadEvent::Button { btn, pressed, .. } => {
+            PadEvent::Button { id, btn, pressed } => {
+                let dev = usize::from(id);
                 for (act, binds) in &self.map {
-                    for b in binds { if *b == InputBinding::PadButton(*btn) { out.push((*act, *pressed)); break; } }
+                    for b in binds {
+                        match *b {
+                            InputBinding::PadButton(b0) if b0 == btn => { out.push((*act, pressed)); break; }
+                            InputBinding::PadButtonOn { device, btn: b0 } if b0 == btn && device == dev => { out.push((*act, pressed)); break; }
+                            _ => {}
+                        }
+                    }
                 }
             }
-            PadEvent::Face { btn, pressed, .. } => {
+            PadEvent::Face { id, btn, pressed } => {
+                let dev = usize::from(id);
                 for (act, binds) in &self.map {
-                    for b in binds { if *b == InputBinding::Face(*btn) { out.push((*act, *pressed)); break; } }
+                    for b in binds {
+                        match *b {
+                            InputBinding::Face(b0) if b0 == btn => { out.push((*act, pressed)); break; }
+                            InputBinding::FaceOn { device, btn: b0 } if b0 == btn && device == dev => { out.push((*act, pressed)); break; }
+                            _ => {}
+                        }
+                    }
                 }
             }
         }
