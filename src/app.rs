@@ -446,7 +446,7 @@ impl App {
             return;
         }
         // Special-case pad F7 for online grade fetch
-        if let PadEvent::Button { btn: PadButton::F7, pressed: true } = ev {
+        if let PadEvent::Button { btn: PadButton::F7, pressed: true, .. } = ev {
             if let CurrentScreen::SelectMusic = self.current_screen {
                 if let Some(select_music::MusicWheelEntry::Song(song)) =
                     self.select_music_state.entries.get(self.select_music_state.selected_index)

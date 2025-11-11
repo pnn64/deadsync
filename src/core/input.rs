@@ -23,9 +23,9 @@ pub enum FaceBtn { SouthA, EastB, WestX, NorthY }
 
 #[derive(Clone, Copy, Debug)]
 pub enum PadEvent {
-    Dir { dir: PadDir, pressed: bool },
-    Button { btn: PadButton, pressed: bool },
-    Face { btn: FaceBtn, pressed: bool },
+    Dir { id: GamepadId, dir: PadDir, pressed: bool },
+    Button { id: GamepadId, btn: PadButton, pressed: bool },
+    Face { id: GamepadId, btn: FaceBtn, pressed: bool },
 }
 
 #[derive(Debug)]
@@ -35,11 +35,11 @@ pub enum GpSystemEvent {
 }
 
 #[derive(Default, Clone, Copy)]
-pub struct GamepadState {
-    pub up: bool,
-    pub down: bool,
-    pub left: bool,
-    pub right: bool,
+struct PerPadState {
+    up: bool,
+    down: bool,
+    left: bool,
+    right: bool,
 
     dpad_up: bool,
     dpad_down: bool,
@@ -48,6 +48,11 @@ pub struct GamepadState {
 
     lx: f32,
     ly: f32,
+}
+
+#[derive(Default, Clone)]
+pub struct GamepadState {
+    states: HashMap<GamepadId, PerPadState>,
 }
 
 #[inline(always)]
@@ -88,82 +93,79 @@ pub fn poll_and_collect(
             EventType::Disconnected => {
                 let name = gilrs.gamepad(id).name().to_string();
                 sys_out.push(GpSystemEvent::Disconnected { name, id });
-                if Some(id) == *active_id {
-                    *active_id = None;
-                    // Release all buttons for the disconnected pad.
-                    if state.up    { out.push(PadEvent::Dir { dir: PadDir::Up,    pressed: false }); }
-                    if state.down  { out.push(PadEvent::Dir { dir: PadDir::Down,  pressed: false }); }
-                    if state.left  { out.push(PadEvent::Dir { dir: PadDir::Left,  pressed: false }); }
-                    if state.right { out.push(PadEvent::Dir { dir: PadDir::Right, pressed: false }); }
-                    *state = GamepadState::default();
+                // Release any buttons/dirs for this device and drop its state.
+                if let Some(ps) = state.states.remove(&id) {
+                    if ps.up    { out.push(PadEvent::Dir { id, dir: PadDir::Up,    pressed: false }); }
+                    if ps.down  { out.push(PadEvent::Dir { id, dir: PadDir::Down,  pressed: false }); }
+                    if ps.left  { out.push(PadEvent::Dir { id, dir: PadDir::Left,  pressed: false }); }
+                    if ps.right { out.push(PadEvent::Dir { id, dir: PadDir::Right, pressed: false }); }
                 }
+                if Some(id) == *active_id { *active_id = None; }
                 continue; // Don't process this event as an input.
             }
             _ => {}
         }
 
         // --- Input Events (Buttons/Axes) ---
-        // From here on, we only care about the active gamepad.
-        // If no pad is active, the first one to send an input event becomes active.
+        // Multi-device: do not filter by active_id. Maintain per-device state.
         if active_id.is_none() { *active_id = Some(id); }
 
-        // Ignore input events from non-active gamepads.
-        if Some(id) != *active_id { continue; }
+        let ps = state.states.entry(id).or_insert_with(PerPadState::default);
 
         match event {
             EventType::ButtonPressed(btn, _) => {
                 match btn {
                     // Face buttons → Face events
-                    Button::South => out.push(PadEvent::Face { btn: FaceBtn::SouthA, pressed: true }),
-                    Button::East  => out.push(PadEvent::Face { btn: FaceBtn::EastB,  pressed: true }),
-                    Button::West  => out.push(PadEvent::Face { btn: FaceBtn::WestX,  pressed: true }),
+                    Button::South => out.push(PadEvent::Face { id, btn: FaceBtn::SouthA, pressed: true }),
+                    Button::East  => out.push(PadEvent::Face { id, btn: FaceBtn::EastB,  pressed: true }),
+                    Button::West  => out.push(PadEvent::Face { id, btn: FaceBtn::WestX,  pressed: true }),
                     Button::North => {
-                        out.push(PadEvent::Face { btn: FaceBtn::NorthY, pressed: true });
-                        if want_f7 { out.push(PadEvent::Button { btn: PadButton::F7, pressed: true }); }
+                        out.push(PadEvent::Face { id, btn: FaceBtn::NorthY, pressed: true });
+                        if want_f7 { out.push(PadEvent::Button { id, btn: PadButton::F7, pressed: true }); }
                     }
 
                     // Confirm = Start ONLY (so A can be used as Down lane)
-                    Button::Start => out.push(PadEvent::Button { btn: PadButton::Confirm, pressed: true }),
+                    Button::Start => out.push(PadEvent::Button { id, btn: PadButton::Confirm, pressed: true }),
 
                     // Back = View/Select (NOT B)
-                    Button::Select => out.push(PadEvent::Button { btn: PadButton::Back, pressed: true }),
+                    Button::Select => out.push(PadEvent::Button { id, btn: PadButton::Back, pressed: true }),
 
                     // D-Pad raw state (edges emitted below)
-                    Button::DPadUp    => { state.dpad_up    = true; }
-                    Button::DPadDown  => { state.dpad_down  = true; }
-                    Button::DPadLeft  => { state.dpad_left  = true; }
-                    Button::DPadRight => { state.dpad_right = true; }
+                    Button::DPadUp    => { ps.dpad_up    = true; }
+                    Button::DPadDown  => { ps.dpad_down  = true; }
+                    Button::DPadLeft  => { ps.dpad_left  = true; }
+                    Button::DPadRight => { ps.dpad_right = true; }
                     _ => {}
                 }
             }
 
             EventType::ButtonReleased(btn, _) => {
                 match btn {
-                    Button::South => out.push(PadEvent::Face { btn: FaceBtn::SouthA, pressed: false }),
-                    Button::East  => out.push(PadEvent::Face { btn: FaceBtn::EastB,  pressed: false }),
-                    Button::West  => out.push(PadEvent::Face { btn: FaceBtn::WestX,  pressed: false }),
+                    Button::South => out.push(PadEvent::Face { id, btn: FaceBtn::SouthA, pressed: false }),
+                    Button::East  => out.push(PadEvent::Face { id, btn: FaceBtn::EastB,  pressed: false }),
+                    Button::West  => out.push(PadEvent::Face { id, btn: FaceBtn::WestX,  pressed: false }),
                     Button::North => {
-                        out.push(PadEvent::Face { btn: FaceBtn::NorthY, pressed: false });
-                        if want_f7 { out.push(PadEvent::Button { btn: PadButton::F7, pressed: false }); }
+                        out.push(PadEvent::Face { id, btn: FaceBtn::NorthY, pressed: false });
+                        if want_f7 { out.push(PadEvent::Button { id, btn: PadButton::F7, pressed: false }); }
                     }
 
                     // Confirm = Start ONLY
-                    Button::Start => out.push(PadEvent::Button { btn: PadButton::Confirm, pressed: false }),
+                    Button::Start => out.push(PadEvent::Button { id, btn: PadButton::Confirm, pressed: false }),
                     // Back = View/Select
-                    Button::Select => out.push(PadEvent::Button { btn: PadButton::Back, pressed: false }),
+                    Button::Select => out.push(PadEvent::Button { id, btn: PadButton::Back, pressed: false }),
 
-                    Button::DPadUp    => { state.dpad_up    = false; }
-                    Button::DPadDown  => { state.dpad_down  = false; }
-                    Button::DPadLeft  => { state.dpad_left  = false; }
-                    Button::DPadRight => { state.dpad_right = false; }
+                    Button::DPadUp    => { ps.dpad_up    = false; }
+                    Button::DPadDown  => { ps.dpad_down  = false; }
+                    Button::DPadLeft  => { ps.dpad_left  = false; }
+                    Button::DPadRight => { ps.dpad_right = false; }
                     _ => {}
                 }
             }
 
             EventType::AxisChanged(axis, value, _) => {
                 match axis {
-                    Axis::LeftStickX => state.lx = value,
-                    Axis::LeftStickY => state.ly = value,
+                    Axis::LeftStickX => ps.lx = value,
+                    Axis::LeftStickY => ps.ly = value,
                     _ => {}
                 }
             }
@@ -171,28 +173,28 @@ pub fn poll_and_collect(
             _ => {}
         }
 
-        // Emit edge transitions for combined D-Pad OR left stick.
-        let (su, sd, sl, sr) = stick_to_dirs(state.lx, state.ly);
-        let want_up    = state.dpad_up    || su;
-        let want_down  = state.dpad_down  || sd;
-        let want_left  = state.dpad_left  || sl;
-        let want_right = state.dpad_right || sr;
+        // Emit edge transitions for combined D-Pad OR left stick (per-device).
+        let (su, sd, sl, sr) = stick_to_dirs(ps.lx, ps.ly);
+        let want_up    = ps.dpad_up    || su;
+        let want_down  = ps.dpad_down  || sd;
+        let want_left  = ps.dpad_left  || sl;
+        let want_right = ps.dpad_right || sr;
 
-        if want_up != state.up {
-            out.push(PadEvent::Dir { dir: PadDir::Up, pressed: want_up });
-            state.up = want_up;
+        if want_up != ps.up {
+            out.push(PadEvent::Dir { id, dir: PadDir::Up, pressed: want_up });
+            ps.up = want_up;
         }
-        if want_down != state.down {
-            out.push(PadEvent::Dir { dir: PadDir::Down, pressed: want_down });
-            state.down = want_down;
+        if want_down != ps.down {
+            out.push(PadEvent::Dir { id, dir: PadDir::Down, pressed: want_down });
+            ps.down = want_down;
         }
-        if want_left != state.left {
-            out.push(PadEvent::Dir { dir: PadDir::Left, pressed: want_left });
-            state.left = want_left;
+        if want_left != ps.left {
+            out.push(PadEvent::Dir { id, dir: PadDir::Left, pressed: want_left });
+            ps.left = want_left;
         }
-        if want_right != state.right {
-            out.push(PadEvent::Dir { dir: PadDir::Right, pressed: want_right });
-            state.right = want_right;
+        if want_right != ps.right {
+            out.push(PadEvent::Dir { id, dir: PadDir::Right, pressed: want_right });
+            ps.right = want_right;
         }
     }
 
@@ -296,17 +298,17 @@ impl Keymap {
     pub fn actions_for_pad_event(&self, ev: &PadEvent) -> Vec<(VirtualAction, bool)> {
         let mut out = Vec::with_capacity(2);
         match ev {
-            PadEvent::Dir { dir, pressed } => {
+            PadEvent::Dir { dir, pressed, .. } => {
                 for (act, binds) in &self.map {
                     for b in binds { if *b == InputBinding::PadDir(*dir) { out.push((*act, *pressed)); break; } }
                 }
             }
-            PadEvent::Button { btn, pressed } => {
+            PadEvent::Button { btn, pressed, .. } => {
                 for (act, binds) in &self.map {
                     for b in binds { if *b == InputBinding::PadButton(*btn) { out.push((*act, *pressed)); break; } }
                 }
             }
-            PadEvent::Face { btn, pressed } => {
+            PadEvent::Face { btn, pressed, .. } => {
                 for (act, binds) in &self.map {
                     for b in binds { if *b == InputBinding::Face(*btn) { out.push((*act, *pressed)); break; } }
                 }

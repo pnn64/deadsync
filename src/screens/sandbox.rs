@@ -80,7 +80,18 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     };
 
     if pressed {
-        let pad_str = format!("Gamepad: {:?}", pad_event);
+        // Include controller ID in the display for clarity when multiple are connected.
+        let pad_str = match pad_event {
+            PadEvent::Dir { id, dir, pressed } => {
+                format!("Gamepad {}: Dir {{ dir: {:?}, pressed: {} }}", usize::from(*id), dir, pressed)
+            }
+            PadEvent::Button { id, btn, pressed } => {
+                format!("Gamepad {}: Button {{ btn: {:?}, pressed: {} }}", usize::from(*id), btn, pressed)
+            }
+            PadEvent::Face { id, btn, pressed } => {
+                format!("Gamepad {}: Face {{ btn: {:?}, pressed: {} }}", usize::from(*id), btn, pressed)
+            }
+        };
         state.last_inputs.push_front((pad_str, Instant::now()));
         if state.last_inputs.len() > INPUT_LOG_MAX_ITEMS {
             state.last_inputs.pop_back();
