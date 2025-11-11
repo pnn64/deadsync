@@ -18,6 +18,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 use winit::keyboard::KeyCode;
+use winit::event::{KeyEvent, ElementState};
 use crate::ui::font;
 use log::info;
 use std::fs;
@@ -513,7 +514,6 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
 }
 
 // Handle A/Start (Confirm) and B/Select (Back) on this screen.
-// (F7/Y is handled in app.rs directly for the online-grade fetch.)
 pub fn handle_pad_button(state: &mut State, btn: PadButton, pressed: bool) -> ScreenAction {
     if !pressed { return ScreenAction::None; }
     match btn {
@@ -557,8 +557,21 @@ pub fn handle_pad_button(state: &mut State, btn: PadButton, pressed: bool) -> Sc
             ScreenAction::None
         }
         PadButton::Back => ScreenAction::Navigate(Screen::Menu),
-        PadButton::F7 => ScreenAction::None, // handled in app.rs
     }
+}
+
+// Screen-specific raw keyboard handling (keyboard-only actions like F7)
+pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
+    if key.state != ElementState::Pressed { return ScreenAction::None; }
+    if let winit::keyboard::PhysicalKey::Code(KeyCode::F7) = key.physical_key {
+        if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
+            let difficulty_name = color::FILE_DIFFICULTY_NAMES[state.selected_difficulty_index];
+            if let Some(chart) = song.charts.iter().find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name)) {
+                return ScreenAction::FetchOnlineGrade(chart.short_hash.clone());
+            }
+        }
+    }
+    ScreenAction::None
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {

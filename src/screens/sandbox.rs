@@ -59,9 +59,13 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     (vec![actor], TRANSITION_OUT_DURATION)
 }
 
-pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) {
+pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAction {
     if key_event.state == ElementState::Pressed && !key_event.repeat {
         if let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key {
+            // F4 or Escape navigates back to Menu
+            if matches!(code, winit::keyboard::KeyCode::F4 | winit::keyboard::KeyCode::Escape) {
+                return ScreenAction::Navigate(Screen::Menu);
+            }
             let key_str = format!("Keyboard: KeyCode::{:?}", code);
             state.last_inputs.push_front((key_str, Instant::now()));
             if state.last_inputs.len() > INPUT_LOG_MAX_ITEMS {
@@ -69,6 +73,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) {
             }
         }
     }
+    ScreenAction::None
 }
 
 pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {

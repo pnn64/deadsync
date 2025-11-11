@@ -16,7 +16,7 @@ use gilrs::{Axis, Button, Event, EventType, GamepadId, Gilrs};
 pub enum PadDir { Up, Down, Left, Right }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum PadButton { Confirm, Back, F7 }
+pub enum PadButton { Confirm, Back }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FaceBtn { SouthA, EastB, WestX, NorthY }
@@ -28,7 +28,7 @@ pub enum PadEvent {
     Face { id: GamepadId, btn: FaceBtn, pressed: bool },
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum GpSystemEvent {
     Connected { name: String, id: GamepadId },
     Disconnected { name: String, id: GamepadId },
@@ -75,7 +75,6 @@ pub fn poll_and_collect(
     gilrs: &mut Gilrs,
     active_id: &mut Option<GamepadId>,
     state: &mut GamepadState,
-    want_f7: bool,
 ) -> (Vec<PadEvent>, Vec<GpSystemEvent>) {
     let mut out = Vec::with_capacity(16);
     let mut sys_out = Vec::with_capacity(2);
@@ -121,7 +120,6 @@ pub fn poll_and_collect(
                     Button::West  => out.push(PadEvent::Face { id, btn: FaceBtn::WestX,  pressed: true }),
                     Button::North => {
                         out.push(PadEvent::Face { id, btn: FaceBtn::NorthY, pressed: true });
-                        if want_f7 { out.push(PadEvent::Button { id, btn: PadButton::F7, pressed: true }); }
                     }
 
                     // Confirm = Start ONLY (so A can be used as Down lane)
@@ -146,7 +144,6 @@ pub fn poll_and_collect(
                     Button::West  => out.push(PadEvent::Face { id, btn: FaceBtn::WestX,  pressed: false }),
                     Button::North => {
                         out.push(PadEvent::Face { id, btn: FaceBtn::NorthY, pressed: false });
-                        if want_f7 { out.push(PadEvent::Button { id, btn: PadButton::F7, pressed: false }); }
                     }
 
                     // Confirm = Start ONLY

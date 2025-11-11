@@ -2,6 +2,8 @@ use crate::act;
 // Screen navigation is handled in app.rs
 use crate::core::input::{VirtualAction, InputEvent};
 use crate::screens::{Screen, ScreenAction};
+use winit::event::{KeyEvent, ElementState};
+use winit::keyboard::KeyCode;
 use crate::ui::actors::Actor;
 use crate::ui::color;
 use crate::ui::components::logo::{self, LogoParams};
@@ -49,6 +51,14 @@ pub fn init() -> State {
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
+// Screen-specific raw keyboard handling for Menu (e.g., F4 to Sandbox)
+pub fn handle_raw_key_event(_state: &mut State, key: &KeyEvent) -> ScreenAction {
+    if key.state != ElementState::Pressed { return ScreenAction::None; }
+    if let winit::keyboard::PhysicalKey::Code(KeyCode::F4) = key.physical_key {
+        return ScreenAction::Navigate(Screen::Sandbox);
+    }
+    ScreenAction::None
+}
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
     let actor = act!(quad:

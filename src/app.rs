@@ -4,13 +4,13 @@ use crate::core::space::{self as space, Metrics};
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting};
 use crate::assets::AssetManager;
 use crate::ui::color;
-use crate::screens::{gameplay, menu, options, init, select_color, select_music, sandbox, evaluation, player_options, Screen as CurrentScreen, ScreenAction, Screen};
+use crate::screens::{gameplay, menu, options, init, select_color, select_music, sandbox, evaluation, player_options, Screen as CurrentScreen, ScreenAction};
 use crate::game::parsing::simfile as song_loading;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     window::Window,
 };
 
@@ -20,8 +20,14 @@ use std::{error::Error, sync::Arc, time::Instant};
 use crate::ui::actors::Actor;
 /* -------------------- gamepad -------------------- */
 use crate::core::input::{self as gamepad};
-use crate::core::input::{GpSystemEvent, PadEvent, PadDir, PadButton};
-use gilrs::{Gilrs, GamepadId};
+use crate::core::input::{GpSystemEvent, PadEvent};
+
+/* -------------------- user events -------------------- */
+#[derive(Debug, Clone)]
+pub enum UserEvent {
+    Pad(PadEvent),
+    GamepadSystem(GpSystemEvent),
+}
 
 /* -------------------- transition timing constants -------------------- */
 const FADE_OUT_DURATION: f32 = 0.4;
@@ -68,11 +74,6 @@ pub struct App {
     session_start_time: Option<Instant>,
     display_width: u32,
     display_height: u32,
-
-    /* gamepad */
-    gilrs: Option<Gilrs>,
-    active_gamepad_id: Option<GamepadId>,
-    gamepad_state: gamepad::GamepadState,
     gamepad_overlay_state: Option<(String, Instant)>,
 }
 
@@ -121,10 +122,6 @@ impl App {
             session_start_time: None,
             display_width,
             display_height,
-
-            gilrs: gamepad::try_init(),
-            active_gamepad_id: None,
-            gamepad_state: gamepad::GamepadState::default(),
             gamepad_overlay_state: None,
         }
     }
@@ -371,7 +368,30 @@ impl App {
         key_event: winit::event::KeyEvent,
     ) {
         if self.current_screen == CurrentScreen::Sandbox {
-            crate::screens::sandbox::handle_raw_key_event(&mut self.sandbox_state, &key_event);
+            let action = crate::screens::sandbox::handle_raw_key_event(&mut self.sandbox_state, &key_event);
+            if !matches!(action, ScreenAction::None) {
+                if let Err(e) = self.handle_action(action, event_loop) {
+                    log::error!("Failed to handle Sandbox raw key action: {}", e);
+                }
+                return;
+            }
+        } else if self.current_screen == CurrentScreen::Menu {
+            let action = crate::screens::menu::handle_raw_key_event(&mut self.menu_state, &key_event);
+            if !matches!(action, ScreenAction::None) {
+                if let Err(e) = self.handle_action(action, event_loop) {
+                    log::error!("Failed to handle Menu raw key action: {}", e);
+                }
+                return;
+            }
+        } else if self.current_screen == CurrentScreen::SelectMusic {
+            // Route screen-specific raw key handling (e.g., F7 fetch) to the screen
+            let action = crate::screens::select_music::handle_raw_key_event(&mut self.select_music_state, &key_event);
+            if !matches!(action, ScreenAction::None) {
+                if let Err(e) = self.handle_action(action, event_loop) {
+                    log::error!("Failed to handle SelectMusic raw key action: {}", e);
+                }
+                return;
+            }
         }
         let is_transitioning = !matches!(self.transition, TransitionState::Idle);
         let _event_timestamp = Instant::now();
@@ -381,15 +401,7 @@ impl App {
                 self.show_overlay = !self.show_overlay;
                 log::info!("Overlay {}", if self.show_overlay { "ON" } else { "OFF" });
             }
-            if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F4) = key_event.physical_key {
-                if self.current_screen == CurrentScreen::Menu {
-                    let _ = self.handle_action(ScreenAction::Navigate(CurrentScreen::Sandbox), event_loop);
-                    return;
-                } else if self.current_screen == CurrentScreen::Sandbox {
-                    let _ = self.handle_action(ScreenAction::Navigate(CurrentScreen::Menu), event_loop);
-                    return;
-                }
-            }
+            // F4 menu/sandbox toggle moved to screen raw handlers
             if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) = key_event.physical_key {
                 if self.current_screen == CurrentScreen::Menu {
                     if let Err(e) = self.handle_action(ScreenAction::Exit, event_loop) {
@@ -397,27 +409,6 @@ impl App {
                         event_loop.exit();
                     }
                     return;
-                }
-            }
-            if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F7) = key_event.physical_key {
-                if self.current_screen == CurrentScreen::SelectMusic {
-                    if let Some(select_music::MusicWheelEntry::Song(song)) =
-                        self.select_music_state.entries.get(self.select_music_state.selected_index)
-                    {
-                        let difficulty_name =
-                            color::FILE_DIFFICULTY_NAMES[self.select_music_state.selected_difficulty_index];
-                        if let Some(chart) = song
-                            .charts
-                            .iter()
-                            .find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name))
-                        {
-                            let action = ScreenAction::FetchOnlineGrade(chart.short_hash.clone());
-                            if let Err(e) = self.handle_action(action, event_loop) {
-                                log::error!("Failed to handle FetchOnlineGrade action: {}", e);
-                            }
-                            return;
-                        }
-                    }
                 }
             }
         }
@@ -433,11 +424,7 @@ impl App {
         }
     }
 
-    /* -------------------- new: gamepad helpers -------------------- */
-
-    #[inline(always)]
-    #[allow(dead_code, unused_variables)]
-    fn apply_dir_from_pad(&mut self, _event_loop: &ActiveEventLoop, _dir: PadDir, _pressed: bool) {}
+    /* -------------------- pad event routing -------------------- */
 
     #[inline(always)]
     fn handle_pad_event(&mut self, event_loop: &ActiveEventLoop, ev: PadEvent) {
@@ -445,21 +432,6 @@ impl App {
         if is_transitioning || self.current_screen == CurrentScreen::Init {
             return;
         }
-        // Special-case pad F7 for online grade fetch
-        if let PadEvent::Button { btn: PadButton::F7, pressed: true, .. } = ev {
-            if let CurrentScreen::SelectMusic = self.current_screen {
-                if let Some(select_music::MusicWheelEntry::Song(song)) =
-                    self.select_music_state.entries.get(self.select_music_state.selected_index)
-                {
-                    let difficulty_name = color::FILE_DIFFICULTY_NAMES[self.select_music_state.selected_difficulty_index];
-                    if let Some(chart) = song.charts.iter().find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name)) {
-                        let action = ScreenAction::FetchOnlineGrade(chart.short_hash.clone());
-                        if let Err(e) = self.handle_action(action, event_loop) { error!("Failed to fetch online grade: {}", e); }
-                    }
-                }
-            }
-        }
-
         for iev in input::map_pad_event(&ev) {
             if let Err(e) = self.route_input_event(event_loop, iev) {
                 error!("Failed to handle pad input: {}", e);
@@ -469,245 +441,37 @@ impl App {
         }
     }
 
+    // legacy virtual-action dispatcher removed; screens own their input
+
+    #[cfg(any())]
     #[inline(always)]
-    #[allow(dead_code, unused_variables)]
-    fn dispatch_virtual_action(&mut self, event_loop: &ActiveEventLoop, action: crate::core::input::VirtualAction, pressed: bool) {
-        use crate::core::input::VirtualAction as A;
-        match action {
-            A::p1_up | A::p1_menu_up => {
-                self.apply_dir_from_pad(event_loop, PadDir::Up, pressed);
-                match self.current_screen {
-                    CurrentScreen::Menu => {
-                        if pressed {
-                            let n = crate::screens::menu::OPTION_COUNT as isize;
-                            let cur = self.menu_state.selected_index as isize;
-                            self.menu_state.selected_index = ((cur - 1 + n) % n) as usize;
-                            crate::core::audio::play_sfx("assets/sounds/change.ogg");
-                        }
-                    }
-                    CurrentScreen::Options => {
-                        if pressed {
-                            let total = crate::screens::options::ITEMS.len();
-                            if total > 0 {
-                                let cur = self.options_state.selected as isize;
-                                self.options_state.selected = ((cur - 1 + total as isize) % total as isize) as usize;
-                            }
-                            crate::screens::options::on_nav_press(&mut self.options_state, crate::screens::options::NavDirection::Up);
-                        } else {
-                            crate::screens::options::on_nav_release(&mut self.options_state, crate::screens::options::NavDirection::Up);
-                        }
-                    }
-                    CurrentScreen::PlayerOptions => {
-                        if let Some(pos) = &mut self.player_options_state {
-                            if pressed {
-                                let num_rows = pos.rows.len();
-                                if num_rows > 0 {
-                                    pos.selected_row = (pos.selected_row + num_rows - 1) % num_rows;
-                                }
-                                crate::screens::player_options::on_nav_press(pos, crate::screens::player_options::NavDirection::Up);
-                            } else {
-                                crate::screens::player_options::on_nav_release(pos, crate::screens::player_options::NavDirection::Up);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            A::p1_down | A::p1_menu_down => {
-                self.apply_dir_from_pad(event_loop, PadDir::Down, pressed);
-                match self.current_screen {
-                    CurrentScreen::Menu => {
-                        if pressed {
-                            let n = crate::screens::menu::OPTION_COUNT as isize;
-                            let cur = self.menu_state.selected_index as isize;
-                            self.menu_state.selected_index = ((cur + 1 + n) % n) as usize;
-                            crate::core::audio::play_sfx("assets/sounds/change.ogg");
-                        }
-                    }
-                    CurrentScreen::Options => {
-                        if pressed {
-                            let total = crate::screens::options::ITEMS.len();
-                            if total > 0 {
-                                let cur = self.options_state.selected as isize;
-                                self.options_state.selected = ((cur + 1 + total as isize) % total as isize) as usize;
-                            }
-                            crate::screens::options::on_nav_press(&mut self.options_state, crate::screens::options::NavDirection::Down);
-                        } else {
-                            crate::screens::options::on_nav_release(&mut self.options_state, crate::screens::options::NavDirection::Down);
-                        }
-                    }
-                    CurrentScreen::PlayerOptions => {
-                        if let Some(pos) = &mut self.player_options_state {
-                            if pressed {
-                                let num_rows = pos.rows.len();
-                                if num_rows > 0 {
-                                    pos.selected_row = (pos.selected_row + 1) % num_rows;
-                                }
-                                crate::screens::player_options::on_nav_press(pos, crate::screens::player_options::NavDirection::Down);
-                            } else {
-                                crate::screens::player_options::on_nav_release(pos, crate::screens::player_options::NavDirection::Down);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            A::p1_left | A::p1_menu_left => {
-                self.apply_dir_from_pad(event_loop, PadDir::Left, pressed);
-                match self.current_screen {
-                    CurrentScreen::SelectColor => {
-                        if pressed {
-                            let state = &mut self.select_color_state;
-                            let num_colors = crate::ui::color::DECORATIVE_HEX.len() as i32;
-                            state.active_color_index -= 1;
-                            crate::core::audio::play_sfx("assets/sounds/collapse.ogg");
-                            crate::config::update_simply_love_color(state.active_color_index.rem_euclid(num_colors));
-                            let showing_now = if state.bg_fade_t < crate::screens::select_color::BG_FADE_DURATION {
-                                let a = (state.bg_fade_t / crate::screens::select_color::BG_FADE_DURATION).clamp(0.0, 1.0);
-                                if (1.0 - a) >= a { state.bg_from_index } else { state.bg_to_index }
-                            } else { state.bg_to_index };
-                            state.bg_from_index = showing_now;
-                            state.bg_to_index = state.active_color_index;
-                            state.bg_fade_t = 0.0;
-                        }
-                    }
-                    CurrentScreen::PlayerOptions => {
-                        if let Some(pos) = &mut self.player_options_state {
-                            if pressed {
-                                crate::screens::player_options::apply_choice_delta(pos, -1);
-                                crate::screens::player_options::on_nav_press(pos, crate::screens::player_options::NavDirection::Left);
-                            } else {
-                                crate::screens::player_options::on_nav_release(pos, crate::screens::player_options::NavDirection::Left);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            A::p1_right | A::p1_menu_right => {
-                self.apply_dir_from_pad(event_loop, PadDir::Right, pressed);
-                match self.current_screen {
-                    CurrentScreen::SelectColor => {
-                        if pressed {
-                            let state = &mut self.select_color_state;
-                            let num_colors = crate::ui::color::DECORATIVE_HEX.len() as i32;
-                            state.active_color_index += 1;
-                            crate::core::audio::play_sfx("assets/sounds/collapse.ogg");
-                            crate::config::update_simply_love_color(state.active_color_index.rem_euclid(num_colors));
-                            let showing_now = if state.bg_fade_t < crate::screens::select_color::BG_FADE_DURATION {
-                                let a = (state.bg_fade_t / crate::screens::select_color::BG_FADE_DURATION).clamp(0.0, 1.0);
-                                if (1.0 - a) >= a { state.bg_from_index } else { state.bg_to_index }
-                            } else { state.bg_to_index };
-                            state.bg_from_index = showing_now;
-                            state.bg_to_index = state.active_color_index;
-                            state.bg_fade_t = 0.0;
-                        }
-                    }
-                    CurrentScreen::PlayerOptions => {
-                        if let Some(pos) = &mut self.player_options_state {
-                            if pressed {
-                                crate::screens::player_options::apply_choice_delta(pos, 1);
-                                crate::screens::player_options::on_nav_press(pos, crate::screens::player_options::NavDirection::Right);
-                            } else {
-                                crate::screens::player_options::on_nav_release(pos, crate::screens::player_options::NavDirection::Right);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            A::p1_start => {
-                if pressed {
-                    // Reuse Start-button logic
-                    let mut play_sound = true;
-                    let action = match self.current_screen {
-                        CurrentScreen::Menu => match self.menu_state.selected_index {
-                            0 => ScreenAction::Navigate(Screen::SelectColor),
-                            1 => ScreenAction::Navigate(Screen::Options),
-                            2 => ScreenAction::Exit,
-                            _ => ScreenAction::None,
-                        },
-                        CurrentScreen::Options => {
-                            if self.options_state.selected == crate::screens::options::ITEMS.len() - 1 { ScreenAction::Navigate(Screen::Menu) } else { play_sound = false; ScreenAction::None }
-                        }
-                        CurrentScreen::SelectColor => ScreenAction::Navigate(Screen::SelectMusic),
-                        CurrentScreen::SelectMusic => { play_sound = false; select_music::handle_pad_button(&mut self.select_music_state, PadButton::Confirm, true) }
-                        CurrentScreen::PlayerOptions => {
-                            if let Some(pos) = &self.player_options_state {
-                                let num_rows = pos.rows.len();
-                                if num_rows > 0 && pos.selected_row == num_rows - 1 {
-                                    if let Some(what_comes_next_row) = pos.rows.get(num_rows - 2) {
-                                        if what_comes_next_row.name == "What comes next?" {
-                                            match what_comes_next_row.selected_choice_index {
-                                                0 => ScreenAction::Navigate(Screen::Gameplay),
-                                                1 => ScreenAction::Navigate(Screen::SelectMusic),
-                                                _ => { play_sound = false; ScreenAction::None }
-                                            }
-                                        } else { play_sound = false; ScreenAction::None }
-                                    } else { play_sound = false; ScreenAction::None }
-                                } else { play_sound = false; ScreenAction::None }
-                            } else { play_sound = false; ScreenAction::None }
-                        }
-                        CurrentScreen::Gameplay => { if let Some(gs) = &mut self.gameplay_state { gs.hold_to_exit_key = Some(winit::keyboard::KeyCode::Enter); gs.hold_to_exit_start = Some(std::time::Instant::now()); } play_sound = false; ScreenAction::None }
-                        CurrentScreen::Evaluation => { play_sound = false; ScreenAction::Navigate(Screen::SelectMusic) }
-                        _ => { play_sound = false; ScreenAction::None }
-                    };
-                    if play_sound { crate::core::audio::play_sfx("assets/sounds/start.ogg"); }
-                    if let Err(e) = self.handle_action(action, event_loop) { log::error!("Failed to handle P1_Start action: {}", e); }
-                } else {
-                    if self.current_screen == CurrentScreen::Gameplay { if let Some(gs) = &mut self.gameplay_state { if gs.hold_to_exit_key == Some(winit::keyboard::KeyCode::Enter) { gs.hold_to_exit_key = None; gs.hold_to_exit_start = None; } } }
-                }
-            }
-            A::p1_back => {
-                if pressed {
-                    crate::core::audio::play_sfx("assets/sounds/back.ogg");
-                    let action = match self.current_screen {
-                        CurrentScreen::Menu => ScreenAction::Exit,
-                        CurrentScreen::Evaluation => ScreenAction::Navigate(Screen::SelectMusic),
-                        CurrentScreen::Gameplay => ScreenAction::Navigate(Screen::SelectMusic),
-                        CurrentScreen::PlayerOptions => ScreenAction::Navigate(Screen::SelectMusic),
-                        _ => ScreenAction::Navigate(CurrentScreen::Menu),
-                    };
-                    if let Err(e) = self.handle_action(action, event_loop) { log::error!("Failed to handle P1_Back action: {}", e); }
-                }
-            }
-            // Not implemented actions are no-ops for now
-            A::p1_select | A::p1_operator | A::p1_restart => {}
-        }
-    }
-
-    #[inline(always)]
-    fn poll_gamepad_and_dispatch(&mut self, event_loop: &ActiveEventLoop) {
-        let Some(g) = &mut self.gilrs else { return; };
-
-        let want_f7 = matches!(self.current_screen, CurrentScreen::SelectMusic);
-        let (pad_events, sys_events) =
-            gamepad::poll_and_collect(g, &mut self.active_gamepad_id, &mut self.gamepad_state, want_f7);
-
-        for ev in sys_events {
-            let msg = match ev {
-                GpSystemEvent::Connected { name, id } => {
-                    info!("Gamepad connected: {} (ID: {})", name, usize::from(id));
-                    format!("Connected: {} (ID: {})", name, usize::from(id))
-                }
-                GpSystemEvent::Disconnected { name, id } => {
-                    info!("Gamepad disconnected: {} (ID: {})", name, usize::from(id));
-                    format!("Disconnected: {} (ID: {})", name, usize::from(id))
-                }
-            };
-            self.gamepad_overlay_state = Some((msg, Instant::now()));
-        }
-
-        for ev in pad_events {
-            if self.current_screen == CurrentScreen::Sandbox {
-                crate::screens::sandbox::handle_raw_pad_event(&mut self.sandbox_state, &ev);
-            }
-            self.handle_pad_event(event_loop, ev);
-        }
-    }
+    fn poll_gamepad_and_dispatch(&mut self, _event_loop: &ActiveEventLoop) {}
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler<UserEvent> for App {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
+        match event {
+            UserEvent::GamepadSystem(ev) => {
+                let msg = match ev {
+                    GpSystemEvent::Connected { name, id } => {
+                        info!("Gamepad connected: {} (ID: {})", name, usize::from(id));
+                        format!("Connected: {} (ID: {})", name, usize::from(id))
+                    }
+                    GpSystemEvent::Disconnected { name, id } => {
+                        info!("Gamepad disconnected: {} (ID: {})", name, usize::from(id));
+                        format!("Disconnected: {} (ID: {})", name, usize::from(id))
+                    }
+                };
+                self.gamepad_overlay_state = Some((msg, Instant::now()));
+            }
+            UserEvent::Pad(ev) => {
+                if self.current_screen == CurrentScreen::Sandbox {
+                    crate::screens::sandbox::handle_raw_pad_event(&mut self.sandbox_state, &ev);
+                }
+                self.handle_pad_event(event_loop, ev);
+            }
+        }
+    }
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none() {
             if let Err(e) = self.init_graphics(event_loop) {
@@ -1148,10 +912,7 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        // Pump gamepad → pad events → handlers
-        self.poll_gamepad_and_dispatch(event_loop);
-
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         if let Some(window) = &self.window {
             window.request_redraw();
         }
@@ -1176,7 +937,28 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let color_index = config.simply_love_color;
 
     song_loading::scan_and_load_songs("songs");
-    let event_loop = EventLoop::new()?;
+    let event_loop: EventLoop<UserEvent> = EventLoop::<UserEvent>::with_user_event().build()?;
+
+    // Spawn background thread to pump gilrs and emit user events; decoupled from frame rate.
+    let proxy: EventLoopProxy<UserEvent> = event_loop.create_proxy();
+    std::thread::spawn(move || {
+        let mut maybe_gilrs = gamepad::try_init();
+        if let Some(mut g) = maybe_gilrs.take() {
+            let mut active_id = None;
+            let mut gp_state = gamepad::GamepadState::default();
+            loop {
+                let (pad_events, sys_events) = gamepad::poll_and_collect(&mut g, &mut active_id, &mut gp_state);
+                let pad_empty = pad_events.is_empty();
+                let sys_empty = sys_events.is_empty();
+                for se in sys_events { let _ = proxy.send_event(UserEvent::GamepadSystem(se)); }
+                for pe in pad_events { let _ = proxy.send_event(UserEvent::Pad(pe)); }
+                if pad_empty && sys_empty {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+            }
+        }
+    });
+
     let mut app = App::new(backend_type, vsync_enabled, fullscreen_enabled, show_stats, color_index);
     event_loop.run_app(&mut app)?;
     Ok(())
