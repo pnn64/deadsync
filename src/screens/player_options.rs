@@ -637,7 +637,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
     
     actors.push(act!(text: font("wendy"): settext(speed_text):
-        align(0.0, 0.5): xy(speed_mod_x, speed_mod_y): zoom(0.5):
+        align(0.5, 0.5): xy(speed_mod_x, speed_mod_y): zoom(0.5):
         diffuse(speed_color[0], speed_color[1], speed_color[2], 1.0):
         z(121)
     ));
@@ -780,13 +780,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let choice_text = &row.choices[row.selected_choice_index];
             let choice_color = if is_active { [1.0, 1.0, 1.0, 1.0] } else { sl_gray };
             actors.push(act!(text: font("miso"): settext(choice_text.clone()):
-                align(0.5, 0.5): xy(row_center_x, current_row_y): zoom(0.8):
+                align(0.5, 0.5): xy(row_center_x, current_row_y): zoom(0.85):
                 diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                 z(101)
             ));
             // Draw the selection cursor for the centered "Exit" text when active
             if is_active {
-                let value_zoom = 0.8;
+                let value_zoom = 0.85;
                 asset_manager.with_fonts(|all_fonts| {
                     asset_manager.with_font("miso", |metrics_font| {
                         let mut text_w = crate::ui::font::measure_line_width_logical(metrics_font, choice_text, all_fonts) as f32;
@@ -821,7 +821,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else if show_all_choices_inline {
             // Render every option horizontally; when active, all options should be white.
             // The selected option gets an underline (quad) drawn just below the text.
-            let value_zoom = 0.8;
+            let value_zoom = 0.85;
             let spacing = widescale(20.0, 24.0);
             // First pass: measure widths to lay out options inline
             let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
@@ -935,7 +935,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         } else {
             // Single value display (default behavior)
-            let choice_center_x = row_center_x - (TITLE_BG_WIDTH + 72.0) / 2.0;
+            let choice_center_x = row_center_x - (TITLE_BG_WIDTH + 70.0) / 2.0;
             let choice_text = &row.choices[row.selected_choice_index];
             let choice_color = if is_active {
                 [1.0, 1.0, 1.0, 1.0]
@@ -947,11 +947,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let mut text_w = crate::ui::font::measure_line_width_logical(metrics_font, choice_text, all_fonts) as f32;
                     if !text_w.is_finite() || text_w <= 0.0 { text_w = 1.0; }
                     let text_h = (metrics_font.height as f32).max(1.0);
-                    let value_zoom = 0.8;
+                    let value_zoom = 0.85;
                     let draw_w = text_w * value_zoom;
                     let draw_h = text_h * value_zoom;
                     actors.push(act!(text: font("miso"): settext(choice_text.clone()):
-                        align(0.5, 0.5): xy(choice_center_x, current_row_y): zoom(0.8):
+                        align(0.5, 0.5): xy(choice_center_x, current_row_y): zoom(0.85):
                         diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                         z(101)
                     ));
