@@ -12,6 +12,8 @@ use crate::ui::components::heart_bg;
 use crate::ui::components::screen_bar::{
     self, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
+use crate::game::parsing::noteskin::{self, Noteskin, Quantization, NUM_QUANTIZATIONS};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
@@ -59,6 +61,9 @@ pub struct State {
     pub nav_key_held_direction: Option<NavDirection>,
     pub nav_key_held_since: Option<Instant>,
     pub nav_key_last_scrolled_at: Option<Instant>,
+    noteskin: Option<Noteskin>,
+    preview_time: f32,
+    preview_beat: f32,
 }
 
 fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: usize, session_music_rate: f32) -> Vec<Row> {
@@ -258,6 +263,13 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         };
     }
 
+    // Load noteskin for preview
+    let style = noteskin::Style {
+        num_cols: 4,
+        num_players: 1,
+    };
+    let noteskin = noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style).ok();
+
     State {
         song,
         chart_difficulty_index,
@@ -271,6 +283,9 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         nav_key_held_direction: None,
         nav_key_held_since: None,
         nav_key_last_scrolled_at: None,
+        noteskin,
+        preview_time: 0.0,
+        preview_beat: 0.0,
     }
 }
 
@@ -403,7 +418,22 @@ pub fn apply_choice_delta(state: &mut State, delta: isize) {
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
-pub fn update(state: &mut State, _dt: f32) {
+pub fn update(state: &mut State, dt: f32) {
+    // Update preview animation time and beat based on song BPM
+    state.preview_time += dt;
+    
+    // Calculate beat increment based on the song's BPM
+    // Use the song's min_bpm (or max_bpm if they're the same)
+    let bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
+        state.song.min_bpm as f32
+    } else {
+        // For variable BPM songs, use min_bpm as a reasonable default
+        state.song.min_bpm as f32
+    };
+    let bpm = if bpm > 0.0 { bpm } else { 120.0 }; // Fallback to 120 BPM
+    
+    let beats_per_second = bpm / 60.0;
+    state.preview_beat += dt * beats_per_second;
     if let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
         state.nav_key_held_direction,
         state.nav_key_held_since,
@@ -928,6 +958,49 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     zoom(0.2):
                     z(102)
                 ));
+            }
+
+            // Add noteskin preview for "NoteSkin" row showing animated 4th note
+            if row.name == "NoteSkin" && choice_text == "cel" {
+                if let Some(ns) = &state.noteskin {
+                    // Render a 4th note (Quantization::Q4th = 0) for column 2 (Up arrow)
+                    // In dance-single: Left=0, Down=1, Up=2, Right=3
+                    let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+                    if let Some(note_slot) = ns.notes.get(note_idx) {
+                        // Get the current animation frame using preview_time and preview_beat
+                        let frame = note_slot.frame_index(state.preview_time, state.preview_beat);
+                        let uv = note_slot.uv_for_frame(frame);
+                        
+                        // Scale the note to match Simply Love's 0.4x preview zoom
+                        // Note: cel noteskin textures are NOT doubleres, so we use 0.4x directly
+                        let size = note_slot.size();
+                        let width = size[0].max(1) as f32;
+                        let height = size[1].max(1) as f32;
+                        
+                        // Target size: 64px is the gameplay size, so 0.4x of that is 25.6px
+                        const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
+                        const PREVIEW_SCALE: f32 = 0.4;
+                        let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                        
+                        let scale = if height > 0.0 {
+                            target_height / height
+                        } else {
+                            PREVIEW_SCALE
+                        };
+                        let final_width = width * scale;
+                        let final_height = target_height;
+                        
+                        let preview_x = choice_inner_left + widescale(80.0, 100.0);
+                        actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                            align(0.0, 0.5):
+                            xy(preview_x, current_row_y):
+                            zoomto(final_width, final_height):
+                            rotationz(-note_slot.def.rotation_deg as f32):
+                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                            z(102)
+                        ));
+                    }
+                }
             }
         }
     }
