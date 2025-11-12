@@ -38,7 +38,6 @@ pub struct Row {
     pub choices: Vec<String>,
     pub selected_choice_index: usize,
     pub help: Vec<String>,
-    // Optional: map each choice to a FILE_DIFFICULTY_NAMES index (used for Stepchart)
     pub choice_difficulty_indices: Option<Vec<usize>>,
 }
 
@@ -654,7 +653,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     const ROW_START_OFFSET: f32 = -164.0;
     const ROW_HEIGHT: f32 = 33.0;
     // Make the first column a bit wider to match SL
-    const TITLE_BG_WIDTH: f32 = 140.0;
+    const TITLE_BG_WIDTH: f32 = 128.0;
     let total_rows = state.rows.len();
     let max_offset = total_rows.saturating_sub(VISIBLE_ROWS);
     let offset_rows = if total_rows <= VISIBLE_ROWS {
@@ -936,7 +935,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         } else {
             // Single value display (default behavior)
-            let choice_center_x = row_center_x - TITLE_BG_WIDTH / 2.0;
+            let choice_center_x = row_center_x - (TITLE_BG_WIDTH + 72.0) / 2.0;
             let choice_text = &row.choices[row.selected_choice_index];
             let choice_color = if is_active {
                 [1.0, 1.0, 1.0, 1.0]
