@@ -17,15 +17,12 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
-
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
-
 /* -------------------------- hold-to-scroll timing ------------------------- */
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(300);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NavDirection {
     Up,
@@ -33,7 +30,6 @@ pub enum NavDirection {
     Left,
     Right,
 }
-
 pub struct Row {
     pub name: String,
     pub choices: Vec<String>,
@@ -42,12 +38,10 @@ pub struct Row {
     // Optional: map each choice to a FILE_DIFFICULTY_NAMES index (used for Stepchart)
     pub choice_difficulty_indices: Option<Vec<usize>>,
 }
-
 pub struct SpeedMod {
     pub mod_type: String, // "X", "C", "M"
     pub value: f32,
 }
-
 pub struct State {
     pub song: Arc<SongData>,
     pub chart_difficulty_index: usize,
@@ -64,8 +58,8 @@ pub struct State {
     noteskin: Option<Noteskin>,
     preview_time: f32,
     preview_beat: f32,
+    help_anim_time: f32,
 }
-
 fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: usize, session_music_rate: f32) -> Vec<Row> {
     let speed_mod_value_str = match speed_mod.mod_type.as_str() {
         "X" => format!("{:.2}x", speed_mod.value),
@@ -73,7 +67,6 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
         "M" => format!("M{}", speed_mod.value as i32),
         _ => "".to_string(),
     };
-
     // Build Stepchart choices from the song's dance-single charts, ordered Beginner..Challenge
     let mut stepchart_choices: Vec<String> = Vec::with_capacity(5);
     let mut stepchart_choice_indices: Vec<usize> = Vec::with_capacity(5);
@@ -97,7 +90,6 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
         .iter()
         .position(|&idx| idx == selected_difficulty_index)
         .unwrap_or(0);
-
     vec![
         Row {
             name: "Type of Speed Mod".to_string(),
@@ -207,14 +199,14 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
                 };
                 let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
                 let effective_bpm = song_bpm * session_music_rate as f64;
-                
+               
                 // Format BPM: show one decimal only if it doesn't round to a whole number
                 let bpm_str = if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
                     format!("{}", effective_bpm.round() as i32)
                 } else {
                     format!("{:.1}", effective_bpm)
                 };
-                
+               
                 // Format: "Music Rate\nbpm: 120" (matches Simply Love's format from line 160)
                 format!("Music Rate\nbpm: {}", bpm_str)
             },
@@ -254,7 +246,6 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
         },
     ]
 }
-
 pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_index: i32) -> State {
     let profile = crate::game::profile::get();
     let session_music_rate = crate::game::profile::get_session_music_rate();
@@ -272,9 +263,7 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
             value: bpm,
         },
     };
-
     let mut rows = build_rows(&song, &speed_mod, chart_difficulty_index, session_music_rate);
-
     // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Background Filter") {
         row.selected_choice_index = match profile.background_filter {
@@ -284,14 +273,12 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
             crate::game::profile::BackgroundFilter::Darkest => 3,
         };
     }
-
     // Load noteskin for preview
     let style = noteskin::Style {
         num_cols: 4,
         num_players: 1,
     };
     let noteskin = noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style).ok();
-
     State {
         song,
         chart_difficulty_index,
@@ -308,9 +295,9 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         noteskin,
         preview_time: 0.0,
         preview_beat: 0.0,
+        help_anim_time: 0.0,
     }
 }
-
 pub fn in_transition() -> (Vec<Actor>, f32) {
     let actor = act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
@@ -322,7 +309,6 @@ pub fn in_transition() -> (Vec<Actor>, f32) {
     );
     (vec![actor], TRANSITION_IN_DURATION)
 }
-
 pub fn out_transition() -> (Vec<Actor>, f32) {
     let actor = act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
@@ -333,7 +319,6 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     );
     (vec![actor], TRANSITION_OUT_DURATION)
 }
-
 fn change_choice(state: &mut State, delta: isize) {
     let row = &mut state.rows[state.selected_row];
     if row.name == "Speed Mod" {
@@ -346,7 +331,6 @@ fn change_choice(state: &mut State, delta: isize) {
         speed_mod.value += delta as f32 * increment;
         speed_mod.value = (speed_mod.value / increment).round() * increment;
         speed_mod.value = speed_mod.value.clamp(increment, upper);
-
         let speed_mod_value_str = match speed_mod.mod_type.as_str() {
             "X" => format!("{:.2}x", speed_mod.value),
             "C" => format!("C{}", speed_mod.value as i32),
@@ -363,7 +347,7 @@ fn change_choice(state: &mut State, delta: isize) {
         state.music_rate = (state.music_rate / increment).round() * increment;
         state.music_rate = state.music_rate.clamp(min_rate, max_rate);
         row.choices[0] = format!("{:.2}x", state.music_rate);
-        
+       
         // Update the row title to show the new BPM
         let song_bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
             state.song.min_bpm
@@ -372,21 +356,19 @@ fn change_choice(state: &mut State, delta: isize) {
         };
         let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
         let effective_bpm = song_bpm * state.music_rate as f64;
-        
+       
         // Format BPM: show one decimal only if it doesn't round to a whole number
         let bpm_str = if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
             format!("{}", effective_bpm.round() as i32)
         } else {
             format!("{:.1}", effective_bpm)
         };
-        
+       
         row.name = format!("Music Rate\nbpm: {}", bpm_str);
-        
+       
         audio::play_sfx("assets/sounds/change_value.ogg");
-
         // Update session music rate immediately so SelectMusic will match on return
         crate::game::profile::set_session_music_rate(state.music_rate);
-
         // If a preview is playing, adjust its rate without restarting it
         audio::set_music_rate(state.music_rate);
     } else {
@@ -395,7 +377,6 @@ fn change_choice(state: &mut State, delta: isize) {
             let current_idx = row.selected_choice_index as isize;
             row.selected_choice_index =
                 ((current_idx + delta + num_choices as isize) % num_choices as isize) as usize;
-
             // Changing the speed mod type should update the mod and the next row display
             if row.name == "Type of Speed Mod" {
                 let new_type = match row.selected_choice_index {
@@ -405,7 +386,6 @@ fn change_choice(state: &mut State, delta: isize) {
                     _ => "C",
                 };
                 state.speed_mod.mod_type = new_type.to_string();
-
                 // Reset value to a default for the new type
                 let new_value = match new_type {
                     "X" => 1.0,
@@ -414,7 +394,6 @@ fn change_choice(state: &mut State, delta: isize) {
                     _ => 600.0,
                 };
                 state.speed_mod.value = new_value;
-
                 // Format the new value string
                 let speed_mod_value_str = match new_type {
                     "X" => format!("{:.2}x", new_value),
@@ -422,7 +401,6 @@ fn change_choice(state: &mut State, delta: isize) {
                     "M" => format!("M{}", new_value as i32),
                     _ => "".to_string(),
                 };
-
                 // Update the choices vec for the "Speed Mod" row.
                 if let Some(speed_mod_row) = state.rows.get_mut(1) {
                     if speed_mod_row.name == "Speed Mod" {
@@ -451,18 +429,15 @@ fn change_choice(state: &mut State, delta: isize) {
         }
     }
 }
-
 // Public wrapper so app dispatcher can invoke a single step change without exposing internals.
 pub fn apply_choice_delta(state: &mut State, delta: isize) {
     change_choice(state, delta);
 }
-
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
-
 pub fn update(state: &mut State, dt: f32) {
     // Update preview animation time and beat based on song BPM
     state.preview_time += dt;
-    
+   
     // Calculate beat increment based on the song's BPM
     // Use the song's min_bpm (or max_bpm if they're the same)
     let bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
@@ -472,7 +447,7 @@ pub fn update(state: &mut State, dt: f32) {
         state.song.min_bpm as f32
     };
     let bpm = if bpm > 0.0 { bpm } else { 120.0 }; // Fallback to 120 BPM
-    
+   
     let beats_per_second = bpm / 60.0;
     state.preview_beat += dt * beats_per_second;
     if let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
@@ -502,7 +477,8 @@ pub fn update(state: &mut State, dt: f32) {
             }
         }
     }
-
+    // Advance the help reveal animation timer
+    state.help_anim_time += dt;
     if state.selected_row != state.prev_selected_row {
         // Direction-aware row change sounds
         match state.nav_key_held_direction {
@@ -510,17 +486,17 @@ pub fn update(state: &mut State, dt: f32) {
             Some(NavDirection::Down) => audio::play_sfx("assets/sounds/next_row.ogg"),
             _ => audio::play_sfx("assets/sounds/next_row.ogg"),
         }
+        // Reset help reveal animation on row change
+        state.help_anim_time = 0.0;
         state.prev_selected_row = state.selected_row;
     }
 }
-
 // Helpers for hold-to-scroll controlled by the app dispatcher
 pub fn on_nav_press(state: &mut State, dir: NavDirection) {
     state.nav_key_held_direction = Some(dir);
     state.nav_key_held_since = Some(Instant::now());
     state.nav_key_last_scrolled_at = Some(Instant::now());
 }
-
 pub fn on_nav_release(state: &mut State, dir: NavDirection) {
     if state.nav_key_held_direction == Some(dir) {
         state.nav_key_held_direction = None;
@@ -528,7 +504,6 @@ pub fn on_nav_release(state: &mut State, dir: NavDirection) {
         state.nav_key_last_scrolled_at = None;
     }
 }
-
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match ev.action {
         VirtualAction::p1_back if ev.pressed => return ScreenAction::Navigate(Screen::SelectMusic),
@@ -580,16 +555,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
     ScreenAction::None
 }
-
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
-
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
     }));
-
     actors.push(screen_bar::build(ScreenBarParams {
         title: "SELECT MODIFIERS",
         title_placement: ScreenBarTitlePlacement::Left,
@@ -601,13 +573,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         right_text: None,
         left_avatar: None,
     }));
-
     // Speed Mod Helper Display (from overlay.lua)
     // Shows the effective scroll speed (e.g., "X390" for 3.25x on 120 BPM)
     let speed_mod_y = 48.0;
     let speed_mod_x = screen_center_x() + widescale(-77.0, -100.0);
     let speed_color = color::simply_love_rgba(state.active_color_index);
-    
+   
     // Calculate effective BPM based on speed mod type
     // IMPORTANT: Use the music rate to get the actual effective BPM
     let song_bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
@@ -617,7 +588,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
     let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
     let effective_song_bpm = song_bpm * state.music_rate as f64;
-    
+   
     let speed_text = match state.speed_mod.mod_type.as_str() {
         "X" => {
             // For X-mod, show the effective BPM accounting for music rate
@@ -629,20 +600,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         "M" => format!("M{}", state.speed_mod.value as i32),
         _ => format!("{:.2}x", state.speed_mod.value),
     };
-    
+   
     actors.push(act!(text: font("wendy"): settext(speed_text):
         align(0.0, 0.5): xy(speed_mod_x, speed_mod_y): zoom(0.5):
         diffuse(speed_color[0], speed_color[1], speed_color[2], 1.0):
         z(121)
     ));
-
     /* ---------- SHARED GEOMETRY (rows aligned to help box) ---------- */
     // Help Text Box (from underlay.lua) — define this first so rows can match its width/left.
     let help_box_h = 40.0;
     let help_box_w = widescale(614.0, 792.0);
     let help_box_x = widescale(13.0, 30.666);
     let help_box_bottom_y = screen_height() - 36.0;
-
     // --- Row Layout Constants & Scrolling ---
     const VISIBLE_ROWS: usize = 10;
     const ANCHOR_ROW: usize = 4; // Keep selection on the 5th visible row
@@ -650,7 +619,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     const ROW_HEIGHT: f32 = 33.0;
     // Make the first column a bit wider to match SL
     const TITLE_BG_WIDTH: f32 = 140.0;
-
     let total_rows = state.rows.len();
     let max_offset = total_rows.saturating_sub(VISIBLE_ROWS);
     let offset_rows = if total_rows <= VISIBLE_ROWS {
@@ -658,9 +626,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         state.selected_row.saturating_sub(ANCHOR_ROW).min(max_offset)
     };
-
     let frame_h = ROW_HEIGHT;
-
     // Compute dynamic row gap so the space between the last visible
     // row and the help box equals all other inter-row gaps.
     // Derivation (using row centers):
@@ -677,26 +643,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
     if !row_gap.is_finite() { row_gap = 0.0; }
     if row_gap < 0.0 { row_gap = 0.0; }
-
     // Make row frame LEFT and WIDTH exactly match the help box.
     let row_left = help_box_x;
     let row_width = help_box_w;
     let row_center_x = row_left + (row_width * 0.5);
     let title_bg_center_x = row_left + (TITLE_BG_WIDTH * 0.5);
-
     // Title text x: slightly less padding so text sits further left
     let title_x = row_left + widescale(8.0, 14.0);
-
     for i_vis in 0..VISIBLE_ROWS {
         let item_idx = offset_rows + i_vis;
         if item_idx >= total_rows {
             break;
         }
-
         let current_row_y = first_row_center_y + (i_vis as f32) * (frame_h + row_gap);
         let is_active = item_idx == state.selected_row;
         let row = &state.rows[item_idx];
-
         let active_bg = color::rgba_hex("#333333");
         let inactive_bg_base = color::rgba_hex("#071016");
         let bg_color = if is_active {
@@ -704,7 +665,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else {
             [inactive_bg_base[0], inactive_bg_base[1], inactive_bg_base[2], 0.8]
         };
-
         // Row background — matches help box width & left
         actors.push(act!(quad:
             align(0.5, 0.5): xy(row_center_x, current_row_y):
@@ -712,7 +672,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             diffuse(bg_color[0], bg_color[1], bg_color[2], bg_color[3]):
             z(100)
         ));
-
         if !row.name.is_empty() {
             actors.push(act!(quad:
                 align(0.5, 0.5): xy(title_bg_center_x, current_row_y):
@@ -721,7 +680,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 z(101)
             ));
         }
-
         // Left column (row titles)
         let title_color = if is_active {
             let mut c = color::simply_love_rgba(state.active_color_index);
@@ -730,7 +688,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else {
             [1.0, 1.0, 1.0, 1.0]
         };
-
         // Handle multi-line row titles (e.g., "Music Rate\nbpm: 120")
         if row.name.contains('\n') {
             let lines: Vec<&str> = row.name.split('\n').collect();
@@ -767,16 +724,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 z(101)
             ));
         }
-
         // Inactive option text color should be #808080 (alpha 1.0)
         let sl_gray = color::rgba_hex("#808080");
-
         // Some rows should display all choices inline
         let show_all_choices_inline = row.name == "Perspective"
             || row.name == "Background Filter"
             || row.name == "Stepchart"
             || row.name == "What comes next?";
-
         // Choice area: For single-choice rows (ShowOneInRow), use ItemsLongRowP1X positioning
         // For multi-choice rows (ShowAllInRow), use ItemsStartX positioning
         // ItemsLongRowP1X = WideScale(_screen.cx-100, _screen.cx-130) from Simply Love metrics
@@ -786,7 +740,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else {
             screen_center_x() + widescale(-100.0, -130.0) // ItemsLongRowP1X for single-choice rows
         };
-
         if row.name.is_empty() {
             // Special case for the last "Exit" row
             let choice_text = &row.choices[row.selected_choice_index];
@@ -796,7 +749,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                 z(101)
             ));
-
             // Draw the selection cursor for the centered "Exit" text when active
             if is_active {
                 let value_zoom = 0.8;
@@ -816,7 +768,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let border_w = widescale(2.0, 2.5);
                         let ring_w = draw_w + pad_x * 2.0;
                         let ring_h = draw_h + pad_y * 2.0;
-
                         let center_x = row_center_x; // Centered within the row
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;
@@ -824,7 +775,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let bottom = current_row_y + ring_h * 0.5;
                         let mut ring_color = color::simply_love_rgba(state.active_color_index);
                         ring_color[3] = 1.0;
-
                         // Top, Bottom, Left, Right borders
                         actors.push(act!(quad: align(0.5, 0.5): xy(center_x, top + border_w * 0.5): zoomto(ring_w, border_w): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
                         actors.push(act!(quad: align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5): zoomto(ring_w, border_w): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
@@ -838,7 +788,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // The selected option gets an underline (quad) drawn just below the text.
             let value_zoom = 0.8;
             let spacing = widescale(20.0, 24.0);
-
             // First pass: measure widths to lay out options inline
             let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
             asset_manager.with_fonts(|all_fonts| {
@@ -850,7 +799,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 });
             });
-
             // Build x positions for each option
             let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
             {
@@ -860,7 +808,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     x += *w + spacing;
                 }
             }
-
             // Draw underline under the selected option (always visible) — match text width exactly (no padding)
             if let Some(sel_x) = x_positions.get(row.selected_choice_index).copied() {
                 let draw_w = widths.get(row.selected_choice_index).copied().unwrap_or(40.0);
@@ -874,7 +821,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let underline_y = current_row_y + text_h * 0.5 + offset;
                         let mut line_color = color::simply_love_rgba(state.active_color_index);
                         line_color[3] = 1.0;
-
                         actors.push(act!(quad:
                             align(0.0, 0.5): // start at text's left edge
                             xy(sel_x, underline_y):
@@ -885,7 +831,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     });
                 });
             }
-
             // Draw the 4-sided cursor ring around the selected option when this row is active
             if is_active {
                 if let Some(sel_x) = x_positions.get(row.selected_choice_index).copied() {
@@ -911,7 +856,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let bottom = current_row_y + ring_h * 0.5;
                             let mut ring_color = color::simply_love_rgba(state.active_color_index);
                             ring_color[3] = 1.0;
-
                             // Top border
                             actors.push(act!(quad:
                                 align(0.5, 0.5): xy((left + right) * 0.5, top + border_w * 0.5):
@@ -944,7 +888,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     });
                 }
             }
-
             // Draw each option's text (active row: all white; inactive: #808080)
             for (idx, text) in row.choices.iter().enumerate() {
                 let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
@@ -963,7 +906,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 sl_gray
             };
-
             // Encircling cursor around the active option value (programmatic border)
             if is_active {
                 let value_zoom = 0.8;
@@ -986,14 +928,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let border_w = widescale(2.0, 2.5);
                         let ring_w = draw_w + pad_x * 2.0;
                         let ring_h = draw_h + pad_y * 2.0;
-
                         let left = choice_inner_left - pad_x;
                         let right = left + ring_w;
                         let top = current_row_y - ring_h * 0.5;
                         let bottom = current_row_y + ring_h * 0.5;
                         let mut ring_color = color::simply_love_rgba(state.active_color_index);
                         ring_color[3] = 1.0;
-
                         actors.push(act!(quad:
                             align(0.5, 0.5): xy((left + right) * 0.5, top + border_w * 0.5):
                             zoomto(ring_w, border_w):
@@ -1021,13 +961,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     });
                 });
             }
-
             actors.push(act!(text: font("miso"): settext(choice_text.clone()):
                 align(0.0, 0.5): xy(choice_inner_left, current_row_y): zoom(0.8):
                 diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                 z(101)
             ));
-
             // Add judgment preview for "Judgement Font" row showing Fantastic frame
             if row.name == "Judgement Font" && choice_text == "Love" {
                 // Love judgment sprite is 2x7 (2 columns, 7 rows) at double resolution
@@ -1042,7 +980,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     z(102)
                 ));
             }
-
             // Add hold judgment preview for "Hold Judgement" row showing Held frame
             if row.name == "Hold Judgement" && choice_text == "Love" {
                 // Love hold judgment sprite is 1x2 (1 column, 2 rows) at double resolution
@@ -1057,7 +994,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     z(102)
                 ));
             }
-
             // Add noteskin preview for "NoteSkin" row showing animated 4th note
             if row.name == "NoteSkin" && choice_text == "cel" {
                 if let Some(ns) = &state.noteskin {
@@ -1068,18 +1004,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         // Get the current animation frame using preview_time and preview_beat
                         let frame = note_slot.frame_index(state.preview_time, state.preview_beat);
                         let uv = note_slot.uv_for_frame(frame);
-                        
+                       
                         // Scale the note to match Simply Love's 0.4x preview zoom
                         // Note: cel noteskin textures are NOT doubleres, so we use 0.4x directly
                         let size = note_slot.size();
                         let width = size[0].max(1) as f32;
                         let height = size[1].max(1) as f32;
-                        
+                       
                         // Target size: 64px is the gameplay size, so 0.4x of that is 25.6px
                         const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
                         const PREVIEW_SCALE: f32 = 0.4;
                         let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
-                        
+                       
                         let scale = if height > 0.0 {
                             target_height / height
                         } else {
@@ -1087,7 +1023,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         };
                         let final_width = width * scale;
                         let final_height = target_height;
-                        
+                       
                         let preview_x = choice_inner_left + widescale(80.0, 100.0);
                         actors.push(act!(sprite(note_slot.texture_key().to_string()):
                             align(0.0, 0.5):
@@ -1102,30 +1038,48 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         }
     }
-
     // ------------------- Description content (selected) -------------------
     actors.push(act!(quad:
         align(0.0, 1.0): xy(help_box_x, help_box_bottom_y):
         zoomto(help_box_w, help_box_h):
         diffuse(0.0, 0.0, 0.0, 0.8)
     ));
-
     if let Some(row) = state.rows.get(state.selected_row) {
         let help_text_color = color::simply_love_rgba(state.active_color_index);
         let wrap_width = help_box_w - 30.0; // padding
         let help_x = help_box_x + 15.0;
-        
+       
+        // Calculate reveal fraction (0.0 to 1.0 over 0.5 seconds)
+        const REVEAL_DURATION: f32 = 0.5;
+        let num_help_lines = if row.help.len() > 1 { row.help.len() } else { 1 };
+        let time_per_line = if num_help_lines > 0 { REVEAL_DURATION / num_help_lines as f32 } else { REVEAL_DURATION };
+       
         // Handle multi-line help text (similar to multi-line row titles)
         if row.help.len() > 1 {
             // Multiple help lines - render them vertically stacked
             let line_spacing = 12.0; // Spacing between help lines
             let total_height = (row.help.len() as f32 - 1.0) * line_spacing;
             let start_y = help_box_bottom_y - (help_box_h / 2.0) - (total_height / 2.0);
-            
+           
             for (i, help_line) in row.help.iter().enumerate() {
+                // Sequential letter-by-letter reveal per line
+                let start_time = i as f32 * time_per_line;
+                let end_time = start_time + time_per_line;
+                let anim_time = state.help_anim_time;
+                let visible_chars = if anim_time < start_time {
+                    0
+                } else if anim_time >= end_time {
+                    help_line.chars().count()
+                } else {
+                    let line_fraction = (anim_time - start_time) / time_per_line;
+                    let char_count = help_line.chars().count();
+                    ((char_count as f32 * line_fraction).round() as usize).min(char_count)
+                };
+                let visible_text: String = help_line.chars().take(visible_chars).collect();
+               
                 let line_y = start_y + (i as f32 * line_spacing);
                 actors.push(act!(text:
-                    font("miso"): settext(help_line.clone()):
+                    font("miso"): settext(visible_text):
                     align(0.0, 0.5):
                     xy(help_x, line_y):
                     zoom(widescale(0.8, 0.85)):
@@ -1137,8 +1091,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else {
             // Single help line (normal case)
             let help_text = row.help.join(" | ");
+            // Letter-by-letter reveal
+            let char_count = help_text.chars().count();
+            let fraction = (state.help_anim_time / REVEAL_DURATION).clamp(0.0, 1.0);
+            let visible_chars = ((char_count as f32 * fraction).round() as usize).min(char_count);
+            let visible_text: String = help_text.chars().take(visible_chars).collect();
+           
             actors.push(act!(text:
-                font("miso"): settext(help_text):
+                font("miso"): settext(visible_text):
                 align(0.0, 0.5):
                 xy(help_x, help_box_bottom_y - (help_box_h / 2.0)):
                 zoom(widescale(0.8, 0.85)):
@@ -1148,6 +1108,5 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
         }
     }
-
     actors
 }
