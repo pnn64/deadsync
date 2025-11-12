@@ -154,7 +154,10 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
             name: "Combo Font".to_string(),
             choices: vec!["Wendy".to_string(), "Arial Rounded".to_string(), "Asap".to_string()],
             selected_choice_index: 0,
-            help: vec!["Choose the font to count your combo. Also used for the measure counter if enabled.".to_string()],
+            help: vec![
+                "Choose the font to count your combo. This font will also be used".to_string(),
+                "for the Measure Counter if that is enabled.".to_string(),
+            ],
             choice_difficulty_indices: None,
         },
         Row {
@@ -177,6 +180,23 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
                 "Darken the underside of the playing field.".to_string(),
                 "This will partially obscure background art.".to_string(),
             ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "NoteField Offset X".to_string(),
+            choices: vec!["0".to_string()],
+            selected_choice_index: 0,
+            help: vec![
+                "Adjust the horizontal position of the notefield (relative to the".to_string(),
+                "center).".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "NoteField Offset Y".to_string(),
+            choices: vec!["0".to_string()],
+            selected_choice_index: 0,
+            help: vec!["Adjust the vertical position of the notefield.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
@@ -232,8 +252,8 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
             ],
             selected_choice_index: 0,
             help: vec![
-                "Go back and choose a different song or change".to_string(),
-                "additional modifiers.".to_string(),
+                "Go back and choose a different song or change additional".to_string(),
+                "modifiers.".to_string(),
             ],
             choice_difficulty_indices: None,
         },
