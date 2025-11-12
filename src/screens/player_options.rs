@@ -198,7 +198,19 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Music Rate".to_string(),
+            name: {
+                // Calculate BPM with music rate applied
+                let song_bpm = if (song.min_bpm - song.max_bpm).abs() < 1e-6 {
+                    song.min_bpm
+                } else {
+                    song.min_bpm
+                };
+                let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
+                let effective_bpm = (song_bpm * session_music_rate as f64).round() as i32;
+                
+                // Format: "Music Rate\nbpm: 120" (matches Simply Love's format from line 160)
+                format!("Music Rate\nbpm: {}", effective_bpm)
+            },
             choices: vec![format!("{:.2}x", session_music_rate.clamp(0.5, 3.0))],
             selected_choice_index: 0,
             help: vec!["Change the native speed of the music itself.".to_string()],
@@ -333,7 +345,7 @@ fn change_choice(state: &mut State, delta: isize) {
         };
         row.choices[0] = speed_mod_value_str;
         audio::play_sfx("assets/sounds/change_value.ogg");
-    } else if row.name == "Music Rate" {
+    } else if row.name.starts_with("Music Rate") {
         let increment = 0.01f32;
         let min_rate = 0.05f32;
         let max_rate = 3.00f32;
@@ -341,6 +353,17 @@ fn change_choice(state: &mut State, delta: isize) {
         state.music_rate = (state.music_rate / increment).round() * increment;
         state.music_rate = state.music_rate.clamp(min_rate, max_rate);
         row.choices[0] = format!("{:.2}x", state.music_rate);
+        
+        // Update the row title to show the new BPM
+        let song_bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
+            state.song.min_bpm
+        } else {
+            state.song.min_bpm
+        };
+        let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
+        let effective_bpm = (song_bpm * state.music_rate as f64).round() as i32;
+        row.name = format!("Music Rate\nbpm: {}", effective_bpm);
+        
         audio::play_sfx("assets/sounds/change_value.ogg");
 
         // Update session music rate immediately so SelectMusic will match on return
@@ -562,14 +585,30 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }));
 
     // Speed Mod Helper Display (from overlay.lua)
+    // Shows the effective scroll speed (e.g., "X390" for 3.25x on 120 BPM)
     let speed_mod_y = 48.0;
     let speed_mod_x = screen_center_x() + widescale(-77.0, -100.0);
     let speed_color = color::simply_love_rgba(state.active_color_index);
-    let speed_text = if state.speed_mod.mod_type == "X" {
-        format!("{:.2}x", state.speed_mod.value)
+    
+    // Calculate effective BPM based on speed mod type
+    let song_bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
+        state.song.min_bpm
     } else {
-        format!("{}{}", state.speed_mod.mod_type, state.speed_mod.value as i32)
+        state.song.min_bpm // Use min for variable BPM songs
     };
+    let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
+    
+    let speed_text = match state.speed_mod.mod_type.as_str() {
+        "X" => {
+            // For X-mod, show the effective BPM (e.g., "X390" for 3.25x on 120 BPM)
+            let effective_bpm = (state.speed_mod.value * song_bpm as f32).round() as i32;
+            format!("X{}", effective_bpm)
+        }
+        "C" => format!("C{}", state.speed_mod.value as i32),
+        "M" => format!("M{}", state.speed_mod.value as i32),
+        _ => format!("{:.2}x", state.speed_mod.value),
+    };
+    
     actors.push(act!(text: font("wendy"): settext(speed_text):
         align(0.0, 0.5): xy(speed_mod_x, speed_mod_y): zoom(0.5):
         diffuse(speed_color[0], speed_color[1], speed_color[2], 1.0):
@@ -671,12 +710,42 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             [1.0, 1.0, 1.0, 1.0]
         };
 
-        actors.push(act!(text: font("miso"): settext(row.name.clone()):
-            align(0.0, 0.5): xy(title_x, current_row_y): zoom(0.9):
-            diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-            horizalign(left): maxwidth(widescale(128.0, 120.0)):
-            z(101)
-        ));
+        // Handle multi-line row titles (e.g., "Music Rate\nbpm: 120")
+        if row.name.contains('\n') {
+            let lines: Vec<&str> = row.name.split('\n').collect();
+            if lines.len() == 2 {
+                // First line (e.g., "Music Rate")
+                actors.push(act!(text: font("miso"): settext(lines[0].to_string()):
+                    align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(0.9):
+                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                    horizalign(left): maxwidth(widescale(128.0, 120.0)):
+                    z(101)
+                ));
+                // Second line (e.g., "bpm: 120") - smaller and slightly below
+                actors.push(act!(text: font("miso"): settext(lines[1].to_string()):
+                    align(0.0, 0.5): xy(title_x, current_row_y + 7.0): zoom(0.9):
+                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                    horizalign(left): maxwidth(widescale(128.0, 120.0)):
+                    z(101)
+                ));
+            } else {
+                // Fallback for unexpected multi-line format
+                actors.push(act!(text: font("miso"): settext(row.name.clone()):
+                    align(0.0, 0.5): xy(title_x, current_row_y): zoom(0.9):
+                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                    horizalign(left): maxwidth(widescale(128.0, 120.0)):
+                    z(101)
+                ));
+            }
+        } else {
+            // Single-line title (normal case)
+            actors.push(act!(text: font("miso"): settext(row.name.clone()):
+                align(0.0, 0.5): xy(title_x, current_row_y): zoom(0.9):
+                diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                horizalign(left): maxwidth(widescale(128.0, 120.0)):
+                z(101)
+            ));
+        }
 
         // Inactive option text color should be #808080 (alpha 1.0)
         let sl_gray = color::rgba_hex("#808080");
