@@ -914,6 +914,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     z(102)
                 ));
             }
+
+            // Add hold judgment preview for "Hold Judgement" row showing Held frame
+            if row.name == "Hold Judgement" && choice_text == "Love" {
+                // Love hold judgment sprite is 1x2 (1 column, 2 rows) at double resolution
+                // Held is the first frame (top, row 0)
+                // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
+                let preview_x = choice_inner_left + widescale(80.0, 100.0);
+                actors.push(act!(sprite("hold_judgements/Love 1x2 (doubleres).png"):
+                    align(0.0, 0.5):
+                    xy(preview_x, current_row_y):
+                    setstate(0):
+                    zoom(0.2):
+                    z(102)
+                ));
+            }
         }
     }
 
