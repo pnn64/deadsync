@@ -4,7 +4,6 @@ use crate::core::space::*;
 use crate::game::song::SongData;
 use crate::screens::{Screen, ScreenAction};
 use crate::core::input::{VirtualAction, InputEvent};
-// Screen navigation is handled in app.rs via the dispatcher
 use crate::ui::actors::Actor;
 use crate::assets::AssetManager;
 use crate::ui::color;
@@ -16,13 +15,16 @@ use crate::game::parsing::noteskin::{self, Noteskin, Quantization, NUM_QUANTIZAT
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
+
 /* -------------------------- hold-to-scroll timing ------------------------- */
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(300);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NavDirection {
     Up,
@@ -30,6 +32,7 @@ pub enum NavDirection {
     Left,
     Right,
 }
+
 pub struct Row {
     pub name: String,
     pub choices: Vec<String>,
@@ -38,10 +41,12 @@ pub struct Row {
     // Optional: map each choice to a FILE_DIFFICULTY_NAMES index (used for Stepchart)
     pub choice_difficulty_indices: Option<Vec<usize>>,
 }
+
 pub struct SpeedMod {
     pub mod_type: String, // "X", "C", "M"
     pub value: f32,
 }
+
 pub struct State {
     pub song: Arc<SongData>,
     pub chart_difficulty_index: usize,
@@ -60,6 +65,7 @@ pub struct State {
     preview_beat: f32,
     help_anim_time: f32,
 }
+
 fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: usize, session_music_rate: f32) -> Vec<Row> {
     let speed_mod_value_str = match speed_mod.mod_type.as_str() {
         "X" => format!("{:.2}x", speed_mod.value),
@@ -266,6 +272,7 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
         },
     ]
 }
+
 pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_index: i32) -> State {
     let profile = crate::game::profile::get();
     let session_music_rate = crate::game::profile::get_session_music_rate();
@@ -318,6 +325,7 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         help_anim_time: 0.0,
     }
 }
+
 pub fn in_transition() -> (Vec<Actor>, f32) {
     let actor = act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
@@ -329,6 +337,7 @@ pub fn in_transition() -> (Vec<Actor>, f32) {
     );
     (vec![actor], TRANSITION_IN_DURATION)
 }
+
 pub fn out_transition() -> (Vec<Actor>, f32) {
     let actor = act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
@@ -339,6 +348,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     );
     (vec![actor], TRANSITION_OUT_DURATION)
 }
+
 fn change_choice(state: &mut State, delta: isize) {
     let row = &mut state.rows[state.selected_row];
     if row.name == "Speed Mod" {
@@ -449,10 +459,12 @@ fn change_choice(state: &mut State, delta: isize) {
         }
     }
 }
+
 // Public wrapper so app dispatcher can invoke a single step change without exposing internals.
 pub fn apply_choice_delta(state: &mut State, delta: isize) {
     change_choice(state, delta);
 }
+
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 pub fn update(state: &mut State, dt: f32) {
     // Update preview animation time and beat based on song BPM
@@ -511,12 +523,14 @@ pub fn update(state: &mut State, dt: f32) {
         state.prev_selected_row = state.selected_row;
     }
 }
+
 // Helpers for hold-to-scroll controlled by the app dispatcher
 pub fn on_nav_press(state: &mut State, dir: NavDirection) {
     state.nav_key_held_direction = Some(dir);
     state.nav_key_held_since = Some(Instant::now());
     state.nav_key_last_scrolled_at = Some(Instant::now());
 }
+
 pub fn on_nav_release(state: &mut State, dir: NavDirection) {
     if state.nav_key_held_direction == Some(dir) {
         state.nav_key_held_direction = None;
@@ -524,6 +538,7 @@ pub fn on_nav_release(state: &mut State, dir: NavDirection) {
         state.nav_key_last_scrolled_at = None;
     }
 }
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match ev.action {
         VirtualAction::p1_back if ev.pressed => return ScreenAction::Navigate(Screen::SelectMusic),
@@ -575,6 +590,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
     ScreenAction::None
 }
+
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
     actors.extend(state.bg.build(heart_bg::Params {
@@ -598,7 +614,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let speed_mod_y = 48.0;
     let speed_mod_x = screen_center_x() + widescale(-77.0, -100.0);
     let speed_color = color::simply_love_rgba(state.active_color_index);
-   
+    
     // Calculate effective BPM based on speed mod type
     // IMPORTANT: Use the music rate to get the actual effective BPM
     let song_bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
@@ -608,7 +624,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
     let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
     let effective_song_bpm = song_bpm * state.music_rate as f64;
-   
+    
     let speed_text = match state.speed_mod.mod_type.as_str() {
         "X" => {
             // For X-mod, show the effective BPM accounting for music rate
@@ -620,7 +636,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         "M" => format!("M{}", state.speed_mod.value as i32),
         _ => format!("{:.2}x", state.speed_mod.value),
     };
-   
+    
     actors.push(act!(text: font("wendy"): settext(speed_text):
         align(0.0, 0.5): xy(speed_mod_x, speed_mod_y): zoom(0.5):
         diffuse(speed_color[0], speed_color[1], speed_color[2], 1.0):
@@ -920,142 +936,149 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         } else {
             // Single value display (default behavior)
+            let choice_center_x = row_center_x - TITLE_BG_WIDTH / 2.0;
             let choice_text = &row.choices[row.selected_choice_index];
             let choice_color = if is_active {
                 [1.0, 1.0, 1.0, 1.0]
             } else {
                 sl_gray
             };
-            // Encircling cursor around the active option value (programmatic border)
-            if is_active {
-                let value_zoom = 0.8;
-                asset_manager.with_fonts(|all_fonts| {
-                    asset_manager.with_font("miso", |metrics_font| {
-                        let mut text_w = crate::ui::font::measure_line_width_logical(metrics_font, choice_text, all_fonts) as f32;
-                        if !text_w.is_finite() || text_w <= 0.0 { text_w = 1.0; }
-                        let text_h = (metrics_font.height as f32).max(1.0);
-                        let draw_w = text_w * value_zoom;
-                        let draw_h = text_h * value_zoom;
+            asset_manager.with_fonts(|all_fonts| {
+                asset_manager.with_font("miso", |metrics_font| {
+                    let mut text_w = crate::ui::font::measure_line_width_logical(metrics_font, choice_text, all_fonts) as f32;
+                    if !text_w.is_finite() || text_w <= 0.0 { text_w = 1.0; }
+                    let text_h = (metrics_font.height as f32).max(1.0);
+                    let value_zoom = 0.8;
+                    let draw_w = text_w * value_zoom;
+                    let draw_h = text_h * value_zoom;
+                    actors.push(act!(text: font("miso"): settext(choice_text.clone()):
+                        align(0.5, 0.5): xy(choice_center_x, current_row_y): zoom(0.8):
+                        diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+                        z(101)
+                    ));
+                    // Encircling cursor around the active option value (programmatic border)
+                    if is_active {
                         let pad_y = widescale(6.0, 8.0);
                         let min_pad_x = widescale(2.0, 3.0);
                         let max_pad_x = widescale(22.0, 28.0);
                         let width_ref = widescale(180.0, 220.0);
-                        let mut t = draw_w / width_ref;
-                        if !t.is_finite() { t = 0.0; }
-                        if t < 0.0 { t = 0.0; }
-                        if t > 1.0 { t = 1.0; }
+                        let t = (draw_w / width_ref).clamp(0.0, 1.0);
                         let pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
                         let border_w = widescale(2.0, 2.5);
                         let ring_w = draw_w + pad_x * 2.0;
                         let ring_h = draw_h + pad_y * 2.0;
-                        let left = choice_inner_left - pad_x;
-                        let right = left + ring_w;
-                        let top = current_row_y - ring_h * 0.5;
-                        let bottom = current_row_y + ring_h * 0.5;
+                        let left = choice_center_x - draw_w / 2.0 - pad_x;
+                        let right = choice_center_x + draw_w / 2.0 + pad_x;
+                        let top = current_row_y - ring_h / 2.0;
+                        let bottom = current_row_y + ring_h / 2.0;
                         let mut ring_color = color::simply_love_rgba(state.active_color_index);
                         ring_color[3] = 1.0;
                         actors.push(act!(quad:
-                            align(0.5, 0.5): xy((left + right) * 0.5, top + border_w * 0.5):
+                            align(0.5, 0.5): xy(choice_center_x, top + border_w * 0.5):
                             zoomto(ring_w, border_w):
                             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                             z(101)
                         ));
                         actors.push(act!(quad:
-                            align(0.5, 0.5): xy((left + right) * 0.5, bottom - border_w * 0.5):
+                            align(0.5, 0.5): xy(choice_center_x, bottom - border_w * 0.5):
                             zoomto(ring_w, border_w):
                             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                             z(101)
                         ));
                         actors.push(act!(quad:
-                            align(0.5, 0.5): xy(left + border_w * 0.5, (top + bottom) * 0.5):
+                            align(0.5, 0.5): xy(left + border_w * 0.5, current_row_y):
                             zoomto(border_w, ring_h):
                             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                             z(101)
                         ));
                         actors.push(act!(quad:
-                            align(0.5, 0.5): xy(right - border_w * 0.5, (top + bottom) * 0.5):
+                            align(0.5, 0.5): xy(right - border_w * 0.5, current_row_y):
                             zoomto(border_w, ring_h):
                             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                             z(101)
                         ));
-                    });
-                });
-            }
-            actors.push(act!(text: font("miso"): settext(choice_text.clone()):
-                align(0.0, 0.5): xy(choice_inner_left, current_row_y): zoom(0.8):
-                diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
-                z(101)
-            ));
-            // Add judgment preview for "Judgement Font" row showing Fantastic frame
-            if row.name == "Judgement Font" && choice_text == "Love" {
-                // Love judgment sprite is 2x7 (2 columns, 7 rows) at double resolution
-                // Fantastic is the first frame (top-left, column 0, row 0)
-                // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
-                let preview_x = choice_inner_left + widescale(80.0, 100.0);
-                actors.push(act!(sprite("judgements/Love 2x7 (doubleres).png"):
-                    align(0.0, 0.5):
-                    xy(preview_x, current_row_y):
-                    setstate(0):
-                    zoom(0.2):
-                    z(102)
-                ));
-            }
-            // Add hold judgment preview for "Hold Judgement" row showing Held frame
-            if row.name == "Hold Judgement" && choice_text == "Love" {
-                // Love hold judgment sprite is 1x2 (1 column, 2 rows) at double resolution
-                // Held is the first frame (top, row 0)
-                // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
-                let preview_x = choice_inner_left + widescale(80.0, 100.0);
-                actors.push(act!(sprite("hold_judgements/Love 1x2 (doubleres).png"):
-                    align(0.0, 0.5):
-                    xy(preview_x, current_row_y):
-                    setstate(0):
-                    zoom(0.2):
-                    z(102)
-                ));
-            }
-            // Add noteskin preview for "NoteSkin" row showing animated 4th note
-            if row.name == "NoteSkin" && choice_text == "cel" {
-                if let Some(ns) = &state.noteskin {
-                    // Render a 4th note (Quantization::Q4th = 0) for column 2 (Up arrow)
-                    // In dance-single: Left=0, Down=1, Up=2, Right=3
-                    let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
-                    if let Some(note_slot) = ns.notes.get(note_idx) {
-                        // Get the current animation frame using preview_time and preview_beat
-                        let frame = note_slot.frame_index(state.preview_time, state.preview_beat);
-                        let uv = note_slot.uv_for_frame(frame);
-                       
-                        // Scale the note to match Simply Love's 0.4x preview zoom
-                        // Note: cel noteskin textures are NOT doubleres, so we use 0.4x directly
-                        let size = note_slot.size();
-                        let width = size[0].max(1) as f32;
-                        let height = size[1].max(1) as f32;
-                       
-                        // Target size: 64px is the gameplay size, so 0.4x of that is 25.6px
-                        const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
-                        const PREVIEW_SCALE: f32 = 0.4;
-                        let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
-                       
-                        let scale = if height > 0.0 {
-                            target_height / height
-                        } else {
-                            PREVIEW_SCALE
-                        };
-                        let final_width = width * scale;
-                        let final_height = target_height;
-                       
-                        let preview_x = choice_inner_left + widescale(80.0, 100.0);
-                        actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                    }
+                    // Add previews (positioned to the right of the centered text)
+                    let preview_offset = widescale(20.0, 25.0);
+                    let preview_x = choice_center_x + draw_w / 2.0 + preview_offset;
+                    // Add judgment preview for "Judgement Font" row showing Fantastic frame
+                    if row.name == "Judgement Font" && choice_text == "Love" {
+                        // Love judgment sprite is 2x7 (2 columns, 7 rows) at double resolution
+                        // Fantastic is the first frame (top-left, column 0, row 0)
+                        // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
+                        actors.push(act!(sprite("judgements/Love 2x7 (doubleres).png"):
                             align(0.0, 0.5):
                             xy(preview_x, current_row_y):
-                            zoomto(final_width, final_height):
-                            rotationz(-note_slot.def.rotation_deg as f32):
-                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                            setstate(0):
+                            zoom(0.2):
                             z(102)
                         ));
                     }
-                }
-            }
+                    // Add hold judgment preview for "Hold Judgement" row showing both frames (Held and e.g. Let Go)
+                    if row.name == "Hold Judgement" && choice_text == "Love" {
+                        // Love hold judgment sprite is 1x2 (1 column, 2 rows) at double resolution
+                        // Held is the first frame (top, row 0), second frame (bottom, row 1)
+                        // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
+                        actors.push(act!(sprite("hold_judgements/Love 1x2 (doubleres).png"):
+                            align(0.0, 0.5):
+                            xy(preview_x, current_row_y):
+                            setstate(0):
+                            zoom(0.2):
+                            z(102)
+                        ));
+                        let hold_spacing = 45.0; // Adjust this value as needed for spacing between the two sprites
+                        let preview_x2 = preview_x + hold_spacing;
+                        actors.push(act!(sprite("hold_judgements/Love 1x2 (doubleres).png"):
+                            align(0.0, 0.5):
+                            xy(preview_x2, current_row_y):
+                            setstate(1):
+                            zoom(0.2):
+                            z(102)
+                        ));
+                    }
+                    // Add noteskin preview for "NoteSkin" row showing animated 4th note
+                    if row.name == "NoteSkin" && choice_text == "cel" {
+                        if let Some(ns) = &state.noteskin {
+                            // Render a 4th note (Quantization::Q4th = 0) for column 2 (Up arrow)
+                            // In dance-single: Left=0, Down=1, Up=2, Right=3
+                            let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+                            if let Some(note_slot) = ns.notes.get(note_idx) {
+                                // Get the current animation frame using preview_time and preview_beat
+                                let frame = note_slot.frame_index(state.preview_time, state.preview_beat);
+                                let uv = note_slot.uv_for_frame(frame);
+                                
+                                // Scale the note to match Simply Love's 0.4x preview zoom
+                                // Note: cel noteskin textures are NOT doubleres, so we use 0.4x directly
+                                let size = note_slot.size();
+                                let width = size[0].max(1) as f32;
+                                let height = size[1].max(1) as f32;
+                                
+                                // Target size: 64px is the gameplay size, so 0.4x of that is 25.6px
+                                const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
+                                const PREVIEW_SCALE: f32 = 0.4;
+                                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                                
+                                let scale = if height > 0.0 {
+                                    target_height / height
+                                } else {
+                                    PREVIEW_SCALE
+                                };
+                                let final_width = width * scale;
+                                let final_height = target_height;
+                                
+                                actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                    align(0.0, 0.5):
+                                    xy(preview_x, current_row_y):
+                                    zoomto(final_width, final_height):
+                                    rotationz(-note_slot.def.rotation_deg as f32):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    z(102)
+                                ));
+                            }
+                        }
+                    }
+                });
+            });
         }
     }
     // ------------------- Description content (selected) -------------------
@@ -1068,19 +1091,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let help_text_color = color::simply_love_rgba(state.active_color_index);
         let wrap_width = help_box_w - 30.0; // padding
         let help_x = help_box_x + 15.0;
-       
+        
         // Calculate reveal fraction (0.0 to 1.0 over 0.5 seconds)
         const REVEAL_DURATION: f32 = 0.5;
         let num_help_lines = if row.help.len() > 1 { row.help.len() } else { 1 };
         let time_per_line = if num_help_lines > 0 { REVEAL_DURATION / num_help_lines as f32 } else { REVEAL_DURATION };
-       
+        
         // Handle multi-line help text (similar to multi-line row titles)
         if row.help.len() > 1 {
             // Multiple help lines - render them vertically stacked
             let line_spacing = 12.0; // Spacing between help lines
             let total_height = (row.help.len() as f32 - 1.0) * line_spacing;
             let start_y = help_box_bottom_y - (help_box_h / 2.0) - (total_height / 2.0);
-           
+            
             for (i, help_line) in row.help.iter().enumerate() {
                 // Sequential letter-by-letter reveal per line
                 let start_time = i as f32 * time_per_line;
@@ -1096,7 +1119,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     ((char_count as f32 * line_fraction).round() as usize).min(char_count)
                 };
                 let visible_text: String = help_line.chars().take(visible_chars).collect();
-               
+                
                 let line_y = start_y + (i as f32 * line_spacing);
                 actors.push(act!(text:
                     font("miso"): settext(visible_text):
@@ -1116,7 +1139,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let fraction = (state.help_anim_time / REVEAL_DURATION).clamp(0.0, 1.0);
             let visible_chars = ((char_count as f32 * fraction).round() as usize).min(char_count);
             let visible_text: String = help_text.chars().take(visible_chars).collect();
-           
+            
             actors.push(act!(text:
                 font("miso"): settext(visible_text):
                 align(0.0, 0.5):
