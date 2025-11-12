@@ -678,8 +678,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             z(101)
         ));
 
-        // Choice area: align more to the right, relative to the widened title column
-        let choice_inner_left = row_left + TITLE_BG_WIDTH + widescale(24.0, 30.0);
         // Inactive option text color should be #808080 (alpha 1.0)
         let sl_gray = color::rgba_hex("#808080");
 
@@ -688,6 +686,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             || row.name == "Background Filter"
             || row.name == "Stepchart"
             || row.name == "What comes next?";
+
+        // Choice area: For single-choice rows (ShowOneInRow), use ItemsLongRowP1X positioning
+        // For multi-choice rows (ShowAllInRow), use ItemsStartX positioning
+        // ItemsLongRowP1X = WideScale(_screen.cx-100, _screen.cx-130) from Simply Love metrics
+        // ItemsStartX = WideScale(146, 160) from Simply Love metrics
+        let choice_inner_left = if show_all_choices_inline {
+            row_left + TITLE_BG_WIDTH + widescale(24.0, 30.0) // Approximately matches ItemsStartX
+        } else {
+            screen_center_x() + widescale(-100.0, -130.0) // ItemsLongRowP1X for single-choice rows
+        };
 
         if row.name.is_empty() {
             // Special case for the last "Exit" row
