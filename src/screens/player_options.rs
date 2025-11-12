@@ -206,10 +206,17 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
                     song.min_bpm
                 };
                 let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
-                let effective_bpm = (song_bpm * session_music_rate as f64).round() as i32;
+                let effective_bpm = song_bpm * session_music_rate as f64;
+                
+                // Format BPM: show one decimal only if it doesn't round to a whole number
+                let bpm_str = if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
+                    format!("{}", effective_bpm.round() as i32)
+                } else {
+                    format!("{:.1}", effective_bpm)
+                };
                 
                 // Format: "Music Rate\nbpm: 120" (matches Simply Love's format from line 160)
-                format!("Music Rate\nbpm: {}", effective_bpm)
+                format!("Music Rate\nbpm: {}", bpm_str)
             },
             choices: vec![format!("{:.2}x", session_music_rate.clamp(0.5, 3.0))],
             selected_choice_index: 0,
@@ -232,7 +239,10 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
                 "Uncommon Modifiers".to_string(),
             ],
             selected_choice_index: 0,
-            help: vec!["Go back and choose a different song or change additional modifiers.".to_string()],
+            help: vec![
+                "Go back and choose a different song or change".to_string(),
+                "additional modifiers.".to_string(),
+            ],
             choice_difficulty_indices: None,
         },
         Row {
@@ -361,8 +371,16 @@ fn change_choice(state: &mut State, delta: isize) {
             state.song.min_bpm
         };
         let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
-        let effective_bpm = (song_bpm * state.music_rate as f64).round() as i32;
-        row.name = format!("Music Rate\nbpm: {}", effective_bpm);
+        let effective_bpm = song_bpm * state.music_rate as f64;
+        
+        // Format BPM: show one decimal only if it doesn't round to a whole number
+        let bpm_str = if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
+            format!("{}", effective_bpm.round() as i32)
+        } else {
+            format!("{:.1}", effective_bpm)
+        };
+        
+        row.name = format!("Music Rate\nbpm: {}", bpm_str);
         
         audio::play_sfx("assets/sounds/change_value.ogg");
 
@@ -591,17 +609,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let speed_color = color::simply_love_rgba(state.active_color_index);
     
     // Calculate effective BPM based on speed mod type
+    // IMPORTANT: Use the music rate to get the actual effective BPM
     let song_bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
         state.song.min_bpm
     } else {
         state.song.min_bpm // Use min for variable BPM songs
     };
     let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
+    let effective_song_bpm = song_bpm * state.music_rate as f64;
     
     let speed_text = match state.speed_mod.mod_type.as_str() {
         "X" => {
-            // For X-mod, show the effective BPM (e.g., "X390" for 3.25x on 120 BPM)
-            let effective_bpm = (state.speed_mod.value * song_bpm as f32).round() as i32;
+            // For X-mod, show the effective BPM accounting for music rate
+            // (e.g., "X390" for 3.25x on 120 BPM at 1.0x rate)
+            let effective_bpm = (state.speed_mod.value * effective_song_bpm as f32).round() as i32;
             format!("X{}", effective_bpm)
         }
         "C" => format!("C{}", state.speed_mod.value as i32),
@@ -1090,19 +1111,42 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     ));
 
     if let Some(row) = state.rows.get(state.selected_row) {
-        let help_text = row.help.join(" | ");
         let help_text_color = color::simply_love_rgba(state.active_color_index);
         let wrap_width = help_box_w - 30.0; // padding
-
-        actors.push(act!(text:
-            font("miso"): settext(help_text):
-            align(0.0, 0.5):
-            xy(help_box_x + 15.0, help_box_bottom_y - (help_box_h / 2.0)):
-            // Slightly larger help text for readability
-            zoom(widescale(0.8, 0.85)):
-            diffuse(help_text_color[0], help_text_color[1], help_text_color[2], 1.0):
-            maxwidth(wrap_width): horizalign(left)
-        ));
+        let help_x = help_box_x + 15.0;
+        
+        // Handle multi-line help text (similar to multi-line row titles)
+        if row.help.len() > 1 {
+            // Multiple help lines - render them vertically stacked
+            let line_spacing = 12.0; // Spacing between help lines
+            let total_height = (row.help.len() as f32 - 1.0) * line_spacing;
+            let start_y = help_box_bottom_y - (help_box_h / 2.0) - (total_height / 2.0);
+            
+            for (i, help_line) in row.help.iter().enumerate() {
+                let line_y = start_y + (i as f32 * line_spacing);
+                actors.push(act!(text:
+                    font("miso"): settext(help_line.clone()):
+                    align(0.0, 0.5):
+                    xy(help_x, line_y):
+                    zoom(widescale(0.8, 0.85)):
+                    diffuse(help_text_color[0], help_text_color[1], help_text_color[2], 1.0):
+                    maxwidth(wrap_width): horizalign(left):
+                    z(101)
+                ));
+            }
+        } else {
+            // Single help line (normal case)
+            let help_text = row.help.join(" | ");
+            actors.push(act!(text:
+                font("miso"): settext(help_text):
+                align(0.0, 0.5):
+                xy(help_x, help_box_bottom_y - (help_box_h / 2.0)):
+                zoom(widescale(0.8, 0.85)):
+                diffuse(help_text_color[0], help_text_color[1], help_text_color[2], 1.0):
+                maxwidth(wrap_width): horizalign(left):
+                z(101)
+            ));
+        }
     }
 
     actors
