@@ -631,6 +631,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Shows the effective scroll speed (e.g., "X390" for 3.25x on 120 BPM)
     let speed_mod_y = 48.0;
     let speed_mod_x = screen_center_x() + widescale(-77.0, -100.0);
+    // All previews (judgment, hold, noteskin, combo) share this center line.
+    // Tweak these to dial in parity with Simply Love.
+    const PREVIEW_CENTER_OFFSET_NORMAL: f32 = 80.75; // 4:3
+    const PREVIEW_CENTER_OFFSET_WIDE: f32 = 98.75; // 16:9
+    let preview_center_x = speed_mod_x + widescale(PREVIEW_CENTER_OFFSET_NORMAL, PREVIEW_CENTER_OFFSET_WIDE);
     let speed_color = color::simply_love_rgba(state.active_color_index);
    
     // Calculate effective BPM based on speed mod type
@@ -840,7 +845,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Render every option horizontally; when active, all options should be white.
             // The selected option gets an underline (quad) drawn just below the text.
             let value_zoom = 0.835;
-            let spacing = 15.0;
+            let spacing = 15.75;
             // First pass: measure widths to lay out options inline
             let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
             asset_manager.with_fonts(|all_fonts| {
@@ -1015,19 +1020,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             z(101)
                         ));
                     }
-                    // Add previews (positioned to the right of the centered text)
-                    let preview_offset = widescale(20.0, 25.0);
-                    let preview_x = choice_center_x + draw_w / 2.0 + preview_offset;
+                    // Add previews (centered on a shared vertical line)
                     // Add judgment preview for "Judgment Font" row showing Fantastic frame
                     if row.name == "Judgment Font" && choice_text == "Love" {
                         // Love judgment sprite is 2x7 (2 columns, 7 rows) at double resolution
                         // Fantastic is the first frame (top-left, column 0, row 0)
                         // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
                         actors.push(act!(sprite("judgements/Love 2x7 (doubleres).png"):
-                            align(0.0, 0.5):
-                            xy(preview_x, current_row_y):
+                            align(0.5, 0.5):
+                            xy(preview_center_x, current_row_y):
                             setstate(0):
-                            zoom(0.2):
+                            zoom(0.225):
                             z(102)
                         ));
                     }
@@ -1036,20 +1039,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         // Love hold judgment sprite is 1x2 (1 column, 2 rows) at double resolution
                         // Held is the first frame (top, row 0), second frame (bottom, row 1)
                         // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
+                        let hold_spacing = 43.0; // spacing between the two sprites (symmetric around center line)
                         actors.push(act!(sprite("hold_judgements/Love 1x2 (doubleres).png"):
-                            align(0.0, 0.5):
-                            xy(preview_x, current_row_y):
+                            align(0.5, 0.5):
+                            xy(preview_center_x - hold_spacing * 0.5, current_row_y):
                             setstate(0):
-                            zoom(0.2):
+                            zoom(0.225):
                             z(102)
                         ));
-                        let hold_spacing = 45.0; // Adjust this value as needed for spacing between the two sprites
-                        let preview_x2 = preview_x + hold_spacing;
                         actors.push(act!(sprite("hold_judgements/Love 1x2 (doubleres).png"):
-                            align(0.0, 0.5):
-                            xy(preview_x2, current_row_y):
+                            align(0.5, 0.5):
+                            xy(preview_center_x + hold_spacing * 0.5, current_row_y):
                             setstate(1):
-                            zoom(0.2):
+                            zoom(0.225):
                             z(102)
                         ));
                     }
@@ -1072,7 +1074,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                
                                 // Target size: 64px is the gameplay size, so 0.4x of that is 25.6px
                                 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
-                                const PREVIEW_SCALE: f32 = 0.4;
+                                const PREVIEW_SCALE: f32 = 0.45;
                                 let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
                                
                                 let scale = if height > 0.0 {
@@ -1084,8 +1086,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 let final_height = target_height;
                                
                                 actors.push(act!(sprite(note_slot.texture_key().to_string()):
-                                    align(0.0, 0.5):
-                                    xy(preview_x, current_row_y):
+                                    align(0.5, 0.5):
+                                    xy(preview_center_x, current_row_y):
                                     zoomto(final_width, final_height):
                                     rotationz(-note_slot.def.rotation_deg as f32):
                                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -1098,12 +1100,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     if row.name == "Combo Font" && choice_text == "Wendy" {
                         let combo_text = state.combo_preview_count.to_string();
                         // Use a moderate zoom to fit within the row while staying readable
-                        let combo_zoom = 0.4; // Gameplay uses ~0.75; smaller here to suit the options row height
+                        let combo_zoom = 0.45;
                         actors.push(act!(text:
                             font("wendy_combo"): settext(combo_text):
-                            align(0.0, 0.5):
-                            xy(preview_x, current_row_y):
-                            zoom(combo_zoom): horizalign(left): shadowlength(1.0):
+                            align(0.5, 0.5):
+                            xy(preview_center_x, current_row_y):
+                            zoom(combo_zoom): horizalign(center):
                             diffuse(1.0, 1.0, 1.0, 1.0):
                             z(102)
                         ));
