@@ -16,7 +16,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-// Keyboard input is handled centrally via the virtual dispatcher in app.rs
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
@@ -613,7 +612,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let speed_mod_y = 48.0;
     let speed_mod_x = screen_center_x() + widescale(-77.0, -100.0);
     let speed_color = color::simply_love_rgba(state.active_color_index);
-    
+   
     // Calculate effective BPM based on speed mod type
     // IMPORTANT: Use the music rate to get the actual effective BPM
     let song_bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
@@ -623,7 +622,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
     let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
     let effective_song_bpm = song_bpm * state.music_rate as f64;
-    
+   
     let speed_text = match state.speed_mod.mod_type.as_str() {
         "X" => {
             // For X-mod, show the effective BPM accounting for music rate
@@ -635,7 +634,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         "M" => format!("M{}", state.speed_mod.value as i32),
         _ => format!("{:.2}x", state.speed_mod.value),
     };
-    
+   
     actors.push(act!(text: font("wendy"): settext(speed_text):
         align(0.5, 0.5): xy(speed_mod_x, speed_mod_y): zoom(0.5):
         diffuse(speed_color[0], speed_color[1], speed_color[2], 1.0):
@@ -682,7 +681,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let row_left = help_box_x;
     let row_width = help_box_w;
     let row_center_x = row_left + (row_width * 0.5);
-    let title_bg_center_x = row_left + (TITLE_BG_WIDTH * 0.5);
+    //let title_bg_center_x = row_left + (TITLE_BG_WIDTH * 0.5);
     // Title text x: slightly less padding so text sits further left
     let title_x = row_left + widescale(8.0, 14.0);
     for i_vis in 0..VISIBLE_ROWS {
@@ -702,14 +701,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
         // Row background — matches help box width & left
         actors.push(act!(quad:
-            align(0.5, 0.5): xy(row_center_x, current_row_y):
+            align(0.0, 0.5): xy(row_left, current_row_y):
             zoomto(row_width, frame_h):
             diffuse(bg_color[0], bg_color[1], bg_color[2], bg_color[3]):
             z(100)
         ));
         if !row.name.is_empty() {
             actors.push(act!(quad:
-                align(0.5, 0.5): xy(title_bg_center_x, current_row_y):
+                align(0.0, 0.5): xy(row_left, current_row_y):
                 zoomto(TITLE_BG_WIDTH, frame_h):
                 diffuse(0.0, 0.0, 0.0, 0.25):
                 z(101)
@@ -1045,18 +1044,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 // Get the current animation frame using preview_time and preview_beat
                                 let frame = note_slot.frame_index(state.preview_time, state.preview_beat);
                                 let uv = note_slot.uv_for_frame(frame);
-                                
+                               
                                 // Scale the note to match Simply Love's 0.4x preview zoom
                                 // Note: cel noteskin textures are NOT doubleres, so we use 0.4x directly
                                 let size = note_slot.size();
                                 let width = size[0].max(1) as f32;
                                 let height = size[1].max(1) as f32;
-                                
+                               
                                 // Target size: 64px is the gameplay size, so 0.4x of that is 25.6px
                                 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
                                 const PREVIEW_SCALE: f32 = 0.4;
                                 let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
-                                
+                               
                                 let scale = if height > 0.0 {
                                     target_height / height
                                 } else {
@@ -1064,7 +1063,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 };
                                 let final_width = width * scale;
                                 let final_height = target_height;
-                                
+                               
                                 actors.push(act!(sprite(note_slot.texture_key().to_string()):
                                     align(0.0, 0.5):
                                     xy(preview_x, current_row_y):
@@ -1090,19 +1089,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let help_text_color = color::simply_love_rgba(state.active_color_index);
         let wrap_width = help_box_w - 30.0; // padding
         let help_x = help_box_x + 15.0;
-        
+       
         // Calculate reveal fraction (0.0 to 1.0 over 0.5 seconds)
         const REVEAL_DURATION: f32 = 0.5;
         let num_help_lines = if row.help.len() > 1 { row.help.len() } else { 1 };
         let time_per_line = if num_help_lines > 0 { REVEAL_DURATION / num_help_lines as f32 } else { REVEAL_DURATION };
-        
+       
         // Handle multi-line help text (similar to multi-line row titles)
         if row.help.len() > 1 {
             // Multiple help lines - render them vertically stacked
             let line_spacing = 12.0; // Spacing between help lines
             let total_height = (row.help.len() as f32 - 1.0) * line_spacing;
             let start_y = help_box_bottom_y - (help_box_h / 2.0) - (total_height / 2.0);
-            
+           
             for (i, help_line) in row.help.iter().enumerate() {
                 // Sequential letter-by-letter reveal per line
                 let start_time = i as f32 * time_per_line;
@@ -1118,7 +1117,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     ((char_count as f32 * line_fraction).round() as usize).min(char_count)
                 };
                 let visible_text: String = help_line.chars().take(visible_chars).collect();
-                
+               
                 let line_y = start_y + (i as f32 * line_spacing);
                 actors.push(act!(text:
                     font("miso"): settext(visible_text):
@@ -1138,7 +1137,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let fraction = (state.help_anim_time / REVEAL_DURATION).clamp(0.0, 1.0);
             let visible_chars = ((char_count as f32 * fraction).round() as usize).min(char_count);
             let visible_text: String = help_text.chars().take(visible_chars).collect();
-            
+           
             actors.push(act!(text:
                 font("miso"): settext(visible_text):
                 align(0.0, 0.5):
