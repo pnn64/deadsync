@@ -67,6 +67,20 @@ pub struct State {
     combo_preview_elapsed: f32,
 }
 
+// Format music rate like Simply Love wants:
+fn fmt_music_rate(rate: f32) -> String {
+    let scaled = (rate * 100.0).round() as i32;
+    let int_part = scaled / 100;
+    let frac2 = (scaled % 100).abs();
+    if frac2 == 0 {
+        format!("{}", int_part)
+    } else if frac2 % 10 == 0 {
+        format!("{}.{}", int_part, frac2 / 10)
+    } else {
+        format!("{}.{:02}", int_part, frac2)
+    }
+}
+
 fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: usize, session_music_rate: f32) -> Vec<Row> {
     let speed_mod_value_str = match speed_mod.mod_type.as_str() {
         "X" => format!("{:.2}x", speed_mod.value),
@@ -237,7 +251,7 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
                 // Format: "Music Rate\nbpm: 120" (matches Simply Love's format from line 160)
                 format!("Music Rate\nbpm: {}", bpm_str)
             },
-            choices: vec![format!("{:.2}x", session_music_rate.clamp(0.5, 3.0))],
+            choices: vec![fmt_music_rate(session_music_rate.clamp(0.5, 3.0))],
             selected_choice_index: 0,
             help: vec!["Change the native speed of the music itself.".to_string()],
             choice_difficulty_indices: None,
@@ -379,7 +393,7 @@ fn change_choice(state: &mut State, delta: isize) {
         state.music_rate += delta as f32 * increment;
         state.music_rate = (state.music_rate / increment).round() * increment;
         state.music_rate = state.music_rate.clamp(min_rate, max_rate);
-        row.choices[0] = format!("{:.2}", state.music_rate);
+        row.choices[0] = fmt_music_rate(state.music_rate);
        
         // Update the row title to show the new BPM
         let song_bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
@@ -704,7 +718,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Make row frame LEFT and WIDTH exactly match the help box.
     let row_left = help_box_x;
     let row_width = help_box_w;
-    let row_center_x = row_left + (row_width * 0.5);
+    //let row_center_x = row_left + (row_width * 0.5);
     let title_zoom = 0.88;
     // Title text x: slightly less padding so text sits further left
     let title_x = row_left + widescale(7.0, 13.0);
@@ -802,8 +816,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Special case for the last "Exit" row
             let choice_text = &row.choices[row.selected_choice_index];
             let choice_color = if is_active { [1.0, 1.0, 1.0, 1.0] } else { sl_gray };
+            // Align Exit horizontally with other single-value options (Speed Mod line)
+            let choice_center_x = speed_mod_x;
             actors.push(act!(text: font("miso"): settext(choice_text.clone()):
-                align(0.5, 0.5): xy(row_center_x, current_row_y): zoom(0.835):
+                align(0.5, 0.5): xy(choice_center_x, current_row_y): zoom(0.835):
                 diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                 z(101)
             ));
@@ -826,7 +842,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let border_w = widescale(2.0, 2.5);
                         let ring_w = draw_w + pad_x * 2.0;
                         let ring_h = draw_h + pad_y * 2.0;
-                        let center_x = row_center_x; // Centered within the row
+                        let center_x = choice_center_x; // Align with single-value line
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;
                         let top = current_row_y - ring_h * 0.5;
@@ -959,7 +975,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         } else {
             // Single value display (default behavior)
-            let choice_center_x = speed_mod_x;
+            // By default, align single-value choices to the same line as Speed Mod.
+            // For Music Rate, center within the item column (to match SL parity).
+            let mut choice_center_x = speed_mod_x;
+            if row.name.starts_with("Music Rate") {
+                let item_col_left = row_left + TITLE_BG_WIDTH;
+                let item_col_w = row_width - TITLE_BG_WIDTH;
+                choice_center_x = item_col_left + item_col_w * 0.5;
+            }
             let choice_text = &row.choices[row.selected_choice_index];
             let choice_color = if is_active {
                 [1.0, 1.0, 1.0, 1.0]
