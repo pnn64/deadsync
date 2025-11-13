@@ -770,7 +770,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         // ItemsLongRowP1X = WideScale(_screen.cx-100, _screen.cx-130) from Simply Love metrics
         // ItemsStartX = WideScale(146, 160) from Simply Love metrics
         let choice_inner_left = if show_all_choices_inline {
-            row_left + TITLE_BG_WIDTH + widescale(24.0, 30.0) // Approximately matches ItemsStartX
+            widescale(162.0, 176.0)
         } else {
             screen_center_x() + widescale(-100.0, -130.0) // ItemsLongRowP1X for single-choice rows
         };
@@ -821,7 +821,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Render every option horizontally; when active, all options should be white.
             // The selected option gets an underline (quad) drawn just below the text.
             let value_zoom = 0.835;
-            let spacing = widescale(20.0, 24.0);
+            let spacing = 16.0;
             // First pass: measure widths to lay out options inline
             let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
             asset_manager.with_fonts(|all_fonts| {
