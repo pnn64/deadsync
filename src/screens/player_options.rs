@@ -651,8 +651,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     const ANCHOR_ROW: usize = 5; // Keep selection on the 5th visible row
     const ROW_START_OFFSET: f32 = -164.0;
     const ROW_HEIGHT: f32 = 33.0;
-    // Make the first column a bit wider to match SL
-    const TITLE_BG_WIDTH: f32 = 128.0;
+    const TITLE_BG_WIDTH: f32 = 127.0;
     let total_rows = state.rows.len();
     let max_offset = total_rows.saturating_sub(VISIBLE_ROWS);
     let offset_rows = if total_rows <= VISIBLE_ROWS {
