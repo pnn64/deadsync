@@ -62,6 +62,9 @@ pub struct State {
     preview_time: f32,
     preview_beat: f32,
     help_anim_time: f32,
+    // Combo preview state (for Combo Font row)
+    combo_preview_count: u32,
+    combo_preview_elapsed: f32,
 }
 
 fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: usize, session_music_rate: f32) -> Vec<Row> {
@@ -321,6 +324,8 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         preview_time: 0.0,
         preview_beat: 0.0,
         help_anim_time: 0.0,
+        combo_preview_count: 0,
+        combo_preview_elapsed: 0.0,
     }
 }
 
@@ -509,6 +514,21 @@ pub fn update(state: &mut State, dt: f32) {
     }
     // Advance the help reveal animation timer
     state.help_anim_time += dt;
+
+    // If the Combo Font row is active, tick the preview combo once per second
+    if let Some(row) = state.rows.get(state.selected_row) {
+        if row.name == "Combo Font" {
+            state.combo_preview_elapsed += dt;
+            if state.combo_preview_elapsed >= 1.0 {
+                // Advance by one per second
+                state.combo_preview_elapsed -= 1.0;
+                state.combo_preview_count = state.combo_preview_count.saturating_add(1);
+            }
+        } else {
+            // Pause ticking when not on the Combo Font row
+            state.combo_preview_elapsed = 0.0;
+        }
+    }
     if state.selected_row != state.prev_selected_row {
         // Direction-aware row change sounds
         match state.nav_key_held_direction {
@@ -1073,6 +1093,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 ));
                             }
                         }
+                    }
+                    // Add combo preview for "Combo Font" row showing ticking Wendy numbers
+                    if row.name == "Combo Font" && choice_text == "Wendy" {
+                        let combo_text = state.combo_preview_count.to_string();
+                        // Use a moderate zoom to fit within the row while staying readable
+                        let combo_zoom = 0.4; // Gameplay uses ~0.75; smaller here to suit the options row height
+                        actors.push(act!(text:
+                            font("wendy_combo"): settext(combo_text):
+                            align(0.0, 0.5):
+                            xy(preview_x, current_row_y):
+                            zoom(combo_zoom): horizalign(left): shadowlength(1.0):
+                            diffuse(1.0, 1.0, 1.0, 1.0):
+                            z(102)
+                        ));
                     }
                 });
             });
