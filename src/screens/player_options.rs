@@ -779,13 +779,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let choice_text = &row.choices[row.selected_choice_index];
             let choice_color = if is_active { [1.0, 1.0, 1.0, 1.0] } else { sl_gray };
             actors.push(act!(text: font("miso"): settext(choice_text.clone()):
-                align(0.5, 0.5): xy(row_center_x, current_row_y): zoom(0.80):
+                align(0.5, 0.5): xy(row_center_x, current_row_y): zoom(0.835):
                 diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                 z(101)
             ));
             // Draw the selection cursor for the centered "Exit" text when active
             if is_active {
-                let value_zoom = 0.80;
+                let value_zoom = 0.835;
                 asset_manager.with_fonts(|all_fonts| {
                     asset_manager.with_font("miso", |metrics_font| {
                         let mut text_w = crate::ui::font::measure_line_width_logical(metrics_font, choice_text, all_fonts) as f32;
@@ -820,7 +820,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else if show_all_choices_inline {
             // Render every option horizontally; when active, all options should be white.
             // The selected option gets an underline (quad) drawn just below the text.
-            let value_zoom = 0.80;
+            let value_zoom = 0.835;
             let spacing = widescale(20.0, 24.0);
             // First pass: measure widths to lay out options inline
             let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
@@ -946,7 +946,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let mut text_w = crate::ui::font::measure_line_width_logical(metrics_font, choice_text, all_fonts) as f32;
                     if !text_w.is_finite() || text_w <= 0.0 { text_w = 1.0; }
                     let text_h = (metrics_font.height as f32).max(1.0);
-                    let value_zoom = 0.80;
+                    let value_zoom = 0.835;
                     let draw_w = text_w * value_zoom;
                     let draw_h = text_h * value_zoom;
                     actors.push(act!(text: font("miso"): settext(choice_text.clone()):
@@ -1123,7 +1123,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     font("miso"): settext(visible_text):
                     align(0.0, 0.5):
                     xy(help_x, line_y):
-                    zoom(widescale(0.8, 0.85)):
+                    zoom(0.8):
                     diffuse(help_text_color[0], help_text_color[1], help_text_color[2], 1.0):
                     maxwidth(wrap_width): horizalign(left):
                     z(101)
@@ -1142,7 +1142,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 font("miso"): settext(visible_text):
                 align(0.0, 0.5):
                 xy(help_x, help_box_bottom_y - (help_box_h / 2.0)):
-                zoom(widescale(0.8, 0.85)):
+                zoom(0.8):
                 diffuse(help_text_color[0], help_text_color[1], help_text_color[2], 1.0):
                 maxwidth(wrap_width): horizalign(left):
                 z(101)
