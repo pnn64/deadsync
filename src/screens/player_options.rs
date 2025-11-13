@@ -148,10 +148,10 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Judgement Font".to_string(),
+            name: "Judgment Font".to_string(),
             choices: vec!["Love".to_string(), "Chromatic".to_string(), "ITG2".to_string()],
             selected_choice_index: 0,
-            help: vec!["Pick your judgement font.".to_string()],
+            help: vec!["Pick your judgment font.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
@@ -165,10 +165,10 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Hold Judgement".to_string(),
+            name: "Hold Judgment".to_string(),
             choices: vec!["Love".to_string(), "mute".to_string(), "ITG2".to_string()],
             selected_choice_index: 0,
-            help: vec!["Change the judgement graphics displayed for hold notes.".to_string()],
+            help: vec!["Change the judgment graphics displayed for hold notes.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
@@ -779,13 +779,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let choice_text = &row.choices[row.selected_choice_index];
             let choice_color = if is_active { [1.0, 1.0, 1.0, 1.0] } else { sl_gray };
             actors.push(act!(text: font("miso"): settext(choice_text.clone()):
-                align(0.5, 0.5): xy(row_center_x, current_row_y): zoom(0.85):
+                align(0.5, 0.5): xy(row_center_x, current_row_y): zoom(0.80):
                 diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                 z(101)
             ));
             // Draw the selection cursor for the centered "Exit" text when active
             if is_active {
-                let value_zoom = 0.85;
+                let value_zoom = 0.80;
                 asset_manager.with_fonts(|all_fonts| {
                     asset_manager.with_font("miso", |metrics_font| {
                         let mut text_w = crate::ui::font::measure_line_width_logical(metrics_font, choice_text, all_fonts) as f32;
@@ -820,7 +820,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else if show_all_choices_inline {
             // Render every option horizontally; when active, all options should be white.
             // The selected option gets an underline (quad) drawn just below the text.
-            let value_zoom = 0.85;
+            let value_zoom = 0.80;
             let spacing = widescale(20.0, 24.0);
             // First pass: measure widths to lay out options inline
             let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
@@ -934,7 +934,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         } else {
             // Single value display (default behavior)
-            let choice_center_x = row_center_x - (TITLE_BG_WIDTH + 70.0) / 2.0;
+            let choice_center_x = speed_mod_x;
             let choice_text = &row.choices[row.selected_choice_index];
             let choice_color = if is_active {
                 [1.0, 1.0, 1.0, 1.0]
@@ -946,11 +946,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let mut text_w = crate::ui::font::measure_line_width_logical(metrics_font, choice_text, all_fonts) as f32;
                     if !text_w.is_finite() || text_w <= 0.0 { text_w = 1.0; }
                     let text_h = (metrics_font.height as f32).max(1.0);
-                    let value_zoom = 0.85;
+                    let value_zoom = 0.80;
                     let draw_w = text_w * value_zoom;
                     let draw_h = text_h * value_zoom;
                     actors.push(act!(text: font("miso"): settext(choice_text.clone()):
-                        align(0.5, 0.5): xy(choice_center_x, current_row_y): zoom(0.85):
+                        align(0.5, 0.5): xy(choice_center_x, current_row_y): zoom(value_zoom):
                         diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                         z(101)
                     ));
@@ -999,8 +999,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     // Add previews (positioned to the right of the centered text)
                     let preview_offset = widescale(20.0, 25.0);
                     let preview_x = choice_center_x + draw_w / 2.0 + preview_offset;
-                    // Add judgment preview for "Judgement Font" row showing Fantastic frame
-                    if row.name == "Judgement Font" && choice_text == "Love" {
+                    // Add judgment preview for "Judgment Font" row showing Fantastic frame
+                    if row.name == "Judgment Font" && choice_text == "Love" {
                         // Love judgment sprite is 2x7 (2 columns, 7 rows) at double resolution
                         // Fantastic is the first frame (top-left, column 0, row 0)
                         // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
@@ -1012,8 +1012,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             z(102)
                         ));
                     }
-                    // Add hold judgment preview for "Hold Judgement" row showing both frames (Held and e.g. Let Go)
-                    if row.name == "Hold Judgement" && choice_text == "Love" {
+                    // Add hold judgment preview for "Hold Judgment" row showing both frames (Held and e.g. Let Go)
+                    if row.name == "Hold Judgment" && choice_text == "Love" {
                         // Love hold judgment sprite is 1x2 (1 column, 2 rows) at double resolution
                         // Held is the first frame (top, row 0), second frame (bottom, row 1)
                         // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
