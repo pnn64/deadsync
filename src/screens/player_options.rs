@@ -875,7 +875,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let border_w = widescale(2.0, 2.5); // thickness matches cursor bottom
                         let underline_w = draw_w; // exact text width
                         // Place just under the text baseline (slightly up from row bottom)
-                        let offset = widescale(2.0, 3.0);
+                        let offset = widescale(3.0, 4.0);
                         let underline_y = current_row_y + text_h * 0.5 + offset;
                         let mut line_color = color::decorative_rgba(state.active_color_index);
                         line_color[3] = 1.0;
@@ -976,6 +976,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     actors.push(act!(text: font("miso"): settext(choice_text.clone()):
                         align(0.5, 0.5): xy(choice_center_x, current_row_y): zoom(value_zoom):
                         diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+                        z(101)
+                    ));
+                    // Underline (always visible) — match the text width exactly
+                    let border_w = widescale(2.0, 2.5);
+                    let underline_w = draw_w; // exact text width
+                    let offset = widescale(3.0, 4.0); // place just under the baseline
+                    let underline_y = current_row_y + draw_h * 0.5 + offset;
+                    let underline_left_x = choice_center_x - draw_w * 0.5;
+                    let mut line_color = color::decorative_rgba(state.active_color_index);
+                    line_color[3] = 1.0;
+                    actors.push(act!(quad:
+                        align(0.0, 0.5): // start at text's left edge
+                        xy(underline_left_x, underline_y):
+                        zoomto(underline_w, border_w):
+                        diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
                         z(101)
                     ));
                     // Encircling cursor around the active option value (programmatic border)
