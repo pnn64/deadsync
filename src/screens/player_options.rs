@@ -807,7 +807,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let right = center_x + ring_w * 0.5;
                         let top = current_row_y - ring_h * 0.5;
                         let bottom = current_row_y + ring_h * 0.5;
-                        let mut ring_color = color::simply_love_rgba(state.active_color_index);
+                        let mut ring_color = color::decorative_rgba(state.active_color_index);
                         ring_color[3] = 1.0;
                         // Top, Bottom, Left, Right borders
                         actors.push(act!(quad: align(0.5, 0.5): xy(center_x, top + border_w * 0.5): zoomto(ring_w, border_w): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
@@ -853,7 +853,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         // Place just under the text baseline (slightly up from row bottom)
                         let offset = widescale(2.0, 3.0);
                         let underline_y = current_row_y + text_h * 0.5 + offset;
-                        let mut line_color = color::simply_love_rgba(state.active_color_index);
+                        let mut line_color = color::decorative_rgba(state.active_color_index);
                         line_color[3] = 1.0;
                         actors.push(act!(quad:
                             align(0.0, 0.5): // start at text's left edge
@@ -888,7 +888,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let right = left + ring_w;
                             let top = current_row_y - ring_h * 0.5;
                             let bottom = current_row_y + ring_h * 0.5;
-                            let mut ring_color = color::simply_love_rgba(state.active_color_index);
+                            let mut ring_color = color::decorative_rgba(state.active_color_index);
                             ring_color[3] = 1.0;
                             // Top border
                             actors.push(act!(quad:
@@ -969,7 +969,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let right = choice_center_x + draw_w / 2.0 + pad_x;
                         let top = current_row_y - ring_h / 2.0;
                         let bottom = current_row_y + ring_h / 2.0;
-                        let mut ring_color = color::simply_love_rgba(state.active_color_index);
+                        let mut ring_color = color::decorative_rgba(state.active_color_index);
                         ring_color[3] = 1.0;
                         actors.push(act!(quad:
                             align(0.5, 0.5): xy(choice_center_x, top + border_w * 0.5):
