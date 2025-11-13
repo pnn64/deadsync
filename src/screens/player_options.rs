@@ -108,14 +108,14 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
                 "M" => 2,
                 _ => 1, // Default to C
             },
-            help: vec!["Change the way the arrows react to changing BPMs.".to_string()],
+            help: vec!["Change the way arrows react to changing BPMs.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
             name: "Speed Mod".to_string(),
             choices: vec![speed_mod_value_str], // Display only the current value
             selected_choice_index: 0,
-            help: vec!["Adjust the speed at which arrows travel towards the targets.".to_string()],
+            help: vec!["Adjust the speed at which arrows travel toward the targets.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
@@ -374,7 +374,7 @@ fn change_choice(state: &mut State, delta: isize) {
         state.music_rate += delta as f32 * increment;
         state.music_rate = (state.music_rate / increment).round() * increment;
         state.music_rate = state.music_rate.clamp(min_rate, max_rate);
-        row.choices[0] = format!("{:.2}x", state.music_rate);
+        row.choices[0] = format!("{:.2}", state.music_rate);
        
         // Update the row title to show the new BPM
         let song_bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
@@ -648,7 +648,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let help_box_bottom_y = screen_height() - 36.0;
     // --- Row Layout Constants & Scrolling ---
     const VISIBLE_ROWS: usize = 10;
-    const ANCHOR_ROW: usize = 4; // Keep selection on the 5th visible row
+    const ANCHOR_ROW: usize = 5; // Keep selection on the 5th visible row
     const ROW_START_OFFSET: f32 = -164.0;
     const ROW_HEIGHT: f32 = 33.0;
     // Make the first column a bit wider to match SL
@@ -681,9 +681,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let row_left = help_box_x;
     let row_width = help_box_w;
     let row_center_x = row_left + (row_width * 0.5);
-    //let title_bg_center_x = row_left + (TITLE_BG_WIDTH * 0.5);
+    let title_zoom = 0.88;
     // Title text x: slightly less padding so text sits further left
-    let title_x = row_left + widescale(8.0, 14.0);
+    let title_x = row_left + widescale(7.0, 13.0);
     for i_vis in 0..VISIBLE_ROWS {
         let item_idx = offset_rows + i_vis;
         if item_idx >= total_rows {
@@ -728,14 +728,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if lines.len() == 2 {
                 // First line (e.g., "Music Rate")
                 actors.push(act!(text: font("miso"): settext(lines[0].to_string()):
-                    align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(0.9):
+                    align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                     horizalign(left): maxwidth(widescale(128.0, 120.0)):
                     z(101)
                 ));
                 // Second line (e.g., "bpm: 120") - smaller and slightly below
                 actors.push(act!(text: font("miso"): settext(lines[1].to_string()):
-                    align(0.0, 0.5): xy(title_x, current_row_y + 7.0): zoom(0.9):
+                    align(0.0, 0.5): xy(title_x, current_row_y + 7.0): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                     horizalign(left): maxwidth(widescale(128.0, 120.0)):
                     z(101)
@@ -743,7 +743,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 // Fallback for unexpected multi-line format
                 actors.push(act!(text: font("miso"): settext(row.name.clone()):
-                    align(0.0, 0.5): xy(title_x, current_row_y): zoom(0.9):
+                    align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                     horizalign(left): maxwidth(widescale(128.0, 120.0)):
                     z(101)
@@ -752,7 +752,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else {
             // Single-line title (normal case)
             actors.push(act!(text: font("miso"): settext(row.name.clone()):
-                align(0.0, 0.5): xy(title_x, current_row_y): zoom(0.9):
+                align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
                 diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                 horizalign(left): maxwidth(widescale(128.0, 120.0)):
                 z(101)
@@ -821,7 +821,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Render every option horizontally; when active, all options should be white.
             // The selected option gets an underline (quad) drawn just below the text.
             let value_zoom = 0.835;
-            let spacing = 16.0;
+            let spacing = 15.0;
             // First pass: measure widths to lay out options inline
             let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
             asset_manager.with_fonts(|all_fonts| {
@@ -1088,7 +1088,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     if let Some(row) = state.rows.get(state.selected_row) {
         let help_text_color = color::simply_love_rgba(state.active_color_index);
         let wrap_width = help_box_w - 30.0; // padding
-        let help_x = help_box_x + 15.0;
+        let help_x = help_box_x + 12.0;
        
         // Calculate reveal fraction (0.0 to 1.0 over 0.5 seconds)
         const REVEAL_DURATION: f32 = 0.5;
@@ -1123,7 +1123,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     font("miso"): settext(visible_text):
                     align(0.0, 0.5):
                     xy(help_x, line_y):
-                    zoom(0.8):
+                    zoom(0.825):
                     diffuse(help_text_color[0], help_text_color[1], help_text_color[2], 1.0):
                     maxwidth(wrap_width): horizalign(left):
                     z(101)
@@ -1142,7 +1142,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 font("miso"): settext(visible_text):
                 align(0.0, 0.5):
                 xy(help_x, help_box_bottom_y - (help_box_h / 2.0)):
-                zoom(0.8):
+                zoom(0.825):
                 diffuse(help_text_color[0], help_text_color[1], help_text_color[2], 1.0):
                 maxwidth(wrap_width): horizalign(left):
                 z(101)
