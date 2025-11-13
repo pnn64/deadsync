@@ -20,6 +20,10 @@ use std::time::{Duration, Instant};
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 
+/* ----------------------------- cursor tweening ----------------------------- */
+// Match Simply Love's CursorTweenSeconds for OptionRow cursor movement
+const CURSOR_TWEEN_SECONDS: f32 = 0.1;
+
 /* -------------------------- hold-to-scroll timing ------------------------- */
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(300);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
@@ -65,6 +69,15 @@ pub struct State {
     // Combo preview state (for Combo Font row)
     combo_preview_count: u32,
     combo_preview_elapsed: f32,
+    // Inline option cursor tween (left/right between items)
+    cursor_anim_row: Option<usize>,
+    cursor_anim_from_choice: usize,
+    cursor_anim_to_choice: usize,
+    cursor_anim_t: f32,
+    // Vertical tween when changing selected row
+    cursor_row_anim_from_y: f32,
+    cursor_row_anim_t: f32,
+    cursor_row_anim_from_row: Option<usize>,
 }
 
 // Format music rate like Simply Love wants:
@@ -340,6 +353,13 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         help_anim_time: 0.0,
         combo_preview_count: 0,
         combo_preview_elapsed: 0.0,
+        cursor_anim_row: None,
+        cursor_anim_from_choice: 0,
+        cursor_anim_to_choice: 0,
+        cursor_anim_t: 1.0,
+        cursor_row_anim_from_y: 0.0,
+        cursor_row_anim_t: 1.0,
+        cursor_row_anim_from_row: None,
     }
 }
 
@@ -422,8 +442,20 @@ fn change_choice(state: &mut State, delta: isize) {
         let num_choices = row.choices.len();
         if num_choices > 0 {
             let current_idx = row.selected_choice_index as isize;
-            row.selected_choice_index =
-                ((current_idx + delta + num_choices as isize) % num_choices as isize) as usize;
+            let new_index = ((current_idx + delta + num_choices as isize) % num_choices as isize) as usize;
+            // Begin cursor animation if this row is inline and the choice actually changes
+            let is_inline_row = row.name == "Perspective"
+                || row.name == "Background Filter"
+                || row.name == "Stepchart"
+                || row.name == "What comes next?";
+            let prev_choice = row.selected_choice_index;
+            row.selected_choice_index = new_index;
+            if is_inline_row && prev_choice != new_index {
+                state.cursor_anim_row = Some(state.selected_row);
+                state.cursor_anim_from_choice = prev_choice;
+                state.cursor_anim_to_choice = new_index;
+                state.cursor_anim_t = 0.0;
+            }
             // Changing the speed mod type should update the mod and the next row display
             if row.name == "Type of Speed Mod" {
                 let new_type = match row.selected_choice_index {
@@ -550,9 +582,58 @@ pub fn update(state: &mut State, dt: f32) {
             Some(NavDirection::Down) => audio::play_sfx("assets/sounds/next_row.ogg"),
             _ => audio::play_sfx("assets/sounds/next_row.ogg"),
         }
+        // Start vertical cursor tween from previous row's Y to new row's Y
+        // Duplicate row layout math used in get_actors() to compute Y centers.
+        let total_rows = state.rows.len();
+        // constants must mirror get_actors()
+        let frame_h = 33.0_f32;                // ROW_HEIGHT
+        let anchor_row = 5_usize;              // ANCHOR_ROW
+        let visible_rows = 10_usize;           // VISIBLE_ROWS
+        let first_row_center_y = screen_center_y() + (-164.0); // ROW_START_OFFSET
+        let help_box_h = 40.0_f32;
+        let help_box_bottom_y = screen_height() - 36.0;
+        let help_top_y = help_box_bottom_y - help_box_h;
+        let n_rows_f = visible_rows as f32;
+        let mut row_gap = if n_rows_f > 0.0 {
+            (help_top_y - first_row_center_y - ((n_rows_f - 0.5) * frame_h)) / n_rows_f
+        } else { 0.0 };
+        if !row_gap.is_finite() { row_gap = 0.0; }
+        if row_gap < 0.0 { row_gap = 0.0; }
+        let max_offset = total_rows.saturating_sub(visible_rows);
+        let offset_rows = if total_rows <= visible_rows {
+            0
+        } else {
+            state.selected_row.saturating_sub(anchor_row).min(max_offset)
+        };
+        let prev_idx = state.prev_selected_row;
+        let i_prev_vis = (prev_idx as isize) - (offset_rows as isize);
+        let from_y = first_row_center_y + (i_prev_vis as f32) * (frame_h + row_gap);
+        state.cursor_row_anim_from_y = from_y;
+        state.cursor_row_anim_t = 0.0;
+        state.cursor_row_anim_from_row = Some(prev_idx);
         // Reset help reveal animation on row change
         state.help_anim_time = 0.0;
         state.prev_selected_row = state.selected_row;
+    }
+
+    // Advance cursor tween, if any
+    if state.cursor_anim_row.is_some() && state.cursor_anim_t < 1.0 {
+        if CURSOR_TWEEN_SECONDS > 0.0 {
+            state.cursor_anim_t = (state.cursor_anim_t + dt / CURSOR_TWEEN_SECONDS).min(1.0);
+        } else {
+            state.cursor_anim_t = 1.0;
+        }
+        if state.cursor_anim_t >= 1.0 {
+            state.cursor_anim_row = None;
+        }
+    }
+    // Advance vertical row tween, if any
+    if state.cursor_row_anim_t < 1.0 {
+        if CURSOR_TWEEN_SECONDS > 0.0 {
+            state.cursor_row_anim_t = (state.cursor_row_anim_t + dt / CURSOR_TWEEN_SECONDS).min(1.0);
+        } else {
+            state.cursor_row_anim_t = 1.0;
+        }
     }
 }
 
@@ -722,6 +803,53 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let title_zoom = 0.88;
     // Title text x: slightly less padding so text sits further left
     let title_x = row_left + widescale(7.0, 13.0);
+    // Helper to compute the cursor center X for a given row index.
+    let calc_row_center_x = |row_idx: usize| -> f32 {
+        if row_idx >= state.rows.len() { return speed_mod_x; }
+        let r = &state.rows[row_idx];
+        if r.name.is_empty() {
+            // Exit row aligns with Speed Mod helper
+            return speed_mod_x;
+        }
+        let is_inline = r.name == "Perspective"
+            || r.name == "Background Filter"
+            || r.name == "Stepchart"
+            || r.name == "What comes next?";
+        if is_inline {
+            let value_zoom = 0.835_f32;
+            let spacing = 15.75_f32;
+            let choice_inner_left = widescale(162.0, 176.0);
+            let mut widths: Vec<f32> = Vec::with_capacity(r.choices.len());
+            asset_manager.with_fonts(|all_fonts| {
+                asset_manager.with_font("miso", |metrics_font| {
+                    for text in &r.choices {
+                        let mut w = crate::ui::font::measure_line_width_logical(metrics_font, text, all_fonts) as f32;
+                        if !w.is_finite() || w <= 0.0 { w = 1.0; }
+                        widths.push(w * value_zoom);
+                    }
+                });
+            });
+            if widths.is_empty() { return speed_mod_x; }
+            let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
+            let mut x = choice_inner_left;
+            for w in &widths {
+                x_positions.push(x);
+                x += *w + spacing;
+            }
+            let sel = r.selected_choice_index.min(widths.len().saturating_sub(1));
+            return x_positions[sel] + widths[sel] * 0.5;
+        } else {
+            // Single value rows: default to Speed Mod helper X, except Music Rate centered in items column
+            let mut cx = speed_mod_x;
+            if r.name.starts_with("Music Rate") {
+                let item_col_left = row_left + TITLE_BG_WIDTH;
+                let item_col_w = row_width - TITLE_BG_WIDTH;
+                cx = item_col_left + item_col_w * 0.5;
+            }
+            return cx;
+        }
+    };
+
     for i_vis in 0..VISIBLE_ROWS {
         let item_idx = offset_rows + i_vis;
         if item_idx >= total_rows {
@@ -842,18 +970,29 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let border_w = widescale(2.0, 2.5);
                         let ring_w = draw_w + pad_x * 2.0;
                         let ring_h = draw_h + pad_y * 2.0;
-                        let center_x = choice_center_x; // Align with single-value line
+                        let mut center_x = choice_center_x; // Align with single-value line
+                        // Vertical tween for row transitions
+                        let mut center_y = current_row_y;
+                        if state.cursor_row_anim_t < 1.0 {
+                            let t = state.cursor_row_anim_t;
+                            // If we have a previous row index, interpolate X from that row's cursor center
+                            if let Some(from_row) = state.cursor_row_anim_from_row {
+                                let from_x = calc_row_center_x(from_row);
+                                center_x = from_x + (center_x - from_x) * t;
+                            }
+                            center_y = state.cursor_row_anim_from_y + (current_row_y - state.cursor_row_anim_from_y) * t;
+                        }
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;
-                        let top = current_row_y - ring_h * 0.5;
-                        let bottom = current_row_y + ring_h * 0.5;
+                        let top = center_y - ring_h * 0.5;
+                        let bottom = center_y + ring_h * 0.5;
                         let mut ring_color = color::decorative_rgba(state.active_color_index);
                         ring_color[3] = 1.0;
                         // Top, Bottom, Left, Right borders
                         actors.push(act!(quad: align(0.5, 0.5): xy(center_x, top + border_w * 0.5): zoomto(ring_w, border_w): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
                         actors.push(act!(quad: align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5): zoomto(ring_w, border_w): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
-                        actors.push(act!(quad: align(0.5, 0.5): xy(left + border_w * 0.5, current_row_y): zoomto(border_w, ring_h): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
-                        actors.push(act!(quad: align(0.5, 0.5): xy(right - border_w * 0.5, current_row_y): zoomto(border_w, ring_h): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
+                        actors.push(act!(quad: align(0.5, 0.5): xy(left + border_w * 0.5, center_y): zoomto(border_w, ring_h): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
+                        actors.push(act!(quad: align(0.5, 0.5): xy(right - border_w * 0.5, center_y): zoomto(border_w, ring_h): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
                     });
                 });
             }
@@ -906,10 +1045,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     });
                 });
             }
-            // Draw the 4-sided cursor ring around the selected option when this row is active
+            // Draw the 4-sided cursor ring around the selected option when this row is active.
+            // If a tween is in progress for this row, animate the ring's X position (SL's CursorTweenSeconds).
             if is_active {
-                if let Some(sel_x) = x_positions.get(row.selected_choice_index).copied() {
-                    let draw_w = widths.get(row.selected_choice_index).copied().unwrap_or(40.0);
+                let sel_idx = row.selected_choice_index;
+                if let Some(target_left_x) = x_positions.get(sel_idx).copied() {
+                    let draw_w = widths.get(sel_idx).copied().unwrap_or(40.0);
                     asset_manager.with_fonts(|_all_fonts| {
                         asset_manager.with_font("miso", |metrics_font| {
                             let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
@@ -917,18 +1058,42 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let min_pad_x = widescale(2.0, 3.0);
                             let max_pad_x = widescale(22.0, 28.0);
                             let width_ref = widescale(180.0, 220.0);
-                            let mut t = draw_w / width_ref;
-                            if !t.is_finite() { t = 0.0; }
-                            if t < 0.0 { t = 0.0; }
-                            if t > 1.0 { t = 1.0; }
-                            let pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
+                            let mut size_t = draw_w / width_ref;
+                            if !size_t.is_finite() { size_t = 0.0; }
+                            if size_t < 0.0 { size_t = 0.0; }
+                            if size_t > 1.0 { size_t = 1.0; }
+                            let pad_x = min_pad_x + (max_pad_x - min_pad_x) * size_t;
                             let border_w = widescale(2.0, 2.5);
                             let ring_w = draw_w + pad_x * 2.0;
                             let ring_h = text_h + pad_y * 2.0;
-                            let left = sel_x - pad_x;
-                            let right = left + ring_w;
-                            let top = current_row_y - ring_h * 0.5;
-                            let bottom = current_row_y + ring_h * 0.5;
+
+                            // Determine animated center X when tweening, otherwise snap to target.
+                            let mut center_x = target_left_x + draw_w * 0.5;
+                            // Vertical tween for row transitions
+                            let mut center_y = current_row_y;
+                            if state.cursor_row_anim_t < 1.0 {
+                                let t = state.cursor_row_anim_t;
+                                if let Some(from_row) = state.cursor_row_anim_from_row {
+                                    let from_x = calc_row_center_x(from_row);
+                                    center_x = from_x + (center_x - from_x) * t;
+                                }
+                                center_y = state.cursor_row_anim_from_y + (current_row_y - state.cursor_row_anim_from_y) * t;
+                            }
+                            if let Some(anim_row) = state.cursor_anim_row {
+                                if anim_row == item_idx && state.cursor_anim_t < 1.0 {
+                                    let from_idx = state.cursor_anim_from_choice.min(widths.len().saturating_sub(1));
+                                    let to_idx = sel_idx.min(widths.len().saturating_sub(1));
+                                    let from_center_x = x_positions[from_idx] + widths[from_idx] * 0.5;
+                                    let to_center_x = x_positions[to_idx] + widths[to_idx] * 0.5;
+                                    let t = state.cursor_anim_t.clamp(0.0, 1.0);
+                                    center_x = from_center_x + (to_center_x - from_center_x) * t;
+                                }
+                            }
+
+                            let left = center_x - (draw_w * 0.5 + pad_x);
+                            let right = center_x + (draw_w * 0.5 + pad_x);
+                            let top = center_y - ring_h * 0.5;
+                            let bottom = center_y + ring_h * 0.5;
                             let mut ring_color = color::decorative_rgba(state.active_color_index);
                             ring_color[3] = 1.0;
                             // Top border
@@ -1028,32 +1193,43 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let border_w = widescale(2.0, 2.5);
                         let ring_w = draw_w + pad_x * 2.0;
                         let ring_h = draw_h + pad_y * 2.0;
-                        let left = choice_center_x - draw_w / 2.0 - pad_x;
-                        let right = choice_center_x + draw_w / 2.0 + pad_x;
-                        let top = current_row_y - ring_h / 2.0;
-                        let bottom = current_row_y + ring_h / 2.0;
+                        let mut center_x = choice_center_x;
+                        // Vertical tween for row transitions
+                        let mut center_y = current_row_y;
+                        if state.cursor_row_anim_t < 1.0 {
+                            let t = state.cursor_row_anim_t;
+                            if let Some(from_row) = state.cursor_row_anim_from_row {
+                                let from_x = calc_row_center_x(from_row);
+                                center_x = from_x + (center_x - from_x) * t;
+                            }
+                            center_y = state.cursor_row_anim_from_y + (current_row_y - state.cursor_row_anim_from_y) * t;
+                        }
+                        let left = center_x - draw_w / 2.0 - pad_x;
+                        let right = center_x + draw_w / 2.0 + pad_x;
+                        let top = center_y - ring_h / 2.0;
+                        let bottom = center_y + ring_h / 2.0;
                         let mut ring_color = color::decorative_rgba(state.active_color_index);
                         ring_color[3] = 1.0;
                         actors.push(act!(quad:
-                            align(0.5, 0.5): xy(choice_center_x, top + border_w * 0.5):
+                            align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
                             zoomto(ring_w, border_w):
                             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                             z(101)
                         ));
                         actors.push(act!(quad:
-                            align(0.5, 0.5): xy(choice_center_x, bottom - border_w * 0.5):
+                            align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5):
                             zoomto(ring_w, border_w):
                             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                             z(101)
                         ));
                         actors.push(act!(quad:
-                            align(0.5, 0.5): xy(left + border_w * 0.5, current_row_y):
+                            align(0.5, 0.5): xy(left + border_w * 0.5, center_y):
                             zoomto(border_w, ring_h):
                             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                             z(101)
                         ));
                         actors.push(act!(quad:
-                            align(0.5, 0.5): xy(right - border_w * 0.5, current_row_y):
+                            align(0.5, 0.5): xy(right - border_w * 0.5, center_y):
                             zoomto(border_w, ring_h):
                             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                             z(101)
