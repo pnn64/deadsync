@@ -872,8 +872,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 asset_manager.with_fonts(|_all_fonts| {
                     asset_manager.with_font("miso", |metrics_font| {
                         let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
-                        let border_w = widescale(2.0, 2.5); // thickness matches cursor bottom
-                        let underline_w = draw_w; // exact text width
+                        // Fixed pixel thickness to keep consistent across option sizes
+                        let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                        let underline_w = draw_w.ceil(); // pixel-align for crispness
                         // Place just under the text baseline (slightly up from row bottom)
                         let offset = widescale(3.0, 4.0);
                         let underline_y = current_row_y + text_h * 0.5 + offset;
@@ -882,7 +883,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         actors.push(act!(quad:
                             align(0.0, 0.5): // start at text's left edge
                             xy(sel_x, underline_y):
-                            zoomto(underline_w, border_w):
+                            zoomto(underline_w, line_thickness):
                             diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
                             z(101)
                         ));
@@ -978,9 +979,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                         z(101)
                     ));
-                    // Underline (always visible) — match the text width exactly
-                    let border_w = widescale(2.0, 2.5);
-                    let underline_w = draw_w; // exact text width
+                    // Underline (always visible) — fixed pixel thickness for consistency
+                    let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                    let underline_w = draw_w.ceil(); // pixel-align for crispness
                     let offset = widescale(3.0, 4.0); // place just under the baseline
                     let underline_y = current_row_y + draw_h * 0.5 + offset;
                     let underline_left_x = choice_center_x - draw_w * 0.5;
@@ -989,7 +990,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     actors.push(act!(quad:
                         align(0.0, 0.5): // start at text's left edge
                         xy(underline_left_x, underline_y):
-                        zoomto(underline_w, border_w):
+                        zoomto(underline_w, line_thickness):
                         diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
                         z(101)
                     ));
