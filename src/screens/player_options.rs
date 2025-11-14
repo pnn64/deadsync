@@ -24,6 +24,13 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 // Match Simply Love's CursorTweenSeconds for OptionRow cursor movement
 const CURSOR_TWEEN_SECONDS: f32 = 0.1;
 
+#[inline(always)]
+fn ease_out_cubic(t: f32) -> f32 {
+    let clamped = if t < 0.0 { 0.0 } else if t > 1.0 { 1.0 } else { t };
+    let u = 1.0 - clamped;
+    1.0 - u * u * u
+}
+
 /* -------------------------- hold-to-scroll timing ------------------------- */
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(300);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
@@ -1004,7 +1011,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         // Vertical tween for row transitions
                         let mut center_y = current_row_y;
                         if state.cursor_row_anim_t < 1.0 {
-                            let t = state.cursor_row_anim_t;
+                            let t = ease_out_cubic(state.cursor_row_anim_t);
                             // If we have a previous row index, interpolate X from that row's cursor center
                             if let Some(from_row) = state.cursor_row_anim_from_row {
                                 let from_x = calc_row_center_x(from_row);
@@ -1020,7 +1027,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * tsize;
                                 let ring_w_from = from_dw + pad_x_from * 2.0;
                                 let ring_h_from = from_dh + pad_y * 2.0;
-                                let t = state.cursor_row_anim_t.clamp(0.0, 1.0);
+                                let t = ease_out_cubic(state.cursor_row_anim_t);
                                 ring_w = ring_w_from + (ring_w - ring_w_from) * t;
                                 ring_h = ring_h_from + (ring_h - ring_h_from) * t;
                             }
@@ -1115,7 +1122,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             // Vertical tween for row transitions
                             let mut center_y = current_row_y;
                             if state.cursor_row_anim_t < 1.0 {
-                                let t = state.cursor_row_anim_t;
+                                let t = ease_out_cubic(state.cursor_row_anim_t);
                                 if let Some(from_row) = state.cursor_row_anim_from_row {
                                     let from_x = calc_row_center_x(from_row);
                                     center_x = from_x + (center_x - from_x) * t;
@@ -1128,7 +1135,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     let to_idx = sel_idx.min(widths.len().saturating_sub(1));
                                     let from_center_x = x_positions[from_idx] + widths[from_idx] * 0.5;
                                     let to_center_x = x_positions[to_idx] + widths[to_idx] * 0.5;
-                                    let t = state.cursor_anim_t.clamp(0.0, 1.0);
+                                    let t = ease_out_cubic(state.cursor_anim_t);
                                     center_x = from_center_x + (to_center_x - from_center_x) * t;
                                     // Also interpolate ring size from previous choice to current choice
                                     let from_draw_w = widths[from_idx];
@@ -1154,14 +1161,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
                                     let ring_w_from = from_dw + pad_x_from * 2.0;
                                     let ring_h_from = from_dh + pad_y * 2.0;
-                                    let t = state.cursor_row_anim_t.clamp(0.0, 1.0);
+                                    let t = ease_out_cubic(state.cursor_row_anim_t);
                                     ring_w = ring_w_from + (ring_w - ring_w_from) * t;
                                     ring_h = ring_h_from + (ring_h - ring_h_from) * t;
                                 }
                             }
 
-                            let mut left = center_x - ring_w * 0.5;
-                            let mut right = center_x + ring_w * 0.5;
+                            let left = center_x - ring_w * 0.5;
+                            let right = center_x + ring_w * 0.5;
                             let top = center_y - ring_h * 0.5;
                             let bottom = center_y + ring_h * 0.5;
                             let mut ring_color = color::decorative_rgba(state.active_color_index);
@@ -1267,7 +1274,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         // Vertical tween for row transitions
                         let mut center_y = current_row_y;
                         if state.cursor_row_anim_t < 1.0 {
-                            let t = state.cursor_row_anim_t;
+                            let t = ease_out_cubic(state.cursor_row_anim_t);
                             if let Some(from_row) = state.cursor_row_anim_from_row {
                                 let from_x = calc_row_center_x(from_row);
                                 center_x = from_x + (center_x - from_x) * t;
@@ -1282,7 +1289,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * tsize;
                                 let ring_w_from = from_dw + pad_x_from * 2.0;
                                 let ring_h_from = from_dh + pad_y * 2.0;
-                                let t = state.cursor_row_anim_t.clamp(0.0, 1.0);
+                                let t = ease_out_cubic(state.cursor_row_anim_t);
                                 ring_w = ring_w_from + (ring_w - ring_w_from) * t;
                                 ring_h = ring_h_from + (ring_h - ring_h_from) * t;
                             }
