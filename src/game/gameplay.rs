@@ -863,33 +863,40 @@ fn update_active_holds(state: &mut State, inputs: &[bool; 4], current_time: f32,
                     continue;
                 };
 
+                // Determine pressed state before updating last-held indices.
+                let pressed = inputs[column];
+                active.is_pressed = pressed;
+
                 if !active.let_go && active.life > 0.0 {
                     let prev_row = hold.last_held_row_index;
                     let prev_beat = hold.last_held_beat;
-                    let mut current_row = state
-                        .timing
-                        .get_row_for_beat(state.current_beat)
-                        .unwrap_or(note_start_row);
-                    current_row = current_row.clamp(note_start_row, hold.end_row_index);
-                    let final_row = prev_row.max(current_row);
-                    if final_row != prev_row {
-                        hold.last_held_row_index = final_row;
-                        let mut new_beat = state
+
+                    if pressed {
+                        let mut current_row = state
                             .timing
-                            .get_beat_for_row(final_row)
-                            .unwrap_or(state.current_beat);
-                        new_beat = new_beat.clamp(note_start_beat, hold.end_beat);
-                        if new_beat < prev_beat {
-                            new_beat = prev_beat;
+                            .get_row_for_beat(state.current_beat)
+                            .unwrap_or(note_start_row);
+                        current_row = current_row.clamp(note_start_row, hold.end_row_index);
+                        let final_row = prev_row.max(current_row);
+                        if final_row != prev_row {
+                            hold.last_held_row_index = final_row;
+                            let mut new_beat = state
+                                .timing
+                                .get_beat_for_row(final_row)
+                                .unwrap_or(state.current_beat);
+                            new_beat = new_beat.clamp(note_start_beat, hold.end_beat);
+                            if new_beat < prev_beat {
+                                new_beat = prev_beat;
+                            }
+                            hold.last_held_beat = new_beat;
+                        } else {
+                            hold.last_held_beat = prev_beat.clamp(note_start_beat, hold.end_beat);
                         }
-                        hold.last_held_beat = new_beat;
                     } else {
+                        // Not pressed: do not advance last_held_row_index; clamp beat only.
                         hold.last_held_beat = prev_beat.clamp(note_start_beat, hold.end_beat);
                     }
                 }
-
-                let pressed = inputs[column];
-                active.is_pressed = pressed;
 
                 if !active.let_go {
                     let window = match active.note_type {
@@ -1234,34 +1241,35 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
         }
     }
 
-    let mut successful_steps: u32 = 0;
-    let mut holds_started_this_row: u32 = 0;
-
-    for note in state
-        .notes
+    // Hands parity with ITG/SM:
+    // A hand is counted on this row if the total simultaneous notes is >= 3,
+    // where simultaneity includes holds started on previous rows that are
+    // still being held at this row. Rows with any WayOff/Miss do not count.
+    let row_has_wayoff = judgments_in_row
         .iter()
-        .filter(|n| n.row_index == row_index && !matches!(n.note_type, NoteType::Mine))
-    {
-        if note
-            .result
-            .as_ref()
-            .is_some_and(|judgment| judgment.grade != JudgeGrade::Miss)
-        {
-            successful_steps = successful_steps.saturating_add(1);
-            if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
-                holds_started_this_row = holds_started_this_row.saturating_add(1);
-            }
+        .any(|judgment| judgment.grade == JudgeGrade::WayOff);
+
+    if !row_has_miss && !row_has_wayoff {
+        // Count all non-mine notes on this row (includes hold heads).
+        let notes_on_row_count: usize = state
+            .notes
+            .iter()
+            .filter(|n| n.row_index == row_index && !matches!(n.note_type, NoteType::Mine))
+            .count();
+
+        // Count carried holds from previous rows that are still down at this row.
+        let carried_holds_down: usize = state
+            .notes
+            .iter()
+            .filter(|n| n.row_index < row_index)
+            .filter_map(|n| n.hold.as_ref())
+            .filter(|h| h.last_held_row_index >= row_index)
+            .count();
+
+        if notes_on_row_count + carried_holds_down >= 3 {
+            state.hands_achieved = state.hands_achieved.saturating_add(1);
         }
     }
-
-    let holding_before_row = state.hands_holding_count_for_stats.max(0) as u32;
-    if successful_steps > 0 && successful_steps + holding_before_row >= 3 {
-        state.hands_achieved = state.hands_achieved.saturating_add(1);
-    }
-
-    state.hands_holding_count_for_stats = state
-        .hands_holding_count_for_stats
-        .saturating_add(holds_started_this_row as i32);
 }
 
 fn update_judged_rows(state: &mut State) {
