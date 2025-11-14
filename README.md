@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="https://raw.githubusercontent.com/pnn64/deadsync/refs/heads/main/assets/graphics/logo.png" width=25% height=25%>
+    <img src="assets/graphics/logo.png" alt="DeadSync" width=25% height=25%>
 </div>
 <hr>
 
