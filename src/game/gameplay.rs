@@ -644,28 +644,97 @@ fn handle_mine_hit(
 }
 
 fn try_hit_mine_while_held(state: &mut State, column: usize, current_time: f32) -> bool {
-    let candidate = {
-        let arrows = &state.arrows[column];
-        let notes = &state.notes;
-        let note_times = &state.note_time_cache;
+    // Time-based detection independent of arrow spawning. Choose the closest
+    // unjudged mine in this column within the mine window, if any.
+    let mine_window = crate::game::timing::mine_window_s();
+    let mut best: Option<(usize, f32)> = None; // (note_index, time_error)
 
-        arrows.iter().enumerate().find_map(|(idx, arrow)| {
-            let note = &notes[arrow.note_index];
-            if !matches!(note.note_type, NoteType::Mine) || note.mine_result.is_some() {
-                return None;
+    for (i, note) in state.notes.iter().enumerate() {
+        if note.column != column {
+            continue;
+        }
+        if !matches!(note.note_type, NoteType::Mine) {
+            continue;
+        }
+        if note.mine_result.is_some() {
+            continue;
+        }
+        let note_time = state.note_time_cache[i];
+        let time_error = current_time - note_time;
+        let abs_err = time_error.abs();
+        if abs_err <= mine_window {
+            match best {
+                Some((_, best_err)) if abs_err >= best_err.abs() => {}
+                _ => best = Some((i, time_error)),
             }
+        }
+    }
 
-            let note_time = note_times[arrow.note_index];
-            Some((idx, arrow.note_index, note_time))
-        })
-    };
+    let Some((note_index, time_error)) = best else { return false; };
 
-    let Some((arrow_idx, note_index, note_time)) = candidate else {
+    // Prefer removing a spawned arrow if present; otherwise just mark by time.
+    if let Some(arrow_idx) = state.arrows[column]
+        .iter()
+        .position(|a| a.note_index == note_index)
+    {
+        handle_mine_hit(state, column, arrow_idx, note_index, time_error)
+    } else {
+        // No spawned arrow: apply a time-based hit.
+        hit_mine_timebased(state, column, note_index, time_error)
+    }
+}
+
+#[inline(always)]
+fn hit_mine_timebased(state: &mut State, column: usize, note_index: usize, time_error: f32) -> bool {
+    let abs_time_error = time_error.abs();
+    let mine_window = crate::game::timing::mine_window_s();
+    if abs_time_error > mine_window {
         return false;
-    };
+    }
+    if state.notes[note_index].mine_result.is_some() {
+        return false;
+    }
 
-    let time_error = current_time - note_time;
-    handle_mine_hit(state, column, arrow_idx, note_index, time_error)
+    state.notes[note_index].mine_result = Some(MineResult::Hit);
+    state.mines_hit = state.mines_hit.saturating_add(1);
+    let mut updated_scoring = false;
+
+    let note_row_index = state.notes[note_index].row_index;
+    info!(
+        "MINE HIT (time-based): Row {}, Col {}, Error: {:.2}ms",
+        note_row_index,
+        column,
+        time_error * 1000.0
+    );
+
+    // Attempt to remove if an arrow was already spawned; ignore if not present.
+    if let Some(pos) = state.arrows[column]
+        .iter()
+        .position(|a| a.note_index == note_index)
+    {
+        state.arrows[column].remove(pos);
+    }
+
+    apply_life_change(state, LifeChange::HIT_MINE);
+    if !is_state_dead(state) {
+        state.mines_hit_for_score = state.mines_hit_for_score.saturating_add(1);
+        updated_scoring = true;
+    }
+    state.combo = 0;
+    state.miss_combo = state.miss_combo.saturating_add(1);
+    if state.full_combo_grade.is_some() {
+        state.first_fc_attempt_broken = true;
+    }
+    state.full_combo_grade = None;
+    state.receptor_glow_timers[column] = 0.0;
+    trigger_mine_explosion(state, column);
+    audio::play_sfx("assets/sounds/boom.ogg");
+
+    if updated_scoring {
+        update_itg_grade_totals(state);
+    }
+
+    true
 }
 
 fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
@@ -917,6 +986,10 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             return false;
         }
 
+        // Press-time fallback: even if the next arrow isn't a mine, try to hit any
+        // unjudged mine in this column within the mine window at this time.
+        let mine_hit_on_press = try_hit_mine_while_held(state, column, current_time);
+
         let windows = crate::game::timing::effective_windows_s();
         let fantastic_window = windows[0];
         let excellent_window = windows[1];
@@ -1013,8 +1086,12 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
 
             return true;
         }
+        // If no chord judged, report whether we hit a mine as part of the press.
+        return mine_hit_on_press;
     }
-    false
+    // No arrow to judge in this column (e.g., X/M-mod during scroll holds). Still allow
+    // mine hits by time on press for parity with SM/ITG.
+    try_hit_mine_while_held(state, column, current_time)
 }
 
 // Legacy raw key handler removed in favor of virtual action path.
@@ -1320,6 +1397,32 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
     }
 }
 
+/// Time-based mine avoidance independent of arrow spawning.
+/// Ensures mines are marked avoided once their time window has passed,
+/// regardless of X/M-mod scroll holds preventing arrow spawn.
+#[inline(always)]
+fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
+    let mine_window = crate::game::timing::mine_window_s();
+    for (i, note) in state.notes.iter_mut().enumerate() {
+        if !matches!(note.note_type, NoteType::Mine) {
+            continue;
+        }
+        if note.mine_result.is_some() {
+            continue;
+        }
+
+        let note_time = state.note_time_cache[i];
+        if music_time_sec - note_time > mine_window {
+            note.mine_result = Some(MineResult::Avoided);
+            state.mines_avoided = state.mines_avoided.saturating_add(1);
+            info!(
+                "MINE AVOIDED: Row {}, Col {}, Time: {:.2}s",
+                note.row_index, note.column, music_time_sec
+            );
+        }
+    }
+}
+
 #[inline(always)]
 fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
     match state.scroll_speed {
@@ -1585,6 +1688,9 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     tick_visual_effects(state, delta_time);
 
     spawn_lookahead_arrows(state, music_time_sec);
+
+    // Decouple mine avoidance from arrow spawning so behavior matches across C/X/M-mods.
+    apply_time_based_mine_avoidance(state, music_time_sec);
 
     apply_passive_misses_and_mine_avoidance(state, music_time_sec);
 
