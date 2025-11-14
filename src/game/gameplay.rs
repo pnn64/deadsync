@@ -649,9 +649,7 @@ fn handle_mine_hit(
     trigger_mine_explosion(state, column);
     audio::play_sfx("assets/sounds/boom.ogg");
 
-    if updated_scoring {
-        update_itg_grade_totals(state);
-    }
+    if updated_scoring { update_itg_grade_totals(state); }
 
     true
 }
@@ -748,9 +746,7 @@ fn hit_mine_timebased(state: &mut State, column: usize, note_index: usize, time_
     trigger_mine_explosion(state, column);
     audio::play_sfx("assets/sounds/boom.ogg");
 
-    if updated_scoring {
-        update_itg_grade_totals(state);
-    }
+    if updated_scoring { update_itg_grade_totals(state); }
 
     true
 }
@@ -826,9 +822,7 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
     }
     apply_life_change(state, LifeChange::HELD);
 
-    if updated_scoring {
-        update_itg_grade_totals(state);
-    }
+    if updated_scoring { update_itg_grade_totals(state); }
     state.miss_combo = 0;
 
     trigger_tap_explosion(state, column, JudgeGrade::Excellent);
@@ -991,23 +985,39 @@ fn update_active_holds(state: &mut State, inputs: &[bool; 4], current_time: f32,
 }
 
 pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool {
-    if let Some((arrow_list_index, arrow_to_judge)) = state.arrows[column]
+    // Find the closest-in-time viable arrow in this column within the
+    // appropriate timing window (WayOff for taps, Mine window for mines).
+    let windows = crate::game::timing::effective_windows_s();
+    let way_off_window = windows[4];
+    let mine_window = crate::game::timing::mine_window_s();
+
+    let mut best: Option<(usize, Arrow, f32)> = None; // (arrow_list_index, arrow, abs_time_error)
+    for (idx, arrow) in state.arrows[column]
         .iter()
         .enumerate()
-        .find(|(_, arrow)| state.notes[arrow.note_index].result.is_none())
-        .map(|(idx, arrow)| (idx, arrow.clone()))
+        .filter(|(_, a)| state.notes[a.note_index].result.is_none())
     {
+        let n = &state.notes[arrow.note_index];
+        if !state.timing.is_judgable_at_beat(n.beat) { continue; }
+        if n.is_fake { continue; }
+        let note_time = state.note_time_cache[arrow.note_index];
+        let abs_err = (current_time - note_time).abs();
+        let window = if matches!(n.note_type, NoteType::Mine) { mine_window } else { way_off_window };
+        if abs_err <= window {
+            match best {
+                Some((_, _, best_err)) if abs_err >= best_err => {}
+                _ => best = Some((idx, arrow.clone(), abs_err)),
+            }
+        }
+    }
+
+    if let Some((arrow_list_index, arrow_to_judge, _)) = best {
         let note_index = arrow_to_judge.note_index;
         let note_row_index = state.notes[note_index].row_index;
         let note_type = state.notes[note_index].note_type.clone();
         let note_time = state.note_time_cache[note_index];
         let time_error = current_time - note_time;
         let abs_time_error = time_error.abs();
-
-        // Never judge notes in non-judgable regions (warps/fakes) — parity with ITGmania.
-        if !state.timing.is_judgable_at_beat(state.notes[note_index].beat) {
-            return false;
-        }
 
         if matches!(note_type, NoteType::Mine) {
             // Skip fake mines entirely for interaction
@@ -1020,21 +1030,14 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             return false;
         }
 
-        // Ignore fake notes completely for judgment/scoring.
-        if state.notes[note_index].is_fake {
-            return false;
-        }
-
-        // Press-time fallback: even if the next arrow isn't a mine, try to hit any
+        // Press-time fallback: even if the candidate isn't a mine, try to hit any
         // unjudged mine in this column within the mine window at this time.
         let mine_hit_on_press = try_hit_mine_while_held(state, column, current_time);
 
-        let windows = crate::game::timing::effective_windows_s();
         let fantastic_window = windows[0];
         let excellent_window = windows[1];
         let great_window = windows[2];
         let decent_window = windows[3];
-        let way_off_window = windows[4];
 
         if abs_time_error <= way_off_window {
             // Determine the full set of non-mine notes on this row (the chord).
@@ -1309,11 +1312,15 @@ fn update_judged_rows(state: &mut State) {
         let max_row_index = state.notes.iter().map(|n| n.row_index).max().unwrap_or(0);
         if state.judged_row_cursor > max_row_index { break; }
 
-        // Consider only non-mine notes for row completion and judgment parity.
+        // Consider only judgable, non-mine, non-fake notes for row completion and parity.
+        // Rows inside #WARPS or #FAKES should not block progress.
         let notes_nonmine_on_row: Vec<&Note> = state
             .notes
             .iter()
-            .filter(|n| n.row_index == state.judged_row_cursor && !matches!(n.note_type, NoteType::Mine) && !n.is_fake)
+            .filter(|n| n.row_index == state.judged_row_cursor)
+            .filter(|n| !matches!(n.note_type, NoteType::Mine))
+            .filter(|n| !n.is_fake)
+            .filter(|n| state.timing.is_judgable_at_beat(n.beat))
             .collect();
 
         // If the row has no non-mine notes, advance past it.
@@ -1599,6 +1606,36 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
     }
 }
 
+/// Fallback miss handling independent of arrow spawning.
+/// Ensures any judgable, non-fake tap/hold/roll that has passed its WayOff
+/// window is marked Miss, even if no arrow was spawned (e.g., extreme SCROLLs).
+#[inline(always)]
+fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
+    let way_off_window = crate::game::timing::effective_windows_s()[4];
+    for (i, note) in state.notes.iter_mut().enumerate() {
+        if matches!(note.note_type, NoteType::Mine) { continue; }
+        if note.is_fake { continue; }
+        if !state.timing.is_judgable_at_beat(note.beat) { continue; }
+        if note.result.is_some() { continue; }
+
+        let note_time = state.note_time_cache[i];
+        if music_time_sec - note_time > way_off_window {
+            let row = note.row_index;
+            note.result = Some(Judgment { time_error_ms: (music_time_sec - note_time) * 1000.0, grade: JudgeGrade::Miss, row });
+            if let Some(hold) = note.hold.as_mut() {
+                if hold.result != Some(HoldResult::Held) {
+                    hold.result = Some(HoldResult::LetGo);
+                    if hold.let_go_started_at.is_none() {
+                        hold.let_go_started_at = Some(music_time_sec);
+                        hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
+                    }
+                }
+            }
+            info!("MISSED (time-based): Row {}", row);
+        }
+    }
+}
+
 #[inline(always)]
 fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     let receptor_y = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER;
@@ -1791,6 +1828,9 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     apply_time_based_mine_avoidance(state, music_time_sec);
 
     apply_passive_misses_and_mine_avoidance(state, music_time_sec);
+
+    // Ensure taps/holds that never spawned arrows still miss out in time.
+    apply_time_based_tap_misses(state, music_time_sec);
 
     cull_scrolled_out_arrows(state, music_time_sec);
 
