@@ -720,7 +720,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 for pn in parsed {
                     if matches!(pn.note_type, crate::game::note::NoteType::Mine) {
                         if let Some(beat) = timing.get_beat_for_row(pn.row_index) {
-                            if !timing.is_fake_at_beat(beat) { mines_nonfake = mines_nonfake.saturating_add(1); }
+                            if timing.is_judgable_at_beat(beat) { mines_nonfake = mines_nonfake.saturating_add(1); }
                         }
                     }
                 }

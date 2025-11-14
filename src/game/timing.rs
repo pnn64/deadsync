@@ -247,13 +247,14 @@ impl TimingData {
 
 		let stops = parse_optional_timing(chart_stops, global_stops, parse_stops);
 		let delays = parse_optional_timing(chart_delays, global_delays, parse_delays);
-		let warps = parse_optional_timing(chart_warps, global_warps, parse_warps);
+		let mut warps = parse_optional_timing(chart_warps, global_warps, parse_warps);
 		let mut speeds = parse_optional_timing(chart_speeds, global_speeds, parse_speeds);
 		let mut scrolls = parse_optional_timing(chart_scrolls, global_scrolls, parse_scrolls);
 		let mut fakes = parse_optional_timing(chart_fakes, global_fakes, parse_fakes);
 		// Ensure event lists are sorted by beat for binary searches
 		speeds.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
 		scrolls.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
+		warps.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
 		fakes.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
 
 		let mut timing_with_stops = Self {
@@ -337,6 +338,23 @@ impl TimingData {
         if idx == 0 { return false; }
         let seg = self.fakes[idx - 1];
         beat >= seg.beat && beat < seg.beat + seg.length
+    }
+
+    #[inline(always)]
+    pub fn is_warp_at_beat(&self, beat: f32) -> bool {
+        if self.warps.is_empty() { return false; }
+        // warps represent a range [beat, beat+length) of non-judgable rows
+        let idx = self.warps.partition_point(|seg| seg.beat <= beat);
+        if idx == 0 { return false; }
+        let seg = self.warps[idx - 1];
+        // Ignore degenerate or negative-length warps
+        if !(seg.length.is_finite() && seg.length > 0.0) { return false; }
+        beat >= seg.beat && beat < seg.beat + seg.length
+    }
+
+    #[inline(always)]
+    pub fn is_judgable_at_beat(&self, beat: f32) -> bool {
+        !self.is_warp_at_beat(beat) && !self.is_fake_at_beat(beat)
     }
 
     pub fn get_beat_for_row(&self, row_index: usize) -> Option<f32> {

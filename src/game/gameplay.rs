@@ -300,12 +300,14 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         };
         let explicit_fake_tap = matches!(parsed.note_type, NoteType::Fake);
         let fake_by_segment = timing.is_fake_at_beat(beat);
+        // Only explicit fakes and #FAKES segments are flagged fake.
+        // Notes inside #WARPS remain visible, but are non-judgable at runtime.
         let is_fake = explicit_fake_tap || fake_by_segment;
 
         // Normalize explicit fake to a Tap with is_fake flag
         let note_type = if explicit_fake_tap { NoteType::Tap } else { parsed.note_type };
 
-        if !is_fake {
+        if !is_fake && timing.is_judgable_at_beat(beat) {
             match note_type {
                 NoteType::Hold => { holds_total = holds_total.saturating_add(1); }
                 NoteType::Roll => { rolls_total = rolls_total.saturating_add(1); }
@@ -348,7 +350,10 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         use std::collections::HashSet;
         let mut rows: HashSet<usize> = HashSet::new();
         for n in &notes {
-            if !matches!(n.note_type, NoteType::Mine) && !n.is_fake {
+            if !matches!(n.note_type, NoteType::Mine)
+                && !n.is_fake
+                && timing.is_judgable_at_beat(n.beat)
+            {
                 rows.insert(n.row_index);
             }
         }
@@ -612,6 +617,9 @@ fn handle_mine_hit(
     if state.notes[note_index].mine_result.is_some() || state.notes[note_index].is_fake {
         return false;
     }
+    if !state.timing.is_judgable_at_beat(state.notes[note_index].beat) {
+        return false;
+    }
 
     state.notes[note_index].mine_result = Some(MineResult::Hit);
     state.mines_hit = state.mines_hit.saturating_add(1);
@@ -662,6 +670,7 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time: f32) 
             continue;
         }
         if note.is_fake { continue; }
+        if !state.timing.is_judgable_at_beat(note.beat) { continue; }
         if note.mine_result.is_some() {
             continue;
         }
@@ -698,6 +707,9 @@ fn hit_mine_timebased(state: &mut State, column: usize, note_index: usize, time_
         return false;
     }
     if state.notes[note_index].mine_result.is_some() || state.notes[note_index].is_fake {
+        return false;
+    }
+    if !state.timing.is_judgable_at_beat(state.notes[note_index].beat) {
         return false;
     }
 
@@ -991,6 +1003,11 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         let note_time = state.note_time_cache[note_index];
         let time_error = current_time - note_time;
         let abs_time_error = time_error.abs();
+
+        // Never judge notes in non-judgable regions (warps/fakes) — parity with ITGmania.
+        if !state.timing.is_judgable_at_beat(state.notes[note_index].beat) {
+            return false;
+        }
 
         if matches!(note_type, NoteType::Mine) {
             // Skip fake mines entirely for interaction
@@ -1431,6 +1448,7 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
             continue;
         }
         if note.is_fake { continue; }
+        if !state.timing.is_judgable_at_beat(note.beat) { continue; }
         if note.mine_result.is_some() {
             continue;
         }
@@ -1529,7 +1547,9 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                     let mine_window = crate::game::timing::mine_window_s();
                     if music_time_sec - note_time > mine_window {
                         // Do not mark fake mines avoided; they are neutral
-                        if !state.notes[note_index].is_fake {
+                        if !state.notes[note_index].is_fake
+                            && state.timing.is_judgable_at_beat(state.notes[note_index].beat)
+                        {
                             state.notes[note_index].mine_result = Some(MineResult::Avoided);
                             state.mines_avoided = state.mines_avoided.saturating_add(1);
                             info!(
@@ -1545,6 +1565,11 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
 
         // Fake: never judge or mark miss; leave result None and let culling remove when off-screen.
         if state.notes[note_index].is_fake {
+            continue;
+        }
+
+        // Non-judgable rows: skip miss handling entirely.
+        if !state.timing.is_judgable_at_beat(state.notes[note_index].beat) {
             continue;
         }
 
