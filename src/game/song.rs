@@ -23,6 +23,7 @@ pub struct SongData {
     pub normalized_warps: String,
     pub normalized_speeds: String,
     pub normalized_scrolls: String,
+    pub normalized_fakes: String,
     pub total_length_seconds: i32,
     pub charts: Vec<ChartData>,
 }

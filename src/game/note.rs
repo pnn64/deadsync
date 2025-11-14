@@ -6,6 +6,7 @@ pub enum NoteType {
     Hold,
     Roll,
     Mine,
+    Fake,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -41,4 +42,5 @@ pub struct Note {
     pub result: Option<Judgment>,
     pub hold: Option<HoldData>,
     pub mine_result: Option<MineResult>,
+    pub is_fake: bool,
 }

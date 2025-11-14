@@ -37,6 +37,15 @@ pub fn parse_chart_notes(raw_note_bytes: &[u8]) -> Vec<ParsedNote> {
                             tail_row_index: None,
                         });
                     }
+                    b'F' | b'f' => {
+                        // Fake tap: render only; never judge or score
+                        notes.push(ParsedNote {
+                            row_index,
+                            column: col_index,
+                            note_type: NoteType::Fake,
+                            tail_row_index: None,
+                        });
+                    }
                     b'2' | b'4' => {
                         let note_type = if ch == b'2' {
                             NoteType::Hold

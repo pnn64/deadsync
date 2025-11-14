@@ -112,6 +112,7 @@ pub struct TimingData {
     warps: Vec<WarpSegment>,
     speeds: Vec<SpeedSegment>,
     scrolls: Vec<ScrollSegment>,
+    fakes: Vec<FakeSegment>,
     speed_runtime: Vec<SpeedRuntime>,
     scroll_prefix: Vec<ScrollPrefix>,
     global_offset_sec: f32,
@@ -171,6 +172,12 @@ enum TimingEvent {
 	NotFound,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FakeSegment {
+    pub beat: f32,
+    pub length: f32,
+}
+
 impl TimingData {
     pub fn from_chart_data(
         song_offset_sec: f32,
@@ -187,6 +194,8 @@ impl TimingData {
 		global_speeds: &str,
 		chart_scrolls: Option<&str>,
 		global_scrolls: &str,
+        chart_fakes: Option<&str>,
+        global_fakes: &str,
         raw_note_bytes: &[u8],
     ) -> Self {
         let bpms_str = chart_bpms.filter(|s| !s.is_empty()).unwrap_or(global_bpms);
@@ -241,13 +250,15 @@ impl TimingData {
 		let warps = parse_optional_timing(chart_warps, global_warps, parse_warps);
 		let mut speeds = parse_optional_timing(chart_speeds, global_speeds, parse_speeds);
 		let mut scrolls = parse_optional_timing(chart_scrolls, global_scrolls, parse_scrolls);
+		let mut fakes = parse_optional_timing(chart_fakes, global_fakes, parse_fakes);
 		// Ensure event lists are sorted by beat for binary searches
 		speeds.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
 		scrolls.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
+		fakes.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
 
 		let mut timing_with_stops = Self {
 			row_to_beat: Arc::new(vec![]), beat_to_time: Arc::new(beat_to_time),
-			stops, delays, warps, speeds, scrolls,
+			stops, delays, warps, speeds, scrolls, fakes,
 			speed_runtime: Vec::new(), scroll_prefix: Vec::new(),
 			global_offset_sec, max_bpm,
 		};
@@ -316,6 +327,16 @@ impl TimingData {
 		timing_with_stops.row_to_beat = Arc::new(row_to_beat);
 
         timing_with_stops
+    }
+
+    #[inline(always)]
+    pub fn is_fake_at_beat(&self, beat: f32) -> bool {
+        if self.fakes.is_empty() { return false; }
+        // Binary search for last segment starting at or before beat
+        let idx = self.fakes.partition_point(|seg| seg.beat <= beat);
+        if idx == 0 { return false; }
+        let seg = self.fakes[idx - 1];
+        beat >= seg.beat && beat < seg.beat + seg.length
     }
 
     pub fn get_beat_for_row(&self, row_index: usize) -> Option<f32> {
@@ -422,6 +443,28 @@ impl TimingData {
 
         if max_bpm > 0.0 { max_bpm } else { 120.0 }
     }
+}
+
+// ----------------------------- Parsers: Fakes -----------------------------
+#[inline(always)]
+fn parse_f32_fast(s: &str) -> Option<f32> {
+    s.trim().parse::<f32>().ok()
+}
+
+pub fn parse_fakes(s: &str) -> Result<Vec<FakeSegment>, &'static str> {
+    let mut out = Vec::new();
+    if s.trim().is_empty() { return Ok(out); }
+    for part in s.split(',') {
+        let part = part.trim();
+        if part.is_empty() { continue; }
+        let Some((beat_str, len_str)) = part.split_once('=') else { continue; };
+        let Some(beat) = parse_f32_fast(beat_str) else { continue; };
+        let Some(len) = parse_f32_fast(len_str) else { continue; };
+        if beat.is_finite() && len.is_finite() && len > 0.0 {
+            out.push(FakeSegment { beat, length: len });
+        }
+    }
+    Ok(out)
 }
 
 fn parse_stops(s: &str) -> Result<Vec<StopSegment>, &'static str> {
@@ -770,6 +813,7 @@ pub fn build_scatter_points(notes: &[Note], note_time_cache: &[f32]) -> Vec<Scat
     let mut out = Vec::with_capacity(notes.len());
     for (idx, n) in notes.iter().enumerate() {
         if matches!(n.note_type, NoteType::Mine) { continue; }
+        if n.is_fake { continue; }
         let t = note_time_cache.get(idx).copied().unwrap_or(0.0);
         let offset_ms = match n.result.as_ref() {
             Some(j) => if j.grade == JudgeGrade::Miss { None } else { Some(j.time_error_ms) },
@@ -800,6 +844,7 @@ pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
         let Some(j) = n.result.as_ref() else { continue; };
         if j.grade == JudgeGrade::Miss { continue; }
         if matches!(n.note_type, NoteType::Mine) { continue; }
+        if n.is_fake { continue; }
         let e = j.time_error_ms;
         let b = bin_index_ms(e);
         let c = counts.entry(b).or_insert(0);

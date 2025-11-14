@@ -145,6 +145,7 @@ struct SerializableChartData {
     chart_warps: Option<String>,
     chart_speeds: Option<String>,
     chart_scrolls: Option<String>,
+    chart_fakes: Option<String>,
     total_measures: usize,
     measure_nps_vec: Vec<f64>,
 }
@@ -171,6 +172,7 @@ impl From<&ChartData> for SerializableChartData {
             chart_warps: chart.chart_warps.clone(),
             chart_speeds: chart.chart_speeds.clone(),
             chart_scrolls: chart.chart_scrolls.clone(),
+            chart_fakes: chart.chart_fakes.clone(),
             total_measures: chart.total_measures,
             measure_nps_vec: chart.measure_nps_vec.clone(),
         }
@@ -199,6 +201,7 @@ impl From<SerializableChartData> for ChartData {
             chart_warps: chart.chart_warps,
             chart_speeds: chart.chart_speeds,
             chart_scrolls: chart.chart_scrolls,
+            chart_fakes: chart.chart_fakes,
             total_measures: chart.total_measures,
             measure_nps_vec: chart.measure_nps_vec,
         }
@@ -225,6 +228,7 @@ struct SerializableSongData {
     normalized_warps: String,
     normalized_speeds: String,
     normalized_scrolls: String,
+    normalized_fakes: String,
     total_length_seconds: i32,
     charts: Vec<SerializableChartData>,
 }
@@ -250,6 +254,7 @@ impl From<&SongData> for SerializableSongData {
             normalized_warps: song.normalized_warps.clone(),
             normalized_speeds: song.normalized_speeds.clone(),
             normalized_scrolls: song.normalized_scrolls.clone(),
+            normalized_fakes: song.normalized_fakes.clone(),
             total_length_seconds: song.total_length_seconds,
             charts: song.charts.iter().map(SerializableChartData::from).collect(),
         }
@@ -277,6 +282,7 @@ impl From<SerializableSongData> for SongData {
             normalized_warps: song.normalized_warps,
             normalized_speeds: song.normalized_speeds,
             normalized_scrolls: song.normalized_scrolls,
+            normalized_fakes: song.normalized_fakes,
             total_length_seconds: song.total_length_seconds,
             charts: song.charts.into_iter().map(ChartData::from).collect(),
         }
@@ -497,6 +503,83 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
     let options = AnalysisOptions::default(); // Use default parsing options
 
     let summary = analyze(&simfile_data, extension, options)?;
+    // Extract global #FAKES tag (if present) from raw simfile text
+    fn extract_tag<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
+        let needle = format!("#{}:", tag);
+        let start = text.find(&needle)? + needle.len();
+        let rest = &text[start..];
+        let end = rest.find(';')?;
+        Some(&rest[..end])
+    }
+    let sim_text = String::from_utf8_lossy(&simfile_data);
+    let global_fakes_raw = extract_tag(&sim_text, "FAKES").unwrap_or("").trim().to_string();
+
+    // Collect per-chart #FAKES from the raw simfile text (handles .sm and .ssc blocks).
+    fn extract_blocks<'a>(text: &'a str) -> Vec<&'a str> {
+        let mut blocks = Vec::new();
+        let mut i = 0usize;
+        let lower = text.to_lowercase();
+        let bytes = lower.as_bytes();
+        let src_bytes = text.as_bytes();
+        let marker_notes = b"#notes:";
+        let marker_notedata = b"#notedata:";
+        while i < bytes.len() {
+            let pos_notes = bytes[i..].windows(marker_notes.len()).position(|w| w == marker_notes);
+            let pos_notedata = bytes[i..].windows(marker_notedata.len()).position(|w| w == marker_notedata);
+            let start_rel = match (pos_notes, pos_notedata) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (Some(a), None) => Some(a),
+                (None, Some(b)) => Some(b),
+                (None, None) => None,
+            };
+            let Some(sr) = start_rel else { break; };
+            let start = i + sr;
+            // Advance past the marker to search for the next block start
+            let next_start = start + 7;
+            // Find next block start
+            let next_notes = bytes[next_start..].windows(marker_notes.len()).position(|w| w == marker_notes).map(|p| next_start + p);
+            let next_notedata = bytes[next_start..].windows(marker_notedata.len()).position(|w| w == marker_notedata).map(|p| next_start + p);
+            let end = match (next_notes, next_notedata) {
+                (Some(a), Some(b)) => a.min(b),
+                (Some(a), None) => a,
+                (None, Some(b)) => b,
+                (None, None) => bytes.len(),
+            };
+            // Push the original-slice block
+            let block = std::str::from_utf8(&src_bytes[start..end]).unwrap_or("");
+            blocks.push(block);
+            i = end;
+        }
+        blocks
+    }
+
+    fn extract_tag_ci<'a>(block: &'a str, tag: &str) -> Option<&'a str> {
+        // Case-insensitive find of #TAG:...;
+        let lower_block = block.to_lowercase();
+        let needle = format!("#{}:", tag.to_lowercase());
+        if let Some(start) = lower_block.find(&needle) {
+            let after = start + needle.len();
+            let rest = &block[after..];
+            if let Some(end) = rest.find(';') { return Some(&rest[..end]); }
+        }
+        None
+    }
+
+    #[derive(Clone)]
+    struct ChartFakesKey { step: String, diff: String, meter: String, fakes: String }
+
+    let mut chart_fakes_index: Vec<ChartFakesKey> = Vec::new();
+    for block in extract_blocks(&sim_text) {
+        let step = extract_tag_ci(block, "STEPSTYPE").unwrap_or("").trim().to_lowercase();
+        let diff = extract_tag_ci(block, "DIFFICULTY").unwrap_or("").trim().to_lowercase();
+        let meter = extract_tag_ci(block, "METER").unwrap_or("").trim().to_string();
+        if let Some(f) = extract_tag_ci(block, "FAKES") {
+            let f = f.trim();
+            if !f.is_empty() {
+                chart_fakes_index.push(ChartFakesKey { step, diff, meter, fakes: f.to_string() });
+            }
+        }
+    }
 
     let charts: Vec<ChartData> = summary
         .charts
@@ -508,6 +591,15 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
                 c.rating_str,
                 c.minimized_note_data.len()
             );
+            // Try to match a per-chart #FAKES entry by (stepstype, difficulty, meter)
+            let step_l = c.step_type_str.to_lowercase();
+            let diff_l = c.difficulty_str.to_lowercase();
+            let meter_s = c.rating_str.clone();
+            let chart_fakes = chart_fakes_index
+                .iter()
+                .find(|k| k.step == step_l && k.diff == diff_l && k.meter == meter_s)
+                .map(|k| k.fakes.clone());
+
             ChartData {
                 chart_type: c.step_type_str,
                 difficulty: c.difficulty_str,
@@ -530,6 +622,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
                 chart_warps: c.chart_warps,
                 chart_speeds: c.chart_speeds,
                 chart_scrolls: c.chart_scrolls,
+                chart_fakes,
             }
         })
         .collect();
@@ -626,6 +719,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
         normalized_warps: summary.normalized_warps,
         normalized_speeds: summary.normalized_speeds,
         normalized_scrolls: summary.normalized_scrolls,
+        normalized_fakes: global_fakes_raw,
         music_path,
         total_length_seconds: summary.total_length,
         charts,

@@ -24,4 +24,5 @@ pub struct ChartData {
     pub chart_warps: Option<String>,
     pub chart_speeds: Option<String>,
     pub chart_scrolls: Option<String>,
+    pub chart_fakes: Option<String>,
 }
