@@ -634,6 +634,9 @@ pub fn update(state: &mut State, dt: f32) {
         } else {
             state.cursor_row_anim_t = 1.0;
         }
+        if state.cursor_row_anim_t >= 1.0 {
+            state.cursor_row_anim_from_row = None;
+        }
     }
 }
 
@@ -850,6 +853,33 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     };
 
+    // Helper to compute draw_w/draw_h (text box) for the selected item of a row
+    let calc_row_dims = |row_idx: usize| -> (f32, f32) {
+        let value_zoom = 0.835_f32;
+        let mut out_w = 40.0_f32;
+        let mut out_h = 16.0_f32;
+        if row_idx >= state.rows.len() {
+            // Fallback; overridden below when font metrics are available
+            return (out_w, out_h);
+        }
+        let r = &state.rows[row_idx];
+        asset_manager.with_fonts(|all_fonts| {
+            asset_manager.with_font("miso", |metrics_font| {
+                out_h = (metrics_font.height as f32).max(1.0) * value_zoom;
+                if r.choices.is_empty() {
+                    out_w = 40.0;
+                    return;
+                }
+                // For inline rows, measure the selected choice; single-value rows do the same
+                let sel = r.selected_choice_index.min(r.choices.len() - 1);
+                let mut w = crate::ui::font::measure_line_width_logical(metrics_font, &r.choices[sel], all_fonts) as f32;
+                if !w.is_finite() || w <= 0.0 { w = 1.0; }
+                out_w = w * value_zoom;
+            });
+        });
+        (out_w, out_h)
+    };
+
     for i_vis in 0..VISIBLE_ROWS {
         let item_idx = offset_rows + i_vis;
         if item_idx >= total_rows {
@@ -968,8 +998,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let t = (draw_w / width_ref).clamp(0.0, 1.0);
                         let pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
                         let border_w = widescale(2.0, 2.5);
-                        let ring_w = draw_w + pad_x * 2.0;
-                        let ring_h = draw_h + pad_y * 2.0;
+                        let mut ring_w = draw_w + pad_x * 2.0;
+                        let mut ring_h = draw_h + pad_y * 2.0;
                         let mut center_x = choice_center_x; // Align with single-value line
                         // Vertical tween for row transitions
                         let mut center_y = current_row_y;
@@ -981,6 +1011,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 center_x = from_x + (center_x - from_x) * t;
                             }
                             center_y = state.cursor_row_anim_from_y + (current_row_y - state.cursor_row_anim_from_y) * t;
+                        }
+                        // Interpolate ring size between previous row and this row when vertically tweening
+                        if state.cursor_row_anim_t < 1.0 {
+                            if let Some(from_row) = state.cursor_row_anim_from_row {
+                                let (from_dw, from_dh) = calc_row_dims(from_row);
+                                let tsize = (from_dw / width_ref).clamp(0.0, 1.0);
+                                let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * tsize;
+                                let ring_w_from = from_dw + pad_x_from * 2.0;
+                                let ring_h_from = from_dh + pad_y * 2.0;
+                                let t = state.cursor_row_anim_t.clamp(0.0, 1.0);
+                                ring_w = ring_w_from + (ring_w - ring_w_from) * t;
+                                ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                            }
                         }
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;
@@ -1058,14 +1101,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let min_pad_x = widescale(2.0, 3.0);
                             let max_pad_x = widescale(22.0, 28.0);
                             let width_ref = widescale(180.0, 220.0);
-                            let mut size_t = draw_w / width_ref;
-                            if !size_t.is_finite() { size_t = 0.0; }
-                            if size_t < 0.0 { size_t = 0.0; }
-                            if size_t > 1.0 { size_t = 1.0; }
-                            let pad_x = min_pad_x + (max_pad_x - min_pad_x) * size_t;
+                            let mut size_t_to = draw_w / width_ref;
+                            if !size_t_to.is_finite() { size_t_to = 0.0; }
+                            if size_t_to < 0.0 { size_t_to = 0.0; }
+                            if size_t_to > 1.0 { size_t_to = 1.0; }
+                            let pad_x_to = min_pad_x + (max_pad_x - min_pad_x) * size_t_to;
                             let border_w = widescale(2.0, 2.5);
-                            let ring_w = draw_w + pad_x * 2.0;
-                            let ring_h = text_h + pad_y * 2.0;
+                            let mut ring_w = draw_w + pad_x_to * 2.0;
+                            let mut ring_h = text_h + pad_y * 2.0;
 
                             // Determine animated center X when tweening, otherwise snap to target.
                             let mut center_x = target_left_x + draw_w * 0.5;
@@ -1087,11 +1130,38 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     let to_center_x = x_positions[to_idx] + widths[to_idx] * 0.5;
                                     let t = state.cursor_anim_t.clamp(0.0, 1.0);
                                     center_x = from_center_x + (to_center_x - from_center_x) * t;
+                                    // Also interpolate ring size from previous choice to current choice
+                                    let from_draw_w = widths[from_idx];
+                                    let mut size_t_from = from_draw_w / width_ref;
+                                    if !size_t_from.is_finite() { size_t_from = 0.0; }
+                                    if size_t_from < 0.0 { size_t_from = 0.0; }
+                                    if size_t_from > 1.0 { size_t_from = 1.0; }
+                                    let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                    let ring_w_from = from_draw_w + pad_x_from * 2.0;
+                                    let ring_h_from = text_h + pad_y * 2.0;
+                                    ring_w = ring_w_from + (ring_w - ring_w_from) * t;
+                                    ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                                }
+                            }
+                            // If not horizontally tweening, but vertically tweening rows, interpolate size
+                            if state.cursor_row_anim_t < 1.0 && (state.cursor_anim_row.is_none() || state.cursor_anim_row != Some(item_idx)) {
+                                if let Some(from_row) = state.cursor_row_anim_from_row {
+                                    let (from_dw, from_dh) = calc_row_dims(from_row);
+                                    let mut size_t_from = from_dw / width_ref;
+                                    if !size_t_from.is_finite() { size_t_from = 0.0; }
+                                    if size_t_from < 0.0 { size_t_from = 0.0; }
+                                    if size_t_from > 1.0 { size_t_from = 1.0; }
+                                    let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                    let ring_w_from = from_dw + pad_x_from * 2.0;
+                                    let ring_h_from = from_dh + pad_y * 2.0;
+                                    let t = state.cursor_row_anim_t.clamp(0.0, 1.0);
+                                    ring_w = ring_w_from + (ring_w - ring_w_from) * t;
+                                    ring_h = ring_h_from + (ring_h - ring_h_from) * t;
                                 }
                             }
 
-                            let left = center_x - (draw_w * 0.5 + pad_x);
-                            let right = center_x + (draw_w * 0.5 + pad_x);
+                            let mut left = center_x - ring_w * 0.5;
+                            let mut right = center_x + ring_w * 0.5;
                             let top = center_y - ring_h * 0.5;
                             let bottom = center_y + ring_h * 0.5;
                             let mut ring_color = color::decorative_rgba(state.active_color_index);
@@ -1191,8 +1261,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let t = (draw_w / width_ref).clamp(0.0, 1.0);
                         let pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
                         let border_w = widescale(2.0, 2.5);
-                        let ring_w = draw_w + pad_x * 2.0;
-                        let ring_h = draw_h + pad_y * 2.0;
+                        let mut ring_w = draw_w + pad_x * 2.0;
+                        let mut ring_h = draw_h + pad_y * 2.0;
                         let mut center_x = choice_center_x;
                         // Vertical tween for row transitions
                         let mut center_y = current_row_y;
@@ -1204,8 +1274,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             }
                             center_y = state.cursor_row_anim_from_y + (current_row_y - state.cursor_row_anim_from_y) * t;
                         }
-                        let left = center_x - draw_w / 2.0 - pad_x;
-                        let right = center_x + draw_w / 2.0 + pad_x;
+                        // Interpolate ring size between previous row and this row when vertically tweening
+                        if state.cursor_row_anim_t < 1.0 {
+                            if let Some(from_row) = state.cursor_row_anim_from_row {
+                                let (from_dw, from_dh) = calc_row_dims(from_row);
+                                let tsize = (from_dw / width_ref).clamp(0.0, 1.0);
+                                let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * tsize;
+                                let ring_w_from = from_dw + pad_x_from * 2.0;
+                                let ring_h_from = from_dh + pad_y * 2.0;
+                                let t = state.cursor_row_anim_t.clamp(0.0, 1.0);
+                                ring_w = ring_w_from + (ring_w - ring_w_from) * t;
+                                ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                            }
+                        }
+                        let left = center_x - ring_w * 0.5;
+                        let right = center_x + ring_w * 0.5;
                         let top = center_y - ring_h / 2.0;
                         let bottom = center_y + ring_h / 2.0;
                         let mut ring_color = color::decorative_rgba(state.active_color_index);
