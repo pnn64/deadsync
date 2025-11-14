@@ -23,6 +23,8 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 /* ----------------------------- cursor tweening ----------------------------- */
 // Match Simply Love's CursorTweenSeconds for OptionRow cursor movement
 const CURSOR_TWEEN_SECONDS: f32 = 0.1;
+// Spacing between inline items in OptionRows (pixels at current zoom)
+const INLINE_SPACING: f32 = 15.75;
 
 #[inline(always)]
 fn ease_out_cubic(t: f32) -> f32 {
@@ -1003,8 +1005,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let max_pad_x = widescale(22.0, 28.0);
                         let width_ref = widescale(180.0, 220.0);
                         let t = (draw_w / width_ref).clamp(0.0, 1.0);
-                        let pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
+                        let mut pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
                         let border_w = widescale(2.0, 2.5);
+                        // Cap pad so the ring never invades adjacent inline item space
+                        let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
+                        if pad_x > max_pad_by_spacing { pad_x = max_pad_by_spacing; }
                         let mut ring_w = draw_w + pad_x * 2.0;
                         let mut ring_h = draw_h + pad_y * 2.0;
                         let mut center_x = choice_center_x; // Align with single-value line
@@ -1024,7 +1029,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             if let Some(from_row) = state.cursor_row_anim_from_row {
                                 let (from_dw, from_dh) = calc_row_dims(from_row);
                                 let tsize = (from_dw / width_ref).clamp(0.0, 1.0);
-                                let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * tsize;
+                                let mut pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * tsize;
+                                let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
+                                if pad_x_from > max_pad_by_spacing { pad_x_from = max_pad_by_spacing; }
                                 let ring_w_from = from_dw + pad_x_from * 2.0;
                                 let ring_h_from = from_dh + pad_y * 2.0;
                                 let t = ease_out_cubic(state.cursor_row_anim_t);
@@ -1112,8 +1119,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             if !size_t_to.is_finite() { size_t_to = 0.0; }
                             if size_t_to < 0.0 { size_t_to = 0.0; }
                             if size_t_to > 1.0 { size_t_to = 1.0; }
-                            let pad_x_to = min_pad_x + (max_pad_x - min_pad_x) * size_t_to;
+                            let mut pad_x_to = min_pad_x + (max_pad_x - min_pad_x) * size_t_to;
                             let border_w = widescale(2.0, 2.5);
+                            // Cap pad so ring doesn't encroach neighbors
+                            let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
+                            if pad_x_to > max_pad_by_spacing { pad_x_to = max_pad_by_spacing; }
                             let mut ring_w = draw_w + pad_x_to * 2.0;
                             let mut ring_h = text_h + pad_y * 2.0;
 
@@ -1143,7 +1153,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     if !size_t_from.is_finite() { size_t_from = 0.0; }
                                     if size_t_from < 0.0 { size_t_from = 0.0; }
                                     if size_t_from > 1.0 { size_t_from = 1.0; }
-                                    let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                    let mut pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                    let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
+                                    if pad_x_from > max_pad_by_spacing { pad_x_from = max_pad_by_spacing; }
                                     let ring_w_from = from_draw_w + pad_x_from * 2.0;
                                     let ring_h_from = text_h + pad_y * 2.0;
                                     ring_w = ring_w_from + (ring_w - ring_w_from) * t;
@@ -1158,7 +1170,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     if !size_t_from.is_finite() { size_t_from = 0.0; }
                                     if size_t_from < 0.0 { size_t_from = 0.0; }
                                     if size_t_from > 1.0 { size_t_from = 1.0; }
-                                    let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                    let mut pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                    let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
+                                    if pad_x_from > max_pad_by_spacing { pad_x_from = max_pad_by_spacing; }
                                     let ring_w_from = from_dw + pad_x_from * 2.0;
                                     let ring_h_from = from_dh + pad_y * 2.0;
                                     let t = ease_out_cubic(state.cursor_row_anim_t);
@@ -1266,8 +1280,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let max_pad_x = widescale(22.0, 28.0);
                         let width_ref = widescale(180.0, 220.0);
                         let t = (draw_w / width_ref).clamp(0.0, 1.0);
-                        let pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
+                        let mut pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
                         let border_w = widescale(2.0, 2.5);
+                        // Cap pad for single-value rows too (consistency)
+                        let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
+                        if pad_x > max_pad_by_spacing { pad_x = max_pad_by_spacing; }
                         let mut ring_w = draw_w + pad_x * 2.0;
                         let mut ring_h = draw_h + pad_y * 2.0;
                         let mut center_x = choice_center_x;
