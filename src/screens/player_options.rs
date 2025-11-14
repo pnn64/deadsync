@@ -254,23 +254,33 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
         },
         Row {
             name: {
-                // Calculate BPM with music rate applied
-                let song_bpm = if (song.min_bpm - song.max_bpm).abs() < 1e-6 {
-                    song.min_bpm
-                } else {
-                    song.min_bpm
-                };
-                let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
-                let effective_bpm = song_bpm * session_music_rate as f64;
-               
+                // Use reference BPM consistent with gameplay: prefer #DISPLAYBPM (max of range),
+                // otherwise fall back to song.max_bpm, then 120.
+                let s = song.display_bpm.trim();
+                let ref_bpm_opt = if !s.is_empty() && s != "*" {
+                    if let Some((_, max_str)) = s.split_once(':') {
+                        max_str.trim().parse::<f32>().ok()
+                    } else if let Some((_, max_str)) = s.split_once('-') {
+                        max_str.trim().parse::<f32>().ok()
+                    } else {
+                        s.parse::<f32>().ok()
+                    }
+                } else { None };
+                let reference_bpm = ref_bpm_opt
+                    .filter(|v| v.is_finite() && *v > 0.0)
+                    .unwrap_or_else(|| song.max_bpm as f32);
+                let reference_bpm = if reference_bpm.is_finite() && reference_bpm > 0.0 { reference_bpm } else { 120.0 };
+
+                let effective_bpm = (reference_bpm as f64) * session_music_rate as f64;
+
                 // Format BPM: show one decimal only if it doesn't round to a whole number
                 let bpm_str = if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
                     format!("{}", effective_bpm.round() as i32)
                 } else {
                     format!("{:.1}", effective_bpm)
                 };
-               
-                // Format: "Music Rate\nbpm: 120" (matches Simply Love's format from line 160)
+
+                // Format: "Music Rate\nbpm: 120" (matches Simply Love's format)
                 format!("Music Rate\nbpm: {}", bpm_str)
             },
             choices: vec![fmt_music_rate(session_music_rate.clamp(0.5, 3.0))],
@@ -424,15 +434,23 @@ fn change_choice(state: &mut State, delta: isize) {
         state.music_rate = state.music_rate.clamp(min_rate, max_rate);
         row.choices[0] = fmt_music_rate(state.music_rate);
        
-        // Update the row title to show the new BPM
-        let song_bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
-            state.song.min_bpm
-        } else {
-            state.song.min_bpm
-        };
-        let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
-        let effective_bpm = song_bpm * state.music_rate as f64;
-       
+        // Update the row title to show the new BPM using reference BPM (from #DISPLAYBPM or max BPM)
+        let s = state.song.display_bpm.trim();
+        let ref_bpm_opt = if !s.is_empty() && s != "*" {
+            if let Some((_, max_str)) = s.split_once(':') {
+                max_str.trim().parse::<f32>().ok()
+            } else if let Some((_, max_str)) = s.split_once('-') {
+                max_str.trim().parse::<f32>().ok()
+            } else {
+                s.parse::<f32>().ok()
+            }
+        } else { None };
+        let reference_bpm = ref_bpm_opt
+            .filter(|v| v.is_finite() && *v > 0.0)
+            .unwrap_or_else(|| state.song.max_bpm as f32);
+        let reference_bpm = if reference_bpm.is_finite() && reference_bpm > 0.0 { reference_bpm } else { 120.0 };
+        let effective_bpm = (reference_bpm as f64) * state.music_rate as f64;
+
         // Format BPM: show one decimal only if it doesn't round to a whole number
         let bpm_str = if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
             format!("{}", effective_bpm.round() as i32)
@@ -745,15 +763,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let preview_center_x = speed_mod_x + widescale(PREVIEW_CENTER_OFFSET_NORMAL, PREVIEW_CENTER_OFFSET_WIDE);
     let speed_color = color::simply_love_rgba(state.active_color_index);
    
-    // Calculate effective BPM based on speed mod type
-    // IMPORTANT: Use the music rate to get the actual effective BPM
-    let song_bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
-        state.song.min_bpm
-    } else {
-        state.song.min_bpm // Use min for variable BPM songs
-    };
-    let song_bpm = if song_bpm > 0.0 { song_bpm } else { 120.0 };
-    let effective_song_bpm = song_bpm * state.music_rate as f64;
+    // Calculate effective BPM for display based on speed mod type.
+    // For X-mod parity with gameplay, use reference BPM derived from #DISPLAYBPM.
+    // Fall back to the song's max_bpm, then 120.
+    let s = state.song.display_bpm.trim();
+    let ref_bpm_opt = if !s.is_empty() && s != "*" {
+        if let Some((_, max_str)) = s.split_once(':') {
+            max_str.trim().parse::<f32>().ok()
+        } else if let Some((_, max_str)) = s.split_once('-') {
+            max_str.trim().parse::<f32>().ok()
+        } else {
+            s.parse::<f32>().ok()
+        }
+    } else { None };
+    let reference_bpm = ref_bpm_opt
+        .filter(|v| v.is_finite() && *v > 0.0)
+        .unwrap_or_else(|| state.song.max_bpm as f32);
+    let reference_bpm = if reference_bpm.is_finite() && reference_bpm > 0.0 { reference_bpm } else { 120.0 };
+    let effective_song_bpm = (reference_bpm as f64) * state.music_rate as f64;
    
     let speed_text = match state.speed_mod.mod_type.as_str() {
         "X" => {
