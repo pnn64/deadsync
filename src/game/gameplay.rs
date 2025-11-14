@@ -925,6 +925,32 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         let way_off_window = windows[4];
 
         if abs_time_error <= way_off_window {
+            // Determine the full set of non-mine notes on this row (the chord).
+            let row_index = note_row_index;
+            let notes_on_row: Vec<usize> = state
+                .notes
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| n.row_index == row_index && !matches!(n.note_type, NoteType::Mine))
+                .filter(|(_, n)| n.result.is_none())
+                .map(|(i, _)| i)
+                .collect();
+
+            if notes_on_row.is_empty() {
+                return false;
+            }
+
+            // Require that all notes in the chord are currently pressed.
+            let all_pressed = notes_on_row.iter().all(|&i| {
+                let col = state.notes[i].column;
+                state.keyboard_lane_state[col] || state.gamepad_lane_state[col]
+            });
+            if !all_pressed {
+                // Do not judge or remove any single arrow yet.
+                return false;
+            }
+
+            // Judge the chord as a whole using the current event time.
             let grade = if abs_time_error <= fantastic_window {
                 JudgeGrade::Fantastic
             } else if abs_time_error <= excellent_window {
@@ -937,54 +963,53 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 JudgeGrade::WayOff
             };
 
-            let judgment = Judgment {
-                time_error_ms: time_error * 1000.0,
-                grade,
-                row: note_row_index,
-            };
+            // Apply the judgment to each note in the chord, remove arrows, and trigger visuals per receptor.
+            for &idx in &notes_on_row {
+                let note_col = state.notes[idx].column;
+                let row_note_time = state.note_time_cache[idx];
+                let te = current_time - row_note_time;
+                state.notes[idx].result = Some(Judgment {
+                    time_error_ms: te * 1000.0,
+                    grade,
+                    row: row_index,
+                });
 
-            state.notes[note_index].result = Some(judgment);
-            let note_type = state.notes[note_index].note_type.clone();
-            let hold_end_time = state.hold_end_time_cache[note_index];
+                // Remove the corresponding arrow from its column list
+                for col_arrows in &mut state.arrows {
+                    if let Some(pos) = col_arrows.iter().position(|a| a.note_index == idx) {
+                        col_arrows.remove(pos);
+                        break;
+                    }
+                }
+
+                state.receptor_glow_timers[note_col] = RECEPTOR_GLOW_DURATION;
+                trigger_tap_explosion(state, note_col, grade);
+
+                // Start holds/rolls if present
+                if let Some(end_time) = state.hold_end_time_cache[idx] {
+                    if matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll) {
+                        if let Some(hold) = state.notes[idx].hold.as_mut() {
+                            hold.life = MAX_HOLD_LIFE;
+                        }
+                        state.active_holds[note_col] = Some(ActiveHold {
+                            note_index: idx,
+                            end_time,
+                            note_type: state.notes[idx].note_type.clone(),
+                            let_go: false,
+                            is_pressed: true,
+                            life: MAX_HOLD_LIFE,
+                        });
+                    }
+                }
+            }
+
             info!(
-                "JUDGED (pending): Row {}, Col {}, Error: {:.2}ms, Grade: {:?}",
-                note_row_index,
-                column,
+                "JUDGED CHORD (pending): Row {}, Notes: {}, Error: {:.2}ms, Grade: {:?}",
+                row_index,
+                notes_on_row.len(),
                 time_error * 1000.0,
                 grade
             );
-
-            state.arrows[column].remove(arrow_list_index);
-            state.receptor_glow_timers[column] = RECEPTOR_GLOW_DURATION;
-            trigger_tap_explosion(state, column, grade);
-
-            // Immediate combo tick per successful arrow (Great or better).
-            if matches!(grade, JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great) {
-                state.combo = state.combo.saturating_add(1);
-                let combo = state.combo;
-                if combo > 0 && combo % 1000 == 0 {
-                    trigger_combo_milestone(state, ComboMilestoneKind::Thousand);
-                    trigger_combo_milestone(state, ComboMilestoneKind::Hundred);
-                } else if combo > 0 && combo % 100 == 0 {
-                    trigger_combo_milestone(state, ComboMilestoneKind::Hundred);
-                }
-            }
-
-            if matches!(note_type, NoteType::Hold | NoteType::Roll) {
-                if let Some(end_time) = hold_end_time {
-                    if let Some(hold) = state.notes[note_index].hold.as_mut() {
-                        hold.life = MAX_HOLD_LIFE;
-                    }
-                    state.active_holds[column] = Some(ActiveHold {
-                        note_index,
-                        end_time,
-                        note_type,
-                        let_go: false,
-                        is_pressed: true,
-                        life: MAX_HOLD_LIFE,
-                    });
-                }
-            }
 
             return true;
         }
@@ -1104,8 +1129,24 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
         }
         state.full_combo_grade = None;
     } else {
-        // Do not increment combo here; per-arrow combo ticks already occurred
-        // when each arrow was judged. Only update FC tracking on finalized row.
+        // Row is successful (worst grade >= Great). Increment combo by the number
+        // of non-mine notes on this row (jumps/hands add multiple).
+        let combo_increment: u32 = state
+            .notes
+            .iter()
+            .filter(|n| n.row_index == row_index && !matches!(n.note_type, NoteType::Mine))
+            .count() as u32;
+        state.combo = state.combo.saturating_add(combo_increment);
+
+        let combo = state.combo;
+        if combo > 0 && combo % 1000 == 0 {
+            trigger_combo_milestone(state, ComboMilestoneKind::Thousand);
+            trigger_combo_milestone(state, ComboMilestoneKind::Hundred);
+        } else if combo > 0 && combo % 100 == 0 {
+            trigger_combo_milestone(state, ComboMilestoneKind::Hundred);
+        }
+
+        // Update FC tracking on finalized row.
         if !state.first_fc_attempt_broken {
             let new_grade = if let Some(current_fc_grade) = &state.full_combo_grade {
                 final_grade.max(*current_fc_grade)
@@ -1149,32 +1190,28 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
 fn update_judged_rows(state: &mut State) {
     loop {
         let max_row_index = state.notes.iter().map(|n| n.row_index).max().unwrap_or(0);
-        if state.judged_row_cursor > max_row_index {
-            break;
+        if state.judged_row_cursor > max_row_index { break; }
+
+        // Consider only non-mine notes for row completion and judgment parity.
+        let notes_nonmine_on_row: Vec<&Note> = state
+            .notes
+            .iter()
+            .filter(|n| n.row_index == state.judged_row_cursor && !matches!(n.note_type, NoteType::Mine))
+            .collect();
+
+        // If the row has no non-mine notes, advance past it.
+        if notes_nonmine_on_row.is_empty() {
+            state.judged_row_cursor += 1;
+            continue;
         }
 
-        let is_row_complete = {
-            let notes_on_row: Vec<&Note> = state
-                .notes
-                .iter()
-                .filter(|n| n.row_index == state.judged_row_cursor)
-                .collect();
-            notes_on_row.is_empty()
-                || notes_on_row.iter().all(|n| match n.note_type {
-                    NoteType::Mine => n.mine_result.is_some(),
-                    _ => n.result.is_some(),
-                })
-        };
+        let is_row_complete = notes_nonmine_on_row.iter().all(|n| n.result.is_some());
 
         if is_row_complete {
-            let judgments_on_row: Vec<Judgment> = state
-                .notes
+            let judgments_on_row: Vec<Judgment> = notes_nonmine_on_row
                 .iter()
-                .filter(|n| n.row_index == state.judged_row_cursor)
-                .filter(|n| !matches!(n.note_type, NoteType::Mine))
                 .filter_map(|n| n.result.clone())
                 .collect();
-
             finalize_row_judgment(state, state.judged_row_cursor, judgments_on_row);
             state.judged_row_cursor += 1;
         } else {
