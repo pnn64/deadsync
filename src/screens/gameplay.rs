@@ -734,6 +734,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     .or_else(|| visuals.bottomcap_active.as_ref())
             };
 
+            // Prepare clipped body extents that respect the tail cap on the side
+            // where the tail visually exists. For normal orientation (head above
+            // tail), we clip the body against the tail cap at the bottom. For
+            // reverse orientation (head below tail), we clip the body against the
+            // tail cap at the top.
+            let mut body_top = top;
             let mut body_bottom = bottom;
             if let Some(cap_slot) = tail_slot {
                 let cap_size = scale_sprite(cap_slot.size());
@@ -741,12 +747,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 if cap_height > std::f32::EPSILON {
                     // Keep the body from poking through the bottom cap, but allow
                     // a tiny overlap so the seam stays hidden like ITGmania.
-                    let cap_top = tail_y - cap_height * 0.5;
-                    body_bottom = body_bottom.min(cap_top + 1.0);
+                    if head_is_top {
+                        // Tail visually at the bottom; trim the body bottom.
+                        let cap_top = tail_y - cap_height * 0.5;
+                        body_bottom = body_bottom.min(cap_top + 1.0);
+                    } else {
+                        // Tail visually at the top; trim the body top.
+                        let cap_bottom = tail_y + cap_height * 0.5;
+                        body_top = body_top.max(cap_bottom - 1.0);
+                    }
                 }
             }
 
-            if body_bottom > top {
+            // Track the actual drawn body extents to decide whether the tail cap
+            // should be rendered (prevents floating caps when no body segments were drawn).
+            let mut rendered_body_top: Option<f32> = None;
+            let mut rendered_body_bottom: Option<f32> = None;
+
+            if body_bottom > body_top {
                 if let Some(body_slot) = if use_active {
                     visuals
                         .body_active
@@ -775,9 +793,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let natural_bottom = if head_is_top { tail_y } else { head_y };
                         let hold_length = (natural_bottom - natural_top).abs();
                         let visible_top_distance = if head_is_top {
-                            (top - natural_top).clamp(0.0, hold_length)
+                            (body_top - natural_top).clamp(0.0, hold_length)
                         } else {
-                            (natural_bottom - top).clamp(0.0, hold_length)
+                            (natural_bottom - body_top).clamp(0.0, hold_length)
                         };
                         let visible_bottom_distance = if head_is_top {
                             (body_bottom - natural_top).clamp(0.0, hold_length)
@@ -828,7 +846,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 let distance_end = (next_phase - phase_offset) * segment_height;
                                 let y_start = natural_top + distance_start;
                                 let y_end = natural_top + distance_end;
-                                let segment_top = y_start.max(top);
+                                let segment_top = y_start.max(body_top);
                                 let segment_bottom = y_end.min(body_bottom);
                                 if segment_bottom - segment_top <= std::f32::EPSILON {
                                     phase = next_phase;
@@ -856,6 +874,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     }
                                 }
 
+                                // Update drawn body extents
+                                rendered_body_top = Some(match rendered_body_top {
+                                    None => segment_top,
+                                    Some(v) => v.min(segment_top),
+                                });
+                                rendered_body_bottom = Some(match rendered_body_bottom {
+                                    None => segment_bottom,
+                                    Some(v) => v.max(segment_bottom),
+                                });
+
                                 actors.push(act!(sprite(body_slot.texture_key().to_string()):
                                     align(0.5, 0.5):
                                     xy(playfield_center_x + col_x_offset as f32, segment_center):
@@ -874,26 +902,61 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 emitted += 1;
                             }
                         } else {
-                            // Fallback to the previous approach for reverse-oriented holds until
-                            // reverse support is fully implemented. This preserves existing
-                            // behavior for those edge cases.
-                            let mut segment_bottom = body_bottom;
-                            while segment_bottom - top > 0.01 && emitted < max_segments {
-                                let segment_top = (segment_bottom - segment_height).max(top);
-                                let segment_size = segment_bottom - segment_top;
-                                if segment_size <= std::f32::EPSILON {
-                                    break;
+                            // Reverse-oriented holds (head visually below tail): use a symmetric
+                            // segmenter measured from the natural_top (tail) downward.
+                            let mut phase = visible_top_distance / segment_height;
+                            let phase_end = visible_bottom_distance / segment_height;
+                            let phase_offset = 0.0_f32; // anchor seam at the tail side
+                            let phase_end_adjusted = phase_end + phase_offset;
+
+                            while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
+                                && emitted < max_segments
+                            {
+                                let mut next_phase = (phase.floor() + 1.0).min(phase_end_adjusted);
+                                if next_phase - phase < SEGMENT_PHASE_EPS { next_phase = phase_end_adjusted; }
+                                if next_phase - phase < SEGMENT_PHASE_EPS { break; }
+
+                                let distance_start = (phase - phase_offset) * segment_height;
+                                let distance_end = (next_phase - phase_offset) * segment_height;
+                                let y_start = natural_top + distance_start;
+                                let y_end = natural_top + distance_end;
+                                let segment_top = y_start.max(body_top);
+                                let segment_bottom = y_end.min(body_bottom);
+                                if segment_bottom - segment_top <= std::f32::EPSILON {
+                                    phase = next_phase;
+                                    continue;
                                 }
 
-                                let portion = (segment_size / segment_height).clamp(0.0, 1.0);
-                                let v_diff = v_range.abs();
-                                let v0 = if v_range >= 0.0 {
-                                    v_bottom - v_diff * portion
-                                } else {
-                                    v_bottom + v_diff * portion
-                                };
-                                let v1 = v_bottom;
+                                let base_floor = phase.floor();
+                                let start_fraction = (phase - base_floor).clamp(0.0, 1.0);
+                                let end_fraction = (next_phase - base_floor).clamp(0.0, 1.0);
+                                let mut v0 = v_top + v_range * start_fraction;
+                                let mut v1 = v_top + v_range * end_fraction;
                                 let segment_center = (segment_top + segment_bottom) * 0.5;
+                                let segment_size = segment_bottom - segment_top;
+                                let portion = (segment_size / segment_height).clamp(0.0, 1.0);
+                                let is_last_segment = (body_bottom - segment_bottom).abs() <= 0.5
+                                    || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
+
+                                if is_last_segment {
+                                    if v_range >= 0.0 {
+                                        v1 = v_bottom;
+                                        v0 = v_bottom - v_range.abs() * portion;
+                                    } else {
+                                        v1 = v_bottom;
+                                        v0 = v_bottom + v_range.abs() * portion;
+                                    }
+                                }
+
+                                // Update drawn body extents
+                                rendered_body_top = Some(match rendered_body_top {
+                                    None => segment_top,
+                                    Some(v) => v.min(segment_top),
+                                });
+                                rendered_body_bottom = Some(match rendered_body_bottom {
+                                    None => segment_bottom,
+                                    Some(v) => v.max(segment_bottom),
+                                });
 
                                 actors.push(act!(sprite(body_slot.texture_key().to_string()):
                                     align(0.5, 0.5):
@@ -909,7 +972,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     z(Z_HOLD_BODY)
                                 ));
 
-                                segment_bottom = segment_top;
+                                phase = next_phase;
                                 emitted += 1;
                             }
                         }
@@ -929,6 +992,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let u1 = cap_uv[2];
                     let mut v0 = cap_uv[1];
                     let mut v1 = cap_uv[3];
+
+                    // Only draw the tail cap if the rendered body actually reaches
+                    // the cap side. This prevents floating caps when no body segments
+                    // were drawn near the tail due to scroll gimmicks.
+                    let (rt, rb) = match (rendered_body_top, rendered_body_bottom) {
+                        (Some(t), Some(b)) if b > t + 0.5 => (t, b),
+                        _ => { continue; }
+                    };
+                    let cap_adjacent_ok = if head_is_top {
+                        // Tail visually below; ensure the drawn body bottom is near the tail.
+                        let dist = tail_y - rb;
+                        dist >= -2.0 && dist <= cap_height + 2.0
+                    } else {
+                        // Tail visually above; ensure the drawn body top is near the tail.
+                        let dist = rt - tail_y;
+                        dist >= -2.0 && dist <= cap_height + 2.0
+                    };
+                    if !cap_adjacent_ok { continue; }
 
                     if cap_height > std::f32::EPSILON {
                         let mut cap_top = cap_center - cap_height * 0.5;

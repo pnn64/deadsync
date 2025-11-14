@@ -958,6 +958,18 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             state.receptor_glow_timers[column] = RECEPTOR_GLOW_DURATION;
             trigger_tap_explosion(state, column, grade);
 
+            // Immediate combo tick per successful arrow (Great or better).
+            if matches!(grade, JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great) {
+                state.combo = state.combo.saturating_add(1);
+                let combo = state.combo;
+                if combo > 0 && combo % 1000 == 0 {
+                    trigger_combo_milestone(state, ComboMilestoneKind::Thousand);
+                    trigger_combo_milestone(state, ComboMilestoneKind::Hundred);
+                } else if combo > 0 && combo % 100 == 0 {
+                    trigger_combo_milestone(state, ComboMilestoneKind::Hundred);
+                }
+            }
+
             if matches!(note_type, NoteType::Hold | NoteType::Roll) {
                 if let Some(end_time) = hold_end_time {
                     if let Some(hold) = state.notes[note_index].hold.as_mut() {
@@ -1092,16 +1104,8 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
         }
         state.full_combo_grade = None;
     } else {
-        state.combo += 1;
-
-        let combo = state.combo;
-        if combo > 0 && combo % 1000 == 0 {
-            trigger_combo_milestone(state, ComboMilestoneKind::Thousand);
-            trigger_combo_milestone(state, ComboMilestoneKind::Hundred);
-        } else if combo > 0 && combo % 100 == 0 {
-            trigger_combo_milestone(state, ComboMilestoneKind::Hundred);
-        }
-
+        // Do not increment combo here; per-arrow combo ticks already occurred
+        // when each arrow was judged. Only update FC tracking on finalized row.
         if !state.first_fc_attempt_broken {
             let new_grade = if let Some(current_fc_grade) = &state.full_combo_grade {
                 final_grade.max(*current_fc_grade)
@@ -1145,7 +1149,6 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
 fn update_judged_rows(state: &mut State) {
     loop {
         let max_row_index = state.notes.iter().map(|n| n.row_index).max().unwrap_or(0);
-
         if state.judged_row_cursor > max_row_index {
             break;
         }
