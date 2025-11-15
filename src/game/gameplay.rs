@@ -47,7 +47,7 @@ const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32;
 const TIMING_WINDOW_SECONDS_ROLL: f32 = 0.35;
 
 #[derive(Clone, Debug)]
-struct RowEntry {
+pub(crate) struct RowEntry {
     row_index: usize,
     // Non-mine, non-fake, judgable notes on this row
     nonmine_note_indices: Vec<usize>,
