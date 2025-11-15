@@ -1545,20 +1545,27 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             _ => None,
                         };
                         if let Some(texture) = texture_key {
-                            // 1x2 doubleres: row 0 = Held, row 1 = Let Go
-                            let hold_spacing = 43.0; // spacing between the two sprites (symmetric around center line)
+                            // 1x2 doubleres: row 0 = Held, row 1 = Let Go.
+                            // Match Simply Love's spacing: each sprite is offset horizontally by
+                            // width * 0.4 from the center, after applying our preview zoom.
+                            let zoom = 0.225;
+                            let tex_w = crate::assets::texture_dims(texture)
+                                .map(|meta| meta.w.max(1) as f32)
+                                .unwrap_or(128.0);
+                            let center_offset = tex_w * zoom * 0.4;
+
                             actors.push(act!(sprite(texture):
                                 align(0.5, 0.5):
-                                xy(preview_center_x - hold_spacing * 0.5, current_row_y):
+                                xy(preview_center_x - center_offset, current_row_y):
                                 setstate(0):
-                                zoom(0.225):
+                                zoom(zoom):
                                 z(102)
                             ));
                             actors.push(act!(sprite(texture):
                                 align(0.5, 0.5):
-                                xy(preview_center_x + hold_spacing * 0.5, current_row_y):
+                                xy(preview_center_x + center_offset, current_row_y):
                                 setstate(1):
-                                zoom(0.225):
+                                zoom(zoom):
                                 z(102)
                             ));
                         }
