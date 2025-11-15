@@ -245,6 +245,82 @@ impl AssetManager {
                 "judgements/Love 2x7 (doubleres).png".to_string(),
             ),
             (
+                "judgements/Love Chroma 2x7 (doubleres).png".to_string(),
+                "judgements/Love Chroma 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Rainbowmatic 2x7 (doubleres).png".to_string(),
+                "judgements/Rainbowmatic 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/GrooveNights 2x7 (doubleres).png".to_string(),
+                "judgements/GrooveNights 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Emoticon 2x7 (doubleres).png".to_string(),
+                "judgements/Emoticon 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Censored 1x7 (doubleres).png".to_string(),
+                "judgements/Censored 1x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Chromatic 2x7 (doubleres).png".to_string(),
+                "judgements/Chromatic 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/ITG2 2x7 (doubleres).png".to_string(),
+                "judgements/ITG2 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Bebas 2x7 (doubleres).png".to_string(),
+                "judgements/Bebas 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Code 2x7 (doubleres).png".to_string(),
+                "judgements/Code 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Comic Sans 2x7 (doubleres).png".to_string(),
+                "judgements/Comic Sans 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Focus 2x7 (doubleres).png".to_string(),
+                "judgements/Focus 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Grammar 2x7 (doubleres).png".to_string(),
+                "judgements/Grammar 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Miso 2x7 (doubleres).png".to_string(),
+                "judgements/Miso 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Papyrus 2x7 (doubleres).png".to_string(),
+                "judgements/Papyrus 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Roboto 2x7 (doubleres).png".to_string(),
+                "judgements/Roboto 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Shift 2x7 (doubleres).png".to_string(),
+                "judgements/Shift 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Tactics 2x7 (doubleres).png".to_string(),
+                "judgements/Tactics 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Wendy 2x7 (doubleres).png".to_string(),
+                "judgements/Wendy 2x7 (doubleres).png".to_string(),
+            ),
+            (
+                "judgements/Wendy Chroma 2x7 (doubleres).png".to_string(),
+                "judgements/Wendy Chroma 2x7 (doubleres).png".to_string(),
+            ),
+            (
                 "hold_judgements/Love 1x2 (doubleres).png".to_string(),
                 "hold_judgements/Love 1x2 (doubleres).png".to_string(),
             ),

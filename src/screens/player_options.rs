@@ -210,7 +210,29 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
         },
         Row {
             name: "Judgment Font".to_string(),
-            choices: vec!["Love".to_string(), "Chromatic".to_string(), "ITG2".to_string()],
+            choices: vec![
+                "Love".to_string(),
+                "Love Chroma".to_string(),
+                "Rainbowmatic".to_string(),
+                "GrooveNights".to_string(),
+                "Emoticon".to_string(),
+                "Censored".to_string(),
+                "Chromatic".to_string(),
+                "ITG2".to_string(),
+                "Bebas".to_string(),
+                "Code".to_string(),
+                "Comic Sans".to_string(),
+                "Focus".to_string(),
+                "Grammar".to_string(),
+                "Miso".to_string(),
+                "Papyrus".to_string(),
+                "Roboto".to_string(),
+                "Shift".to_string(),
+                "Tactics".to_string(),
+                "Wendy".to_string(),
+                "Wendy Chroma".to_string(),
+                "None".to_string(),
+            ],
             selected_choice_index: 0,
             help: vec!["Pick your judgment font.".to_string()],
             choice_difficulty_indices: None,
@@ -352,6 +374,32 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
             crate::game::profile::BackgroundFilter::Dark => 1,
             crate::game::profile::BackgroundFilter::Darker => 2,
             crate::game::profile::BackgroundFilter::Darkest => 3,
+        };
+    }
+    // Initialize Judgment Font row from profile setting
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Judgment Font") {
+        row.selected_choice_index = match profile.judgment_graphic {
+            crate::game::profile::JudgmentGraphic::Love => 0,
+            crate::game::profile::JudgmentGraphic::LoveChroma => 1,
+            crate::game::profile::JudgmentGraphic::Rainbowmatic => 2,
+            crate::game::profile::JudgmentGraphic::GrooveNights => 3,
+            crate::game::profile::JudgmentGraphic::Emoticon => 4,
+            crate::game::profile::JudgmentGraphic::Censored => 5,
+            crate::game::profile::JudgmentGraphic::Chromatic => 6,
+            crate::game::profile::JudgmentGraphic::ITG2 => 7,
+            crate::game::profile::JudgmentGraphic::Bebas => 8,
+            crate::game::profile::JudgmentGraphic::Code => 9,
+            crate::game::profile::JudgmentGraphic::ComicSans => 10,
+            crate::game::profile::JudgmentGraphic::Focus => 11,
+            crate::game::profile::JudgmentGraphic::Grammar => 12,
+            crate::game::profile::JudgmentGraphic::Miso => 13,
+            crate::game::profile::JudgmentGraphic::Papyrus => 14,
+            crate::game::profile::JudgmentGraphic::Roboto => 15,
+            crate::game::profile::JudgmentGraphic::Shift => 16,
+            crate::game::profile::JudgmentGraphic::Tactics => 17,
+            crate::game::profile::JudgmentGraphic::Wendy => 18,
+            crate::game::profile::JudgmentGraphic::WendyChroma => 19,
+            crate::game::profile::JudgmentGraphic::None => 20,
         };
     }
     // Initialize Hold Judgment row from profile setting (Love, mute, ITG2, None)
@@ -544,6 +592,33 @@ fn change_choice(state: &mut State, delta: isize) {
                     _ => crate::game::profile::BackgroundFilter::Darkest,
                 };
                 crate::game::profile::update_background_filter(setting);
+            } else if row.name == "Judgment Font" {
+                // Persist tap judgment font selection to the profile
+                let setting = match row.selected_choice_index {
+                    0 => crate::game::profile::JudgmentGraphic::Love,
+                    1 => crate::game::profile::JudgmentGraphic::LoveChroma,
+                    2 => crate::game::profile::JudgmentGraphic::Rainbowmatic,
+                    3 => crate::game::profile::JudgmentGraphic::GrooveNights,
+                    4 => crate::game::profile::JudgmentGraphic::Emoticon,
+                    5 => crate::game::profile::JudgmentGraphic::Censored,
+                    6 => crate::game::profile::JudgmentGraphic::Chromatic,
+                    7 => crate::game::profile::JudgmentGraphic::ITG2,
+                    8 => crate::game::profile::JudgmentGraphic::Bebas,
+                    9 => crate::game::profile::JudgmentGraphic::Code,
+                    10 => crate::game::profile::JudgmentGraphic::ComicSans,
+                    11 => crate::game::profile::JudgmentGraphic::Focus,
+                    12 => crate::game::profile::JudgmentGraphic::Grammar,
+                    13 => crate::game::profile::JudgmentGraphic::Miso,
+                    14 => crate::game::profile::JudgmentGraphic::Papyrus,
+                    15 => crate::game::profile::JudgmentGraphic::Roboto,
+                    16 => crate::game::profile::JudgmentGraphic::Shift,
+                    17 => crate::game::profile::JudgmentGraphic::Tactics,
+                    18 => crate::game::profile::JudgmentGraphic::Wendy,
+                    19 => crate::game::profile::JudgmentGraphic::WendyChroma,
+                    20 => crate::game::profile::JudgmentGraphic::None,
+                    _ => crate::game::profile::JudgmentGraphic::Love,
+                };
+                crate::game::profile::update_judgment_graphic(setting);
             } else if row.name == "Hold Judgment" {
                 // Persist hold judgment graphic selection to profile
                 let setting = match row.selected_choice_index {
@@ -1386,18 +1461,43 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         ));
                     }
                     // Add previews (centered on a shared vertical line)
-                    // Add judgment preview for "Judgment Font" row showing Fantastic frame
-                    if row.name == "Judgment Font" && choice_text == "Love" {
-                        // Love judgment sprite is 2x7 (2 columns, 7 rows) at double resolution
-                        // Fantastic is the first frame (top-left, column 0, row 0)
-                        // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
-                        actors.push(act!(sprite("judgements/Love 2x7 (doubleres).png"):
-                            align(0.5, 0.5):
-                            xy(preview_center_x, current_row_y):
-                            setstate(0):
-                            zoom(0.225):
-                            z(102)
-                        ));
+                    // Add judgment preview for "Judgment Font" row showing Fantastic frame of the selected font
+                    if row.name == "Judgment Font" {
+                        let texture_key = match choice_text.as_str() {
+                            "Love" => Some("judgements/Love 2x7 (doubleres).png"),
+                            "Love Chroma" => Some("judgements/Love Chroma 2x7 (doubleres).png"),
+                            "Rainbowmatic" => Some("judgements/Rainbowmatic 2x7 (doubleres).png"),
+                            "GrooveNights" => Some("judgements/GrooveNights 2x7 (doubleres).png"),
+                            "Emoticon" => Some("judgements/Emoticon 2x7 (doubleres).png"),
+                            "Censored" => Some("judgements/Censored 1x7 (doubleres).png"),
+                            "Chromatic" => Some("judgements/Chromatic 2x7 (doubleres).png"),
+                            "ITG2" => Some("judgements/ITG2 2x7 (doubleres).png"),
+                            "Bebas" => Some("judgements/Bebas 2x7 (doubleres).png"),
+                            "Code" => Some("judgements/Code 2x7 (doubleres).png"),
+                            "Comic Sans" => Some("judgements/Comic Sans 2x7 (doubleres).png"),
+                            "Focus" => Some("judgements/Focus 2x7 (doubleres).png"),
+                            "Grammar" => Some("judgements/Grammar 2x7 (doubleres).png"),
+                            "Miso" => Some("judgements/Miso 2x7 (doubleres).png"),
+                            "Papyrus" => Some("judgements/Papyrus 2x7 (doubleres).png"),
+                            "Roboto" => Some("judgements/Roboto 2x7 (doubleres).png"),
+                            "Shift" => Some("judgements/Shift 2x7 (doubleres).png"),
+                            "Tactics" => Some("judgements/Tactics 2x7 (doubleres).png"),
+                            "Wendy" => Some("judgements/Wendy 2x7 (doubleres).png"),
+                            "Wendy Chroma" => Some("judgements/Wendy Chroma 2x7 (doubleres).png"),
+                            "None" => None,
+                            _ => None,
+                        };
+                        if let Some(texture) = texture_key {
+                            // Fantastic is the first frame (top-left, column 0, row 0)
+                            // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
+                            actors.push(act!(sprite(texture):
+                                align(0.5, 0.5):
+                                xy(preview_center_x, current_row_y):
+                                setstate(0):
+                                zoom(0.225):
+                                z(102)
+                            ));
+                        }
                     }
                     // Add hold judgment preview for "Hold Judgment" row showing both frames (Held and Let Go)
                     if row.name == "Hold Judgment" {

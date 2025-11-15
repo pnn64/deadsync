@@ -1444,8 +1444,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
 
-    // Judgment Sprite (Love)
+    // Judgment Sprite (tap judgments)
     if let Some(render_info) = &state.last_judgment {
+        if matches!(profile.judgment_graphic, profile::JudgmentGraphic::None) {
+            // Player chose to hide tap judgment graphics.
+            // Still keep life/score effects; only suppress the visual sprite.
+            // (Parity with HoldJudgmentGraphic::None behavior.)
+            // Just skip rendering for this judgment instance.
+            ()
+        } else {
         let judgment = &render_info.judgment;
         let elapsed = render_info.judged_at.elapsed().as_secs_f32();
         if elapsed < 0.9 {
@@ -1467,12 +1474,62 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 frame_base += 1;
             }
             let frame_offset = if offset_sec < 0.0 { 0 } else { 1 };
-            let linear_index = (frame_base * 2 + frame_offset) as u32;
+            let columns = match profile.judgment_graphic {
+                profile::JudgmentGraphic::Censored => 1,
+                _ => 2,
+            };
+            let col_index = if columns > 1 { frame_offset } else { 0 };
+            let linear_index = (frame_base * columns + col_index) as u32;
 
-            actors.push(act!(sprite("judgements/Love 2x7 (doubleres).png"):
+            let judgment_texture = match profile.judgment_graphic {
+                profile::JudgmentGraphic::Bebas =>
+                    "judgements/Bebas 2x7 (doubleres).png",
+                profile::JudgmentGraphic::Censored =>
+                    "judgements/Censored 1x7 (doubleres).png",
+                profile::JudgmentGraphic::Chromatic =>
+                    "judgements/Chromatic 2x7 (doubleres).png",
+                profile::JudgmentGraphic::Code =>
+                    "judgements/Code 2x7 (doubleres).png",
+                profile::JudgmentGraphic::ComicSans =>
+                    "judgements/Comic Sans 2x7 (doubleres).png",
+                profile::JudgmentGraphic::Emoticon =>
+                    "judgements/Emoticon 2x7 (doubleres).png",
+                profile::JudgmentGraphic::Focus =>
+                    "judgements/Focus 2x7 (doubleres).png",
+                profile::JudgmentGraphic::Grammar =>
+                    "judgements/Grammar 2x7 (doubleres).png",
+                profile::JudgmentGraphic::GrooveNights =>
+                    "judgements/GrooveNights 2x7 (doubleres).png",
+                profile::JudgmentGraphic::ITG2 =>
+                    "judgements/ITG2 2x7 (doubleres).png",
+                profile::JudgmentGraphic::Love =>
+                    "judgements/Love 2x7 (doubleres).png",
+                profile::JudgmentGraphic::LoveChroma =>
+                    "judgements/Love Chroma 2x7 (doubleres).png",
+                profile::JudgmentGraphic::Miso =>
+                    "judgements/Miso 2x7 (doubleres).png",
+                profile::JudgmentGraphic::Papyrus =>
+                    "judgements/Papyrus 2x7 (doubleres).png",
+                profile::JudgmentGraphic::Rainbowmatic =>
+                    "judgements/Rainbowmatic 2x7 (doubleres).png",
+                profile::JudgmentGraphic::Roboto =>
+                    "judgements/Roboto 2x7 (doubleres).png",
+                profile::JudgmentGraphic::Shift =>
+                    "judgements/Shift 2x7 (doubleres).png",
+                profile::JudgmentGraphic::Tactics =>
+                    "judgements/Tactics 2x7 (doubleres).png",
+                profile::JudgmentGraphic::Wendy =>
+                    "judgements/Wendy 2x7 (doubleres).png",
+                profile::JudgmentGraphic::WendyChroma =>
+                    "judgements/Wendy Chroma 2x7 (doubleres).png",
+                profile::JudgmentGraphic::None => unreachable!("JudgmentGraphic::None is filtered above"),
+            };
+
+            actors.push(act!(sprite(judgment_texture):
                 align(0.5, 0.5): xy(playfield_center_x, screen_center_y() - 30.0):
                 z(200): zoomtoheight(76.0): setstate(linear_index): zoom(zoom)
             ));
+        }
         }
     }
 

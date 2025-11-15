@@ -89,6 +89,100 @@ impl core::fmt::Display for HoldJudgmentGraphic {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JudgmentGraphic {
+    Bebas,
+    Censored,
+    Chromatic,
+    Code,
+    ComicSans,
+    Emoticon,
+    Focus,
+    Grammar,
+    GrooveNights,
+    ITG2,
+    Love,
+    LoveChroma,
+    Miso,
+    Papyrus,
+    Rainbowmatic,
+    Roboto,
+    Shift,
+    Tactics,
+    Wendy,
+    WendyChroma,
+    None,
+}
+
+impl Default for JudgmentGraphic {
+    fn default() -> Self {
+        JudgmentGraphic::Love
+    }
+}
+
+impl FromStr for JudgmentGraphic {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let v = s.trim().to_lowercase();
+        match v.as_str() {
+            "bebas" => Ok(Self::Bebas),
+            "censored" => Ok(Self::Censored),
+            "chromatic" => Ok(Self::Chromatic),
+            "code" => Ok(Self::Code),
+            "comic sans" => Ok(Self::ComicSans),
+            "comicsans" => Ok(Self::ComicSans),
+            "emoticon" => Ok(Self::Emoticon),
+            "focus" => Ok(Self::Focus),
+            "grammar" => Ok(Self::Grammar),
+            "groovenights" => Ok(Self::GrooveNights),
+            "groove nights" => Ok(Self::GrooveNights),
+            "itg2" => Ok(Self::ITG2),
+            "love" => Ok(Self::Love),
+            "love chroma" => Ok(Self::LoveChroma),
+            "lovechroma" => Ok(Self::LoveChroma),
+            "miso" => Ok(Self::Miso),
+            "papyrus" => Ok(Self::Papyrus),
+            "rainbowmatic" => Ok(Self::Rainbowmatic),
+            "roboto" => Ok(Self::Roboto),
+            "shift" => Ok(Self::Shift),
+            "tactics" => Ok(Self::Tactics),
+            "wendy" => Ok(Self::Wendy),
+            "wendy chroma" => Ok(Self::WendyChroma),
+            "wendychroma" => Ok(Self::WendyChroma),
+            "none" => Ok(Self::None),
+            other => Err(format!("'{}' is not a valid JudgmentGraphic setting", other)),
+        }
+    }
+}
+
+impl core::fmt::Display for JudgmentGraphic {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Bebas => write!(f, "Bebas"),
+            Self::Censored => write!(f, "Censored"),
+            Self::Chromatic => write!(f, "Chromatic"),
+            Self::Code => write!(f, "Code"),
+            Self::ComicSans => write!(f, "Comic Sans"),
+            Self::Emoticon => write!(f, "Emoticon"),
+            Self::Focus => write!(f, "Focus"),
+            Self::Grammar => write!(f, "Grammar"),
+            Self::GrooveNights => write!(f, "GrooveNights"),
+            Self::ITG2 => write!(f, "ITG2"),
+            Self::Love => write!(f, "Love"),
+            Self::LoveChroma => write!(f, "Love Chroma"),
+            Self::Miso => write!(f, "Miso"),
+            Self::Papyrus => write!(f, "Papyrus"),
+            Self::Rainbowmatic => write!(f, "Rainbowmatic"),
+            Self::Roboto => write!(f, "Roboto"),
+            Self::Shift => write!(f, "Shift"),
+            Self::Tactics => write!(f, "Tactics"),
+            Self::Wendy => write!(f, "Wendy"),
+            Self::WendyChroma => write!(f, "Wendy Chroma"),
+            Self::None => write!(f, "None"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub display_name: String,
@@ -98,6 +192,7 @@ pub struct Profile {
     pub groovestats_username: String,
     pub background_filter: BackgroundFilter,
     pub hold_judgment_graphic: HoldJudgmentGraphic,
+    pub judgment_graphic: JudgmentGraphic,
     pub avatar_path: Option<PathBuf>,
     pub avatar_texture_key: Option<String>,
     pub scroll_speed: ScrollSpeedSetting,
@@ -113,6 +208,7 @@ impl Default for Profile {
             groovestats_username: "".to_string(),
             background_filter: BackgroundFilter::default(),
             hold_judgment_graphic: HoldJudgmentGraphic::default(),
+            judgment_graphic: JudgmentGraphic::default(),
             avatar_path: None,
             avatar_texture_key: None,
             scroll_speed: ScrollSpeedSetting::default(),
@@ -151,6 +247,10 @@ fn create_default_files() -> Result<(), std::io::Error> {
             "HoldJudgmentGraphic = {}\n",
             default_profile.hold_judgment_graphic
         ));
+        content.push_str(&format!(
+            "JudgmentGraphic = {}\n",
+            default_profile.judgment_graphic
+        ));
         content.push('\n');
 
         content.push_str("[userprofile]\n");
@@ -187,6 +287,10 @@ fn save_profile_ini() {
     content.push_str(&format!(
         "HoldJudgmentGraphic={}\n",
         profile.hold_judgment_graphic
+    ));
+    content.push_str(&format!(
+        "JudgmentGraphic={}\n",
+        profile.judgment_graphic
     ));
     content.push('\n');
 
@@ -244,6 +348,10 @@ pub fn load() {
                 .get("PlayerOptions", "HoldJudgmentGraphic")
                 .and_then(|s| HoldJudgmentGraphic::from_str(&s).ok())
                 .unwrap_or(default_profile.hold_judgment_graphic);
+            profile.judgment_graphic = profile_conf
+                .get("PlayerOptions", "JudgmentGraphic")
+                .and_then(|s| JudgmentGraphic::from_str(&s).ok())
+                .unwrap_or(default_profile.judgment_graphic);
             profile.scroll_speed = profile_conf
                 .get("PlayerOptions", "ScrollSpeed")
                 .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
@@ -340,6 +448,17 @@ pub fn update_hold_judgment_graphic(setting: HoldJudgmentGraphic) {
             return;
         }
         profile.hold_judgment_graphic = setting;
+    }
+    save_profile_ini();
+}
+
+pub fn update_judgment_graphic(setting: JudgmentGraphic) {
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        if profile.judgment_graphic == setting {
+            return;
+        }
+        profile.judgment_graphic = setting;
     }
     save_profile_ini();
 }
