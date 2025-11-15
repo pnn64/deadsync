@@ -138,6 +138,9 @@ pub struct State {
     // Row index for fast per-row operations
     pub row_entries: Vec<RowEntry>,
     pub row_pos_by_index: HashMap<usize, usize>,
+    // Track holds that are decaying after being let go
+    pub decaying_hold_indices: Vec<usize>,
+    pub hold_decay_active: Vec<bool>,
 
     pub combo: u32,
     pub miss_combo: u32,
@@ -486,6 +489,9 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         + crate::game::timing::effective_windows_s()[4]
         + TRANSITION_OUT_DURATION;
 
+    // Capture length before moving notes into state
+    let notes_len = notes.len();
+
     State {
         song,
         chart,
@@ -507,6 +513,8 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         next_mine_avoid_cursor: 0,
         row_entries,
         row_pos_by_index,
+        decaying_hold_indices: Vec::new(),
+        hold_decay_active: vec![false; notes_len],
         judgment_counts: HashMap::from_iter([
             (JudgeGrade::Fantastic, 0),
             (JudgeGrade::Excellent, 0),
@@ -689,27 +697,30 @@ fn handle_mine_hit(
     true
 }
 
+#[inline(always)]
 fn try_hit_mine_while_held(state: &mut State, column: usize, current_time: f32) -> bool {
     // Time-based detection independent of arrow spawning. Choose the closest
     // unjudged mine in this column within the mine window, if any.
     let mine_window = crate::game::timing::mine_window_s();
-    let mut best: Option<(usize, f32)> = None; // (note_index, time_error)
+    let start_t = current_time - mine_window;
+    let end_t = current_time + mine_window;
+    // Narrow scan with time bounds
+    let times = &state.note_time_cache;
+    let start_idx = times.partition_point(|&t| t < start_t);
+    let end_idx = times.partition_point(|&t| t <= end_t);
 
-    for (i, note) in state.notes.iter().enumerate() {
-        if note.column != column {
-            continue;
-        }
-        if !matches!(note.note_type, NoteType::Mine) {
-            continue;
-        }
+    let mut best: Option<(usize, f32)> = None; // (note_index, time_error)
+    for i in start_idx..end_idx {
+        let note = &state.notes[i];
+        if note.column != column { continue; }
+        if !matches!(note.note_type, NoteType::Mine) { continue; }
         if note.is_fake { continue; }
         if !state.timing.is_judgable_at_beat(note.beat) { continue; }
-        if note.mine_result.is_some() {
-            continue;
-        }
-        let note_time = state.note_time_cache[i];
+        if note.mine_result.is_some() { continue; }
+        let note_time = times[i];
         let time_error = current_time - note_time;
         let abs_err = time_error.abs();
+        // abs_err is guaranteed <= mine_window by construction, but keep guard for safety
         if abs_err <= mine_window {
             match best {
                 Some((_, best_err)) if abs_err >= best_err.abs() => {}
@@ -795,6 +806,10 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
         if hold.let_go_started_at.is_none() {
             hold.let_go_started_at = Some(state.current_music_time);
             hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
+            if note_index < state.hold_decay_active.len() && !state.hold_decay_active[note_index] {
+                state.hold_decay_active[note_index] = true;
+                state.decaying_hold_indices.push(note_index);
+            }
         }
     }
 
@@ -831,6 +846,10 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
         hold.let_go_starting_life = 0.0;
         hold.last_held_row_index = hold.end_row_index;
         hold.last_held_beat = hold.end_beat;
+    }
+    if note_index < state.hold_decay_active.len() && state.hold_decay_active[note_index] {
+        state.hold_decay_active[note_index] = false;
+        // Removal from decaying_hold_indices is handled in decay loop when encountered.
     }
 
     if state.hands_holding_count_for_stats > 0 {
@@ -1026,7 +1045,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     let way_off_window = windows[4];
     let mine_window = crate::game::timing::mine_window_s();
 
-    let mut best: Option<(usize, Arrow, f32)> = None; // (arrow_list_index, arrow, abs_time_error)
+    let mut best: Option<(usize, usize, f32)> = None; // (arrow_list_index, note_index, abs_time_error)
     for (idx, arrow) in state.arrows[column]
         .iter()
         .enumerate()
@@ -1035,19 +1054,19 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         let n = &state.notes[arrow.note_index];
         if !state.timing.is_judgable_at_beat(n.beat) { continue; }
         if n.is_fake { continue; }
-        let note_time = state.note_time_cache[arrow.note_index];
+        let note_index = arrow.note_index;
+        let note_time = state.note_time_cache[note_index];
         let abs_err = (current_time - note_time).abs();
         let window = if matches!(n.note_type, NoteType::Mine) { mine_window } else { way_off_window };
         if abs_err <= window {
             match best {
                 Some((_, _, best_err)) if abs_err >= best_err => {}
-                _ => best = Some((idx, arrow.clone(), abs_err)),
+                _ => best = Some((idx, note_index, abs_err)),
             }
         }
     }
 
-    if let Some((arrow_list_index, arrow_to_judge, _)) = best {
-        let note_index = arrow_to_judge.note_index;
+    if let Some((arrow_list_index, note_index, _)) = best {
         let note_row_index = state.notes[note_index].row_index;
         let note_type = state.notes[note_index].note_type.clone();
         let note_time = state.note_time_cache[note_index];
@@ -1428,22 +1447,55 @@ fn process_input_edges(state: &mut State, music_time_sec: f32, now: Instant) {
 
 #[inline(always)]
 fn decay_let_go_hold_life(state: &mut State) {
-    for note in &mut state.notes {
-        let Some(hold) = note.hold.as_mut() else { continue; };
-        if hold.result == Some(HoldResult::Held) { continue; }
-        let Some(start_time) = hold.let_go_started_at else { continue; };
+    let mut i = 0;
+    while i < state.decaying_hold_indices.len() {
+        let note_index = state.decaying_hold_indices[i];
+        let Some(note) = state.notes.get_mut(note_index) else {
+            // Defensive: remove if index is invalid
+            state.decaying_hold_indices.swap_remove(i);
+            continue;
+        };
+        let Some(hold) = note.hold.as_mut() else {
+            state.hold_decay_active[note_index] = false;
+            state.decaying_hold_indices.swap_remove(i);
+            continue;
+        };
 
+        if hold.result == Some(HoldResult::Held) || hold.let_go_started_at.is_none() {
+            state.hold_decay_active[note_index] = false;
+            state.decaying_hold_indices.swap_remove(i);
+            continue;
+        }
+
+        let start_time = hold.let_go_started_at.unwrap();
         let base_life = hold.let_go_starting_life.clamp(0.0, MAX_HOLD_LIFE);
-        if base_life <= 0.0 { hold.life = 0.0; continue; }
+        if base_life <= 0.0 {
+            hold.life = 0.0;
+            state.hold_decay_active[note_index] = false;
+            state.decaying_hold_indices.swap_remove(i);
+            continue;
+        }
 
         let window = match note.note_type {
             NoteType::Roll => TIMING_WINDOW_SECONDS_ROLL,
             _ => TIMING_WINDOW_SECONDS_HOLD,
         };
-        if window <= 0.0 { hold.life = 0.0; continue; }
+        if window <= 0.0 {
+            hold.life = 0.0;
+            state.hold_decay_active[note_index] = false;
+            state.decaying_hold_indices.swap_remove(i);
+            continue;
+        }
 
         let elapsed = (state.current_music_time - start_time).max(0.0);
         hold.life = (base_life - elapsed / window).max(0.0);
+
+        if hold.life <= 0.0 {
+            state.hold_decay_active[note_index] = false;
+            state.decaying_hold_indices.swap_remove(i);
+        } else {
+            i += 1;
+        }
     }
 }
 
@@ -1598,8 +1650,7 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
             .position(|arrow| state.notes[arrow.note_index].result.is_none())
         else { continue; };
 
-        let arrow = col_arrows[next_arrow_index].clone();
-        let note_index = arrow.note_index;
+        let note_index = col_arrows[next_arrow_index].note_index;
         let (note_row_index, note_type) = {
             let note = &state.notes[note_index];
             (note.row_index, note.note_type.clone())
@@ -1653,6 +1704,10 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                     if hold.let_go_started_at.is_none() {
                         hold.let_go_started_at = Some(music_time_sec);
                         hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
+                        if note_index < state.hold_decay_active.len() && !state.hold_decay_active[note_index] {
+                            state.hold_decay_active[note_index] = true;
+                            state.decaying_hold_indices.push(note_index);
+                        }
                     }
                 }
             }
@@ -1695,6 +1750,10 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                         if hold.let_go_started_at.is_none() {
                             hold.let_go_started_at = Some(music_time_sec);
                             hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
+                            if i < state.hold_decay_active.len() && !state.hold_decay_active[i] {
+                                state.hold_decay_active[i] = true;
+                                state.decaying_hold_indices.push(i);
+                            }
                         }
                     }
                 }
