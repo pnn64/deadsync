@@ -1948,9 +1948,38 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
             let font_name = "miso";
             let text_zoom = banner_data_zoom * 0.833;
+            // Time values currently render without explicit zoom, so treat as 1.0
+            let time_value_zoom = 1.0_f32;
 
             let numbers_block_width = (digits as f32) * max_digit_w;
             let numbers_left_x = numbers_cx - numbers_block_width + 2.0;
+
+            // Measure dynamic widths so labels always appear after the time text
+            let (total_width_px, remaining_width_px, baseline_width_px) =
+                asset_manager
+                    .with_font(font_name, |time_font| {
+                        let total_w = (font::measure_line_width_logical(
+                            time_font,
+                            &total_time_str,
+                            all_fonts,
+                        ) as f32)
+                            * time_value_zoom;
+                        let remaining_w = (font::measure_line_width_logical(
+                            time_font,
+                            &remaining_time_str,
+                            all_fonts,
+                        ) as f32)
+                            * time_value_zoom;
+                        // Use "9:59" as the baseline look the layout was tuned for
+                        let baseline_w = (font::measure_line_width_logical(
+                            time_font,
+                            "9:59",
+                            all_fonts,
+                        ) as f32)
+                            * time_value_zoom;
+                        (total_w, remaining_w, baseline_w)
+                    })
+                    .unwrap_or((0.0_f32, 0.0_f32, 0.0_f32));
 
             let red_color = color::rgba_hex("#ff3030");
             let white_color = [1.0, 1.0, 1.0, 1.0];
@@ -1958,7 +1987,14 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
             // --- Total Time Row ---
             let y_pos_total = sidepane_center_y + local_y + 13.0;
-            let label_offset = 29.0;
+            let label_offset: f32 = 29.0;
+            // Keep original spacing for <= 9:59, otherwise push label after the time width
+            let desired_gap_px = (label_offset - baseline_width_px).max(4.0_f32);
+            let label_offset_total = if total_width_px > baseline_width_px {
+                total_width_px + desired_gap_px
+            } else {
+                label_offset
+            };
 
             actors.push(act!(text: font(font_name): settext(total_time_str):
                 align(0.0, 0.5): horizalign(left):
@@ -1968,7 +2004,7 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
             actors.push(act!(text: font(font_name): settext(" song"):
                 align(0.0, 0.5): horizalign(left):
-                xy(numbers_left_x + label_offset, y_pos_total + 1.0):
+                xy(numbers_left_x + label_offset_total, y_pos_total + 1.0):
                 zoom(text_zoom): z(71):
                 diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
             ));
@@ -1982,9 +2018,15 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 z(71):
                 diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
             ));
+            // Keep original spacing for <= 9:59, otherwise push label after the time width
+            let label_offset_remaining = if remaining_width_px > baseline_width_px {
+                remaining_width_px + desired_gap_px
+            } else {
+                label_offset
+            };
             actors.push(act!(text: font(font_name): settext(" remaining"):
                 align(0.0, 0.5): horizalign(left):
-                xy(numbers_left_x + label_offset, y_pos_remaining + 1.0):
+                xy(numbers_left_x + label_offset_remaining, y_pos_remaining + 1.0):
                 zoom(text_zoom): z(71):
                 diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
             ));
