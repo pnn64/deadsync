@@ -347,6 +347,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::new();
     let profile = profile::get();
 
+    let hold_judgment_texture: Option<&str> = match profile.hold_judgment_graphic {
+        profile::HoldJudgmentGraphic::Love => {
+            Some("hold_judgements/Love 1x2 (doubleres).png")
+        }
+        profile::HoldJudgmentGraphic::Mute => {
+            Some("hold_judgements/mute 1x2 (doubleres).png")
+        }
+        profile::HoldJudgmentGraphic::ITG2 => {
+            Some("hold_judgements/ITG2 1x2 (doubleres).png")
+        }
+        profile::HoldJudgmentGraphic::None => None,
+    };
+
     // --- Background and Filter ---
     actors.push(build_background(state));
 
@@ -1487,21 +1500,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             HoldResult::LetGo => 1,
         } as u32;
 
-        let column_offset = state
-            .noteskin
-            .as_ref()
-            .and_then(|ns| ns.column_xs.get(column))
-            .map(|&x| x as f32)
-            .unwrap_or_else(|| ((column as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE);
+        if let Some(texture) = hold_judgment_texture {
+            let column_offset = state
+                .noteskin
+                .as_ref()
+                .and_then(|ns| ns.column_xs.get(column))
+                .map(|&x| x as f32)
+                .unwrap_or_else(|| ((column as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE);
 
-        actors.push(act!(sprite("hold_judgements/Love 1x2 (doubleres).png"):
-            align(0.5, 0.5):
-            xy(playfield_center_x + column_offset, hold_judgment_y):
-            z(195):
-            setstate(frame_index):
-            zoom(zoom):
-            diffusealpha(1.0)
-        ));
+            actors.push(act!(sprite(texture):
+                align(0.5, 0.5):
+                xy(playfield_center_x + column_offset, hold_judgment_y):
+                z(195):
+                setstate(frame_index):
+                zoom(zoom):
+                diffusealpha(1.0)
+            ));
+        }
     }
 
     // Difficulty Box

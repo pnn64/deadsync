@@ -227,7 +227,12 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
         },
         Row {
             name: "Hold Judgment".to_string(),
-            choices: vec!["Love".to_string(), "mute".to_string(), "ITG2".to_string()],
+            choices: vec![
+                "Love".to_string(),
+                "mute".to_string(),
+                "ITG2".to_string(),
+                "None".to_string(),
+            ],
             selected_choice_index: 0,
             help: vec!["Change the judgment graphics displayed for hold notes.".to_string()],
             choice_difficulty_indices: None,
@@ -347,6 +352,15 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
             crate::game::profile::BackgroundFilter::Dark => 1,
             crate::game::profile::BackgroundFilter::Darker => 2,
             crate::game::profile::BackgroundFilter::Darkest => 3,
+        };
+    }
+    // Initialize Hold Judgment row from profile setting (Love, mute, ITG2, None)
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Hold Judgment") {
+        row.selected_choice_index = match profile.hold_judgment_graphic {
+            crate::game::profile::HoldJudgmentGraphic::Love => 0,
+            crate::game::profile::HoldJudgmentGraphic::Mute => 1,
+            crate::game::profile::HoldJudgmentGraphic::ITG2 => 2,
+            crate::game::profile::HoldJudgmentGraphic::None => 3,
         };
     }
     // Load noteskin for preview
@@ -530,6 +544,16 @@ fn change_choice(state: &mut State, delta: isize) {
                     _ => crate::game::profile::BackgroundFilter::Darkest,
                 };
                 crate::game::profile::update_background_filter(setting);
+            } else if row.name == "Hold Judgment" {
+                // Persist hold judgment graphic selection to profile
+                let setting = match row.selected_choice_index {
+                    0 => crate::game::profile::HoldJudgmentGraphic::Love,
+                    1 => crate::game::profile::HoldJudgmentGraphic::Mute,
+                    2 => crate::game::profile::HoldJudgmentGraphic::ITG2,
+                    3 => crate::game::profile::HoldJudgmentGraphic::None,
+                    _ => crate::game::profile::HoldJudgmentGraphic::Love,
+                };
+                crate::game::profile::update_hold_judgment_graphic(setting);
             } else if row.name == "Stepchart" {
                 // Update the state's difficulty index to match the newly selected choice
                 if let Some(diff_indices) = &row.choice_difficulty_indices {
@@ -1375,26 +1399,33 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             z(102)
                         ));
                     }
-                    // Add hold judgment preview for "Hold Judgment" row showing both frames (Held and e.g. Let Go)
-                    if row.name == "Hold Judgment" && choice_text == "Love" {
-                        // Love hold judgment sprite is 1x2 (1 column, 2 rows) at double resolution
-                        // Held is the first frame (top, row 0), second frame (bottom, row 1)
-                        // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
-                        let hold_spacing = 43.0; // spacing between the two sprites (symmetric around center line)
-                        actors.push(act!(sprite("hold_judgements/Love 1x2 (doubleres).png"):
-                            align(0.5, 0.5):
-                            xy(preview_center_x - hold_spacing * 0.5, current_row_y):
-                            setstate(0):
-                            zoom(0.225):
-                            z(102)
-                        ));
-                        actors.push(act!(sprite("hold_judgements/Love 1x2 (doubleres).png"):
-                            align(0.5, 0.5):
-                            xy(preview_center_x + hold_spacing * 0.5, current_row_y):
-                            setstate(1):
-                            zoom(0.225):
-                            z(102)
-                        ));
+                    // Add hold judgment preview for "Hold Judgment" row showing both frames (Held and Let Go)
+                    if row.name == "Hold Judgment" {
+                        let texture_key = match choice_text.as_str() {
+                            "Love" => Some("hold_judgements/Love 1x2 (doubleres).png"),
+                            "mute" => Some("hold_judgements/mute 1x2 (doubleres).png"),
+                            "ITG2" => Some("hold_judgements/ITG2 1x2 (doubleres).png"),
+                            "None" => None,
+                            _ => None,
+                        };
+                        if let Some(texture) = texture_key {
+                            // 1x2 doubleres: row 0 = Held, row 1 = Let Go
+                            let hold_spacing = 43.0; // spacing between the two sprites (symmetric around center line)
+                            actors.push(act!(sprite(texture):
+                                align(0.5, 0.5):
+                                xy(preview_center_x - hold_spacing * 0.5, current_row_y):
+                                setstate(0):
+                                zoom(0.225):
+                                z(102)
+                            ));
+                            actors.push(act!(sprite(texture):
+                                align(0.5, 0.5):
+                                xy(preview_center_x + hold_spacing * 0.5, current_row_y):
+                                setstate(1):
+                                zoom(0.225):
+                                z(102)
+                            ));
+                        }
                     }
                     // Add noteskin preview for "NoteSkin" row showing animated 4th note
                     if row.name == "NoteSkin" && choice_text == "cel" {

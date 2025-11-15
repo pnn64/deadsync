@@ -249,6 +249,14 @@ impl AssetManager {
                 "hold_judgements/Love 1x2 (doubleres).png".to_string(),
             ),
             (
+                "hold_judgements/mute 1x2 (doubleres).png".to_string(),
+                "hold_judgements/mute 1x2 (doubleres).png".to_string(),
+            ),
+            (
+                "hold_judgements/ITG2 1x2 (doubleres).png".to_string(),
+                "hold_judgements/ITG2 1x2 (doubleres).png".to_string(),
+            ),
+            (
                 "grades/grades 1x19.png".to_string(),
                 "grades/grades 1x19.png".to_string(),
             ),

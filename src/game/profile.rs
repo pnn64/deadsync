@@ -51,6 +51,44 @@ impl core::fmt::Display for BackgroundFilter {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoldJudgmentGraphic {
+    Love,
+    Mute,
+    ITG2,
+    None,
+}
+
+impl Default for HoldJudgmentGraphic {
+    fn default() -> Self {
+        HoldJudgmentGraphic::Love
+    }
+}
+
+impl FromStr for HoldJudgmentGraphic {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "love" => Ok(Self::Love),
+            "mute" => Ok(Self::Mute),
+            "itg2" => Ok(Self::ITG2),
+            "none" => Ok(Self::None),
+            other => Err(format!("'{}' is not a valid HoldJudgmentGraphic setting", other)),
+        }
+    }
+}
+
+impl core::fmt::Display for HoldJudgmentGraphic {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Love => write!(f, "Love"),
+            Self::Mute => write!(f, "mute"),
+            Self::ITG2 => write!(f, "ITG2"),
+            Self::None => write!(f, "None"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub display_name: String,
@@ -59,6 +97,7 @@ pub struct Profile {
     pub groovestats_is_pad_player: bool,
     pub groovestats_username: String,
     pub background_filter: BackgroundFilter,
+    pub hold_judgment_graphic: HoldJudgmentGraphic,
     pub avatar_path: Option<PathBuf>,
     pub avatar_texture_key: Option<String>,
     pub scroll_speed: ScrollSpeedSetting,
@@ -73,6 +112,7 @@ impl Default for Profile {
             groovestats_is_pad_player: false,
             groovestats_username: "".to_string(),
             background_filter: BackgroundFilter::default(),
+            hold_judgment_graphic: HoldJudgmentGraphic::default(),
             avatar_path: None,
             avatar_texture_key: None,
             scroll_speed: ScrollSpeedSetting::default(),
@@ -107,6 +147,10 @@ fn create_default_files() -> Result<(), std::io::Error> {
         content.push_str("[PlayerOptions]\n");
         content.push_str(&format!("BackgroundFilter = {}\n", default_profile.background_filter));
         content.push_str(&format!("ScrollSpeed = {}\n", default_profile.scroll_speed));
+        content.push_str(&format!(
+            "HoldJudgmentGraphic = {}\n",
+            default_profile.hold_judgment_graphic
+        ));
         content.push('\n');
 
         content.push_str("[userprofile]\n");
@@ -140,6 +184,10 @@ fn save_profile_ini() {
     content.push_str("[PlayerOptions]\n");
     content.push_str(&format!("BackgroundFilter={}\n", profile.background_filter));
     content.push_str(&format!("ScrollSpeed={}\n", profile.scroll_speed));
+    content.push_str(&format!(
+        "HoldJudgmentGraphic={}\n",
+        profile.hold_judgment_graphic
+    ));
     content.push('\n');
 
     content.push_str("[userprofile]\n");
@@ -192,6 +240,10 @@ pub fn load() {
                 .get("PlayerOptions", "BackgroundFilter")
                 .and_then(|s| BackgroundFilter::from_str(&s).ok())
                 .unwrap_or(default_profile.background_filter);
+            profile.hold_judgment_graphic = profile_conf
+                .get("PlayerOptions", "HoldJudgmentGraphic")
+                .and_then(|s| HoldJudgmentGraphic::from_str(&s).ok())
+                .unwrap_or(default_profile.hold_judgment_graphic);
             profile.scroll_speed = profile_conf
                 .get("PlayerOptions", "ScrollSpeed")
                 .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
@@ -277,6 +329,17 @@ pub fn update_background_filter(setting: BackgroundFilter) {
             return;
         }
         profile.background_filter = setting;
+    }
+    save_profile_ini();
+}
+
+pub fn update_hold_judgment_graphic(setting: HoldJudgmentGraphic) {
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        if profile.hold_judgment_graphic == setting {
+            return;
+        }
+        profile.hold_judgment_graphic = setting;
     }
     save_profile_ini();
 }
