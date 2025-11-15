@@ -47,6 +47,13 @@ const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32;
 const TIMING_WINDOW_SECONDS_ROLL: f32 = 0.35;
 
 #[derive(Clone, Debug)]
+struct RowEntry {
+    row_index: usize,
+    // Non-mine, non-fake, judgable notes on this row
+    nonmine_note_indices: Vec<usize>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Arrow {
     pub beat: f32,
     pub column: usize,
@@ -128,6 +135,9 @@ pub struct State {
     // Linear-time cursors to avoid O(N) per-frame scans
     pub next_tap_miss_cursor: usize,
     pub next_mine_avoid_cursor: usize,
+    // Row index for fast per-row operations
+    pub row_entries: Vec<RowEntry>,
+    pub row_pos_by_index: HashMap<usize, usize>,
 
     pub combo: u32,
     pub miss_combo: u32,
@@ -383,6 +393,24 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         .map(|n| n.hold.as_ref().map(|h| timing.get_time_for_beat(h.end_beat)))
         .collect();
 
+    // Build row index: unique rows with at least one non-mine & judgable & non-fake note
+    let mut row_map: HashMap<usize, Vec<usize>> = HashMap::new();
+    for (i, n) in notes.iter().enumerate() {
+        if matches!(n.note_type, NoteType::Mine) { continue; }
+        if n.is_fake { continue; }
+        if !timing.is_judgable_at_beat(n.beat) { continue; }
+        row_map.entry(n.row_index).or_default().push(i);
+    }
+    let mut row_entries: Vec<RowEntry> = row_map
+        .into_iter()
+        .map(|(row_index, nonmine_note_indices)| RowEntry { row_index, nonmine_note_indices })
+        .collect();
+    row_entries.sort_by_key(|e| e.row_index);
+    let mut row_pos_by_index: HashMap<usize, usize> = HashMap::with_capacity(row_entries.len());
+    for (pos, entry) in row_entries.iter().enumerate() {
+        row_pos_by_index.insert(entry.row_index, pos);
+    }
+
     let first_note_beat = notes.first().map_or(0.0, |n| n.beat);
     let first_second = timing.get_time_for_beat(first_note_beat);
     let start_delay = (MIN_SECONDS_TO_STEP - first_second).max(MIN_SECONDS_TO_MUSIC);
@@ -477,6 +505,8 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         music_rate: if music_rate.is_finite() && music_rate > 0.0 { music_rate } else { 1.0 },
         next_tap_miss_cursor: 0,
         next_mine_avoid_cursor: 0,
+        row_entries,
+        row_pos_by_index,
         judgment_counts: HashMap::from_iter([
             (JudgeGrade::Fantastic, 0),
             (JudgeGrade::Excellent, 0),
@@ -1045,16 +1075,26 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         let decent_window = windows[3];
 
         if abs_time_error <= way_off_window {
-            // Determine the full set of non-mine notes on this row (the chord).
+            // Determine the set of non-mine notes on this row (the chord) from the prebuilt index.
             let row_index = note_row_index;
-            let notes_on_row: Vec<usize> = state
-                .notes
-                .iter()
-                .enumerate()
-                .filter(|(_, n)| n.row_index == row_index && !matches!(n.note_type, NoteType::Mine) && !n.is_fake)
-                .filter(|(_, n)| n.result.is_none())
-                .map(|(i, _)| i)
-                .collect();
+            let notes_on_row: Vec<usize> = if let Some(&pos) = state.row_pos_by_index.get(&row_index) {
+                state.row_entries[pos]
+                    .nonmine_note_indices
+                    .iter()
+                    .copied()
+                    .filter(|&i| state.notes[i].result.is_none())
+                    .collect()
+            } else {
+                // Fallback (should be rare): scan to preserve correctness.
+                state
+                    .notes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, n)| n.row_index == row_index && !matches!(n.note_type, NoteType::Mine) && !n.is_fake)
+                    .filter(|(_, n)| n.result.is_none())
+                    .map(|(i, _)| i)
+                    .collect()
+            };
 
             if notes_on_row.is_empty() {
                 return false;
@@ -1255,11 +1295,15 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
     } else {
         // Row is successful (worst grade >= Great). Increment combo by the number
         // of non-mine notes on this row (jumps/hands add multiple).
-        let combo_increment: u32 = state
-            .notes
-            .iter()
-            .filter(|n| n.row_index == row_index && !matches!(n.note_type, NoteType::Mine))
-            .count() as u32;
+        let combo_increment: u32 = if let Some(&pos) = state.row_pos_by_index.get(&row_index) {
+            state.row_entries[pos].nonmine_note_indices.len() as u32
+        } else {
+            state
+                .notes
+                .iter()
+                .filter(|n| n.row_index == row_index && !matches!(n.note_type, NoteType::Mine))
+                .count() as u32
+        };
         state.combo = state.combo.saturating_add(combo_increment);
 
         let combo = state.combo;
@@ -1290,20 +1334,30 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
         .any(|judgment| judgment.grade == JudgeGrade::WayOff);
 
     if !row_has_miss && !row_has_wayoff {
-        // Count all non-mine notes on this row (includes hold heads).
-        let notes_on_row_count: usize = state
-            .notes
-            .iter()
-            .filter(|n| n.row_index == row_index && !matches!(n.note_type, NoteType::Mine) && !n.is_fake)
-            .count();
+        // Count all non-mine notes on this row (includes hold heads) via row index
+        let notes_on_row_count: usize = if let Some(&pos) = state.row_pos_by_index.get(&row_index) {
+            state.row_entries[pos].nonmine_note_indices.len()
+        } else {
+            state
+                .notes
+                .iter()
+                .filter(|n| n.row_index == row_index && !matches!(n.note_type, NoteType::Mine) && !n.is_fake)
+                .count()
+        };
 
-        // Count carried holds from previous rows that are still down at this row.
+        // Count carried holds from previous rows that are still down at this row
         let carried_holds_down: usize = state
-            .notes
+            .active_holds
             .iter()
-            .filter(|n| n.row_index < row_index && !n.is_fake)
-            .filter_map(|n| n.hold.as_ref())
-            .filter(|h| h.last_held_row_index >= row_index)
+            .filter_map(|a| a.as_ref())
+            .filter(|a| active_hold_is_engaged(a))
+            .filter(|a| {
+                let note = &state.notes[a.note_index];
+                if note.row_index >= row_index { return false; }
+                if let Some(h) = note.hold.as_ref() {
+                    h.last_held_row_index >= row_index
+                } else { false }
+            })
             .count();
 
         if notes_on_row_count + carried_holds_down >= 3 {
@@ -1313,35 +1367,30 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
 }
 
 fn update_judged_rows(state: &mut State) {
+    // Interpret judged_row_cursor as a position within row_entries
     loop {
-        let max_row_index = state.notes.iter().map(|n| n.row_index).max().unwrap_or(0);
-        if state.judged_row_cursor > max_row_index { break; }
+        if state.judged_row_cursor >= state.row_entries.len() { break; }
+        let row_entry = &state.row_entries[state.judged_row_cursor];
 
-        // Consider only judgable, non-mine, non-fake notes for row completion and parity.
-        // Rows inside #WARPS or #FAKES should not block progress.
-        let notes_nonmine_on_row: Vec<&Note> = state
-            .notes
-            .iter()
-            .filter(|n| n.row_index == state.judged_row_cursor)
-            .filter(|n| !matches!(n.note_type, NoteType::Mine))
-            .filter(|n| !n.is_fake)
-            .filter(|n| state.timing.is_judgable_at_beat(n.beat))
-            .collect();
-
-        // If the row has no non-mine notes, advance past it.
-        if notes_nonmine_on_row.is_empty() {
+        // If no notes (shouldn’t happen with our build), skip.
+        if row_entry.nonmine_note_indices.is_empty() {
             state.judged_row_cursor += 1;
             continue;
         }
 
-        let is_row_complete = notes_nonmine_on_row.iter().all(|n| n.result.is_some());
+        let is_row_complete = row_entry
+            .nonmine_note_indices
+            .iter()
+            .all(|&i| state.notes[i].result.is_some());
 
         if is_row_complete {
-            let judgments_on_row: Vec<Judgment> = notes_nonmine_on_row
-                .iter()
-                .filter_map(|n| n.result.clone())
-                .collect();
-            finalize_row_judgment(state, state.judged_row_cursor, judgments_on_row);
+            let mut judgments_on_row: Vec<Judgment> = Vec::with_capacity(row_entry.nonmine_note_indices.len());
+            for &i in &row_entry.nonmine_note_indices {
+                if let Some(j) = state.notes[i].result.clone() {
+                    judgments_on_row.push(j);
+                }
+            }
+            finalize_row_judgment(state, row_entry.row_index, judgments_on_row);
             state.judged_row_cursor += 1;
         } else {
             break;
