@@ -125,6 +125,9 @@ pub struct State {
     pub hold_end_time_cache: Vec<Option<f32>>,
     pub music_end_time: f32,
     pub music_rate: f32,
+    // Linear-time cursors to avoid O(N) per-frame scans
+    pub next_tap_miss_cursor: usize,
+    pub next_mine_avoid_cursor: usize,
 
     pub combo: u32,
     pub miss_combo: u32,
@@ -472,6 +475,8 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         hold_end_time_cache,
         music_end_time,
         music_rate: if music_rate.is_finite() && music_rate > 0.0 { music_rate } else { 1.0 },
+        next_tap_miss_cursor: 0,
+        next_mine_avoid_cursor: 0,
         judgment_counts: HashMap::from_iter([
             (JudgeGrade::Fantastic, 0),
             (JudgeGrade::Excellent, 0),
@@ -1449,26 +1454,32 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
 /// regardless of X/M-mod scroll holds preventing arrow spawn.
 #[inline(always)]
 fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
+    // Advance a single pass cursor while notes have passed the mine window cutoff.
     let mine_window = crate::game::timing::mine_window_s();
-    for (i, note) in state.notes.iter_mut().enumerate() {
-        if !matches!(note.note_type, NoteType::Mine) {
-            continue;
-        }
-        if note.is_fake { continue; }
-        if !state.timing.is_judgable_at_beat(note.beat) { continue; }
-        if note.mine_result.is_some() {
-            continue;
+    let cutoff_time = music_time_sec - mine_window;
+    let len = state.notes.len();
+
+    while state.next_mine_avoid_cursor < len {
+        let i = state.next_mine_avoid_cursor;
+        let note_time = state.note_time_cache[i];
+        if note_time > cutoff_time { break; }
+
+        if let Some(note) = state.notes.get_mut(i) {
+            if matches!(note.note_type, NoteType::Mine)
+                && !note.is_fake
+                && state.timing.is_judgable_at_beat(note.beat)
+                && note.mine_result.is_none()
+            {
+                note.mine_result = Some(MineResult::Avoided);
+                state.mines_avoided = state.mines_avoided.saturating_add(1);
+                info!(
+                    "MINE AVOIDED: Row {}, Col {}, Time: {:.2}s",
+                    note.row_index, note.column, music_time_sec
+                );
+            }
         }
 
-        let note_time = state.note_time_cache[i];
-        if music_time_sec - note_time > mine_window {
-            note.mine_result = Some(MineResult::Avoided);
-            state.mines_avoided = state.mines_avoided.saturating_add(1);
-            info!(
-                "MINE AVOIDED: Row {}, Col {}, Time: {:.2}s",
-                note.row_index, note.column, music_time_sec
-            );
-        }
+        state.next_mine_avoid_cursor += 1;
     }
 }
 
@@ -1611,28 +1622,38 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
 /// window is marked Miss, even if no arrow was spawned (e.g., extreme SCROLLs).
 #[inline(always)]
 fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
+    // Advance a single pass cursor while notes have passed the WayOff cutoff.
     let way_off_window = crate::game::timing::effective_windows_s()[4];
-    for (i, note) in state.notes.iter_mut().enumerate() {
-        if matches!(note.note_type, NoteType::Mine) { continue; }
-        if note.is_fake { continue; }
-        if !state.timing.is_judgable_at_beat(note.beat) { continue; }
-        if note.result.is_some() { continue; }
+    let cutoff_time = music_time_sec - way_off_window;
+    let len = state.notes.len();
 
+    while state.next_tap_miss_cursor < len {
+        let i = state.next_tap_miss_cursor;
         let note_time = state.note_time_cache[i];
-        if music_time_sec - note_time > way_off_window {
-            let row = note.row_index;
-            note.result = Some(Judgment { time_error_ms: (music_time_sec - note_time) * 1000.0, grade: JudgeGrade::Miss, row });
-            if let Some(hold) = note.hold.as_mut() {
-                if hold.result != Some(HoldResult::Held) {
-                    hold.result = Some(HoldResult::LetGo);
-                    if hold.let_go_started_at.is_none() {
-                        hold.let_go_started_at = Some(music_time_sec);
-                        hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
+        if note_time > cutoff_time { break; }
+
+        if let Some(note) = state.notes.get_mut(i) {
+            if !matches!(note.note_type, NoteType::Mine)
+                && !note.is_fake
+                && state.timing.is_judgable_at_beat(note.beat)
+                && note.result.is_none()
+            {
+                let row = note.row_index;
+                note.result = Some(Judgment { time_error_ms: (music_time_sec - note_time) * 1000.0, grade: JudgeGrade::Miss, row });
+                if let Some(hold) = note.hold.as_mut() {
+                    if hold.result != Some(HoldResult::Held) {
+                        hold.result = Some(HoldResult::LetGo);
+                        if hold.let_go_started_at.is_none() {
+                            hold.let_go_started_at = Some(music_time_sec);
+                            hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
+                        }
                     }
                 }
+                info!("MISSED (time-based): Row {}", row);
             }
-            info!("MISSED (time-based): Row {}", row);
         }
+
+        state.next_tap_miss_cursor += 1;
     }
 }
 
