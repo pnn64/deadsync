@@ -239,7 +239,16 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
         },
         Row {
             name: "Combo Font".to_string(),
-            choices: vec!["Wendy".to_string(), "Arial Rounded".to_string(), "Asap".to_string()],
+            choices: vec![
+                "Wendy".to_string(),
+                "Arial Rounded".to_string(),
+                "Asap".to_string(),
+                "Bebas Neue".to_string(),
+                "Source Code".to_string(),
+                "Work".to_string(),
+                "Wendy (Cursed)".to_string(),
+                "None".to_string(),
+            ],
             selected_choice_index: 0,
             help: vec![
                 "Choose the font to count your combo. This font will also be used".to_string(),
@@ -400,6 +409,19 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
             crate::game::profile::JudgmentGraphic::Wendy => 18,
             crate::game::profile::JudgmentGraphic::WendyChroma => 19,
             crate::game::profile::JudgmentGraphic::None => 20,
+        };
+    }
+    // Initialize Combo Font row from profile setting
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Font") {
+        row.selected_choice_index = match profile.combo_font {
+            crate::game::profile::ComboFont::Wendy => 0,
+            crate::game::profile::ComboFont::ArialRounded => 1,
+            crate::game::profile::ComboFont::Asap => 2,
+            crate::game::profile::ComboFont::BebasNeue => 3,
+            crate::game::profile::ComboFont::SourceCode => 4,
+            crate::game::profile::ComboFont::Work => 5,
+            crate::game::profile::ComboFont::WendyCursed => 6,
+            crate::game::profile::ComboFont::None => 7,
         };
     }
     // Initialize Hold Judgment row from profile setting (Love, mute, ITG2, None)
@@ -619,6 +641,20 @@ fn change_choice(state: &mut State, delta: isize) {
                     _ => crate::game::profile::JudgmentGraphic::Love,
                 };
                 crate::game::profile::update_judgment_graphic(setting);
+            } else if row.name == "Combo Font" {
+                // Persist combo font selection to the profile
+                let setting = match row.selected_choice_index {
+                    0 => crate::game::profile::ComboFont::Wendy,
+                    1 => crate::game::profile::ComboFont::ArialRounded,
+                    2 => crate::game::profile::ComboFont::Asap,
+                    3 => crate::game::profile::ComboFont::BebasNeue,
+                    4 => crate::game::profile::ComboFont::SourceCode,
+                    5 => crate::game::profile::ComboFont::Work,
+                    6 => crate::game::profile::ComboFont::WendyCursed,
+                    7 => crate::game::profile::ComboFont::None,
+                    _ => crate::game::profile::ComboFont::Wendy,
+                };
+                crate::game::profile::update_combo_font(setting);
             } else if row.name == "Hold Judgment" {
                 // Persist hold judgment graphic selection to profile
                 let setting = match row.selected_choice_index {
@@ -1568,19 +1604,31 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             }
                         }
                     }
-                    // Add combo preview for "Combo Font" row showing ticking Wendy numbers
-                    if row.name == "Combo Font" && choice_text == "Wendy" {
+                    // Add combo preview for "Combo Font" row showing ticking numbers
+                    if row.name == "Combo Font" {
                         let combo_text = state.combo_preview_count.to_string();
-                        // Use a moderate zoom to fit within the row while staying readable
                         let combo_zoom = 0.45;
-                        actors.push(act!(text:
-                            font("wendy_combo"): settext(combo_text):
-                            align(0.5, 0.5):
-                            xy(preview_center_x, current_row_y):
-                            zoom(combo_zoom): horizalign(center):
-                            diffuse(1.0, 1.0, 1.0, 1.0):
-                            z(102)
-                        ));
+                        let font_name_opt = match choice_text.as_str() {
+                            "Wendy" => Some("wendy_combo"),
+                            "Arial Rounded" => Some("combo_arial_rounded"),
+                            "Asap" => Some("combo_asap"),
+                            "Bebas Neue" => Some("combo_bebas_neue"),
+                            "Source Code" => Some("combo_source_code"),
+                            "Work" => Some("combo_work"),
+                            "Wendy (Cursed)" => Some("combo_wendy_cursed"),
+                            "None" => None,
+                            _ => Some("wendy_combo"),
+                        };
+                        if let Some(font_name) = font_name_opt {
+                            actors.push(act!(text:
+                                font(font_name): settext(combo_text):
+                                align(0.5, 0.5):
+                                xy(preview_center_x, current_row_y):
+                                zoom(combo_zoom): horizalign(center):
+                                diffuse(1.0, 1.0, 1.0, 1.0):
+                                z(102)
+                            ));
+                        }
                     }
                 });
             });

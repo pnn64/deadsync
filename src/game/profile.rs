@@ -183,6 +183,57 @@ impl core::fmt::Display for JudgmentGraphic {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComboFont {
+    Wendy,
+    ArialRounded,
+    Asap,
+    BebasNeue,
+    SourceCode,
+    Work,
+    WendyCursed,
+    None,
+}
+
+impl Default for ComboFont {
+    fn default() -> Self {
+        ComboFont::Wendy
+    }
+}
+
+impl FromStr for ComboFont {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let v = s.trim().to_lowercase();
+        match v.as_str() {
+            "wendy" => Ok(Self::Wendy),
+            "arial rounded" | "arialrounded" => Ok(Self::ArialRounded),
+            "asap" => Ok(Self::Asap),
+            "bebas neue" | "bebasneue" => Ok(Self::BebasNeue),
+            "source code" | "sourcecode" => Ok(Self::SourceCode),
+            "work" => Ok(Self::Work),
+            "wendy (cursed)" | "wendy cursed" | "wendycursed" => Ok(Self::WendyCursed),
+            "none" => Ok(Self::None),
+            other => Err(format!("'{}' is not a valid ComboFont setting", other)),
+        }
+    }
+}
+
+impl core::fmt::Display for ComboFont {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Wendy => write!(f, "Wendy"),
+            Self::ArialRounded => write!(f, "Arial Rounded"),
+            Self::Asap => write!(f, "Asap"),
+            Self::BebasNeue => write!(f, "Bebas Neue"),
+            Self::SourceCode => write!(f, "Source Code"),
+            Self::Work => write!(f, "Work"),
+            Self::WendyCursed => write!(f, "Wendy (Cursed)"),
+            Self::None => write!(f, "None"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub display_name: String,
@@ -193,6 +244,7 @@ pub struct Profile {
     pub background_filter: BackgroundFilter,
     pub hold_judgment_graphic: HoldJudgmentGraphic,
     pub judgment_graphic: JudgmentGraphic,
+    pub combo_font: ComboFont,
     pub avatar_path: Option<PathBuf>,
     pub avatar_texture_key: Option<String>,
     pub scroll_speed: ScrollSpeedSetting,
@@ -209,6 +261,7 @@ impl Default for Profile {
             background_filter: BackgroundFilter::default(),
             hold_judgment_graphic: HoldJudgmentGraphic::default(),
             judgment_graphic: JudgmentGraphic::default(),
+            combo_font: ComboFont::default(),
             avatar_path: None,
             avatar_texture_key: None,
             scroll_speed: ScrollSpeedSetting::default(),
@@ -251,6 +304,10 @@ fn create_default_files() -> Result<(), std::io::Error> {
             "JudgmentGraphic = {}\n",
             default_profile.judgment_graphic
         ));
+        content.push_str(&format!(
+            "ComboFont = {}\n",
+            default_profile.combo_font
+        ));
         content.push('\n');
 
         content.push_str("[userprofile]\n");
@@ -291,6 +348,10 @@ fn save_profile_ini() {
     content.push_str(&format!(
         "JudgmentGraphic={}\n",
         profile.judgment_graphic
+    ));
+    content.push_str(&format!(
+        "ComboFont={}\n",
+        profile.combo_font
     ));
     content.push('\n');
 
@@ -352,6 +413,10 @@ pub fn load() {
                 .get("PlayerOptions", "JudgmentGraphic")
                 .and_then(|s| JudgmentGraphic::from_str(&s).ok())
                 .unwrap_or(default_profile.judgment_graphic);
+            profile.combo_font = profile_conf
+                .get("PlayerOptions", "ComboFont")
+                .and_then(|s| ComboFont::from_str(&s).ok())
+                .unwrap_or(default_profile.combo_font);
             profile.scroll_speed = profile_conf
                 .get("PlayerOptions", "ScrollSpeed")
                 .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
@@ -459,6 +524,17 @@ pub fn update_judgment_graphic(setting: JudgmentGraphic) {
             return;
         }
         profile.judgment_graphic = setting;
+    }
+    save_profile_ini();
+}
+
+pub fn update_combo_font(setting: ComboFont) {
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        if profile.combo_font == setting {
+            return;
+        }
+        profile.combo_font = setting;
     }
     save_profile_ini();
 }

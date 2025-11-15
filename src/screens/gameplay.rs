@@ -1405,13 +1405,26 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Combo
     if state.miss_combo >= SHOW_COMBO_AT {
-        actors.push(act!(text:
-            font("wendy_combo"): settext(state.miss_combo.to_string()):
-            align(0.5, 0.5): xy(playfield_center_x, screen_center_y() + 30.0):
-            zoom(0.75): horizalign(center): shadowlength(1.0):
-            diffuse(1.0, 0.0, 0.0, 1.0):
-            z(90)
-        ));
+        let miss_combo_font_name = match profile.combo_font {
+            crate::game::profile::ComboFont::Wendy => Some("wendy_combo"),
+            crate::game::profile::ComboFont::ArialRounded => Some("combo_arial_rounded"),
+            crate::game::profile::ComboFont::Asap => Some("combo_asap"),
+            crate::game::profile::ComboFont::BebasNeue => Some("combo_bebas_neue"),
+            crate::game::profile::ComboFont::SourceCode => Some("combo_source_code"),
+            crate::game::profile::ComboFont::Work => Some("combo_work"),
+            crate::game::profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
+            crate::game::profile::ComboFont::None => None,
+        };
+
+        if let Some(font_name) = miss_combo_font_name {
+            actors.push(act!(text:
+                font(font_name): settext(state.miss_combo.to_string()):
+                align(0.5, 0.5): xy(playfield_center_x, screen_center_y() + 30.0):
+                zoom(0.75): horizalign(center): shadowlength(1.0):
+                diffuse(1.0, 0.0, 0.0, 1.0):
+                z(90)
+            ));
+        }
     } else if state.combo >= SHOW_COMBO_AT {
         let (color1, color2) = if let Some(fc_grade) = &state.full_combo_grade {
             match fc_grade {
@@ -1435,13 +1448,26 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             1.0,
         ];
 
-        actors.push(act!(text:
-            font("wendy_combo"): settext(state.combo.to_string()):
-            align(0.5, 0.5): xy(playfield_center_x, screen_center_y() + 30.0):
-            zoom(0.75): horizalign(center): shadowlength(1.0):
-            diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
-            z(90)
-        ));
+        let combo_font_name = match profile.combo_font {
+            crate::game::profile::ComboFont::Wendy => Some("wendy_combo"),
+            crate::game::profile::ComboFont::ArialRounded => Some("combo_arial_rounded"),
+            crate::game::profile::ComboFont::Asap => Some("combo_asap"),
+            crate::game::profile::ComboFont::BebasNeue => Some("combo_bebas_neue"),
+            crate::game::profile::ComboFont::SourceCode => Some("combo_source_code"),
+            crate::game::profile::ComboFont::Work => Some("combo_work"),
+            crate::game::profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
+            crate::game::profile::ComboFont::None => None,
+        };
+
+        if let Some(font_name) = combo_font_name {
+            actors.push(act!(text:
+                font(font_name): settext(state.combo.to_string()):
+                align(0.5, 0.5): xy(playfield_center_x, screen_center_y() + 30.0):
+                zoom(0.75): horizalign(center): shadowlength(1.0):
+                diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
+                z(90)
+            ));
+        }
     }
 
     // Judgment Sprite (tap judgments)
