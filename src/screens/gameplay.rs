@@ -428,28 +428,34 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         };
         let current_time = state.current_music_time;
-        // BPM not needed here; compute_lane_y handles per-mod logic
+        // Precompute per-frame values used for converting beat/time to Y positions
+        let (rate, cmod_pps_opt, curr_disp_beat, beatmod_multiplier) = match state.scroll_speed {
+            ScrollSpeedSetting::CMod(c_bpm) => {
+                let pps = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING;
+                let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+                (rate, Some(pps), 0.0, 0.0)
+            }
+            ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                let curr_disp = state.timing.get_displayed_beat(state.current_beat);
+                let speed_multiplier = state.timing.get_speed_multiplier(state.current_beat, state.current_music_time);
+                let player_multiplier = state.scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
+                let final_multiplier = player_multiplier * speed_multiplier;
+                (1.0, None, curr_disp, final_multiplier)
+            }
+        };
+        // For dynamic values (e.g., last_held_beat while letting go), fall back to timing for that beat
         let compute_lane_y = |beat: f32| -> f32 {
             match state.scroll_speed {
-                ScrollSpeedSetting::CMod(c_bpm) => {
-                    // C-Mod is time-based; keep visual speed constant in real time regardless of Music Rate.
-                    // Use px per chart-second then divide the chart-time delta by rate to convert to real seconds.
-                    let pps_chart = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING;
+                ScrollSpeedSetting::CMod(_) => {
+                    let pps_chart = cmod_pps_opt.expect("cmod pps computed");
                     let note_time_chart = state.timing.get_time_for_beat(beat);
-                    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
                     let time_diff_real = (note_time_chart - current_time) / rate;
                     receptor_y + time_diff_real * pps_chart
                 }
-                ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => { // Beat-based mods
-                    // This logic is correct for both frozen and non-frozen states for beat-based mods.
-                    let speed_multiplier = state.timing.get_speed_multiplier(state.current_beat, state.current_music_time);
+                ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     let note_disp_beat = state.timing.get_displayed_beat(beat);
-                    let curr_disp_beat = state.timing.get_displayed_beat(state.current_beat);
                     let beat_diff_disp = note_disp_beat - curr_disp_beat;
-
-                    let player_multiplier = state.scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
-                    let final_multiplier = player_multiplier * speed_multiplier;
-                    receptor_y + (beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * final_multiplier)
+                    receptor_y + (beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmod_multiplier)
                 }
             }
         };
@@ -660,7 +666,33 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         }
 
-        for (note_index, note) in state.notes.iter().enumerate() {
+        // Only consider notes that are currently in or near the lookahead window.
+        let min_visible_index = state
+            .arrows
+            .iter()
+            .filter_map(|v| v.first())
+            .map(|a| a.note_index)
+            .min()
+            .unwrap_or(0);
+        let max_visible_index = state.note_spawn_cursor.min(state.notes.len());
+        // Build candidate indices: visible heads + active holds + decaying holds
+        let mut render_indices: Vec<usize> = (min_visible_index..max_visible_index).collect();
+        for a in &state.active_holds {
+            if let Some(h) = a.as_ref() {
+                if h.note_index < state.notes.len() { render_indices.push(h.note_index); }
+            }
+        }
+        for &idx in &state.decaying_hold_indices {
+            if idx < state.notes.len() { render_indices.push(idx); }
+        }
+        // Deduplicate while roughly preserving order
+        {
+            use std::collections::HashSet;
+            let mut seen = HashSet::with_capacity(render_indices.len());
+            render_indices.retain(|i| seen.insert(*i));
+        }
+        for note_index in render_indices {
+            let note = &state.notes[note_index];
             if !matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
                 continue;
             }
@@ -1109,7 +1141,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         // Active arrows
         for column_arrows in &state.arrows {
             for arrow in column_arrows {
-                let y_pos = compute_lane_y(arrow.beat);
+                // Use cached per-note timing to avoid per-frame timing queries
+                let y_pos = match state.scroll_speed {
+                    ScrollSpeedSetting::CMod(_) => {
+                        let pps_chart = cmod_pps_opt.expect("cmod pps computed");
+                        let note_time_chart = state.note_time_cache[arrow.note_index];
+                        let time_diff_real = (current_time - note_time_chart) / rate;
+                        // Negative because earlier times are above the receptor
+                        receptor_y - time_diff_real * pps_chart
+                    }
+                    ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                        let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
+                        let beat_diff_disp = note_disp_beat - curr_disp_beat;
+                        receptor_y + beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmod_multiplier
+                    }
+                };
 
                 if y_pos < receptor_y - state.draw_distance_after_targets
                     || y_pos > receptor_y + state.draw_distance_before_targets
