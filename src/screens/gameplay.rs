@@ -725,7 +725,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let hold_life = hold.life.clamp(0.0, 1.0);
             let hold_color_scale = let_go_gray + (1.0 - let_go_gray) * hold_life;
             let hold_diffuse = [hold_color_scale, hold_color_scale, hold_color_scale, 1.0];
-            if engaged && !state.reverse_scroll {
+            if engaged {
                 if head_is_top {
                     top = top.max(receptor_y);
                 } else {
