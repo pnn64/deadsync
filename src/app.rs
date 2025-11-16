@@ -37,8 +37,8 @@ const MENU_ACTORS_FADE_DURATION: f32 = 0.65;
 #[derive(Debug)]
 enum TransitionState {
     Idle,
-    FadingOut { elapsed: f32, duration: f32, target: CurrentScreen, actors: Vec<Actor> },
-    FadingIn  { elapsed: f32, duration: f32, actors: Vec<Actor> },
+    FadingOut { elapsed: f32, duration: f32, target: CurrentScreen },
+    FadingIn  { elapsed: f32, duration: f32 },
     ActorsFadeOut { elapsed: f32, target: CurrentScreen },
     ActorsFadeIn { elapsed: f32 },
 }
@@ -164,7 +164,7 @@ impl App {
 
                 if matches!(self.transition, TransitionState::Idle) {
                     let is_actor_only_fade =
-                        (from == CurrentScreen::Menu && (to == CurrentScreen::Options || to == CurrentScreen::SelectColor)) ||
+                        (from == CurrentScreen::Menu && to == CurrentScreen::Options) ||
                         ((from == CurrentScreen::Options || from == CurrentScreen::SelectColor) && to == CurrentScreen::Menu);
 
                     if is_actor_only_fade {
@@ -172,12 +172,11 @@ impl App {
                         self.transition = TransitionState::ActorsFadeOut { elapsed: 0.0, target: screen };
                     } else {
                         info!("Starting global fade out to screen: {:?}", screen);                        
-                        let (out_actors, out_duration) = self.get_out_transition_for_screen(self.current_screen);
+                        let (_, out_duration) = self.get_out_transition_for_screen(self.current_screen);
                         self.transition = TransitionState::FadingOut {
                             elapsed: 0.0,
                             duration: out_duration,
                             target: screen,
-                            actors: out_actors,
                         };
                     }
                 }
@@ -258,11 +257,13 @@ impl App {
         }
 
         match &self.transition {
-            TransitionState::FadingOut { actors: out_actors, .. } => {
-                actors.extend(out_actors.clone());
+            TransitionState::FadingOut { .. } => {
+                let (out_actors, _) = self.get_out_transition_for_screen(self.current_screen);
+                actors.extend(out_actors);
             }
-            TransitionState::FadingIn { actors: in_actors, .. } => {
-                actors.extend(in_actors.clone());
+            TransitionState::FadingIn { .. } => {
+                let (in_actors, _) = self.get_in_transition_for_screen(self.current_screen);
+                actors.extend(in_actors);
             }
             _ => {}
         }
@@ -272,7 +273,7 @@ impl App {
     
     fn get_out_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
         match screen {
-            CurrentScreen::Menu => menu::out_transition(),
+            CurrentScreen::Menu => menu::out_transition(self.menu_state.active_color_index),
             CurrentScreen::Gameplay => gameplay::out_transition(),
             CurrentScreen::Options => options::out_transition(),
             CurrentScreen::PlayerOptions => player_options::out_transition(),
@@ -521,7 +522,7 @@ impl ApplicationHandler<UserEvent> for App {
                 let mut finished_fading_out_to: Option<CurrentScreen> = None;
 
                 match &mut self.transition {
-                    TransitionState::FadingOut { elapsed, duration, target, .. } => {
+                    TransitionState::FadingOut { elapsed, duration, target } => {
                         *elapsed += delta_time;
                         if *elapsed >= *duration {
                             finished_fading_out_to = Some(*target);
@@ -571,7 +572,7 @@ impl ApplicationHandler<UserEvent> for App {
                             crate::ui::runtime::clear_all();
                         }
                     }
-                    TransitionState::FadingIn { elapsed, duration, .. } => {
+                    TransitionState::FadingIn { elapsed, duration } => {
                         *elapsed += delta_time;
                         if *elapsed >= *duration {
                             self.transition = TransitionState::Idle;
@@ -876,11 +877,10 @@ impl ApplicationHandler<UserEvent> for App {
                         }
                     }
 
-                    let (in_actors, in_duration) = self.get_in_transition_for_screen(target);
+                    let (_, in_duration) = self.get_in_transition_for_screen(target);
                     self.transition = TransitionState::FadingIn { 
                         elapsed: 0.0,
                         duration: in_duration,
-                        actors: in_actors
                     };
                     crate::ui::runtime::clear_all();
                 }

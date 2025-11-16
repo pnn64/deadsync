@@ -225,6 +225,18 @@ impl AssetManager {
                 "hit_mine_explosion.png".to_string(),
                 "hit_mine_explosion.png".to_string(),
             ),
+            (
+                "titlemenu_flycenter.png".to_string(),
+                "titlemenu_flycenter.png".to_string(),
+            ),
+            (
+                "titlemenu_flytop.png".to_string(),
+                "titlemenu_flytop.png".to_string(),
+            ),
+            (
+                "titlemenu_flybottom.png".to_string(),
+                "titlemenu_flybottom.png".to_string(),
+            ),
             ("banner1.png".to_string(), "_fallback/banner1.png".to_string()),
             ("banner2.png".to_string(), "_fallback/banner2.png".to_string()),
             ("banner3.png".to_string(), "_fallback/banner3.png".to_string()),

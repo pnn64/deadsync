@@ -6,6 +6,7 @@ use winit::event::{KeyEvent, ElementState};
 use winit::keyboard::KeyCode;
 use crate::ui::actors::Actor;
 use crate::ui::color;
+use crate::ui::components::menu_splash;
 use crate::ui::components::logo::{self, LogoParams};
 use crate::ui::components::menu_list::{self};
 use crate::ui::components::{heart_bg, screen_bar};
@@ -16,7 +17,7 @@ use crate::core::space::*;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;
-const TRANSITION_OUT_DURATION: f32 = 0.3;
+const TRANSITION_OUT_DURATION: f32 = 1.0;
 
 const NORMAL_COLOR_HEX: &str = "#888888";
 
@@ -78,15 +79,23 @@ pub fn in_transition() -> (Vec<Actor>, f32) {
     (vec![actor], TRANSITION_IN_DURATION)
 }
 
-pub fn out_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
+pub fn out_transition(active_color_index: i32) -> (Vec<Actor>, f32) {
+    let mut actors: Vec<Actor> = Vec::new();
+
+    // Hearts splash, matching Simply Love's ScreenTitleMenu out.lua look.
+    actors.extend(menu_splash::build(active_color_index));
+
+    // Full-screen fade to black behind the hearts.
+    let fade = act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
         zoomto(screen_width(), screen_height()):
         diffuse(0.0, 0.0, 0.0, 0.0):
         z(1200):
         linear(TRANSITION_OUT_DURATION): alpha(1.0)
     );
-    (vec![actor], TRANSITION_OUT_DURATION)
+    actors.push(fade);
+
+    (actors, TRANSITION_OUT_DURATION)
 }
 
 // Signature changed to accept the alpha_multiplier
