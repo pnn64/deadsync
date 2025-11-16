@@ -758,6 +758,11 @@ fn apply_profile_defaults(rows: &mut [Row]) {
             crate::game::profile::HoldJudgmentGraphic::None => 3,
         };
     }
+    // Initialize Scroll row from profile setting (Reverse on/off).
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Scroll") {
+        // Index 0 is "Reverse" in build_advanced_rows; treat any other choice as "no reverse".
+        row.selected_choice_index = if profile.reverse_scroll { 0 } else { 4.min(row.choices.len().saturating_sub(1)) };
+    }
 }
 
 pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_index: i32) -> State {
@@ -1028,6 +1033,14 @@ fn change_choice(state: &mut State, delta: isize) {
                     _ => crate::game::profile::HoldJudgmentGraphic::Love,
                 };
                 crate::game::profile::update_hold_judgment_graphic(setting);
+            } else if row.name == "Scroll" {
+                // Treat "Reverse" as the only implemented scroll mode for now.
+                let enable_reverse = row
+                    .choices
+                    .get(row.selected_choice_index)
+                    .map(|s| s.as_str() == "Reverse")
+                    .unwrap_or(false);
+                crate::game::profile::update_reverse_scroll(enable_reverse);
             } else if row.name == "Stepchart" {
                 // Update the state's difficulty index to match the newly selected choice
                 if let Some(diff_indices) = &row.choice_difficulty_indices {

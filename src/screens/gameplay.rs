@@ -24,7 +24,8 @@ use crate::game::gameplay::active_hold_is_engaged;
 use crate::game::gameplay::{
     ComboMilestoneKind, COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION,
     HOLD_JUDGMENT_TOTAL_DURATION, MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION,
-    RECEPTOR_Y_OFFSET_FROM_CENTER, TRANSITION_IN_DURATION, TRANSITION_OUT_DURATION,
+    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
+    TRANSITION_IN_DURATION, TRANSITION_OUT_DURATION,
 };
 
 // --- CONSTANTS ---
@@ -346,7 +347,6 @@ fn format_game_time(s: f32, total_seconds: f32) -> String {
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::new();
     let profile = profile::get();
-
     let hold_judgment_texture: Option<&str> = match profile.hold_judgment_graphic {
         profile::HoldJudgmentGraphic::Love => {
             Some("hold_judgements/Love 1x2 (doubleres).png")
@@ -359,17 +359,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
         profile::HoldJudgmentGraphic::None => None,
     };
-
     // --- Background and Filter ---
     actors.push(build_background(state));
-
     let filter_alpha = match profile.background_filter {
         crate::game::profile::BackgroundFilter::Off => 0.0,
         crate::game::profile::BackgroundFilter::Dark => 0.5,
         crate::game::profile::BackgroundFilter::Darker => 0.75,
         crate::game::profile::BackgroundFilter::Darkest => 0.95,
     };
-
     if filter_alpha > 0.0 {
         actors.push(act!(quad:
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
@@ -378,19 +375,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             z(-99) // Draw just above the background
         ));
     }
-
     // --- Playfield Positioning (1:1 with Simply Love) ---
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
     let playfield_center_x = screen_center_x() - (clamped_width * 0.25);
-
-    let receptor_y = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER;
-
+    let receptor_y = screen_center_y()
+        + if state.reverse_scroll {
+            RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE
+        } else {
+            RECEPTOR_Y_OFFSET_FROM_CENTER
+        };
     // --- Banner (1:1 with Simply Love, including parent frame logic) ---
     if let Some(banner_path) = &state.song.banner_path {
         let banner_key = banner_path.to_string_lossy().into_owned();
         let wide = is_wide();
-
         let sidepane_center_x = screen_width() * 0.75;
         let sidepane_center_y = screen_center_y() + 80.0;
         let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
@@ -407,18 +405,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             local_banner_x = 72.0;
         }
         let local_banner_y = -200.0;
-
         let banner_x = sidepane_center_x + (local_banner_x * banner_data_zoom);
         let banner_y = sidepane_center_y + (local_banner_y * banner_data_zoom);
         let final_zoom = 0.4 * banner_data_zoom;
-
         actors.push(act!(sprite(banner_key):
             align(0.5, 0.5): xy(banner_x, banner_y):
             setsize(418.0, 164.0): zoom(final_zoom):
             z(-50)
         ));
     }
-
     if let Some(ns) = &state.noteskin {
         let scale_sprite = |size: [i32; 2]| -> [f32; 2] {
             let width = size[0].max(0) as f32;
@@ -456,6 +451,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 (1.0, None, curr_disp, final_multiplier)
             }
         };
+        let dir = if state.reverse_scroll { -1.0 } else { 1.0 };
         // For dynamic values (e.g., last_held_beat while letting go), fall back to timing for that beat
         let compute_lane_y = |beat: f32| -> f32 {
             match state.scroll_speed {
@@ -463,21 +459,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let pps_chart = cmod_pps_opt.expect("cmod pps computed");
                     let note_time_chart = state.timing.get_time_for_beat(beat);
                     let time_diff_real = (note_time_chart - current_time) / rate;
-                    receptor_y + time_diff_real * pps_chart
+                    receptor_y + dir * time_diff_real * pps_chart
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     let note_disp_beat = state.timing.get_displayed_beat(beat);
                     let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                    receptor_y + (beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmod_multiplier)
+                    receptor_y + dir * (beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmod_multiplier)
                 }
             }
         };
-
         let mine_explosion_size = {
             let base = assets::texture_dims("hit_mine_explosion.png")
                 .map(|meta| [meta.w.max(1) as f32, meta.h.max(1) as f32])
                 .unwrap_or([TARGET_EXPLOSION_PIXEL_SIZE, TARGET_EXPLOSION_PIXEL_SIZE]);
-
             if base[1] <= 0.0 {
                 base
             } else {
@@ -485,11 +479,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 [base[0] * scale, TARGET_EXPLOSION_PIXEL_SIZE]
             }
         };
-
         // Receptors + glow
         for i in 0..4 {
             let col_x_offset = ns.column_xs[i];
-
             let bop_timer = state.receptor_bop_timers[i];
             let bop_zoom = if bop_timer > 0.0 {
                 let t = (0.11 - bop_timer) / 0.11;
@@ -497,7 +489,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 1.0
             };
-
             let receptor_slot = &ns.receptor_off[i];
             let receptor_frame =
                 receptor_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
@@ -524,7 +515,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 ):
                 z(Z_RECEPTOR)
             ));
-
             if let Some(hold_slot) = state.active_holds[i]
                 .as_ref()
                 .filter(|active| active_hold_is_engaged(active))
@@ -560,7 +550,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     z(Z_HOLD_EXPLOSION)
                 ));
             }
-
             let glow_timer = state.receptor_glow_timers[i];
             if glow_timer > 0.0 {
                 if let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref()) {
@@ -582,7 +571,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
         }
-
         // Tap explosions
         for i in 0..4 {
             if let Some(active) = state.tap_explosions[i].as_ref() {
@@ -604,7 +592,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         .get(i)
                         .map(|slot| slot.def.rotation_deg)
                         .unwrap_or(0);
-
                     actors.push(act!(sprite(slot.texture_key().to_string()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset as f32, receptor_y):
@@ -621,7 +608,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         blend(normal):
                         z(101)
                     ));
-
                     let glow = visual.glow;
                     let glow_strength =
                         glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
@@ -641,7 +627,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
         }
-
         // Mine explosions
         for i in 0..4 {
             if let Some(active) = state.mine_explosions[i].as_ref() {
@@ -653,11 +638,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     1.0 - ((progress - 0.5) / 0.5)
                 }
                 .clamp(0.0, 1.0);
-
                 if alpha <= f32::EPSILON {
                     continue;
                 }
-
                 let rotation_progress = 180.0 * progress;
                 let col_x_offset = ns.column_xs[i];
                 let base_rotation = ns
@@ -666,7 +649,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     .map(|slot| slot.def.rotation_deg as f32)
                     .unwrap_or(0.0);
                 let final_rotation = base_rotation + rotation_progress;
-
                 actors.push(act!(sprite("hit_mine_explosion.png"):
                     align(0.5, 0.5):
                     xy(playfield_center_x + col_x_offset as f32, receptor_y):
@@ -678,7 +660,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 ));
             }
         }
-
         // Only consider notes that are currently in or near the lookahead window.
         let min_visible_index = state
             .arrows
@@ -712,11 +693,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let Some(hold) = &note.hold else {
                 continue;
             };
-
             if matches!(hold.result, Some(HoldResult::Held)) {
                 continue;
             }
-
             let mut head_beat = note.beat;
             if hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo) {
                 head_beat = hold.last_held_beat.clamp(note.beat, hold.end_beat);
@@ -734,7 +713,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if bottom <= top {
                 continue;
             }
-
             let col_x_offset = ns.column_xs[note.column];
             let active_state = state.active_holds[note.column]
                 .as_ref()
@@ -743,30 +721,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let use_active = active_state
                 .map(|h| h.is_pressed && !h.let_go)
                 .unwrap_or(false);
-
             let let_go_gray = ns.hold_let_go_gray_percent.clamp(0.0, 1.0);
             let hold_life = hold.life.clamp(0.0, 1.0);
             let hold_color_scale = let_go_gray + (1.0 - let_go_gray) * hold_life;
             let hold_diffuse = [hold_color_scale, hold_color_scale, hold_color_scale, 1.0];
-
-            if engaged {
+            if engaged && !state.reverse_scroll {
                 if head_is_top {
                     top = top.max(receptor_y);
                 } else {
                     bottom = bottom.min(receptor_y);
                 }
             }
-
             if bottom <= top {
                 continue;
             }
-
             let visuals = if matches!(note.note_type, NoteType::Roll) {
                 &ns.roll
             } else {
                 &ns.hold
             };
-
             let tail_slot = if use_active {
                 visuals
                     .bottomcap_active
@@ -778,7 +751,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     .as_ref()
                     .or_else(|| visuals.bottomcap_active.as_ref())
             };
-
             // Prepare clipped body extents that respect the tail cap on the side
             // where the tail visually exists. For normal orientation (head above
             // tail), we clip the body against the tail cap at the bottom. For
@@ -803,12 +775,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 }
             }
-
             // Track the actual drawn body extents to decide whether the tail cap
             // should be rendered (prevents floating caps when no body segments were drawn).
             let mut rendered_body_top: Option<f32> = None;
             let mut rendered_body_bottom: Option<f32> = None;
-
             if body_bottom > body_top {
                 if let Some(body_slot) = if use_active {
                     visuals
@@ -847,15 +817,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         } else {
                             (natural_bottom - body_bottom).clamp(0.0, hold_length)
                         };
-
                         const SEGMENT_PHASE_EPS: f32 = 1e-4;
                         let max_segments = 2048;
                         let mut emitted = 0;
-
                         if head_is_top {
                             let mut phase = visible_top_distance / segment_height;
                             let phase_end = visible_bottom_distance / segment_height;
-
                             // Shift the fractional remainder of the hold body height to the first
                             // segment so the final segment can remain a full tile that lines up with
                             // the tail cap. This avoids a visible seam between the last two body
@@ -872,10 +839,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     phase_offset = 1.0 - fractional;
                                 }
                             }
-
                             phase += phase_offset;
                             let phase_end_adjusted = phase_end + phase_offset;
-
                             while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
                                 && emitted < max_segments
                             {
@@ -886,7 +851,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 if next_phase - phase < SEGMENT_PHASE_EPS {
                                     break;
                                 }
-
                                 let distance_start = (phase - phase_offset) * segment_height;
                                 let distance_end = (next_phase - phase_offset) * segment_height;
                                 let y_start = natural_top + distance_start;
@@ -897,7 +861,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     phase = next_phase;
                                     continue;
                                 }
-
                                 let base_floor = phase.floor();
                                 let start_fraction = (phase - base_floor).clamp(0.0, 1.0);
                                 let end_fraction = (next_phase - base_floor).clamp(0.0, 1.0);
@@ -908,7 +871,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 let portion = (segment_size / segment_height).clamp(0.0, 1.0);
                                 let is_last_segment = (body_bottom - segment_bottom).abs() <= 0.5
                                     || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
-
                                 if is_last_segment {
                                     if v_range >= 0.0 {
                                         v1 = v_bottom;
@@ -918,7 +880,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                         v0 = v_bottom + v_range.abs() * portion;
                                     }
                                 }
-
                                 // Update drawn body extents
                                 rendered_body_top = Some(match rendered_body_top {
                                     None => segment_top,
@@ -928,7 +889,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     None => segment_bottom,
                                     Some(v) => v.max(segment_bottom),
                                 });
-
                                 actors.push(act!(sprite(body_slot.texture_key().to_string()):
                                     align(0.5, 0.5):
                                     xy(playfield_center_x + col_x_offset as f32, segment_center):
@@ -942,7 +902,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     ):
                                     z(Z_HOLD_BODY)
                                 ));
-
                                 phase = next_phase;
                                 emitted += 1;
                             }
@@ -953,14 +912,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let phase_end = visible_bottom_distance / segment_height;
                             let phase_offset = 0.0_f32; // anchor seam at the tail side
                             let phase_end_adjusted = phase_end + phase_offset;
-
                             while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
                                 && emitted < max_segments
                             {
                                 let mut next_phase = (phase.floor() + 1.0).min(phase_end_adjusted);
                                 if next_phase - phase < SEGMENT_PHASE_EPS { next_phase = phase_end_adjusted; }
                                 if next_phase - phase < SEGMENT_PHASE_EPS { break; }
-
                                 let distance_start = (phase - phase_offset) * segment_height;
                                 let distance_end = (next_phase - phase_offset) * segment_height;
                                 let y_start = natural_top + distance_start;
@@ -971,7 +928,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     phase = next_phase;
                                     continue;
                                 }
-
                                 let base_floor = phase.floor();
                                 let start_fraction = (phase - base_floor).clamp(0.0, 1.0);
                                 let end_fraction = (next_phase - base_floor).clamp(0.0, 1.0);
@@ -982,7 +938,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 let portion = (segment_size / segment_height).clamp(0.0, 1.0);
                                 let is_last_segment = (body_bottom - segment_bottom).abs() <= 0.5
                                     || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
-
                                 if is_last_segment {
                                     if v_range >= 0.0 {
                                         v1 = v_bottom;
@@ -992,7 +947,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                         v0 = v_bottom + v_range.abs() * portion;
                                     }
                                 }
-
                                 // Update drawn body extents
                                 rendered_body_top = Some(match rendered_body_top {
                                     None => segment_top,
@@ -1002,7 +956,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     None => segment_bottom,
                                     Some(v) => v.max(segment_bottom),
                                 });
-
                                 actors.push(act!(sprite(body_slot.texture_key().to_string()):
                                     align(0.5, 0.5):
                                     xy(playfield_center_x + col_x_offset as f32, segment_center):
@@ -1016,7 +969,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     ):
                                     z(Z_HOLD_BODY)
                                 ));
-
                                 phase = next_phase;
                                 emitted += 1;
                             }
@@ -1024,7 +976,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 }
             }
-
             if let Some(cap_slot) = tail_slot {
                 let tail_position = tail_y;
                 if tail_position > -400.0 && tail_position < screen_height() + 400.0 {
@@ -1037,7 +988,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let u1 = cap_uv[2];
                     let mut v0 = cap_uv[1];
                     let mut v1 = cap_uv[3];
-
                     // Only draw the tail cap if the rendered body actually reaches
                     // the cap side. This prevents floating caps when no body segments
                     // were drawn near the tail due to scroll gimmicks.
@@ -1055,12 +1005,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         dist >= -2.0 && dist <= cap_height + 2.0
                     };
                     if !cap_adjacent_ok { continue; }
-
                     if cap_height > std::f32::EPSILON {
                         let mut cap_top = cap_center - cap_height * 0.5;
                         let mut cap_bottom = cap_center + cap_height * 0.5;
                         let v_span = v1 - v0;
-
                         if head_is_top {
                             let head_limit = top;
                             if head_limit > cap_top {
@@ -1091,7 +1039,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             }
                         }
                     }
-
                     if cap_height > std::f32::EPSILON {
                         actors.push(act!(sprite(cap_slot.texture_key().to_string()):
                             align(0.5, 0.5):
@@ -1104,12 +1051,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 hold_diffuse[2],
                                 hold_diffuse[3]
                             ):
+                            rotationz(if state.reverse_scroll { 180.0 } else { 0.0 }):
                             z(Z_HOLD_CAP)
                         ));
                     }
                 }
             }
-
             if hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo) {
                 if head_y >= receptor_y - state.draw_distance_after_targets
                     && head_y <= receptor_y + state.draw_distance_before_targets
@@ -1124,14 +1071,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         32 | 160 => Quantization::Q24th,
                         _ => Quantization::Q192nd,
                     };
-
                     let note_idx = (note.column % 4) * NUM_QUANTIZATIONS + quantization as usize;
                     if let Some(note_slot) = ns.notes.get(note_idx) {
                         let frame = note_slot
                             .frame_index(state.total_elapsed_in_screen, state.current_beat);
                         let uv = note_slot.uv_for_frame(frame);
                         let size = scale_sprite(note_slot.size());
-
                         actors.push(act!(sprite(note_slot.texture_key().to_string()):
                             align(0.5, 0.5):
                             xy(playfield_center_x + col_x_offset as f32, head_y):
@@ -1150,7 +1095,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
         }
-
         // Active arrows
         for column_arrows in &state.arrows {
             for arrow in column_arrows {
@@ -1160,62 +1104,55 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let pps_chart = cmod_pps_opt.expect("cmod pps computed");
                         let note_time_chart = state.note_time_cache[arrow.note_index];
                         let time_diff_real = (current_time - note_time_chart) / rate;
-                        // Negative because earlier times are above the receptor
-                        receptor_y - time_diff_real * pps_chart
+                        receptor_y - dir * time_diff_real * pps_chart
                     }
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                         let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                         let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                        receptor_y + beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmod_multiplier
+                        receptor_y
+                            + dir * beat_diff_disp
+                                * ScrollSpeedSetting::ARROW_SPACING
+                                * beatmod_multiplier
                     }
                 };
-
-                if y_pos < receptor_y - state.draw_distance_after_targets
-                    || y_pos > receptor_y + state.draw_distance_before_targets
+                let delta = (y_pos - receptor_y) * dir;
+                if delta < -state.draw_distance_after_targets
+                    || delta > state.draw_distance_before_targets
                 {
                     continue;
                 }
-
                 let col_x_offset = ns.column_xs[arrow.column];
-
                 if matches!(arrow.note_type, NoteType::Mine) {
                     let fill_slot = ns.mines.get(arrow.column).and_then(|slot| slot.as_ref());
                     let frame_slot = ns
                         .mine_frames
                         .get(arrow.column)
                         .and_then(|slot| slot.as_ref());
-
                     if fill_slot.is_none() && frame_slot.is_none() {
                         continue;
                     }
-
                     let base_rotation = fill_slot
                         .map(|slot| -slot.def.rotation_deg as f32)
                         .or_else(|| frame_slot.map(|slot| -slot.def.rotation_deg as f32))
                         .unwrap_or(0.0);
                     let time = state.total_elapsed_in_screen;
                     let beat = state.current_beat;
-
                     let circle_reference = frame_slot
                         .map(|slot| scale_sprite(slot.size()))
                         .or_else(|| fill_slot.map(|slot| scale_sprite(slot.size())))
                         .unwrap_or([TARGET_ARROW_PIXEL_SIZE, TARGET_ARROW_PIXEL_SIZE]);
-
                     if let Some(slot) = fill_slot {
                         if let Some(fill_state) = mine_fill_state(slot, state.current_beat) {
                             let width = circle_reference[0] * MINE_CORE_SIZE_RATIO;
                             let height = circle_reference[1] * MINE_CORE_SIZE_RATIO;
-
                             for layer_idx in (0..MINE_FILL_LAYERS).rev() {
                                 let color = fill_state.layers[layer_idx];
                                 let scale = (layer_idx as f32 + 1.0) / MINE_FILL_LAYERS as f32;
                                 let layer_width = width * scale;
                                 let layer_height = height * scale;
-
                                 if layer_width <= 0.0 || layer_height <= 0.0 {
                                     continue;
                                 }
-
                                 actors.push(act!(sprite("circle.png"):
                                     align(0.5, 0.5):
                                     xy(playfield_center_x + col_x_offset as f32, y_pos):
@@ -1231,7 +1168,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let width = size[0];
                             let height = size[1];
                             let rotation = base_rotation - time * 45.0;
-
                             actors.push(act!(sprite(slot.texture_key().to_string()):
                                 align(0.5, 0.5):
                                 xy(playfield_center_x + col_x_offset as f32, y_pos):
@@ -1243,13 +1179,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             ));
                         }
                     }
-
                     if let Some(slot) = frame_slot {
                         let frame = slot.frame_index(time, beat);
                         let uv = slot.uv_for_frame(frame);
                         let size = scale_sprite(slot.size());
                         let rotation = base_rotation + time * 120.0;
-
                         actors.push(act!(sprite(slot.texture_key().to_string()):
                             align(0.5, 0.5):
                             xy(playfield_center_x + col_x_offset as f32, y_pos):
@@ -1259,10 +1193,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             z(Z_TAP_NOTE)
                         ));
                     }
-
                     continue;
                 }
-
                 let beat_fraction = arrow.beat.fract();
                 let quantization = match (beat_fraction * 192.0).round() as u32 {
                     0 | 192 => Quantization::Q4th,
@@ -1273,14 +1205,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     32 | 160 => Quantization::Q24th,
                     _ => Quantization::Q192nd,
                 };
-
                 let note_idx = (arrow.column % 4) * NUM_QUANTIZATIONS + quantization as usize;
                 if let Some(note_slot) = ns.notes.get(note_idx) {
                     let note_frame =
                         note_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
                     let note_uv = note_slot.uv_for_frame(note_frame);
                     let note_size = scale_sprite(note_slot.size());
-
                     actors.push(act!(sprite(note_slot.texture_key().to_string()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset as f32, y_pos):
@@ -1293,18 +1223,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         }
     }
-
     // Combo Milestone Explosions (100 / 1000 combo)
     if !state.combo_milestones.is_empty() {
         let combo_center_x = playfield_center_x;
         let combo_center_y = screen_center_y() + 30.0;
         let player_color = state.player_color;
-
         let ease_out_quad = |t: f32| -> f32 {
             let t = t.clamp(0.0, 1.0);
             1.0 - (1.0 - t).powi(2)
         };
-
         for milestone in &state.combo_milestones {
             match milestone.kind {
                 ComboMilestoneKind::Hundred => {
@@ -1327,7 +1254,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             ));
                         }
                     }
-
                     if elapsed <= COMBO_HUNDRED_MILESTONE_DURATION {
                         let progress = (elapsed / COMBO_HUNDRED_MILESTONE_DURATION).clamp(0.0, 1.0);
                         let eased = ease_out_quad(progress);
@@ -1348,7 +1274,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             blend(add):
                             z(89)
                         ));
-
                         let mini_duration = 0.4_f32;
                         if elapsed <= mini_duration {
                             let mini_progress = (elapsed / mini_duration).clamp(0.0, 1.0);
@@ -1402,7 +1327,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         }
     }
-
     // Combo
     if state.miss_combo >= SHOW_COMBO_AT {
         let miss_combo_font_name = match profile.combo_font {
@@ -1415,7 +1339,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             crate::game::profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
             crate::game::profile::ComboFont::None => None,
         };
-
         if let Some(font_name) = miss_combo_font_name {
             actors.push(act!(text:
                 font(font_name): settext(state.miss_combo.to_string()):
@@ -1436,18 +1359,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else {
             ([1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0])
         };
-
         let effect_period = 0.8;
         let t = (state.total_elapsed_in_screen / effect_period).fract();
         let anim_t = ((t * 2.0 * std::f32::consts::PI).sin() + 1.0) / 2.0;
-
         let final_color = [
             color1[0] + (color2[0] - color1[0]) * anim_t,
             color1[1] + (color2[1] - color1[1]) * anim_t,
             color1[2] + (color2[2] - color1[2]) * anim_t,
             1.0,
         ];
-
         let combo_font_name = match profile.combo_font {
             crate::game::profile::ComboFont::Wendy => Some("wendy_combo"),
             crate::game::profile::ComboFont::ArialRounded => Some("combo_arial_rounded"),
@@ -1458,7 +1378,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             crate::game::profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
             crate::game::profile::ComboFont::None => None,
         };
-
         if let Some(font_name) = combo_font_name {
             actors.push(act!(text:
                 font(font_name): settext(state.combo.to_string()):
@@ -1469,7 +1388,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
         }
     }
-
     // Judgment Sprite (tap judgments)
     if let Some(render_info) = &state.last_judgment {
         if matches!(profile.judgment_graphic, profile::JudgmentGraphic::None) {
@@ -1493,7 +1411,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 let ease_t = t.powi(2);
                 0.75 * (1.0 - ease_t)
             };
-
             let offset_sec = judgment.time_error_ms / 1000.0;
             let mut frame_base = judgment.grade as usize;
             if judgment.grade >= JudgeGrade::Excellent {
@@ -1506,7 +1423,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
             let col_index = if columns > 1 { frame_offset } else { 0 };
             let linear_index = (frame_base * columns + col_index) as u32;
-
             let judgment_texture = match profile.judgment_graphic {
                 profile::JudgmentGraphic::Bebas =>
                     "judgements/Bebas 2x7 (doubleres).png",
@@ -1550,7 +1466,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     "judgements/Wendy Chroma 2x7 (doubleres).png",
                 profile::JudgmentGraphic::None => unreachable!("JudgmentGraphic::None is filtered above"),
             };
-
             actors.push(act!(sprite(judgment_texture):
                 align(0.5, 0.5): xy(playfield_center_x, screen_center_y() - 30.0):
                 z(200): zoomtoheight(76.0): setstate(linear_index): zoom(zoom)
@@ -1558,18 +1473,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
         }
     }
-
     let hold_judgment_y = screen_center_y() + HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER;
     for (column, render_info) in state.hold_judgments.iter().enumerate() {
         let Some(render_info) = render_info else {
             continue;
         };
-
         let elapsed = render_info.triggered_at.elapsed().as_secs_f32();
         if elapsed >= HOLD_JUDGMENT_TOTAL_DURATION {
             continue;
         }
-
         let zoom = if elapsed < 0.3 {
             let progress = (elapsed / 0.3).clamp(0.0, 1.0);
             HOLD_JUDGMENT_INITIAL_ZOOM
@@ -1577,12 +1489,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else {
             HOLD_JUDGMENT_FINAL_ZOOM
         };
-
         let frame_index = match render_info.result {
             HoldResult::Held => 0,
             HoldResult::LetGo => 1,
         } as u32;
-
         if let Some(texture) = hold_judgment_texture {
             let column_offset = state
                 .noteskin
@@ -1590,7 +1500,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 .and_then(|ns| ns.column_xs.get(column))
                 .map(|&x| x as f32)
                 .unwrap_or_else(|| ((column as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE);
-
             actors.push(act!(sprite(texture):
                 align(0.5, 0.5):
                 xy(playfield_center_x + column_offset, hold_judgment_y):
@@ -1601,11 +1510,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
         }
     }
-
     // Difficulty Box
     let x = screen_center_x() - widescale(292.5, 342.5);
     let y = 56.0;
-
     let difficulty_index = color::FILE_DIFFICULTY_NAMES
         .iter()
         .position(|&name| name.eq_ignore_ascii_case(&state.chart.difficulty))
@@ -1613,7 +1520,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let difficulty_color_index = state.active_color_index - (4 - difficulty_index) as i32;
     let difficulty_color = color::simply_love_rgba(difficulty_color_index);
     let meter_text = state.chart.meter.to_string();
-
     actors.push(Actor::Frame {
         align: [0.5, 0.5],
         offset: [x, y],
@@ -1631,12 +1537,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         background: None,
         z: 90,
     });
-
     // Score Display (P1)
     let clamped_width = screen_width().clamp(640.0, 854.0);
     let score_x = screen_center_x() - clamped_width / 4.3;
     let score_y = 56.0;
-
     let score_percent = (judgment::calculate_itg_score_percent(
         &state.scoring_counts,
         state.holds_held_for_score,
@@ -1645,13 +1549,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         state.possible_grade_points,
     ) * 100.0) as f32;
     let percent_text = format!("{:.2}", score_percent);
-
     actors.push(act!(text:
         font("wendy_monospace_numbers"): settext(percent_text):
         align(1.0, 1.0): xy(score_x, score_y):
         zoom(0.5): horizalign(right): z(90)
     ));
-
     // Current BPM Display (1:1 with Simply Love)
     {
         let base_bpm = state.timing.get_bpm_for_beat(state.current_beat);
@@ -1660,45 +1562,36 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else {
             0
         };
-
         let bpm_text = display_bpm.to_string();
-
         // Final world-space positions derived from analyzing the SM Lua transforms.
         // The parent frame is bottom-aligned to y=52, and its children are positioned
         // relative to that y-coordinate, with a zoom of 1.33 applied to the whole group.
         let frame_origin_y = 51.0;
         let frame_zoom = 1.33;
-
         // The BPM text is at y=0 relative to the frame's origin. Its final position is just the origin.
         let bpm_center_y = frame_origin_y;
         // The Rate text is at y=12 relative to the frame's origin. Its offset is scaled by the frame's zoom.
         let rate_center_y = frame_origin_y + (12.0 * frame_zoom);
-
         let bpm_final_zoom = 1.0 * frame_zoom;
         let rate_final_zoom = 0.5 * frame_zoom;
-
         let bpm_x = screen_center_x();
-
         actors.push(act!(text:
             font("miso"): settext(bpm_text):
             align(0.5, 0.5): xy(bpm_x, bpm_center_y):
             zoom(bpm_final_zoom): horizalign(center): z(90)
         ));
-
         let rate = if state.music_rate.is_finite() { state.music_rate } else { 1.0 };
         let rate_text = if (rate - 1.0).abs() > 0.001 {
             format!("{rate:.2}x rate")
         } else {
             String::new()
         };
-
         actors.push(act!(text:
             font("miso"): settext(rate_text):
             align(0.5, 0.5): xy(bpm_x, rate_center_y):
             zoom(rate_final_zoom): horizalign(center): z(90)
         ));
     }
-
     // Song Title Box (SongMeter)
     {
         let w = widescale(310.0, 417.0);
@@ -1706,10 +1599,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let box_cx = screen_center_x();
         let box_cy = 20.0;
         let mut frame_children = Vec::new();
-
         frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w, h): diffuse(1.0, 1.0, 1.0, 1.0): z(0) ));
         frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w - 4.0, h - 4.0): diffuse(0.0, 0.0, 0.0, 1.0): z(1) ));
-
         if state.song.total_length_seconds > 0 && state.current_music_time >= 0.0 {
             let progress =
                 (state.current_music_time / state.song.total_length_seconds as f32).clamp(0.0, 1.0);
@@ -1718,7 +1609,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 diffuse(state.player_color[0], state.player_color[1], state.player_color[2], 1.0): z(2)
             ));
         }
-
         let full_title = if state.song.subtitle.trim().is_empty() {
             state.song.title.clone()
         } else {
@@ -1728,7 +1618,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             font("miso"): settext(full_title): align(0.5, 0.5): xy(w / 2.0, h / 2.0):
             zoom(0.8): maxwidth(screen_width() / 2.5 - 10.0): horizalign(center): z(3)
         ));
-
         actors.push(Actor::Frame {
             align: [0.5, 0.5],
             offset: [box_cx, box_cy],
@@ -1738,18 +1627,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             children: frame_children,
         });
     }
-
     // --- Life Meter (P1) ---
     {
         let w = 136.0;
         let h = 18.0;
         let meter_cx = screen_center_x() - widescale(238.0, 288.0);
         let meter_cy = 20.0;
-
         // Frames/border
         actors.push(act!(quad: align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0): diffuse(1.0, 1.0, 1.0, 1.0): z(90) ));
         actors.push(act!(quad: align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w, h): diffuse(0.0, 0.0, 0.0, 1.0): z(91) ));
-
         // Latch-to-zero for rendering the very frame we die.
         let dead = state.is_failing || state.life <= 0.0;
         let life_for_render = if dead {
@@ -1757,16 +1643,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else {
             state.life.clamp(0.0, 1.0)
         };
-
         let is_hot = !dead && life_for_render >= 1.0;
         let life_color = if is_hot {
             [1.0, 1.0, 1.0, 1.0]
         } else {
             state.player_color
         };
-
         let filled_width = w * life_for_render;
-
         // Never draw swoosh if dead OR nothing to fill.
         if filled_width > 0.0 && !dead {
             let bps = state.timing.get_bpm_for_beat(state.current_beat) / 60.0;
@@ -1779,7 +1662,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 texcoordvelocity(-(bps * 0.5), 0.0):
                 z(93)
             ));
-
             actors.push(act!(quad:
                 align(0.0, 0.5):
                 xy(meter_cx - w / 2.0, meter_cy):
@@ -1789,7 +1671,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
         }
     }
-
     actors.push(screen_bar::build(ScreenBarParams {
         title: "",
         title_placement: screen_bar::ScreenBarTitlePlacement::Center,
@@ -1801,10 +1682,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         right_text: None,
         left_avatar: None,
     }));
-
     actors.extend(build_side_pane(state, asset_manager));
     actors.extend(build_holds_mines_rolls_pane(state, asset_manager));
-
     actors
 }
 

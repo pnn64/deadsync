@@ -1,4 +1,4 @@
-// ===== PROJECT: deadsync FILE: src/game/gameplay.rs =====
+
 use crate::core::audio;
 use crate::core::input::{InputEdge, InputSource, Lane, InputEvent, VirtualAction, lane_from_action};
 use crate::core::space::*;
@@ -33,6 +33,7 @@ const M_MOD_HIGH_CAP: f32 = 600.0;
 // Timing windows now sourced from game::timing
 
 pub const RECEPTOR_Y_OFFSET_FROM_CENTER: f32 = -125.0;
+pub const RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE: f32 = 145.0;
 pub const DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER: f32 = 1.5;
 pub const DRAW_DISTANCE_AFTER_TARGETS: f32 = 130.0;
 pub const MINE_EXPLOSION_DURATION: f32 = 0.6;
@@ -172,6 +173,7 @@ pub struct State {
     pub scroll_travel_time: f32,
     pub draw_distance_before_targets: f32,
     pub draw_distance_after_targets: f32,
+    pub reverse_scroll: bool,
     pub receptor_glow_timers: [f32; 4],
     pub receptor_bop_timers: [f32; 4],
     pub tap_explosions: [Option<ActiveTapExplosion>; 4],
@@ -557,6 +559,7 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         scroll_travel_time: travel_time,
         draw_distance_before_targets,
         draw_distance_after_targets,
+        reverse_scroll: profile.reverse_scroll,
         receptor_glow_timers: [0.0; 4],
         receptor_bop_timers: [0.0; 4],
         tap_explosions: Default::default(),
@@ -1769,8 +1772,14 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
 
 #[inline(always)]
 fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
-    let receptor_y = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER;
-    let miss_cull_threshold = receptor_y - state.draw_distance_after_targets;
+    let receptor_y = screen_center_y()
+        + if state.reverse_scroll {
+            RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE
+        } else {
+            RECEPTOR_Y_OFFSET_FROM_CENTER
+        };
+    let dir = if state.reverse_scroll { -1.0 } else { 1.0 };
+    let miss_cull_threshold = receptor_y - dir * state.draw_distance_after_targets;
 
     let (cmod_pps_opt, curr_disp_beat, beatmod_multiplier) = match state.scroll_speed {
         ScrollSpeedSetting::CMod(c_bpm) => {
@@ -1801,18 +1810,22 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                             let note_time_chart = state.note_time_cache[arrow.note_index];
                             let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
                             let time_diff_real = (note_time_chart - music_time_sec) / rate;
-                            receptor_y + time_diff_real * pps_chart
+                            receptor_y + dir * time_diff_real * pps_chart
                         }
                         ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                             let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                             let beat_diff_disp = note_disp_beat - curr_disp_beat;
                             receptor_y
-                                + beat_diff_disp
+                                + dir * beat_diff_disp
                                     * ScrollSpeedSetting::ARROW_SPACING
                                     * beatmod_multiplier
                         }
                     };
-                    return y_pos >= miss_cull_threshold;
+                    return if state.reverse_scroll {
+                        y_pos <= miss_cull_threshold
+                    } else {
+                        y_pos >= miss_cull_threshold
+                    };
                 }
                 match note.mine_result {
                     Some(MineResult::Avoided) => {}
@@ -1827,18 +1840,22 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                         let note_time_chart = state.note_time_cache[arrow.note_index];
                         let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
                         let time_diff_real = (note_time_chart - music_time_sec) / rate;
-                        receptor_y + time_diff_real * pps_chart
+                        receptor_y + dir * time_diff_real * pps_chart
                     }
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                         let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                         let beat_diff_disp = note_disp_beat - curr_disp_beat;
                         receptor_y
-                            + beat_diff_disp
+                            + dir * beat_diff_disp
                                 * ScrollSpeedSetting::ARROW_SPACING
                                 * beatmod_multiplier
                     }
                 };
-                return y_pos >= miss_cull_threshold;
+                return if state.reverse_scroll {
+                    y_pos <= miss_cull_threshold
+                } else {
+                    y_pos >= miss_cull_threshold
+                };
             } else {
                 let Some(judgment) = note.result.as_ref() else { return true; };
                 if judgment.grade != JudgeGrade::Miss { return false; }
@@ -1850,19 +1867,23 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                     let note_time_chart = state.note_time_cache[arrow.note_index];
                     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
                     let time_diff_real = (note_time_chart - music_time_sec) / rate;
-                    receptor_y + time_diff_real * pps_chart
+                    receptor_y + dir * time_diff_real * pps_chart
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                     let beat_diff_disp = note_disp_beat - curr_disp_beat;
                     receptor_y
-                        + beat_diff_disp
+                        + dir * beat_diff_disp
                             * ScrollSpeedSetting::ARROW_SPACING
                             * beatmod_multiplier
                 }
             };
 
-            y_pos >= miss_cull_threshold
+            if state.reverse_scroll {
+                y_pos <= miss_cull_threshold
+            } else {
+                y_pos >= miss_cull_threshold
+            }
         });
     }
 }

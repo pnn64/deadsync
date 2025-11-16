@@ -248,6 +248,7 @@ pub struct Profile {
     pub avatar_path: Option<PathBuf>,
     pub avatar_texture_key: Option<String>,
     pub scroll_speed: ScrollSpeedSetting,
+    pub reverse_scroll: bool,
 }
 
 impl Default for Profile {
@@ -265,6 +266,7 @@ impl Default for Profile {
             avatar_path: None,
             avatar_texture_key: None,
             scroll_speed: ScrollSpeedSetting::default(),
+            reverse_scroll: false,
         }
     }
 }
@@ -296,6 +298,10 @@ fn create_default_files() -> Result<(), std::io::Error> {
         content.push_str("[PlayerOptions]\n");
         content.push_str(&format!("BackgroundFilter = {}\n", default_profile.background_filter));
         content.push_str(&format!("ScrollSpeed = {}\n", default_profile.scroll_speed));
+        content.push_str(&format!(
+            "ReverseScroll = {}\n",
+            if default_profile.reverse_scroll { 1 } else { 0 }
+        ));
         content.push_str(&format!(
             "HoldJudgmentGraphic = {}\n",
             default_profile.hold_judgment_graphic
@@ -341,6 +347,10 @@ fn save_profile_ini() {
     content.push_str("[PlayerOptions]\n");
     content.push_str(&format!("BackgroundFilter={}\n", profile.background_filter));
     content.push_str(&format!("ScrollSpeed={}\n", profile.scroll_speed));
+    content.push_str(&format!(
+        "ReverseScroll={}\n",
+        if profile.reverse_scroll { 1 } else { 0 }
+    ));
     content.push_str(&format!(
         "HoldJudgmentGraphic={}\n",
         profile.hold_judgment_graphic
@@ -421,6 +431,10 @@ pub fn load() {
                 .get("PlayerOptions", "ScrollSpeed")
                 .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
                 .unwrap_or(default_profile.scroll_speed);
+            profile.reverse_scroll = profile_conf
+                .get("PlayerOptions", "ReverseScroll")
+                .and_then(|v| v.parse::<u8>().ok())
+                .map_or(default_profile.reverse_scroll, |v| v != 0);
         } else {
             warn!(
                 "Failed to load '{}', using default profile settings.",
@@ -535,6 +549,17 @@ pub fn update_combo_font(setting: ComboFont) {
             return;
         }
         profile.combo_font = setting;
+    }
+    save_profile_ini();
+}
+
+pub fn update_reverse_scroll(enabled: bool) {
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        if profile.reverse_scroll == enabled {
+            return;
+        }
+        profile.reverse_scroll = enabled;
     }
     save_profile_ini();
 }
