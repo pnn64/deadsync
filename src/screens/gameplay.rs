@@ -1001,19 +1001,36 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 }
                             }
                         } else if hold_length > std::f32::EPSILON {
-                            // Reverse-scroll path: build along the head→tail axis so only the
-                            // first segment near the head is cropped; interior seams use intact
-                            // edges and the last segment near the tail is a full tile.
-                            let axis_sign = if head_is_top { 1.0_f32 } else { -1.0_f32 };
-                            let mut visible_start =
-                                ((body_top - head_y) / axis_sign).clamp(0.0, hold_length);
-                            let mut visible_end =
-                                ((body_bottom - head_y) / axis_sign).clamp(0.0, hold_length);
-                            if visible_start > visible_end {
-                                std::mem::swap(&mut visible_start, &mut visible_end);
-                            }
-                            if visible_end - visible_start > std::f32::EPSILON {
-                                let mut emitted = 0;
+                            // Reverse-scroll path: mirror the forward-segmentation logic around
+                            // the receptor line so that negative #SCROLLS behave identically.
+                            let receptor = receptor_y;
+                            let head_y_fwd = 2.0 * receptor - head_y;
+                            let tail_y_fwd = 2.0 * receptor - tail_y;
+                            let body_top_fwd = 2.0 * receptor - body_bottom;
+                            let body_bottom_fwd = 2.0 * receptor - body_top;
+
+                            let head_is_top_fwd = head_y_fwd <= tail_y_fwd;
+                            let natural_top_fwd =
+                                if head_is_top_fwd { head_y_fwd } else { tail_y_fwd };
+                            let natural_bottom_fwd =
+                                if head_is_top_fwd { tail_y_fwd } else { head_y_fwd };
+
+                            let visible_top_distance = if head_is_top_fwd {
+                                (body_top_fwd - natural_top_fwd).clamp(0.0, hold_length)
+                            } else {
+                                (natural_bottom_fwd - body_top_fwd).clamp(0.0, hold_length)
+                            };
+                            let visible_bottom_distance = if head_is_top_fwd {
+                                (body_bottom_fwd - natural_top_fwd).clamp(0.0, hold_length)
+                            } else {
+                                (natural_bottom_fwd - body_bottom_fwd).clamp(0.0, hold_length)
+                            };
+
+                            let mut emitted = 0;
+                            if head_is_top_fwd {
+                                let mut phase = visible_top_distance / segment_height;
+                                let phase_end = visible_bottom_distance / segment_height;
+                                // Same tail-side seam anchoring as the forward path.
                                 let mut phase_offset = 0.0_f32;
                                 let total_phase = hold_length / segment_height;
                                 if total_phase >= 1.0 + SEGMENT_PHASE_EPS {
@@ -1024,9 +1041,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                         phase_offset = 1.0 - fractional;
                                     }
                                 }
-                                let mut phase = visible_start / segment_height + phase_offset;
-                                let phase_end_adjusted =
-                                    visible_end / segment_height + phase_offset;
+                                phase += phase_offset;
+                                let phase_end_adjusted = phase_end + phase_offset;
                                 while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
                                     && emitted < max_segments
                                 {
@@ -1042,15 +1058,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                         (phase - phase_offset) * segment_height;
                                     let distance_end =
                                         (next_phase - phase_offset) * segment_height;
-                                    let y_start =
-                                        head_y + axis_sign * distance_start;
-                                    let y_end =
-                                        head_y + axis_sign * distance_end;
-                                    let seg_y_min = y_start.min(y_end);
-                                    let seg_y_max = y_start.max(y_end);
-                                    let segment_top = seg_y_min.max(body_top);
-                                    let segment_bottom = seg_y_max.min(body_bottom);
-                                    if segment_bottom - segment_top <= std::f32::EPSILON {
+                                    let y_start_fwd =
+                                        natural_top_fwd + distance_start;
+                                    let y_end_fwd =
+                                        natural_top_fwd + distance_end;
+                                    let segment_top_fwd =
+                                        y_start_fwd.max(body_top_fwd);
+                                    let segment_bottom_fwd =
+                                        y_end_fwd.min(body_bottom_fwd);
+                                    if segment_bottom_fwd - segment_top_fwd
+                                        <= std::f32::EPSILON
+                                    {
                                         phase = next_phase;
                                         continue;
                                     }
@@ -1063,15 +1081,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                         v_top + v_range * start_fraction;
                                     let mut v1 =
                                         v_top + v_range * end_fraction;
-                                    let segment_center =
-                                        (segment_top + segment_bottom) * 0.5;
-                                    let segment_size = segment_bottom - segment_top;
-                                    let portion = (segment_size / segment_height)
+                                    let segment_top_rev =
+                                        2.0 * receptor - segment_bottom_fwd;
+                                    let segment_bottom_rev =
+                                        2.0 * receptor - segment_top_fwd;
+                                    let segment_center_rev =
+                                        (segment_top_rev + segment_bottom_rev) * 0.5;
+                                    let segment_size_rev =
+                                        segment_bottom_rev - segment_top_rev;
+                                    let portion = (segment_size_rev / segment_height)
                                         .clamp(0.0, 1.0);
-                                    let segment_end_distance =
-                                        distance_end.min(hold_length);
                                     let is_last_segment =
-                                        (visible_end - segment_end_distance).abs() <= 0.5
+                                        (body_bottom_fwd - segment_bottom_fwd).abs()
+                                            <= 0.5
                                             || next_phase >= phase_end_adjusted
                                                 - SEGMENT_PHASE_EPS;
                                     if is_last_segment {
@@ -1084,18 +1106,117 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                         }
                                     }
                                     rendered_body_top = Some(match rendered_body_top {
-                                        None => segment_top,
-                                        Some(v) => v.min(segment_top),
+                                        None => segment_top_rev,
+                                        Some(v) => v.min(segment_top_rev),
                                     });
                                     rendered_body_bottom =
                                         Some(match rendered_body_bottom {
-                                            None => segment_bottom,
-                                            Some(v) => v.max(segment_bottom),
+                                            None => segment_bottom_rev,
+                                            Some(v) => v.max(segment_bottom_rev),
                                         });
                                     actors.push(act!(sprite(body_slot.texture_key().to_string()):
                                         align(0.5, 0.5):
-                                        xy(playfield_center_x + col_x_offset as f32, segment_center):
-                                        zoomto(body_width, segment_size):
+                                        xy(
+                                            playfield_center_x + col_x_offset as f32,
+                                            segment_center_rev
+                                        ):
+                                        zoomto(body_width, segment_size_rev):
+                                        rotationz(180.0):
+                                        customtexturerect(u0, v0, u1, v1):
+                                        diffuse(
+                                            hold_diffuse[0],
+                                            hold_diffuse[1],
+                                            hold_diffuse[2],
+                                            hold_diffuse[3]
+                                        ):
+                                        z(Z_HOLD_BODY)
+                                    ));
+                                    phase = next_phase;
+                                    emitted += 1;
+                                }
+                            } else {
+                                let mut phase = visible_top_distance / segment_height;
+                                let phase_end = visible_bottom_distance / segment_height;
+                                let phase_offset = 0.0_f32; // anchor seam at the tail side
+                                let phase_end_adjusted = phase_end + phase_offset;
+                                while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
+                                    && emitted < max_segments
+                                {
+                                    let mut next_phase =
+                                        (phase.floor() + 1.0).min(phase_end_adjusted);
+                                    if next_phase - phase < SEGMENT_PHASE_EPS {
+                                        next_phase = phase_end_adjusted;
+                                    }
+                                    if next_phase - phase < SEGMENT_PHASE_EPS {
+                                        break;
+                                    }
+                                    let distance_start =
+                                        (phase - phase_offset) * segment_height;
+                                    let distance_end =
+                                        (next_phase - phase_offset) * segment_height;
+                                    let y_start_fwd =
+                                        natural_top_fwd + distance_start;
+                                    let y_end_fwd =
+                                        natural_top_fwd + distance_end;
+                                    let segment_top_fwd =
+                                        y_start_fwd.max(body_top_fwd);
+                                    let segment_bottom_fwd =
+                                        y_end_fwd.min(body_bottom_fwd);
+                                    if segment_bottom_fwd - segment_top_fwd
+                                        <= std::f32::EPSILON
+                                    {
+                                        phase = next_phase;
+                                        continue;
+                                    }
+                                    let base_floor = phase.floor();
+                                    let start_fraction =
+                                        (phase - base_floor).clamp(0.0, 1.0);
+                                    let end_fraction =
+                                        (next_phase - base_floor).clamp(0.0, 1.0);
+                                    let mut v0 =
+                                        v_top + v_range * start_fraction;
+                                    let mut v1 =
+                                        v_top + v_range * end_fraction;
+                                    let segment_top_rev =
+                                        2.0 * receptor - segment_bottom_fwd;
+                                    let segment_bottom_rev =
+                                        2.0 * receptor - segment_top_fwd;
+                                    let segment_center_rev =
+                                        (segment_top_rev + segment_bottom_rev) * 0.5;
+                                    let segment_size_rev =
+                                        segment_bottom_rev - segment_top_rev;
+                                    let portion = (segment_size_rev / segment_height)
+                                        .clamp(0.0, 1.0);
+                                    let is_last_segment =
+                                        (body_bottom_fwd - segment_bottom_fwd).abs()
+                                            <= 0.5
+                                            || next_phase >= phase_end_adjusted
+                                                - SEGMENT_PHASE_EPS;
+                                    if is_last_segment {
+                                        if v_range >= 0.0 {
+                                            v1 = v_bottom;
+                                            v0 = v_bottom - v_range.abs() * portion;
+                                        } else {
+                                            v1 = v_bottom;
+                                            v0 = v_bottom + v_range.abs() * portion;
+                                        }
+                                    }
+                                    rendered_body_top = Some(match rendered_body_top {
+                                        None => segment_top_rev,
+                                        Some(v) => v.min(segment_top_rev),
+                                    });
+                                    rendered_body_bottom =
+                                        Some(match rendered_body_bottom {
+                                            None => segment_bottom_rev,
+                                            Some(v) => v.max(segment_bottom_rev),
+                                        });
+                                    actors.push(act!(sprite(body_slot.texture_key().to_string()):
+                                        align(0.5, 0.5):
+                                        xy(
+                                            playfield_center_x + col_x_offset as f32,
+                                            segment_center_rev
+                                        ):
+                                        zoomto(body_width, segment_size_rev):
                                         rotationz(180.0):
                                         customtexturerect(u0, v0, u1, v1):
                                         diffuse(
