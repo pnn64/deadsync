@@ -807,15 +807,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let natural_top = if head_is_top { head_y } else { tail_y };
                         let natural_bottom = if head_is_top { tail_y } else { head_y };
                         let hold_length = (natural_bottom - natural_top).abs();
-                        let visible_top_distance = if head_is_top {
-                            (body_top - natural_top).clamp(0.0, hold_length)
+                        let (visible_top_distance, visible_bottom_distance) = if state.reverse_scroll {
+                            (
+                                (body_top - natural_top).clamp(0.0, hold_length),
+                                (body_bottom - natural_top).clamp(0.0, hold_length),
+                            )
                         } else {
-                            (natural_bottom - body_top).clamp(0.0, hold_length)
-                        };
-                        let visible_bottom_distance = if head_is_top {
-                            (body_bottom - natural_top).clamp(0.0, hold_length)
-                        } else {
-                            (natural_bottom - body_bottom).clamp(0.0, hold_length)
+                            (
+                                if head_is_top {
+                                    (body_top - natural_top).clamp(0.0, hold_length)
+                                } else {
+                                    (natural_bottom - body_top).clamp(0.0, hold_length)
+                                },
+                                if head_is_top {
+                                    (body_bottom - natural_top).clamp(0.0, hold_length)
+                                } else {
+                                    (natural_bottom - body_bottom).clamp(0.0, hold_length)
+                                },
+                            )
                         };
                         const SEGMENT_PHASE_EPS: f32 = 1e-4;
                         let max_segments = 2048;
