@@ -45,6 +45,13 @@ pub enum NavDirection {
     Right,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OptionsPane {
+    Main,
+    Advanced,
+    Uncommon,
+}
+
 pub struct Row {
     pub name: String,
     pub choices: Vec<String>,
@@ -67,6 +74,7 @@ pub struct State {
     pub active_color_index: i32,
     pub speed_mod: SpeedMod,
     pub music_rate: f32,
+    pub current_pane: OptionsPane,
     bg: heart_bg::State,
     pub nav_key_held_direction: Option<NavDirection>,
     pub nav_key_held_since: Option<Instant>,
@@ -125,7 +133,35 @@ fn round_to_step(x: f32, step: f32) -> f32 {
     (x / step).round() * step
 }
 
-fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: usize, session_music_rate: f32) -> Vec<Row> {
+fn what_comes_next_choices(pane: OptionsPane) -> Vec<String> {
+    match pane {
+        OptionsPane::Main => vec![
+            "Gameplay".to_string(),
+            "Choose a Different Song".to_string(),
+            "Advanced Modifiers".to_string(),
+            "Uncommon Modifiers".to_string(),
+        ],
+        OptionsPane::Advanced => vec![
+            "Gameplay".to_string(),
+            "Choose a Different Song".to_string(),
+            "Main Modifiers".to_string(),
+            "Uncommon Modifiers".to_string(),
+        ],
+        OptionsPane::Uncommon => vec![
+            "Gameplay".to_string(),
+            "Choose a Different Song".to_string(),
+            "Main Modifiers".to_string(),
+            "Advanced Modifiers".to_string(),
+        ],
+    }
+}
+
+fn build_main_rows(
+    song: &SongData,
+    speed_mod: &SpeedMod,
+    selected_difficulty_index: usize,
+    session_music_rate: f32,
+) -> Vec<Row> {
     let speed_mod_value_str = match speed_mod.mod_type.as_str() {
         "X" => format!("{:.2}x", speed_mod.value),
         "C" => format!("C{}", speed_mod.value as i32),
@@ -335,12 +371,7 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
         },
         Row {
             name: "What comes next?".to_string(),
-            choices: vec![
-                "Gameplay".to_string(),
-                "Choose a Different Song".to_string(),
-                "Advanced Modifiers".to_string(),
-                "Uncommon Modifiers".to_string(),
-            ],
+            choices: what_comes_next_choices(OptionsPane::Main),
             selected_choice_index: 0,
             help: vec![
                 "Go back and choose a different song or change additional".to_string(),
@@ -358,24 +389,318 @@ fn build_rows(song: &SongData, speed_mod: &SpeedMod, selected_difficulty_index: 
     ]
 }
 
-pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_index: i32) -> State {
+fn build_advanced_rows() -> Vec<Row> {
+    vec![
+        Row {
+            name: "Turn".to_string(),
+            choices: vec![
+                "None".to_string(),
+                "Mirror".to_string(),
+                "Left".to_string(),
+                "Right".to_string(),
+                "LRMirror".to_string(),
+                "UDMirror".to_string(),
+                "Shuffle".to_string(),
+                "Blender".to_string(),
+                "Random".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Apply simple transforms to the arrow directions.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Scroll".to_string(),
+            choices: vec![
+                "Reverse".to_string(),
+                "Split".to_string(),
+                "Alternate".to_string(),
+                "Cross".to_string(),
+                "Centered".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Change how notes scroll relative to the receptors.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Hide".to_string(),
+            choices: vec![
+                "Targets".to_string(),
+                "Background".to_string(),
+                "Combo".to_string(),
+                "Life".to_string(),
+                "Score".to_string(),
+                "Danger".to_string(),
+                "Combo Explosions".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Hide parts of the gameplay UI.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "LifeMeter Type".to_string(),
+            choices: vec![
+                "Standard".to_string(),
+                "Surround".to_string(),
+                "Vertical".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Change the style of the lifebar.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Data Visualizations".to_string(),
+            choices: vec![
+                "None".to_string(),
+                "Target Score Graph".to_string(),
+                "Step Statistics".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Show additional graphs during gameplay and evaluation.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Target Score".to_string(),
+            choices: vec![
+                "C-".to_string(),
+                "C".to_string(),
+                "C+".to_string(),
+                "B-".to_string(),
+                "B".to_string(),
+                "B+".to_string(),
+                "A-".to_string(),
+                "A".to_string(),
+                "A+".to_string(),
+                "S-".to_string(),
+                "S".to_string(),
+                "S+".to_string(),
+                "Machine Best".to_string(),
+                "Personal Best".to_string(),
+            ],
+            selected_choice_index: 11, // S by default, matching screenshot
+            help: vec!["Choose a grade or score to chase.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Action On Missed Target".to_string(),
+            choices: vec![
+                "Nothing".to_string(),
+                "Fail".to_string(),
+                "Restart Song".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Decide what happens if you fall behind your target score.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Gameplay Extras".to_string(),
+            choices: vec![
+                "Flash Column for Miss".to_string(),
+                "Subtractive Scoring".to_string(),
+                "Pacemaker".to_string(),
+                "Density Graph at Top".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Extra feedback helpers shown during gameplay.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Gameplay Extras (More)".to_string(),
+            choices: vec![
+                "Judgment Tilt".to_string(),
+                "Column Cues".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Additional visual effects and cues.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Judgment Tilt Intensity".to_string(),
+            choices: vec![
+                "1".to_string(),
+                "1.5".to_string(),
+                "2".to_string(),
+                "2.5".to_string(),
+                "3".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["How strongly to tilt judgments left/right.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "What comes next?".to_string(),
+            choices: what_comes_next_choices(OptionsPane::Advanced),
+            selected_choice_index: 0,
+            help: vec![
+                "Jump to gameplay, another modifier pane,".to_string(),
+                "or back to song select.".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "".to_string(),
+            choices: vec!["Exit".to_string()],
+            selected_choice_index: 0,
+            help: vec!["".to_string()],
+            choice_difficulty_indices: None,
+        },
+    ]
+}
+
+fn build_uncommon_rows() -> Vec<Row> {
+    vec![
+        Row {
+            name: "Insert".to_string(),
+            choices: vec![
+                "Wide".to_string(),
+                "Big".to_string(),
+                "Quick".to_string(),
+                "BMRize".to_string(),
+                "Skippy".to_string(),
+                "Echo".to_string(),
+                "Stomp".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Add extra notes into the chart in unusual patterns.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Remove".to_string(),
+            choices: vec![
+                "Little".to_string(),
+                "No Mines".to_string(),
+                "No Holds".to_string(),
+                "No Jumps".to_string(),
+                "No Hands".to_string(),
+                "No Quads".to_string(),
+                "No Lifts".to_string(),
+                "No Fakes".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Strip specific note types out of the chart.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Holds".to_string(),
+            choices: vec![
+                "Planted".to_string(),
+                "Floored".to_string(),
+                "Twister".to_string(),
+                "No Rolls".to_string(),
+                "Holds To Rolls".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Twist and reshape hold notes in strange ways.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Accel Effects".to_string(),
+            choices: vec![
+                "Boost".to_string(),
+                "Brake".to_string(),
+                "Wave".to_string(),
+                "Expand".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Time-based acceleration and deceleration effects.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Visual Effects".to_string(),
+            choices: vec![
+                "Drunk".to_string(),
+                "Dizzy".to_string(),
+                "Confusion".to_string(),
+                "Flip".to_string(),
+                "Invert".to_string(),
+                "Tornado".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Wild motion applied to the note field.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Appearance Effects".to_string(),
+            choices: vec![
+                "Hidden".to_string(),
+                "Sudden".to_string(),
+                "Stealth".to_string(),
+                "Blink".to_string(),
+                "R.Vanish".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Fade or hide incoming arrows in unusual ways.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Attacks".to_string(),
+            choices: vec![
+                "Off".to_string(),
+                "On".to_string(),
+                "Random".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Toggle charts that include attack modifiers.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Characters".to_string(),
+            choices: vec![
+                "None".to_string(),
+                "Random".to_string(),
+                "Select Per Song".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Dancing characters and how they are chosen.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Hide Light Type".to_string(),
+            choices: vec![
+                "No Hide Lights".to_string(),
+                "Hide All Lights".to_string(),
+                "Hide Marquee Lights".to_string(),
+                "Hide Bass Lights".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Control how cabinet lights react during gameplay.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "What comes next?".to_string(),
+            choices: what_comes_next_choices(OptionsPane::Uncommon),
+            selected_choice_index: 0,
+            help: vec![
+                "Jump to gameplay, another modifier pane,".to_string(),
+                "or back to song select.".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "".to_string(),
+            choices: vec!["Exit".to_string()],
+            selected_choice_index: 0,
+            help: vec!["".to_string()],
+            choice_difficulty_indices: None,
+        },
+    ]
+}
+
+fn build_rows(
+    song: &SongData,
+    speed_mod: &SpeedMod,
+    selected_difficulty_index: usize,
+    session_music_rate: f32,
+    pane: OptionsPane,
+) -> Vec<Row> {
+    match pane {
+        OptionsPane::Main => build_main_rows(song, speed_mod, selected_difficulty_index, session_music_rate),
+        OptionsPane::Advanced => build_advanced_rows(),
+        OptionsPane::Uncommon => build_uncommon_rows(),
+    }
+}
+
+fn apply_profile_defaults(rows: &mut [Row]) {
     let profile = crate::game::profile::get();
-    let session_music_rate = crate::game::profile::get_session_music_rate();
-    let speed_mod = match profile.scroll_speed {
-        crate::game::scroll::ScrollSpeedSetting::CMod(bpm) => SpeedMod {
-            mod_type: "C".to_string(),
-            value: bpm,
-        },
-        crate::game::scroll::ScrollSpeedSetting::XMod(mult) => SpeedMod {
-            mod_type: "X".to_string(),
-            value: mult,
-        },
-        crate::game::scroll::ScrollSpeedSetting::MMod(bpm) => SpeedMod {
-            mod_type: "M".to_string(),
-            value: bpm,
-        },
-    };
-    let mut rows = build_rows(&song, &speed_mod, chart_difficulty_index, session_music_rate);
     // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Background Filter") {
         row.selected_choice_index = match profile.background_filter {
@@ -433,6 +758,27 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
             crate::game::profile::HoldJudgmentGraphic::None => 3,
         };
     }
+}
+
+pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_index: i32) -> State {
+    let session_music_rate = crate::game::profile::get_session_music_rate();
+    let profile = crate::game::profile::get();
+    let speed_mod = match profile.scroll_speed {
+        crate::game::scroll::ScrollSpeedSetting::CMod(bpm) => SpeedMod {
+            mod_type: "C".to_string(),
+            value: bpm,
+        },
+        crate::game::scroll::ScrollSpeedSetting::XMod(mult) => SpeedMod {
+            mod_type: "X".to_string(),
+            value: mult,
+        },
+        crate::game::scroll::ScrollSpeedSetting::MMod(bpm) => SpeedMod {
+            mod_type: "M".to_string(),
+            value: bpm,
+        },
+    };
+    let mut rows = build_rows(&song, &speed_mod, chart_difficulty_index, session_music_rate, OptionsPane::Main);
+    apply_profile_defaults(&mut rows);
     // Load noteskin for preview
     let style = noteskin::Style {
         num_cols: 4,
@@ -448,6 +794,7 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         active_color_index,
         speed_mod,
         music_rate: session_music_rate,
+        current_pane: OptionsPane::Main,
         bg: heart_bg::State::new(),
         nav_key_held_direction: None,
         nav_key_held_since: None,
@@ -547,7 +894,23 @@ fn change_choice(state: &mut State, delta: isize) {
             let is_inline_row = row.name == "Perspective"
                 || row.name == "Background Filter"
                 || row.name == "Stepchart"
-                || row.name == "What comes next?";
+                || row.name == "What comes next?"
+                || row.name == "Turn"
+                || row.name == "Scroll"
+                || row.name == "Hide"
+                || row.name == "LifeMeter Type"
+                || row.name == "Data Visualizations"
+                || row.name.starts_with("Gameplay Extras")
+                || row.name == "Judgment Tilt Intensity"
+                || row.name == "Insert"
+                || row.name == "Remove"
+                || row.name == "Holds"
+                || row.name == "Accel Effects"
+                || row.name == "Visual Effects"
+                || row.name == "Appearance Effects"
+                || row.name == "Attacks"
+                || row.name == "Characters"
+                || row.name == "Hide Light Type";
             let prev_choice = row.selected_choice_index;
             row.selected_choice_index = new_index;
             if is_inline_row && prev_choice != new_index {
@@ -824,6 +1187,29 @@ pub fn on_nav_release(state: &mut State, dir: NavDirection) {
     }
 }
 
+fn switch_to_pane(state: &mut State, pane: OptionsPane) {
+    if state.current_pane == pane {
+        return;
+    }
+    let mut rows = build_rows(
+        &state.song,
+        &state.speed_mod,
+        state.chart_difficulty_index,
+        state.music_rate,
+        pane,
+    );
+    apply_profile_defaults(&mut rows);
+    state.rows = rows;
+    state.current_pane = pane;
+    state.selected_row = 0;
+    state.prev_selected_row = 0;
+    state.cursor_anim_row = None;
+    state.cursor_anim_t = 1.0;
+    state.cursor_row_anim_t = 1.0;
+    state.cursor_row_anim_from_row = None;
+    state.help_anim_time = 0.0;
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match ev.action {
         VirtualAction::p1_back if ev.pressed => return ScreenAction::Navigate(Screen::SelectMusic),
@@ -862,10 +1248,26 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             if num_rows > 0 && state.selected_row == num_rows - 1 {
                 if let Some(what_comes_next_row) = state.rows.get(num_rows - 2) {
                     if what_comes_next_row.name == "What comes next?" {
-                        match what_comes_next_row.selected_choice_index {
-                            0 => return ScreenAction::Navigate(Screen::Gameplay),
-                            1 => return ScreenAction::Navigate(Screen::SelectMusic),
-                            _ => {}
+                        if let Some(choice) = what_comes_next_row
+                            .choices
+                            .get(what_comes_next_row.selected_choice_index)
+                        {
+                            match choice.as_str() {
+                                "Gameplay" => return ScreenAction::Navigate(Screen::Gameplay),
+                                "Choose a Different Song" => {
+                                    return ScreenAction::Navigate(Screen::SelectMusic)
+                                }
+                                "Advanced Modifiers" => {
+                                    switch_to_pane(state, OptionsPane::Advanced);
+                                }
+                                "Uncommon Modifiers" => {
+                                    switch_to_pane(state, OptionsPane::Uncommon);
+                                }
+                                "Main Modifiers" => {
+                                    switch_to_pane(state, OptionsPane::Main);
+                                }
+                                _ => {}
+                            }
                         }
                     }
                 }
@@ -980,7 +1382,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let is_inline = r.name == "Perspective"
             || r.name == "Background Filter"
             || r.name == "Stepchart"
-            || r.name == "What comes next?";
+            || r.name == "What comes next?"
+            || r.name == "Turn"
+            || r.name == "Scroll"
+            || r.name == "Hide"
+            || r.name == "LifeMeter Type"
+            || r.name == "Data Visualizations"
+            || r.name.starts_with("Gameplay Extras")
+            || r.name == "Judgment Tilt Intensity"
+            || r.name == "Insert"
+            || r.name == "Remove"
+            || r.name == "Holds"
+            || r.name == "Accel Effects"
+            || r.name == "Visual Effects"
+            || r.name == "Appearance Effects"
+            || r.name == "Attacks"
+            || r.name == "Characters"
+            || r.name == "Hide Light Type";
         if is_inline {
             let value_zoom = 0.835_f32;
             let spacing = 15.75_f32;
@@ -1123,7 +1541,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let show_all_choices_inline = row.name == "Perspective"
             || row.name == "Background Filter"
             || row.name == "Stepchart"
-            || row.name == "What comes next?";
+            || row.name == "What comes next?"
+            || row.name == "Turn"
+            || row.name == "Scroll"
+            || row.name == "Hide"
+            || row.name == "LifeMeter Type"
+            || row.name == "Data Visualizations"
+            || row.name.starts_with("Gameplay Extras")
+            || row.name == "Judgment Tilt Intensity"
+            || row.name == "Insert"
+            || row.name == "Remove"
+            || row.name == "Holds"
+            || row.name == "Accel Effects"
+            || row.name == "Visual Effects"
+            || row.name == "Appearance Effects"
+            || row.name == "Attacks"
+            || row.name == "Characters"
+            || row.name == "Hide Light Type";
         // Choice area: For single-choice rows (ShowOneInRow), use ItemsLongRowP1X positioning
         // For multi-choice rows (ShowAllInRow), use ItemsStartX positioning
         // ItemsLongRowP1X = WideScale(_screen.cx-100, _screen.cx-130) from Simply Love metrics
