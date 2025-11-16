@@ -132,6 +132,7 @@ pub struct State {
     pub hold_end_time_cache: Vec<Option<f32>>,
     pub music_end_time: f32,
     pub music_rate: f32,
+    pub global_offset_seconds: f32,
     // Linear-time cursors to avoid O(N) per-frame scans
     pub next_tap_miss_cursor: usize,
     pub next_mine_avoid_cursor: usize,
@@ -509,6 +510,7 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         hold_end_time_cache,
         music_end_time,
         music_rate: if music_rate.is_finite() && music_rate > 0.0 { music_rate } else { 1.0 },
+        global_offset_seconds: config.global_offset_seconds,
         next_tap_miss_cursor: 0,
         next_mine_avoid_cursor: 0,
         row_entries,
@@ -1887,9 +1889,21 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             .saturating_duration_since(now)
             .as_secs_f32())
     } else {
-        // Scale positive elapsed by music rate to keep gameplay in sync with audio speed
-        now.saturating_duration_since(state.song_start_instant)
-            .as_secs_f32() * state.music_rate
+        // Scale positive elapsed by music rate to keep gameplay in sync with audio speed,
+        // but anchor the scaling at the effective group delay captured by the global offset.
+        // At 1.0x, players tune global_offset_seconds so that hits by ear land at 0ms;
+        // anchoring here preserves that calibration for all music rates instead of
+        // stretching the offset itself by music_rate.
+        let elapsed = now
+            .saturating_duration_since(state.song_start_instant)
+            .as_secs_f32();
+        let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+            state.music_rate
+        } else {
+            1.0
+        };
+        let anchor = -state.global_offset_seconds;
+        elapsed * rate + anchor * (1.0 - rate)
     };
     state.current_music_time = music_time_sec;
 	let beat_info = state.timing.get_beat_info_from_time(music_time_sec);
