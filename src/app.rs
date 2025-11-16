@@ -31,6 +31,7 @@ pub enum UserEvent {
 
 /* -------------------- transition timing constants -------------------- */
 const FADE_OUT_DURATION: f32 = 0.4;
+const MENU_TO_SELECT_COLOR_OUT_DURATION: f32 = 1.0;
 const MENU_ACTORS_FADE_DURATION: f32 = 0.65;
 
 /* -------------------- transition state machine -------------------- */
@@ -39,7 +40,7 @@ enum TransitionState {
     Idle,
     FadingOut { elapsed: f32, duration: f32, target: CurrentScreen },
     FadingIn  { elapsed: f32, duration: f32 },
-    ActorsFadeOut { elapsed: f32, target: CurrentScreen },
+    ActorsFadeOut { elapsed: f32, duration: f32, target: CurrentScreen },
     ActorsFadeIn { elapsed: f32 },
 }
 
@@ -75,6 +76,7 @@ pub struct App {
     display_width: u32,
     display_height: u32,
     gamepad_overlay_state: Option<(String, Instant)>,
+    pending_exit: bool,
 }
 
 impl App {
@@ -123,6 +125,7 @@ impl App {
             display_width,
             display_height,
             gamepad_overlay_state: None,
+            pending_exit: false,
         }
     }
 
@@ -163,13 +166,21 @@ impl App {
                 }
 
                 if matches!(self.transition, TransitionState::Idle) {
+                    // Any new navigation cancels a pending exit.
+                    self.pending_exit = false;
                     let is_actor_only_fade =
-                        (from == CurrentScreen::Menu && to == CurrentScreen::Options) ||
+                        (from == CurrentScreen::Menu &&
+                            (to == CurrentScreen::Options || to == CurrentScreen::SelectColor)) ||
                         ((from == CurrentScreen::Options || from == CurrentScreen::SelectColor) && to == CurrentScreen::Menu);
 
                     if is_actor_only_fade {
                         info!("Starting actor-only fade out to screen: {:?}", screen);
-                        self.transition = TransitionState::ActorsFadeOut { elapsed: 0.0, target: screen };
+                        let duration = if from == CurrentScreen::Menu && (to == CurrentScreen::SelectColor || to == CurrentScreen::Options) {
+                            MENU_TO_SELECT_COLOR_OUT_DURATION
+                        } else {
+                            FADE_OUT_DURATION
+                        };
+                        self.transition = TransitionState::ActorsFadeOut { elapsed: 0.0, duration, target: screen };
                     } else {
                         info!("Starting global fade out to screen: {:?}", screen);                        
                         let (_, out_duration) = self.get_out_transition_for_screen(self.current_screen);
@@ -182,8 +193,19 @@ impl App {
                 }
             }
             ScreenAction::Exit => {
-                info!("Exit action received. Shutting down.");
-                event_loop.exit();
+                if self.current_screen == CurrentScreen::Menu && matches!(self.transition, TransitionState::Idle) {
+                    info!("Exit requested from Menu; playing menu out-transition before shutdown.");
+                    let (_, out_duration) = self.get_out_transition_for_screen(self.current_screen);
+                    self.transition = TransitionState::FadingOut {
+                        elapsed: 0.0,
+                        duration: out_duration,
+                        target: self.current_screen,
+                    };
+                    self.pending_exit = true;
+                } else {
+                    info!("Exit action received. Shutting down.");
+                    event_loop.exit();
+                }
             }
             ScreenAction::RequestBanner(_) => {}
             ScreenAction::RequestDensityGraph(_) => {}
@@ -218,8 +240,8 @@ impl App {
                 TransitionState::ActorsFadeIn { elapsed } => {
                     screen_alpha_multiplier = (elapsed / MENU_ACTORS_FADE_DURATION).clamp(0.0, 1.0);
                 },
-                TransitionState::ActorsFadeOut { elapsed, .. } => {
-                    screen_alpha_multiplier = 1.0 - (elapsed / FADE_OUT_DURATION).clamp(0.0, 1.0);
+                TransitionState::ActorsFadeOut { elapsed, duration, .. } => {
+                    screen_alpha_multiplier = 1.0 - (elapsed / duration).clamp(0.0, 1.0);
                 },
                 _ => {},
             }
@@ -260,6 +282,16 @@ impl App {
             TransitionState::FadingOut { .. } => {
                 let (out_actors, _) = self.get_out_transition_for_screen(self.current_screen);
                 actors.extend(out_actors);
+            }
+            TransitionState::ActorsFadeOut { target, .. } => {
+                // Special case: Menu → SelectColor / Menu → Options should keep the heart
+                // background bright and only fade UI, but still play the hearts splash.
+                if self.current_screen == CurrentScreen::Menu
+                    && (*target == CurrentScreen::SelectColor || *target == CurrentScreen::Options)
+                {
+                    let splash = crate::ui::components::menu_splash::build(self.menu_state.active_color_index);
+                    actors.extend(splash);
+                }
             }
             TransitionState::FadingIn { .. } => {
                 let (in_actors, _) = self.get_in_transition_for_screen(self.current_screen);
@@ -528,9 +560,9 @@ impl ApplicationHandler<UserEvent> for App {
                             finished_fading_out_to = Some(*target);
                         }
                     }
-                    TransitionState::ActorsFadeOut { elapsed, target } => {
+                    TransitionState::ActorsFadeOut { elapsed, duration, target } => {
                         *elapsed += delta_time;
-                        if *elapsed >= FADE_OUT_DURATION {
+                        if *elapsed >= *duration {
                             let prev = self.current_screen;
                             self.current_screen = *target;
                             // Only SelectColor has its own looping BGM; keep SelectMusic preview
@@ -668,6 +700,11 @@ impl ApplicationHandler<UserEvent> for App {
                 }
 
                 if let Some(target) = finished_fading_out_to {
+                    if self.pending_exit {
+                        info!("Fade-out complete; exiting application.");
+                        event_loop.exit();
+                        return;
+                    }
                     let prev = self.current_screen;
                     self.current_screen = target;
                     // Only SelectColor has looping BGM; keep SelectMusic preview when moving

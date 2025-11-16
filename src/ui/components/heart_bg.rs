@@ -5,6 +5,10 @@ use crate::ui::color;
 use image;
 use std::time::Instant;
 
+// Shared start time so all heart backgrounds (menu, select color, options, etc.)
+// stay phase-locked and visually continuous across screens.
+static GLOBAL_T0: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+
 // ---- tint/placement (from theme) ----
 const COLOR_ADD: [i32; 10]     = [-1, 0, 0, -1, -1, -1, 0, 0, 0, 0];
 const DIFFUSE_ALPHA: [f32; 10] = [0.05, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1];
@@ -59,7 +63,7 @@ impl State {
 
         let variants = [0, 1, 2, 0, 1, 0, 2, 0, 1, 2]; // normal,big,small pattern
         Self {
-            t0: std::time::Instant::now(),
+            t0: *GLOBAL_T0.get_or_init(Instant::now),
             base_w: w_px as f32,
             base_h: h_px as f32,
             variants,
