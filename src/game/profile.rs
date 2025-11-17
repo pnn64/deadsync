@@ -10,6 +10,7 @@ use std::sync::Mutex;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScrollOption(u8);
 
+#[allow(non_upper_case_globals)]
 impl ScrollOption {
     pub const Normal: ScrollOption = ScrollOption(0);
     pub const Reverse: ScrollOption = ScrollOption(1 << 0);
@@ -20,11 +21,6 @@ impl ScrollOption {
     #[inline(always)]
     pub const fn empty() -> ScrollOption {
         ScrollOption(0)
-    }
-
-    #[inline(always)]
-    pub const fn bits(self) -> u8 {
-        self.0
     }
 
     #[inline(always)]
@@ -678,20 +674,5 @@ pub fn update_scroll_option(setting: ScrollOption) {
         profile.scroll_option = setting;
         profile.reverse_scroll = reverse_enabled;
     }
-    save_profile_ini();
-}
-
-pub fn update_reverse_scroll(enabled: bool) {
-    let mut profile = PROFILE.lock().unwrap();
-    let mut setting = profile.scroll_option;
-    if enabled {
-        setting = setting.union(ScrollOption::Reverse);
-    } else {
-        // Clear the Reverse bit while preserving any others.
-        setting = ScrollOption(setting.bits() & !ScrollOption::Reverse.bits());
-    }
-    profile.scroll_option = setting;
-    profile.reverse_scroll = setting.contains(ScrollOption::Reverse);
-    drop(profile);
     save_profile_ini();
 }

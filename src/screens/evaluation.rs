@@ -55,7 +55,7 @@ pub struct ScoreInfo {
     pub graph_first_second: f32,
     pub graph_last_second: f32,
     pub music_rate: f32,
-    pub reverse_scroll: bool,
+    pub scroll_option: crate::game::profile::ScrollOption,
 }
 
 pub struct State {
@@ -111,7 +111,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             graph_first_second,
             graph_last_second,
             music_rate: if gs.music_rate.is_finite() && gs.music_rate > 0.0 { gs.music_rate } else { 1.0 },
-            reverse_scroll: gs.reverse_scroll,
+            scroll_option: profile::get().scroll_option,
         }
     });
 
@@ -566,9 +566,20 @@ fn build_modifiers_pane(state: &State) -> Vec<Actor> {
     let speed_mod_text = score_info.speed_mod.to_string();
     let mut parts = Vec::new();
     parts.push(speed_mod_text);
-    if score_info.reverse_scroll {
-        // When Reverse was active, show it before Overhead, matching Simply Love ordering.
+    // Show active scroll modifiers in a fixed order, matching Simply Love's
+    // preference for listing Reverse before the perspective.
+    let scroll = score_info.scroll_option;
+    if scroll.contains(profile::ScrollOption::Reverse) {
         parts.push("Reverse".to_string());
+    }
+    if scroll.contains(profile::ScrollOption::Split) {
+        parts.push("Split".to_string());
+    }
+    if scroll.contains(profile::ScrollOption::Alternate) {
+        parts.push("Alternate".to_string());
+    }
+    if scroll.contains(profile::ScrollOption::Cross) {
+        parts.push("Cross".to_string());
     }
     parts.push("Overhead".to_string());
     let final_text = parts.join(", ");
