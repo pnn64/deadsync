@@ -1472,35 +1472,28 @@ fn decay_let_go_hold_life(state: &mut State) {
             continue;
         }
 
-        let start_time = hold.let_go_started_at.unwrap();
-        let base_life = hold.let_go_starting_life.clamp(0.0, MAX_HOLD_LIFE);
-        if base_life <= 0.0 {
-            hold.life = 0.0;
-            state.hold_decay_active[note_index] = false;
-            state.decaying_hold_indices.swap_remove(i);
-            continue;
-        }
-
         let window = match note.note_type {
             NoteType::Roll => TIMING_WINDOW_SECONDS_ROLL,
             _ => TIMING_WINDOW_SECONDS_HOLD,
         };
         if window <= 0.0 {
             hold.life = 0.0;
-            state.hold_decay_active[note_index] = false;
-            state.decaying_hold_indices.swap_remove(i);
+            i += 1;
+            continue;
+        }
+
+        let start_time = hold.let_go_started_at.unwrap();
+        let base_life = hold.let_go_starting_life.clamp(0.0, MAX_HOLD_LIFE);
+        if base_life <= 0.0 {
+            hold.life = 0.0;
+            i += 1;
             continue;
         }
 
         let elapsed = (state.current_music_time - start_time).max(0.0);
         hold.life = (base_life - elapsed / window).max(0.0);
 
-        if hold.life <= 0.0 {
-            state.hold_decay_active[note_index] = false;
-            state.decaying_hold_indices.swap_remove(i);
-        } else {
-            i += 1;
-        }
+        i += 1;
     }
 }
 
