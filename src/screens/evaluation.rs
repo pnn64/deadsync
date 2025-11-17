@@ -55,6 +55,7 @@ pub struct ScoreInfo {
     pub graph_first_second: f32,
     pub graph_last_second: f32,
     pub music_rate: f32,
+    pub reverse_scroll: bool,
 }
 
 pub struct State {
@@ -110,6 +111,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             graph_first_second,
             graph_last_second,
             music_rate: if gs.music_rate.is_finite() && gs.music_rate > 0.0 { gs.music_rate } else { 1.0 },
+            reverse_scroll: gs.reverse_scroll,
         }
     });
 
@@ -559,9 +561,17 @@ fn build_modifiers_pane(state: &State) -> Vec<Actor> {
     // The original large background pane is at z=100. This text needs to be on top.
     let text_z = 101;
 
-    // Get the speed mod from state.score_info
-    let speed_mod_text = state.score_info.as_ref().unwrap().speed_mod.to_string();
-    let final_text = format!("{}, Overhead", speed_mod_text);
+    // Get the speed mod and scroll perspective from score info.
+    let score_info = state.score_info.as_ref().unwrap();
+    let speed_mod_text = score_info.speed_mod.to_string();
+    let mut parts = Vec::new();
+    parts.push(speed_mod_text);
+    if score_info.reverse_scroll {
+        // When Reverse was active, show it before Overhead, matching Simply Love ordering.
+        parts.push("Reverse".to_string());
+    }
+    parts.push("Overhead".to_string());
+    let final_text = parts.join(", ");
 
     let modifier_text = act!(text:
         font("miso"):

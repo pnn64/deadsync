@@ -7,6 +7,47 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Mutex;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScrollOption {
+    Normal,
+    Reverse,
+    Split,
+    Alternate,
+    Cross,
+}
+
+impl Default for ScrollOption {
+    fn default() -> Self {
+        ScrollOption::Normal
+    }
+}
+
+impl FromStr for ScrollOption {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "normal" => Ok(Self::Normal),
+            "reverse" => Ok(Self::Reverse),
+            "split" => Ok(Self::Split),
+            "alternate" => Ok(Self::Alternate),
+            "cross" => Ok(Self::Cross),
+            other => Err(format!("'{}' is not a valid Scroll setting", other)),
+        }
+    }
+}
+
+impl core::fmt::Display for ScrollOption {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Normal => write!(f, "Normal"),
+            Self::Reverse => write!(f, "Reverse"),
+            Self::Split => write!(f, "Split"),
+            Self::Alternate => write!(f, "Alternate"),
+            Self::Cross => write!(f, "Cross"),
+        }
+    }
+}
+
 // --- Profile Data ---
 const PROFILE_DIR: &str = "save/profiles/00000000";
 const PROFILE_INI_PATH: &str = "save/profiles/00000000/profile.ini";
@@ -248,6 +289,7 @@ pub struct Profile {
     pub avatar_path: Option<PathBuf>,
     pub avatar_texture_key: Option<String>,
     pub scroll_speed: ScrollSpeedSetting,
+    pub scroll_option: ScrollOption,
     pub reverse_scroll: bool,
 }
 
@@ -266,6 +308,7 @@ impl Default for Profile {
             avatar_path: None,
             avatar_texture_key: None,
             scroll_speed: ScrollSpeedSetting::default(),
+            scroll_option: ScrollOption::default(),
             reverse_scroll: false,
         }
     }
@@ -298,6 +341,7 @@ fn create_default_files() -> Result<(), std::io::Error> {
         content.push_str("[PlayerOptions]\n");
         content.push_str(&format!("BackgroundFilter = {}\n", default_profile.background_filter));
         content.push_str(&format!("ScrollSpeed = {}\n", default_profile.scroll_speed));
+        content.push_str(&format!("Scroll = {}\n", default_profile.scroll_option));
         content.push_str(&format!(
             "ReverseScroll = {}\n",
             if default_profile.reverse_scroll { 1 } else { 0 }
@@ -347,6 +391,7 @@ fn save_profile_ini() {
     content.push_str("[PlayerOptions]\n");
     content.push_str(&format!("BackgroundFilter={}\n", profile.background_filter));
     content.push_str(&format!("ScrollSpeed={}\n", profile.scroll_speed));
+    content.push_str(&format!("Scroll={}\n", profile.scroll_option));
     content.push_str(&format!(
         "ReverseScroll={}\n",
         if profile.reverse_scroll { 1 } else { 0 }
@@ -431,10 +476,21 @@ pub fn load() {
                 .get("PlayerOptions", "ScrollSpeed")
                 .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
                 .unwrap_or(default_profile.scroll_speed);
-            profile.reverse_scroll = profile_conf
-                .get("PlayerOptions", "ReverseScroll")
-                .and_then(|v| v.parse::<u8>().ok())
-                .map_or(default_profile.reverse_scroll, |v| v != 0);
+            profile.scroll_option = profile_conf
+                .get("PlayerOptions", "Scroll")
+                .and_then(|s| ScrollOption::from_str(&s).ok())
+                .unwrap_or_else(|| {
+                    let reverse_enabled = profile_conf
+                        .get("PlayerOptions", "ReverseScroll")
+                        .and_then(|v| v.parse::<u8>().ok())
+                        .map_or(default_profile.reverse_scroll, |v| v != 0);
+                    if reverse_enabled {
+                        ScrollOption::Reverse
+                    } else {
+                        default_profile.scroll_option
+                    }
+                });
+            profile.reverse_scroll = matches!(profile.scroll_option, ScrollOption::Reverse);
         } else {
             warn!(
                 "Failed to load '{}', using default profile settings.",
@@ -553,13 +609,25 @@ pub fn update_combo_font(setting: ComboFont) {
     save_profile_ini();
 }
 
-pub fn update_reverse_scroll(enabled: bool) {
+pub fn update_scroll_option(setting: ScrollOption) {
     {
         let mut profile = PROFILE.lock().unwrap();
-        if profile.reverse_scroll == enabled {
+        if profile.scroll_option == setting
+            && profile.reverse_scroll == matches!(setting, ScrollOption::Reverse)
+        {
             return;
         }
-        profile.reverse_scroll = enabled;
+        profile.scroll_option = setting;
+        profile.reverse_scroll = matches!(setting, ScrollOption::Reverse);
     }
     save_profile_ini();
+}
+
+pub fn update_reverse_scroll(enabled: bool) {
+    let setting = if enabled {
+        ScrollOption::Reverse
+    } else {
+        ScrollOption::Normal
+    };
+    update_scroll_option(setting);
 }

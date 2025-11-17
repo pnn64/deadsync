@@ -71,6 +71,9 @@ pub struct State {
     pub rows: Vec<Row>,
     pub selected_row: usize,
     pub prev_selected_row: usize,
+    // For Scroll row: which option (if any) is actively enabled.
+    // None => Normal scroll (no special modifier).
+    pub scroll_active_choice: Option<usize>,
     pub active_color_index: i32,
     pub speed_mod: SpeedMod,
     pub music_rate: f32,
@@ -415,7 +418,6 @@ fn build_advanced_rows() -> Vec<Row> {
                 "Split".to_string(),
                 "Alternate".to_string(),
                 "Cross".to_string(),
-                "Centered".to_string(),
             ],
             selected_choice_index: 0,
             help: vec!["Change how notes scroll relative to the receptors.".to_string()],
@@ -699,8 +701,9 @@ fn build_rows(
     }
 }
 
-fn apply_profile_defaults(rows: &mut [Row]) {
+fn apply_profile_defaults(rows: &mut [Row]) -> Option<usize> {
     let profile = crate::game::profile::get();
+    let mut scroll_active_choice: Option<usize> = None;
     // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Background Filter") {
         row.selected_choice_index = match profile.background_filter {
@@ -758,11 +761,20 @@ fn apply_profile_defaults(rows: &mut [Row]) {
             crate::game::profile::HoldJudgmentGraphic::None => 3,
         };
     }
-    // Initialize Scroll row from profile setting (Reverse on/off).
+    // Initialize Scroll row from profile setting (single-choice toggle group).
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Scroll") {
-        // Index 0 is "Reverse" in build_advanced_rows; treat any other choice as "no reverse".
-        row.selected_choice_index = if profile.reverse_scroll { 0 } else { 4.min(row.choices.len().saturating_sub(1)) };
+        use crate::game::profile::ScrollOption;
+        scroll_active_choice = match profile.scroll_option {
+            ScrollOption::Normal => None,
+            ScrollOption::Reverse => row.choices.iter().position(|c| c == "Reverse"),
+            ScrollOption::Split => row.choices.iter().position(|c| c == "Split"),
+            ScrollOption::Alternate => row.choices.iter().position(|c| c == "Alternate"),
+            ScrollOption::Cross => row.choices.iter().position(|c| c == "Cross"),
+        };
+        // Cursor starts at the active choice if any, otherwise at the first option.
+        row.selected_choice_index = scroll_active_choice.unwrap_or(0);
     }
+    scroll_active_choice
 }
 
 pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_index: i32) -> State {
@@ -783,7 +795,7 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         },
     };
     let mut rows = build_rows(&song, &speed_mod, chart_difficulty_index, session_music_rate, OptionsPane::Main);
-    apply_profile_defaults(&mut rows);
+    let scroll_active_choice = apply_profile_defaults(&mut rows);
     // Load noteskin for preview
     let style = noteskin::Style {
         num_cols: 4,
@@ -796,6 +808,7 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         rows,
         selected_row: 0,
         prev_selected_row: 0,
+        scroll_active_choice,
         active_color_index,
         speed_mod,
         music_rate: session_music_rate,
@@ -1033,14 +1046,6 @@ fn change_choice(state: &mut State, delta: isize) {
                     _ => crate::game::profile::HoldJudgmentGraphic::Love,
                 };
                 crate::game::profile::update_hold_judgment_graphic(setting);
-            } else if row.name == "Scroll" {
-                // Treat "Reverse" as the only implemented scroll mode for now.
-                let enable_reverse = row
-                    .choices
-                    .get(row.selected_choice_index)
-                    .map(|s| s.as_str() == "Reverse")
-                    .unwrap_or(false);
-                crate::game::profile::update_reverse_scroll(enable_reverse);
             } else if row.name == "Stepchart" {
                 // Update the state's difficulty index to match the newly selected choice
                 if let Some(diff_indices) = &row.choice_difficulty_indices {
@@ -1200,6 +1205,44 @@ pub fn on_nav_release(state: &mut State, dir: NavDirection) {
     }
 }
 
+fn toggle_scroll_row(state: &mut State) {
+    let row_index = state.selected_row;
+    if let Some(row) = state.rows.get(row_index) {
+        if row.name != "Scroll" {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let choice_index = state.rows[row_index].selected_choice_index;
+    let was_active = state.scroll_active_choice;
+
+    if was_active == Some(choice_index) {
+        // Toggling off: Normal scroll (no special modifier) and no underline.
+        state.scroll_active_choice = None;
+        crate::game::profile::update_scroll_option(crate::game::profile::ScrollOption::Normal);
+    } else {
+        // Toggling on: exactly one active mode at a time.
+        state.scroll_active_choice = Some(choice_index);
+        let mode = state.rows[row_index]
+            .choices
+            .get(choice_index)
+            .map(|s| s.as_str())
+            .unwrap_or("");
+        use crate::game::profile::ScrollOption;
+        let setting = match mode {
+            "Reverse" => ScrollOption::Reverse,
+            "Split" => ScrollOption::Split,
+            "Alternate" => ScrollOption::Alternate,
+            "Cross" => ScrollOption::Cross,
+            _ => ScrollOption::Normal,
+        };
+        crate::game::profile::update_scroll_option(setting);
+    }
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
 fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     if state.current_pane == pane {
         return;
@@ -1211,8 +1254,9 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
         state.music_rate,
         pane,
     );
-    apply_profile_defaults(&mut rows);
+    let scroll_active_choice = apply_profile_defaults(&mut rows);
     state.rows = rows;
+    state.scroll_active_choice = scroll_active_choice;
     state.current_pane = pane;
     state.selected_row = 0;
     state.prev_selected_row = 0;
@@ -1258,7 +1302,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         VirtualAction::p1_start if ev.pressed => {
             let num_rows = state.rows.len();
-            if num_rows > 0 && state.selected_row == num_rows - 1 {
+            if num_rows == 0 {
+                // Nothing to do.
+            } else if matches!(
+                state.rows.get(state.selected_row),
+                Some(row) if row.name == "Scroll"
+            ) {
+                // Scroll row uses Start as a toggle for the currently focused option.
+                toggle_scroll_row(state);
+            } else if state.selected_row == num_rows - 1 {
                 if let Some(what_comes_next_row) = state.rows.get(num_rows - 2) {
                     if what_comes_next_row.name == "What comes next?" {
                         if let Some(choice) = what_comes_next_row
@@ -1656,7 +1708,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         } else if show_all_choices_inline {
             // Render every option horizontally; when active, all options should be white.
-            // The selected option gets an underline (quad) drawn just below the text.
+            // The active option gets an underline (quad) drawn just below the text.
             let value_zoom = 0.835;
             let spacing = 15.75;
             // First pass: measure widths to lay out options inline
@@ -1679,29 +1731,38 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     x += *w + spacing;
                 }
             }
-            // Draw underline under the selected option (always visible) — match text width exactly (no padding)
-            if let Some(sel_x) = x_positions.get(row.selected_choice_index).copied() {
-                let draw_w = widths.get(row.selected_choice_index).copied().unwrap_or(40.0);
-                asset_manager.with_fonts(|_all_fonts| {
-                    asset_manager.with_font("miso", |metrics_font| {
-                        let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
-                        // Fixed pixel thickness to keep consistent across option sizes
-                        let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                        let underline_w = draw_w.ceil(); // pixel-align for crispness
-                        // Place just under the text baseline (slightly up from row bottom)
-                        let offset = widescale(3.0, 4.0);
-                        let underline_y = current_row_y + text_h * 0.5 + offset;
-                        let mut line_color = color::decorative_rgba(state.active_color_index);
-                        line_color[3] = 1.0;
-                        actors.push(act!(quad:
-                            align(0.0, 0.5): // start at text's left edge
-                            xy(sel_x, underline_y):
-                            zoomto(underline_w, line_thickness):
-                            diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                            z(101)
-                        ));
+            // Draw underline under the active option:
+            // - For normal rows: always the currently selected choice.
+            // - For Scroll row: only when a mode is toggled on; None => Normal (no underline).
+            let underline_index = if row.name == "Scroll" {
+                state.scroll_active_choice
+            } else {
+                Some(row.selected_choice_index)
+            };
+            if let Some(idx) = underline_index {
+                if let Some(sel_x) = x_positions.get(idx).copied() {
+                    let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                    asset_manager.with_fonts(|_all_fonts| {
+                        asset_manager.with_font("miso", |metrics_font| {
+                            let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
+                            // Fixed pixel thickness to keep consistent across option sizes
+                            let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                            let underline_w = draw_w.ceil(); // pixel-align for crispness
+                            // Place just under the text baseline (slightly up from row bottom)
+                            let offset = widescale(3.0, 4.0);
+                            let underline_y = current_row_y + text_h * 0.5 + offset;
+                            let mut line_color = color::decorative_rgba(state.active_color_index);
+                            line_color[3] = 1.0;
+                            actors.push(act!(quad:
+                                align(0.0, 0.5): // start at text's left edge
+                                xy(sel_x, underline_y):
+                                zoomto(underline_w, line_thickness):
+                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                z(101)
+                            ));
+                        });
                     });
-                });
+                }
             }
             // Draw the 4-sided cursor ring around the selected option when this row is active.
             // If a tween is in progress for this row, animate the ring's X position (SL's CursorTweenSeconds).
