@@ -1823,14 +1823,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
         }
     }
-    let hold_judgment_y = if state.reverse_scroll {
-        // In reverse, mirror around the receptor so the hold judgment
-        // appears just above the receptors instead of near screen center.
-        receptor_y - HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR
-    } else {
-        // Non-reverse matches Simply Love's baseline center offset.
-        receptor_y + HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR
-    };
     for (column, render_info) in state.hold_judgments.iter().enumerate() {
         let Some(render_info) = render_info else {
             continue;
@@ -1851,6 +1843,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             HoldResult::LetGo => 1,
         } as u32;
         if let Some(texture) = hold_judgment_texture {
+            let raw_dir = state
+                .column_scroll_dirs
+                .get(column)
+                .copied()
+                .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
+            let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
+            let receptor_y_lane = if dir >= 0.0 {
+                receptor_y_normal
+            } else {
+                receptor_y_reverse
+            };
+            let hold_judgment_y = if dir >= 0.0 {
+                // Non-reverse lane: match Simply Love's baseline offset below receptors.
+                receptor_y_lane + HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR
+            } else {
+                // Reverse lane: mirror around the receptor so the hold judgment
+                // appears just above the receptors instead of near screen center.
+                receptor_y_lane - HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR
+            };
             let column_offset = state
                 .noteskin
                 .as_ref()

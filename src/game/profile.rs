@@ -622,12 +622,3 @@ pub fn update_scroll_option(setting: ScrollOption) {
     }
     save_profile_ini();
 }
-
-pub fn update_reverse_scroll(enabled: bool) {
-    let setting = if enabled {
-        ScrollOption::Reverse
-    } else {
-        ScrollOption::Normal
-    };
-    update_scroll_option(setting);
-}
