@@ -8,12 +8,39 @@ use std::str::FromStr;
 use std::sync::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ScrollOption {
-    Normal,
-    Reverse,
-    Split,
-    Alternate,
-    Cross,
+pub struct ScrollOption(u8);
+
+impl ScrollOption {
+    pub const Normal: ScrollOption = ScrollOption(0);
+    pub const Reverse: ScrollOption = ScrollOption(1 << 0);
+    pub const Split: ScrollOption = ScrollOption(1 << 1);
+    pub const Alternate: ScrollOption = ScrollOption(1 << 2);
+    pub const Cross: ScrollOption = ScrollOption(1 << 3);
+
+    #[inline(always)]
+    pub const fn empty() -> ScrollOption {
+        ScrollOption(0)
+    }
+
+    #[inline(always)]
+    pub const fn bits(self) -> u8 {
+        self.0
+    }
+
+    #[inline(always)]
+    pub const fn contains(self, flag: ScrollOption) -> bool {
+        (self.0 & flag.0) != 0
+    }
+
+    #[inline(always)]
+    pub const fn union(self, other: ScrollOption) -> ScrollOption {
+        ScrollOption(self.0 | other.0)
+    }
+
+    #[inline(always)]
+    pub const fn is_normal(self) -> bool {
+        self.0 == 0
+    }
 }
 
 impl Default for ScrollOption {
@@ -24,27 +51,63 @@ impl Default for ScrollOption {
 
 impl FromStr for ScrollOption {
     type Err = String;
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_lowercase().as_str() {
-            "normal" => Ok(Self::Normal),
-            "reverse" => Ok(Self::Reverse),
-            "split" => Ok(Self::Split),
-            "alternate" => Ok(Self::Alternate),
-            "cross" => Ok(Self::Cross),
-            other => Err(format!("'{}' is not a valid Scroll setting", other)),
+        let raw = s.trim();
+        if raw.is_empty() {
+            return Err("Scroll setting is empty".to_string());
         }
+        let lower = raw.to_lowercase();
+        // Support both legacy single values ("Reverse") and combined values
+        // like "Reverse+Cross" or "Reverse Cross".
+        let mut result = ScrollOption::empty();
+        for token in lower
+            .split(|c: char| c == '+' || c == ',' || c.is_whitespace())
+        {
+            if token.is_empty() {
+                continue;
+            }
+            let flag = match token {
+                "normal" => ScrollOption::Normal,
+                "reverse" => ScrollOption::Reverse,
+                "split" => ScrollOption::Split,
+                "alternate" => ScrollOption::Alternate,
+                "cross" => ScrollOption::Cross,
+                other => {
+                    return Err(format!("'{}' is not a valid Scroll setting", other));
+                }
+            };
+            // "Normal" means no flags; combining it with others is treated as just the others.
+            if flag.0 != 0 {
+                result = result.union(flag);
+            }
+        }
+        Ok(result)
     }
 }
 
 impl core::fmt::Display for ScrollOption {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Normal => write!(f, "Normal"),
-            Self::Reverse => write!(f, "Reverse"),
-            Self::Split => write!(f, "Split"),
-            Self::Alternate => write!(f, "Alternate"),
-            Self::Cross => write!(f, "Cross"),
+        if self.is_normal() {
+            return write!(f, "Normal");
         }
+
+        let mut first = true;
+        let mut write_flag = |name: &str, present: bool, f: &mut core::fmt::Formatter<'_>| {
+            if !present {
+                return Ok(());
+            }
+            if !first {
+                write!(f, "+")?;
+            }
+            first = false;
+            write!(f, "{}", name)
+        };
+
+        write_flag("Reverse", self.contains(ScrollOption::Reverse), f)?;
+        write_flag("Split", self.contains(ScrollOption::Split), f)?;
+        write_flag("Alternate", self.contains(ScrollOption::Alternate), f)?;
+        write_flag("Cross", self.contains(ScrollOption::Cross), f)
     }
 }
 
@@ -484,13 +547,9 @@ pub fn load() {
                         .get("PlayerOptions", "ReverseScroll")
                         .and_then(|v| v.parse::<u8>().ok())
                         .map_or(default_profile.reverse_scroll, |v| v != 0);
-                    if reverse_enabled {
-                        ScrollOption::Reverse
-                    } else {
-                        default_profile.scroll_option
-                    }
+                    if reverse_enabled { ScrollOption::Reverse } else { default_profile.scroll_option }
                 });
-            profile.reverse_scroll = matches!(profile.scroll_option, ScrollOption::Reverse);
+            profile.reverse_scroll = profile.scroll_option.contains(ScrollOption::Reverse);
         } else {
             warn!(
                 "Failed to load '{}', using default profile settings.",
@@ -612,13 +671,27 @@ pub fn update_combo_font(setting: ComboFont) {
 pub fn update_scroll_option(setting: ScrollOption) {
     {
         let mut profile = PROFILE.lock().unwrap();
-        if profile.scroll_option == setting
-            && profile.reverse_scroll == matches!(setting, ScrollOption::Reverse)
-        {
+        let reverse_enabled = setting.contains(ScrollOption::Reverse);
+        if profile.scroll_option == setting && profile.reverse_scroll == reverse_enabled {
             return;
         }
         profile.scroll_option = setting;
-        profile.reverse_scroll = matches!(setting, ScrollOption::Reverse);
+        profile.reverse_scroll = reverse_enabled;
     }
+    save_profile_ini();
+}
+
+pub fn update_reverse_scroll(enabled: bool) {
+    let mut profile = PROFILE.lock().unwrap();
+    let mut setting = profile.scroll_option;
+    if enabled {
+        setting = setting.union(ScrollOption::Reverse);
+    } else {
+        // Clear the Reverse bit while preserving any others.
+        setting = ScrollOption(setting.bits() & !ScrollOption::Reverse.bits());
+    }
+    profile.scroll_option = setting;
+    profile.reverse_scroll = setting.contains(ScrollOption::Reverse);
+    drop(profile);
     save_profile_ini();
 }

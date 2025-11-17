@@ -117,17 +117,35 @@ pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
 #[inline(always)]
 fn compute_column_scroll_dirs(scroll_option: profile::ScrollOption) -> [f32; 4] {
     use profile::ScrollOption;
-    match scroll_option {
-        ScrollOption::Normal => [1.0, 1.0, 1.0, 1.0],
-        ScrollOption::Reverse => [-1.0, -1.0, -1.0, -1.0],
+    // Start from Normal (all lanes scroll "forward") and apply each
+    // modifier multiplicatively, so multiple scroll options combine
+    // per-column (e.g. Reverse + Cross, or Split + Alternate + Cross).
+    let mut dirs = [1.0_f32, 1.0_f32, 1.0_f32, 1.0_f32];
+
+    if scroll_option.contains(ScrollOption::Reverse) {
+        // Reverse: flip all lanes.
+        for d in &mut dirs {
+            *d *= -1.0;
+        }
+    }
+    if scroll_option.contains(ScrollOption::Split) {
         // For dance-single (cols: Left, Down, Up, Right):
         // Split:  Left, Down   = upwards; Up, Right   = downwards.
-        ScrollOption::Split => [1.0, 1.0, -1.0, -1.0],
-        // Alternate: Left, Up  = upwards; Down, Right = downwards.
-        ScrollOption::Alternate => [1.0, -1.0, 1.0, -1.0],
-        // Cross:  Left, Right = upwards; Down, Up    = downwards.
-        ScrollOption::Cross => [1.0, -1.0, -1.0, 1.0],
+        dirs[2] *= -1.0;
+        dirs[3] *= -1.0;
     }
+    if scroll_option.contains(ScrollOption::Alternate) {
+        // Alternate: Left, Up  = upwards; Down, Right = downwards.
+        dirs[1] *= -1.0;
+        dirs[3] *= -1.0;
+    }
+    if scroll_option.contains(ScrollOption::Cross) {
+        // Cross:  Left, Right = upwards; Down, Up    = downwards.
+        dirs[1] *= -1.0;
+        dirs[2] *= -1.0;
+    }
+
+    dirs
 }
 
 pub struct State {
