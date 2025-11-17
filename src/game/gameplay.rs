@@ -114,6 +114,22 @@ pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
     !active.let_go && active.life > 0.0
 }
 
+#[inline(always)]
+fn compute_column_scroll_dirs(scroll_option: profile::ScrollOption) -> [f32; 4] {
+    use profile::ScrollOption;
+    match scroll_option {
+        ScrollOption::Normal => [1.0, 1.0, 1.0, 1.0],
+        ScrollOption::Reverse => [-1.0, -1.0, -1.0, -1.0],
+        // For dance-single (cols: Left, Down, Up, Right):
+        // Split:  Left, Down   = upwards; Up, Right   = downwards.
+        ScrollOption::Split => [1.0, 1.0, -1.0, -1.0],
+        // Alternate: Left, Up  = upwards; Down, Right = downwards.
+        ScrollOption::Alternate => [1.0, -1.0, 1.0, -1.0],
+        // Cross:  Left, Right = upwards; Down, Up    = downwards.
+        ScrollOption::Cross => [1.0, -1.0, -1.0, 1.0],
+    }
+}
+
 pub struct State {
     pub song: Arc<SongData>,
     pub background_texture_key: String,
@@ -174,6 +190,7 @@ pub struct State {
     pub draw_distance_before_targets: f32,
     pub draw_distance_after_targets: f32,
     pub reverse_scroll: bool,
+    pub column_scroll_dirs: [f32; 4],
     pub receptor_glow_timers: [f32; 4],
     pub receptor_bop_timers: [f32; 4],
     pub tap_explosions: [Option<ActiveTapExplosion>; 4],
@@ -495,6 +512,8 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
     // Capture length before moving notes into state
     let notes_len = notes.len();
 
+    let column_scroll_dirs = compute_column_scroll_dirs(profile.scroll_option);
+
     State {
         song,
         chart,
@@ -560,6 +579,7 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         draw_distance_before_targets,
         draw_distance_after_targets,
         reverse_scroll: profile.reverse_scroll,
+        column_scroll_dirs,
         receptor_glow_timers: [0.0; 4],
         receptor_bop_timers: [0.0; 4],
         tap_explosions: Default::default(),
@@ -1765,15 +1785,10 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
 
 #[inline(always)]
 fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
-    let receptor_y = screen_center_y()
-        + if state.reverse_scroll {
-            RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE
-        } else {
-            RECEPTOR_Y_OFFSET_FROM_CENTER
-        };
-    let dir = if state.reverse_scroll { -1.0 } else { 1.0 };
-    let miss_cull_threshold = receptor_y - dir * state.draw_distance_after_targets;
-
+    let receptor_y_normal =
+        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER;
+    let receptor_y_reverse =
+        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE;
     let (cmod_pps_opt, curr_disp_beat, beatmod_multiplier) = match state.scroll_speed {
         ScrollSpeedSetting::CMod(c_bpm) => {
             let pps = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING;
@@ -1791,7 +1806,19 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         }
     };
 
-    for col_arrows in &mut state.arrows {
+    for (col_idx, col_arrows) in state.arrows.iter_mut().enumerate() {
+        let raw_dir = state
+            .column_scroll_dirs
+            .get(col_idx)
+            .copied()
+            .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
+        let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
+        let receptor_y = if dir >= 0.0 {
+            receptor_y_normal
+        } else {
+            receptor_y_reverse
+        };
+        let miss_cull_threshold = receptor_y - dir * state.draw_distance_after_targets;
         col_arrows.retain(|arrow| {
             let note = &state.notes[arrow.note_index];
             if matches!(note.note_type, NoteType::Mine) {
@@ -1814,7 +1841,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                                     * beatmod_multiplier
                         }
                     };
-                    return if state.reverse_scroll {
+                    return if dir < 0.0 {
                         y_pos <= miss_cull_threshold
                     } else {
                         y_pos >= miss_cull_threshold
@@ -1844,7 +1871,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                                 * beatmod_multiplier
                     }
                 };
-                return if state.reverse_scroll {
+                return if dir < 0.0 {
                     y_pos <= miss_cull_threshold
                 } else {
                     y_pos >= miss_cull_threshold
@@ -1872,7 +1899,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                 }
             };
 
-            if state.reverse_scroll {
+            if dir < 0.0 {
                 y_pos <= miss_cull_threshold
             } else {
                 y_pos >= miss_cull_threshold

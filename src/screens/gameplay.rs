@@ -383,12 +383,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
     let playfield_center_x = screen_center_x() - (clamped_width * 0.25);
-    let receptor_y = screen_center_y()
-        + if state.reverse_scroll {
-            RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE
-        } else {
-            RECEPTOR_Y_OFFSET_FROM_CENTER
-        };
+    let receptor_y_normal =
+        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER;
+    let receptor_y_reverse =
+        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE;
+    let receptor_y = if state.reverse_scroll {
+        receptor_y_reverse
+    } else {
+        receptor_y_normal
+    };
     // --- Banner (1:1 with Simply Love, including parent frame logic) ---
     if let Some(banner_path) = &state.song.banner_path {
         let banner_key = banner_path.to_string_lossy().into_owned();
@@ -455,20 +458,30 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 (1.0, None, curr_disp, final_multiplier)
             }
         };
-        let dir = if state.reverse_scroll { -1.0 } else { 1.0 };
-        // For dynamic values (e.g., last_held_beat while letting go), fall back to timing for that beat
-        let compute_lane_y = |beat: f32| -> f32 {
+        // For dynamic values (e.g., last_held_beat while letting go), fall back to timing for that beat.
+        // Direction and receptor row are per-lane: upwards lanes anchor to the normal receptor row,
+        // downwards lanes anchor to the reverse row.
+        let compute_lane_y = |beat: f32, dir: f32| -> f32 {
+            let dir = if dir >= 0.0 { 1.0 } else { -1.0 };
+            let receptor_y_lane = if dir >= 0.0 {
+                receptor_y_normal
+            } else {
+                receptor_y_reverse
+            };
             match state.scroll_speed {
                 ScrollSpeedSetting::CMod(_) => {
                     let pps_chart = cmod_pps_opt.expect("cmod pps computed");
                     let note_time_chart = state.timing.get_time_for_beat(beat);
                     let time_diff_real = (note_time_chart - current_time) / rate;
-                    receptor_y + dir * time_diff_real * pps_chart
+                    receptor_y_lane + dir * time_diff_real * pps_chart
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     let note_disp_beat = state.timing.get_displayed_beat(beat);
                     let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                    receptor_y + dir * (beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmod_multiplier)
+                    receptor_y_lane
+                        + dir * (beat_diff_disp
+                            * ScrollSpeedSetting::ARROW_SPACING
+                            * beatmod_multiplier)
                 }
             }
         };
@@ -486,6 +499,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         // Receptors + glow
         for i in 0..4 {
             let col_x_offset = ns.column_xs[i];
+            let raw_dir = state
+                .column_scroll_dirs
+                .get(i)
+                .copied()
+                .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
+            let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
+            let receptor_y_lane = if dir >= 0.0 {
+                receptor_y_normal
+            } else {
+                receptor_y_reverse
+            };
             let bop_timer = state.receptor_bop_timers[i];
             let bop_zoom = if bop_timer > 0.0 {
                 let t = (0.11 - bop_timer) / 0.11;
@@ -501,7 +525,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let receptor_color = ns.receptor_pulse.color_for_beat(state.current_beat);
             actors.push(act!(sprite(receptor_slot.texture_key().to_string()):
                 align(0.5, 0.5):
-                xy(playfield_center_x + col_x_offset as f32, receptor_y):
+                xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
                 zoomto(receptor_size[0] as f32, receptor_size[1] as f32):
                 zoom(bop_zoom):
                 diffuse(
@@ -546,7 +570,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 let final_rotation = base_rotation + receptor_rotation;
                 actors.push(act!(sprite(hold_slot.texture_key().to_string()):
                     align(0.5, 0.5):
-                    xy(playfield_center_x + col_x_offset as f32, receptor_y):
+                    xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
                     zoomto(hold_size[0], hold_size[1]):
                     rotationz(-final_rotation):
                     customtexturerect(hold_uv[0], hold_uv[1], hold_uv[2], hold_uv[3]):
@@ -564,7 +588,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let alpha = (glow_timer / RECEPTOR_GLOW_DURATION).powf(0.75);
                     actors.push(act!(sprite(glow_slot.texture_key().to_string()):
                         align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset as f32, receptor_y):
+                        xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
                         zoomto(glow_size[0] as f32, glow_size[1] as f32):
                         rotationz(-glow_slot.def.rotation_deg as f32):
                         customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
@@ -580,6 +604,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if let Some(active) = state.tap_explosions[i].as_ref() {
                 if let Some(explosion) = ns.tap_explosions.get(&active.window) {
                     let col_x_offset = ns.column_xs[i];
+                    let raw_dir = state
+                        .column_scroll_dirs
+                        .get(i)
+                        .copied()
+                        .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
+                    let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
+                    let receptor_y_lane = if dir >= 0.0 {
+                        receptor_y_normal
+                    } else {
+                        receptor_y_reverse
+                    };
                     let anim_time = active.elapsed;
                     let slot = &explosion.slot;
                     let beat_for_anim = if slot.source.is_beat_based() {
@@ -598,7 +633,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         .unwrap_or(0);
                     actors.push(act!(sprite(slot.texture_key().to_string()):
                         align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset as f32, receptor_y):
+                        xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
                         zoomto(size[0], size[1]):
                         zoom(visual.zoom):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -618,7 +653,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     if glow_strength > f32::EPSILON {
                         actors.push(act!(sprite(slot.texture_key().to_string()):
                             align(0.5, 0.5):
-                            xy(playfield_center_x + col_x_offset as f32, receptor_y):
+                            xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
                             zoomto(size[0], size[1]):
                             zoom(visual.zoom):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -647,6 +682,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
                 let rotation_progress = 180.0 * progress;
                 let col_x_offset = ns.column_xs[i];
+                let raw_dir = state
+                    .column_scroll_dirs
+                    .get(i)
+                    .copied()
+                    .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
+                let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
+                let receptor_y_lane = if dir >= 0.0 {
+                    receptor_y_normal
+                } else {
+                    receptor_y_reverse
+                };
                 let base_rotation = ns
                     .receptor_off
                     .get(i)
@@ -655,7 +701,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 let final_rotation = base_rotation + rotation_progress;
                 actors.push(act!(sprite("hit_mine_explosion.png"):
                     align(0.5, 0.5):
-                    xy(playfield_center_x + col_x_offset as f32, receptor_y):
+                    xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
                     zoomto(mine_explosion_size[0], mine_explosion_size[1]):
                     rotationz(-final_rotation):
                     diffuse(1.0, 1.0, 1.0, alpha):
@@ -704,8 +750,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo) {
                 head_beat = hold.last_held_beat.clamp(note.beat, hold.end_beat);
             }
-            let head_y = compute_lane_y(head_beat);
-            let tail_y = compute_lane_y(hold.end_beat);
+            let col_dir = state
+                .column_scroll_dirs
+                .get(note.column)
+                .copied()
+                .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
+            let head_y = compute_lane_y(head_beat, col_dir);
+            let tail_y = compute_lane_y(hold.end_beat, col_dir);
             let head_is_top = head_y <= tail_y;
             let mut top = head_y.min(tail_y);
             let mut bottom = head_y.max(tail_y);
@@ -718,6 +769,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 continue;
             }
             let col_x_offset = ns.column_xs[note.column];
+            let lane_receptor_y = if col_dir >= 0.0 {
+                receptor_y_normal
+            } else {
+                receptor_y_reverse
+            };
             let active_state = state.active_holds[note.column]
                 .as_ref()
                 .filter(|h| h.note_index == note_index);
@@ -731,9 +787,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let hold_diffuse = [hold_color_scale, hold_color_scale, hold_color_scale, 1.0];
             if engaged {
                 if head_is_top {
-                    top = top.max(receptor_y);
+                    top = top.max(lane_receptor_y);
                 } else {
-                    bottom = bottom.min(receptor_y);
+                    bottom = bottom.min(lane_receptor_y);
                 }
             }
             if bottom <= top {
@@ -813,7 +869,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let hold_length = (natural_bottom - natural_top).abs();
                         const SEGMENT_PHASE_EPS: f32 = 1e-4;
                         let max_segments = 2048;
-                        if !state.reverse_scroll {
+                        let lane_reverse = col_dir < 0.0;
+                        if !lane_reverse {
                             // Original segmentation path (normal scroll), which correctly
                             // handles negative #SCROLLS and arbitrary timing warps.
                             let visible_top_distance = if head_is_top {
@@ -1314,15 +1371,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 hold_diffuse[2],
                                 hold_diffuse[3]
                             ):
-                            rotationz(if state.reverse_scroll { 180.0 } else { 0.0 }):
+                            rotationz(if col_dir < 0.0 { 180.0 } else { 0.0 }):
                             z(Z_HOLD_CAP)
                         ));
                     }
                 }
             }
             if hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo) {
-                if head_y >= receptor_y - state.draw_distance_after_targets
-                    && head_y <= receptor_y + state.draw_distance_before_targets
+                if head_y >= lane_receptor_y - state.draw_distance_after_targets
+                    && head_y <= lane_receptor_y + state.draw_distance_before_targets
                 {
                     let beat_fraction = note.beat.fract();
                     let quantization = match (beat_fraction * 192.0).round() as u32 {
@@ -1359,7 +1416,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         }
         // Active arrows
-        for column_arrows in &state.arrows {
+        for (col_idx, column_arrows) in state.arrows.iter().enumerate() {
+            let raw_dir = state
+                .column_scroll_dirs
+                .get(col_idx)
+                .copied()
+                .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
+            let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
+            let receptor_y_lane = if dir >= 0.0 {
+                receptor_y_normal
+            } else {
+                receptor_y_reverse
+            };
             for arrow in column_arrows {
                 // Use cached per-note timing to avoid per-frame timing queries
                 let y_pos = match state.scroll_speed {
@@ -1367,18 +1435,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let pps_chart = cmod_pps_opt.expect("cmod pps computed");
                         let note_time_chart = state.note_time_cache[arrow.note_index];
                         let time_diff_real = (current_time - note_time_chart) / rate;
-                        receptor_y - dir * time_diff_real * pps_chart
+                        receptor_y_lane - dir * time_diff_real * pps_chart
                     }
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                         let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                         let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                        receptor_y
+                        receptor_y_lane
                             + dir * beat_diff_disp
                                 * ScrollSpeedSetting::ARROW_SPACING
                                 * beatmod_multiplier
                     }
                 };
-                let delta = (y_pos - receptor_y) * dir;
+                let delta = (y_pos - receptor_y_lane) * dir;
                 if delta < -state.draw_distance_after_targets
                     || delta > state.draw_distance_before_targets
                 {
