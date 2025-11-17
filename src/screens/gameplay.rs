@@ -34,6 +34,10 @@ use crate::game::gameplay::{
 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0; // Match Simply Love's on-screen arrow height
 const TARGET_EXPLOSION_PIXEL_SIZE: f32 = 125.0; // Simply Love tap explosions top out around 125px tall
 const HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER: f32 = -90.0; // Mirrors Simply Love metrics for hold judgments
+const HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR: f32 =
+    HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER - RECEPTOR_Y_OFFSET_FROM_CENTER;
+const TAP_JUDGMENT_OFFSET_FROM_CENTER: f32 = 30.0; // From _fallback JudgmentTransformCommand
+const COMBO_OFFSET_FROM_CENTER: f32 = 30.0; // From _fallback ComboTransformCommand (non-centered)
 const LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT: f32 = 140.0; // Each frame in Love 1x2 (doubleres).png is 140px tall
 const HOLD_JUDGMENT_FINAL_HEIGHT: f32 = 32.0; // Matches Simply Love's final on-screen size
 const HOLD_JUDGMENT_INITIAL_HEIGHT: f32 = HOLD_JUDGMENT_FINAL_HEIGHT * 0.8; // Mirrors 0.4->0.5 zoom ramp in metrics
@@ -1485,7 +1489,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Combo Milestone Explosions (100 / 1000 combo)
     if !state.combo_milestones.is_empty() {
         let combo_center_x = playfield_center_x;
-        let combo_center_y = screen_center_y() + 30.0;
+        let combo_center_y = if state.reverse_scroll {
+            screen_center_y() - COMBO_OFFSET_FROM_CENTER
+        } else {
+            screen_center_y() + COMBO_OFFSET_FROM_CENTER
+        };
         let player_color = state.player_color;
         let ease_out_quad = |t: f32| -> f32 {
             let t = t.clamp(0.0, 1.0);
@@ -1588,6 +1596,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
     // Combo
     if state.miss_combo >= SHOW_COMBO_AT {
+        let combo_y = if state.reverse_scroll {
+            screen_center_y() - COMBO_OFFSET_FROM_CENTER
+        } else {
+            screen_center_y() + COMBO_OFFSET_FROM_CENTER
+        };
         let miss_combo_font_name = match profile.combo_font {
             crate::game::profile::ComboFont::Wendy => Some("wendy_combo"),
             crate::game::profile::ComboFont::ArialRounded => Some("combo_arial_rounded"),
@@ -1601,13 +1614,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if let Some(font_name) = miss_combo_font_name {
             actors.push(act!(text:
                 font(font_name): settext(state.miss_combo.to_string()):
-                align(0.5, 0.5): xy(playfield_center_x, screen_center_y() + 30.0):
+                align(0.5, 0.5): xy(playfield_center_x, combo_y):
                 zoom(0.75): horizalign(center): shadowlength(1.0):
                 diffuse(1.0, 0.0, 0.0, 1.0):
                 z(90)
             ));
         }
     } else if state.combo >= SHOW_COMBO_AT {
+        let combo_y = if state.reverse_scroll {
+            screen_center_y() - COMBO_OFFSET_FROM_CENTER
+        } else {
+            screen_center_y() + COMBO_OFFSET_FROM_CENTER
+        };
         let (color1, color2) = if let Some(fc_grade) = &state.full_combo_grade {
             match fc_grade {
                 JudgeGrade::Fantastic => (color::rgba_hex("#C8FFFF"), color::rgba_hex("#6BF0FF")),
@@ -1640,7 +1658,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if let Some(font_name) = combo_font_name {
             actors.push(act!(text:
                 font(font_name): settext(state.combo.to_string()):
-                align(0.5, 0.5): xy(playfield_center_x, screen_center_y() + 30.0):
+                align(0.5, 0.5): xy(playfield_center_x, combo_y):
                 zoom(0.75): horizalign(center): shadowlength(1.0):
                 diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
                 z(90)
@@ -1725,14 +1743,26 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     "judgements/Wendy Chroma 2x7 (doubleres).png",
                 profile::JudgmentGraphic::None => unreachable!("JudgmentGraphic::None is filtered above"),
             };
+            let judgment_y = if state.reverse_scroll {
+                screen_center_y() + TAP_JUDGMENT_OFFSET_FROM_CENTER
+            } else {
+                screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER
+            };
             actors.push(act!(sprite(judgment_texture):
-                align(0.5, 0.5): xy(playfield_center_x, screen_center_y() - 30.0):
+                align(0.5, 0.5): xy(playfield_center_x, judgment_y):
                 z(200): zoomtoheight(76.0): setstate(linear_index): zoom(zoom)
             ));
         }
         }
     }
-    let hold_judgment_y = screen_center_y() + HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER;
+    let hold_judgment_y = if state.reverse_scroll {
+        // In reverse, mirror around the receptor so the hold judgment
+        // appears just above the receptors instead of near screen center.
+        receptor_y - HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR
+    } else {
+        // Non-reverse matches Simply Love's baseline center offset.
+        receptor_y + HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR
+    };
     for (column, render_info) in state.hold_judgments.iter().enumerate() {
         let Some(render_info) = render_info else {
             continue;
