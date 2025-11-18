@@ -2065,16 +2065,30 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let filled_width = w * life_for_render;
         // Never draw swoosh if dead OR nothing to fill.
         if filled_width > 0.0 && !dead {
+            // Logic Parity:
+            // velocity = -(songposition:GetCurBPS() * 0.5)
+            // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
             let bps = state.timing.get_bpm_for_beat(state.current_beat) / 60.0;
+            let velocity_x = if state.is_in_freeze || state.is_in_delay {
+                0.0
+            } else {
+                -(bps * 0.5)
+            };
+
             let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
+
+            // MeterSwoosh
             actors.push(act!(sprite("swoosh.png"):
                 align(0.0, 0.5):
                 xy(meter_cx - w / 2.0, meter_cy):
                 zoomto(filled_width, h):
                 diffusealpha(swoosh_alpha):
-                texcoordvelocity(-(bps * 0.5), 0.0):
+                // Apply the calculated velocity
+                texcoordvelocity(velocity_x, 0.0):
                 z(93)
             ));
+
+            // MeterFill
             actors.push(act!(quad:
                 align(0.0, 0.5):
                 xy(meter_cx - w / 2.0, meter_cy):

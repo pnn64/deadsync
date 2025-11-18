@@ -18,7 +18,7 @@ float edgeFactor1D(float t, float featherLeft, float featherRight) {
 }
 
 void main() {
-    vec4 texel = texture(u_tex, v_uv);
+    vec4 texel = texture(u_tex, fract(v_uv));
 
     float fadeX = edgeFactor1D(v_uv.x, v_edgeFade.x, v_edgeFade.y);
     float fadeY = edgeFactor1D(v_uv.y, v_edgeFade.z, v_edgeFade.w);
