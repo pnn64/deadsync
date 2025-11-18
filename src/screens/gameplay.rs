@@ -387,11 +387,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER;
     let receptor_y_reverse =
         screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE;
-    let receptor_y = if state.reverse_scroll {
-        receptor_y_reverse
-    } else {
-        receptor_y_normal
-    };
+
     // --- Banner (1:1 with Simply Love, including parent frame logic) ---
     if let Some(banner_path) = &state.song.banner_path {
         let banner_key = banner_path.to_string_lossy().into_owned();
