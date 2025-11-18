@@ -1,4 +1,3 @@
-
 use crate::core::audio;
 use crate::core::input::{InputEdge, InputSource, Lane, InputEvent, VirtualAction, lane_from_action};
 use crate::core::space::*;
@@ -165,6 +164,7 @@ pub struct State {
     pub note_time_cache: Vec<f32>,
     pub note_display_beat_cache: Vec<f32>,
     pub hold_end_time_cache: Vec<Option<f32>>,
+    pub hold_end_display_beat_cache: Vec<Option<f32>>, // New Cache
     pub music_end_time: f32,
     pub music_rate: f32,
     pub global_offset_seconds: f32,
@@ -433,6 +433,10 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         .iter()
         .map(|n| n.hold.as_ref().map(|h| timing.get_time_for_beat(h.end_beat)))
         .collect();
+    let hold_end_display_beat_cache: Vec<Option<f32>> = notes
+        .iter()
+        .map(|n| n.hold.as_ref().map(|h| timing.get_displayed_beat(h.end_beat)))
+        .collect();
 
     // Build row index: unique rows with at least one non-mine & judgable & non-fake note
     let mut row_map: HashMap<usize, Vec<usize>> = HashMap::new();
@@ -547,6 +551,7 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         note_time_cache,
         note_display_beat_cache,
         hold_end_time_cache,
+        hold_end_display_beat_cache,
         music_end_time,
         music_rate: if music_rate.is_finite() && music_rate > 0.0 { music_rate } else { 1.0 },
         global_offset_seconds: config.global_offset_seconds,

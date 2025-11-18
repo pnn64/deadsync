@@ -461,7 +461,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         // For dynamic values (e.g., last_held_beat while letting go), fall back to timing for that beat.
         // Direction and receptor row are per-lane: upwards lanes anchor to the normal receptor row,
         // downwards lanes anchor to the reverse row.
-        let compute_lane_y = |beat: f32, dir: f32| -> f32 {
+        let compute_lane_y_dynamic = |beat: f32, dir: f32| -> f32 {
             let dir = if dir >= 0.0 { 1.0 } else { -1.0 };
             let receptor_y_lane = if dir >= 0.0 {
                 receptor_y_normal
@@ -485,6 +485,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
         };
+        
         let mine_explosion_size = {
             let base = assets::texture_dims("hit_mine_explosion.png")
                 .map(|meta| [meta.w.max(1) as f32, meta.h.max(1) as f32])
@@ -746,17 +747,69 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if matches!(hold.result, Some(HoldResult::Held)) {
                 continue;
             }
+
+            // Prepare static/dynamic Y positions for the hold body
+            // Head Y: dynamic if actively held or let go, otherwise static cache
             let mut head_beat = note.beat;
-            if hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo) {
+            let is_head_dynamic = hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo);
+            
+            if is_head_dynamic {
                 head_beat = hold.last_held_beat.clamp(note.beat, hold.end_beat);
             }
+            
             let col_dir = state
                 .column_scroll_dirs
                 .get(note.column)
                 .copied()
                 .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
-            let head_y = compute_lane_y(head_beat, col_dir);
-            let tail_y = compute_lane_y(hold.end_beat, col_dir);
+            let dir = if col_dir >= 0.0 { 1.0 } else { -1.0 };
+            let lane_receptor_y = if col_dir >= 0.0 {
+                receptor_y_normal
+            } else {
+                receptor_y_reverse
+            };
+
+            // Compute Y positions: O(1) via cache for static parts, dynamic for moving head
+            let head_y = if is_head_dynamic {
+                compute_lane_y_dynamic(head_beat, col_dir)
+            } else {
+                 match state.scroll_speed {
+                    ScrollSpeedSetting::CMod(_) => {
+                        let pps_chart = cmod_pps_opt.expect("cmod pps computed");
+                        let note_time_chart = state.note_time_cache[note_index];
+                        let time_diff_real = (note_time_chart - current_time) / rate;
+                        lane_receptor_y + dir * time_diff_real * pps_chart
+                    }
+                    ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                        let note_disp_beat = state.note_display_beat_cache[note_index];
+                        let beat_diff_disp = note_disp_beat - curr_disp_beat;
+                        lane_receptor_y
+                            + dir * (beat_diff_disp
+                                * ScrollSpeedSetting::ARROW_SPACING
+                                * beatmod_multiplier)
+                    }
+                }
+            };
+
+            let tail_y = match state.scroll_speed {
+                ScrollSpeedSetting::CMod(_) => {
+                    let pps_chart = cmod_pps_opt.expect("cmod pps computed");
+                    // Use cached end time for O(1) lookup
+                    let note_end_time_chart = state.hold_end_time_cache[note_index].unwrap_or(0.0);
+                    let time_diff_real = (note_end_time_chart - current_time) / rate;
+                    lane_receptor_y + dir * time_diff_real * pps_chart
+                }
+                ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                    // Use cached end display beat for O(1) lookup
+                    let note_end_disp_beat = state.hold_end_display_beat_cache[note_index].unwrap_or(0.0);
+                    let beat_diff_disp = note_end_disp_beat - curr_disp_beat;
+                    lane_receptor_y
+                        + dir * (beat_diff_disp
+                            * ScrollSpeedSetting::ARROW_SPACING
+                            * beatmod_multiplier)
+                }
+            };
+
             let head_is_top = head_y <= tail_y;
             let mut top = head_y.min(tail_y);
             let mut bottom = head_y.max(tail_y);
@@ -769,11 +822,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 continue;
             }
             let col_x_offset = ns.column_xs[note.column];
-            let lane_receptor_y = if col_dir >= 0.0 {
-                receptor_y_normal
-            } else {
-                receptor_y_reverse
-            };
+
             let active_state = state.active_holds[note.column]
                 .as_ref()
                 .filter(|h| h.note_index == note_index);
@@ -1064,7 +1113,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         } else if hold_length > std::f32::EPSILON {
                             // Reverse-scroll path: mirror the forward-segmentation logic around
                             // the receptor line so that negative #SCROLLS behave identically.
-                            let receptor = receptor_y;
+                            let receptor = lane_receptor_y;
                             let head_y_fwd = 2.0 * receptor - head_y;
                             let tail_y_fwd = 2.0 * receptor - tail_y;
                             let body_top_fwd = 2.0 * receptor - body_bottom;
