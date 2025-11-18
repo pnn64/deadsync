@@ -43,4 +43,6 @@ pub struct Note {
     pub hold: Option<HoldData>,
     pub mine_result: Option<MineResult>,
     pub is_fake: bool,
+    // Optimization: cached result of !is_fake && !warp && !fake_segment
+    pub can_be_judged: bool,
 }
