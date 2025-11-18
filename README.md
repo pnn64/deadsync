@@ -23,6 +23,11 @@ sudo apt update
 sudo apt install --no-install-recommends build-essential cmake pkg-config libudev-dev libasound2-dev libvulkan-dev libgl1-mesa-dev
 ```
 
+### BSD build dependencies (FreeBSD)
+```bash
+pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers
+```
+
 ## Getting Started
 
 Follow these steps to get the game running:
