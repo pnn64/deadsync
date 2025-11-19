@@ -302,9 +302,33 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
             let number_local_y = (i as f32 * 35.0) + 53.0;
             let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
             
-            // --- Actor Group: "Achieved / Possible" (Right-aligned at local x = -114) ---
-            let right_anchor_x = numbers_frame_origin_x + (-114.0 * numbers_frame_zoom);
-            let mut cursor_x = right_anchor_x; // Start drawing from the right edge.
+            // --- Group 1: "Achieved" Numbers (Anchored at -180, separated from Slash) ---
+            // Matches Lua: x = { P1=-180 }, aligned right.
+            let achieved_anchor_x = numbers_frame_origin_x + (-180.0 * numbers_frame_zoom);
+            
+            let achieved_str = format!("{:03}", achieved_clamped);
+            let first_nonzero_achieved = achieved_str.find(|c: char| c != '0').unwrap_or(achieved_str.len());
+
+            for (char_idx_from_right, ch) in achieved_str.chars().rev().enumerate() {
+                 let is_dim = if achieved == 0 { 
+                    char_idx_from_right > 0
+                } else { 
+                    let idx_from_left = 2 - char_idx_from_right;
+                    idx_from_left < first_nonzero_achieved 
+                };
+                let color = if is_dim { gray_color_achieved } else { white_color };
+                let x_pos = achieved_anchor_x - (char_idx_from_right as f32 * digit_width);
+
+                actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
+                    align(1.0, 0.5): xy(x_pos, number_final_y): zoom(final_numbers_zoom):
+                    diffuse(color[0], color[1], color[2], color[3]): z(101)
+                ));
+            }
+
+            // --- Group 2: "Slash + Possible" Numbers (Anchored at -114) ---
+            // Matches Lua: x = { P1=-114 }, aligned right.
+            let possible_anchor_x = numbers_frame_origin_x + (-114.0 * numbers_frame_zoom);
+            let mut cursor_x = possible_anchor_x; 
 
             // 1. Draw "possible" number (right-most part)
             let possible_str = format!("{:03}", possible_clamped);
@@ -331,30 +355,6 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 align(1.0, 0.5): xy(cursor_x, number_final_y): zoom(final_numbers_zoom):
                 diffuse(gray_color_possible[0], gray_color_possible[1], gray_color_possible[2], gray_color_possible[3]): z(101)
             ));
-            cursor_x -= slash_width;
-
-            // 3. Draw "achieved" number (left-most part)
-            let achieved_str = format!("{:03}", achieved_clamped);
-            let first_nonzero_achieved = achieved_str.find(|c: char| c != '0').unwrap_or(achieved_str.len());
-
-            // The 'achieved' block must have its own right-anchor for alignment within the group.
-            let achieved_block_right_x = cursor_x;
-
-            for (char_idx_from_right, ch) in achieved_str.chars().rev().enumerate() {
-                 let is_dim = if achieved == 0 { 
-                    char_idx_from_right > 0
-                } else { 
-                    let idx_from_left = 2 - char_idx_from_right;
-                    idx_from_left < first_nonzero_achieved 
-                };
-                let color = if is_dim { gray_color_achieved } else { white_color };
-                let x_pos = achieved_block_right_x - (char_idx_from_right as f32 * digit_width);
-
-                actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
-                    align(1.0, 0.5): xy(x_pos, number_final_y): zoom(final_numbers_zoom):
-                    diffuse(color[0], color[1], color[2], color[3]): z(101)
-                ));
-            }
         }
     }));
 

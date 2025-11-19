@@ -15,7 +15,7 @@ use crate::game::{
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
-use log::{info, warn};
+use log::info;
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::Arc;
