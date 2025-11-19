@@ -231,9 +231,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
         let numbers_frame_zoom = 0.8;
         let final_numbers_zoom = numbers_frame_zoom * 0.5;
         let digit_width = font::measure_line_width_logical(metrics_font, "0", all_fonts) as f32 * final_numbers_zoom;
-        let slash_width = font::measure_line_width_logical(metrics_font, "/", all_fonts) as f32 * final_numbers_zoom;
         if digit_width <= 0.0 { return; }
-        let slash_width = if slash_width > 0.0 { slash_width } else { digit_width };
 
         // --- Judgment Labels & Numbers ---
         let labels_frame_origin_x = p1_side_offset + 50.0;
@@ -351,8 +349,9 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
             }
 
             // 2. Draw slash
+            // Moved 1px to the right for visual parity
             actors.push(act!(text: font("wendy_screenevaluation"): settext("/"):
-                align(1.0, 0.5): xy(cursor_x, number_final_y): zoom(final_numbers_zoom):
+                align(1.0, 0.5): xy(cursor_x + 0.5, number_final_y): zoom(final_numbers_zoom):
                 diffuse(gray_color_possible[0], gray_color_possible[1], gray_color_possible[2], gray_color_possible[3]): z(101)
             ));
         }
