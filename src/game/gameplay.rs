@@ -162,6 +162,7 @@ pub struct State {
 
     pub decaying_hold_indices: Vec<usize>,
     pub hold_decay_active: Vec<bool>,
+    pub life_history: Vec<(f32, f32)>, // (time, life_value)
 
     pub combo: u32,
     pub miss_combo: u32,
@@ -442,6 +443,7 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         music_end_time, music_rate: if music_rate.is_finite() && music_rate > 0.0 { music_rate } else { 1.0 },
         global_offset_seconds: config.global_offset_seconds, next_tap_miss_cursor: 0, next_mine_avoid_cursor: 0,
         row_entries, row_map_cache, decaying_hold_indices: Vec::new(), hold_decay_active: vec![false; notes_len],
+        life_history: Vec::with_capacity(10000),
         judgment_counts: HashMap::from_iter([(JudgeGrade::Fantastic, 0), (JudgeGrade::Excellent, 0), (JudgeGrade::Great, 0), (JudgeGrade::Decent, 0), (JudgeGrade::WayOff, 0), (JudgeGrade::Miss, 0)]),
         scoring_counts: HashMap::from_iter([(JudgeGrade::Fantastic, 0), (JudgeGrade::Excellent, 0), (JudgeGrade::Great, 0), (JudgeGrade::Decent, 0), (JudgeGrade::WayOff, 0), (JudgeGrade::Miss, 0)]),
         combo: 0, miss_combo: 0, full_combo_grade: None, first_fc_attempt_broken: false, last_judgment: None, hold_judgments: Default::default(),
@@ -1220,6 +1222,12 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         elapsed * rate + anchor * (1.0 - rate)
     };
     state.current_music_time = music_time_sec;
+    
+    // Optimization: only record if time has advanced slightly to avoid duplicates
+    if state.life_history.last().map_or(true, |(t, _)| *t < music_time_sec) {
+        state.life_history.push((music_time_sec, state.life));
+    }
+
 	let beat_info = state.timing.get_beat_info_from_time(music_time_sec);
 	state.current_beat = beat_info.beat;
 	state.is_in_freeze = beat_info.is_in_freeze;

@@ -56,6 +56,8 @@ pub struct ScoreInfo {
     pub graph_last_second: f32,
     pub music_rate: f32,
     pub scroll_option: crate::game::profile::ScrollOption,
+    pub life_history: Vec<(f32, f32)>,
+    pub fail_time: Option<f32>,
 }
 
 pub struct State {
@@ -112,6 +114,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             graph_last_second,
             music_rate: if gs.music_rate.is_finite() && gs.music_rate > 0.0 { gs.music_rate } else { 1.0 },
             scroll_option: profile::get().scroll_option,
+            life_history: gs.life_history,
+            fail_time: gs.fail_time,
         }
     });
 
@@ -910,6 +914,122 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         background: None,
                         z: 3,
                         children: scatter_children,
+                    }
+                },
+                // Life Line Overlay (z=4)
+                {
+                    let mut life_children: Vec<Actor> = Vec::new();
+                    if let Some(si) = &state.score_info {
+                        let first = si.graph_first_second;
+                        let last = si.graph_last_second.max(first + 0.001_f32);
+                        let dur = (last - first).max(0.001_f32);
+                        let padding = 0.05; // Same padding as scatter
+
+                        let mut last_x = -999.0_f32;
+                        let mut last_y = -999.0_f32;
+
+                        for &(t, life) in &si.life_history {
+                            let x = ((t - first) / (dur + padding)).clamp(0.0, 1.0) * GRAPH_WIDTH;
+                            // Map life (0..1) to Y (GraphHeight..0)
+                            // life 1.0 = top (y=0), life 0.0 = bottom (y=Height)
+                            let y = (1.0 - life).clamp(0.0, 1.0) * GRAPH_HEIGHT;
+
+                            // Skip if this point is identical to the last one in screen space
+                            if (x - last_x).abs() < 0.5 && (y - last_y).abs() < 0.5 {
+                                continue;
+                            }
+
+                            if last_x > -900.0 {
+                                // Horizontal segment (if time passed)
+                                let w = (x - last_x).max(0.0);
+                                if w > 0.5 {
+                                    life_children.push(act!(quad:
+                                        align(0.0, 0.5): xy(last_x, last_y):
+                                        setsize(w, 2.0): // 2px thick
+                                        diffuse(1.0, 1.0, 1.0, 0.8):
+                                        z(4)
+                                    ));
+                                }
+
+                                // Vertical segment (drawdown/gain)
+                                // This handles the "loss of life" vertical drop perfectly.
+                                let h = (y - last_y).abs();
+                                if h > 0.5 {
+                                    let min_y = last_y.min(y);
+                                    life_children.push(act!(quad:
+                                        align(0.5, 0.0): xy(x, min_y):
+                                        setsize(2.0, h):
+                                        diffuse(1.0, 1.0, 1.0, 0.8):
+                                        z(4)
+                                    ));
+                                }
+                            } else {
+                                // First point dot
+                                life_children.push(act!(quad:
+                                    align(0.5, 0.5): xy(x, y):
+                                    setsize(2.0, 2.0):
+                                    diffuse(1.0, 1.0, 1.0, 0.8):
+                                    z(4)
+                                ));
+                            }
+                            
+                            last_x = x;
+                            last_y = y;
+                        }
+
+                        // Draw Fail Marker if present
+                        if let Some(fail_time) = si.fail_time {
+                            let x = ((fail_time - first) / (dur + padding)).clamp(0.0, 1.0) * GRAPH_WIDTH;
+                            
+                            // Red vertical line
+                            life_children.push(act!(quad:
+                                align(0.5, 0.0): xy(x, 0.0):
+                                setsize(1.5, GRAPH_HEIGHT):
+                                diffuse(1.0, 0.0, 0.0, 0.8):
+                                z(5)
+                            ));
+
+                            // Time remaining text calculation
+                            let total = si.song.total_length_seconds as f32;
+                            let remaining = (total - fail_time).max(0.0);
+                            let remaining_str = format!("-{}", format_session_time(remaining));
+                            
+                            // Flag box background (Black with Red border)
+                            // Using a small frame to group the flag elements
+                            let flag_w = 40.0;
+                            let flag_h = 14.0;
+                            
+                            life_children.push(act!(quad:
+                                align(1.0, 1.0): xy(x, GRAPH_HEIGHT):
+                                setsize(flag_w, flag_h):
+                                diffuse(1.0, 0.0, 0.0, 1.0): // Red border
+                                z(5)
+                            ));
+                             life_children.push(act!(quad:
+                                align(1.0, 1.0): xy(x - 1.0, GRAPH_HEIGHT - 1.0):
+                                setsize(flag_w - 2.0, flag_h - 2.0):
+                                diffuse(0.0, 0.0, 0.0, 0.8): // Black fill
+                                z(6)
+                            ));
+                            
+                            // Flag Text
+                            life_children.push(act!(text:
+                                font("miso"): settext(remaining_str):
+                                align(1.0, 1.0): xy(x - 4.0, GRAPH_HEIGHT - 1.5):
+                                zoom(0.5):
+                                diffuse(1.0, 0.3, 0.3, 1.0):
+                                z(7)
+                            ));
+                        }
+                    }
+
+                    Actor::Frame {
+                        align: [0.0, 0.0],
+                        offset: [0.0, 0.0],
+                        size: [SizeSpec::Px(GRAPH_WIDTH), SizeSpec::Px(GRAPH_HEIGHT)],
+                        background: None,
+                        z: 4,
+                        children: life_children,
                     }
                 },
             ],
