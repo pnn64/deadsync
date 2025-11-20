@@ -1,4 +1,3 @@
-// src/screens/select_music.rs
 use crate::act;
 use crate::core::audio;
 use crate::core::space::*;
@@ -793,6 +792,27 @@ fn format_session_time(seconds_total: f32) -> String {
     }
 }
 
+fn format_chart_length(seconds_total: i32) -> String {
+    // Clamp negatives to 0
+    let seconds_total = if seconds_total < 0 {
+        0
+    } else {
+        seconds_total as u64
+    };
+
+    let hours = seconds_total / 3600;
+    let minutes = (seconds_total % 3600) / 60;
+    let seconds = seconds_total % 60;
+
+    if hours > 0 {
+        // For very long charts (e.g. 6h), mirror pack style: H:MM:SS
+        format!("{}:{:02}:{:02}", hours, minutes, seconds)
+    } else {
+        // For normal charts: M:SS, NO leading zero on minutes
+        format!("{}:{:02}", minutes, seconds)
+    }
+}
+
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     let profile = profile::get();
@@ -957,7 +977,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
-// --- ARTIST / BPM / LENGTH INFO BOX (Verbatim Implementation) ---
+    // --- ARTIST / BPM / LENGTH INFO BOX ---
     let (box_width, frame_x, frame_y) = if is_wide() {
         (320.0, screen_center_x() - 170.0, screen_center_y() - 55.0)
     } else {
@@ -969,8 +989,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let (artist_text, bpm_text, length_text) = if let Some(entry) = selected_entry {
         match entry {
             MusicWheelEntry::Song(song) => {
-                let minutes = song.total_length_seconds / 60;
-                let seconds = song.total_length_seconds % 60;
                 let formatted_bpm = {
                     // Rate-aware BPM display: scale #DISPLAYBPM or computed min/max by session music rate
                     let rate = crate::game::profile::get_session_music_rate();
@@ -979,46 +997,81 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     } else {
                         let s = song.display_bpm.trim();
                         if !s.is_empty() && s != "*" {
-                            let parts: Vec<&str> = s.split(|c| c == ':' || c == '-').map(str::trim).collect();
+                            let parts: Vec<&str> =
+                                s.split(|c| c == ':' || c == '-').map(str::trim).collect();
                             if parts.len() == 2 {
                                 let min = parts[0].parse::<f32>().ok();
                                 let max = parts[1].parse::<f32>().ok();
                                 if let (Some(min), Some(max)) = (min, max) {
                                     let min_i = (min * rate).round() as i32;
                                     let max_i = (max * rate).round() as i32;
-                                    if min_i == max_i { format!("{}", min_i) } else { format!("{} - {}", min_i.min(max_i), min_i.max(max_i)) }
+                                    if min_i == max_i {
+                                        format!("{}", min_i)
+                                    } else {
+                                        format!(
+                                            "{} - {}",
+                                            min_i.min(max_i),
+                                            min_i.max(max_i)
+                                        )
+                                    }
                                 } else {
-                                    let min_i = (song.min_bpm as f32 * rate).round() as i32;
-                                    let max_i = (song.max_bpm as f32 * rate).round() as i32;
-                                    if min_i == max_i { format!("{}", min_i) } else { format!("{} - {}", min_i, max_i) }
+                                    let min_i =
+                                        (song.min_bpm as f32 * rate).round() as i32;
+                                    let max_i =
+                                        (song.max_bpm as f32 * rate).round() as i32;
+                                    if min_i == max_i {
+                                        format!("{}", min_i)
+                                    } else {
+                                        format!("{} - {}", min_i, max_i)
+                                    }
                                 }
                             } else if let Ok(val) = s.parse::<f32>() {
                                 format!("{}", (val * rate).round() as i32)
                             } else {
-                                let min_i = (song.min_bpm as f32 * rate).round() as i32;
-                                let max_i = (song.max_bpm as f32 * rate).round() as i32;
-                                if min_i == max_i { format!("{}", min_i) } else { format!("{} - {}", min_i, max_i) }
+                                let min_i =
+                                    (song.min_bpm as f32 * rate).round() as i32;
+                                let max_i =
+                                    (song.max_bpm as f32 * rate).round() as i32;
+                                if min_i == max_i {
+                                    format!("{}", min_i)
+                                } else {
+                                    format!("{} - {}", min_i, max_i)
+                                }
                             }
                         } else {
                             let min_i = (song.min_bpm as f32 * rate).round() as i32;
                             let max_i = (song.max_bpm as f32 * rate).round() as i32;
-                            if min_i == max_i { format!("{}", min_i) } else { format!("{} - {}", min_i, max_i) }
+                            if min_i == max_i {
+                                format!("{}", min_i)
+                            } else {
+                                format!("{} - {}", min_i, max_i)
+                            }
                         }
                     }
                 };
+
+                let length_text = format_chart_length(song.total_length_seconds);
+
                 (
                     song.artist.clone(),
                     formatted_bpm,
-                    format!("{}:{:02}", minutes, seconds)
+                    length_text,
                 )
             }
             MusicWheelEntry::PackHeader { original_index, .. } => {
                 let total_length_sec = if let Some(pack) = song_cache.get(*original_index) {
-                    pack.songs.iter().map(|s| s.total_length_seconds as u64).sum()
+                    pack.songs
+                        .iter()
+                        .map(|s| s.total_length_seconds as u64)
+                        .sum()
                 } else {
                     0
                 };
-                ("".to_string(), "".to_string(), format_session_time(total_length_sec as f32))
+                (
+                    "".to_string(),
+                    "".to_string(),
+                    format_session_time(total_length_sec as f32),
+                )
             }
         }
     } else {
@@ -1174,7 +1227,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             )
         };
 
-// --- Step credit panel (P1, song mode) — positioned directly above the density graph ---
+    // --- Step credit panel (P1, song mode) — positioned directly above the density graph ---
 
     // The component's bottom edge should align with the density graph's top edge.
     // Density Graph Top Y = (screen_center_y() + 23.0) - (64.0 / 2.0) = screen_center_y() - 9.0
