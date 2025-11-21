@@ -1257,12 +1257,16 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     }
     state.total_elapsed_in_screen += delta_time;
     let now = std::time::Instant::now();
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+    let anchor = -state.global_offset_seconds;
     let music_time_sec = if now < state.song_start_instant {
-        -(state.song_start_instant.saturating_duration_since(now).as_secs_f32())
+        // Before the song actually starts, simulate ITGmania's behavior of using
+        // a negative song position that advances at MusicRate. This keeps XMod/MMod
+        // scroll speeds consistent during the lead-in.
+        let delta = state.song_start_instant.saturating_duration_since(now).as_secs_f32();
+        anchor * (1.0 - rate) - delta * rate
     } else {
         let elapsed = now.saturating_duration_since(state.song_start_instant).as_secs_f32();
-        let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
-        let anchor = -state.global_offset_seconds;
         elapsed * rate + anchor * (1.0 - rate)
     };
     state.current_music_time = music_time_sec;
