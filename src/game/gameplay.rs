@@ -15,7 +15,7 @@ use crate::game::{
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
-use log::info;
+use log::{info, debug};
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::Arc;
@@ -539,7 +539,8 @@ fn trigger_combo_milestone(state: &mut State, kind: ComboMilestoneKind) {
 }
 
 fn handle_mine_hit(state: &mut State, column: usize, arrow_list_index: usize, note_index: usize, time_error: f32) -> bool {
-    let abs_time_error = time_error.abs();
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+    let abs_time_error = (time_error / rate).abs();
     let mine_window = crate::game::timing::mine_window_s();
     if abs_time_error > mine_window { return false; }
     if state.notes[note_index].mine_result.is_some() || state.notes[note_index].is_fake { return false; }
@@ -562,6 +563,16 @@ fn handle_mine_hit(state: &mut State, column: usize, arrow_list_index: usize, no
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
     audio::play_sfx("assets/sounds/boom.ogg");
+    debug!(
+        "JUDGE MINE HIT: row={}, col={}, beat={:.3}, note_time={:.4}s, hit_time={:.4}s, offset_ms={:.2}, rate={:.3}",
+        state.notes[note_index].row_index,
+        column,
+        state.notes[note_index].beat,
+        state.note_time_cache[note_index],
+        state.note_time_cache[note_index] + time_error,
+        (time_error / rate) * 1000.0,
+        rate
+    );
     if updated_scoring { update_itg_grade_totals(state); }
     true
 }
@@ -569,8 +580,10 @@ fn handle_mine_hit(state: &mut State, column: usize, arrow_list_index: usize, no
 #[inline(always)]
 fn try_hit_mine_while_held(state: &mut State, column: usize, current_time: f32) -> bool {
     let mine_window = crate::game::timing::mine_window_s();
-    let start_t = current_time - mine_window;
-    let end_t = current_time + mine_window;
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+    let search_radius = mine_window * rate;
+    let start_t = current_time - search_radius;
+    let end_t = current_time + search_radius;
     let times = &state.note_time_cache;
     let start_idx = times.partition_point(|&t| t < start_t);
     let end_idx = times.partition_point(|&t| t <= end_t);
@@ -583,10 +596,10 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time: f32) 
         if note.mine_result.is_some() { continue; }
         let note_time = times[i];
         let time_error = current_time - note_time;
-        let abs_err = time_error.abs();
+        let abs_err = (time_error / rate).abs();
         if abs_err <= mine_window {
             match best {
-                Some((_, best_err)) if abs_err >= best_err.abs() => {}
+                Some((_, best_err)) if abs_err >= best_err => {}
                 _ => best = Some((i, time_error)),
             }
         }
@@ -601,7 +614,8 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time: f32) 
 
 #[inline(always)]
 fn hit_mine_timebased(state: &mut State, column: usize, note_index: usize, time_error: f32) -> bool {
-    let abs_time_error = time_error.abs();
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+    let abs_time_error = (time_error / rate).abs();
     let mine_window = crate::game::timing::mine_window_s();
     if abs_time_error > mine_window { return false; }
     if state.notes[note_index].mine_result.is_some() || state.notes[note_index].is_fake { return false; }
@@ -625,6 +639,16 @@ fn hit_mine_timebased(state: &mut State, column: usize, note_index: usize, time_
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
     audio::play_sfx("assets/sounds/boom.ogg");
+    debug!(
+        "JUDGE MINE HIT (timebased): row={}, col={}, beat={:.3}, note_time={:.4}s, hit_time={:.4}s, offset_ms={:.2}, rate={:.3}",
+        state.notes[note_index].row_index,
+        column,
+        state.notes[note_index].beat,
+        state.note_time_cache[note_index],
+        state.note_time_cache[note_index] + time_error,
+        (time_error / rate) * 1000.0,
+        rate
+    );
     if updated_scoring { update_itg_grade_totals(state); }
     true
 }
@@ -736,9 +760,29 @@ fn update_active_holds(state: &mut State, inputs: &[bool; 4], current_time: f32,
                 if !active.let_go {
                     let window = match active.note_type { NoteType::Hold => TIMING_WINDOW_SECONDS_HOLD, NoteType::Roll => TIMING_WINDOW_SECONDS_ROLL, _ => TIMING_WINDOW_SECONDS_HOLD };
                     match active.note_type {
-                        NoteType::Hold => { if pressed { active.life = MAX_HOLD_LIFE; } else if window > 0.0 { active.life -= (delta_time * state.music_rate) / window; } else { active.life = 0.0; } }
-                        NoteType::Roll => { if window > 0.0 { active.life -= (delta_time * state.music_rate) / window; } else { active.life = 0.0; } }
-                        _ => { if window > 0.0 { active.life -= (delta_time * state.music_rate) / window; } else { active.life = 0.0; } }
+                        NoteType::Hold => {
+                            if pressed {
+                                active.life = MAX_HOLD_LIFE;
+                            } else if window > 0.0 {
+                                active.life -= delta_time / window;
+                            } else {
+                                active.life = 0.0;
+                            }
+                        }
+                        NoteType::Roll => {
+                            if window > 0.0 {
+                                active.life -= delta_time / window;
+                            } else {
+                                active.life = 0.0;
+                            }
+                        }
+                        _ => {
+                            if window > 0.0 {
+                                active.life -= delta_time / window;
+                            } else {
+                                active.life = 0.0;
+                            }
+                        }
                     }
                     active.life = active.life.clamp(0.0, MAX_HOLD_LIFE);
                 }
@@ -767,6 +811,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     let windows = crate::game::timing::effective_windows_s();
     let way_off_window = windows[4];
     let mine_window = crate::game::timing::mine_window_s();
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
     let mut best: Option<(usize, usize, f32)> = None;
     for (idx, arrow) in state.arrows[column].iter().enumerate().filter(|(_, a)| state.notes[a.note_index].result.is_none()) {
         let n = &state.notes[arrow.note_index];
@@ -774,7 +819,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         if n.is_fake { continue; }
         let note_index = arrow.note_index;
         let note_time = state.note_time_cache[note_index];
-        let abs_err = (current_time - note_time).abs();
+        let abs_err = ((current_time - note_time) / rate).abs();
         let window = if matches!(n.note_type, NoteType::Mine) { mine_window } else { way_off_window };
         if abs_err <= window {
             match best {
@@ -788,12 +833,13 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         let note_row_index = state.notes[note_index].row_index;
         let note_type = state.notes[note_index].note_type.clone();
         let note_time = state.note_time_cache[note_index];
-        let time_error = current_time - note_time;
-        let abs_time_error = time_error.abs();
+        let time_error_music = current_time - note_time;
+        let time_error_real = time_error_music / rate;
+        let abs_time_error = time_error_real.abs();
 
         if matches!(note_type, NoteType::Mine) {
             if state.notes[note_index].is_fake { return false; }
-            if handle_mine_hit(state, column, arrow_list_index, note_index, time_error) { return true; }
+            if handle_mine_hit(state, column, arrow_list_index, note_index, time_error_music) { return true; }
             return false;
         }
         let mine_hit_on_press = try_hit_mine_while_held(state, column, current_time);
@@ -818,8 +864,20 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             for &idx in &notes_on_row {
                 let note_col = state.notes[idx].column;
                 let row_note_time = state.note_time_cache[idx];
-                let te = current_time - row_note_time;
-                state.notes[idx].result = Some(Judgment { time_error_ms: te * 1000.0, grade, row: note_row_index });
+                let te_music = current_time - row_note_time;
+                let te_real = te_music / rate;
+                state.notes[idx].result = Some(Judgment { time_error_ms: te_real * 1000.0, grade, row: note_row_index });
+                debug!(
+                    "JUDGE TAP: grade={:?}, row={}, col={}, beat={:.3}, note_time={:.4}s, press_time={:.4}s, offset_ms={:.2}, rate={:.3}",
+                    grade,
+                    note_row_index,
+                    note_col,
+                    state.notes[idx].beat,
+                    row_note_time,
+                    current_time,
+                    te_real * 1000.0,
+                    rate
+                );
                 for col_arrows in &mut state.arrows {
                     if let Some(pos) = col_arrows.iter().position(|a| a.note_index == idx) {
                         col_arrows.remove(pos);
@@ -986,8 +1044,10 @@ fn decay_let_go_hold_life(state: &mut State) {
         let start_time = hold.let_go_started_at.unwrap();
         let base_life = hold.let_go_starting_life.clamp(0.0, MAX_HOLD_LIFE);
         if base_life <= 0.0 { hold.life = 0.0; i += 1; continue; }
-        let elapsed = (state.current_music_time - start_time).max(0.0);
-        hold.life = (base_life - elapsed / window).max(0.0);
+        let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+        let elapsed_music = (state.current_music_time - start_time).max(0.0);
+        let elapsed_real = elapsed_music / rate;
+        hold.life = (base_life - elapsed_real / window).max(0.0);
         i += 1;
     }
 }
@@ -1027,7 +1087,8 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
 #[inline(always)]
 fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
     let mine_window = crate::game::timing::mine_window_s();
-    let cutoff_time = music_time_sec - mine_window;
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+    let cutoff_time = music_time_sec - mine_window * rate;
     let len = state.notes.len();
     while state.next_mine_avoid_cursor < len {
         let i = state.next_mine_avoid_cursor;
@@ -1081,6 +1142,7 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
 #[inline(always)]
 fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f32) {
     let way_off_window = crate::game::timing::effective_windows_s()[4];
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
     for (col_idx, col_arrows) in state.arrows.iter_mut().enumerate() {
         let Some(next_arrow_index) = col_arrows.iter().position(|arrow| state.notes[arrow.note_index].result.is_none()) else { continue; };
         let note_index = col_arrows[next_arrow_index].note_index;
@@ -1093,7 +1155,8 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                 Some(MineResult::Avoided) => {}
                 None => {
                     let mine_window = crate::game::timing::mine_window_s();
-                    if music_time_sec - note_time > mine_window {
+                    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+                    if music_time_sec - note_time > mine_window * rate {
                         if state.notes[note_index].can_be_judged {
                             state.notes[note_index].mine_result = Some(MineResult::Avoided);
                             state.mines_avoided = state.mines_avoided.saturating_add(1);
@@ -1106,8 +1169,10 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
         }
         if state.notes[note_index].is_fake { continue; }
         if !state.notes[note_index].can_be_judged { continue; }
-        if music_time_sec - note_time > way_off_window {
-            let judgment = Judgment { time_error_ms: ((music_time_sec - note_time) * 1000.0), grade: JudgeGrade::Miss, row: note_row_index };
+        if music_time_sec - note_time > way_off_window * rate {
+            let time_err_music = music_time_sec - note_time;
+            let time_err_real = time_err_music / rate;
+            let judgment = Judgment { time_error_ms: (time_err_real * 1000.0), grade: JudgeGrade::Miss, row: note_row_index };
             if let Some(hold) = state.notes[note_index].hold.as_mut() {
                 if hold.result != Some(HoldResult::Held) {
                     hold.result = Some(HoldResult::LetGo);
@@ -1130,7 +1195,8 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
 #[inline(always)]
 fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
     let way_off_window = crate::game::timing::effective_windows_s()[4];
-    let cutoff_time = music_time_sec - way_off_window;
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+    let cutoff_time = music_time_sec - way_off_window * rate;
     let len = state.notes.len();
     while state.next_tap_miss_cursor < len {
         let i = state.next_tap_miss_cursor;
@@ -1139,7 +1205,19 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
         if let Some(note) = state.notes.get_mut(i) {
             if !matches!(note.note_type, NoteType::Mine) && note.can_be_judged && note.result.is_none() {
                 let row = note.row_index;
-                note.result = Some(Judgment { time_error_ms: (music_time_sec - note_time) * 1000.0, grade: JudgeGrade::Miss, row });
+                let time_err_music = music_time_sec - note_time;
+                let time_err_real = time_err_music / rate;
+                note.result = Some(Judgment { time_error_ms: time_err_real * 1000.0, grade: JudgeGrade::Miss, row });
+                debug!(
+                    "JUDGE TAP MISS (time-based): row={}, col={}, beat={:.3}, note_time={:.4}s, miss_time={:.4}s, offset_ms={:.2}, rate={:.3}",
+                    row,
+                    note.column,
+                    note.beat,
+                    note_time,
+                    music_time_sec,
+                    time_err_real * 1000.0,
+                    rate
+                );
                 if let Some(hold) = note.hold.as_mut() {
                     if hold.result != Some(HoldResult::Held) {
                         hold.result = Some(HoldResult::LetGo);
