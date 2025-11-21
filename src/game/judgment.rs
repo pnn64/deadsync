@@ -14,7 +14,6 @@ pub enum JudgeGrade {
 pub struct Judgment {
     pub time_error_ms: f32,
     pub grade: JudgeGrade, // The grade of this specific note
-    pub row: usize,        // The row this judgment belongs to
 }
 
 pub const HOLD_SCORE_HELD: i32 = 5;

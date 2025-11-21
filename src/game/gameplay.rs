@@ -866,7 +866,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 let row_note_time = state.note_time_cache[idx];
                 let te_music = current_time - row_note_time;
                 let te_real = te_music / rate;
-                state.notes[idx].result = Some(Judgment { time_error_ms: te_real * 1000.0, grade, row: note_row_index });
+                state.notes[idx].result = Some(Judgment { time_error_ms: te_real * 1000.0, grade });
                 debug!(
                     "JUDGE TAP: grade={:?}, row={}, col={}, beat={:.3}, note_time={:.4}s, press_time={:.4}s, offset_ms={:.2}, rate={:.3}",
                     grade,
@@ -1172,7 +1172,7 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
         if music_time_sec - note_time > way_off_window * rate {
             let time_err_music = music_time_sec - note_time;
             let time_err_real = time_err_music / rate;
-            let judgment = Judgment { time_error_ms: (time_err_real * 1000.0), grade: JudgeGrade::Miss, row: note_row_index };
+            let judgment = Judgment { time_error_ms: (time_err_real * 1000.0), grade: JudgeGrade::Miss };
             if let Some(hold) = state.notes[note_index].hold.as_mut() {
                 if hold.result != Some(HoldResult::Held) {
                     hold.result = Some(HoldResult::LetGo);
@@ -1207,7 +1207,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                 let row = note.row_index;
                 let time_err_music = music_time_sec - note_time;
                 let time_err_real = time_err_music / rate;
-                note.result = Some(Judgment { time_error_ms: time_err_real * 1000.0, grade: JudgeGrade::Miss, row });
+                note.result = Some(Judgment { time_error_ms: time_err_real * 1000.0, grade: JudgeGrade::Miss });
                 debug!(
                     "JUDGE TAP MISS (time-based): row={}, col={}, beat={:.3}, note_time={:.4}s, miss_time={:.4}s, offset_ms={:.2}, rate={:.3}",
                     row,
