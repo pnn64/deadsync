@@ -24,6 +24,10 @@ pub struct SongData {
     pub normalized_speeds: String,
     pub normalized_scrolls: String,
     pub normalized_fakes: String,
+    /// Length of the music file in seconds (audio duration, including trailing silence).
+    /// Mirrors ITGmania's `Song::m_fMusicLengthSeconds` / `MusicLengthSeconds()` Lua.
+    pub music_length_seconds: f32,
+    /// Length of the chart in seconds based on the last note/hold (`Song::GetLastSecond()` semantics).
     pub total_length_seconds: i32,
     pub charts: Vec<ChartData>,
 }

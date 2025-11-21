@@ -8,11 +8,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
-use std::io::{Read, Write};
-use twox_hash::XxHash64;
-use std::hash::Hasher;
 use bincode::{Decode, Encode};
+use lewton::inside_ogg::OggStreamReader;
+use memmap2::Mmap;
+use serde::{Deserialize, Serialize};
+use std::hash::Hasher;
+use std::io::{BufReader, Cursor, Read, Write};
+use twox_hash::XxHash64;
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
 
@@ -229,6 +231,7 @@ struct SerializableSongData {
     normalized_speeds: String,
     normalized_scrolls: String,
     normalized_fakes: String,
+    music_length_seconds: f32,
     total_length_seconds: i32,
     charts: Vec<SerializableChartData>,
 }
@@ -255,6 +258,7 @@ impl From<&SongData> for SerializableSongData {
             normalized_speeds: song.normalized_speeds.clone(),
             normalized_scrolls: song.normalized_scrolls.clone(),
             normalized_fakes: song.normalized_fakes.clone(),
+            music_length_seconds: song.music_length_seconds,
             total_length_seconds: song.total_length_seconds,
             charts: song.charts.iter().map(SerializableChartData::from).collect(),
         }
@@ -283,6 +287,7 @@ impl From<SerializableSongData> for SongData {
             normalized_speeds: song.normalized_speeds,
             normalized_scrolls: song.normalized_scrolls,
             normalized_fakes: song.normalized_fakes,
+            music_length_seconds: song.music_length_seconds,
             total_length_seconds: song.total_length_seconds,
             charts: song.charts.into_iter().map(ChartData::from).collect(),
         }
@@ -701,6 +706,12 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
         None
     };
 
+    // Compute audio length (music file duration) in seconds, mirroring ITGmania's
+    // m_fMusicLengthSeconds. This intentionally measures the full OGG length,
+    // including trailing silence, and is used for displays that call
+    // Song:MusicLengthSeconds() in Simply Love.
+    let music_length_seconds = compute_music_length_seconds(music_path.as_deref());
+
     Ok(SongData {
         title: summary.title_str,
         subtitle: summary.subtitle_str,
@@ -721,7 +732,104 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
         normalized_scrolls: summary.normalized_scrolls,
         normalized_fakes: global_fakes_raw,
         music_path,
+        music_length_seconds,
         total_length_seconds: summary.total_length,
         charts,
     })
+}
+
+/// Computes the length of the music file in seconds, if it is a readable OGG file.
+/// Returns 0.0 on failure or if no music path is provided.
+fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
+    let Some(path) = music_path else {
+        return 0.0;
+    };
+
+    let ext_is_ogg = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|ext| {
+            let ext_lower = ext.to_ascii_lowercase();
+            ext_lower == "ogg" || ext_lower == "oga"
+        })
+        .unwrap_or(false);
+    if !ext_is_ogg {
+        return 0.0;
+    }
+
+    match ogg_length_seconds(path) {
+        Ok(sec) => sec,
+        Err(e) => {
+            warn!("Failed to compute OGG length for {:?}: {}", path, e);
+            0.0
+        }
+    }
+}
+
+/// Fast OGG length detection: use lewton only for headers (sample rate) and
+/// scan backwards through the file to find the last valid granule position.
+fn ogg_length_seconds(path: &Path) -> Result<f32, String> {
+    let file = fs::File::open(path).map_err(|e| format!("Cannot open file: {}", e))?;
+
+    // Safe wrapper around the unsafe memmap2 API.
+    let mmap = unsafe { Mmap::map(&file) }
+        .map_err(|e| format!("Memory-map failed: {}", e))?;
+
+    // Use lewton to get the sample rate from the header.
+    let sample_rate_hz = {
+        let cursor = Cursor::new(&mmap[..]);
+        let reader = OggStreamReader::new(BufReader::new(cursor))
+            .map_err(|e| format!("lewton header error: {}", e))?;
+        let rate = reader.ident_hdr.audio_sample_rate;
+        if rate == 0 {
+            return Err("Invalid sample rate (0)".into());
+        }
+        rate as f64
+    };
+
+    let total_samples = find_last_granule_backwards(&mmap)?;
+    Ok((total_samples as f64 / sample_rate_hz) as f32)
+}
+
+fn find_last_granule_backwards(data: &[u8]) -> Result<u64, String> {
+    const PAGE_HEADER: usize = 27;
+    const CHUNK: usize = 64 * 1024;
+
+    let mut pos = data.len();
+    let mut best_granule: Option<u64> = None;
+
+    while pos > PAGE_HEADER {
+        let start = pos.saturating_sub(CHUNK);
+        let chunk = &data[start..pos];
+
+        let mut i = chunk.len().saturating_sub(PAGE_HEADER);
+        while i > 0 {
+            if &chunk[i..i + 4] == b"OggS" {
+                let granule = u64::from_le_bytes(
+                    chunk[i + 6..i + 14]
+                        .try_into()
+                        .map_err(|_| "Failed to read granule position".to_string())?,
+                );
+
+                if granule != u64::MAX {
+                    if best_granule.map_or(true, |prev| granule > prev) {
+                        best_granule = Some(granule);
+                    }
+                }
+
+                // Jump back far enough to definitely get past this page.
+                i = i.saturating_sub(27 + 255 * 255);
+            } else {
+                i -= 1;
+            }
+        }
+
+        if best_granule.is_some() {
+            // In almost all real-world files, the final granule is on the last page.
+            break;
+        }
+        pos = start;
+    }
+
+    best_granule.ok_or_else(|| "No valid granule position found".into())
 }

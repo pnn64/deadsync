@@ -126,7 +126,12 @@ fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cu
     // Start with raw tags (treat missing as 0)
     let mut start = song.sample_start.unwrap_or(0.0) as f64;
     let mut length = song.sample_length.unwrap_or(0.0) as f64;
-    let total_len = song.total_length_seconds.max(0) as f64;
+    // Prefer true music length (audio duration); fall back to chart length.
+    let total_len = if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
+        song.music_length_seconds as f64
+    } else {
+        song.total_length_seconds.max(0) as f64
+    };
 
     // If length is not valid, mirror ITGmania defaults
     if !(length.is_sign_positive() && length.is_finite()) || length == 0.0 {
@@ -1050,7 +1055,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 };
 
-                let length_text = format_chart_length(song.total_length_seconds);
+                // Simply Love uses Song:MusicLengthSeconds() for this display.
+                let length_seconds = if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
+                    song.music_length_seconds.round() as i32
+                } else {
+                    song.total_length_seconds
+                };
+                let length_text = format_chart_length(length_seconds);
 
                 (
                     song.artist.clone(),
@@ -1059,13 +1070,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 )
             }
             MusicWheelEntry::PackHeader { original_index, .. } => {
-                let total_length_sec = if let Some(pack) = song_cache.get(*original_index) {
+                // Sum true music lengths per song for group duration, mirroring
+                // Simply Love's use of MusicLengthSeconds in GroupDurations.lua.
+                let total_length_sec: f64 = if let Some(pack) = song_cache.get(*original_index) {
                     pack.songs
                         .iter()
-                        .map(|s| s.total_length_seconds as u64)
+                        .map(|s| {
+                            if s.music_length_seconds.is_finite() && s.music_length_seconds > 0.0 {
+                                s.music_length_seconds as f64
+                            } else {
+                                s.total_length_seconds.max(0) as f64
+                            }
+                        })
                         .sum()
                 } else {
-                    0
+                    0.0
                 };
                 (
                     "".to_string(),

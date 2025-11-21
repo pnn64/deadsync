@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.1.279"
+version = "0.1.280"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "Rust-based ITG engine with switchable Vulkan/OpenGL backends, designed for accurate sync and competitive performance."
@@ -34,6 +34,7 @@ raw-window-handle = "0.6.2"
 cpal = "0.16.0"
 lewton = "0.10.2"
 rubato = "0.16.2"
+memmap2 = "0.9.9"
 
 # Fonts
 regex = "1.12.2"

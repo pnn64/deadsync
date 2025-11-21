@@ -710,10 +710,28 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
 
         let length_text = {
-            let seconds = score_info.song.total_length_seconds;
-            if seconds < 0 { "".to_string() }
-            else if seconds >= 3600 { format!("{}:{:02}:{:02}", seconds / 3600, (seconds % 3600) / 60, seconds % 60) }
-            else { format!("{}:{:02}", seconds / 60, seconds % 60) }
+            // Simply Love uses Song:MusicLengthSeconds() here (audio duration),
+            // not the chart's last note time.
+            let seconds_f = if score_info.song.music_length_seconds.is_finite()
+                && score_info.song.music_length_seconds > 0.0
+            {
+                score_info.song.music_length_seconds
+            } else {
+                score_info.song.total_length_seconds.max(0) as f32
+            };
+            let seconds = seconds_f.round() as i32;
+            if seconds < 0 {
+                "".to_string()
+            } else if seconds >= 3600 {
+                format!(
+                    "{}:{:02}:{:02}",
+                    seconds / 3600,
+                    (seconds % 3600) / 60,
+                    seconds % 60
+                )
+            } else {
+                format!("{}:{:02}", seconds / 60, seconds % 60)
+            }
         };
 
         let song_features_frame = Actor::Frame {
