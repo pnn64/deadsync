@@ -710,16 +710,22 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
 
         let length_text = {
-            // Simply Love uses Song:MusicLengthSeconds() here (audio duration),
-            // not the chart's last note time.
-            let seconds_f = if score_info.song.music_length_seconds.is_finite()
+            // Simply Love uses Song:MusicLengthSeconds() divided by MusicRate
+            // for this display, not the chart's last note time.
+            let base_seconds = if score_info.song.music_length_seconds.is_finite()
                 && score_info.song.music_length_seconds > 0.0
             {
                 score_info.song.music_length_seconds
             } else {
                 score_info.song.total_length_seconds.max(0) as f32
             };
-            let seconds = seconds_f.round() as i32;
+            let rate = if score_info.music_rate.is_finite() && score_info.music_rate > 0.0 {
+                score_info.music_rate
+            } else {
+                1.0
+            };
+            let adjusted = base_seconds / rate;
+            let seconds = adjusted.round() as i32;
             if seconds < 0 {
                 "".to_string()
             } else if seconds >= 3600 {
@@ -1006,10 +1012,27 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 diffuse(1.0, 0.0, 0.0, 0.8):
                                 z(5)
                             ));
-
+                            
                             // Time remaining text calculation
-                            let total = si.song.total_length_seconds as f32;
-                            let remaining = (total - fail_time).max(0.0);
+                            // Match Simply Love's TrackFailTime behavior:
+                            // display remaining time using chart length divided by MusicRate.
+                            let base_total = si.song.total_length_seconds.max(0) as f32;
+                            let rate = if si.music_rate.is_finite() && si.music_rate > 0.0 {
+                                si.music_rate
+                            } else {
+                                1.0
+                            };
+                            let total_display = if rate != 0.0 {
+                                base_total / rate
+                            } else {
+                                base_total
+                            };
+                            let death_display = if rate != 0.0 {
+                                fail_time.max(0.0) / rate
+                            } else {
+                                fail_time.max(0.0)
+                            };
+                            let remaining = (total_display - death_display).max(0.0);
                             let remaining_str = format!("-{}", format_session_time(remaining));
                             
                             // Flag box background (Black with Red border)

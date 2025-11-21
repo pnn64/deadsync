@@ -2340,15 +2340,40 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         {
             let local_y = -40.0 * banner_data_zoom;
 
-            let total_seconds = state.song.total_length_seconds.max(0) as f32;
-            let total_time_str = format_game_time(total_seconds, total_seconds);
-
-            let remaining_seconds = if let Some(fail_time) = state.fail_time {
-                (total_seconds - fail_time.max(0.0)).max(0.0)
+            // Base chart length in seconds (GetLastSecond semantics).
+            let base_total = state.song.total_length_seconds.max(0) as f32;
+            // Displayed duration should respect music rate (SongLength / MusicRate),
+            // while the on-screen timer still advances in real seconds.
+            let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+                state.music_rate
             } else {
-                (total_seconds - state.current_music_time.max(0.0)).max(0.0)
+                1.0
             };
-            let remaining_time_str = format_game_time(remaining_seconds, total_seconds);
+            let total_display_seconds = if rate != 0.0 {
+                base_total / rate
+            } else {
+                base_total
+            };
+            let elapsed_display_seconds = if rate != 0.0 {
+                state.current_music_time.max(0.0) / rate
+            } else {
+                state.current_music_time.max(0.0)
+            };
+
+            let total_time_str = format_game_time(total_display_seconds, total_display_seconds);
+
+            let remaining_display_seconds = if let Some(fail_time) = state.fail_time {
+                let fail_disp = if rate != 0.0 {
+                    fail_time.max(0.0) / rate
+                } else {
+                    fail_time.max(0.0)
+                };
+                (total_display_seconds - fail_disp).max(0.0)
+            } else {
+                (total_display_seconds - elapsed_display_seconds).max(0.0)
+            };
+            let remaining_time_str =
+                format_game_time(remaining_display_seconds, total_display_seconds);
 
             let font_name = "miso";
             let text_zoom = banner_data_zoom * 0.833;

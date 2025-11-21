@@ -1055,12 +1055,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 };
 
-                // Simply Love uses Song:MusicLengthSeconds() for this display.
-                let length_seconds = if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
-                    song.music_length_seconds.round() as i32
+                // Simply Love uses Song:MusicLengthSeconds() divided by MusicRate
+                // for this display (audio duration at the chosen rate).
+                let base_seconds = if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
+                    song.music_length_seconds
                 } else {
-                    song.total_length_seconds
+                    song.total_length_seconds.max(0) as f32
                 };
+                let rate = crate::game::profile::get_session_music_rate();
+                let rate = if rate.is_finite() && rate > 0.0 { rate } else { 1.0 };
+                let length_seconds = (base_seconds / rate).round() as i32;
                 let length_text = format_chart_length(length_seconds);
 
                 (
@@ -1086,10 +1090,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 } else {
                     0.0
                 };
+                let rate = crate::game::profile::get_session_music_rate();
+                let rate = if rate.is_finite() && rate > 0.0 { rate } else { 1.0 };
                 (
                     "".to_string(),
                     "".to_string(),
-                    format_session_time(total_length_sec as f32),
+                    format_session_time((total_length_sec / rate as f64) as f32),
                 )
             }
         }

@@ -710,7 +710,19 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
     // m_fMusicLengthSeconds. This intentionally measures the full OGG length,
     // including trailing silence, and is used for displays that call
     // Song:MusicLengthSeconds() in Simply Love.
-    let music_length_seconds = compute_music_length_seconds(music_path.as_deref());
+    //
+    // StepMania also applies a safety heuristic: if the decoded music length
+    // is suspiciously shorter than the chart's last second (by > 10s), it
+    // trusts the chart timing instead. This handles meme files where the
+    // audio is a short silent stub but the chart runs for hours.
+    let mut music_length_seconds = compute_music_length_seconds(music_path.as_deref());
+    let chart_length_seconds = summary.total_length.max(0) as f32;
+    if music_length_seconds > 0.0
+        && chart_length_seconds > 0.0
+        && music_length_seconds < chart_length_seconds - 10.0
+    {
+        music_length_seconds = chart_length_seconds;
+    }
 
     Ok(SongData {
         title: summary.title_str,
