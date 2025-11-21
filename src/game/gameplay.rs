@@ -25,8 +25,14 @@ use winit::keyboard::KeyCode;
 pub const TRANSITION_IN_DURATION: f32 = 0.4;
 pub const TRANSITION_OUT_DURATION: f32 = 0.4;
 
+// These mirror ScreenGameplay's MinSecondsToStep/MinSecondsToMusic metrics in ITGmania.
+// Simply Love scales them by MusicRate, so we apply that in init().
 const MIN_SECONDS_TO_STEP: f32 = 6.0;
 const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
+// Additional linger time on ScreenGameplay after the last judgable note,
+// approximating OutTransitionLength (5s) so that the perceived wait before
+// ScreenEvaluation matches ITGmania/Simply Love.
+const POST_SONG_DISPLAY_SECONDS: f32 = 5.0;
 const M_MOD_HIGH_CAP: f32 = 600.0;
 
 // Timing windows now sourced from game::timing
@@ -275,6 +281,8 @@ fn get_reference_bpm_from_display_tag(display_bpm_str: &str) -> Option<f32> {
 
 pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32, music_rate: f32) -> State {
     info!("Initializing Gameplay Screen...");
+    let rate = if music_rate.is_finite() && music_rate > 0.0 { music_rate } else { 1.0 };
+
     let style = Style { num_cols: 4, num_players: 1 };
     let noteskin = noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style)
         .ok()
@@ -397,13 +405,25 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
 
     let first_note_beat = notes.first().map_or(0.0, |n| n.beat);
     let first_second = timing.get_time_for_beat(first_note_beat);
-    let start_delay = (MIN_SECONDS_TO_STEP - first_second).max(MIN_SECONDS_TO_MUSIC);
+    // ITGmania's ScreenGameplay::StartPlayingSong uses theme metrics
+    // MinSecondsToStep / MinSecondsToMusic. Simply Love scales both by
+    // MusicRate, so we apply the same here to keep real-world lead-in time
+    // consistent across rates.
+    let min_time_to_notes = MIN_SECONDS_TO_STEP * rate;
+    let min_time_to_music = MIN_SECONDS_TO_MUSIC * rate;
+    let mut start_delay = min_time_to_notes - first_second;
+    if start_delay < min_time_to_music {
+        start_delay = min_time_to_music;
+    }
+    if start_delay < 0.0 {
+        start_delay = 0.0;
+    }
     let song_start_instant = Instant::now() + Duration::from_secs_f32(start_delay);
 
     if let Some(music_path) = &song.music_path {
         info!("Starting music with a preroll delay of {:.2}s", start_delay);
         let cut = audio::Cut { start_sec: (-start_delay) as f64, length_sec: f64::INFINITY, ..Default::default() };
-        audio::play_music(music_path.clone(), cut, false, music_rate.max(0.01));
+        audio::play_music(music_path.clone(), cut, false, rate.max(0.01));
     }
 
     let profile = profile::get();
@@ -417,21 +437,45 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
     });
     if !reference_bpm.is_finite() || reference_bpm <= 0.0 { reference_bpm = initial_bpm.max(120.0); }
 
-    let mut pixels_per_second = scroll_speed.pixels_per_second(initial_bpm, reference_bpm, music_rate);
+    let mut pixels_per_second = scroll_speed.pixels_per_second(initial_bpm, reference_bpm, rate);
     if !pixels_per_second.is_finite() || pixels_per_second <= 0.0 {
-        pixels_per_second = ScrollSpeedSetting::default().pixels_per_second(initial_bpm, reference_bpm, music_rate);
+        pixels_per_second = ScrollSpeedSetting::default().pixels_per_second(initial_bpm, reference_bpm, rate);
     }
     let draw_distance_before_targets = screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER;
     let draw_distance_after_targets = DRAW_DISTANCE_AFTER_TARGETS;
-    let mut travel_time = scroll_speed.travel_time_seconds(draw_distance_before_targets, initial_bpm, reference_bpm, music_rate);
+    let mut travel_time = scroll_speed.travel_time_seconds(draw_distance_before_targets, initial_bpm, reference_bpm, rate);
     if !travel_time.is_finite() || travel_time <= 0.0 { travel_time = draw_distance_before_targets / pixels_per_second; }
 
+    // For end-of-song timing, approximate ScreenGameplay::GetMusicEndTiming() /
+    // Player::GetMaxStepDistanceSeconds() semantics on a per-chart basis:
+    //
+    //   fLastStepSeconds = last_relevant_second_in_chart + Player::GetMaxStepDistanceSeconds();
+    //
+    // where GetMaxStepDistanceSeconds() takes the maximum timing window across
+    // taps, mines, holds, rolls, etc, scaled by MusicRate and including a small
+    // latency fudge. We approximate this using our unified timing helpers.
+    //
+    // Using the chart's own last judgable object (tap or hold/roll tail) here
+    // ensures we never cut to evaluation before a long ending hold finishes.
     let last_relevant_second = notes.iter().enumerate().fold(0.0_f32, |acc, (i, _)| {
         let start = note_time_cache[i];
         let end = hold_end_time_cache[i].unwrap_or(start);
         acc.max(end)
     });
-    let music_end_time = last_relevant_second + crate::game::timing::effective_windows_s()[4] + TRANSITION_OUT_DURATION;
+    let mut max_window = 0.0_f32;
+    let windows = crate::game::timing::effective_windows_s();
+    for w in windows.iter() {
+        if *w > max_window {
+            max_window = *w;
+        }
+    }
+    max_window = max_window.max(crate::game::timing::mine_window_s());
+    max_window = max_window.max(TIMING_WINDOW_SECONDS_HOLD);
+    max_window = max_window.max(TIMING_WINDOW_SECONDS_ROLL);
+
+    let max_step_distance = rate * max_window;
+    let last_step_seconds = last_relevant_second + max_step_distance;
+    let music_end_time = last_step_seconds + POST_SONG_DISPLAY_SECONDS;
     let notes_len = notes.len();
     let column_scroll_dirs = compute_column_scroll_dirs(profile.scroll_option);
 
@@ -440,7 +484,7 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         song_start_instant, current_beat: 0.0, current_music_time: -start_delay,
         note_spawn_cursor: 0, judged_row_cursor: 0, arrows: [vec![], vec![], vec![], vec![]],
         note_time_cache, note_display_beat_cache, hold_end_time_cache, hold_end_display_beat_cache,
-        music_end_time, music_rate: if music_rate.is_finite() && music_rate > 0.0 { music_rate } else { 1.0 },
+        music_end_time, music_rate: rate,
         global_offset_seconds: config.global_offset_seconds, next_tap_miss_cursor: 0, next_mine_avoid_cursor: 0,
         row_entries, row_map_cache, decaying_hold_indices: Vec::new(), hold_decay_active: vec![false; notes_len],
         life_history: Vec::with_capacity(10000),
