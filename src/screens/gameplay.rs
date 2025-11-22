@@ -2402,7 +2402,7 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
             let rows: [(&str, [f32; 4], u32); 7] = [
                 ("FANTASTIC", fantastic_color, wc.w0),
-                ("FA+", [1.0, 1.0, 1.0, 1.0], wc.w1),
+                ("FANTASTIC", [1.0, 1.0, 1.0, 1.0], wc.w1),
                 ("EXCELLENT", excellent_color, wc.w2),
                 ("GREAT", great_color, wc.w3),
                 ("DECENT", decent_color, wc.w4),

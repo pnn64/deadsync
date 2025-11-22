@@ -221,10 +221,12 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
     let p1_side_offset = screen_center_x() - 155.0;
 
     let profile_data = profile::get();
-    let show_fa_plus_window = profile_data.show_fa_plus_window;
+    // FA+ evaluation pane is controlled by the "Display FA+ Pane" toggle,
+    // not by the FA+ judgment window display.
+    let show_fa_plus_pane = profile_data.show_fa_plus_pane;
 
     // --- Calculate label shift for large numbers ---
-    let max_judgment_count = if !show_fa_plus_window {
+    let max_judgment_count = if !show_fa_plus_pane {
         JUDGMENT_ORDER.iter()
             .map(|grade| score_info.judgment_counts.get(grade).cloned().unwrap_or(0))
             .max().unwrap_or(0)
@@ -257,7 +259,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
         let numbers_frame_origin_x = p1_side_offset + 90.0;
         let frame_origin_y = cy - 24.0;
 
-        if !show_fa_plus_window {
+        if !show_fa_plus_pane {
             for (i, grade) in JUDGMENT_ORDER.iter().enumerate() {
                 let info = JUDGMENT_INFO.get(grade).unwrap();
                 let count = score_info.judgment_counts.get(grade).cloned().unwrap_or(0);
@@ -323,7 +325,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
 
             let rows: [(&str, [f32; 4], u32); 7] = [
                 ("FANTASTIC", fantastic_color, wc.w0),
-                ("FA+", [1.0, 1.0, 1.0, 1.0], wc.w1),
+                ("FANTASTIC", [1.0, 1.0, 1.0, 1.0], wc.w1),
                 ("EXCELLENT", excellent_color, wc.w2),
                 ("GREAT", great_color, wc.w3),
                 ("DECENT", decent_color, wc.w4),
@@ -332,9 +334,11 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
             ];
 
             for (i, (label, bright_color, count)) in rows.iter().enumerate() {
-                // Label
+                // Label: match Simply Love Pane2 labels using 26px spacing.
+                // Original Lua uses 1-based indexing: y = i*26 - 46.
+                // Our rows are 0-based, so use (i+1) here.
                 let label_local_x = 28.0 + label_shift_x;
-                let label_local_y = (i as f32 * 28.0) - 16.0;
+                let label_local_y = ((i as f32 + 1.0) * 26.0) - 46.0;
                 actors.push(act!(text: font("miso"): settext(label.to_string()):
                     align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
                     maxwidth(76.0): zoom(label_zoom): horizalign(right):
@@ -351,8 +355,9 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 let number_str = format!("{:0width$}", count, width = digits_to_fmt);
                 let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
                 
+                // Numbers: match Simply Love Pane2 numbers using 32px spacing.
                 let number_local_x = 64.0;
-                let number_local_y = (i as f32 * 35.0) - 20.0;
+                let number_local_y = (i as f32 * 32.0) - 24.0;
                 let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
                 let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
                 
