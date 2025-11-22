@@ -329,7 +329,7 @@ fn build_main_rows(
         },
         Row {
             name: "NoteField Offset X".to_string(),
-            choices: vec!["0".to_string()],
+            choices: (0..=50).map(|v| v.to_string()).collect(),
             selected_choice_index: 0,
             help: vec![
                 "Adjust the horizontal position of the notefield (relative to the".to_string(),
@@ -339,7 +339,7 @@ fn build_main_rows(
         },
         Row {
             name: "NoteField Offset Y".to_string(),
-            choices: vec!["0".to_string()],
+            choices: (-50..=50).map(|v| v.to_string()).collect(),
             selected_choice_index: 0,
             help: vec!["Adjust the vertical position of the notefield.".to_string()],
             choice_difficulty_indices: None,
@@ -775,6 +775,22 @@ fn apply_profile_defaults(rows: &mut [Row]) -> u8 {
             crate::game::profile::HoldJudgmentGraphic::None => 3,
         };
     }
+    // Initialize NoteField Offset X from profile (0..50, non-negative; P1 uses negative sign at render time)
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "NoteField Offset X") {
+        let val = profile.note_field_offset_x.clamp(0, 50);
+        let val_str = val.to_string();
+        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
+            row.selected_choice_index = idx;
+        }
+    }
+    // Initialize NoteField Offset Y from profile (-50..50)
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "NoteField Offset Y") {
+        let val = profile.note_field_offset_y.clamp(-50, 50);
+        let val_str = val.to_string();
+        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
+            row.selected_choice_index = idx;
+        }
+    }
     // Initialize Scroll row from profile setting (multi-choice toggle group).
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Scroll") {
         use crate::game::profile::ScrollOption;
@@ -1051,6 +1067,18 @@ fn change_choice(state: &mut State, delta: isize) {
                     _ => crate::game::profile::BackgroundFilter::Darkest,
                 };
                 crate::game::profile::update_background_filter(setting);
+            } else if row.name == "NoteField Offset X" {
+                if let Some(choice) = row.choices.get(row.selected_choice_index) {
+                    if let Ok(raw) = choice.parse::<i32>() {
+                        crate::game::profile::update_notefield_offset_x(raw);
+                    }
+                }
+            } else if row.name == "NoteField Offset Y" {
+                if let Some(choice) = row.choices.get(row.selected_choice_index) {
+                    if let Ok(raw) = choice.parse::<i32>() {
+                        crate::game::profile::update_notefield_offset_y(raw);
+                    }
+                }
             } else if row.name == "Judgment Font" {
                 // Persist tap judgment font selection to the profile
                 let setting = match row.selected_choice_index {

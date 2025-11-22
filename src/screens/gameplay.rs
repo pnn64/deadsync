@@ -380,13 +380,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
     // --- Playfield Positioning (1:1 with Simply Love) ---
+    // NoteFieldOffsetX is stored as a non-negative magnitude; for a single P1-style field,
+    // positive values move the field left, mirroring Simply Love's use of a sign flip.
+    let notefield_offset_x = -(profile.note_field_offset_x.clamp(0, 50) as f32);
+    let notefield_offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
-    let playfield_center_x = screen_center_x() - (clamped_width * 0.25);
+    let playfield_center_x = screen_center_x() - (clamped_width * 0.25) + notefield_offset_x;
     let receptor_y_normal =
-        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER;
+        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + notefield_offset_y;
     let receptor_y_reverse =
-        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE;
+        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE + notefield_offset_y;
 
     // --- Banner (1:1 with Simply Love, including parent frame logic) ---
     if let Some(banner_path) = &state.song.banner_path {
@@ -1606,7 +1610,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             screen_center_y() - COMBO_OFFSET_FROM_CENTER
         } else {
             screen_center_y() + COMBO_OFFSET_FROM_CENTER
-        };
+        } + notefield_offset_y;
         let player_color = state.player_color;
         let ease_out_quad = |t: f32| -> f32 {
             let t = t.clamp(0.0, 1.0);
@@ -1710,9 +1714,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Combo
     if state.miss_combo >= SHOW_COMBO_AT {
         let combo_y = if state.reverse_scroll {
-            screen_center_y() - COMBO_OFFSET_FROM_CENTER
+            screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
         } else {
-            screen_center_y() + COMBO_OFFSET_FROM_CENTER
+            screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
         };
         let miss_combo_font_name = match profile.combo_font {
             crate::game::profile::ComboFont::Wendy => Some("wendy_combo"),
@@ -1735,9 +1739,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     } else if state.combo >= SHOW_COMBO_AT {
         let combo_y = if state.reverse_scroll {
-            screen_center_y() - COMBO_OFFSET_FROM_CENTER
+            screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
         } else {
-            screen_center_y() + COMBO_OFFSET_FROM_CENTER
+            screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
         };
         let (color1, color2) = if let Some(fc_grade) = &state.full_combo_grade {
             match fc_grade {
@@ -1857,9 +1861,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 profile::JudgmentGraphic::None => unreachable!("JudgmentGraphic::None is filtered above"),
             };
             let judgment_y = if state.reverse_scroll {
-                screen_center_y() + TAP_JUDGMENT_OFFSET_FROM_CENTER
+                screen_center_y() + TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
             } else {
-                screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER
+                screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
             };
             actors.push(act!(sprite(judgment_texture):
                 align(0.5, 0.5): xy(playfield_center_x, judgment_y):

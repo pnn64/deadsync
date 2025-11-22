@@ -389,6 +389,13 @@ pub struct Profile {
     pub scroll_speed: ScrollSpeedSetting,
     pub scroll_option: ScrollOption,
     pub reverse_scroll: bool,
+    // NoteField positional offsets (Simply Love semantics).
+    // X is non-negative and interpreted relative to player side:
+    // for P1, positive values move the field left.
+    pub note_field_offset_x: i32,
+    // Y is applied directly to the notefield and related HUD,
+    // positive values move everything down.
+    pub note_field_offset_y: i32,
 }
 
 impl Default for Profile {
@@ -409,6 +416,8 @@ impl Default for Profile {
             scroll_speed: ScrollSpeedSetting::default(),
             scroll_option: ScrollOption::default(),
             reverse_scroll: false,
+            note_field_offset_x: 0,
+            note_field_offset_y: 0,
         }
     }
 }
@@ -461,6 +470,14 @@ fn create_default_files() -> Result<(), std::io::Error> {
             "NoteSkin = {}\n",
             default_profile.noteskin
         ));
+        content.push_str(&format!(
+            "NoteFieldOffsetX = {}\n",
+            default_profile.note_field_offset_x
+        ));
+        content.push_str(&format!(
+            "NoteFieldOffsetY = {}\n",
+            default_profile.note_field_offset_y
+        ));
         content.push('\n');
 
         content.push_str("[userprofile]\n");
@@ -512,6 +529,14 @@ fn save_profile_ini() {
         profile.combo_font
     ));
     content.push_str(&format!("NoteSkin={}\n", profile.noteskin));
+    content.push_str(&format!(
+        "NoteFieldOffsetX={}\n",
+        profile.note_field_offset_x
+    ));
+    content.push_str(&format!(
+        "NoteFieldOffsetY={}\n",
+        profile.note_field_offset_y
+    ));
     content.push('\n');
 
     content.push_str("[userprofile]\n");
@@ -580,6 +605,14 @@ pub fn load() {
                 .get("PlayerOptions", "NoteSkin")
                 .and_then(|s| NoteSkin::from_str(&s).ok())
                 .unwrap_or(default_profile.noteskin);
+            profile.note_field_offset_x = profile_conf
+                .get("PlayerOptions", "NoteFieldOffsetX")
+                .and_then(|s| s.parse::<i32>().ok())
+                .unwrap_or(default_profile.note_field_offset_x);
+            profile.note_field_offset_y = profile_conf
+                .get("PlayerOptions", "NoteFieldOffsetY")
+                .and_then(|s| s.parse::<i32>().ok())
+                .unwrap_or(default_profile.note_field_offset_y);
             profile.scroll_speed = profile_conf
                 .get("PlayerOptions", "ScrollSpeed")
                 .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
@@ -733,6 +766,30 @@ pub fn update_noteskin(setting: NoteSkin) {
             return;
         }
         profile.noteskin = setting;
+    }
+    save_profile_ini();
+}
+
+pub fn update_notefield_offset_x(offset: i32) {
+    let clamped = offset.clamp(0, 50);
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        if profile.note_field_offset_x == clamped {
+            return;
+        }
+        profile.note_field_offset_x = clamped;
+    }
+    save_profile_ini();
+}
+
+pub fn update_notefield_offset_y(offset: i32) {
+    let clamped = offset.clamp(-50, 50);
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        if profile.note_field_offset_y == clamped {
+            return;
+        }
+        profile.note_field_offset_y = clamped;
     }
     save_profile_ini();
 }
