@@ -41,6 +41,7 @@ RollBottomCap { state="active";   texture="Down Roll BottomCap Active (res 256x2
 RollExplosion { texture="down hold explosion (res 1000x1000).png"; grid=1,1; frames=1; frame_size=1000,1000 }
 
 HoldLetGoGrayPercent = 0.25
+TapExplosionTargetHeight = 64
 
 ReceptorSheet { texture="_Down Receptor tex (res 268x268).png"; grid=1,1; frames=1; frame_size=268,268; fps=1; state=off }
 ReceptorPulse { base_color=0.1,0.1,0.1,1; beat_color=1,1,1,1; effect_timing=0.25,0.50,0,0,0.25; effect_offset=-0.25 }
@@ -50,11 +51,11 @@ ExplosionSheet { texture="Down Tap Explosion Dim W2 (res 1000x1000).png";    win
 ExplosionSheet { texture="Down Tap Explosion Dim W3 (res 1000x1000).png";    window=W3; grid=1,1; frames=1, frame_size=1000,1000 }
 ExplosionSheet { texture="Down Tap Explosion Dim W4 (res 1000x1000).png";    window=W4; grid=1,1; frames=1, frame_size=1000,1000 }
 ExplosionSheet { texture="Down Tap Explosion Dim W5 (res 1000x1000).png";    window=W5; grid=1,1; frames=1, frame_size=1000,1000 }
-ExplosionCommand { window=W1; commands="diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5" }
-ExplosionCommand { window=W2; commands="diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0" }
-ExplosionCommand { window=W3; commands="diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0" }
-ExplosionCommand { window=W4; commands="diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0" }
-ExplosionCommand { window=W5; commands="diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0" }
+ExplosionCommand { window=W1; commands="diffusealpha,0.85;zoom,0.9;accelerate,0.12;zoom,0.9;diffusealpha,0" }
+ExplosionCommand { window=W2; commands="diffusealpha,0.85;zoom,0.9;accelerate,0.12;zoom,0.9;diffusealpha,0" }
+ExplosionCommand { window=W3; commands="diffusealpha,0.85;zoom,0.9;accelerate,0.12;zoom,0.9;diffusealpha,0" }
+ExplosionCommand { window=W4; commands="diffusealpha,0.85;zoom,0.9;accelerate,0.12;zoom,0.9;diffusealpha,0" }
+ExplosionCommand { window=W5; commands="diffusealpha,0.85;zoom,0.9;accelerate,0.12;zoom,0.9;diffusealpha,0" }
 
 Receptor { col=0; x=-102 }
 Receptor { col=1; x=-34 }
@@ -78,4 +79,3 @@ Note { col=0; rot=90 }
 Note { col=1; rot=0 }
 Note { col=2; rot=180 }
 Note { col=3; rot=270 }
-
