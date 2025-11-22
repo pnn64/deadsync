@@ -389,6 +389,11 @@ pub struct Profile {
     pub scroll_speed: ScrollSpeedSetting,
     pub scroll_option: ScrollOption,
     pub reverse_scroll: bool,
+    // FA+ visual options (Simply Love semantics).
+    // These do not change core timing semantics; they only affect HUD/UX.
+    pub show_fa_plus_window: bool,
+    pub show_ex_score: bool,
+    pub show_fa_plus_pane: bool,
     // Mini modifier as a percentage, mirroring Simply Love semantics.
     // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
     pub mini_percent: i32,
@@ -419,6 +424,9 @@ impl Default for Profile {
             scroll_speed: ScrollSpeedSetting::default(),
             scroll_option: ScrollOption::default(),
             reverse_scroll: false,
+            show_fa_plus_window: false,
+            show_ex_score: false,
+            show_fa_plus_pane: false,
             mini_percent: 0,
             note_field_offset_x: 0,
             note_field_offset_y: 0,
@@ -457,6 +465,18 @@ fn create_default_files() -> Result<(), std::io::Error> {
         content.push_str(&format!(
             "ReverseScroll = {}\n",
             if default_profile.reverse_scroll { 1 } else { 0 }
+        ));
+        content.push_str(&format!(
+            "ShowFaPlusWindow = {}\n",
+            if default_profile.show_fa_plus_window { 1 } else { 0 }
+        ));
+        content.push_str(&format!(
+            "ShowExScore = {}\n",
+            if default_profile.show_ex_score { 1 } else { 0 }
+        ));
+        content.push_str(&format!(
+            "ShowFaPlusPane = {}\n",
+            if default_profile.show_fa_plus_pane { 1 } else { 0 }
         ));
         content.push_str(&format!(
             "HoldJudgmentGraphic = {}\n",
@@ -523,6 +543,18 @@ fn save_profile_ini() {
     content.push_str(&format!(
         "ReverseScroll={}\n",
         if profile.reverse_scroll { 1 } else { 0 }
+    ));
+    content.push_str(&format!(
+        "ShowFaPlusWindow={}\n",
+        if profile.show_fa_plus_window { 1 } else { 0 }
+    ));
+    content.push_str(&format!(
+        "ShowExScore={}\n",
+        if profile.show_ex_score { 1 } else { 0 }
+    ));
+    content.push_str(&format!(
+        "ShowFaPlusPane={}\n",
+        if profile.show_fa_plus_pane { 1 } else { 0 }
     ));
     content.push_str(&format!(
         "HoldJudgmentGraphic={}\n",
@@ -629,6 +661,18 @@ pub fn load() {
                 .get("PlayerOptions", "NoteFieldOffsetY")
                 .and_then(|s| s.parse::<i32>().ok())
                 .unwrap_or(default_profile.note_field_offset_y);
+            profile.show_fa_plus_window = profile_conf
+                .get("PlayerOptions", "ShowFaPlusWindow")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.show_fa_plus_window, |v| v != 0);
+            profile.show_ex_score = profile_conf
+                .get("PlayerOptions", "ShowExScore")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.show_ex_score, |v| v != 0);
+            profile.show_fa_plus_pane = profile_conf
+                .get("PlayerOptions", "ShowFaPlusPane")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.show_fa_plus_pane, |v| v != 0);
             profile.scroll_speed = profile_conf
                 .get("PlayerOptions", "ScrollSpeed")
                 .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
@@ -819,6 +863,39 @@ pub fn update_mini_percent(percent: i32) {
             return;
         }
         profile.mini_percent = clamped;
+    }
+    save_profile_ini();
+}
+
+pub fn update_show_fa_plus_window(enabled: bool) {
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        if profile.show_fa_plus_window == enabled {
+            return;
+        }
+        profile.show_fa_plus_window = enabled;
+    }
+    save_profile_ini();
+}
+
+pub fn update_show_ex_score(enabled: bool) {
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        if profile.show_ex_score == enabled {
+            return;
+        }
+        profile.show_ex_score = enabled;
+    }
+    save_profile_ini();
+}
+
+pub fn update_show_fa_plus_pane(enabled: bool) {
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        if profile.show_fa_plus_pane == enabled {
+            return;
+        }
+        profile.show_fa_plus_pane = enabled;
     }
     save_profile_ini();
 }

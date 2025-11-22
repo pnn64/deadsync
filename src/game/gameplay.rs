@@ -7,7 +7,7 @@ use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::notes as note_parser;
 use crate::game::parsing::noteskin::{self, Noteskin, Style};
 use crate::game::song::SongData;
-use crate::game::timing::TimingData;
+use crate::game::timing::{TimingData, TimingProfile, classify_offset_s};
 use crate::game::{
     life::{LifeChange, REGEN_COMBO_AFTER_MISS},
     profile,
@@ -144,6 +144,7 @@ pub struct State {
     pub background_texture_key: String,
     pub chart: Arc<ChartData>,
     pub timing: Arc<TimingData>,
+    pub timing_profile: TimingProfile,
     pub notes: Vec<Note>,
 
     pub song_start_instant: Instant,
@@ -471,13 +472,13 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         acc.max(end)
     });
     let mut max_window = 0.0_f32;
-    let windows = crate::game::timing::effective_windows_s();
-    for w in windows.iter() {
+    let timing_profile = TimingProfile::default_itg_with_fa_plus();
+    for w in timing_profile.windows_s.iter() {
         if *w > max_window {
             max_window = *w;
         }
     }
-    max_window = max_window.max(crate::game::timing::mine_window_s());
+    max_window = max_window.max(timing_profile.mine_window_s);
     max_window = max_window.max(TIMING_WINDOW_SECONDS_HOLD);
     max_window = max_window.max(TIMING_WINDOW_SECONDS_ROLL);
 
@@ -488,7 +489,7 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
     let column_scroll_dirs = compute_column_scroll_dirs(profile.scroll_option);
 
     State {
-        song, chart, background_texture_key: "__white".to_string(), timing, notes,
+        song, chart, background_texture_key: "__white".to_string(), timing, timing_profile, notes,
         song_start_instant, current_beat: 0.0, current_music_time: -start_delay,
         note_spawn_cursor: 0, judged_row_cursor: 0, arrows: [vec![], vec![], vec![], vec![]],
         note_time_cache, note_display_beat_cache, hold_end_time_cache, hold_end_display_beat_cache,
@@ -549,7 +550,7 @@ fn trigger_combo_milestone(state: &mut State, kind: ComboMilestoneKind) {
 fn handle_mine_hit(state: &mut State, column: usize, arrow_list_index: usize, note_index: usize, time_error: f32) -> bool {
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
     let abs_time_error = (time_error / rate).abs();
-    let mine_window = crate::game::timing::mine_window_s();
+    let mine_window = state.timing_profile.mine_window_s;
     if abs_time_error > mine_window { return false; }
     if state.notes[note_index].mine_result.is_some() || state.notes[note_index].is_fake { return false; }
     if !state.notes[note_index].can_be_judged { return false; }
@@ -587,7 +588,7 @@ fn handle_mine_hit(state: &mut State, column: usize, arrow_list_index: usize, no
 
 #[inline(always)]
 fn try_hit_mine_while_held(state: &mut State, column: usize, current_time: f32) -> bool {
-    let mine_window = crate::game::timing::mine_window_s();
+    let mine_window = state.timing_profile.mine_window_s;
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
     let search_radius = mine_window * rate;
     let start_t = current_time - search_radius;
@@ -624,7 +625,7 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time: f32) 
 fn hit_mine_timebased(state: &mut State, column: usize, note_index: usize, time_error: f32) -> bool {
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
     let abs_time_error = (time_error / rate).abs();
-    let mine_window = crate::game::timing::mine_window_s();
+    let mine_window = state.timing_profile.mine_window_s;
     if abs_time_error > mine_window { return false; }
     if state.notes[note_index].mine_result.is_some() || state.notes[note_index].is_fake { return false; }
     if !state.notes[note_index].can_be_judged { return false; }
@@ -816,9 +817,9 @@ fn update_active_holds(state: &mut State, inputs: &[bool; 4], current_time: f32,
 }
 
 pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool {
-    let windows = crate::game::timing::effective_windows_s();
+    let windows = state.timing_profile.windows_s;
     let way_off_window = windows[4];
-    let mine_window = crate::game::timing::mine_window_s();
+    let mine_window = state.timing_profile.mine_window_s;
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
     let mut best: Option<(usize, usize, f32)> = None;
     for (idx, arrow) in state.arrows[column].iter().enumerate().filter(|(_, a)| state.notes[a.note_index].result.is_none()) {
@@ -863,18 +864,18 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             let all_pressed = notes_on_row.iter().all(|&i| { let col = state.notes[i].column; state.keyboard_lane_state[col] || state.gamepad_lane_state[col] });
             if !all_pressed { return false; }
 
-            let grade = if abs_time_error <= windows[0] { JudgeGrade::Fantastic }
-            else if abs_time_error <= windows[1] { JudgeGrade::Excellent }
-            else if abs_time_error <= windows[2] { JudgeGrade::Great }
-            else if abs_time_error <= windows[3] { JudgeGrade::Decent }
-            else { JudgeGrade::WayOff };
+            let (grade, window) = classify_offset_s(time_error_real, &state.timing_profile);
 
             for &idx in &notes_on_row {
                 let note_col = state.notes[idx].column;
                 let row_note_time = state.note_time_cache[idx];
                 let te_music = current_time - row_note_time;
                 let te_real = te_music / rate;
-                state.notes[idx].result = Some(Judgment { time_error_ms: te_real * 1000.0, grade });
+                state.notes[idx].result = Some(Judgment {
+                    time_error_ms: te_real * 1000.0,
+                    grade,
+                    window: Some(window),
+                });
                 debug!(
                     "JUDGE TAP: grade={:?}, row={}, col={}, beat={:.3}, note_time={:.4}s, press_time={:.4}s, offset_ms={:.2}, rate={:.3}",
                     grade,
@@ -1094,7 +1095,7 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
 
 #[inline(always)]
 fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
-    let mine_window = crate::game::timing::mine_window_s();
+    let mine_window = state.timing_profile.mine_window_s;
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
     let cutoff_time = music_time_sec - mine_window * rate;
     let len = state.notes.len();
@@ -1164,7 +1165,7 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                 Some(MineResult::Hit) => { col_arrows.remove(next_arrow_index); }
                 Some(MineResult::Avoided) => {}
                 None => {
-                    let mine_window = crate::game::timing::mine_window_s();
+                    let mine_window = state.timing_profile.mine_window_s;
                     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
                     if music_time_sec - note_time > mine_window * rate {
                         if state.notes[note_index].can_be_judged {
@@ -1182,7 +1183,11 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
         if music_time_sec - note_time > way_off_window * rate {
             let time_err_music = music_time_sec - note_time;
             let time_err_real = time_err_music / rate;
-            let judgment = Judgment { time_error_ms: (time_err_real * 1000.0), grade: JudgeGrade::Miss };
+            let judgment = Judgment {
+                time_error_ms: time_err_real * 1000.0,
+                grade: JudgeGrade::Miss,
+                window: None,
+            };
             if let Some(hold) = state.notes[note_index].hold.as_mut() {
                 if hold.result != Some(HoldResult::Held) {
                     hold.result = Some(HoldResult::LetGo);
@@ -1204,7 +1209,7 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
 
 #[inline(always)]
 fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
-    let way_off_window = crate::game::timing::effective_windows_s()[4];
+    let way_off_window = state.timing_profile.windows_s[4];
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
     let cutoff_time = music_time_sec - way_off_window * rate;
     let len = state.notes.len();
@@ -1217,7 +1222,11 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                 let row = note.row_index;
                 let time_err_music = music_time_sec - note_time;
                 let time_err_real = time_err_music / rate;
-                note.result = Some(Judgment { time_error_ms: time_err_real * 1000.0, grade: JudgeGrade::Miss });
+                note.result = Some(Judgment {
+                    time_error_ms: time_err_real * 1000.0,
+                    grade: JudgeGrade::Miss,
+                    window: None,
+                });
                 debug!(
                     "JUDGE TAP MISS (time-based): row={}, col={}, beat={:.3}, note_time={:.4}s, miss_time={:.4}s, offset_ms={:.2}, rate={:.3}",
                     row,

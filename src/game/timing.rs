@@ -3,7 +3,7 @@ use rssp::bpm::{normalize_float_digits, parse_bpm_map};
 use std::cmp::Ordering;
 use std::sync::Arc;
 use crate::game::note::{Note, NoteType};
-use crate::game::judgment::JudgeGrade;
+use crate::game::judgment::{JudgeGrade, TimingWindow};
 
 // --- ITGMania Parity Constants and Helpers ---
 pub const ROWS_PER_BEAT: i32 = 48;
@@ -12,6 +12,7 @@ pub const ROWS_PER_BEAT: i32 = 48;
 // All base windows are in seconds.
 pub const TIMING_WINDOW_ADD_S: f32 = 0.0015; // +1.5ms padding applied by ITG/SM
 
+// ITG tap windows (seconds, exclusive of TIMING_WINDOW_ADD_S).
 pub const BASE_W1_S: f32 = 0.0215;
 pub const BASE_W2_S: f32 = 0.0430;
 pub const BASE_W3_S: f32 = 0.1020;
@@ -19,25 +20,81 @@ pub const BASE_W4_S: f32 = 0.1350;
 pub const BASE_W5_S: f32 = 0.1800;
 pub const BASE_MINE_S: f32 = 0.0700;
 
+// FA+ inner Fantastic window (W0) is defined using Simply Love's FA+ W1 timing.
+// See SL.Preferences["FA+"].TimingWindowSecondsW1 in SL_Init.lua.
+pub const BASE_FA_PLUS_W0_S: f32 = 0.0135;
+
+#[derive(Copy, Clone, Debug)]
+pub struct TimingProfile {
+    // Unified ITG tap windows (seconds, already including TIMING_WINDOW_ADD_S), W1..W5.
+    pub windows_s: [f32; 5],
+    // Optional FA+ inner Fantastic window (seconds, already including TIMING_WINDOW_ADD_S).
+    pub fa_plus_window_s: Option<f32>,
+    // Mine window (seconds, already including TIMING_WINDOW_ADD_S).
+    pub mine_window_s: f32,
+}
+
+impl TimingProfile {
+    #[inline(always)]
+    pub fn default_itg_with_fa_plus() -> Self {
+        let windows_s = [
+            BASE_W1_S + TIMING_WINDOW_ADD_S,
+            BASE_W2_S + TIMING_WINDOW_ADD_S,
+            BASE_W3_S + TIMING_WINDOW_ADD_S,
+            BASE_W4_S + TIMING_WINDOW_ADD_S,
+            BASE_W5_S + TIMING_WINDOW_ADD_S,
+        ];
+        let fa_plus_window_s = Some(BASE_FA_PLUS_W0_S + TIMING_WINDOW_ADD_S);
+        let mine_window_s = mine_window_s();
+        TimingProfile { windows_s, fa_plus_window_s, mine_window_s }
+    }
+
+    #[inline(always)]
+    pub fn windows_ms(&self) -> [f32; 5] {
+        let s = self.windows_s;
+        [s[0] * 1000.0, s[1] * 1000.0, s[2] * 1000.0, s[3] * 1000.0, s[4] * 1000.0]
+    }
+}
+
 #[inline(always)]
 pub fn effective_windows_s() -> [f32; 5] {
-    [
-        BASE_W1_S + TIMING_WINDOW_ADD_S,
-        BASE_W2_S + TIMING_WINDOW_ADD_S,
-        BASE_W3_S + TIMING_WINDOW_ADD_S,
-        BASE_W4_S + TIMING_WINDOW_ADD_S,
-        BASE_W5_S + TIMING_WINDOW_ADD_S,
-    ]
+    TimingProfile::default_itg_with_fa_plus().windows_s
 }
 
 #[inline(always)]
 pub fn effective_windows_ms() -> [f32; 5] {
-    let s = effective_windows_s();
-    [s[0] * 1000.0, s[1] * 1000.0, s[2] * 1000.0, s[3] * 1000.0, s[4] * 1000.0]
+    TimingProfile::default_itg_with_fa_plus().windows_ms()
 }
 
 #[inline(always)]
 pub fn mine_window_s() -> f32 { BASE_MINE_S + TIMING_WINDOW_ADD_S }
+
+/// Classify a signed tap offset (seconds) into an ITG-style JudgeGrade and
+/// detailed TimingWindow (including FA+ W0 when enabled in the profile).
+///
+/// Callers should ensure |offset_s| is within the outer WayOff window; if it is
+/// not, the returned JudgeGrade will still be WayOff.
+#[inline(always)]
+pub fn classify_offset_s(offset_s: f32, profile: &TimingProfile) -> (JudgeGrade, TimingWindow) {
+    let abs = offset_s.abs();
+    if let Some(w0) = profile.fa_plus_window_s {
+        if abs <= w0 {
+            return (JudgeGrade::Fantastic, TimingWindow::W0);
+        }
+    }
+    let w = profile.windows_s;
+    if abs <= w[0] {
+        (JudgeGrade::Fantastic, TimingWindow::W1)
+    } else if abs <= w[1] {
+        (JudgeGrade::Excellent, TimingWindow::W2)
+    } else if abs <= w[2] {
+        (JudgeGrade::Great, TimingWindow::W3)
+    } else if abs <= w[3] {
+        (JudgeGrade::Decent, TimingWindow::W4)
+    } else {
+        (JudgeGrade::WayOff, TimingWindow::W5)
+    }
+}
 
 #[inline(always)]
 pub fn note_row_to_beat(row: i32) -> f32 {
@@ -1118,4 +1175,41 @@ pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
         worst_observed_ms: (worst_observed_bin_abs as f32) * HIST_BIN_MS,
         worst_window_ms: worst_window_ms.max(max_abs),
     }
+}
+
+// ----------------------------- FA+ / Window Counts -----------------------------
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct WindowCounts {
+    pub w0: u32,
+    pub w1: u32,
+    pub w2: u32,
+    pub w3: u32,
+    pub w4: u32,
+    pub w5: u32,
+    pub miss: u32,
+}
+
+#[inline(always)]
+pub fn compute_window_counts(notes: &[Note]) -> WindowCounts {
+    let mut out = WindowCounts::default();
+    for n in notes {
+        if n.is_fake { continue; }
+        if matches!(n.note_type, NoteType::Mine) { continue; }
+        let Some(j) = n.result.as_ref() else { continue; };
+        match j.grade {
+            JudgeGrade::Fantastic => {
+                match j.window {
+                    Some(TimingWindow::W0) => out.w0 = out.w0.saturating_add(1),
+                    _ => out.w1 = out.w1.saturating_add(1),
+                }
+            }
+            JudgeGrade::Excellent => out.w2 = out.w2.saturating_add(1),
+            JudgeGrade::Great => out.w3 = out.w3.saturating_add(1),
+            JudgeGrade::Decent => out.w4 = out.w4.saturating_add(1),
+            JudgeGrade::WayOff => out.w5 = out.w5.saturating_add(1),
+            JudgeGrade::Miss => out.miss = out.miss.saturating_add(1),
+        }
+    }
+    out
 }

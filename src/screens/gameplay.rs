@@ -3,11 +3,11 @@ use crate::assets::{self, AssetManager};
 use crate::core::space::*;
 use crate::core::space::{is_wide, widescale};
 use crate::game::judgment;
-use crate::game::judgment::JudgeGrade;
+use crate::game::judgment::{JudgeGrade, TimingWindow};
 use crate::game::note::HoldResult;
 use crate::game::note::NoteType;
 use crate::game::parsing::noteskin::{Quantization, SpriteSlot, NUM_QUANTIZATIONS};
-use crate::game::{profile, scroll::ScrollSpeedSetting};
+use crate::game::{profile, scroll::ScrollSpeedSetting, timing as timing_stats};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use crate::ui::components::screen_bar::{self, ScreenBarParams};
@@ -1796,89 +1796,105 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if matches!(profile.judgment_graphic, profile::JudgmentGraphic::None) {
             // Player chose to hide tap judgment graphics.
             // Still keep life/score effects; only suppress the visual sprite.
-            // (Parity with HoldJudgmentGraphic::None behavior.)
-            // Just skip rendering for this judgment instance.
             ()
         } else {
-        let judgment = &render_info.judgment;
-        let elapsed = render_info.judged_at.elapsed().as_secs_f32();
-        if elapsed < 0.9 {
-            let zoom = if elapsed < 0.1 {
-                let t = elapsed / 0.1;
-                let ease_t = 1.0 - (1.0 - t).powi(2);
-                0.8 + (0.75 - 0.8) * ease_t
-            } else if elapsed < 0.7 {
-                0.75
-            } else {
-                let t = (elapsed - 0.7) / 0.2;
-                let ease_t = t.powi(2);
-                0.75 * (1.0 - ease_t)
-            };
-            let offset_sec = judgment.time_error_ms / 1000.0;
-            let mut frame_base = judgment.grade as usize;
-            if judgment.grade >= JudgeGrade::Excellent {
-                frame_base += 1;
-            }
-            let frame_offset = if offset_sec < 0.0 { 0 } else { 1 };
-            let columns = match profile.judgment_graphic {
-                profile::JudgmentGraphic::Censored => 1,
-                _ => 2,
-            };
-            let col_index = if columns > 1 { frame_offset } else { 0 };
-            let linear_index = (frame_base * columns + col_index) as u32;
-            let judgment_texture = match profile.judgment_graphic {
-                profile::JudgmentGraphic::Bebas =>
+            let judgment = &render_info.judgment;
+            let elapsed = render_info.judged_at.elapsed().as_secs_f32();
+            if elapsed < 0.9 {
+                let zoom = if elapsed < 0.1 {
+                    let t = elapsed / 0.1;
+                    let ease_t = 1.0 - (1.0 - t).powi(2);
+                    0.8 + (0.75 - 0.8) * ease_t
+                } else if elapsed < 0.7 {
+                    0.75
+                } else {
+                    let t = (elapsed - 0.7) / 0.2;
+                    let ease_t = t.powi(2);
+                    0.75 * (1.0 - ease_t)
+                };
+                let offset_sec = judgment.time_error_ms / 1000.0;
+                let use_fa_plus_window = profile.show_fa_plus_window;
+                // Map JudgeGrade + TimingWindow to a row index in the 7-row sheet:
+                //  row 0: FA+ Fantastic (W0)
+                //  row 1: regular Fantastic (W1)
+                //  row 2..6: Excellent..Miss, matching our existing layout.
+                let frame_row = match judgment.grade {
+                    JudgeGrade::Fantastic => {
+                        if use_fa_plus_window {
+                            match judgment.window {
+                                Some(TimingWindow::W0) => 0,
+                                _ => 1,
+                            }
+                        } else {
+                            0
+                        }
+                    }
+                    JudgeGrade::Excellent => 2,
+                    JudgeGrade::Great => 3,
+                    JudgeGrade::Decent => 4,
+                    JudgeGrade::WayOff => 5,
+                    JudgeGrade::Miss => 6,
+                };
+                let frame_offset = if offset_sec < 0.0 { 0 } else { 1 };
+                let columns = match profile.judgment_graphic {
+                    profile::JudgmentGraphic::Censored => 1,
+                    _ => 2,
+                };
+                let col_index = if columns > 1 { frame_offset } else { 0 };
+                let linear_index = (frame_row * columns + col_index) as u32;
+                let judgment_texture = match profile.judgment_graphic {
+                    profile::JudgmentGraphic::Bebas =>
                     "judgements/Bebas 2x7 (doubleres).png",
-                profile::JudgmentGraphic::Censored =>
+                    profile::JudgmentGraphic::Censored =>
                     "judgements/Censored 1x7 (doubleres).png",
-                profile::JudgmentGraphic::Chromatic =>
+                    profile::JudgmentGraphic::Chromatic =>
                     "judgements/Chromatic 2x7 (doubleres).png",
-                profile::JudgmentGraphic::Code =>
+                    profile::JudgmentGraphic::Code =>
                     "judgements/Code 2x7 (doubleres).png",
-                profile::JudgmentGraphic::ComicSans =>
+                    profile::JudgmentGraphic::ComicSans =>
                     "judgements/Comic Sans 2x7 (doubleres).png",
-                profile::JudgmentGraphic::Emoticon =>
+                    profile::JudgmentGraphic::Emoticon =>
                     "judgements/Emoticon 2x7 (doubleres).png",
-                profile::JudgmentGraphic::Focus =>
+                    profile::JudgmentGraphic::Focus =>
                     "judgements/Focus 2x7 (doubleres).png",
-                profile::JudgmentGraphic::Grammar =>
+                    profile::JudgmentGraphic::Grammar =>
                     "judgements/Grammar 2x7 (doubleres).png",
-                profile::JudgmentGraphic::GrooveNights =>
+                    profile::JudgmentGraphic::GrooveNights =>
                     "judgements/GrooveNights 2x7 (doubleres).png",
-                profile::JudgmentGraphic::ITG2 =>
+                    profile::JudgmentGraphic::ITG2 =>
                     "judgements/ITG2 2x7 (doubleres).png",
-                profile::JudgmentGraphic::Love =>
+                    profile::JudgmentGraphic::Love =>
                     "judgements/Love 2x7 (doubleres).png",
-                profile::JudgmentGraphic::LoveChroma =>
+                    profile::JudgmentGraphic::LoveChroma =>
                     "judgements/Love Chroma 2x7 (doubleres).png",
-                profile::JudgmentGraphic::Miso =>
+                    profile::JudgmentGraphic::Miso =>
                     "judgements/Miso 2x7 (doubleres).png",
-                profile::JudgmentGraphic::Papyrus =>
+                    profile::JudgmentGraphic::Papyrus =>
                     "judgements/Papyrus 2x7 (doubleres).png",
-                profile::JudgmentGraphic::Rainbowmatic =>
+                    profile::JudgmentGraphic::Rainbowmatic =>
                     "judgements/Rainbowmatic 2x7 (doubleres).png",
-                profile::JudgmentGraphic::Roboto =>
+                    profile::JudgmentGraphic::Roboto =>
                     "judgements/Roboto 2x7 (doubleres).png",
-                profile::JudgmentGraphic::Shift =>
+                    profile::JudgmentGraphic::Shift =>
                     "judgements/Shift 2x7 (doubleres).png",
-                profile::JudgmentGraphic::Tactics =>
+                    profile::JudgmentGraphic::Tactics =>
                     "judgements/Tactics 2x7 (doubleres).png",
-                profile::JudgmentGraphic::Wendy =>
+                    profile::JudgmentGraphic::Wendy =>
                     "judgements/Wendy 2x7 (doubleres).png",
-                profile::JudgmentGraphic::WendyChroma =>
+                    profile::JudgmentGraphic::WendyChroma =>
                     "judgements/Wendy Chroma 2x7 (doubleres).png",
-                profile::JudgmentGraphic::None => unreachable!("JudgmentGraphic::None is filtered above"),
-            };
-            let judgment_y = if state.reverse_scroll {
-                screen_center_y() + TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
-            } else {
-                screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
-            };
-            actors.push(act!(sprite(judgment_texture):
-                align(0.5, 0.5): xy(playfield_center_x, judgment_y):
-                z(200): zoomtoheight(76.0): setstate(linear_index): zoom(zoom)
-            ));
-        }
+                    profile::JudgmentGraphic::None => unreachable!("JudgmentGraphic::None is filtered above"),
+                };
+                let judgment_y = if state.reverse_scroll {
+                    screen_center_y() + TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
+                } else {
+                    screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
+                };
+                actors.push(act!(sprite(judgment_texture):
+                    align(0.5, 0.5): xy(playfield_center_x, judgment_y):
+                    z(200): zoomtoheight(76.0): setstate(linear_index): zoom(zoom)
+                ));
+            }
         }
     }
     for (column, render_info) in state.hold_judgments.iter().enumerate() {
@@ -2299,7 +2315,9 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     const LABEL_DIGIT_STEP: f32 = 16.0;
     const NUMBER_TO_LABEL_GAP: f32 = 8.0;
     let base_numbers_local_x_offset = base_label_local_x_offset - NUMBER_TO_LABEL_GAP;
-    let row_height = 35.0;
+    let profile = profile::get();
+    let show_fa_plus_window = profile.show_fa_plus_window;
+    let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
     let y_base = -280.0;
 
     asset_manager.with_fonts(|all_fonts| asset_manager.with_font("wendy_screenevaluation", |f| {
@@ -2313,43 +2331,119 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let numbers_local_x_offset = base_numbers_local_x_offset + (extra_digits * digit_local_width);
         let numbers_cx = final_judgments_center_x + (numbers_local_x_offset * final_text_base_zoom);
 
-        for (index, grade) in JUDGMENT_ORDER.iter().enumerate() {
-            let info = JUDGMENT_INFO.get(grade).unwrap();
-            let count = *state.judgment_counts.get(grade).unwrap_or(&0);
+        if !show_fa_plus_window {
+            // Standard ITG-style rows: Fantastic..Miss using aggregate grade counts.
+            for (index, grade) in JUDGMENT_ORDER.iter().enumerate() {
+                let info = JUDGMENT_INFO.get(grade).unwrap();
+                let count = *state.judgment_counts.get(grade).unwrap_or(&0);
 
-            let local_y = y_base + (index as f32 * row_height);
-            let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
+                let local_y = y_base + (index as f32 * row_height);
+                let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
 
-            let bright = info.color;
-            let dim = color::rgba_hex(color::JUDGMENT_DIM_HEX[index]);
-            let full_number_str = format!("{:0width$}", count, width = digits);
+                let bright = info.color;
+                let dim = color::rgba_hex(color::JUDGMENT_DIM_HEX[index]);
+                let full_number_str = format!("{:0width$}", count, width = digits);
 
-            for (i, ch) in full_number_str.chars().enumerate() {
-                let is_dim = if count == 0 { i < digits - 1 } else {
-                    let first_nonzero = full_number_str.find(|c: char| c != '0').unwrap_or(full_number_str.len());
-                    i < first_nonzero
-                };
-                let color = if is_dim { dim } else { bright };
-                let index_from_right = digits - 1 - i;
-                let cell_right_x = numbers_cx - (index_from_right as f32 * max_digit_w);
+                for (i, ch) in full_number_str.chars().enumerate() {
+                    let is_dim = if count == 0 { i < digits - 1 } else {
+                        let first_nonzero = full_number_str.find(|c: char| c != '0').unwrap_or(full_number_str.len());
+                        i < first_nonzero
+                    };
+                    let color = if is_dim { dim } else { bright };
+                    let index_from_right = digits - 1 - i;
+                    let cell_right_x = numbers_cx - (index_from_right as f32 * max_digit_w);
+
+                    actors.push(act!(text:
+                        font("wendy_screenevaluation"): settext(ch.to_string()):
+                        align(1.0, 0.5): xy(cell_right_x, world_y): zoom(numbers_zoom):
+                        diffuse(color[0], color[1], color[2], color[3]): z(71)
+                    ));
+                }
+
+                let label_world_y = world_y + (1.0 * final_text_base_zoom);
+                let label_zoom = final_text_base_zoom * 0.833;
 
                 actors.push(act!(text:
-                    font("wendy_screenevaluation"): settext(ch.to_string()):
-                    align(1.0, 0.5): xy(cell_right_x, world_y): zoom(numbers_zoom):
-                    diffuse(color[0], color[1], color[2], color[3]): z(71)
+                    font("miso"): settext(info.label): align(0.0, 0.5):
+                    xy(label_world_x, label_world_y): zoom(label_zoom):
+                    maxwidth(72.0 * final_text_base_zoom): horizalign(left):
+                    diffuse(bright[0], bright[1], bright[2], bright[3]):
+                    z(71)
                 ));
             }
+        } else {
+            // FA+ mode: split Fantastic into W0 (blue) and W1 (white) using per-note windows,
+            // matching Simply Love's FA+ evaluation pane semantics.
+            let wc = timing_stats::compute_window_counts(&state.notes);
+            let fantastic_color = JUDGMENT_INFO
+                .get(&JudgeGrade::Fantastic)
+                .map(|info| info.color)
+                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[0]));
+            let excellent_color = JUDGMENT_INFO
+                .get(&JudgeGrade::Excellent)
+                .map(|info| info.color)
+                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[1]));
+            let great_color = JUDGMENT_INFO
+                .get(&JudgeGrade::Great)
+                .map(|info| info.color)
+                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[2]));
+            let decent_color = JUDGMENT_INFO
+                .get(&JudgeGrade::Decent)
+                .map(|info| info.color)
+                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[3]));
+            let wayoff_color = JUDGMENT_INFO
+                .get(&JudgeGrade::WayOff)
+                .map(|info| info.color)
+                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[4]));
+            let miss_color = JUDGMENT_INFO
+                .get(&JudgeGrade::Miss)
+                .map(|info| info.color)
+                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[5]));
 
-            let label_world_y = world_y + (1.0 * final_text_base_zoom);
-            let label_zoom = final_text_base_zoom * 0.833;
+            let rows: [(&str, [f32; 4], u32); 7] = [
+                ("FANTASTIC", fantastic_color, wc.w0),
+                ("FA+", [1.0, 1.0, 1.0, 1.0], wc.w1),
+                ("EXCELLENT", excellent_color, wc.w2),
+                ("GREAT", great_color, wc.w3),
+                ("DECENT", decent_color, wc.w4),
+                ("WAY OFF", wayoff_color, wc.w5),
+                ("MISS", miss_color, wc.miss),
+            ];
 
-            actors.push(act!(text:
-                font("miso"): settext(info.label): align(0.0, 0.5):
-                xy(label_world_x, label_world_y): zoom(label_zoom):
-                maxwidth(72.0 * final_text_base_zoom): horizalign(left):
-                diffuse(bright[0], bright[1], bright[2], bright[3]):
-                z(71)
-            ));
+            for (index, (label, bright, count)) in rows.iter().enumerate() {
+                let local_y = y_base + (index as f32 * row_height);
+                let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
+
+                let dim = [bright[0] * 0.35, bright[1] * 0.35, bright[2] * 0.35, bright[3]];
+                let full_number_str = format!("{:0width$}", count, width = digits);
+
+                for (i, ch) in full_number_str.chars().enumerate() {
+                    let is_dim = if *count == 0 { i < digits - 1 } else {
+                        let first_nonzero = full_number_str.find(|c: char| c != '0').unwrap_or(full_number_str.len());
+                        i < first_nonzero
+                    };
+                    let color = if is_dim { dim } else { *bright };
+                    let index_from_right = digits - 1 - i;
+                    let cell_right_x = numbers_cx - (index_from_right as f32 * max_digit_w);
+
+                    actors.push(act!(text:
+                        font("wendy_screenevaluation"): settext(ch.to_string()):
+                        align(1.0, 0.5): xy(cell_right_x, world_y): zoom(numbers_zoom):
+                        diffuse(color[0], color[1], color[2], color[3]): z(71)
+                    ));
+                }
+
+                let label_world_y = world_y + (1.0 * final_text_base_zoom);
+                let label_zoom = final_text_base_zoom * 0.833;
+
+                actors.push(act!(text:
+                    font("miso"): settext(label.to_string()): align(0.0, 0.5):
+                    xy(label_world_x, label_world_y): zoom(label_zoom):
+                    maxwidth(72.0 * final_text_base_zoom): horizalign(left):
+                    diffuse(bright[0], bright[1], bright[2], bright[3]):
+                    z(71)
+                ));
+            }
         }
 
         // --- Time Display (Remaining / Total) ---

@@ -58,6 +58,8 @@ pub struct ScoreInfo {
     pub scroll_option: crate::game::profile::ScrollOption,
     pub life_history: Vec<(f32, f32)>,
     pub fail_time: Option<f32>,
+    // Per-window tap counts (including FA+ W0) for display purposes.
+    pub window_counts: timing_stats::WindowCounts,
 }
 
 pub struct State {
@@ -75,6 +77,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         // Prepare scatter points and histogram bins
         let scatter = timing_stats::build_scatter_points(&gs.notes, &gs.note_time_cache);
         let histogram = timing_stats::build_histogram_ms(&gs.notes);
+        let window_counts = timing_stats::compute_window_counts(&gs.notes);
         let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
         // Pad right bound slightly (0.05s) to match SL visual alignment.
         let graph_last_second = gs.song.total_length_seconds as f32 + 0.05;
@@ -116,6 +119,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             scroll_option: profile::get().scroll_option,
             life_history: gs.life_history,
             fail_time: gs.fail_time,
+            window_counts,
         }
     });
 
@@ -216,10 +220,21 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
     // The base offset for all P1 panes from the screen center.
     let p1_side_offset = screen_center_x() - 155.0;
 
+    let profile_data = profile::get();
+    let show_fa_plus_window = profile_data.show_fa_plus_window;
+
     // --- Calculate label shift for large numbers ---
-    let max_judgment_count = JUDGMENT_ORDER.iter()
-        .map(|grade| score_info.judgment_counts.get(grade).cloned().unwrap_or(0))
-        .max().unwrap_or(0);
+    let max_judgment_count = if !show_fa_plus_window {
+        JUDGMENT_ORDER.iter()
+            .map(|grade| score_info.judgment_counts.get(grade).cloned().unwrap_or(0))
+            .max().unwrap_or(0)
+    } else {
+        let wc = score_info.window_counts;
+        *[wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss]
+            .iter()
+            .max()
+            .unwrap_or(&0)
+    };
     
     let (label_shift_x, label_zoom) = if max_judgment_count > 9999 {
         let length = (max_judgment_count as f32).log10().floor() as i32 + 1;
@@ -242,40 +257,116 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
         let numbers_frame_origin_x = p1_side_offset + 90.0;
         let frame_origin_y = cy - 24.0;
 
-        for (i, grade) in JUDGMENT_ORDER.iter().enumerate() {
-            let info = JUDGMENT_INFO.get(grade).unwrap();
-            let count = score_info.judgment_counts.get(grade).cloned().unwrap_or(0);
-            
-            // Label
-            let label_local_x = 28.0 + label_shift_x;
-            let label_local_y = (i as f32 * 28.0) - 16.0;
-            actors.push(act!(text: font("miso"): settext(info.label):
-                align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
-                maxwidth(76.0): zoom(label_zoom): horizalign(right):
-                diffuse(info.color[0], info.color[1], info.color[2], info.color[3]): z(101)
-            ));
-
-            // Number (digit by digit for dimming)
-            let bright_color = info.color;
-            let dim_color = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[i]);
-            let number_str = format!("{:0width$}", count, width = digits_to_fmt);
-            let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
-            
-            let number_local_x = 64.0;
-            let number_local_y = (i as f32 * 35.0) - 20.0;
-            let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
-            let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
-            
-            for (char_idx, ch) in number_str.chars().enumerate() {
-                let is_dim = if count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
-                let color = if is_dim { dim_color } else { bright_color };
-                let index_from_right = digits_to_fmt - 1 - char_idx;
-                let cell_right_x = number_base_x - (index_from_right as f32 * digit_width);
+        if !show_fa_plus_window {
+            for (i, grade) in JUDGMENT_ORDER.iter().enumerate() {
+                let info = JUDGMENT_INFO.get(grade).unwrap();
+                let count = score_info.judgment_counts.get(grade).cloned().unwrap_or(0);
                 
-                actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
-                    align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
-                    diffuse(color[0], color[1], color[2], color[3]): z(101)
+                // Label
+                let label_local_x = 28.0 + label_shift_x;
+                let label_local_y = (i as f32 * 28.0) - 16.0;
+                actors.push(act!(text: font("miso"): settext(info.label):
+                    align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
+                    maxwidth(76.0): zoom(label_zoom): horizalign(right):
+                    diffuse(info.color[0], info.color[1], info.color[2], info.color[3]): z(101)
                 ));
+        
+                // Number (digit by digit for dimming)
+                let bright_color = info.color;
+                let dim_color = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[i]);
+                let number_str = format!("{:0width$}", count, width = digits_to_fmt);
+                let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
+                
+                let number_local_x = 64.0;
+                let number_local_y = (i as f32 * 35.0) - 20.0;
+                let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
+                let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
+                
+                for (char_idx, ch) in number_str.chars().enumerate() {
+                    let is_dim = if count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
+                    let color = if is_dim { dim_color } else { bright_color };
+                    let index_from_right = digits_to_fmt - 1 - char_idx;
+                    let cell_right_x = number_base_x - (index_from_right as f32 * digit_width);
+                    
+                    actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
+                        align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
+                        diffuse(color[0], color[1], color[2], color[3]): z(101)
+                    ));
+                }
+            }
+        } else {
+            let wc = score_info.window_counts;
+            let fantastic_color = JUDGMENT_INFO
+                .get(&JudgeGrade::Fantastic)
+                .map(|info| info.color)
+                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[0]));
+            let excellent_color = JUDGMENT_INFO
+                .get(&JudgeGrade::Excellent)
+                .map(|info| info.color)
+                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[1]));
+            let great_color = JUDGMENT_INFO
+                .get(&JudgeGrade::Great)
+                .map(|info| info.color)
+                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[2]));
+            let decent_color = JUDGMENT_INFO
+                .get(&JudgeGrade::Decent)
+                .map(|info| info.color)
+                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[3]));
+            let wayoff_color = JUDGMENT_INFO
+                .get(&JudgeGrade::WayOff)
+                .map(|info| info.color)
+                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[4]));
+            let miss_color = JUDGMENT_INFO
+                .get(&JudgeGrade::Miss)
+                .map(|info| info.color)
+                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[5]));
+
+            let rows: [(&str, [f32; 4], u32); 7] = [
+                ("FANTASTIC", fantastic_color, wc.w0),
+                ("FA+", [1.0, 1.0, 1.0, 1.0], wc.w1),
+                ("EXCELLENT", excellent_color, wc.w2),
+                ("GREAT", great_color, wc.w3),
+                ("DECENT", decent_color, wc.w4),
+                ("WAY OFF", wayoff_color, wc.w5),
+                ("MISS", miss_color, wc.miss),
+            ];
+
+            for (i, (label, bright_color, count)) in rows.iter().enumerate() {
+                // Label
+                let label_local_x = 28.0 + label_shift_x;
+                let label_local_y = (i as f32 * 28.0) - 16.0;
+                actors.push(act!(text: font("miso"): settext(label.to_string()):
+                    align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
+                    maxwidth(76.0): zoom(label_zoom): horizalign(right):
+                    diffuse(bright_color[0], bright_color[1], bright_color[2], bright_color[3]): z(101)
+                ));
+
+                // Number
+                let dim_color = [
+                    bright_color[0] * 0.35,
+                    bright_color[1] * 0.35,
+                    bright_color[2] * 0.35,
+                    bright_color[3],
+                ];
+                let number_str = format!("{:0width$}", count, width = digits_to_fmt);
+                let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
+                
+                let number_local_x = 64.0;
+                let number_local_y = (i as f32 * 35.0) - 20.0;
+                let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
+                let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
+                
+                for (char_idx, ch) in number_str.chars().enumerate() {
+                    let is_dim = if *count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
+                    let color = if is_dim { dim_color } else { *bright_color };
+                    let index_from_right = digits_to_fmt - 1 - char_idx;
+                    let cell_right_x = number_base_x - (index_from_right as f32 * digit_width);
+                    
+                    actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
+                        align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
+                        diffuse(color[0], color[1], color[2], color[3]): z(101)
+                    ));
+                }
             }
         }
         

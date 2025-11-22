@@ -1,8 +1,20 @@
 use std::collections::HashMap;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum TimingWindow {
+    // FA+ inner Fantastic (W0) lives strictly inside the normal Fantastic window.
+    W0,
+    // ITG-style tap windows, mapped 1:1 to JudgeGrade semantics.
+    W1,
+    W2,
+    W3,
+    W4,
+    W5,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum JudgeGrade {
-    Fantastic, // W1
+    Fantastic, // W1 (plus FA+ W0 when enabled)
     Excellent, // W2
     Great,     // W3
     Decent,    // W4
@@ -13,7 +25,8 @@ pub enum JudgeGrade {
 #[derive(Clone, Debug)]
 pub struct Judgment {
     pub time_error_ms: f32,
-    pub grade: JudgeGrade, // The grade of this specific note
+    pub grade: JudgeGrade,          // The grade of this specific note
+    pub window: Option<TimingWindow>, // Optional detailed window (W0-W5) for FA+/EX-style features
 }
 
 pub const HOLD_SCORE_HELD: i32 = 5;

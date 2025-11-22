@@ -74,6 +74,9 @@ pub struct State {
     // For Scroll row: bitmask of which options are enabled.
     // 0 => Normal scroll (no special modifier).
     pub scroll_active_mask: u8,
+    // For FA+ Options row: bitmask of which options are enabled.
+    // bit0 = Display FA+ Window, bit1 = Display EX Score, bit2 = Display FA+ Pane.
+    pub fa_plus_active_mask: u8,
     pub active_color_index: i32,
     pub speed_mod: SpeedMod,
     pub music_rate: f32,
@@ -818,9 +821,10 @@ fn build_rows(
     }
 }
 
-fn apply_profile_defaults(rows: &mut [Row]) -> u8 {
+fn apply_profile_defaults(rows: &mut [Row]) -> (u8, u8) {
     let profile = crate::game::profile::get();
     let mut scroll_active_mask: u8 = 0;
+    let mut fa_plus_active_mask: u8 = 0;
     // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Background Filter") {
         row.selected_choice_index = match profile.background_filter {
@@ -911,6 +915,21 @@ fn apply_profile_defaults(rows: &mut [Row]) -> u8 {
             row.selected_choice_index = idx;
         }
     }
+    // Initialize FA+ Options row from profile (three independent toggles).
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "FA+ Options") {
+        // Cursor always starts on the first option; toggled state is reflected visually.
+        row.selected_choice_index = 0;
+    }
+    if profile.show_fa_plus_window {
+        fa_plus_active_mask |= 1u8 << 0;
+    }
+    if profile.show_ex_score {
+        fa_plus_active_mask |= 1u8 << 1;
+    }
+    if profile.show_fa_plus_pane {
+        fa_plus_active_mask |= 1u8 << 2;
+    }
+
     // Initialize Scroll row from profile setting (multi-choice toggle group).
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Scroll") {
         use crate::game::profile::ScrollOption;
@@ -957,7 +976,7 @@ fn apply_profile_defaults(rows: &mut [Row]) -> u8 {
             row.selected_choice_index = 0;
         }
     }
-    scroll_active_mask
+    (scroll_active_mask, fa_plus_active_mask)
 }
 
 pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_index: i32) -> State {
@@ -978,7 +997,7 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         },
     };
     let mut rows = build_rows(&song, &speed_mod, chart_difficulty_index, session_music_rate, OptionsPane::Main);
-    let scroll_active_mask = apply_profile_defaults(&mut rows);
+    let (scroll_active_mask, fa_plus_active_mask) = apply_profile_defaults(&mut rows);
     // Load noteskin for preview based on profile setting
     let style = noteskin::Style {
         num_cols: 4,
@@ -1001,6 +1020,7 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         selected_row: 0,
         prev_selected_row: 0,
         scroll_active_mask,
+        fa_plus_active_mask,
         active_color_index,
         speed_mod,
         music_rate: session_music_rate,
@@ -1495,6 +1515,44 @@ fn toggle_scroll_row(state: &mut State) {
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
+fn toggle_fa_plus_row(state: &mut State) {
+    let row_index = state.selected_row;
+    if let Some(row) = state.rows.get(row_index) {
+        if row.name != "FA+ Options" {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let choice_index = state.rows[row_index].selected_choice_index;
+    let bit = if choice_index < 3 {
+        1u8 << (choice_index as u8)
+    } else {
+        0
+    };
+    if bit == 0 {
+        return;
+    }
+
+    // Toggle this bit in the local mask.
+    if (state.fa_plus_active_mask & bit) != 0 {
+        state.fa_plus_active_mask &= !bit;
+    } else {
+        state.fa_plus_active_mask |= bit;
+    }
+
+    // Persist back to profile.
+    let window_enabled = (state.fa_plus_active_mask & (1u8 << 0)) != 0;
+    let ex_enabled = (state.fa_plus_active_mask & (1u8 << 1)) != 0;
+    let pane_enabled = (state.fa_plus_active_mask & (1u8 << 2)) != 0;
+    crate::game::profile::update_show_fa_plus_window(window_enabled);
+    crate::game::profile::update_show_ex_score(ex_enabled);
+    crate::game::profile::update_show_fa_plus_pane(pane_enabled);
+
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
 fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     if state.current_pane == pane {
         return;
@@ -1506,9 +1564,10 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
         state.music_rate,
         pane,
     );
-    let scroll_active_mask = apply_profile_defaults(&mut rows);
+    let (scroll_active_mask, fa_plus_active_mask) = apply_profile_defaults(&mut rows);
     state.rows = rows;
     state.scroll_active_mask = scroll_active_mask;
+    state.fa_plus_active_mask = fa_plus_active_mask;
     state.current_pane = pane;
     state.selected_row = 0;
     state.prev_selected_row = 0;
@@ -1562,6 +1621,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ) {
                 // Scroll row uses Start as a toggle for the currently focused option.
                 toggle_scroll_row(state);
+            } else if matches!(
+                state.rows.get(state.selected_row),
+                Some(row) if row.name == "FA+ Options"
+            ) {
+                // FA+ Options row uses Start as a toggle for the currently focused option.
+                toggle_fa_plus_row(state);
             } else if state.selected_row == num_rows - 1 {
                 if let Some(what_comes_next_row) = state.rows.get(num_rows - 2) {
                     if what_comes_next_row.name == "What comes next?" {
@@ -1866,6 +1931,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             || row.name == "Data Visualizations"
             || row.name.starts_with("Gameplay Extras")
             || row.name == "Judgment Tilt Intensity"
+            || row.name == "FA+ Options"
             || row.name == "Insert"
             || row.name == "Remove"
             || row.name == "Holds"
@@ -1986,8 +2052,40 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Draw underline under active options:
             // - For normal rows: underline the currently selected choice.
             // - For Scroll row: underline each enabled scroll mode (multi-select).
+            // - For FA+ Options row: underline each enabled FA+ toggle (multi-select).
             if row.name == "Scroll" {
                 let mask = state.scroll_active_mask;
+                if mask != 0 {
+                    for idx in 0..row.choices.len() {
+                        let bit = 1u8 << (idx as u8);
+                        if (mask & bit) == 0 {
+                            continue;
+                        }
+                        if let Some(sel_x) = x_positions.get(idx).copied() {
+                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                            asset_manager.with_fonts(|_all_fonts| {
+                                asset_manager.with_font("miso", |metrics_font| {
+                                    let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
+                                    let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                                    let underline_w = draw_w.ceil();
+                                    let offset = widescale(3.0, 4.0);
+                                    let underline_y = current_row_y + text_h * 0.5 + offset;
+                                    let mut line_color = color::decorative_rgba(state.active_color_index);
+                                    line_color[3] = 1.0;
+                                    actors.push(act!(quad:
+                                        align(0.0, 0.5):
+                                        xy(sel_x, underline_y):
+                                        zoomto(underline_w, line_thickness):
+                                        diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                        z(101)
+                                    ));
+                                });
+                            });
+                        }
+                    }
+                }
+            } else if row.name == "FA+ Options" {
+                let mask = state.fa_plus_active_mask;
                 if mask != 0 {
                     for idx in 0..row.choices.len() {
                         let bit = 1u8 << (idx as u8);
