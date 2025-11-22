@@ -513,9 +513,10 @@ fn build_advanced_rows() -> Vec<Row> {
             choices: vec![
                 "Judgment Tilt".to_string(),
                 "Column Cues".to_string(),
+                "Display Scorebox".to_string(),
             ],
             selected_choice_index: 0,
-            help: vec!["Additional visual effects and cues.".to_string()],
+            help: vec!["Additional visual effects, cues, and score display options.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
@@ -529,6 +530,119 @@ fn build_advanced_rows() -> Vec<Row> {
             ],
             selected_choice_index: 0,
             help: vec!["How strongly to tilt judgments left/right.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Error Bar".to_string(),
+            choices: vec![
+                "None".to_string(),
+                "Colorful".to_string(),
+                "Monochrome".to_string(),
+                "Text".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Choose the style for the timing error bar or disable it.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Error Bar Trim".to_string(),
+            choices: vec![
+                "Off".to_string(),
+                "Great".to_string(),
+                "Excellent".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Set the worst timing window that the error bar will show.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Error Bar Options".to_string(),
+            choices: vec![
+                "Move Up".to_string(),
+                "Multi-Tick".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec![
+                "Adjust where the error bar appears and whether it shows multiple tick marks.".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Measure Counter".to_string(),
+            choices: vec![
+                "None".to_string(),
+                "8th".to_string(),
+                "12th".to_string(),
+                "16th".to_string(),
+                "24th".to_string(),
+                "32nd".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec![
+                "Display a count of how long you have been streaming a specific type of note.".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Measure Counter Options".to_string(),
+            choices: vec![
+                "Move Left".to_string(),
+                "Move Up".to_string(),
+                "Hide Lookahead".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec![
+                "Change how the Measure Counter is positioned and whether it hides upcoming notes.".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Measure Lines".to_string(),
+            choices: vec![
+                "Off".to_string(),
+                "Measure".to_string(),
+                "Quarter".to_string(),
+                "Eighth".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Display horizontal lines on the notefield to indicate quantization.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Early Decent/Way Off Options".to_string(),
+            choices: vec![
+                "Hide Judgments".to_string(),
+                "Hide NoteField Flash".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec!["Set how early Decent and Way Off judgments are visually represented.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Timing Windows".to_string(),
+            choices: vec![
+                "None".to_string(),
+                "Way Offs".to_string(),
+                "Decents + Way Offs".to_string(),
+                "Fantastics + Excellents".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec![
+                "Disable or simplify specific timing windows used for judgments.".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "FA+ Options".to_string(),
+            choices: vec![
+                "Display FA+ Window".to_string(),
+                "Display EX Score".to_string(),
+                "Display FA+ Pane".to_string(),
+            ],
+            selected_choice_index: 0,
+            help: vec![
+                "Toggle FA+ style timing window display and EX scoring visuals.".to_string(),
+            ],
             choice_difficulty_indices: None,
         },
         Row {
@@ -998,6 +1112,15 @@ fn change_choice(state: &mut State, delta: isize) {
                 || row.name == "Data Visualizations"
                 || row.name.starts_with("Gameplay Extras")
                 || row.name == "Judgment Tilt Intensity"
+                || row.name == "Error Bar"
+                || row.name == "Error Bar Trim"
+                || row.name == "Error Bar Options"
+                || row.name == "Measure Counter"
+                || row.name == "Measure Counter Options"
+                || row.name == "Measure Lines"
+                || row.name == "Early Decent/Way Off Options"
+                || row.name == "Timing Windows"
+                || row.name == "FA+ Options"
                 || row.name == "Insert"
                 || row.name == "Remove"
                 || row.name == "Holds"
