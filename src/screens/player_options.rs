@@ -242,7 +242,12 @@ fn build_main_rows(
         },
         Row {
             name: "NoteSkin".to_string(),
-            choices: vec!["cel".to_string(), "metal".to_string(), "note".to_string()],
+            choices: vec![
+                "cel".to_string(),
+                "metal".to_string(),
+                "enchantment-v2".to_string(),
+                "note".to_string(),
+            ],
             selected_choice_index: 0,
             help: vec!["Change the appearance of the arrows.".to_string()],
             choice_difficulty_indices: None,
@@ -744,7 +749,8 @@ fn apply_profile_defaults(rows: &mut [Row]) -> u8 {
         row.selected_choice_index = match profile.noteskin {
             crate::game::profile::NoteSkin::Cel => 0,
             crate::game::profile::NoteSkin::Metal => 1,
-            crate::game::profile::NoteSkin::Note => 2,
+            crate::game::profile::NoteSkin::EnchantmentV2 => 2,
+            crate::game::profile::NoteSkin::Note => 3,
         };
     }
     // Initialize Combo Font row from profile setting
@@ -845,6 +851,7 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
     let noteskin_path = match profile.noteskin {
         crate::game::profile::NoteSkin::Cel => "assets/noteskins/cel/dance-single.txt",
         crate::game::profile::NoteSkin::Metal => "assets/noteskins/metal/dance-single.txt",
+        crate::game::profile::NoteSkin::EnchantmentV2 => "assets/noteskins/enchantment-v2/dance-single.txt",
         crate::game::profile::NoteSkin::Note => "assets/noteskins/cel/dance-single.txt",
     };
     let noteskin = noteskin::load(Path::new(noteskin_path), &style)
@@ -1100,7 +1107,8 @@ fn change_choice(state: &mut State, delta: isize) {
                 let setting = match row.selected_choice_index {
                     0 => crate::game::profile::NoteSkin::Cel,
                     1 => crate::game::profile::NoteSkin::Metal,
-                    2 => crate::game::profile::NoteSkin::Note,
+                    2 => crate::game::profile::NoteSkin::EnchantmentV2,
+                    3 => crate::game::profile::NoteSkin::Note,
                     _ => crate::game::profile::NoteSkin::Cel,
                 };
                 crate::game::profile::update_noteskin(setting);
@@ -1108,6 +1116,7 @@ fn change_choice(state: &mut State, delta: isize) {
                 let path_str = match setting {
                     crate::game::profile::NoteSkin::Cel => "assets/noteskins/cel/dance-single.txt",
                     crate::game::profile::NoteSkin::Metal => "assets/noteskins/metal/dance-single.txt",
+                    crate::game::profile::NoteSkin::EnchantmentV2 => "assets/noteskins/enchantment-v2/dance-single.txt",
                     crate::game::profile::NoteSkin::Note => "assets/noteskins/cel/dance-single.txt",
                 };
                 state.noteskin = noteskin::load(Path::new(path_str), &style)

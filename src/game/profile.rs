@@ -287,6 +287,7 @@ impl core::fmt::Display for JudgmentGraphic {
 pub enum NoteSkin {
     Cel,
     Metal,
+    EnchantmentV2,
     Note,
 }
 
@@ -302,6 +303,7 @@ impl FromStr for NoteSkin {
         match s.trim().to_lowercase().as_str() {
             "cel" => Ok(Self::Cel),
             "metal" => Ok(Self::Metal),
+            "enchantment-v2" => Ok(Self::EnchantmentV2),
             "note" => Ok(Self::Note),
             other => Err(format!("'{}' is not a valid NoteSkin setting", other)),
         }
@@ -313,6 +315,7 @@ impl core::fmt::Display for NoteSkin {
         match self {
             Self::Cel => write!(f, "cel"),
             Self::Metal => write!(f, "metal"),
+            Self::EnchantmentV2 => write!(f, "enchantment-v2"),
             Self::Note => write!(f, "note"),
         }
     }
