@@ -389,6 +389,19 @@ impl AssetManager {
             }
         }
 
+        if let Ok(entries) = fs::read_dir("assets/noteskins/devcel-2024-v3") {
+            for entry in entries.flatten() {
+                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
+                    if ext.eq_ignore_ascii_case("png") {
+                        if let Ok(name) = entry.file_name().into_string() {
+                            let key = format!("noteskins/devcel-2024-v3/{}", name);
+                            textures_to_load.push((key.clone(), key));
+                        }
+                    }
+                }
+            }
+        }
+
         let mut handles = Vec::with_capacity(textures_to_load.len());
         for (key, relative_path) in textures_to_load {
             handles.push(std::thread::spawn(move || {

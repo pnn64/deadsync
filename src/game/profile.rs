@@ -288,7 +288,7 @@ pub enum NoteSkin {
     Cel,
     Metal,
     EnchantmentV2,
-    Note,
+    DevCel2024V3,
 }
 
 impl Default for NoteSkin {
@@ -304,7 +304,7 @@ impl FromStr for NoteSkin {
             "cel" => Ok(Self::Cel),
             "metal" => Ok(Self::Metal),
             "enchantment-v2" => Ok(Self::EnchantmentV2),
-            "note" => Ok(Self::Note),
+            "devcel-2024-v3" => Ok(Self::DevCel2024V3),
             other => Err(format!("'{}' is not a valid NoteSkin setting", other)),
         }
     }
@@ -316,7 +316,7 @@ impl core::fmt::Display for NoteSkin {
             Self::Cel => write!(f, "cel"),
             Self::Metal => write!(f, "metal"),
             Self::EnchantmentV2 => write!(f, "enchantment-v2"),
-            Self::Note => write!(f, "note"),
+            Self::DevCel2024V3 => write!(f, "devcel-2024-v3"),
         }
     }
 }

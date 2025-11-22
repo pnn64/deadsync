@@ -246,7 +246,7 @@ fn build_main_rows(
                 "cel".to_string(),
                 "metal".to_string(),
                 "enchantment-v2".to_string(),
-                "note".to_string(),
+                "devcel-2024-v3".to_string(),
             ],
             selected_choice_index: 0,
             help: vec!["Change the appearance of the arrows.".to_string()],
@@ -750,7 +750,7 @@ fn apply_profile_defaults(rows: &mut [Row]) -> u8 {
             crate::game::profile::NoteSkin::Cel => 0,
             crate::game::profile::NoteSkin::Metal => 1,
             crate::game::profile::NoteSkin::EnchantmentV2 => 2,
-            crate::game::profile::NoteSkin::Note => 3,
+            crate::game::profile::NoteSkin::DevCel2024V3 => 3,
         };
     }
     // Initialize Combo Font row from profile setting
@@ -852,7 +852,7 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         crate::game::profile::NoteSkin::Cel => "assets/noteskins/cel/dance-single.txt",
         crate::game::profile::NoteSkin::Metal => "assets/noteskins/metal/dance-single.txt",
         crate::game::profile::NoteSkin::EnchantmentV2 => "assets/noteskins/enchantment-v2/dance-single.txt",
-        crate::game::profile::NoteSkin::Note => "assets/noteskins/cel/dance-single.txt",
+        crate::game::profile::NoteSkin::DevCel2024V3 => "assets/noteskins/devcel-2024-v3/dance-single.txt",
     };
     let noteskin = noteskin::load(Path::new(noteskin_path), &style)
         .ok()
@@ -1108,7 +1108,7 @@ fn change_choice(state: &mut State, delta: isize) {
                     0 => crate::game::profile::NoteSkin::Cel,
                     1 => crate::game::profile::NoteSkin::Metal,
                     2 => crate::game::profile::NoteSkin::EnchantmentV2,
-                    3 => crate::game::profile::NoteSkin::Note,
+                    3 => crate::game::profile::NoteSkin::DevCel2024V3,
                     _ => crate::game::profile::NoteSkin::Cel,
                 };
                 crate::game::profile::update_noteskin(setting);
@@ -1117,7 +1117,7 @@ fn change_choice(state: &mut State, delta: isize) {
                     crate::game::profile::NoteSkin::Cel => "assets/noteskins/cel/dance-single.txt",
                     crate::game::profile::NoteSkin::Metal => "assets/noteskins/metal/dance-single.txt",
                     crate::game::profile::NoteSkin::EnchantmentV2 => "assets/noteskins/enchantment-v2/dance-single.txt",
-                    crate::game::profile::NoteSkin::Note => "assets/noteskins/cel/dance-single.txt",
+                    crate::game::profile::NoteSkin::DevCel2024V3 => "assets/noteskins/devcel-2024-v3/dance-single.txt",
                 };
                 state.noteskin = noteskin::load(Path::new(path_str), &style)
                     .ok()

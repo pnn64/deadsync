@@ -289,7 +289,7 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         crate::game::profile::NoteSkin::Cel => "assets/noteskins/cel/dance-single.txt",
         crate::game::profile::NoteSkin::Metal => "assets/noteskins/metal/dance-single.txt",
         crate::game::profile::NoteSkin::EnchantmentV2 => "assets/noteskins/enchantment-v2/dance-single.txt",
-        crate::game::profile::NoteSkin::Note => "assets/noteskins/cel/dance-single.txt",
+        crate::game::profile::NoteSkin::DevCel2024V3 => "assets/noteskins/devcel-2024-v3/dance-single.txt",
     };
     let noteskin = noteskin::load(Path::new(noteskin_path), &style)
         .ok()
