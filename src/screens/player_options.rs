@@ -220,9 +220,7 @@ fn build_main_rows(
         },
         Row {
             name: "Mini".to_string(),
-            choices: vec![
-                "0%".to_string(),
-            ],
+            choices: (-100..=150).map(|v| format!("{}%", v)).collect(),
             selected_choice_index: 0,
             help: vec!["Change the size of your arrows.".to_string()],
             choice_difficulty_indices: None,
@@ -775,6 +773,14 @@ fn apply_profile_defaults(rows: &mut [Row]) -> u8 {
             crate::game::profile::HoldJudgmentGraphic::None => 3,
         };
     }
+    // Initialize Mini row from profile (range -100..150, stored as percent).
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Mini") {
+        let val = profile.mini_percent.clamp(-100, 150);
+        let needle = format!("{}%", val);
+        if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
+            row.selected_choice_index = idx;
+        }
+    }
     // Initialize NoteField Offset X from profile (0..50, non-negative; P1 uses negative sign at render time)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "NoteField Offset X") {
         let val = profile.note_field_offset_x.clamp(0, 50);
@@ -1067,6 +1073,14 @@ fn change_choice(state: &mut State, delta: isize) {
                     _ => crate::game::profile::BackgroundFilter::Darkest,
                 };
                 crate::game::profile::update_background_filter(setting);
+            } else if row.name == "Mini" {
+                // Persist Mini% selection to the profile.
+                if let Some(choice) = row.choices.get(row.selected_choice_index) {
+                    let trimmed = choice.trim_end_matches('%');
+                    if let Ok(val) = trimmed.parse::<i32>() {
+                        crate::game::profile::update_mini_percent(val);
+                    }
+                }
             } else if row.name == "NoteField Offset X" {
                 if let Some(choice) = row.choices.get(row.selected_choice_index) {
                     if let Ok(raw) = choice.parse::<i32>() {

@@ -1130,7 +1130,9 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
             let player_multiplier = state.scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
             let final_multiplier = player_multiplier * speed_multiplier;
             if final_multiplier > 0.0 {
-                let pixels_per_beat = ScrollSpeedSetting::ARROW_SPACING * final_multiplier;
+                let mini_value = (crate::game::profile::get().mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
+                let field_zoom = (1.0 - mini_value * 0.5).clamp(0.01, f32::MAX);
+                let pixels_per_beat = ScrollSpeedSetting::ARROW_SPACING * final_multiplier * field_zoom;
                 let lookahead_in_displayed_beats = state.draw_distance_before_targets / pixels_per_beat;
                 let current_displayed_beat = state.timing.get_displayed_beat(state.current_beat);
                 let target_displayed_beat = current_displayed_beat + lookahead_in_displayed_beats;
@@ -1250,9 +1252,11 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
 fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     let receptor_y_normal = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER;
     let receptor_y_reverse = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE;
+    let mini_value = (crate::game::profile::get().mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
+    let field_zoom = (1.0 - mini_value * 0.5).clamp(0.01, f32::MAX);
     let (cmod_pps_opt, curr_disp_beat, beatmod_multiplier) = match state.scroll_speed {
         ScrollSpeedSetting::CMod(c_bpm) => {
-            let pps = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING;
+            let pps = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING * field_zoom;
             (Some(pps), 0.0, 0.0)
         }
         ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
@@ -1283,7 +1287,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                         ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                             let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                             let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                            receptor_y + dir * beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmod_multiplier
+                            receptor_y + dir * beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmod_multiplier * field_zoom
                         }
                     };
                     return if dir < 0.0 { y_pos <= miss_cull_threshold } else { y_pos >= miss_cull_threshold };
@@ -1301,7 +1305,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                         let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                         let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                        receptor_y + dir * beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmod_multiplier
+                        receptor_y + dir * beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmod_multiplier * field_zoom
                     }
                 };
                 return if dir < 0.0 { y_pos <= miss_cull_threshold } else { y_pos >= miss_cull_threshold };
@@ -1321,7 +1325,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                     let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                    receptor_y + dir * beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmod_multiplier
+                    receptor_y + dir * beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmod_multiplier * field_zoom
                 }
             };
             if dir < 0.0 { y_pos <= miss_cull_threshold } else { y_pos >= miss_cull_threshold }

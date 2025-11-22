@@ -389,6 +389,9 @@ pub struct Profile {
     pub scroll_speed: ScrollSpeedSetting,
     pub scroll_option: ScrollOption,
     pub reverse_scroll: bool,
+    // Mini modifier as a percentage, mirroring Simply Love semantics.
+    // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
+    pub mini_percent: i32,
     // NoteField positional offsets (Simply Love semantics).
     // X is non-negative and interpreted relative to player side:
     // for P1, positive values move the field left.
@@ -416,6 +419,7 @@ impl Default for Profile {
             scroll_speed: ScrollSpeedSetting::default(),
             scroll_option: ScrollOption::default(),
             reverse_scroll: false,
+            mini_percent: 0,
             note_field_offset_x: 0,
             note_field_offset_y: 0,
         }
@@ -469,6 +473,10 @@ fn create_default_files() -> Result<(), std::io::Error> {
         content.push_str(&format!(
             "NoteSkin = {}\n",
             default_profile.noteskin
+        ));
+        content.push_str(&format!(
+            "MiniPercent = {}\n",
+            default_profile.mini_percent
         ));
         content.push_str(&format!(
             "NoteFieldOffsetX = {}\n",
@@ -529,6 +537,10 @@ fn save_profile_ini() {
         profile.combo_font
     ));
     content.push_str(&format!("NoteSkin={}\n", profile.noteskin));
+    content.push_str(&format!(
+        "MiniPercent={}\n",
+        profile.mini_percent
+    ));
     content.push_str(&format!(
         "NoteFieldOffsetX={}\n",
         profile.note_field_offset_x
@@ -605,6 +617,10 @@ pub fn load() {
                 .get("PlayerOptions", "NoteSkin")
                 .and_then(|s| NoteSkin::from_str(&s).ok())
                 .unwrap_or(default_profile.noteskin);
+            profile.mini_percent = profile_conf
+                .get("PlayerOptions", "MiniPercent")
+                .and_then(|s| s.parse::<i32>().ok())
+                .unwrap_or(default_profile.mini_percent);
             profile.note_field_offset_x = profile_conf
                 .get("PlayerOptions", "NoteFieldOffsetX")
                 .and_then(|s| s.parse::<i32>().ok())
@@ -790,6 +806,19 @@ pub fn update_notefield_offset_y(offset: i32) {
             return;
         }
         profile.note_field_offset_y = clamped;
+    }
+    save_profile_ini();
+}
+
+pub fn update_mini_percent(percent: i32) {
+    // Mirror Simply Love's range: -100% to +150%.
+    let clamped = percent.clamp(-100, 150);
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        if profile.mini_percent == clamped {
+            return;
+        }
+        profile.mini_percent = clamped;
     }
     save_profile_ini();
 }

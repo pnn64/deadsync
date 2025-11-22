@@ -380,6 +380,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
     // --- Playfield Positioning (1:1 with Simply Love) ---
+    // Mini%: Simply Love passes Mini() a value in [0, 2] where 0 = normal, 1 = 100% Mini.
+    // ITGmania uses field_zoom = 1 - Mini * 0.5 for note field scaling.
+    let mini_value = (profile.mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
+    let mut field_zoom = 1.0 - mini_value * 0.5;
+    if field_zoom.abs() < 0.01 {
+        field_zoom = 0.01;
+    }
     // NoteFieldOffsetX is stored as a non-negative magnitude; for a single P1-style field,
     // positive values move the field left, mirroring Simply Love's use of a sign flip.
     let notefield_offset_x = -(profile.note_field_offset_x.clamp(0, 50) as f32);
@@ -422,31 +429,33 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
     if let Some(ns) = &state.noteskin {
+        let target_arrow_px = TARGET_ARROW_PIXEL_SIZE * field_zoom;
+        let target_explosion_px = TARGET_EXPLOSION_PIXEL_SIZE * field_zoom;
         let scale_sprite = |size: [i32; 2]| -> [f32; 2] {
             let width = size[0].max(0) as f32;
             let height = size[1].max(0) as f32;
-            if height <= 0.0 || TARGET_ARROW_PIXEL_SIZE <= 0.0 {
+            if height <= 0.0 || target_arrow_px <= 0.0 {
                 [width, height]
             } else {
-                let scale = TARGET_ARROW_PIXEL_SIZE / height;
-                [width * scale, TARGET_ARROW_PIXEL_SIZE]
+                let scale = target_arrow_px / height;
+                [width * scale, target_arrow_px]
             }
         };
         let scale_explosion = |size: [i32; 2]| -> [f32; 2] {
             let width = size[0].max(0) as f32;
             let height = size[1].max(0) as f32;
-            if height <= 0.0 || TARGET_EXPLOSION_PIXEL_SIZE <= 0.0 {
+            if height <= 0.0 || target_explosion_px <= 0.0 {
                 [width, height]
             } else {
-                let scale = TARGET_EXPLOSION_PIXEL_SIZE / height;
-                [width * scale, TARGET_EXPLOSION_PIXEL_SIZE]
+                let scale = target_explosion_px / height;
+                [width * scale, target_explosion_px]
             }
         };
         let current_time = state.current_music_time;
         // Precompute per-frame values used for converting beat/time to Y positions
         let (rate, cmod_pps_opt, curr_disp_beat, beatmod_multiplier) = match state.scroll_speed {
             ScrollSpeedSetting::CMod(c_bpm) => {
-                let pps = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING;
+                let pps = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING * field_zoom;
                 let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
                 (rate, Some(pps), 0.0, 0.0)
             }
@@ -480,7 +489,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let beat_diff_disp = note_disp_beat - curr_disp_beat;
                     receptor_y_lane
                         + dir * (beat_diff_disp
-                            * ScrollSpeedSetting::ARROW_SPACING
+                            * ScrollSpeedSetting::ARROW_SPACING * field_zoom
                             * beatmod_multiplier)
                 }
             }
@@ -499,7 +508,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
         // Receptors + glow
         for i in 0..4 {
-            let col_x_offset = ns.column_xs[i];
+            let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
             let raw_dir = state
                 .column_scroll_dirs
                 .get(i)
@@ -604,7 +613,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         for i in 0..4 {
             if let Some(active) = state.tap_explosions[i].as_ref() {
                 if let Some(explosion) = ns.tap_explosions.get(&active.window) {
-                    let col_x_offset = ns.column_xs[i];
+                    let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
                     let raw_dir = state
                         .column_scroll_dirs
                         .get(i)
@@ -682,7 +691,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     continue;
                 }
                 let rotation_progress = 180.0 * progress;
-                let col_x_offset = ns.column_xs[i];
+                let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
                 let raw_dir = state
                     .column_scroll_dirs
                     .get(i)
@@ -785,7 +794,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let beat_diff_disp = note_disp_beat - curr_disp_beat;
                         lane_receptor_y
                             + dir * (beat_diff_disp
-                                * ScrollSpeedSetting::ARROW_SPACING
+                                * ScrollSpeedSetting::ARROW_SPACING * field_zoom
                                 * beatmod_multiplier)
                     }
                 }
@@ -805,7 +814,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let beat_diff_disp = note_end_disp_beat - curr_disp_beat;
                     lane_receptor_y
                         + dir * (beat_diff_disp
-                            * ScrollSpeedSetting::ARROW_SPACING
+                            * ScrollSpeedSetting::ARROW_SPACING * field_zoom
                             * beatmod_multiplier)
                 }
             };
@@ -821,7 +830,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if bottom <= top {
                 continue;
             }
-            let col_x_offset = ns.column_xs[note.column];
+            let col_x_offset = ns.column_xs[note.column] as f32 * field_zoom;
 
             let active_state = state.active_holds[note.column]
                 .as_ref()
@@ -904,7 +913,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let texture_width = texture_size[0].max(1) as f32;
                     let texture_height = texture_size[1].max(1) as f32;
                     if texture_width > std::f32::EPSILON && texture_height > std::f32::EPSILON {
-                        let body_width = TARGET_ARROW_PIXEL_SIZE;
+                        let body_width = TARGET_ARROW_PIXEL_SIZE * field_zoom;
                         let scale = body_width / texture_width;
                         let segment_height = (texture_height * scale).max(std::f32::EPSILON);
                         let body_uv = body_slot.uv_for_frame(0);
@@ -1491,7 +1500,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let beat_diff_disp = note_disp_beat - curr_disp_beat;
                         receptor_y_lane
                             + dir * beat_diff_disp
-                                * ScrollSpeedSetting::ARROW_SPACING
+                                * ScrollSpeedSetting::ARROW_SPACING * field_zoom
                                 * beatmod_multiplier
                     }
                 };
@@ -1501,7 +1510,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 {
                     continue;
                 }
-                let col_x_offset = ns.column_xs[arrow.column];
+                let col_x_offset = ns.column_xs[arrow.column] as f32 * field_zoom;
                 if matches!(arrow.note_type, NoteType::Mine) {
                     let fill_slot = ns.mines.get(arrow.column).and_then(|slot| slot.as_ref());
                     let frame_slot = ns
@@ -1520,7 +1529,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let circle_reference = frame_slot
                         .map(|slot| scale_sprite(slot.size()))
                         .or_else(|| fill_slot.map(|slot| scale_sprite(slot.size())))
-                        .unwrap_or([TARGET_ARROW_PIXEL_SIZE, TARGET_ARROW_PIXEL_SIZE]);
+                        .unwrap_or([TARGET_ARROW_PIXEL_SIZE * field_zoom, TARGET_ARROW_PIXEL_SIZE * field_zoom]);
                     if let Some(slot) = fill_slot {
                         if let Some(fill_state) = mine_fill_state(slot, state.current_beat) {
                             let width = circle_reference[0] * MINE_CORE_SIZE_RATIO;
@@ -1880,12 +1889,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if elapsed >= HOLD_JUDGMENT_TOTAL_DURATION {
             continue;
         }
+        // Hold judgments scale with Mini/Tiny in ITGmania as pow(0.5, mini+tiny), clamped to 1.0.
+        let mini_for_holds = mini_value.max(0.0);
+        let hold_judgment_zoom_mod = 0.5_f32.powf(mini_for_holds).min(1.0);
         let zoom = if elapsed < 0.3 {
             let progress = (elapsed / 0.3).clamp(0.0, 1.0);
-            HOLD_JUDGMENT_INITIAL_ZOOM
-                + progress * (HOLD_JUDGMENT_FINAL_ZOOM - HOLD_JUDGMENT_INITIAL_ZOOM)
+            (HOLD_JUDGMENT_INITIAL_ZOOM
+                + progress * (HOLD_JUDGMENT_FINAL_ZOOM - HOLD_JUDGMENT_INITIAL_ZOOM)) * hold_judgment_zoom_mod
         } else {
-            HOLD_JUDGMENT_FINAL_ZOOM
+            HOLD_JUDGMENT_FINAL_ZOOM * hold_judgment_zoom_mod
         };
         let frame_index = match render_info.result {
             HoldResult::Held => 0,
@@ -1916,7 +1928,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 .as_ref()
                 .and_then(|ns| ns.column_xs.get(column))
                 .map(|&x| x as f32)
-                .unwrap_or_else(|| ((column as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE);
+                .unwrap_or_else(|| ((column as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
             actors.push(act!(sprite(texture):
                 align(0.5, 0.5):
                 xy(playfield_center_x + column_offset, hold_judgment_y):
