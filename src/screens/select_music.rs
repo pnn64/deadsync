@@ -174,6 +174,20 @@ fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cu
     Some((path, cut))
 }
 
+// Format music rate like Simply Love wants (mirrors PlayerOptions).
+fn fmt_music_rate(rate: f32) -> String {
+    let scaled = (rate * 100.0).round() as i32;
+    let int_part = scaled / 100;
+    let frac2 = (scaled % 100).abs();
+    if frac2 == 0 {
+        format!("{}", int_part)
+    } else if frac2 % 10 == 0 {
+        format!("{}.{}", int_part, frac2 / 10)
+    } else {
+        format!("{}.{:02}", int_part, frac2)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum NavDirection { Left, Right }
 
@@ -928,57 +942,41 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         z(51)
     ));
 
-    // Music Rate badge overlay (top-left of banner) when rate != 1.00x
+    // Music Rate overlay bar at bottom of banner (full width), when rate != 1.0x.
     {
         let rate = crate::game::profile::get_session_music_rate();
         if (rate - 1.0).abs() > 0.001 {
-            let text = format!("{:.2}x", rate);
-            // Compute top-left corner of the banner in screen space
+            let text = format!("{}x Music Rate", fmt_music_rate(rate));
+
+            // Match Simply Love: quad width 418, height 14, offset y=75 within the banner frame,
+            // all scaled by the banner's zoom.
             let banner_w = BANNER_NATIVE_WIDTH * banner_zoom;
-            let banner_h = BANNER_NATIVE_HEIGHT * banner_zoom;
-            let top_left_x = banner_cx - 0.5 * banner_w;
-            let top_left_y = banner_cy - 0.5 * banner_h;
+            let overlay_h = 14.0 * banner_zoom;
+            let overlay_cx = banner_cx;
+            let overlay_cy = banner_cy + 75.0 * banner_zoom;
 
-            // Measure text to size the badge nicely
-            let mut badge_children: Vec<Actor> = Vec::new();
-            let pad_x = 6.0f32;
-            let pad_y = 3.5f32;
-            let badge_zoom = 0.7f32;
-            let font_name = "miso";
-            let mut badge_w = 44.0f32; // default if metrics unavailable
-            let mut badge_h = 16.0f32;
-            asset_manager.with_fonts(|all_fonts| {
-                asset_manager.with_font(font_name, |font| {
-                    let logical_w = crate::ui::font::measure_line_width_logical(font, &text, all_fonts) as f32;
-                    let logical_h = (font.height as f32).max(1.0);
-                    let draw_w = logical_w * badge_zoom;
-                    let draw_h = logical_h * badge_zoom;
-                    badge_w = (draw_w + pad_x * 2.0).max(28.0);
-                    badge_h = (draw_h + pad_y * 2.0).max(14.0);
-                });
-            });
+            let quad_color = color::rgba_hex("#1E282FCC");
 
-            let badge_x = top_left_x + 6.0 + badge_w * 0.5;
-            let badge_y = top_left_y + 6.0 + badge_h * 0.5;
-
-            // Background
-            badge_children.push(act!(quad:
-                align(0.5, 0.5): xy(0.0, 0.0): setsize(badge_w, badge_h): diffuse(0.0, 0.0, 0.0, 0.7)
-            ));
-            // Label
-            badge_children.push(act!(text:
-                font(font_name): settext(text): align(0.5, 0.5): xy(0.0, 0.0): zoom(badge_zoom): diffuse(1.0, 1.0, 1.0, 1.0)
+            // Background quad spanning the banner width.
+            actors.push(act!(quad:
+                align(0.5, 0.5):
+                xy(overlay_cx, overlay_cy):
+                setsize(banner_w, overlay_h):
+                z(52):
+                diffuse(quad_color[0], quad_color[1], quad_color[2], quad_color[3])
             ));
 
-            let badge = Actor::Frame {
-                align: [0.5, 0.5],
-                offset: [badge_x, badge_y],
-                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-                background: None,
-                z: 52,
-                children: badge_children,
-            };
-            actors.push(badge);
+            // Text centered in the overlay.
+            actors.push(act!(text:
+                font("miso"):
+                settext(text):
+                align(0.5, 0.5):
+                xy(overlay_cx, overlay_cy):
+                zoom(0.85 * banner_zoom):
+                shadowlength(1.0):
+                z(53):
+                diffuse(1.0, 1.0, 1.0, 1.0)
+            ));
         }
     }
 
