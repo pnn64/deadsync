@@ -284,6 +284,41 @@ impl core::fmt::Display for JudgmentGraphic {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoteSkin {
+    Cel,
+    Metal,
+    Note,
+}
+
+impl Default for NoteSkin {
+    fn default() -> Self {
+        NoteSkin::Cel
+    }
+}
+
+impl FromStr for NoteSkin {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "cel" => Ok(Self::Cel),
+            "metal" => Ok(Self::Metal),
+            "note" => Ok(Self::Note),
+            other => Err(format!("'{}' is not a valid NoteSkin setting", other)),
+        }
+    }
+}
+
+impl core::fmt::Display for NoteSkin {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Cel => write!(f, "cel"),
+            Self::Metal => write!(f, "metal"),
+            Self::Note => write!(f, "note"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComboFont {
     Wendy,
     ArialRounded,
@@ -345,6 +380,7 @@ pub struct Profile {
     pub hold_judgment_graphic: HoldJudgmentGraphic,
     pub judgment_graphic: JudgmentGraphic,
     pub combo_font: ComboFont,
+    pub noteskin: NoteSkin,
     pub avatar_path: Option<PathBuf>,
     pub avatar_texture_key: Option<String>,
     pub scroll_speed: ScrollSpeedSetting,
@@ -364,6 +400,7 @@ impl Default for Profile {
             hold_judgment_graphic: HoldJudgmentGraphic::default(),
             judgment_graphic: JudgmentGraphic::default(),
             combo_font: ComboFont::default(),
+            noteskin: NoteSkin::default(),
             avatar_path: None,
             avatar_texture_key: None,
             scroll_speed: ScrollSpeedSetting::default(),
@@ -417,6 +454,10 @@ fn create_default_files() -> Result<(), std::io::Error> {
             "ComboFont = {}\n",
             default_profile.combo_font
         ));
+        content.push_str(&format!(
+            "NoteSkin = {}\n",
+            default_profile.noteskin
+        ));
         content.push('\n');
 
         content.push_str("[userprofile]\n");
@@ -467,6 +508,7 @@ fn save_profile_ini() {
         "ComboFont={}\n",
         profile.combo_font
     ));
+    content.push_str(&format!("NoteSkin={}\n", profile.noteskin));
     content.push('\n');
 
     content.push_str("[userprofile]\n");
@@ -531,6 +573,10 @@ pub fn load() {
                 .get("PlayerOptions", "ComboFont")
                 .and_then(|s| ComboFont::from_str(&s).ok())
                 .unwrap_or(default_profile.combo_font);
+            profile.noteskin = profile_conf
+                .get("PlayerOptions", "NoteSkin")
+                .and_then(|s| NoteSkin::from_str(&s).ok())
+                .unwrap_or(default_profile.noteskin);
             profile.scroll_speed = profile_conf
                 .get("PlayerOptions", "ScrollSpeed")
                 .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
@@ -673,6 +719,17 @@ pub fn update_scroll_option(setting: ScrollOption) {
         }
         profile.scroll_option = setting;
         profile.reverse_scroll = reverse_enabled;
+    }
+    save_profile_ini();
+}
+
+pub fn update_noteskin(setting: NoteSkin) {
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        if profile.noteskin == setting {
+            return;
+        }
+        profile.noteskin = setting;
     }
     save_profile_ini();
 }

@@ -739,6 +739,14 @@ fn apply_profile_defaults(rows: &mut [Row]) -> u8 {
             crate::game::profile::JudgmentGraphic::None => 20,
         };
     }
+    // Initialize NoteSkin row from profile setting
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "NoteSkin") {
+        row.selected_choice_index = match profile.noteskin {
+            crate::game::profile::NoteSkin::Cel => 0,
+            crate::game::profile::NoteSkin::Metal => 1,
+            crate::game::profile::NoteSkin::Note => 2,
+        };
+    }
     // Initialize Combo Font row from profile setting
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Font") {
         row.selected_choice_index = match profile.combo_font {
@@ -829,12 +837,20 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
     };
     let mut rows = build_rows(&song, &speed_mod, chart_difficulty_index, session_music_rate, OptionsPane::Main);
     let scroll_active_mask = apply_profile_defaults(&mut rows);
-    // Load noteskin for preview
+    // Load noteskin for preview based on profile setting
     let style = noteskin::Style {
         num_cols: 4,
         num_players: 1,
     };
-    let noteskin = noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style).ok();
+    let noteskin_path = match profile.noteskin {
+        crate::game::profile::NoteSkin::Cel => "assets/noteskins/cel/dance-single.txt",
+        crate::game::profile::NoteSkin::Metal => "assets/noteskins/metal/dance-single.txt",
+        crate::game::profile::NoteSkin::Note => "assets/noteskins/cel/dance-single.txt",
+    };
+    let noteskin = noteskin::load(Path::new(noteskin_path), &style)
+        .ok()
+        .or_else(|| noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style).ok())
+        .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok());
     State {
         song,
         chart_difficulty_index,
@@ -1079,6 +1095,25 @@ fn change_choice(state: &mut State, delta: isize) {
                     _ => crate::game::profile::HoldJudgmentGraphic::Love,
                 };
                 crate::game::profile::update_hold_judgment_graphic(setting);
+            } else if row.name == "NoteSkin" {
+                // Persist noteskin selection to profile and reload preview noteskin
+                let setting = match row.selected_choice_index {
+                    0 => crate::game::profile::NoteSkin::Cel,
+                    1 => crate::game::profile::NoteSkin::Metal,
+                    2 => crate::game::profile::NoteSkin::Note,
+                    _ => crate::game::profile::NoteSkin::Cel,
+                };
+                crate::game::profile::update_noteskin(setting);
+                let style = noteskin::Style { num_cols: 4, num_players: 1 };
+                let path_str = match setting {
+                    crate::game::profile::NoteSkin::Cel => "assets/noteskins/cel/dance-single.txt",
+                    crate::game::profile::NoteSkin::Metal => "assets/noteskins/metal/dance-single.txt",
+                    crate::game::profile::NoteSkin::Note => "assets/noteskins/cel/dance-single.txt",
+                };
+                state.noteskin = noteskin::load(Path::new(path_str), &style)
+                    .ok()
+                    .or_else(|| noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style).ok())
+                    .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok());
             } else if row.name == "Stepchart" {
                 // Update the state's difficulty index to match the newly selected choice
                 if let Some(diff_indices) = &row.choice_difficulty_indices {
@@ -2147,7 +2182,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                     // Add noteskin preview for "NoteSkin" row showing animated 4th note
-                    if row.name == "NoteSkin" && choice_text == "cel" {
+                    if row.name == "NoteSkin" {
                         if let Some(ns) = &state.noteskin {
                             // Render a 4th note (Quantization::Q4th = 0) for column 2 (Up arrow)
                             // In dance-single: Left=0, Down=1, Up=2, Right=3

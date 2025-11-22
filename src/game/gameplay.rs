@@ -284,8 +284,15 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
     let rate = if music_rate.is_finite() && music_rate > 0.0 { music_rate } else { 1.0 };
 
     let style = Style { num_cols: 4, num_players: 1 };
-    let noteskin = noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style)
+    let profile = profile::get();
+    let noteskin_path = match profile.noteskin {
+        crate::game::profile::NoteSkin::Cel => "assets/noteskins/cel/dance-single.txt",
+        crate::game::profile::NoteSkin::Metal => "assets/noteskins/metal/dance-single.txt",
+        crate::game::profile::NoteSkin::Note => "assets/noteskins/cel/dance-single.txt",
+    };
+    let noteskin = noteskin::load(Path::new(noteskin_path), &style)
         .ok()
+        .or_else(|| noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style).ok())
         .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok());
 
     let config = crate::config::get();
