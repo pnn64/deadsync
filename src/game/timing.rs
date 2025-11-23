@@ -77,11 +77,10 @@ pub fn mine_window_s() -> f32 { BASE_MINE_S + TIMING_WINDOW_ADD_S }
 #[inline(always)]
 pub fn classify_offset_s(offset_s: f32, profile: &TimingProfile) -> (JudgeGrade, TimingWindow) {
     let abs = offset_s.abs();
-    if let Some(w0) = profile.fa_plus_window_s {
-        if abs <= w0 {
+    if let Some(w0) = profile.fa_plus_window_s
+        && abs <= w0 {
             return (JudgeGrade::Fantastic, TimingWindow::W0);
         }
-    }
     let w = profile.windows_s;
     if abs <= w[0] {
         (JudgeGrade::Fantastic, TimingWindow::W1)
@@ -480,15 +479,15 @@ impl TimingData {
     fn get_bpm_point_index_for_beat(&self, target_beat: f32) -> usize {
 		let points = &self.beat_to_time;
         if points.is_empty() { return 0; }
-        let point_idx = match points.binary_search_by(|p| {
+        
+		match points.binary_search_by(|p| {
             p.beat
                 .partial_cmp(&target_beat)
                 .unwrap_or(std::cmp::Ordering::Less)
         }) {
             Ok(i) => i,
             Err(i) => i.saturating_sub(1),
-        };
-		point_idx
+        }
 	}
 
     pub fn get_time_for_beat(&self, target_beat: f32) -> f32 {
@@ -498,7 +497,7 @@ impl TimingData {
 	fn get_time_for_beat_internal(&self, target_beat: f32) -> f32 {
 		let mut starts = GetBeatStarts::default();
 		starts.last_time = -self.beat0_offset_seconds() - self.beat0_group_offset_seconds();
-		return self.get_elapsed_time_internal(&mut starts, target_beat);
+		self.get_elapsed_time_internal(&mut starts, target_beat)
 	}
 
     pub fn get_bpm_for_beat(&self, target_beat: f32) -> f32 {
@@ -519,11 +518,10 @@ impl TimingData {
                 .fold(0.0, f32::max);
         }
 
-        if let Some(cap_value) = cap {
-            if cap_value > 0.0 {
+        if let Some(cap_value) = cap
+            && cap_value > 0.0 {
                 max_bpm = max_bpm.min(cap_value);
             }
-        }
 
         if max_bpm > 0.0 { max_bpm } else { 120.0 }
     }
@@ -676,8 +674,8 @@ fn process_bpms_and_stops(
             let (change_beat, new_bpm) = bpm_changes[bpm_idx];
 
             time_offset_sec += (change_beat - prev_beat) * 60.0 / bpm.max(f32::EPSILON);
-            if let Some(start) = warp_start {
-                if bpm > 0.0 && time_offset_sec > 0.0 {
+            if let Some(start) = warp_start
+                && bpm > 0.0 && time_offset_sec > 0.0 {
                     let warp_end = change_beat - (time_offset_sec * bpm / 60.0);
                     if warp_end > start {
                         out_warps.push(WarpSegment {
@@ -690,7 +688,6 @@ fn process_bpms_and_stops(
                     }
                     warp_start = None;
                 }
-            }
 
             prev_beat = change_beat;
 
@@ -708,8 +705,8 @@ fn process_bpms_and_stops(
             let (change_beat, stop_secs) = stop_changes[stop_idx];
 
             time_offset_sec += (change_beat - prev_beat) * 60.0 / bpm.max(f32::EPSILON);
-            if let Some(start) = warp_start {
-                if bpm > 0.0 && time_offset_sec > 0.0 {
+            if let Some(start) = warp_start
+                && bpm > 0.0 && time_offset_sec > 0.0 {
                     let warp_end = change_beat - (time_offset_sec * bpm / 60.0);
                     if warp_end > start {
                         out_warps.push(WarpSegment {
@@ -722,7 +719,6 @@ fn process_bpms_and_stops(
                     }
                     warp_start = None;
                 }
-            }
 
             prev_beat = change_beat;
 
@@ -737,8 +733,8 @@ fn process_bpms_and_stops(
                 });
             } else {
                 time_offset_sec += stop_secs;
-                if stop_secs > 0.0 && time_offset_sec > 0.0 {
-                    if let Some(start) = warp_start {
+                if stop_secs > 0.0 && time_offset_sec > 0.0
+                    && let Some(start) = warp_start {
                         let warp_end = change_beat;
                         if warp_end > start {
                             out_warps.push(WarpSegment {
@@ -762,7 +758,6 @@ fn process_bpms_and_stops(
                             warp_start = None;
                         }
                     }
-                }
             }
 
             stop_idx += 1;
@@ -1061,8 +1056,8 @@ pub fn compute_note_timing_stats(notes: &[Note]) -> TimingStats {
     let mut count: usize = 0;
 
     for n in notes {
-        if let Some(j) = &n.result {
-            if j.grade != JudgeGrade::Miss {
+        if let Some(j) = &n.result
+            && j.grade != JudgeGrade::Miss {
                 let e = j.time_error_ms;
                 let a = e.abs();
                 sum_abs += a;
@@ -1070,7 +1065,6 @@ pub fn compute_note_timing_stats(notes: &[Note]) -> TimingStats {
                 if a > max_abs { max_abs = a; }
                 count += 1;
             }
-        }
     }
 
     if count == 0 { return TimingStats::default(); }
@@ -1082,12 +1076,11 @@ pub fn compute_note_timing_stats(notes: &[Note]) -> TimingStats {
     let stddev_ms = if count > 1 {
         let mut sum_diff_sq = 0.0_f32;
         for n in notes {
-            if let Some(j) = &n.result {
-                if j.grade != JudgeGrade::Miss {
+            if let Some(j) = &n.result
+                && j.grade != JudgeGrade::Miss {
                     let d = j.time_error_ms - mean_ms;
                     sum_diff_sq += d * d;
                 }
-            }
         }
         (sum_diff_sq / ((count as f32) - 1.0)).sqrt()
     } else { 0.0 };

@@ -101,7 +101,7 @@ impl State {
         let speed_scale_px = w.max(h) * 1.3;
         let t = self.t0.elapsed().as_secs_f32();
 
-        const PHI: f32 = 0.618_033_988_75;
+        const PHI: f32 = 0.618_034;
 
         for i in 0..10 {
             let variant = self.variants[i];

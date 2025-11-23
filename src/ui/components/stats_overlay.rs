@@ -15,7 +15,7 @@ pub fn build(backend: BackendType, fps: f32, vpf: u32) -> Vec<Actor> {
         "{:.0} FPS\n{} VPF\n{}",
         fps.max(0.0),
         vpf,
-        backend.to_string()
+        backend
     );
 
     // 2. Create a single text actor for the entire block.

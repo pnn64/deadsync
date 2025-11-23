@@ -74,14 +74,12 @@ fn compile_vulkan_shaders(compiler: &mut Compiler, out_dir: &Path) -> Result<(),
         let dest_path = out_dir.join(format!("{file_name}.spv"));
 
         // Timestamp short-circuit (fast path)
-        if let Ok(dest_meta) = fs::metadata(&dest_path) {
-            if let Ok(dest_mtime) = dest_meta.modified() {
-                if dest_mtime >= src_mtime {
+        if let Ok(dest_meta) = fs::metadata(&dest_path)
+            && let Ok(dest_mtime) = dest_meta.modified()
+                && dest_mtime >= src_mtime {
                     // .spv is up-to-date for this profile/options — skip
                     continue;
                 }
-            }
-        }
 
         let source = fs::read_to_string(&path)?;
         let src_name = path.to_string_lossy();

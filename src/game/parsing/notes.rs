@@ -71,11 +71,10 @@ pub fn parse_chart_notes(raw_note_bytes: &[u8]) -> Vec<ParsedNote> {
                         });
                     }
                     b'3' => {
-                        if let Some(head_idx) = hold_heads[col_index].take() {
-                            if let Some(note) = notes.get_mut(head_idx) {
+                        if let Some(head_idx) = hold_heads[col_index].take()
+                            && let Some(note) = notes.get_mut(head_idx) {
                                 note.tail_row_index = Some(row_index);
                             }
-                        }
                     }
                     _ => {}
                 }

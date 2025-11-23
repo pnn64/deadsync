@@ -248,11 +248,10 @@ fn harvest_raw_line_entries_from_text(text: &str) -> HashMap<(String, u32), Stri
 #[inline(always)]
 fn get_page_name_from_path(path: &Path) -> String {
     let filename = path.file_stem().unwrap_or_default().to_string_lossy();
-    if let (Some(s), Some(e)) = (filename.find('['), filename.find(']')) {
-        if s < e {
+    if let (Some(s), Some(e)) = (filename.find('['), filename.find(']'))
+        && s < e {
             return filename[s + 1..e].to_string();
         }
-    }
     "main".to_string()
 }
 
@@ -564,7 +563,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
         let mut specs: Vec<String> = Vec::new();
         // SM implicitly seeds "Common default". We'll add it first; failure is non-fatal.
         specs.push("Common default".to_string());
-        for (_sec, map) in ini_map_lower {
+        for map in ini_map_lower.values() {
             if let Some(v) = map.get("import") {
                 // allow comma/semicolon separated or single value
                 for s in v
@@ -704,11 +703,10 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                 }
 
                 for (key, val) in map {
-                    if let Ok(frame_idx) = key.parse::<usize>() {
-                        if let Ok(w) = val.parse::<i32>() {
+                    if let Ok(frame_idx) = key.parse::<usize>()
+                        && let Ok(w) = val.parse::<i32>() {
                             settings.glyph_widths.insert(frame_idx, w);
                         }
-                    }
                 }
             }
         }
@@ -802,13 +800,11 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                             if let Some(hex) =
                                 spec.strip_prefix("U+").or_else(|| spec.strip_prefix("u+"))
                             {
-                                if let Ok(cp) = u32::from_str_radix(hex, 16) {
-                                    if let Some(ch) = char::from_u32(cp) {
-                                        if frame_index < total_frames {
+                                if let Ok(cp) = u32::from_str_radix(hex, 16)
+                                    && let Some(ch) = char::from_u32(cp)
+                                        && frame_index < total_frames {
                                             char_to_frame.insert(ch, frame_index);
                                         }
-                                    }
-                                }
                             } else if spec.starts_with('"')
                                 && spec.ends_with('"')
                                 && spec.len() >= 2
@@ -820,13 +816,11 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                                 }
                             }
                         }
-                    } else if key_lc.starts_with("range ") {
-                        if let Ok(first_frame) = val_str.parse::<usize>() {
-                            if let Some((codeset, hex)) = parse_range_key(raw_key_lc) {
+                    } else if key_lc.starts_with("range ")
+                        && let Ok(first_frame) = val_str.parse::<usize>()
+                            && let Some((codeset, hex)) = parse_range_key(raw_key_lc) {
                                 apply_range_mapping(&mut char_to_frame, &codeset, hex, first_frame);
                             }
-                        }
-                    }
                 }
             }
         }
@@ -1069,10 +1063,9 @@ fn apply_space_nbsp_symmetry(char_to_frame: &mut std::collections::HashMap<char,
 
 #[inline(always)]
 fn synthesize_space_from_nbsp(all_glyphs: &mut std::collections::HashMap<char, Glyph>) {
-    if !all_glyphs.contains_key(&' ') {
-        if let Some(nbsp) = all_glyphs.get(&'\u{00A0}').cloned() {
+    if !all_glyphs.contains_key(&' ')
+        && let Some(nbsp) = all_glyphs.get(&'\u{00A0}').cloned() {
             all_glyphs.insert(' ', nbsp);
             debug!("SPACE synthesized from NBSP glyph at font level (SM parity).");
         }
-    }
 }

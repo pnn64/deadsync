@@ -142,9 +142,9 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                 ));
 
                 // PACK count — right-aligned, inset from edge
-                if let Some(pack_name) = pack_name_opt {
-                    if let Some(count) = p.pack_song_counts.get(&pack_name) {
-                        if *count > 0 {
+                if let Some(pack_name) = pack_name_opt
+                    && let Some(count) = p.pack_song_counts.get(&pack_name)
+                        && *count > 0 {
                             slot_children.push(act!(text:
                                 font("miso"):
                                 settext(format!("{}", count)):
@@ -156,8 +156,6 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 z(2)
                             ));
                         }
-                    }
-                }
             } else {
                 // SONG title/subtitle — subtract sl_shift to avoid double offset
                 let subtitle_y_offset = if has_subtitle { -line_gap_units } else { 0.0 };
@@ -207,14 +205,12 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     
                     let difficulty_name = crate::ui::color::FILE_DIFFICULTY_NAMES[difficulty_index_to_check];
 
-                    if let Some(chart) = info.charts.iter().find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name)) {
-                        if let Some(cached_score) = scores::get_cached_score(&chart.short_hash) {
-                            if let Actor::Sprite { visible, cell, .. } = &mut grade_actor {
+                    if let Some(chart) = info.charts.iter().find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name))
+                        && let Some(cached_score) = scores::get_cached_score(&chart.short_hash)
+                            && let Actor::Sprite { visible, cell, .. } = &mut grade_actor {
                                 *visible = true;
                                 *cell = Some((cached_score.grade.to_sprite_state(), u32::MAX));
                             }
-                        }
-                    }
                 }
 
                 slot_children.push(grade_actor);

@@ -108,16 +108,14 @@ pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
                 right += 1;
             }
 
-            if left < i && i + 1 < right {
-                if let (Some(w), Some(h)) = (
+            if left < i && i + 1 < right
+                && let (Some(w), Some(h)) = (
                     parse_ascii_digits(&bytes[left..i]),
                     parse_ascii_digits(&bytes[i + 1..right]),
-                ) {
-                    if w > 0 && h > 0 {
+                )
+                    && w > 0 && h > 0 {
                         dims = Some((w, h));
                     }
-                }
-            }
 
             i = right;
             continue;
@@ -352,53 +350,45 @@ impl AssetManager {
 
         if let Ok(entries) = fs::read_dir("assets/noteskins/cel") {
             for entry in entries.flatten() {
-                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
-                    if ext.eq_ignore_ascii_case("png") {
-                        if let Ok(name) = entry.file_name().into_string() {
+                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
+                    && ext.eq_ignore_ascii_case("png")
+                        && let Ok(name) = entry.file_name().into_string() {
                             let key = format!("noteskins/cel/{}", name);
                             textures_to_load.push((key.clone(), key));
                         }
-                    }
-                }
             }
         }
 
         if let Ok(entries) = fs::read_dir("assets/noteskins/metal") {
             for entry in entries.flatten() {
-                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
-                    if ext.eq_ignore_ascii_case("png") {
-                        if let Ok(name) = entry.file_name().into_string() {
+                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
+                    && ext.eq_ignore_ascii_case("png")
+                        && let Ok(name) = entry.file_name().into_string() {
                             let key = format!("noteskins/metal/{}", name);
                             textures_to_load.push((key.clone(), key));
                         }
-                    }
-                }
             }
         }
 
         if let Ok(entries) = fs::read_dir("assets/noteskins/enchantment-v2") {
             for entry in entries.flatten() {
-                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
-                    if ext.eq_ignore_ascii_case("png") {
-                        if let Ok(name) = entry.file_name().into_string() {
+                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
+                    && ext.eq_ignore_ascii_case("png")
+                        && let Ok(name) = entry.file_name().into_string() {
                             let key = format!("noteskins/enchantment-v2/{}", name);
                             textures_to_load.push((key.clone(), key));
                         }
-                    }
-                }
             }
         }
 
         if let Ok(entries) = fs::read_dir("assets/noteskins/devcel-2024-v3") {
             for entry in entries.flatten() {
-                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
-                    if ext.eq_ignore_ascii_case("png") {
-                        if let Ok(name) = entry.file_name().into_string() {
+                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
+                    && ext.eq_ignore_ascii_case("png")
+                        && let Ok(name) = entry.file_name().into_string() {
                             let key = format!("noteskins/devcel-2024-v3/{}", name);
                             textures_to_load.push((key.clone(), key));
                         }
-                    }
-                }
             }
         }
 
@@ -520,7 +510,7 @@ impl AssetManager {
 
     pub fn set_dynamic_banner(&mut self, backend: &mut Backend, path_opt: Option<PathBuf>) -> String {
         if let Some(path) = path_opt {
-            if self.current_dynamic_banner.as_ref().map_or(false, |(_, p)| p == &path) {
+            if self.current_dynamic_banner.as_ref().is_some_and(|(_, p)| p == &path) {
                 return self.current_dynamic_banner.as_ref().unwrap().0.clone();
             }
 
@@ -562,7 +552,7 @@ impl AssetManager {
         const FALLBACK_KEY: &str = "__white";
 
         if let Some((key, graph_data)) = data {
-            if self.current_density_graph.as_ref().map_or(false, |(_, cache_key)| cache_key == &key) {
+            if self.current_density_graph.as_ref().is_some_and(|(_, cache_key)| cache_key == &key) {
                 return self.current_density_graph.as_ref().unwrap().0.clone();
             }
 
@@ -598,7 +588,7 @@ impl AssetManager {
         const FALLBACK_KEY: &str = "__white";
 
         if let Some(path) = path_opt {
-            if self.current_dynamic_background.as_ref().map_or(false, |(_, p)| p == &path) {
+            if self.current_dynamic_background.as_ref().is_some_and(|(_, p)| p == &path) {
                 return self.current_dynamic_background.as_ref().unwrap().0.clone();
             }
 
@@ -634,7 +624,7 @@ impl AssetManager {
 
     pub fn set_profile_avatar(&mut self, backend: &mut Backend, path_opt: Option<PathBuf>) {
         if let Some(path) = path_opt {
-            if self.current_profile_avatar.as_ref().map_or(false, |(_, p)| p == &path) {
+            if self.current_profile_avatar.as_ref().is_some_and(|(_, p)| p == &path) {
                 if let Some((key, _)) = &self.current_profile_avatar {
                     profile::set_avatar_texture_key(Some(key.clone()));
                 }

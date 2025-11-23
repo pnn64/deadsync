@@ -932,7 +932,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
 
     if let Some((arrow_list_index, note_index, _)) = best {
         let note_row_index = state.notes[note_index].row_index;
-        let note_type = state.notes[note_index].note_type.clone();
+        let note_type = state.notes[note_index].note_type;
         let note_time = state.note_time_cache[note_index];
         let time_error_music = current_time - note_time;
         let time_error_real = time_error_music / rate;
@@ -987,15 +987,14 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 }
                 state.receptor_glow_timers[note_col] = RECEPTOR_GLOW_DURATION;
                 trigger_tap_explosion(state, note_col, grade);
-                if let Some(end_time) = state.hold_end_time_cache[idx] {
-                    if matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll) {
+                if let Some(end_time) = state.hold_end_time_cache[idx]
+                    && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll) {
                         if let Some(hold) = state.notes[idx].hold.as_mut() { hold.life = MAX_HOLD_LIFE; }
                         state.active_holds[note_col] = Some(ActiveHold {
-                            note_index: idx, end_time, note_type: state.notes[idx].note_type.clone(),
+                            note_index: idx, end_time, note_type: state.notes[idx].note_type,
                             let_go: false, is_pressed: true, life: MAX_HOLD_LIFE,
                         });
                     }
-                }
             }
             return true;
         }
@@ -1132,10 +1131,10 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
         };
         state.combo = state.combo.saturating_add(combo_increment);
         let combo = state.combo;
-        if combo > 0 && combo % 1000 == 0 {
+        if combo > 0 && combo.is_multiple_of(1000) {
             trigger_combo_milestone(state, ComboMilestoneKind::Thousand);
             trigger_combo_milestone(state, ComboMilestoneKind::Hundred);
-        } else if combo > 0 && combo % 100 == 0 {
+        } else if combo > 0 && combo.is_multiple_of(100) {
             trigger_combo_milestone(state, ComboMilestoneKind::Hundred);
         }
         if !state.first_fc_attempt_broken {
@@ -1251,9 +1250,8 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
         }
     }
     for slot in &mut state.hold_judgments {
-        if let Some(render_info) = slot {
-            if render_info.triggered_at.elapsed().as_secs_f32() >= HOLD_JUDGMENT_TOTAL_DURATION { *slot = None; }
-        }
+        if let Some(render_info) = slot
+            && render_info.triggered_at.elapsed().as_secs_f32() >= HOLD_JUDGMENT_TOTAL_DURATION { *slot = None; }
     }
 }
 
@@ -1267,13 +1265,12 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
         let i = state.next_mine_avoid_cursor;
         let note_time = state.note_time_cache[i];
         if note_time > cutoff_time { break; }
-        if let Some(note) = state.notes.get_mut(i) {
-            if matches!(note.note_type, NoteType::Mine) && note.can_be_judged && note.mine_result.is_none() {
+        if let Some(note) = state.notes.get_mut(i)
+            && matches!(note.note_type, NoteType::Mine) && note.can_be_judged && note.mine_result.is_none() {
                 note.mine_result = Some(MineResult::Avoided);
                 state.mines_avoided = state.mines_avoided.saturating_add(1);
                 info!("MINE AVOIDED: Row {}, Col {}, Time: {:.2}s", note.row_index, note.column, music_time_sec);
             }
-        }
         state.next_mine_avoid_cursor += 1;
     }
 }
@@ -1286,7 +1283,7 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
             let lookahead_beat = state.timing.get_beat_for_time(lookahead_time);
             while state.note_spawn_cursor < state.notes.len() && state.notes[state.note_spawn_cursor].beat < lookahead_beat {
                 let note = &state.notes[state.note_spawn_cursor];
-                state.arrows[note.column].push(Arrow { beat: note.beat, column: note.column, note_type: note.note_type.clone(), note_index: state.note_spawn_cursor });
+                state.arrows[note.column].push(Arrow { beat: note.beat, column: note.column, note_type: note.note_type, note_index: state.note_spawn_cursor });
                 state.note_spawn_cursor += 1;
             }
         }
@@ -1305,7 +1302,7 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
                     let note_disp_beat = state.note_display_beat_cache[state.note_spawn_cursor];
                     if note_disp_beat < target_displayed_beat {
                         let note = &state.notes[state.note_spawn_cursor];
-                        state.arrows[note.column].push(Arrow { beat: note.beat, column: note.column, note_type: note.note_type.clone(), note_index: state.note_spawn_cursor });
+                        state.arrows[note.column].push(Arrow { beat: note.beat, column: note.column, note_type: note.note_type, note_index: state.note_spawn_cursor });
                         state.note_spawn_cursor += 1;
                     } else { break; }
                 }
@@ -1321,7 +1318,7 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
     for (col_idx, col_arrows) in state.arrows.iter_mut().enumerate() {
         let Some(next_arrow_index) = col_arrows.iter().position(|arrow| state.notes[arrow.note_index].result.is_none()) else { continue; };
         let note_index = col_arrows[next_arrow_index].note_index;
-        let (note_row_index, note_type) = { let note = &state.notes[note_index]; (note.row_index, note.note_type.clone()) };
+        let (note_row_index, note_type) = { let note = &state.notes[note_index]; (note.row_index, note.note_type) };
         let note_time = state.note_time_cache[note_index];
 
         if matches!(note_type, NoteType::Mine) {
@@ -1331,13 +1328,12 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                 None => {
                     let mine_window = state.timing_profile.mine_window_s;
                     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
-                    if music_time_sec - note_time > mine_window * rate {
-                        if state.notes[note_index].can_be_judged {
+                    if music_time_sec - note_time > mine_window * rate
+                        && state.notes[note_index].can_be_judged {
                             state.notes[note_index].mine_result = Some(MineResult::Avoided);
                             state.mines_avoided = state.mines_avoided.saturating_add(1);
                             info!("MINE AVOIDED: Row {}, Col {}, Time: {:.2}s", note_row_index, col_idx, music_time_sec);
                         }
-                    }
                 }
             }
             continue;
@@ -1352,8 +1348,8 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                 grade: JudgeGrade::Miss,
                 window: None,
             };
-            if let Some(hold) = state.notes[note_index].hold.as_mut() {
-                if hold.result != Some(HoldResult::Held) {
+            if let Some(hold) = state.notes[note_index].hold.as_mut()
+                && hold.result != Some(HoldResult::Held) {
                     hold.result = Some(HoldResult::LetGo);
                     if hold.let_go_started_at.is_none() {
                         hold.let_go_started_at = Some(music_time_sec);
@@ -1364,7 +1360,6 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                         }
                     }
                 }
-            }
             state.notes[note_index].result = Some(judgment);
             info!("MISSED (pending): Row {}, Col {}", note_row_index, col_idx);
         }
@@ -1381,8 +1376,8 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
         let i = state.next_tap_miss_cursor;
         let note_time = state.note_time_cache[i];
         if note_time > cutoff_time { break; }
-        if let Some(note) = state.notes.get_mut(i) {
-            if !matches!(note.note_type, NoteType::Mine) && note.can_be_judged && note.result.is_none() {
+        if let Some(note) = state.notes.get_mut(i)
+            && !matches!(note.note_type, NoteType::Mine) && note.can_be_judged && note.result.is_none() {
                 let row = note.row_index;
                 let time_err_music = music_time_sec - note_time;
                 let time_err_real = time_err_music / rate;
@@ -1401,8 +1396,8 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                     time_err_real * 1000.0,
                     rate
                 );
-                if let Some(hold) = note.hold.as_mut() {
-                    if hold.result != Some(HoldResult::Held) {
+                if let Some(hold) = note.hold.as_mut()
+                    && hold.result != Some(HoldResult::Held) {
                         hold.result = Some(HoldResult::LetGo);
                         if hold.let_go_started_at.is_none() {
                             hold.let_go_started_at = Some(music_time_sec);
@@ -1413,10 +1408,8 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                             }
                         }
                     }
-                }
                 info!("MISSED (time-based): Row {}", row);
             }
-        }
         state.next_tap_miss_cursor += 1;
     }
 }
@@ -1507,8 +1500,8 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
 }
 
 pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
-    if let (Some(key), Some(start_time)) = (state.hold_to_exit_key, state.hold_to_exit_start) {
-        if start_time.elapsed() >= std::time::Duration::from_secs(1) {
+    if let (Some(key), Some(start_time)) = (state.hold_to_exit_key, state.hold_to_exit_start)
+        && start_time.elapsed() >= std::time::Duration::from_secs(1) {
             state.hold_to_exit_key = None;
             state.hold_to_exit_start = None;
             return match key {
@@ -1517,7 +1510,6 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
                 _ => ScreenAction::None,
             };
         }
-    }
     state.total_elapsed_in_screen += delta_time;
     let now = std::time::Instant::now();
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
@@ -1535,7 +1527,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     state.current_music_time = music_time_sec;
     
     // Optimization: only record if time has advanced slightly to avoid duplicates
-    if state.life_history.last().map_or(true, |(t, _)| *t < music_time_sec) {
+    if state.life_history.last().is_none_or(|(t, _)| *t < music_time_sec) {
         state.life_history.push((music_time_sec, state.life));
     }
 

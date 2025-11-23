@@ -373,8 +373,8 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
             if let Ok(files) = fs::read_dir(&song_path) {
                 for file in files.flatten() {
                     let file_path = file.path();
-                    if let Some(ext) = file_path.extension().and_then(|s| s.to_str()) {
-                        if ext.eq_ignore_ascii_case("sm") || ext.eq_ignore_ascii_case("ssc") {
+                    if let Some(ext) = file_path.extension().and_then(|s| s.to_str())
+                        && (ext.eq_ignore_ascii_case("sm") || ext.eq_ignore_ascii_case("ssc")) {
                             match load_song_from_file(&file_path, config.fastload, config.cachesongs) {
                                 Ok(song_data) => {
                                     current_pack.songs.push(Arc::new(song_data));
@@ -384,7 +384,6 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
                             // Found the simfile, move to the next song directory
                             break;
                         }
-                    }
                 }
             }
         }
@@ -400,8 +399,8 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
                 let b_first_char = b_title.chars().next();
 
                 // Treat a title as "special" if it starts with a non-alphanumeric character.
-                let a_is_special = a_first_char.map_or(false, |c| !c.is_alphanumeric());
-                let b_is_special = b_first_char.map_or(false, |c| !c.is_alphanumeric());
+                let a_is_special = a_first_char.is_some_and(|c| !c.is_alphanumeric());
+                let b_is_special = b_first_char.is_some_and(|c| !c.is_alphanumeric());
 
                 if a_is_special == b_is_special {
                     // If both are special or both are not, sort them alphabetically.
@@ -444,29 +443,23 @@ fn load_song_from_file(path: &Path, fastload: bool, cachesongs: bool) -> Result<
     };
 
     // --- CACHE CHECK ---
-    if fastload {
-        if let (Some(cp), Some(ch)) = (cache_path.as_ref(), content_hash) {
-            if cp.exists() {
-                if let Ok(mut file) = fs::File::open(cp) {
+    if fastload
+        && let (Some(cp), Some(ch)) = (cache_path.as_ref(), content_hash)
+            && cp.exists()
+                && let Ok(mut file) = fs::File::open(cp) {
                     let mut buffer = Vec::new();
-                    if file.read_to_end(&mut buffer).is_ok() {
-                        if let Ok((cached_song, _)) = bincode::decode_from_slice::<CachedSong, _>(&buffer, bincode::config::standard()) {
+                    if file.read_to_end(&mut buffer).is_ok()
+                        && let Ok((cached_song, _)) = bincode::decode_from_slice::<CachedSong, _>(&buffer, bincode::config::standard()) {
                             if cached_song.source_hash == ch && cached_song.rssp_version == rssp::RSSP_VERSION {
                                 info!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
                                 return Ok(cached_song.data.into());
+                            } else if cached_song.source_hash != ch {
+                                info!("Cache stale (content hash mismatch) for: {:?}", path.file_name().unwrap_or_default());
                             } else {
-                                if cached_song.source_hash != ch {
-                                    info!("Cache stale (content hash mismatch) for: {:?}", path.file_name().unwrap_or_default());
-                                } else {
-                                    info!("Cache stale (rssp version mismatch) for: {:?}", path.file_name().unwrap_or_default());
-                                }
+                                info!("Cache stale (rssp version mismatch) for: {:?}", path.file_name().unwrap_or_default());
                             }
                         }
-                    }
                 }
-            }
-        }
-    }
 
     // --- CACHE MISS: PARSE AND WRITE ---
     if fastload {
@@ -476,8 +469,8 @@ fn load_song_from_file(path: &Path, fastload: bool, cachesongs: bool) -> Result<
     }
     let song_data = parse_and_process_song_file(path)?;
 
-    if cachesongs {
-        if let (Some(cp), Some(ch)) = (cache_path, content_hash) {
+    if cachesongs
+        && let (Some(cp), Some(ch)) = (cache_path, content_hash) {
             let serializable_data: SerializableSongData = (&song_data).into();
             let cached_song = CachedSong {
                 rssp_version: rssp::RSSP_VERSION.to_string(),
@@ -495,7 +488,6 @@ fn load_song_from_file(path: &Path, fastload: bool, cachesongs: bool) -> Result<
                 }
             }
         }
-    }
 
     Ok(song_data)
 }
@@ -520,7 +512,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
     let global_fakes_raw = extract_tag(&sim_text, "FAKES").unwrap_or("").trim().to_string();
 
     // Collect per-chart #FAKES from the raw simfile text (handles .sm and .ssc blocks).
-    fn extract_blocks<'a>(text: &'a str) -> Vec<&'a str> {
+    fn extract_blocks(text: &str) -> Vec<&str> {
         let mut blocks = Vec::new();
         let mut i = 0usize;
         let lower = text.to_lowercase();
@@ -650,7 +642,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
                 .map(|e| e.path())
                 .filter(|p| {
                     p.is_file() &&
-                    p.extension().and_then(|s| s.to_str()).map_or(false, |ext| {
+                    p.extension().and_then(|s| s.to_str()).is_some_and(|ext| {
                         matches!(ext.to_lowercase().as_str(), "png" | "jpg" | "jpeg" | "bmp")
                     })
                 })
@@ -672,17 +664,15 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
             // Dimension-based search if no hint match
             if found_bg.is_none() {
                 for file in &image_files {
-                    if let Some(file_name) = file.file_name().and_then(|s| s.to_str()) {
-                         if let Ok((w, h)) = image::image_dimensions(file) {
-                             if w >= 320 && h >= 240 {
+                    if let Some(file_name) = file.file_name().and_then(|s| s.to_str())
+                         && let Ok((w, h)) = image::image_dimensions(file)
+                             && w >= 320 && h >= 240 {
                                 let aspect = if h > 0 { w as f32 / h as f32 } else { 0.0 };
                                 if aspect < 2.0 { // Banners are usually wider than 2:1
                                     found_bg = Some(file_name.to_string());
                                     break;
                                 }
                             }
-                        }
-                    }
                 }
             }
             
@@ -823,11 +813,10 @@ fn find_last_granule_backwards(data: &[u8]) -> Result<u64, String> {
                         .map_err(|_| "Failed to read granule position".to_string())?,
                 );
 
-                if granule != u64::MAX {
-                    if best_granule.map_or(true, |prev| granule > prev) {
+                if granule != u64::MAX
+                    && best_granule.is_none_or(|prev| granule > prev) {
                         best_granule = Some(granule);
                     }
-                }
 
                 // Jump back far enough to definitely get past this page.
                 i = i.saturating_sub(27 + 255 * 255);

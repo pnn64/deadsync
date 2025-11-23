@@ -21,7 +21,7 @@ pub struct Metrics {
 // Thread-local current metrics and current *pixel* size
 thread_local! {
     static CURRENT_METRICS: Cell<Metrics> = Cell::new(default_metrics());
-    static CURRENT_PIXEL:   Cell<(u32,u32)> = Cell::new((854, 480));
+    static CURRENT_PIXEL:   Cell<(u32,u32)> = const { Cell::new((854, 480)) };
 }
 
 #[inline(always)]

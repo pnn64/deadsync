@@ -104,11 +104,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
 
 pub fn load() {
     // --- Load main deadsync.ini ---
-    if !std::path::Path::new(CONFIG_PATH).exists() {
-        if let Err(e) = create_default_config_file() {
+    if !std::path::Path::new(CONFIG_PATH).exists()
+        && let Err(e) = create_default_config_file() {
             warn!("Failed to create default config file: {}", e);
         }
-    }
 
     let mut conf = Ini::new();
     match conf.load(CONFIG_PATH) {
@@ -189,9 +188,8 @@ pub fn load() {
                 need_write_keymaps |= ensure(&mut conf2, "P1_Operator", "");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Restart", "");
             }
-            if need_write_keymaps {
-                if let Err(e) = conf2.write(CONFIG_PATH) { warn!("Failed to append missing keymaps: {}", e); }
-            }
+            if need_write_keymaps
+                && let Err(e) = conf2.write(CONFIG_PATH) { warn!("Failed to append missing keymaps: {}", e); }
 
             // Only write [Options]/[Theme] if any of those keys are missing.
             let missing_opts = {
@@ -203,7 +201,7 @@ pub fn load() {
                     "VideoRenderer","Vsync","Windowed"
                 ];
                 for k in options_keys { if !has("Options", k) { miss = true; break; } }
-                if !miss { if !has("Theme","SimplyLoveColor") { miss = true; } }
+                if !miss && !has("Theme","SimplyLoveColor") { miss = true; }
                 miss
             };
             if missing_opts {
@@ -313,8 +311,7 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
     if parts.len() == 3 {
         let (pad_part, kind, name) = (parts[0], parts[1], parts[2]);
         // Parse device index from PadN
-        if pad_part.starts_with("Pad") {
-            let dev_str = &pad_part[3..];
+        if let Some(dev_str) = pad_part.strip_prefix("Pad") {
             if dev_str.is_empty() {
                 // Treat as any-pad; handled at top via PadDir/PadButton/Face prefixes.
                 // But allow here too for flexibility.

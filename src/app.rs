@@ -179,13 +179,11 @@ impl App {
                 let to = screen;
 
                 // Persist any pending global offset changes when leaving Gameplay.
-                if from == CurrentScreen::Gameplay && to != CurrentScreen::Gameplay {
-                    if let Some(gs) = &self.gameplay_state {
-                        if (gs.global_offset_seconds - gs.initial_global_offset_seconds).abs() > f32::EPSILON {
+                if from == CurrentScreen::Gameplay && to != CurrentScreen::Gameplay
+                    && let Some(gs) = &self.gameplay_state
+                        && (gs.global_offset_seconds - gs.initial_global_offset_seconds).abs() > f32::EPSILON {
                             crate::config::update_global_offset(gs.global_offset_seconds);
                         }
-                    }
-                }
 
                 if from == CurrentScreen::Init && to == CurrentScreen::Menu {
                     info!("Instant navigation Init→Menu (out-transition handled by Init screen)");
@@ -467,8 +465,8 @@ impl App {
                 }
                 return;
             }
-        } else if self.current_screen == CurrentScreen::Gameplay {
-            if let Some(gs) = &mut self.gameplay_state {
+        } else if self.current_screen == CurrentScreen::Gameplay
+            && let Some(gs) = &mut self.gameplay_state {
                 let action = crate::game::gameplay::handle_raw_key_event(gs, &key_event, self.shift_held);
                 if !matches!(action, ScreenAction::None) {
                     if let Err(e) = self.handle_action(action, event_loop) {
@@ -477,17 +475,15 @@ impl App {
                     return;
                 }
             }
-        }
         let is_transitioning = !matches!(self.transition, TransitionState::Idle);
         let _event_timestamp = Instant::now();
 
-        if key_event.state == winit::event::ElementState::Pressed {
-            if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F3) = key_event.physical_key {
+        if key_event.state == winit::event::ElementState::Pressed
+            && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F3) = key_event.physical_key {
                 self.show_overlay = !self.show_overlay;
                 log::info!("Overlay {}", if self.show_overlay { "ON" } else { "OFF" });
             }
             // Screen-specific Escape handling resides in per-screen raw handlers now
-        }
 
         if is_transitioning { return; }
 
@@ -672,15 +668,13 @@ impl ApplicationHandler<UserEvent> for App {
                         match self.current_screen {
                             CurrentScreen::Gameplay => if let Some(gs) = &mut self.gameplay_state {
                                 let action = gameplay::update(gs, delta_time);
-                                if let ScreenAction::Navigate(_) | ScreenAction::Exit = action.clone() {
-                                    if self.handle_action(action, event_loop).is_err() {}
-                                }
+                                if let ScreenAction::Navigate(_) | ScreenAction::Exit = action.clone()
+                                    && self.handle_action(action, event_loop).is_err() {}
                             },
                             CurrentScreen::Init => {
                                 let action = init::update(&mut self.init_state, delta_time);
-                                if let ScreenAction::Navigate(_) | ScreenAction::Exit = action.clone() {
-                                    if self.handle_action(action, event_loop).is_err() {}
-                                }
+                                if let ScreenAction::Navigate(_) | ScreenAction::Exit = action.clone()
+                                    && self.handle_action(action, event_loop).is_err() {}
                             }
                             CurrentScreen::Options => {
                                 options::update(&mut self.options_state, delta_time);
@@ -783,8 +777,8 @@ impl ApplicationHandler<UserEvent> for App {
 
                     if prev == CurrentScreen::SelectMusic || prev == CurrentScreen::PlayerOptions {
                         // When leaving PlayerOptions, persist any user-chosen settings
-                        if prev == CurrentScreen::PlayerOptions {
-                            if let Some(po_state) = &self.player_options_state {
+                        if prev == CurrentScreen::PlayerOptions
+                            && let Some(po_state) = &self.player_options_state {
                                 // Save speed mod to profile
                                 let setting = match po_state.speed_mod.mod_type.as_str() {
                                     "C" => Some(ScrollSpeedSetting::CMod(po_state.speed_mod.value)),
@@ -811,7 +805,6 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.preferred_difficulty_index = po_state.chart_difficulty_index;
                                 info!("Updated preferred difficulty index to {} from PlayerOptions", self.preferred_difficulty_index);
                             }
-                        }
                         // Keep preview alive when returning to SelectMusic/PlayerOptions.
                         if !(target == CurrentScreen::SelectMusic || target == CurrentScreen::PlayerOptions) {
                             crate::core::audio::stop_music();

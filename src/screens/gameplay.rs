@@ -129,12 +129,11 @@ fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
 
     let mut width = slot.def.size[0];
     let mut height = slot.def.size[1];
-    if width <= 0 || height <= 0 {
-        if let Some(frame) = slot.source.frame_size() {
+    if (width <= 0 || height <= 0)
+        && let Some(frame) = slot.source.frame_size() {
             width = frame[0];
             height = frame[1];
         }
-    }
 
     if width <= 0 || height <= 0 {
         warn!("Mine fill slot has invalid size for gradient sampling");
@@ -553,7 +552,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             actors.push(act!(sprite(receptor_slot.texture_key().to_string()):
                 align(0.5, 0.5):
                 xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
-                zoomto(receptor_size[0] as f32, receptor_size[1] as f32):
+                zoomto(receptor_size[0], receptor_size[1]):
                 zoom(bop_zoom):
                 diffuse(
                     receptor_color[0],
@@ -583,7 +582,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     visuals
                         .explosion
                         .as_ref()
-                        .or_else(|| ns.hold.explosion.as_ref())
+                        .or(ns.hold.explosion.as_ref())
                 })
             {
                 let hold_uv = hold_slot.uv_for_frame(0);
@@ -606,8 +605,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 ));
             }
             let glow_timer = state.receptor_glow_timers[i];
-            if glow_timer > 0.0 {
-                if let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref()) {
+            if glow_timer > 0.0
+                && let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref()) {
                     let glow_frame =
                         glow_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
                     let glow_uv = glow_slot.uv_for_frame(glow_frame);
@@ -624,12 +623,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         z(Z_HOLD_GLOW)
                     ));
                 }
-            }
         }
         // Tap explosions
         for i in 0..4 {
-            if let Some(active) = state.tap_explosions[i].as_ref() {
-                if let Some(explosion) = ns.tap_explosions.get(&active.window) {
+            if let Some(active) = state.tap_explosions[i].as_ref()
+                && let Some(explosion) = ns.tap_explosions.get(&active.window) {
                     let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
                     let raw_dir = state
                         .column_scroll_dirs
@@ -691,7 +689,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         ));
                     }
                 }
-            }
         }
         // Mine explosions
         for i in 0..4 {
@@ -749,9 +746,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         // Build candidate indices: visible heads + active holds + decaying holds
         let mut render_indices: Vec<usize> = (min_visible_index..max_visible_index).collect();
         for a in &state.active_holds {
-            if let Some(h) = a.as_ref() {
-                if h.note_index < state.notes.len() { render_indices.push(h.note_index); }
-            }
+            if let Some(h) = a.as_ref()
+                && h.note_index < state.notes.len() { render_indices.push(h.note_index); }
         }
         for &idx in &state.decaying_hold_indices {
             if idx < state.notes.len() { render_indices.push(idx); }
@@ -852,7 +848,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let active_state = state.active_holds[note.column]
                 .as_ref()
                 .filter(|h| h.note_index == note_index);
-            let engaged = active_state.map(|h| active_hold_is_engaged(h)).unwrap_or(false);
+            let engaged = active_state.map(active_hold_is_engaged).unwrap_or(false);
             let use_active = active_state
                 .map(|h| h.is_pressed && !h.let_go)
                 .unwrap_or(false);
@@ -879,12 +875,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 visuals
                     .bottomcap_active
                     .as_ref()
-                    .or_else(|| visuals.bottomcap_inactive.as_ref())
+                    .or(visuals.bottomcap_inactive.as_ref())
             } else {
                 visuals
                     .bottomcap_inactive
                     .as_ref()
-                    .or_else(|| visuals.bottomcap_active.as_ref())
+                    .or(visuals.bottomcap_active.as_ref())
             };
             // Prepare clipped body extents that respect the tail cap on the side
             // where the tail visually exists. For normal orientation (head above
@@ -914,17 +910,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // should be rendered (prevents floating caps when no body segments were drawn).
             let mut rendered_body_top: Option<f32> = None;
             let mut rendered_body_bottom: Option<f32> = None;
-            if body_bottom > body_top {
-                if let Some(body_slot) = if use_active {
+            if body_bottom > body_top
+                && let Some(body_slot) = if use_active {
                     visuals
                         .body_active
                         .as_ref()
-                        .or_else(|| visuals.body_inactive.as_ref())
+                        .or(visuals.body_inactive.as_ref())
                 } else {
                     visuals
                         .body_inactive
                         .as_ref()
-                        .or_else(|| visuals.body_active.as_ref())
+                        .or(visuals.body_active.as_ref())
                 } {
                     let texture_size = body_slot.size();
                     let texture_width = texture_size[0].max(1) as f32;
@@ -1370,7 +1366,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            }
             if let Some(cap_slot) = tail_slot {
                 let tail_position = tail_y;
                 if tail_position > -400.0 && tail_position < screen_height() + 400.0 {
@@ -1452,8 +1447,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 }
             }
-            if hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo) {
-                if head_y >= lane_receptor_y - state.draw_distance_after_targets
+            if (hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo))
+                && head_y >= lane_receptor_y - state.draw_distance_after_targets
                     && head_y <= lane_receptor_y + state.draw_distance_before_targets
                 {
                     let beat_fraction = note.beat.fract();
@@ -1475,7 +1470,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         actors.push(act!(sprite(note_slot.texture_key().to_string()):
                             align(0.5, 0.5):
                             xy(playfield_center_x + col_x_offset as f32, head_y):
-                            zoomto(size[0] as f32, size[1] as f32):
+                            zoomto(size[0], size[1]):
                             rotationz(-note_slot.def.rotation_deg as f32):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                             diffuse(
@@ -1488,7 +1483,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         ));
                     }
                 }
-            }
         }
         // Active arrows
         for (col_idx, column_arrows) in state.arrows.iter().enumerate() {
@@ -1620,7 +1614,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     actors.push(act!(sprite(note_slot.texture_key().to_string()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset as f32, y_pos):
-                        zoomto(note_size[0] as f32, note_size[1] as f32):
+                        zoomto(note_size[0], note_size[1]):
                         rotationz(-note_slot.def.rotation_deg as f32):
                         customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                         z(Z_TAP_NOTE)
@@ -1813,7 +1807,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if matches!(profile.judgment_graphic, profile::JudgmentGraphic::None) {
             // Player chose to hide tap judgment graphics.
             // Still keep life/score effects; only suppress the visual sprite.
-            ()
+            
         } else {
             let judgment = &render_info.judgment;
             let elapsed = render_info.judged_at.elapsed().as_secs_f32();
@@ -2020,8 +2014,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             match n.note_type {
                 NoteType::Tap | NoteType::Hold | NoteType::Roll => {
                     total_steps = total_steps.saturating_add(1);
-                    if matches!(n.note_type, NoteType::Hold | NoteType::Roll) {
-                        if let Some(h) = n.hold.as_ref() {
+                    if matches!(n.note_type, NoteType::Hold | NoteType::Roll)
+                        && let Some(h) = n.hold.as_ref() {
                             match h.result {
                                 Some(HoldResult::Held) => {
                                     held = held.saturating_add(1);
@@ -2032,7 +2026,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 None => {}
                             }
                         }
-                    }
                 }
                 NoteType::Mine => {
                     if n.mine_result == Some(MineResult::Hit) {
@@ -2664,7 +2657,7 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // --- Peak NPS Display (as seen in Simply Love's Step Statistics) ---
     if is_wide() {
-        let scaled_peak = (state.chart.max_nps as f32 * state.music_rate).max(0.0) as f32;
+        let scaled_peak = (state.chart.max_nps as f32 * state.music_rate).max(0.0);
         let peak_nps_text = format!("Peak NPS: {:.2}", scaled_peak);
 
         // Positioned based on visual parity with Simply Love's Step Statistics pane

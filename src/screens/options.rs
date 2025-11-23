@@ -140,8 +140,8 @@ pub fn update(state: &mut State, _dt: f32) {
         (state.nav_key_held_direction, state.nav_key_held_since, state.nav_key_last_scrolled_at)
     {
         let now = Instant::now();
-        if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY {
-            if now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL {
+        if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
+            && now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL {
                 let total = ITEMS.len();
                 if total > 0 {
                     match direction {
@@ -155,7 +155,6 @@ pub fn update(state: &mut State, _dt: f32) {
                     state.nav_key_last_scrolled_at = Some(now);
                 }
             }
-        }
     }
 
     if state.selected != state.prev_selected {

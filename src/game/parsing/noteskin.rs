@@ -985,7 +985,7 @@ pub fn load(path: &Path, style: &Style) -> Result<Noteskin, String> {
     Ok(noteskin)
 }
 
-fn parse_properties<'a>(content: &'a str) -> HashMap<&'a str, &'a str> {
+fn parse_properties(content: &str) -> HashMap<&str, &str> {
     let mut props = HashMap::new();
     let mut start = 0;
     let mut in_quotes = false;
@@ -1014,11 +1014,10 @@ fn parse_properties<'a>(content: &'a str) -> HashMap<&'a str, &'a str> {
         }
     }
 
-    if start < content.len() {
-        if let Some((key, value)) = content[start..].split_once('=') {
+    if start < content.len()
+        && let Some((key, value)) = content[start..].split_once('=') {
             props.insert(key.trim(), value.trim());
         }
-    }
 
     props
 }
@@ -1261,14 +1260,13 @@ fn parse_hold_component(
                 texture, default_key
             );
         }
-    } else if slot.source.is_none() {
-        if let Some(source) = builder.default_sources.get(&default_key) {
+    } else if slot.source.is_none()
+        && let Some(source) = builder.default_sources.get(&default_key) {
             slot.set_source(source.clone());
         }
-    }
 
-    if slot.def.size == [0, 0] {
-        if let Some(source) = slot.source.as_ref() {
+    if slot.def.size == [0, 0]
+        && let Some(source) = slot.source.as_ref() {
             if let Some(size) = source.frame_size() {
                 slot.def.size = size;
             } else {
@@ -1276,7 +1274,6 @@ fn parse_hold_component(
                 slot.def.size = [dims.0 as i32, dims.1 as i32];
             }
         }
-    }
 }
 
 fn parse_glow_sheet(
@@ -1527,8 +1524,8 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                 });
             }
             "effectperiod" => {
-                if let Some(arg) = args.first() {
-                    if let Ok(period) = arg.parse::<f32>() {
+                if let Some(arg) = args.first()
+                    && let Ok(period) = arg.parse::<f32>() {
                         if let Some(glow) = animation.glow.as_mut() {
                             glow.period = period.max(0.0);
                         } else {
@@ -1539,7 +1536,6 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                             });
                         }
                     }
-                }
             }
             "effectcolor1" => {
                 if let Some(color) = parse_color4(&args) {
@@ -1617,16 +1613,14 @@ fn parse_color4(args: &[&str]) -> Option<[f32; 4]> {
 }
 
 fn apply_basic_sprite_properties(slot: &mut SlotBuilder, props: &HashMap<&str, &str>) {
-    if let Some(src_str) = props.get("src") {
-        if let Some((x_str, y_str)) = src_str.split_once(',') {
+    if let Some(src_str) = props.get("src")
+        && let Some((x_str, y_str)) = src_str.split_once(',') {
             slot.def.src = [x_str.parse().unwrap_or(0), y_str.parse().unwrap_or(0)];
         }
-    }
-    if let Some(size_str) = props.get("size") {
-        if let Some((w_str, h_str)) = size_str.split_once(',') {
+    if let Some(size_str) = props.get("size")
+        && let Some((w_str, h_str)) = size_str.split_once(',') {
             slot.def.size = [w_str.parse().unwrap_or(0), h_str.parse().unwrap_or(0)];
         }
-    }
     if let Some(rot_str) = props.get("rot") {
         slot.def.rotation_deg = rot_str.parse().unwrap_or(0);
     }
@@ -1648,16 +1642,14 @@ fn parse_sprite_rule(
         props.contains_key("row") || props.contains_key("col") || props.contains_key("player");
     if !has_range_spec {
         let mut def = builder.defaults.get(tag).cloned().unwrap_or_default();
-        if let Some(src_str) = props.get("src") {
-            if let Some((x_str, y_str)) = src_str.split_once(',') {
+        if let Some(src_str) = props.get("src")
+            && let Some((x_str, y_str)) = src_str.split_once(',') {
                 def.src = [x_str.parse().unwrap_or(0), y_str.parse().unwrap_or(0)];
             }
-        }
-        if let Some(size_str) = props.get("size") {
-            if let Some((w_str, h_str)) = size_str.split_once(',') {
+        if let Some(size_str) = props.get("size")
+            && let Some((w_str, h_str)) = size_str.split_once(',') {
                 def.size = [w_str.parse().unwrap_or(0), h_str.parse().unwrap_or(0)];
             }
-        }
         if let Some(rot_str) = props.get("rot") {
             def.rotation_deg = rot_str.parse().unwrap_or(0);
         }
@@ -1732,7 +1724,7 @@ fn parse_sprite_rule(
 
 fn parse_quant_list(props: &HashMap<&str, &str>) -> Vec<Quantization> {
     if let Some(list) = props.get("quants").or_else(|| props.get("quant")) {
-        list.split(|c| c == ',' || c == ' ' || c == ';')
+        list.split([',', ' ', ';'])
             .filter_map(|part| part.trim().parse::<u32>().ok())
             .filter_map(Quantization::from_row)
             .collect()
@@ -1961,7 +1953,7 @@ fn parse_receptor_pulse(builder: &mut NoteskinBuilder, props: &HashMap<&str, &st
             }
         })
     {
-        if let Some(value) = timing.get(0) {
+        if let Some(value) = timing.first() {
             pulse.ramp_to_half = value.max(0.0);
         }
         if let Some(value) = timing.get(1) {

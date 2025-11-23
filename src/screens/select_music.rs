@@ -60,7 +60,7 @@ fn sec_at_beat_from_bpms(normalized_bpms: &str, target_beat: f64) -> f64 {
     if bpm_map.is_empty() {
         bpm_map.push((0.0, 120.0));
     }
-    if bpm_map.first().map_or(true, |(b, _)| *b != 0.0) {
+    if bpm_map.first().is_none_or(|(b, _)| *b != 0.0) {
         let first_bpm = bpm_map[0].1;
         bpm_map.insert(0, (0.0, first_bpm));
     }
@@ -96,7 +96,7 @@ fn beat_at_sec_from_bpms(normalized_bpms: &str, target_sec: f64) -> f64 {
     if bpm_map.is_empty() {
         bpm_map.push((0.0, 120.0));
     }
-    if bpm_map.first().map_or(true, |(b, _)| *b != 0.0) {
+    if bpm_map.first().is_none_or(|(b, _)| *b != 0.0) {
         let first_bpm = bpm_map[0].1;
         bpm_map.insert(0, (0.0, first_bpm));
     }
@@ -259,7 +259,7 @@ fn find_pack_banner(pack: &SongPack) -> Option<PathBuf> {
             if !p.is_file() { return false; }
             p.extension()
                 .and_then(|s| s.to_str())
-                .map_or(false, |ext| {
+                .is_some_and(|ext| {
                     let ext_lower = ext.to_lowercase();
                     ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg"
                 })
@@ -433,7 +433,7 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                     if state.last_difficulty_nav_key == Some(kc)
                         && state
                             .last_difficulty_nav_time
-                            .map_or(false, |t| now.duration_since(t) < DOUBLE_TAP_WINDOW)
+                            .is_some_and(|t| now.duration_since(t) < DOUBLE_TAP_WINDOW)
                     {
                         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
                             let mut new_idx = state.selected_difficulty_index;
@@ -454,8 +454,8 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                         state.last_difficulty_nav_time = Some(now);
                     }
                     // If Down already pressed, treat as chord: collapse current pack if any
-                    if state.active_chord_keys.contains(&KeyCode::ArrowDown) {
-                        if let Some(pack_to_collapse) = state.expanded_pack_name.clone() {
+                    if state.active_chord_keys.contains(&KeyCode::ArrowDown)
+                        && let Some(pack_to_collapse) = state.expanded_pack_name.clone() {
                             info!("Up+Down combo: Collapsing pack '{}'.", pack_to_collapse);
                             state.expanded_pack_name = None;
                             rebuild_displayed_entries(state);
@@ -468,7 +468,6 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                                 state.time_since_selection_change = 0.0;
                             }
                         }
-                    }
                     state.active_chord_keys.insert(kc);
                 }
             }
@@ -482,7 +481,7 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                     if state.last_difficulty_nav_key == Some(kc)
                         && state
                             .last_difficulty_nav_time
-                            .map_or(false, |t| now.duration_since(t) < DOUBLE_TAP_WINDOW)
+                            .is_some_and(|t| now.duration_since(t) < DOUBLE_TAP_WINDOW)
                     {
                         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
                             let mut new_idx = state.selected_difficulty_index;
@@ -502,8 +501,8 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                         state.last_difficulty_nav_key = Some(kc);
                         state.last_difficulty_nav_time = Some(now);
                     }
-                    if state.active_chord_keys.contains(&KeyCode::ArrowUp) {
-                        if let Some(pack_to_collapse) = state.expanded_pack_name.clone() {
+                    if state.active_chord_keys.contains(&KeyCode::ArrowUp)
+                        && let Some(pack_to_collapse) = state.expanded_pack_name.clone() {
                             info!("Up+Down combo: Collapsing pack '{}'.", pack_to_collapse);
                             state.expanded_pack_name = None;
                             rebuild_displayed_entries(state);
@@ -516,7 +515,6 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                                 state.time_since_selection_change = 0.0;
                             }
                         }
-                    }
                     state.active_chord_keys.insert(kc);
                 }
             }
@@ -586,14 +584,13 @@ pub fn handle_pad_button(state: &mut State, btn: PadButton, pressed: bool) -> Sc
 // Screen-specific raw keyboard handling (keyboard-only actions like F7)
 pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
     if key.state != ElementState::Pressed { return ScreenAction::None; }
-    if let winit::keyboard::PhysicalKey::Code(KeyCode::F7) = key.physical_key {
-        if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
+    if let winit::keyboard::PhysicalKey::Code(KeyCode::F7) = key.physical_key
+        && let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
             let difficulty_name = color::FILE_DIFFICULTY_NAMES[state.selected_difficulty_index];
             if let Some(chart) = song.charts.iter().find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name)) {
                 return ScreenAction::FetchOnlineGrade(chart.short_hash.clone());
             }
         }
-    }
     ScreenAction::None
 }
 
@@ -627,8 +624,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         (state.nav_key_held_direction.clone(), state.nav_key_held_since, state.nav_key_last_scrolled_at)
     {
         let now = Instant::now();
-        if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY {
-            if now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL {
+        if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
+            && now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL {
                 let num_entries = state.entries.len();
                 if num_entries > 0 {
                     match direction {
@@ -644,7 +641,6 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 state.nav_key_last_scrolled_at = Some(now);
                 state.time_since_selection_change = 0.0;
             }
-        }
     }
 
     if state.selected_index != state.prev_selected_index {
@@ -698,8 +694,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         if state.currently_playing_preview_path != music_path_for_preview {
             state.currently_playing_preview_path = music_path_for_preview;
             let mut played = false;
-            if let Some(song) = &selected_song {
-                if let Some((path, cut)) = compute_preview_cut(song) {
+            if let Some(song) = &selected_song
+                && let Some((path, cut)) = compute_preview_cut(song) {
                     info!(
                         "Playing preview for '{}' at {:.2}s for {:.2}s",
                         song.title, cut.start_sec, cut.length_sec
@@ -707,7 +703,6 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                     audio::play_music(path, cut, true, crate::game::profile::get_session_music_rate());
                     played = true;
                 }
-            }
             if !played { audio::stop_music(); }
         }
         
@@ -736,11 +731,9 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 let parsed = crate::game::parsing::notes::parse_chart_notes(&chart.notes);
                 let mut mines_nonfake: u32 = 0;
                 for pn in parsed {
-                    if matches!(pn.note_type, crate::game::note::NoteType::Mine) {
-                        if let Some(beat) = timing.get_beat_for_row(pn.row_index) {
-                            if timing.is_judgable_at_beat(beat) { mines_nonfake = mines_nonfake.saturating_add(1); }
-                        }
-                    }
+                    if matches!(pn.note_type, crate::game::note::NoteType::Mine)
+                        && let Some(beat) = timing.get_beat_for_row(pn.row_index)
+                            && timing.is_judgable_at_beat(beat) { mines_nonfake = mines_nonfake.saturating_add(1); }
                 }
                 state.cached_displayed_mines_hash = Some(chart_hash.clone());
                 state.cached_displayed_mines_value = mines_nonfake;
@@ -1008,7 +1001,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let s = song.display_bpm.trim();
                         if !s.is_empty() && s != "*" {
                             let parts: Vec<&str> =
-                                s.split(|c| c == ':' || c == '-').map(str::trim).collect();
+                                s.split([':', '-']).map(str::trim).collect();
                             if parts.len() == 2 {
                                 let min = parts[0].parse::<f32>().ok();
                                 let max = parts[1].parse::<f32>().ok();
@@ -1511,11 +1504,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             xy(pane_cx + cols_x[3], pane_top + rows_y[1]):
             z(121): diffuse(0.0, 0.0, 0.0, 1.0)
         );
-        if !is_wide() {
-            if let Actor::Text { max_width, .. } = &mut meter_actor {
+        if !is_wide()
+            && let Actor::Text { max_width, .. } = &mut meter_actor {
                 *max_width = Some(66.0);
             }
-        }
         actors.push(meter_actor);
     }
 
@@ -1659,7 +1651,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // dim when no chart: #182025
             (0.0941, 0.1255, 0.1451, 1.0)
         };
-        let meter_text = meters[row_i].map(|m| m.to_string()).unwrap_or_else(|| "".to_string());
+        let meter_text = meters[row_i].map(|m| m.to_string()).unwrap_or_default();
 
         actors.push(act!(text:
             font("wendy"):

@@ -51,11 +51,10 @@ fn sprite_heart(
             alpha(end_alpha):
         sleep(0.0): zoom(0.0)
     );
-    if flip_x {
-        if let Actor::Sprite { flip_x: fx, .. } = &mut actor {
+    if flip_x
+        && let Actor::Sprite { flip_x: fx, .. } = &mut actor {
             *fx = true;
         }
-    }
     actor
 }
 

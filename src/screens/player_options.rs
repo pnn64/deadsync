@@ -129,7 +129,7 @@ fn reference_bpm_for_song(song: &SongData) -> f32 {
             s.parse::<f32>().ok()
         }
     } else { None };
-    let bpm = from_display.unwrap_or_else(|| song.max_bpm as f32);
+    let bpm = from_display.unwrap_or(song.max_bpm as f32);
     if bpm.is_finite() && bpm > 0.0 { bpm } else { 120.0 }
 }
 
@@ -934,34 +934,26 @@ fn apply_profile_defaults(rows: &mut [Row]) -> (u8, u8) {
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Scroll") {
         use crate::game::profile::ScrollOption;
         // Map profile flags onto row choice indices.
-        if profile.scroll_option.contains(ScrollOption::Reverse) {
-            if let Some(idx) = row.choices.iter().position(|c| c == "Reverse") {
-                if idx < 8 {
+        if profile.scroll_option.contains(ScrollOption::Reverse)
+            && let Some(idx) = row.choices.iter().position(|c| c == "Reverse")
+                && idx < 8 {
                     scroll_active_mask |= 1u8 << (idx as u8);
                 }
-            }
-        }
-        if profile.scroll_option.contains(ScrollOption::Split) {
-            if let Some(idx) = row.choices.iter().position(|c| c == "Split") {
-                if idx < 8 {
+        if profile.scroll_option.contains(ScrollOption::Split)
+            && let Some(idx) = row.choices.iter().position(|c| c == "Split")
+                && idx < 8 {
                     scroll_active_mask |= 1u8 << (idx as u8);
                 }
-            }
-        }
-        if profile.scroll_option.contains(ScrollOption::Alternate) {
-            if let Some(idx) = row.choices.iter().position(|c| c == "Alternate") {
-                if idx < 8 {
+        if profile.scroll_option.contains(ScrollOption::Alternate)
+            && let Some(idx) = row.choices.iter().position(|c| c == "Alternate")
+                && idx < 8 {
                     scroll_active_mask |= 1u8 << (idx as u8);
                 }
-            }
-        }
-        if profile.scroll_option.contains(ScrollOption::Cross) {
-            if let Some(idx) = row.choices.iter().position(|c| c == "Cross") {
-                if idx < 8 {
+        if profile.scroll_option.contains(ScrollOption::Cross)
+            && let Some(idx) = row.choices.iter().position(|c| c == "Cross")
+                && idx < 8 {
                     scroll_active_mask |= 1u8 << (idx as u8);
                 }
-            }
-        }
 
         // Cursor starts at the first active choice if any, otherwise at the first option.
         if scroll_active_mask != 0 {
@@ -1196,8 +1188,8 @@ fn change_choice(state: &mut State, delta: isize) {
                 state.speed_mod.value = new_value;
 
                 // Update the choices vec for the "Speed Mod" row.
-                if let Some(speed_mod_row) = state.rows.get_mut(1) {
-                    if speed_mod_row.name == "Speed Mod" {
+                if let Some(speed_mod_row) = state.rows.get_mut(1)
+                    && speed_mod_row.name == "Speed Mod" {
                         speed_mod_row.choices[0] = match new_type {
                             "X" => format!("{:.2}x", new_value),
                             "C" => format!("C{}", new_value as i32),
@@ -1205,7 +1197,6 @@ fn change_choice(state: &mut State, delta: isize) {
                             _ => String::new(),
                         };
                     }
-                }
             } else if row.name == "Background Filter" {
                 // Persist the new filter level to the profile
                 let setting = match row.selected_choice_index {
@@ -1225,17 +1216,15 @@ fn change_choice(state: &mut State, delta: isize) {
                     }
                 }
             } else if row.name == "NoteField Offset X" {
-                if let Some(choice) = row.choices.get(row.selected_choice_index) {
-                    if let Ok(raw) = choice.parse::<i32>() {
+                if let Some(choice) = row.choices.get(row.selected_choice_index)
+                    && let Ok(raw) = choice.parse::<i32>() {
                         crate::game::profile::update_notefield_offset_x(raw);
                     }
-                }
             } else if row.name == "NoteField Offset Y" {
-                if let Some(choice) = row.choices.get(row.selected_choice_index) {
-                    if let Ok(raw) = choice.parse::<i32>() {
+                if let Some(choice) = row.choices.get(row.selected_choice_index)
+                    && let Ok(raw) = choice.parse::<i32>() {
                         crate::game::profile::update_notefield_offset_y(raw);
                     }
-                }
             } else if row.name == "Judgment Font" {
                 // Persist tap judgment font selection to the profile
                 let setting = match row.selected_choice_index {
@@ -1310,11 +1299,10 @@ fn change_choice(state: &mut State, delta: isize) {
                     .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok());
             } else if row.name == "Stepchart" {
                 // Update the state's difficulty index to match the newly selected choice
-                if let Some(diff_indices) = &row.choice_difficulty_indices {
-                    if let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index) {
+                if let Some(diff_indices) = &row.choice_difficulty_indices
+                    && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index) {
                         state.chart_difficulty_index = difficulty_idx;
                     }
-                }
             }
             audio::play_sfx("assets/sounds/change_value.ogg");
         }
@@ -1349,8 +1337,8 @@ pub fn update(state: &mut State, dt: f32) {
         state.nav_key_last_scrolled_at,
     ) {
         let now = Instant::now();
-        if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY {
-            if now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL {
+        if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
+            && now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL {
                 let total_rows = state.rows.len();
                 if total_rows > 0 {
                     match direction {
@@ -1368,7 +1356,6 @@ pub fn update(state: &mut State, dt: f32) {
                     state.nav_key_last_scrolled_at = Some(now);
                 }
             }
-        }
     }
     // Advance the help reveal animation timer
     state.help_anim_time += dt;
@@ -1582,7 +1569,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match ev.action {
         VirtualAction::p1_back if ev.pressed => return ScreenAction::Navigate(Screen::SelectMusic),
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
-            if let Some(_) = state.rows.get(0) {
+            if state.rows.first().is_some() {
                 if ev.pressed {
                     let num_rows = state.rows.len();
                     state.selected_row = (state.selected_row + num_rows - 1) % num_rows;
@@ -1593,7 +1580,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
         }
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
-            if let Some(_) = state.rows.get(0) {
+            if state.rows.first().is_some() {
                 if ev.pressed {
                     let num_rows = state.rows.len();
                     state.selected_row = (state.selected_row + 1) % num_rows;
@@ -1627,10 +1614,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ) {
                 // FA+ Options row uses Start as a toggle for the currently focused option.
                 toggle_fa_plus_row(state);
-            } else if state.selected_row == num_rows - 1 {
-                if let Some(what_comes_next_row) = state.rows.get(num_rows - 2) {
-                    if what_comes_next_row.name == "What comes next?" {
-                        if let Some(choice) = what_comes_next_row
+            } else if state.selected_row == num_rows - 1
+                && let Some(what_comes_next_row) = state.rows.get(num_rows - 2)
+                    && what_comes_next_row.name == "What comes next?"
+                        && let Some(choice) = what_comes_next_row
                             .choices
                             .get(what_comes_next_row.selected_choice_index)
                         {
@@ -1651,9 +1638,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                                 _ => {}
                             }
                         }
-                    }
-                }
-            }
         }
         _ => {}
     }
@@ -1803,7 +1787,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 x += *w + spacing;
             }
             let sel = r.selected_choice_index.min(widths.len().saturating_sub(1));
-            return x_positions[sel] + widths[sel] * 0.5;
+            x_positions[sel] + widths[sel] * 0.5
         } else {
             // Single value rows: default to Speed Mod helper X, except Music Rate centered in items column
             let mut cx = speed_mod_x;
@@ -1812,7 +1796,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 let item_col_w = row_width - TITLE_BG_WIDTH;
                 cx = item_col_left + item_col_w * 0.5;
             }
-            return cx;
+            cx
         }
     };
 
@@ -1996,8 +1980,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             center_y = state.cursor_row_anim_from_y + (current_row_y - state.cursor_row_anim_from_y) * t;
                         }
                         // Interpolate ring size between previous row and this row when vertically tweening
-                        if state.cursor_row_anim_t < 1.0 {
-                            if let Some(from_row) = state.cursor_row_anim_from_row {
+                        if state.cursor_row_anim_t < 1.0
+                            && let Some(from_row) = state.cursor_row_anim_from_row {
                                 let (from_dw, from_dh) = calc_row_dims(from_row);
                                 let tsize = (from_dw / width_ref).clamp(0.0, 1.0);
                                 let mut pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * tsize;
@@ -2009,7 +1993,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 ring_w = ring_w_from + (ring_w - ring_w_from) * t;
                                 ring_h = ring_h_from + (ring_h - ring_h_from) * t;
                             }
-                        }
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;
                         let top = center_y - ring_h * 0.5;
@@ -2176,8 +2159,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 }
                                 center_y = state.cursor_row_anim_from_y + (current_row_y - state.cursor_row_anim_from_y) * t;
                             }
-                            if let Some(anim_row) = state.cursor_anim_row {
-                                if anim_row == item_idx && state.cursor_anim_t < 1.0 {
+                            if let Some(anim_row) = state.cursor_anim_row
+                                && anim_row == item_idx && state.cursor_anim_t < 1.0 {
                                     let from_idx = state.cursor_anim_from_choice.min(widths.len().saturating_sub(1));
                                     let to_idx = sel_idx.min(widths.len().saturating_sub(1));
                                     let from_center_x = x_positions[from_idx] + widths[from_idx] * 0.5;
@@ -2198,10 +2181,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     ring_w = ring_w_from + (ring_w - ring_w_from) * t;
                                     ring_h = ring_h_from + (ring_h - ring_h_from) * t;
                                 }
-                            }
                             // If not horizontally tweening, but vertically tweening rows, interpolate size
-                            if state.cursor_row_anim_t < 1.0 && (state.cursor_anim_row.is_none() || state.cursor_anim_row != Some(item_idx)) {
-                                if let Some(from_row) = state.cursor_row_anim_from_row {
+                            if state.cursor_row_anim_t < 1.0 && (state.cursor_anim_row.is_none() || state.cursor_anim_row != Some(item_idx))
+                                && let Some(from_row) = state.cursor_row_anim_from_row {
                                     let (from_dw, from_dh) = calc_row_dims(from_row);
                                     let mut size_t_from = from_dw / width_ref;
                                     if !size_t_from.is_finite() { size_t_from = 0.0; }
@@ -2216,7 +2198,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     ring_w = ring_w_from + (ring_w - ring_w_from) * t;
                                     ring_h = ring_h_from + (ring_h - ring_h_from) * t;
                                 }
-                            }
 
                             let left = center_x - ring_w * 0.5;
                             let right = center_x + ring_w * 0.5;
@@ -2336,8 +2317,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             center_y = state.cursor_row_anim_from_y + (current_row_y - state.cursor_row_anim_from_y) * t;
                         }
                         // Interpolate ring size between previous row and this row when vertically tweening
-                        if state.cursor_row_anim_t < 1.0 {
-                            if let Some(from_row) = state.cursor_row_anim_from_row {
+                        if state.cursor_row_anim_t < 1.0
+                            && let Some(from_row) = state.cursor_row_anim_from_row {
                                 let (from_dw, from_dh) = calc_row_dims(from_row);
                                 let tsize = (from_dw / width_ref).clamp(0.0, 1.0);
                                 let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * tsize;
@@ -2347,7 +2328,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 ring_w = ring_w_from + (ring_w - ring_w_from) * t;
                                 ring_h = ring_h_from + (ring_h - ring_h_from) * t;
                             }
-                        }
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;
                         let top = center_y - ring_h / 2.0;
@@ -2454,8 +2434,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                     // Add noteskin preview for "NoteSkin" row showing animated 4th note
-                    if row.name == "NoteSkin" {
-                        if let Some(ns) = &state.noteskin {
+                    if row.name == "NoteSkin"
+                        && let Some(ns) = &state.noteskin {
                             // Render a 4th note (Quantization::Q4th = 0) for column 2 (Up arrow)
                             // In dance-single: Left=0, Down=1, Up=2, Right=3
                             let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
@@ -2493,7 +2473,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 ));
                             }
                         }
-                    }
                     // Add combo preview for "Combo Font" row showing ticking numbers
                     if row.name == "Combo Font" {
                         let combo_text = state.combo_preview_count.to_string();

@@ -71,7 +71,7 @@ fn estimate_object_count(
                                 return false;
                             }
                             let mapped = fm.glyph_map.contains_key(&c)
-                                || fallback_font.map_or(false, |f| f.glyph_map.contains_key(&c));
+                                || fallback_font.is_some_and(|f| f.glyph_map.contains_key(&c));
                             mapped || fm.default_glyph.is_some()
                         })
                         .count();

@@ -334,7 +334,7 @@ fn create_opengl_context(
         let vsync_logic = move |display: &Display| {
             info!("Attempting to set VSync via wglSwapIntervalEXT...");
             type SwapIntervalFn = extern "system" fn(i32) -> i32;
-            let proc_name = CStr::from_bytes_with_nul(b"wglSwapIntervalEXT\0").unwrap();
+            let proc_name = c"wglSwapIntervalEXT";
             let proc = display.get_proc_address(proc_name);
             if !proc.is_null() {
                 let f: SwapIntervalFn = unsafe { std::mem::transmute(proc) };

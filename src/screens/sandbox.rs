@@ -60,8 +60,8 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 }
 
 pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAction {
-    if key_event.state == ElementState::Pressed && !key_event.repeat {
-        if let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key {
+    if key_event.state == ElementState::Pressed && !key_event.repeat
+        && let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key {
             // F4 or Escape navigates back to Menu
             if matches!(code, winit::keyboard::KeyCode::F4 | winit::keyboard::KeyCode::Escape) {
                 return ScreenAction::Navigate(Screen::Menu);
@@ -72,7 +72,6 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAc
                 state.last_inputs.pop_back();
             }
         }
-    }
     ScreenAction::None
 }
 
@@ -139,11 +138,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
 }
 
 pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if ev.pressed {
-        match ev.action {
-            VirtualAction::p1_back => return ScreenAction::Navigate(Screen::Menu),
-            _ => {}
-        }
-    }
+    if ev.pressed
+        && ev.action == VirtualAction::p1_back { return ScreenAction::Navigate(Screen::Menu) }
     ScreenAction::None
 }

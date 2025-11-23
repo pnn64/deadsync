@@ -141,8 +141,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             match n.note_type {
                 NoteType::Tap | NoteType::Hold | NoteType::Roll => {
                     total_steps = total_steps.saturating_add(1);
-                    if matches!(n.note_type, NoteType::Hold | NoteType::Roll) {
-                        if let Some(h) = n.hold.as_ref() {
+                    if matches!(n.note_type, NoteType::Hold | NoteType::Roll)
+                        && let Some(h) = n.hold.as_ref() {
                             match h.result {
                                 Some(HoldResult::Held) => {
                                     held = held.saturating_add(1);
@@ -153,7 +153,6 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                                 None => {}
                             }
                         }
-                    }
                 }
                 NoteType::Mine => {
                     if n.mine_result == Some(MineResult::Hit) {
@@ -641,7 +640,7 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
         let graph_area_height = (pane_height - topbar_height - bottombar_height).max(1.0_f32);
         let y_bottom = pane_height - bottombar_height;
         let worst_bin = (score_info.histogram.worst_window_ms / 1.0_f32).round() as i32; // 1ms bins
-        let total_bins = (worst_bin * 2 + 1).max(1) as i32;
+        let total_bins = (worst_bin * 2 + 1).max(1);
         let bar_w = pane_width / (total_bins as f32);
 
         let use_smoothing = crate::config::get().smooth_histogram;

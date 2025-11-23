@@ -58,7 +58,7 @@ impl SongData {
         if !self.display_bpm.is_empty() && &self.display_bpm != "*" {
             let s = &self.display_bpm;
             // Handle range "min:max" or "min - max"
-            let parts: Vec<&str> = s.split(|c| c == ':' || c == '-').map(str::trim).collect();
+            let parts: Vec<&str> = s.split([':', '-']).map(str::trim).collect();
             if parts.len() == 2 {
                 if let (Some(min), Some(max)) = (parts[0].parse::<f32>().ok(), parts[1].parse::<f32>().ok()) {
                     let min_i = min.round() as i32;

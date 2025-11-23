@@ -660,10 +660,8 @@ pub fn draw(
             if runs.is_empty() || set != last_set {
                 runs.push(Run { set, start: written, count: 1 });
                 last_set = set;
-            } else {
-                if let Some(r) = runs.last_mut() {
-                    r.count += 1;
-                }
+            } else if let Some(r) = runs.last_mut() {
+                r.count += 1;
             }
             written += 1;
         }

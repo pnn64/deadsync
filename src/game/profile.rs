@@ -114,18 +114,15 @@ const GROOVESTATS_INI_PATH: &str = "save/profiles/00000000/groovestats.ini";
 const PROFILE_AVATAR_PATH: &str = "save/profiles/00000000/profile.png";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum BackgroundFilter {
     Off,
     Dark,
     Darker,
+    #[default]
     Darkest,
 }
 
-impl Default for BackgroundFilter {
-    fn default() -> Self {
-        BackgroundFilter::Darkest
-    }
-}
 
 impl FromStr for BackgroundFilter {
     type Err = String;
@@ -152,18 +149,15 @@ impl core::fmt::Display for BackgroundFilter {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum HoldJudgmentGraphic {
+    #[default]
     Love,
     Mute,
     ITG2,
     None,
 }
 
-impl Default for HoldJudgmentGraphic {
-    fn default() -> Self {
-        HoldJudgmentGraphic::Love
-    }
-}
 
 impl FromStr for HoldJudgmentGraphic {
     type Err = String;
@@ -190,6 +184,7 @@ impl core::fmt::Display for HoldJudgmentGraphic {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum JudgmentGraphic {
     Bebas,
     Censored,
@@ -201,6 +196,7 @@ pub enum JudgmentGraphic {
     Grammar,
     GrooveNights,
     ITG2,
+    #[default]
     Love,
     LoveChroma,
     Miso,
@@ -214,11 +210,6 @@ pub enum JudgmentGraphic {
     None,
 }
 
-impl Default for JudgmentGraphic {
-    fn default() -> Self {
-        JudgmentGraphic::Love
-    }
-}
 
 impl FromStr for JudgmentGraphic {
     type Err = String;
@@ -284,18 +275,15 @@ impl core::fmt::Display for JudgmentGraphic {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum NoteSkin {
+    #[default]
     Cel,
     Metal,
     EnchantmentV2,
     DevCel2024V3,
 }
 
-impl Default for NoteSkin {
-    fn default() -> Self {
-        NoteSkin::Cel
-    }
-}
 
 impl FromStr for NoteSkin {
     type Err = String;
@@ -322,7 +310,9 @@ impl core::fmt::Display for NoteSkin {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum ComboFont {
+    #[default]
     Wendy,
     ArialRounded,
     Asap,
@@ -333,11 +323,6 @@ pub enum ComboFont {
     None,
 }
 
-impl Default for ComboFont {
-    fn default() -> Self {
-        ComboFont::Wendy
-    }
-}
 
 impl FromStr for ComboFont {
     type Err = String;
@@ -609,12 +594,11 @@ fn save_groovestats_ini() {
 }
 
 pub fn load() {
-    if !Path::new(PROFILE_INI_PATH).exists() || !Path::new(GROOVESTATS_INI_PATH).exists() {
-        if let Err(e) = create_default_files() {
+    if (!Path::new(PROFILE_INI_PATH).exists() || !Path::new(GROOVESTATS_INI_PATH).exists())
+        && let Err(e) = create_default_files() {
             warn!("Failed to create default profile files: {}", e);
             // Proceed with default struct values and attempt to save them.
         }
-    }
 
     {
         let mut profile = PROFILE.lock().unwrap();

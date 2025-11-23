@@ -109,7 +109,7 @@ pub fn poll_and_collect(
         // Multi-device: do not filter by active_id. Maintain per-device state.
         if active_id.is_none() { *active_id = Some(id); }
 
-        let ps = state.states.entry(id).or_insert_with(PerPadState::default);
+        let ps = state.states.entry(id).or_default();
 
         match event {
             EventType::ButtonPressed(btn, _) => {
