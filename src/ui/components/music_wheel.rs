@@ -182,18 +182,23 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     ));
                 }
 
-                // --- Grade Sprite (Now with real data) ---
-                let mut grade_actor = {
-                    let grade_x = widescale(10.0, 17.0); // widescale(38.0, 50.0) - sl_shift
-                    let grade_y = half_item_h;
-                    let grade_zoom = widescale(0.18, 0.3);
-                    
-                    act!(sprite("grades/grades 1x19.png"):
-                        align(0.5, 0.5): xy(grade_x, grade_y): zoom(grade_zoom): z(2): visible(false)
-                    )
-                };
+                // --- Grade Sprite + Lamp (using cached scores) ---
+                let grade_x = widescale(10.0, 17.0); // widescale(38.0, 50.0) - sl_shift
+                let grade_y = half_item_h;
+                let grade_zoom = widescale(0.18, 0.3);
 
-                // Find the relevant chart to check for a grade
+                let mut grade_actor = act!(sprite("grades/grades 1x19.png"):
+                    align(0.5, 0.5):
+                    xy(grade_x, grade_y):
+                    zoom(grade_zoom):
+                    z(2):
+                    visible(false)
+                );
+
+                // Optional lamp quad, positioned to the left of the grade sprite.
+                let mut lamp_actor: Option<Actor> = None;
+
+                // Find the relevant chart to check for a grade (and lamp).
                 if let Some(MusicWheelEntry::Song(info)) = p.entries.get(list_index) {
                     // For the selected item, use the *actual* selected difficulty.
                     // For all other items, use the player's *preferred* difficulty.
@@ -202,18 +207,43 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     } else {
                         p.preferred_difficulty_index
                     };
-                    
+
                     let difficulty_name = crate::ui::color::FILE_DIFFICULTY_NAMES[difficulty_index_to_check];
 
-                    if let Some(chart) = info.charts.iter().find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name))
-                        && let Some(cached_score) = scores::get_cached_score(&chart.short_hash)
-                            && let Actor::Sprite { visible, cell, .. } = &mut grade_actor {
+                    if let Some(chart) = info.charts.iter().find(|c| {
+                        c.difficulty.eq_ignore_ascii_case(difficulty_name)
+                    }) {
+                        if let Some(cached_score) = scores::get_cached_score(&chart.short_hash) {
+                            if let Actor::Sprite { visible, cell, .. } = &mut grade_actor {
                                 *visible = true;
                                 *cell = Some((cached_score.grade.to_sprite_state(), u32::MAX));
                             }
+
+                            if let Some(idx) = cached_score.lamp_index {
+                                let lamp_color_index = (idx as usize) % color::JUDGMENT_HEX.len();
+                                let lamp_color = color::rgba_hex(color::JUDGMENT_HEX[lamp_color_index]);
+
+                                // Position and size mirror Simply Love's lamp quad.
+                                let lamp_x = grade_x - widescale(13.0, 20.0);
+                                let lamp_w = widescale(5.0, 6.0);
+                                let lamp_h = 31.0;
+
+                                lamp_actor = Some(act!(quad:
+                                    align(0.5, 0.5):
+                                    xy(lamp_x, grade_y):
+                                    zoomto(lamp_w, lamp_h):
+                                    diffuse(lamp_color[0], lamp_color[1], lamp_color[2], lamp_color[3]):
+                                    z(2)
+                                ));
+                            }
+                        }
+                    }
                 }
 
                 slot_children.push(grade_actor);
+                if let Some(lamp) = lamp_actor {
+                    slot_children.push(lamp);
+                }
             }
 
             // Container: left-anchored at SL highlight-left

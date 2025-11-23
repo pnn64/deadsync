@@ -37,6 +37,10 @@ impl Grade {
 pub struct CachedScore {
     pub grade: Grade,
     pub score_percent: f64, // Stored as 0.0 to 1.0
+    /// Optional lamp index for UI (e.g., Select Music wheel).
+    /// This is intentionally UI-agnostic: the meaning of the index is left
+    /// to the presentation layer (colors, effects, etc.).
+    pub lamp_index: Option<u8>,
 }
 
 // --- Global Grade Cache ---
@@ -130,9 +134,19 @@ pub fn fetch_and_store_grade(profile: Profile, chart_hash: String) -> Result<(),
 
     if let Some(score_data) = player_score {
         let grade = score_to_grade(score_data.score);
+        // For now, assign a deterministic "random" lamp index based on the chart hash.
+        // This keeps behavior stable across runs without pulling in RNG dependencies.
+        let lamp_index = {
+            let mut h: u32 = 0;
+            for b in chart_hash.as_bytes() {
+                h = h.wrapping_mul(31).wrapping_add(*b as u32);
+            }
+            Some((h & 0xFF) as u8)
+        };
         let cached_score = CachedScore {
             grade,
             score_percent: score_data.score / 10000.0,
+            lamp_index,
         };
         set_cached_score(chart_hash, cached_score);
     } else {
@@ -143,6 +157,8 @@ pub fn fetch_and_store_grade(profile: Profile, chart_hash: String) -> Result<(),
         let cached_score = CachedScore {
             grade: Grade::Failed,
             score_percent: 0.0,
+            // No lamp when there is no score for this chart.
+            lamp_index: None,
         };
         set_cached_score(chart_hash, cached_score);
     }
