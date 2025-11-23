@@ -4,8 +4,7 @@ use crate::core::space::*;
 use crate::core::space::{is_wide, widescale};
 use crate::game::judgment;
 use crate::game::judgment::{JudgeGrade, TimingWindow};
-use crate::game::note::HoldResult;
-use crate::game::note::NoteType;
+use crate::game::note::{HoldResult, MineResult, NoteType};
 use crate::game::parsing::noteskin::{Quantization, SpriteSlot, NUM_QUANTIZATIONS};
 use crate::game::{profile, scroll::ScrollSpeedSetting, timing as timing_stats};
 use crate::ui::actors::{Actor, SizeSpec};
@@ -1986,18 +1985,80 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let clamped_width = screen_width().clamp(640.0, 854.0);
     let score_x = screen_center_x() - clamped_width / 4.3;
     let score_y = 56.0;
-    let score_percent = (judgment::calculate_itg_score_percent(
-        &state.scoring_counts,
-        state.holds_held_for_score,
-        state.rolls_held_for_score,
-        state.mines_hit_for_score,
-        state.possible_grade_points,
-    ) * 100.0) as f32;
-    let percent_text = format!("{:.2}", score_percent);
+    let (score_text, score_color) = if profile.show_ex_score {
+        // FA+ EX score display (Simply Love EX scoring semantics).
+        // We derive per-window tap counts (including W0), hold/roll results,
+        // and mine hits from the current gameplay state.
+        let windows = timing_stats::compute_window_counts(&state.notes);
+        let mut total_steps: u32 = 0;
+        let mut held: u32 = 0;
+        let mut let_go: u32 = 0;
+        let mut hit_mine: u32 = 0;
+
+        for n in &state.notes {
+            if n.is_fake || !n.can_be_judged {
+                continue;
+            }
+            match n.note_type {
+                NoteType::Tap | NoteType::Hold | NoteType::Roll => {
+                    total_steps = total_steps.saturating_add(1);
+                    if matches!(n.note_type, NoteType::Hold | NoteType::Roll) {
+                        if let Some(h) = n.hold.as_ref() {
+                            match h.result {
+                                Some(HoldResult::Held) => {
+                                    held = held.saturating_add(1);
+                                }
+                                Some(HoldResult::LetGo) => {
+                                    let_go = let_go.saturating_add(1);
+                                }
+                                None => {}
+                            }
+                        }
+                    }
+                }
+                NoteType::Mine => {
+                    if n.mine_result == Some(MineResult::Hit) {
+                        hit_mine = hit_mine.saturating_add(1);
+                    }
+                }
+                NoteType::Fake => {}
+            }
+        }
+
+        // NoMines handling is not wired yet, so treat mines as enabled.
+        let mines_disabled = false;
+        let ex_percent = judgment::calculate_ex_score_fa_plus(
+            &windows,
+            held,
+            let_go,
+            hit_mine,
+            total_steps,
+            state.holds_total,
+            state.rolls_total,
+            state.mines_total,
+            mines_disabled,
+        );
+        let text = format!("{:.2}", ex_percent.max(0.0));
+        let color = color::rgba_hex(color::JUDGMENT_HEX[0]); // Fantastic blue (#21CCE8)
+        (text, color)
+    } else {
+        let score_percent = (judgment::calculate_itg_score_percent(
+            &state.scoring_counts,
+            state.holds_held_for_score,
+            state.rolls_held_for_score,
+            state.mines_hit_for_score,
+            state.possible_grade_points,
+        ) * 100.0) as f32;
+        let text = format!("{:.2}", score_percent);
+        let color = [1.0, 1.0, 1.0, 1.0];
+        (text, color)
+    };
     actors.push(act!(text:
-        font("wendy_monospace_numbers"): settext(percent_text):
+        font("wendy_monospace_numbers"): settext(score_text):
         align(1.0, 1.0): xy(score_x, score_y):
-        zoom(0.5): horizalign(right): z(90)
+        zoom(0.5): horizalign(right):
+        diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
+        z(90)
     ));
     // Current BPM Display (1:1 with Simply Love)
     {
