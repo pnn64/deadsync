@@ -220,7 +220,9 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             }
 
                             if let Some(idx) = cached_score.lamp_index {
-                                let lamp_color_index = (idx as usize) % color::JUDGMENT_HEX.len();
+                                // Lamp indices are StageAward-like (1=W1 FC, 2=FEC/W2 FC, ...).
+                                // Map 1->Fantastic, 2->Excellent, etc. by shifting into 0-based.
+                                let lamp_color_index = (idx.saturating_sub(1) as usize) % color::JUDGMENT_HEX.len();
                                 let lamp_color = color::rgba_hex(color::JUDGMENT_HEX[lamp_color_index]);
 
                                 // Position and size mirror Simply Love's lamp quad.
