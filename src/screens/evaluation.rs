@@ -66,12 +66,38 @@ pub struct ScoreInfo {
     pub ex_score_percent: f64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EvalPane {
+    Standard,
+    FaPlus,
+}
+
+impl EvalPane {
+    #[inline(always)]
+    fn default_from_profile() -> Self {
+        if profile::get().show_fa_plus_pane {
+            Self::FaPlus
+        } else {
+            Self::Standard
+        }
+    }
+
+    #[inline(always)]
+    fn toggle(self) -> Self {
+        match self {
+            Self::Standard => Self::FaPlus,
+            Self::FaPlus => Self::Standard,
+        }
+    }
+}
+
 pub struct State {
     pub active_color_index: i32,
     bg: heart_bg::State,
     pub session_elapsed: f32, // To display the timer
     pub score_info: Option<ScoreInfo>,
     pub density_graph_texture_key: String,
+    active_pane: EvalPane,
 }
 
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
@@ -186,6 +212,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         session_elapsed: 0.0,
         score_info,
         density_graph_texture_key: "__white".to_string(),
+        active_pane: EvalPane::default_from_profile(),
     }
 }
 
@@ -235,14 +262,26 @@ fn format_session_time(seconds_total: f32) -> String {
     }
 }
 
-pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if ev.pressed {
-        match ev.action {
-            VirtualAction::p1_back | VirtualAction::p1_start => return ScreenAction::Navigate(Screen::SelectMusic),
-            _ => {}
-        }
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if !ev.pressed {
+        return ScreenAction::None;
     }
-    ScreenAction::None
+
+    match ev.action {
+        VirtualAction::p1_back | VirtualAction::p1_start => {
+            ScreenAction::Navigate(Screen::SelectMusic)
+        }
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_right => {
+            if state.score_info.is_some() {
+                state.active_pane = state.active_pane.toggle();
+            }
+            ScreenAction::None
+        }
+        _ => ScreenAction::None,
+    }
 }
 
 // --- Statics and helper function for the P1 stats pane ---
@@ -277,10 +316,9 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
     // The base offset for all P1 panes from the screen center.
     let p1_side_offset = screen_center_x() - 155.0;
 
-    let profile_data = profile::get();
-    // FA+ evaluation pane is controlled by the "Display FA+ Pane" toggle,
-    // not by the FA+ judgment window display.
-    let show_fa_plus_pane = profile_data.show_fa_plus_pane;
+    // Active evaluation pane is chosen at runtime; the profile toggle
+    // only selects which pane is shown first.
+    let show_fa_plus_pane = matches!(state.active_pane, EvalPane::FaPlus);
 
     // --- Calculate label shift for large numbers ---
     let max_judgment_count = if !show_fa_plus_pane {
@@ -982,7 +1020,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let percent_text = format!("{:.2}", score_info.score_percent * 100.0);
         let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));
         let score_bg_color = color::rgba_hex("#101519");
-        let show_fa_plus_pane = profile.show_fa_plus_pane;
+        let show_fa_plus_pane = matches!(state.active_pane, EvalPane::FaPlus);
         let show_ex_score = profile.show_ex_score;
 
         let mut children = Vec::new();
