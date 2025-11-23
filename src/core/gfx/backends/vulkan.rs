@@ -253,11 +253,11 @@ fn create_descriptor_set_layout(device: &Device) -> Result<vk::DescriptorSetLayo
 fn create_descriptor_pool(device: &Device) -> Result<vk::DescriptorPool, vk::Result> {
     let pool_size = vk::DescriptorPoolSize::default()
         .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        .descriptor_count(100);
+        .descriptor_count(1024);
 
     let pool_info = vk::DescriptorPoolCreateInfo::default()
         .pool_sizes(std::slice::from_ref(&pool_size))
-        .max_sets(100)
+        .max_sets(1024)
         .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET);
 
     unsafe { device.create_descriptor_pool(&pool_info, None) }
