@@ -607,8 +607,6 @@ fn parse_scrolls(s: &str) -> Result<Vec<ScrollSegment>, &'static str> {
         .collect())
 }
 
-const FAST_BPM_WARP: f32 = 9_999_999.0;
-
 fn process_bpms_and_stops(
     bpms: &[(f32, f32)],
     stops: &[StopSegment],
@@ -656,7 +654,6 @@ fn process_bpms_and_stops(
 
     let mut prev_beat = 0.0_f32;
     let mut warp_start: Option<f32> = None;
-    let mut warp_end: f32 = 0.0;
     let mut prewarp_bpm: f32 = bpm;
     let mut time_offset_sec = 0.0_f32;
 
@@ -681,7 +678,7 @@ fn process_bpms_and_stops(
             time_offset_sec += (change_beat - prev_beat) * 60.0 / bpm.max(f32::EPSILON);
             if let Some(start) = warp_start {
                 if bpm > 0.0 && time_offset_sec > 0.0 {
-                    warp_end = change_beat - (time_offset_sec * bpm / 60.0);
+                    let warp_end = change_beat - (time_offset_sec * bpm / 60.0);
                     if warp_end > start {
                         out_warps.push(WarpSegment {
                             beat: start,
@@ -713,7 +710,7 @@ fn process_bpms_and_stops(
             time_offset_sec += (change_beat - prev_beat) * 60.0 / bpm.max(f32::EPSILON);
             if let Some(start) = warp_start {
                 if bpm > 0.0 && time_offset_sec > 0.0 {
-                    warp_end = change_beat - (time_offset_sec * bpm / 60.0);
+                    let warp_end = change_beat - (time_offset_sec * bpm / 60.0);
                     if warp_end > start {
                         out_warps.push(WarpSegment {
                             beat: start,
@@ -742,7 +739,7 @@ fn process_bpms_and_stops(
                 time_offset_sec += stop_secs;
                 if stop_secs > 0.0 && time_offset_sec > 0.0 {
                     if let Some(start) = warp_start {
-                        warp_end = change_beat;
+                        let warp_end = change_beat;
                         if warp_end > start {
                             out_warps.push(WarpSegment {
                                 beat: start,

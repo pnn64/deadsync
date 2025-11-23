@@ -248,9 +248,6 @@ impl App {
                     }
                 });
             }
-            ScreenAction::ShowSystemMessage(msg) => {
-                self.gamepad_overlay_state = Some((msg, Instant::now()));
-            }
             ScreenAction::None => {}
         }
         Ok(())

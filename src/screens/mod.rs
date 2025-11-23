@@ -18,7 +18,6 @@ pub enum ScreenAction {
     RequestBanner(Option<PathBuf>),
     RequestDensityGraph(Option<ChartData>),
     FetchOnlineGrade(String),
-    ShowSystemMessage(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
