@@ -323,17 +323,29 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 .map(|info| info.color)
                 .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[5]));
 
-            let rows: [(&str, [f32; 4], u32); 7] = [
-                ("FANTASTIC", fantastic_color, wc.w0),
-                ("FANTASTIC", [1.0, 1.0, 1.0, 1.0], wc.w1),
-                ("EXCELLENT", excellent_color, wc.w2),
-                ("GREAT", great_color, wc.w3),
-                ("DECENT", decent_color, wc.w4),
-                ("WAY OFF", wayoff_color, wc.w5),
-                ("MISS", miss_color, wc.miss),
+            // Dim colors: reuse the standard evaluation dim palette for blue Fantastic
+            // through Miss, and use a dedicated dim color for the white FA+ row.
+            let dim_fantastic = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[0]);
+            let dim_excellent  = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[1]);
+            let dim_great      = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[2]);
+            let dim_decent     = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[3]);
+            let dim_wayoff     = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[4]);
+            let dim_miss       = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[5]);
+            // White Fantastic (FA+ outer window) bright/dim colors.
+            let white_fa_color = color::rgba_hex(color::JUDGMENT_FA_PLUS_WHITE_HEX);
+            let dim_white_fa   = color::rgba_hex(color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_HEX);
+
+            let rows: [(&str, [f32; 4], [f32; 4], u32); 7] = [
+                ("FANTASTIC", fantastic_color, dim_fantastic, wc.w0),
+                ("FANTASTIC",       white_fa_color, dim_white_fa, wc.w1),
+                ("EXCELLENT", excellent_color, dim_excellent, wc.w2),
+                ("GREAT", great_color, dim_great, wc.w3),
+                ("DECENT", decent_color, dim_decent, wc.w4),
+                ("WAY OFF", wayoff_color, dim_wayoff, wc.w5),
+                ("MISS", miss_color, dim_miss, wc.miss),
             ];
 
-            for (i, (label, bright_color, count)) in rows.iter().enumerate() {
+            for (i, (label, bright_color, dim_color, count)) in rows.iter().enumerate() {
                 // Label: match Simply Love Pane2 labels using 26px spacing.
                 // Original Lua uses 1-based indexing: y = i*26 - 46.
                 // Our rows are 0-based, so use (i+1) here.
@@ -346,12 +358,6 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 ));
 
                 // Number
-                let dim_color = [
-                    bright_color[0] * 0.35,
-                    bright_color[1] * 0.35,
-                    bright_color[2] * 0.35,
-                    bright_color[3],
-                ];
                 let number_str = format!("{:0width$}", count, width = digits_to_fmt);
                 let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
                 
@@ -363,7 +369,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 
                 for (char_idx, ch) in number_str.chars().enumerate() {
                     let is_dim = if *count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
-                    let color = if is_dim { dim_color } else { *bright_color };
+                    let color = if is_dim { *dim_color } else { *bright_color };
                     let index_from_right = digits_to_fmt - 1 - char_idx;
                     let cell_right_x = number_base_x - (index_from_right as f32 * digit_width);
                     

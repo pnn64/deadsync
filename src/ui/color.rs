@@ -100,6 +100,15 @@ pub const JUDGMENT_DIM_EVAL_HEX: [&str; 6] = [
     "#440C0C",
 ];
 
+/// Undimmed white Fantastic color for FA+ (outer window).
+pub const JUDGMENT_FA_PLUS_WHITE_HEX: &str = "#FFFFFF";
+
+/// Dimmed white Fantastic color for FA+ eval pane.
+pub const JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_HEX: &str = "#444444";
+
+/// Dimmed white Fantastic color for FA+ gameplay side pane.
+pub const JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_HEX: &str = "#595959";
+
 /// Difficulty names as they appear in simfiles. Used for parsing and lookups.
 pub const FILE_DIFFICULTY_NAMES: [&str; 5] = ["Beginner", "Easy", "Medium", "Hard", "Challenge"];
 /// Difficulty names as they should be displayed in the UI.

@@ -2373,7 +2373,7 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         } else {
             // FA+ mode: split Fantastic into W0 (blue) and W1 (white) using per-note windows,
-            // matching Simply Love's FA+ evaluation pane semantics.
+            // matching Simply Love's FA+ Step Statistics semantics.
             let wc = timing_stats::compute_window_counts(&state.notes);
             let fantastic_color = JUDGMENT_INFO
                 .get(&JudgeGrade::Fantastic)
@@ -2400,21 +2400,32 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 .map(|info| info.color)
                 .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[5]));
 
-            let rows: [(&str, [f32; 4], u32); 7] = [
-                ("FANTASTIC", fantastic_color, wc.w0),
-                ("FANTASTIC", [1.0, 1.0, 1.0, 1.0], wc.w1),
-                ("EXCELLENT", excellent_color, wc.w2),
-                ("GREAT", great_color, wc.w3),
-                ("DECENT", decent_color, wc.w4),
-                ("WAY OFF", wayoff_color, wc.w5),
-                ("MISS", miss_color, wc.miss),
+            // Dim palette for FA+ side pane: reuse gameplay dim colors for Fantastic..Miss,
+            // and a dedicated dim color for the white FA+ row.
+            let dim_fantastic = color::rgba_hex(color::JUDGMENT_DIM_HEX[0]);
+            let dim_excellent  = color::rgba_hex(color::JUDGMENT_DIM_HEX[1]);
+            let dim_great      = color::rgba_hex(color::JUDGMENT_DIM_HEX[2]);
+            let dim_decent     = color::rgba_hex(color::JUDGMENT_DIM_HEX[3]);
+            let dim_wayoff     = color::rgba_hex(color::JUDGMENT_DIM_HEX[4]);
+            let dim_miss       = color::rgba_hex(color::JUDGMENT_DIM_HEX[5]);
+            let dim_white_fa   = color::rgba_hex(color::JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_HEX);
+
+            let white_fa_color = color::rgba_hex(color::JUDGMENT_FA_PLUS_WHITE_HEX);
+
+            let rows: [(&str, [f32; 4], [f32; 4], u32); 7] = [
+                ("FANTASTIC", fantastic_color, dim_fantastic, wc.w0),
+                ("FANTASTIC",       white_fa_color, dim_white_fa, wc.w1),
+                ("EXCELLENT", excellent_color, dim_excellent, wc.w2),
+                ("GREAT",     great_color, dim_great, wc.w3),
+                ("DECENT",    decent_color, dim_decent, wc.w4),
+                ("WAY OFF",   wayoff_color, dim_wayoff, wc.w5),
+                ("MISS",      miss_color, dim_miss, wc.miss),
             ];
 
-            for (index, (label, bright, count)) in rows.iter().enumerate() {
+            for (index, (label, bright, dim, count)) in rows.iter().enumerate() {
                 let local_y = y_base + (index as f32 * row_height);
                 let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
 
-                let dim = [bright[0] * 0.35, bright[1] * 0.35, bright[2] * 0.35, bright[3]];
                 let full_number_str = format!("{:0width$}", count, width = digits);
 
                 for (i, ch) in full_number_str.chars().enumerate() {
@@ -2422,7 +2433,7 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let first_nonzero = full_number_str.find(|c: char| c != '0').unwrap_or(full_number_str.len());
                         i < first_nonzero
                     };
-                    let color = if is_dim { dim } else { *bright };
+                    let color = if is_dim { dim } else { bright };
                     let index_from_right = digits - 1 - i;
                     let cell_right_x = numbers_cx - (index_from_right as f32 * max_digit_w);
 
