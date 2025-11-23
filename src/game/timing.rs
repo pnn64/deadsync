@@ -800,6 +800,42 @@ impl TimingData {
 	fn beat0_offset_seconds(&self) -> f32 { self.beat_to_time.first().map_or(0.0, |p| p.time_sec) }
 	fn beat0_group_offset_seconds(&self) -> f32 { self.global_offset_sec }
 
+    /// Update the global offset used for time⇄beat conversion, mirroring
+    /// ITGmania semantics while keeping precomputed data consistent.
+    #[inline(always)]
+    pub fn set_global_offset_seconds(&mut self, new_offset: f32) {
+        let old = self.global_offset_sec;
+        if (old - new_offset).abs() < f32::EPSILON {
+            return;
+        }
+        // Adjust beat0 offset so that beat→time mapping shifts by (old - new)
+        // instead of being recomputed from raw timing data.
+        if let Some(first) = Arc::make_mut(&mut self.beat_to_time).first_mut() {
+            first.time_sec += old - new_offset;
+        }
+        self.global_offset_sec = new_offset;
+
+        // Rebuild speed_runtime, since its start/end times are in song time.
+        if !self.speeds.is_empty() {
+            let mut runtime = Vec::with_capacity(self.speeds.len());
+            let mut prev_ratio = 1.0_f32;
+            for seg in &self.speeds {
+                let start_time = self.get_time_for_beat(seg.beat);
+                let end_time = if seg.delay <= 0.0 {
+                    start_time
+                } else if seg.unit == SpeedUnit::Seconds {
+                    start_time + seg.delay
+                } else {
+                    self.get_time_for_beat(seg.beat + seg.delay)
+                };
+                runtime.push(SpeedRuntime { start_time, end_time, prev_ratio });
+                prev_ratio = seg.ratio;
+            }
+            self.speed_runtime = runtime;
+        }
+        // scroll_prefix depends only on beats/ratios, not absolute time.
+    }
+
     fn get_elapsed_time_internal(&self, starts: &mut GetBeatStarts, beat: f32) -> f32 {
 		let mut start = *starts;
 		self.get_elapsed_time_internal_mut(&mut start, beat, u32::MAX as usize);

@@ -378,6 +378,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             z(-99) // Draw just above the background
         ));
     }
+
+    // Global offset adjustment overlay (centered text with subtle shadow).
+    if let Some(msg) = &state.sync_overlay_message {
+        let zoom = widescale(0.8, 1.0);
+        let y = screen_center_y() + 120.0;
+
+        // Main text
+        actors.push(act!(text:
+            font("miso"):
+            settext(msg.clone()):
+            align(0.5, 0.5):
+            xy(screen_center_x(), y):
+            zoom(zoom):
+            shadowlength(2.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(901)
+        ));
+    }
     // --- Playfield Positioning (1:1 with Simply Love) ---
     // Mini%: Simply Love passes Mini() a value in [0, 2] where 0 = normal, 1 = 100% Mini.
     // ITGmania uses field_zoom = 1 - Mini * 0.5 for note field scaling.

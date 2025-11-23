@@ -20,6 +20,7 @@ use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use winit::event::KeyEvent;
 use winit::keyboard::KeyCode;
 
 pub const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -51,6 +52,42 @@ const MAX_HOLD_LIFE: f32 = 1.0;
 const INITIAL_HOLD_LIFE: f32 = 1.0;
 const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32;
 const TIMING_WINDOW_SECONDS_ROLL: f32 = 0.35;
+
+#[inline(always)]
+fn quantize_offset_seconds(v: f32) -> f32 {
+    let step = 0.001_f32;
+    (v / step).round() * step
+}
+
+fn compute_music_end_time(
+    notes: &[Note],
+    note_time_cache: &[f32],
+    hold_end_time_cache: &[Option<f32>],
+    rate: f32,
+) -> f32 {
+    let last_relevant_second = notes
+        .iter()
+        .enumerate()
+        .fold(0.0_f32, |acc, (i, _)| {
+            let start = note_time_cache[i];
+            let end = hold_end_time_cache[i].unwrap_or(start);
+            acc.max(end)
+        });
+
+    let timing_profile = TimingProfile::default_itg_with_fa_plus();
+    let mut max_window = timing_profile
+        .windows_s
+        .iter()
+        .copied()
+        .fold(0.0_f32, f32::max);
+    max_window = max_window.max(timing_profile.mine_window_s);
+    max_window = max_window.max(TIMING_WINDOW_SECONDS_HOLD);
+    max_window = max_window.max(TIMING_WINDOW_SECONDS_ROLL);
+
+    let max_step_distance = rate * max_window;
+    let last_step_seconds = last_relevant_second + max_step_distance;
+    last_step_seconds + POST_SONG_DISPLAY_SECONDS
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct RowEntry {
@@ -160,6 +197,7 @@ pub struct State {
     pub music_end_time: f32,
     pub music_rate: f32,
     pub global_offset_seconds: f32,
+    pub initial_global_offset_seconds: f32,
     pub next_tap_miss_cursor: usize,
     pub next_mine_avoid_cursor: usize,
     pub row_entries: Vec<RowEntry>,
@@ -222,6 +260,8 @@ pub struct State {
     hands_holding_count_for_stats: i32,
 
     pub total_elapsed_in_screen: f32,
+
+    pub sync_overlay_message: Option<String>,
 
     pub hold_to_exit_key: Option<KeyCode>,
     pub hold_to_exit_start: Option<Instant>,
@@ -452,64 +492,116 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
     }
     let draw_distance_before_targets = screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER;
     let draw_distance_after_targets = DRAW_DISTANCE_AFTER_TARGETS;
-    let mut travel_time = scroll_speed.travel_time_seconds(draw_distance_before_targets, initial_bpm, reference_bpm, rate);
+    let mut travel_time = scroll_speed.travel_time_seconds(
+        draw_distance_before_targets,
+        initial_bpm,
+        reference_bpm,
+        rate,
+    );
     if !travel_time.is_finite() || travel_time <= 0.0 { travel_time = draw_distance_before_targets / pixels_per_second; }
 
-    // For end-of-song timing, approximate ScreenGameplay::GetMusicEndTiming() /
-    // Player::GetMaxStepDistanceSeconds() semantics on a per-chart basis:
-    //
-    //   fLastStepSeconds = last_relevant_second_in_chart + Player::GetMaxStepDistanceSeconds();
-    //
-    // where GetMaxStepDistanceSeconds() takes the maximum timing window across
-    // taps, mines, holds, rolls, etc, scaled by MusicRate and including a small
-    // latency fudge. We approximate this using our unified timing helpers.
-    //
-    // Using the chart's own last judgable object (tap or hold/roll tail) here
-    // ensures we never cut to evaluation before a long ending hold finishes.
-    let last_relevant_second = notes.iter().enumerate().fold(0.0_f32, |acc, (i, _)| {
-        let start = note_time_cache[i];
-        let end = hold_end_time_cache[i].unwrap_or(start);
-        acc.max(end)
-    });
-    let mut max_window = 0.0_f32;
     let timing_profile = TimingProfile::default_itg_with_fa_plus();
-    for w in timing_profile.windows_s.iter() {
-        if *w > max_window {
-            max_window = *w;
-        }
-    }
-    max_window = max_window.max(timing_profile.mine_window_s);
-    max_window = max_window.max(TIMING_WINDOW_SECONDS_HOLD);
-    max_window = max_window.max(TIMING_WINDOW_SECONDS_ROLL);
-
-    let max_step_distance = rate * max_window;
-    let last_step_seconds = last_relevant_second + max_step_distance;
-    let music_end_time = last_step_seconds + POST_SONG_DISPLAY_SECONDS;
+    let music_end_time = compute_music_end_time(&notes, &note_time_cache, &hold_end_time_cache, rate);
     let notes_len = notes.len();
     let column_scroll_dirs = compute_column_scroll_dirs(profile.scroll_option);
 
     State {
-        song, chart, background_texture_key: "__white".to_string(), timing, timing_profile, notes,
-        song_start_instant, current_beat: 0.0, current_music_time: -start_delay,
-        note_spawn_cursor: 0, judged_row_cursor: 0, arrows: [vec![], vec![], vec![], vec![]],
-        note_time_cache, note_display_beat_cache, hold_end_time_cache, hold_end_display_beat_cache,
-        music_end_time, music_rate: rate,
-        global_offset_seconds: config.global_offset_seconds, next_tap_miss_cursor: 0, next_mine_avoid_cursor: 0,
-        row_entries, row_map_cache, decaying_hold_indices: Vec::new(), hold_decay_active: vec![false; notes_len],
+        song,
+        chart,
+        background_texture_key: "__white".to_string(),
+        timing,
+        timing_profile,
+        notes,
+        song_start_instant,
+        current_beat: 0.0,
+        current_music_time: -start_delay,
+        note_spawn_cursor: 0,
+        judged_row_cursor: 0,
+        arrows: [vec![], vec![], vec![], vec![]],
+        note_time_cache,
+        note_display_beat_cache,
+        hold_end_time_cache,
+        hold_end_display_beat_cache,
+        music_end_time,
+        music_rate: rate,
+        global_offset_seconds: config.global_offset_seconds,
+        initial_global_offset_seconds: config.global_offset_seconds,
+        next_tap_miss_cursor: 0,
+        next_mine_avoid_cursor: 0,
+        row_entries,
+        row_map_cache,
+        decaying_hold_indices: Vec::new(),
+        hold_decay_active: vec![false; notes_len],
         life_history: Vec::with_capacity(10000),
-        judgment_counts: HashMap::from_iter([(JudgeGrade::Fantastic, 0), (JudgeGrade::Excellent, 0), (JudgeGrade::Great, 0), (JudgeGrade::Decent, 0), (JudgeGrade::WayOff, 0), (JudgeGrade::Miss, 0)]),
-        scoring_counts: HashMap::from_iter([(JudgeGrade::Fantastic, 0), (JudgeGrade::Excellent, 0), (JudgeGrade::Great, 0), (JudgeGrade::Decent, 0), (JudgeGrade::WayOff, 0), (JudgeGrade::Miss, 0)]),
-        combo: 0, miss_combo: 0, full_combo_grade: None, first_fc_attempt_broken: false, last_judgment: None, hold_judgments: Default::default(),
-        life: 0.5, combo_after_miss: 0, is_failing: false, is_in_freeze: false, is_in_delay: false, fail_time: None,
-        earned_grade_points: 0, possible_grade_points, song_completed_naturally: false, noteskin, active_color_index,
-        player_color: color::decorative_rgba(active_color_index), scroll_speed, scroll_reference_bpm: reference_bpm,
-        scroll_pixels_per_second: pixels_per_second, scroll_travel_time: travel_time,
-        draw_distance_before_targets, draw_distance_after_targets, reverse_scroll: profile.reverse_scroll, column_scroll_dirs,
-        receptor_glow_timers: [0.0; 4], receptor_bop_timers: [0.0; 4], tap_explosions: Default::default(), mine_explosions: Default::default(),
-        active_holds: Default::default(), combo_milestones: Vec::new(), hands_achieved: 0, holds_total, holds_held: 0, holds_held_for_score: 0,
-        rolls_total, rolls_held: 0, rolls_held_for_score: 0, mines_total, mines_hit: 0, mines_hit_for_score: 0, mines_avoided: 0,
-        hands_holding_count_for_stats: 0, total_elapsed_in_screen: 0.0, hold_to_exit_key: None, hold_to_exit_start: None,
-        prev_inputs: [false; 4], keyboard_lane_state: [false; 4], gamepad_lane_state: [false; 4], pending_edges: VecDeque::new(), log_timer: 0.0,
+        judgment_counts: HashMap::from_iter([
+            (JudgeGrade::Fantastic, 0),
+            (JudgeGrade::Excellent, 0),
+            (JudgeGrade::Great, 0),
+            (JudgeGrade::Decent, 0),
+            (JudgeGrade::WayOff, 0),
+            (JudgeGrade::Miss, 0),
+        ]),
+        scoring_counts: HashMap::from_iter([
+            (JudgeGrade::Fantastic, 0),
+            (JudgeGrade::Excellent, 0),
+            (JudgeGrade::Great, 0),
+            (JudgeGrade::Decent, 0),
+            (JudgeGrade::WayOff, 0),
+            (JudgeGrade::Miss, 0),
+        ]),
+        combo: 0,
+        miss_combo: 0,
+        full_combo_grade: None,
+        first_fc_attempt_broken: false,
+        last_judgment: None,
+        hold_judgments: Default::default(),
+        life: 0.5,
+        combo_after_miss: 0,
+        is_failing: false,
+        is_in_freeze: false,
+        is_in_delay: false,
+        fail_time: None,
+        earned_grade_points: 0,
+        possible_grade_points,
+        song_completed_naturally: false,
+        noteskin,
+        active_color_index,
+        player_color: color::decorative_rgba(active_color_index),
+        scroll_speed,
+        scroll_reference_bpm: reference_bpm,
+        scroll_pixels_per_second: pixels_per_second,
+        scroll_travel_time: travel_time,
+        draw_distance_before_targets,
+        draw_distance_after_targets,
+        reverse_scroll: profile.reverse_scroll,
+        column_scroll_dirs,
+        receptor_glow_timers: [0.0; 4],
+        receptor_bop_timers: [0.0; 4],
+        tap_explosions: Default::default(),
+        mine_explosions: Default::default(),
+        active_holds: Default::default(),
+        combo_milestones: Vec::new(),
+        hands_achieved: 0,
+        holds_total,
+        holds_held: 0,
+        holds_held_for_score: 0,
+        rolls_total,
+        rolls_held: 0,
+        rolls_held_for_score: 0,
+        mines_total,
+        mines_hit: 0,
+        mines_hit_for_score: 0,
+        mines_avoided: 0,
+        hands_holding_count_for_stats: 0,
+        total_elapsed_in_screen: 0.0,
+        sync_overlay_message: None,
+        hold_to_exit_key: None,
+        hold_to_exit_start: None,
+        prev_inputs: [false; 4],
+        keyboard_lane_state: [false; 4],
+        gamepad_lane_state: [false; 4],
+        pending_edges: VecDeque::new(),
+        log_timer: 0.0,
     }
 }
 
@@ -928,6 +1020,78 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         _ => {}
     }
+    ScreenAction::None
+}
+
+pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool) -> ScreenAction {
+    use winit::event::ElementState;
+    use winit::keyboard::PhysicalKey;
+
+    if key.state != ElementState::Pressed {
+        return ScreenAction::None;
+    }
+    if !shift_held {
+        return ScreenAction::None;
+    }
+
+    let PhysicalKey::Code(code) = key.physical_key else {
+        return ScreenAction::None;
+    };
+
+    let delta = match code {
+        KeyCode::F11 => -0.001_f32,
+        KeyCode::F12 => 0.001_f32,
+        _ => return ScreenAction::None,
+    };
+
+    let old_offset = state.global_offset_seconds;
+    let new_offset = old_offset + delta;
+    if (new_offset - old_offset).abs() < 0.000_001_f32 {
+        return ScreenAction::None;
+    }
+
+    if let Some(timing) = Arc::get_mut(&mut state.timing) {
+        timing.set_global_offset_seconds(new_offset);
+    }
+
+    for (time, note) in state.note_time_cache.iter_mut().zip(&state.notes) {
+        *time = state.timing.get_time_for_beat(note.beat);
+    }
+    for (time_opt, note) in state.hold_end_time_cache.iter_mut().zip(&state.notes) {
+        *time_opt = note
+            .hold
+            .as_ref()
+            .map(|h| state.timing.get_time_for_beat(h.end_beat));
+    }
+
+    state.music_end_time = compute_music_end_time(
+        &state.notes,
+        &state.note_time_cache,
+        &state.hold_end_time_cache,
+        state.music_rate,
+    );
+
+    state.global_offset_seconds = new_offset;
+
+    if (new_offset - state.initial_global_offset_seconds).abs() < 0.000_001_f32 {
+        state.sync_overlay_message = None;
+        return ScreenAction::None;
+    }
+
+    let start_q = quantize_offset_seconds(state.initial_global_offset_seconds);
+    let new_q = quantize_offset_seconds(new_offset);
+    let delta_q = new_q - start_q;
+    if delta_q.abs() < 0.000_1_f32 {
+        state.sync_overlay_message = None;
+        return ScreenAction::None;
+    }
+
+    let direction = if delta_q > 0.0 { "earlier" } else { "later" };
+    let msg = format!(
+        "Global Offset from {:+.3} to {:+.3} (notes {})",
+        start_q, new_q, direction
+    );
+    state.sync_overlay_message = Some(msg);
     ScreenAction::None
 }
 

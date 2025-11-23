@@ -77,6 +77,7 @@ pub struct App {
     display_height: u32,
     gamepad_overlay_state: Option<(String, Instant)>,
     pending_exit: bool,
+    shift_held: bool,
 }
 
 impl App {
@@ -113,19 +114,39 @@ impl App {
         evaluation_state.active_color_index = color_index;
 
         Self {
-            window: None, backend: None, backend_type, asset_manager: AssetManager::new(),
-            current_screen: CurrentScreen::Init, init_state, menu_state, gameplay_state: None, options_state,
+            window: None,
+            backend: None,
+            backend_type,
+            asset_manager: AssetManager::new(),
+            current_screen: CurrentScreen::Init,
+            init_state,
+            menu_state,
+            gameplay_state: None,
+            options_state,
             player_options_state: None,
-            select_color_state, select_music_state, sandbox_state: sandbox::init(), evaluation_state, 
-            frame_count: 0, last_title_update: Instant::now(), last_frame_time: Instant::now(),
-            start_time: Instant::now(), metrics: space::metrics_for_window(display_width, display_height), preferred_difficulty_index: 2, // Default to Medium
-            vsync_enabled, fullscreen_enabled, show_overlay, last_fps: 0.0, last_vpf: 0, 
-            current_frame_vpf: 0, transition: TransitionState::Idle,
+            select_color_state,
+            select_music_state,
+            sandbox_state: sandbox::init(),
+            evaluation_state,
+            frame_count: 0,
+            last_title_update: Instant::now(),
+            last_frame_time: Instant::now(),
+            start_time: Instant::now(),
+            metrics: space::metrics_for_window(display_width, display_height),
+            preferred_difficulty_index: 2, // Default to Medium
+            vsync_enabled,
+            fullscreen_enabled,
+            show_overlay,
+            last_fps: 0.0,
+            last_vpf: 0,
+            current_frame_vpf: 0,
+            transition: TransitionState::Idle,
             session_start_time: None,
             display_width,
             display_height,
             gamepad_overlay_state: None,
             pending_exit: false,
+            shift_held: false,
         }
     }
 
@@ -156,6 +177,15 @@ impl App {
             ScreenAction::Navigate(screen) => {
                 let from = self.current_screen;
                 let to = screen;
+
+                // Persist any pending global offset changes when leaving Gameplay.
+                if from == CurrentScreen::Gameplay && to != CurrentScreen::Gameplay {
+                    if let Some(gs) = &self.gameplay_state {
+                        if (gs.global_offset_seconds - gs.initial_global_offset_seconds).abs() > f32::EPSILON {
+                            crate::config::update_global_offset(gs.global_offset_seconds);
+                        }
+                    }
+                }
 
                 if from == CurrentScreen::Init && to == CurrentScreen::Menu {
                     info!("Instant navigation Init→Menu (out-transition handled by Init screen)");
@@ -217,6 +247,9 @@ impl App {
                         warn!("Failed to fetch online grade: {}", e);
                     }
                 });
+            }
+            ScreenAction::ShowSystemMessage(msg) => {
+                self.gamepad_overlay_state = Some((msg, Instant::now()));
             }
             ScreenAction::None => {}
         }
@@ -400,6 +433,18 @@ impl App {
         event_loop: &ActiveEventLoop,
         key_event: winit::event::KeyEvent,
     ) {
+        // Track Shift key state for raw combos (e.g., global offset adjust)
+        if let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key {
+            use winit::event::ElementState;
+            use winit::keyboard::KeyCode;
+            match code {
+                KeyCode::ShiftLeft | KeyCode::ShiftRight => {
+                    self.shift_held = key_event.state == ElementState::Pressed;
+                }
+                _ => {}
+            }
+        }
+
         if self.current_screen == CurrentScreen::Sandbox {
             let action = crate::screens::sandbox::handle_raw_key_event(&mut self.sandbox_state, &key_event);
             if !matches!(action, ScreenAction::None) {
@@ -424,6 +469,16 @@ impl App {
                     log::error!("Failed to handle SelectMusic raw key action: {}", e);
                 }
                 return;
+            }
+        } else if self.current_screen == CurrentScreen::Gameplay {
+            if let Some(gs) = &mut self.gameplay_state {
+                let action = crate::game::gameplay::handle_raw_key_event(gs, &key_event, self.shift_held);
+                if !matches!(action, ScreenAction::None) {
+                    if let Err(e) = self.handle_action(action, event_loop) {
+                        log::error!("Failed to handle Gameplay raw key action: {}", e);
+                    }
+                    return;
+                }
             }
         }
         let is_transitioning = !matches!(self.transition, TransitionState::Idle);
