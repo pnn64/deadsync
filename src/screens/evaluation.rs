@@ -8,6 +8,7 @@ use crate::ui::components::screen_bar::{AvatarParams, ScreenBarParams, ScreenBar
 use crate::core::space::widescale;
 
 use crate::game::judgment::{self, JudgeGrade};
+use crate::game::note::{HoldResult, MineResult, NoteType};
 use crate::screens::gameplay;
 use crate::game::song::SongData;
 use crate::game::chart::ChartData;
@@ -60,6 +61,9 @@ pub struct ScoreInfo {
     pub fail_time: Option<f32>,
     // Per-window tap counts (including FA+ W0) for display purposes.
     pub window_counts: timing_stats::WindowCounts,
+    // FA+ style EX score percentage (0.00–100.00), using the same semantics
+    // as ScreenGameplay's EX HUD (Simply Love's CalculateExScore).
+    pub ex_score_percent: f64,
 }
 
 pub struct State {
@@ -96,6 +100,58 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             scores::score_to_grade(score_percent * 10000.0)
         };
 
+        // Compute FA+ EX score percentage for evaluation using the same
+        // semantics as the gameplay HUD: derive counts from final note
+        // results, including FA+ W0..W5 window splits.
+        let mut total_steps: u32 = 0;
+        let mut held: u32 = 0;
+        let mut let_go: u32 = 0;
+        let mut hit_mine: u32 = 0;
+
+        for n in &gs.notes {
+            if n.is_fake || !n.can_be_judged {
+                continue;
+            }
+            match n.note_type {
+                NoteType::Tap | NoteType::Hold | NoteType::Roll => {
+                    total_steps = total_steps.saturating_add(1);
+                    if matches!(n.note_type, NoteType::Hold | NoteType::Roll) {
+                        if let Some(h) = n.hold.as_ref() {
+                            match h.result {
+                                Some(HoldResult::Held) => {
+                                    held = held.saturating_add(1);
+                                }
+                                Some(HoldResult::LetGo) => {
+                                    let_go = let_go.saturating_add(1);
+                                }
+                                None => {}
+                            }
+                        }
+                    }
+                }
+                NoteType::Mine => {
+                    if n.mine_result == Some(MineResult::Hit) {
+                        hit_mine = hit_mine.saturating_add(1);
+                    }
+                }
+                NoteType::Fake => {}
+            }
+        }
+
+        // NoMines handling is not wired yet, so treat mines as enabled.
+        let mines_disabled = false;
+        let ex_score_percent = judgment::calculate_ex_score_fa_plus(
+            &window_counts,
+            held,
+            let_go,
+            hit_mine,
+            total_steps,
+            gs.holds_total,
+            gs.rolls_total,
+            gs.mines_total,
+            mines_disabled,
+        );
+
         ScoreInfo {
             song: gs.song.clone(),
             chart: gs.chart.clone(),
@@ -120,6 +176,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             life_history: gs.life_history,
             fail_time: gs.fail_time,
             window_counts,
+            ex_score_percent,
         }
     });
 
@@ -923,18 +980,87 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     {
         let score_frame_y = screen_center_y() - 26.0;
         let percent_text = format!("{:.2}", score_info.score_percent * 100.0);
+        let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));
         let score_bg_color = color::rgba_hex("#101519");
+        let show_fa_plus_pane = profile.show_fa_plus_pane;
+        let show_ex_score = profile.show_ex_score;
+
+        let mut children = Vec::new();
+
+        if show_fa_plus_pane {
+            // FA+ pane: stretch the background down (height 88, y-offset 14)
+            // to match Simply Love's Pane2 percentage container, and optionally
+            // show EX score beneath the normal ITG percent when EX scoring is enabled.
+            children.push(act!(quad:
+                align(0.0, 0.5):
+                xy(-150.0, 14.0):
+                setsize(158.5, 88.0):
+                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+            ));
+
+            // Normal ITG score (top line, white)
+            children.push(act!(text:
+                font("wendy_white"):
+                settext(percent_text.clone()):
+                align(1.0, 0.5):
+                // Keep ITG percent in the same position regardless of FA+ pane.
+                xy(1.5, 0.0):
+                zoom(0.585):
+                horizalign(right)
+            ));
+
+            if show_ex_score {
+                // EX score (bottom line, Fantastic blue / turquoise), smaller than ITG score
+                let ex_color = color::rgba_hex(color::JUDGMENT_HEX[0]);
+                // "EX" label to the left of the numeric EX score.
+                children.push(act!(text:
+                    font("wendy_white"):
+                    settext("EX"):
+                    align(1.0, 0.5):
+                    // Near the left edge of the background box.
+                    xy(-108.0, 40.0):
+                    zoom(0.31):
+                    horizalign(right):
+                    diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
+                ));
+                children.push(act!(text:
+                    font("wendy_white"):
+                    settext(ex_percent_text):
+                    align(1.0, 0.5):
+                    // EX numeric value aligned with label, further below ITG percent.
+                    xy(0, 40.0):
+                    zoom(0.31):
+                    horizalign(right):
+                    diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
+                ));
+            }
+        } else {
+            // Standard pane: original 60px-tall background and single ITG percent.
+            children.push(act!(quad:
+                align(0.0, 0.5):
+                xy(-150.0, 0.0):
+                setsize(158.5, 60.0):
+                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+            ));
+            children.push(act!(text:
+                font("wendy_white"):
+                settext(percent_text):
+                align(1.0, 0.5):
+                xy(1.5, 0.0):
+                zoom(0.585):
+                horizalign(right)
+            ));
+        }
 
         let score_display_frame = Actor::Frame {
             align: [0.5, 0.5],
             offset: [p1_frame_x, score_frame_y],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             background: None,
-            z: 101,
-            children: vec![
-                act!(quad: align(0.0, 0.5): xy(-150.0, 0.0): setsize(158.5, 60.0): diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0) ),
-                act!(text: font("wendy_white"): settext(percent_text): align(1.0, 0.5): xy(1.5, 0.0): zoom(0.585): horizalign(right)),
-            ],
+            // Draw above the judgment/radar pane (z≈101) so the stretched
+            // background cleanly covers the top radar row when FA+ pane is used.
+            z: 102,
+            children,
         };
         actors.push(score_display_frame);
     }
