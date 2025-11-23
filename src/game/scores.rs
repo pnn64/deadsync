@@ -150,7 +150,9 @@ fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Op
     let score_percent = score / 10000.0;
 
     // Perfect 100%: always at least a W1 full combo lamp.
-    if (score_percent - 1.0).abs() <= 0.0005 {
+    // Use a very small epsilon so only true 100.00% (score == 10000) hits this,
+    // not 99.95% (score == 9995) or similar edge cases.
+    if (score_percent - 1.0).abs() <= 1e-9 {
         info!(
             "GrooveStats lamp: hash={} score={:.4}% -> Quad lamp (W1 FC, no DP check needed)",
             chart_hash,
