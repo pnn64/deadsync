@@ -877,40 +877,48 @@ impl ApplicationHandler<UserEvent> for App {
                             info!("Session timer started.");
                         }
 
-                        if prev == CurrentScreen::PlayerOptions {
-                            // Preserve wheel state; only sync difficulty choice back from PlayerOptions
-                            let preferred = self.preferred_difficulty_index;
-                            self.select_music_state.preferred_difficulty_index = preferred;
-                            self.select_music_state.selected_difficulty_index = preferred;
+                        match prev {
+                            CurrentScreen::PlayerOptions => {
+                                // Preserve wheel state; only sync difficulty choice back from PlayerOptions
+                                let preferred = self.preferred_difficulty_index;
+                                self.select_music_state.preferred_difficulty_index = preferred;
+                                self.select_music_state.selected_difficulty_index = preferred;
 
-                            // Clamp to the nearest playable difficulty for the currently selected song
-                            if let Some(select_music::MusicWheelEntry::Song(song)) =
-                                self.select_music_state.entries.get(self.select_music_state.selected_index)
-                            {
-                                let mut best_match_index = None;
-                                let mut min_diff = i32::MAX;
-                                for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
-                                    if select_music::is_difficulty_playable(song, i) {
-                                        let diff = (i as i32 - preferred as i32).abs();
-                                        if diff < min_diff {
-                                            min_diff = diff;
-                                            best_match_index = Some(i);
+                                // Clamp to the nearest playable difficulty for the currently selected song
+                                if let Some(select_music::MusicWheelEntry::Song(song)) =
+                                    self.select_music_state.entries.get(self.select_music_state.selected_index)
+                                {
+                                    let mut best_match_index = None;
+                                    let mut min_diff = i32::MAX;
+                                    for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
+                                        if select_music::is_difficulty_playable(song, i) {
+                                            let diff = (i as i32 - preferred as i32).abs();
+                                            if diff < min_diff {
+                                                min_diff = diff;
+                                                best_match_index = Some(i);
+                                            }
                                         }
                                     }
+                                    if let Some(idx) = best_match_index {
+                                        self.select_music_state.selected_difficulty_index = idx;
+                                    }
                                 }
-                                if let Some(idx) = best_match_index {
-                                    self.select_music_state.selected_difficulty_index = idx;
-                                }
-                            }
 
-                            // Nudge delayed updates to refresh graph immediately on return
-                            select_music::trigger_immediate_refresh(&mut self.select_music_state);
-                        } else if prev != CurrentScreen::Gameplay && prev != CurrentScreen::Evaluation {
-                            let current_color_index = self.select_music_state.active_color_index;
-                            self.select_music_state = select_music::init();
-                            self.select_music_state.active_color_index = current_color_index;
-                            self.select_music_state.selected_difficulty_index = self.preferred_difficulty_index;
-                            self.select_music_state.preferred_difficulty_index = self.preferred_difficulty_index;
+                                // Nudge delayed updates to refresh graph immediately on return
+                                select_music::trigger_immediate_refresh(&mut self.select_music_state);
+                            }
+                            CurrentScreen::Gameplay | CurrentScreen::Evaluation => {
+                                // Gameplay/Evaluation stop the actual preview music; ask SelectMusic
+                                // to invalidate preview state and regenerate delayed assets.
+                                select_music::reset_preview_after_gameplay(&mut self.select_music_state);
+                            }
+                            _ => {
+                                let current_color_index = self.select_music_state.active_color_index;
+                                self.select_music_state = select_music::init();
+                                self.select_music_state.active_color_index = current_color_index;
+                                self.select_music_state.selected_difficulty_index = self.preferred_difficulty_index;
+                                self.select_music_state.preferred_difficulty_index = self.preferred_difficulty_index;
+                            }
                         }
                     }
 

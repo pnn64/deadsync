@@ -794,6 +794,13 @@ pub fn trigger_immediate_refresh(state: &mut State) {
     state.last_requested_chart_hash = None;
 }
 
+/// Reset preview state after returning from Gameplay/Evaluation so that the
+/// SelectMusic screen restarts the preview and regenerates the density graph.
+pub fn reset_preview_after_gameplay(state: &mut State) {
+    state.currently_playing_preview_path = None;
+    trigger_immediate_refresh(state);
+}
+
 fn format_session_time(seconds_total: f32) -> String {
     if seconds_total < 0.0 {
         return "00:00".to_string();
