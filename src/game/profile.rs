@@ -389,6 +389,11 @@ pub struct Profile {
     // Y is applied directly to the notefield and related HUD,
     // positive values move everything down.
     pub note_field_offset_y: i32,
+    // Persisted "last played" selection so that SelectMusic can
+    // reopen on the last song+difficulty the player actually played.
+    // Stored as a serialized music file path and a raw difficulty index.
+    pub last_song_music_path: Option<String>,
+    pub last_difficulty_index: usize,
 }
 
 impl Default for Profile {
@@ -415,6 +420,9 @@ impl Default for Profile {
             mini_percent: 0,
             note_field_offset_x: 0,
             note_field_offset_y: 0,
+            last_song_music_path: None,
+            // Mirror FILE_DIFFICULTY_NAMES[2] ("Medium") as the default.
+            last_difficulty_index: 2,
         }
     }
 }
@@ -573,6 +581,17 @@ fn save_profile_ini() {
     content.push_str(&format!("PlayerInitials={}\n", profile.player_initials));
     content.push('\n');
 
+    // Persist "last played" song + difficulty so that future sessions
+    // can reopen SelectMusic on the most recently played chart.
+    content.push_str("[LastPlayed]\n");
+    if let Some(path) = &profile.last_song_music_path {
+        content.push_str(&format!("MusicPath={}\n", path));
+    } else {
+        content.push_str("MusicPath=\n");
+    }
+    content.push_str(&format!("DifficultyIndex={}\n", profile.last_difficulty_index));
+    content.push('\n');
+
     if let Err(e) = fs::write(PROFILE_INI_PATH, content) {
         warn!("Failed to save {}: {}", PROFILE_INI_PATH, e);
     }
@@ -672,6 +691,22 @@ pub fn load() {
                     if reverse_enabled { ScrollOption::Reverse } else { default_profile.scroll_option }
                 });
             profile.reverse_scroll = profile.scroll_option.contains(ScrollOption::Reverse);
+
+            // Optional last-played section: if missing, fall back to defaults.
+            profile.last_song_music_path = profile_conf
+                .get("LastPlayed", "MusicPath")
+                .map(|s| {
+                    let trimmed = s.trim();
+                    if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+                })
+                .unwrap_or(None);
+
+            let raw_last_diff = profile_conf
+                .get("LastPlayed", "DifficultyIndex")
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(default_profile.last_difficulty_index);
+            // Do not assume any particular max here; clamp later at call sites.
+            profile.last_difficulty_index = raw_last_diff;
         } else {
             warn!(
                 "Failed to load '{}', using default profile settings.",
@@ -733,6 +768,28 @@ pub fn get_session_music_rate() -> f32 {
 pub fn set_session_music_rate(rate: f32) {
     let mut s = SESSION.lock().unwrap();
     s.music_rate = if rate.is_finite() && rate > 0.0 { rate.clamp(0.5, 3.0) } else { 1.0 };
+}
+
+/// Persist the last played song and difficulty to the on-disk profile.
+/// The caller is responsible for clamping difficulty indices to a valid range.
+pub fn update_last_played(music_path: Option<&Path>, difficulty_index: usize) {
+    let new_path = music_path.map(|p| p.to_string_lossy().into_owned());
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        let mut changed = false;
+        if profile.last_song_music_path != new_path {
+            profile.last_song_music_path = new_path;
+            changed = true;
+        }
+        if profile.last_difficulty_index != difficulty_index {
+            profile.last_difficulty_index = difficulty_index;
+            changed = true;
+        }
+        if !changed {
+            return;
+        }
+    }
+    save_profile_ini();
 }
 
 pub fn update_scroll_speed(setting: ScrollSpeedSetting) {

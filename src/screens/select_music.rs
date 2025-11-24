@@ -329,6 +329,36 @@ pub fn init() -> State {
     let song_cache = get_song_cache();
     let mut total_filtered_songs = 0;
 
+    // Seed initial selection from the profile's last-played song, if any.
+    let profile_data = profile::get();
+    let max_diff_index = crate::ui::color::FILE_DIFFICULTY_NAMES
+        .len()
+        .saturating_sub(1);
+    let initial_diff_index = if max_diff_index == 0 {
+        0
+    } else {
+        profile_data
+            .last_difficulty_index
+            .min(max_diff_index)
+    };
+    let mut last_song_arc: Option<Arc<SongData>> = None;
+    let mut last_pack_name: Option<String> = None;
+
+    if let Some(last_path) = profile_data.last_song_music_path.as_deref() {
+        'outer: for pack in song_cache.iter() {
+            for song in &pack.songs {
+                if let Some(music_path) = &song.music_path {
+                    let path_str = music_path.to_string_lossy();
+                    if path_str == last_path {
+                        last_song_arc = Some(song.clone());
+                        last_pack_name = Some(pack.name.clone());
+                        break 'outer;
+                    }
+                }
+            }
+        }
+    }
+
     for (i, pack) in song_cache.iter().enumerate() {
         // Filter songs for this pack to only include those with "dance-single" charts.
         let single_dance_songs: Vec<Arc<SongData>> = pack.songs
@@ -360,11 +390,11 @@ pub fn init() -> State {
         all_entries,
         entries: Vec::new(),
         selected_index: 0,
-        selected_difficulty_index: 2,
-        preferred_difficulty_index: 2,
+        selected_difficulty_index: initial_diff_index,
+        preferred_difficulty_index: initial_diff_index,
         active_color_index: color::DEFAULT_COLOR_INDEX,
         selection_animation_timer: 0.0,
-        expanded_pack_name: None,
+        expanded_pack_name: last_pack_name,
         bg: heart_bg::State::new(),
         last_requested_banner_path: None,
         current_banner_key: "banner1.png".to_string(),
@@ -386,6 +416,36 @@ pub fn init() -> State {
     };
 
     rebuild_displayed_entries(&mut state);
+
+    // If we found a last-played song, move the selection to it and
+    // clamp the difficulty to the nearest playable stepchart.
+    if let Some(last_song) = last_song_arc {
+        if let Some(idx) = state.entries.iter().position(|e| match e {
+            MusicWheelEntry::Song(s) => Arc::ptr_eq(s, &last_song),
+            _ => false,
+        }) {
+            state.selected_index = idx;
+
+            if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
+                let preferred = state.preferred_difficulty_index;
+                let mut best_match_index = None;
+                let mut min_diff = i32::MAX;
+                for i in 0..crate::ui::color::FILE_DIFFICULTY_NAMES.len() {
+                    if is_difficulty_playable(song, i) {
+                        let diff = (i as i32 - preferred as i32).abs();
+                        if diff < min_diff {
+                            min_diff = diff;
+                            best_match_index = Some(i);
+                        }
+                    }
+                }
+                if let Some(idx2) = best_match_index {
+                    state.selected_difficulty_index = idx2;
+                }
+            }
+        }
+    }
+
     state.prev_selected_index = state.selected_index;
     state
 }

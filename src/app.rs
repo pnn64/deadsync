@@ -16,6 +16,7 @@ use winit::{
 
 use log::{error, warn, info};
 use std::{error::Error, sync::Arc, time::Instant};
+use std::cmp;
 
 use crate::ui::actors::Actor;
 /* -------------------- gamepad -------------------- */
@@ -92,6 +93,18 @@ impl App {
         let display_width = config.display_width;
         let display_height = config.display_height;
 
+        // Seed preferred difficulty from the profile's last-played
+        // difficulty, clamped to the known range of file difficulty names.
+        let profile_data = profile::get();
+        let max_diff_index = crate::ui::color::FILE_DIFFICULTY_NAMES
+            .len()
+            .saturating_sub(1);
+        let initial_pref_diff = if max_diff_index == 0 {
+            0
+        } else {
+            cmp::min(profile_data.last_difficulty_index, max_diff_index)
+        };
+
         let mut menu_state = menu::init();
         menu_state.active_color_index = color_index;
 
@@ -103,6 +116,9 @@ impl App {
 
         let mut select_music_state = select_music::init();
         select_music_state.active_color_index = color_index;
+        // Ensure SelectMusic's preferred difficulty matches the app's seed.
+        select_music_state.preferred_difficulty_index = initial_pref_diff;
+        select_music_state.selected_difficulty_index = initial_pref_diff;
 
         let mut options_state = options::init();
         options_state.active_color_index = color_index;
@@ -133,7 +149,7 @@ impl App {
             last_frame_time: Instant::now(),
             start_time: Instant::now(),
             metrics: space::metrics_for_window(display_width, display_height),
-            preferred_difficulty_index: 2, // Default to Medium
+            preferred_difficulty_index: initial_pref_diff,
             vsync_enabled,
             fullscreen_enabled,
             show_overlay,
@@ -862,6 +878,13 @@ impl ApplicationHandler<UserEvent> for App {
                                 .or_else(|| song_arc.charts.iter().find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name)))
                                 .expect("No chart found for selected difficulty");
                             let chart = Arc::new(chart_ref.clone());
+
+                            // Persist this as the "last played" selection so that
+                            // future visits to SelectMusic reopen on this song+difficulty.
+                            profile::update_last_played(
+                                song_arc.music_path.as_deref(),
+                                chart_difficulty_index,
+                            );
 
                             let color_index = po_state.active_color_index;
                             let mut gs = gameplay::init(song_arc, chart, color_index, po_state.music_rate);
