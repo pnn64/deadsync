@@ -6,9 +6,15 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::error::Error;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use bincode::{Decode, Encode};
 
 const API_URL: &str = "https://api.groovestats.com/player-leaderboards.php";
+const GS_SCORES_DIR: &str = "save/profiles/00000000/scores/gs";
 
 // --- Grade Definitions ---
 
@@ -49,12 +55,202 @@ pub struct CachedScore {
 static GRADE_CACHE: Lazy<Mutex<HashMap<String, CachedScore>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 pub fn get_cached_score(chart_hash: &str) -> Option<CachedScore> {
-    GRADE_CACHE.lock().unwrap().get(chart_hash).copied()
+    if let Some(score) = GRADE_CACHE.lock().unwrap().get(chart_hash).copied() {
+        return Some(score);
+    }
+    if let Some(from_disk) = load_best_score_from_disk(chart_hash) {
+        GRADE_CACHE
+            .lock()
+            .unwrap()
+            .insert(chart_hash.to_string(), from_disk);
+        return Some(from_disk);
+    }
+    None
 }
 
 pub fn set_cached_score(chart_hash: String, score: CachedScore) {
     info!("Caching score {:?} for chart hash {}", score, chart_hash);
     GRADE_CACHE.lock().unwrap().insert(chart_hash, score);
+}
+
+// --- On-disk GrooveStats score storage ---
+
+#[derive(Debug, Clone, Encode, Decode)]
+struct GsScoreEntry {
+    score_percent: f64,
+    grade_code: u8,
+    lamp_index: Option<u8>,
+    username: String,
+    fetched_at_ms: i64,
+}
+
+fn grade_to_code(g: Grade) -> u8 {
+    match g {
+        Grade::Quint => 0,
+        Grade::Tier01 => 1,
+        Grade::Tier02 => 2,
+        Grade::Tier03 => 3,
+        Grade::Tier04 => 4,
+        Grade::Tier05 => 5,
+        Grade::Tier06 => 6,
+        Grade::Tier07 => 7,
+        Grade::Tier08 => 8,
+        Grade::Tier09 => 9,
+        Grade::Tier10 => 10,
+        Grade::Tier11 => 11,
+        Grade::Tier12 => 12,
+        Grade::Tier13 => 13,
+        Grade::Tier14 => 14,
+        Grade::Tier15 => 15,
+        Grade::Tier16 => 16,
+        Grade::Tier17 => 17,
+        Grade::Failed => 18,
+    }
+}
+
+fn grade_from_code(code: u8) -> Grade {
+    match code {
+        0 => Grade::Quint,
+        1 => Grade::Tier01,
+        2 => Grade::Tier02,
+        3 => Grade::Tier03,
+        4 => Grade::Tier04,
+        5 => Grade::Tier05,
+        6 => Grade::Tier06,
+        7 => Grade::Tier07,
+        8 => Grade::Tier08,
+        9 => Grade::Tier09,
+        10 => Grade::Tier10,
+        11 => Grade::Tier11,
+        12 => Grade::Tier12,
+        13 => Grade::Tier13,
+        14 => Grade::Tier14,
+        15 => Grade::Tier15,
+        16 => Grade::Tier16,
+        17 => Grade::Tier17,
+        _ => Grade::Failed,
+    }
+}
+
+fn gs_scores_dir() -> PathBuf {
+    PathBuf::from(GS_SCORES_DIR)
+}
+
+fn entry_from_cached(score: CachedScore, username: &str, fetched_at_ms: i64) -> GsScoreEntry {
+    GsScoreEntry {
+        score_percent: score.score_percent,
+        grade_code: grade_to_code(score.grade),
+        lamp_index: score.lamp_index,
+        username: username.to_string(),
+        fetched_at_ms,
+    }
+}
+
+fn cached_from_entry(entry: &GsScoreEntry) -> CachedScore {
+    CachedScore {
+        grade: grade_from_code(entry.grade_code),
+        score_percent: entry.score_percent,
+        lamp_index: entry.lamp_index,
+    }
+}
+
+fn load_all_entries_for_chart(chart_hash: &str) -> Vec<GsScoreEntry> {
+    let dir = gs_scores_dir();
+    if !dir.is_dir() {
+        return Vec::new();
+    }
+    let prefix = format!("{}-", chart_hash);
+    let Ok(read_dir) = fs::read_dir(&dir) else { return Vec::new(); };
+    let mut entries = Vec::new();
+    for item in read_dir.flatten() {
+        let path = item.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !name.starts_with(&prefix) || !name.ends_with(".bin") {
+            continue;
+        }
+        let Ok(bytes) = fs::read(&path) else { continue; };
+        if let Ok((entry, _)) = bincode::decode_from_slice::<GsScoreEntry, _>(&bytes, bincode::config::standard()) {
+            entries.push(entry);
+        }
+    }
+    entries
+}
+
+fn load_best_score_from_disk(chart_hash: &str) -> Option<CachedScore> {
+    let entries = load_all_entries_for_chart(chart_hash);
+    if entries.is_empty() {
+        return None;
+    }
+    let mut best: Option<&GsScoreEntry> = None;
+    for entry in &entries {
+        if let Some(current) = best {
+            if entry.score_percent > current.score_percent {
+                best = Some(entry);
+            }
+        } else {
+            best = Some(entry);
+        }
+    }
+    best.map(cached_from_entry)
+}
+
+fn append_gs_score_on_disk(chart_hash: &str, score: CachedScore, username: &str) {
+    if username.trim().is_empty() {
+        return;
+    }
+    let mut entries = load_all_entries_for_chart(chart_hash);
+    let fetched_at_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    let new_entry = entry_from_cached(score, username, fetched_at_ms);
+
+    let epsilon = 1e-9_f64;
+    for existing in &entries {
+        if existing.username.eq_ignore_ascii_case(username)
+            && (existing.score_percent - new_entry.score_percent).abs() <= epsilon
+            && existing.lamp_index == new_entry.lamp_index
+            && existing.grade_code == new_entry.grade_code
+        {
+            return;
+        }
+    }
+
+    entries.push(new_entry.clone());
+
+    let dir = gs_scores_dir();
+    if let Err(e) = fs::create_dir_all(&dir) {
+        warn!("Failed to create GrooveStats scores dir {:?}: {}", dir, e);
+        return;
+    }
+
+    let file_name = format!("{}-{}.bin", chart_hash, fetched_at_ms);
+    let mut path = dir;
+    path.push(file_name);
+
+    match bincode::encode_to_vec(&new_entry, bincode::config::standard()) {
+        Ok(buf) => {
+            if let Err(e) = fs::write(&path, buf) {
+                warn!("Failed to write GrooveStats score file {:?}: {}", path, e);
+            } else {
+                info!(
+                    "Stored GrooveStats score on disk for chart {} at {:?}",
+                    chart_hash, path
+                );
+            }
+        }
+        Err(e) => {
+            warn!(
+                "Failed to encode GrooveStats score for chart {}: {}",
+                chart_hash, e
+            );
+        }
+    }
 }
 
 // --- API Response Structs ---
@@ -403,7 +599,8 @@ pub fn fetch_and_store_grade(profile: Profile, chart_hash: String) -> Result<(),
             score_percent: score_data.score / 10000.0,
             lamp_index,
         };
-        set_cached_score(chart_hash, cached_score);
+        set_cached_score(chart_hash.clone(), cached_score);
+        append_gs_score_on_disk(&chart_hash, cached_score, &profile.groovestats_username);
     } else {
         warn!(
             "No score found for player '{}' on chart '{}'. Caching as Failed.",
