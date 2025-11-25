@@ -52,20 +52,16 @@ pub struct CachedScore {
 
 // --- Global Grade Cache ---
 
-static GRADE_CACHE: Lazy<Mutex<HashMap<String, CachedScore>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static GRADE_CACHE: Lazy<Mutex<HashMap<String, CachedScore>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+static GS_DISK_BOOTSTRAP: Lazy<()> = Lazy::new(|| {
+    preload_scores_from_disk();
+});
 
 pub fn get_cached_score(chart_hash: &str) -> Option<CachedScore> {
-    if let Some(score) = GRADE_CACHE.lock().unwrap().get(chart_hash).copied() {
-        return Some(score);
-    }
-    if let Some(from_disk) = load_best_score_from_disk(chart_hash) {
-        GRADE_CACHE
-            .lock()
-            .unwrap()
-            .insert(chart_hash.to_string(), from_disk);
-        return Some(from_disk);
-    }
-    None
+    Lazy::force(&GS_DISK_BOOTSTRAP);
+    GRADE_CACHE.lock().unwrap().get(chart_hash).copied()
 }
 
 pub fn set_cached_score(chart_hash: String, score: CachedScore) {
@@ -154,6 +150,68 @@ fn cached_from_entry(entry: &GsScoreEntry) -> CachedScore {
     }
 }
 
+fn preload_scores_from_disk() {
+    let dir = gs_scores_dir();
+    if !dir.is_dir() {
+        return;
+    }
+    let Ok(read_dir) = fs::read_dir(&dir) else { return; };
+
+    let mut best_by_chart: HashMap<String, CachedScore> = HashMap::new();
+
+    for item in read_dir.flatten() {
+        let path = item.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !name.ends_with(".bin") {
+            continue;
+        }
+        let base = &name[..name.len().saturating_sub(4)];
+        let Some(idx) = base.rfind('-') else { continue; };
+        if idx == 0 {
+            continue;
+        }
+        let chart_hash = &base[..idx];
+
+        let Ok(bytes) = fs::read(&path) else { continue; };
+        let Ok((entry, _)) =
+            bincode::decode_from_slice::<GsScoreEntry, _>(&bytes, bincode::config::standard())
+        else {
+            continue;
+        };
+        let cached = cached_from_entry(&entry);
+
+        match best_by_chart.get_mut(chart_hash) {
+            Some(existing) => {
+                if cached.score_percent > existing.score_percent {
+                    *existing = cached;
+                }
+            }
+            None => {
+                best_by_chart.insert(chart_hash.to_string(), cached);
+            }
+        }
+    }
+
+    let mut cache = GRADE_CACHE.lock().unwrap();
+    for (chart_hash, score) in best_by_chart {
+        match cache.get(&chart_hash) {
+            Some(existing) => {
+                if score.score_percent > existing.score_percent {
+                    cache.insert(chart_hash, score);
+                }
+            }
+            None => {
+                cache.insert(chart_hash, score);
+            }
+        }
+    }
+}
+
 fn load_all_entries_for_chart(chart_hash: &str) -> Vec<GsScoreEntry> {
     let dir = gs_scores_dir();
     if !dir.is_dir() {
@@ -179,24 +237,6 @@ fn load_all_entries_for_chart(chart_hash: &str) -> Vec<GsScoreEntry> {
         }
     }
     entries
-}
-
-fn load_best_score_from_disk(chart_hash: &str) -> Option<CachedScore> {
-    let entries = load_all_entries_for_chart(chart_hash);
-    if entries.is_empty() {
-        return None;
-    }
-    let mut best: Option<&GsScoreEntry> = None;
-    for entry in &entries {
-        if let Some(current) = best {
-            if entry.score_percent > current.score_percent {
-                best = Some(entry);
-            }
-        } else {
-            best = Some(entry);
-        }
-    }
-    best.map(cached_from_entry)
 }
 
 fn append_gs_score_on_disk(chart_hash: &str, score: CachedScore, username: &str) {
