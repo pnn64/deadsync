@@ -105,6 +105,7 @@ pub struct State {
     in_flight_fences: Vec<vk::Fence>,
     images_in_flight: Vec<vk::Fence>,
     current_frame: usize,
+    swapchain_valid: bool,
     window_size: PhysicalSize<u32>,
     vsync_enabled: bool,
     projection: Matrix4<f32>,
@@ -189,6 +190,7 @@ pub fn init(window: &Window, vsync_enabled: bool) -> Result<State, Box<dyn Error
         in_flight_fences,
         images_in_flight,
         current_frame: 0,
+        swapchain_valid: true,
         window_size: initial_size,
         vsync_enabled,
         projection,
@@ -540,7 +542,10 @@ pub fn draw(
     render_list: &RenderList,
     textures: &HashMap<String, RendererTexture>,
 ) -> Result<u32, Box<dyn Error>> {
-    if state.window_size.width == 0 || state.window_size.height == 0 {
+    if !state.swapchain_valid
+        || state.window_size.width == 0
+        || state.window_size.height == 0
+    {
         return Ok(0);
     }
 
@@ -1287,14 +1292,42 @@ fn create_swapchain(
         max => desired_images.min(max),
     };
 
-    let extent = if capabilities.current_extent.width != u32::MAX {
+    // Derive the swapchain extent, making sure we never create a swapchain
+    // with a zero-sized surface (which is invalid and triggers validation errors
+    // on some platforms when the window is minimized or not yet fully realized).
+    let mut extent = if capabilities.current_extent.width != u32::MAX {
         capabilities.current_extent
     } else {
         vk::Extent2D {
-            width: window_size.width.clamp(capabilities.min_image_extent.width, capabilities.max_image_extent.width),
-            height: window_size.height.clamp(capabilities.min_image_extent.height, capabilities.max_image_extent.height),
+            width: window_size
+                .width
+                .clamp(
+                    capabilities.min_image_extent.width,
+                    capabilities.max_image_extent.width,
+                ),
+            height: window_size
+                .height
+                .clamp(
+                    capabilities.min_image_extent.height,
+                    capabilities.max_image_extent.height,
+                ),
         }
     };
+
+    if extent.width == 0 || extent.height == 0 {
+        // Some drivers can briefly report a zero-sized surface (e.g. during
+        // startup or minimize). Creating a swapchain with a 0x0 extent is
+        // invalid, so fall back to the minimum supported extent instead.
+        let fallback = vk::Extent2D {
+            width: capabilities.min_image_extent.width.max(1),
+            height: capabilities.min_image_extent.height.max(1),
+        };
+        debug!(
+            "Surface reported zero-sized extent ({}x{}); using fallback {}x{} for swapchain",
+            extent.width, extent.height, fallback.width, fallback.height
+        );
+        extent = fallback;
+    }
 
     let create_info = vk::SwapchainCreateInfoKHR::default()
         .surface(surface).min_image_count(image_count).image_format(format.format)
@@ -1403,6 +1436,32 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
     debug!("Recreating swapchain...");
     let device = state.device.as_ref().unwrap();
 
+    // Some platforms (notably under certain compositors or when minimized)
+    // can temporarily report a surface with all extents set to zero. In that
+    // state, any attempt to create a swapchain is invalid (imageExtent must be
+    // within [minImageExtent, maxImageExtent], which would both be 0x0).
+    // Instead of hammering vkCreateSwapchainKHR with illegal extents, mark the
+    // swapchain as temporarily invalid and skip recreation; we'll try again
+    // once the surface reports usable extents.
+    let caps = unsafe {
+        state
+            .surface_loader
+            .get_physical_device_surface_capabilities(state.pdevice, state.surface)?
+    };
+    if caps.current_extent.width == 0
+        && caps.current_extent.height == 0
+        && caps.min_image_extent.width == 0
+        && caps.min_image_extent.height == 0
+        && caps.max_image_extent.width == 0
+        && caps.max_image_extent.height == 0
+    {
+        debug!("Swapchain recreation skipped: surface capabilities report all-zero extents (likely minimized)");
+        state.swapchain_valid = false;
+        return Ok(());
+    }
+
+    state.swapchain_valid = false;
+
     unsafe { device.device_wait_idle()?; }
 
     let old_swapchain = state.swapchain_resources.swapchain;
@@ -1433,6 +1492,7 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
     }
 
     state.images_in_flight = vec![vk::Fence::null(); state.swapchain_resources._images.len()];
+    state.swapchain_valid = true;
     debug!("Swapchain recreated.");
     Ok(())
 }

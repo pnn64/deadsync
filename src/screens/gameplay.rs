@@ -4,7 +4,7 @@ use crate::core::space::*;
 use crate::core::space::{is_wide, widescale};
 use crate::game::judgment;
 use crate::game::judgment::{JudgeGrade, TimingWindow};
-use crate::game::note::{HoldResult, MineResult, NoteType};
+use crate::game::note::{HoldResult, NoteType};
 use crate::game::parsing::noteskin::{Quantization, SpriteSlot, NUM_QUANTIZATIONS};
 use crate::game::{profile, scroll::ScrollSpeedSetting, timing as timing_stats};
 use crate::ui::actors::{Actor, SizeSpec};
