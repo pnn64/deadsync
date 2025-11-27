@@ -1998,55 +1998,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let score_x = screen_center_x() - clamped_width / 4.3;
     let score_y = 56.0;
     let (score_text, score_color) = if profile.show_ex_score {
-        // FA+ EX score display (Simply Love EX scoring semantics).
-        // We derive per-window tap counts (including W0), hold/roll results,
-        // and mine hits from the current gameplay state.
-        let windows = timing_stats::compute_window_counts(&state.notes);
-        let mut total_steps: u32 = 0;
-        let mut held: u32 = 0;
-        let mut let_go: u32 = 0;
-        let mut hit_mine: u32 = 0;
-
-        for n in &state.notes {
-            if n.is_fake || !n.can_be_judged {
-                continue;
-            }
-            match n.note_type {
-                NoteType::Tap | NoteType::Hold | NoteType::Roll => {
-                    total_steps = total_steps.saturating_add(1);
-                    if matches!(n.note_type, NoteType::Hold | NoteType::Roll)
-                        && let Some(h) = n.hold.as_ref() {
-                            match h.result {
-                                Some(HoldResult::Held) => {
-                                    held = held.saturating_add(1);
-                                }
-                                Some(HoldResult::LetGo) => {
-                                    let_go = let_go.saturating_add(1);
-                                }
-                                None => {}
-                            }
-                        }
-                }
-                NoteType::Mine => {
-                    if n.mine_result == Some(MineResult::Hit) {
-                        hit_mine = hit_mine.saturating_add(1);
-                    }
-                }
-                NoteType::Fake => {}
-            }
-        }
-
-        // NoMines handling is not wired yet, so treat mines as enabled.
-        let mines_disabled = false;
-        let ex_percent = judgment::calculate_ex_score_fa_plus(
-            &windows,
-            held,
-            let_go,
-            hit_mine,
-            total_steps,
+        // FA+ EX score display (Simply Love EX scoring semantics), with
+        // failure-aware gating so score stops changing after life reaches 0.
+        let mines_disabled = false; // NoMines handling not wired yet.
+        let ex_percent = judgment::calculate_ex_score_from_notes(
+            &state.notes,
+            &state.note_time_cache,
+            &state.hold_end_time_cache,
             state.holds_total,
             state.rolls_total,
             state.mines_total,
+            state.fail_time,
             mines_disabled,
         );
         let text = format!("{:.2}", ex_percent.max(0.0));

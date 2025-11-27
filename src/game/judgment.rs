@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::game::note::{HoldResult, MineResult, Note, NoteType};
 use crate::game::timing::WindowCounts;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -155,4 +156,137 @@ pub fn calculate_ex_score_fa_plus(
     let ratio = (total_points / total_possible).max(0.0);
     // Match Simply Love: floor(total_points/total_possible * 10000) / 100
     ((ratio * 10000.0).floor()) / 100.0
+}
+
+/// Calculates FA+ EX score from a full gameplay note stream, applying failure
+/// semantics so that score no longer increases after the moment of failure.
+///
+/// - `notes`:           Full note list for the chart.
+/// - `note_times`:      Cached absolute times (seconds) for each note.
+/// - `hold_end_times`:  Optional cached end times (seconds) for holds/rolls.
+/// - `holds_total`:     Total chart holds (for denominator).
+/// - `rolls_total`:     Total chart rolls (for denominator).
+/// - `mines_total`:     Total chart mines (for denominator).
+/// - `fail_time`:       First music time (seconds) when life reached 0, if any.
+/// - `mines_disabled`:  Whether NoMines is active (EX still counts mines).
+///
+/// This mirrors Simply Love's CalculateExScore semantics and additionally
+/// enforces that:
+/// - taps and tap windows only count for notes scheduled at or before fail,
+/// - hold/roll Held/LetGo results only count if their end time is at or before fail,
+/// - mine hits only count if their scheduled time is at or before fail,
+/// while the denominator (total_steps/holds/rolls/mines) remains chart-wide.
+pub fn calculate_ex_score_from_notes(
+    notes: &[Note],
+    note_times: &[f32],
+    hold_end_times: &[Option<f32>],
+    holds_total: u32,
+    rolls_total: u32,
+    mines_total: u32,
+    fail_time: Option<f32>,
+    mines_disabled: bool,
+) -> f64 {
+    let mut windows = WindowCounts::default();
+    let mut total_steps: u32 = 0;
+    let mut held: u32 = 0;
+    let mut let_go: u32 = 0;
+    let mut hit_mine: u32 = 0;
+
+    for (i, note) in notes.iter().enumerate() {
+        if note.is_fake || !note.can_be_judged {
+            continue;
+        }
+
+        let note_time = *note_times.get(i).unwrap_or(&0.0);
+        let active_at_fail = match fail_time {
+            None => true,
+            Some(ft) => note_time <= ft,
+        };
+
+        if active_at_fail {
+            if matches!(note.note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll) {
+                if let Some(j) = note.result.as_ref() {
+                    match j.grade {
+                        JudgeGrade::Fantastic => match j.window {
+                            Some(TimingWindow::W0) => {
+                                windows.w0 = windows.w0.saturating_add(1);
+                            }
+                            _ => {
+                                windows.w1 = windows.w1.saturating_add(1);
+                            }
+                        },
+                        JudgeGrade::Excellent => {
+                            windows.w2 = windows.w2.saturating_add(1);
+                        }
+                        JudgeGrade::Great => {
+                            windows.w3 = windows.w3.saturating_add(1);
+                        }
+                        JudgeGrade::Decent => {
+                            windows.w4 = windows.w4.saturating_add(1);
+                        }
+                        JudgeGrade::WayOff => {
+                            windows.w5 = windows.w5.saturating_add(1);
+                        }
+                        JudgeGrade::Miss => {
+                            windows.miss = windows.miss.saturating_add(1);
+                        }
+                    }
+                }
+            }
+        }
+
+        match note.note_type {
+            NoteType::Tap => {
+                total_steps = total_steps.saturating_add(1);
+            }
+            NoteType::Hold | NoteType::Roll => {
+                total_steps = total_steps.saturating_add(1);
+
+                let end_time = hold_end_times
+                    .get(i)
+                    .and_then(|t| *t)
+                    .unwrap_or(note_time);
+                let include_hold = match fail_time {
+                    None => true,
+                    Some(ft) => end_time <= ft,
+                };
+
+                if include_hold {
+                    if let Some(h) = note.hold.as_ref() {
+                        match h.result {
+                            Some(HoldResult::Held) => {
+                                held = held.saturating_add(1);
+                            }
+                            Some(HoldResult::LetGo) => {
+                                let_go = let_go.saturating_add(1);
+                            }
+                            None => {}
+                        }
+                    }
+                }
+            }
+            NoteType::Mine => {
+                let include_mine = match fail_time {
+                    None => true,
+                    Some(ft) => note_time <= ft,
+                };
+                if include_mine && note.mine_result == Some(MineResult::Hit) {
+                    hit_mine = hit_mine.saturating_add(1);
+                }
+            }
+            NoteType::Fake => {}
+        }
+    }
+
+    calculate_ex_score_fa_plus(
+        &windows,
+        held,
+        let_go,
+        hit_mine,
+        total_steps,
+        holds_total,
+        rolls_total,
+        mines_total,
+        mines_disabled,
+    )
 }

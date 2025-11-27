@@ -8,7 +8,6 @@ use crate::ui::components::screen_bar::{AvatarParams, ScreenBarParams, ScreenBar
 use crate::core::space::widescale;
 
 use crate::game::judgment::{self, JudgeGrade};
-use crate::game::note::{HoldResult, MineResult, NoteType};
 use crate::screens::gameplay;
 use crate::game::song::SongData;
 use crate::game::chart::ChartData;
@@ -107,7 +106,6 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         // Prepare scatter points and histogram bins
         let scatter = timing_stats::build_scatter_points(&gs.notes, &gs.note_time_cache);
         let histogram = timing_stats::build_histogram_ms(&gs.notes);
-        let window_counts = timing_stats::compute_window_counts(&gs.notes);
         let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
         // Pad right bound slightly (0.05s) to match SL visual alignment.
         let graph_last_second = gs.song.total_length_seconds as f32 + 0.05;
@@ -126,54 +124,21 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             scores::score_to_grade(score_percent * 10000.0)
         };
 
-        // Compute FA+ EX score percentage for evaluation using the same
-        // semantics as the gameplay HUD: derive counts from final note
-        // results, including FA+ W0..W5 window splits.
-        let mut total_steps: u32 = 0;
-        let mut held: u32 = 0;
-        let mut let_go: u32 = 0;
-        let mut hit_mine: u32 = 0;
-
-        for n in &gs.notes {
-            if n.is_fake || !n.can_be_judged {
-                continue;
-            }
-            match n.note_type {
-                NoteType::Tap | NoteType::Hold | NoteType::Roll => {
-                    total_steps = total_steps.saturating_add(1);
-                    if matches!(n.note_type, NoteType::Hold | NoteType::Roll)
-                        && let Some(h) = n.hold.as_ref() {
-                            match h.result {
-                                Some(HoldResult::Held) => {
-                                    held = held.saturating_add(1);
-                                }
-                                Some(HoldResult::LetGo) => {
-                                    let_go = let_go.saturating_add(1);
-                                }
-                                None => {}
-                            }
-                        }
-                }
-                NoteType::Mine => {
-                    if n.mine_result == Some(MineResult::Hit) {
-                        hit_mine = hit_mine.saturating_add(1);
-                    }
-                }
-                NoteType::Fake => {}
-            }
-        }
+        // Per-window counts for the FA+ pane should always reflect all tap
+        // judgments that occurred (including after failure), matching the
+        // standard pane's judgment_counts semantics.
+        let window_counts = timing_stats::compute_window_counts(&gs.notes);
 
         // NoMines handling is not wired yet, so treat mines as enabled.
         let mines_disabled = false;
-        let ex_score_percent = judgment::calculate_ex_score_fa_plus(
-            &window_counts,
-            held,
-            let_go,
-            hit_mine,
-            total_steps,
+        let ex_score_percent = judgment::calculate_ex_score_from_notes(
+            &gs.notes,
+            &gs.note_time_cache,
+            &gs.hold_end_time_cache,
             gs.holds_total,
             gs.rolls_total,
             gs.mines_total,
+            gs.fail_time,
             mines_disabled,
         );
 
