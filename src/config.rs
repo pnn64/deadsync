@@ -1,5 +1,5 @@
 use crate::core::gfx::BackendType;
-use crate::core::input::{Keymap, VirtualAction, InputBinding, PadDir, PadButton, FaceBtn};
+use crate::core::input::{Keymap, VirtualAction, InputBinding, PadDir, PadButton, FaceBtn, GamepadCodeBinding};
 use winit::keyboard::KeyCode;
 use configparser::ini::Ini;
 use log::{info, warn};
@@ -288,6 +288,91 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
             _ => return None,
         };
         return Some(InputBinding::Key(code));
+    }
+
+    // Gamepad low-level code binding:
+    //   PadCode[0xDEADBEEF]
+    //   PadCode[0xDEADBEEF]@0
+    //   PadCode[0xDEADBEEF]#00112233AABBCCDDEEFF001122334455
+    //   PadCode[0xDEADBEEF]@0#00112233AABBCCDDEEFF001122334455
+    //
+    // where 0x... or decimal is gilrs::ev::Code::into_u32(), @N restricts to device index N,
+    // and #... restricts to a 16-byte UUID (32 hex chars, no dashes).
+    if let Some(rest) = t.strip_prefix("PadCode[") {
+        if let Some(end) = rest.find(']') {
+            let code_str = &rest[..end];
+            let mut tail = &rest[end + 1..];
+
+            let code_u32 = if let Some(hex) = code_str.strip_prefix("0x").or_else(|| code_str.strip_prefix("0X")) {
+                u32::from_str_radix(hex, 16).ok()?
+            } else {
+                u32::from_str(code_str).ok()?
+            };
+
+            let mut device: Option<usize> = None;
+            let mut uuid: Option<[u8; 16]> = None;
+
+            // Parse optional @device and #uuid, in any order.
+            loop {
+                if let Some(rest2) = tail.strip_prefix('@') {
+                    let mut digits = String::new();
+                    for ch in rest2.chars() {
+                        if ch.is_ascii_digit() {
+                            digits.push(ch);
+                        } else {
+                            break;
+                        }
+                    }
+                    if digits.is_empty() {
+                        break;
+                    }
+                    if let Ok(dev_idx) = usize::from_str(&digits) {
+                        device = Some(dev_idx);
+                    }
+                    tail = &rest2[digits.len()..];
+                    continue;
+                }
+
+                if let Some(rest2) = tail.strip_prefix('#') {
+                    let mut hex_digits = String::new();
+                    for ch in rest2.chars() {
+                        if ch.is_ascii_hexdigit() {
+                            hex_digits.push(ch);
+                        } else {
+                            break;
+                        }
+                    }
+                    if hex_digits.len() == 32 {
+                        let mut bytes = [0u8; 16];
+                        let mut ok = true;
+                        for i in 0..16 {
+                            let start = i * 2;
+                            let end = start + 2;
+                            match u8::from_str_radix(&hex_digits[start..end], 16) {
+                                Ok(b) => bytes[i] = b,
+                                Err(_) => {
+                                    ok = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if ok {
+                            uuid = Some(bytes);
+                        }
+                    }
+                    tail = &rest2[hex_digits.len()..];
+                    continue;
+                }
+
+                break;
+            }
+
+            return Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32,
+                device,
+                uuid,
+            }));
+        }
     }
 
     // Gamepad (any pad): PadDir::Up, PadButton::Confirm, Face::WestX

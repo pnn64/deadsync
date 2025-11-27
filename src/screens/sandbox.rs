@@ -1,12 +1,11 @@
 use crate::act;
 use crate::core::space::*;
 use crate::screens::{Screen, ScreenAction};
-use crate::core::input::{VirtualAction, InputEvent};
+use crate::core::input::{VirtualAction, InputEvent, PadEvent, GpSystemEvent};
 use crate::ui::actors::Actor;
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 use std::collections::VecDeque;
-use std::time::{Instant};
-use crate::core::input::PadEvent;
+use std::time::Instant;
 use winit::event::{KeyEvent, ElementState};
 
 /* ---------------------------- constants ---------------------------- */
@@ -81,6 +80,8 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
         PadEvent::Dir { pressed, .. } => *pressed,
         PadEvent::Button { pressed, .. } => *pressed,
         PadEvent::Face { pressed, .. } => *pressed,
+        PadEvent::RawButton { pressed, .. } => *pressed,
+        PadEvent::RawAxis { .. } => false,
     };
 
     if pressed {
@@ -95,11 +96,75 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             PadEvent::Face { id, btn, pressed } => {
                 format!("Gamepad {}: Face {{ btn: {:?}, pressed: {} }}", usize::from(*id), btn, pressed)
             }
+            PadEvent::RawButton { id, button, code, uuid, value, pressed } => {
+                let dev = usize::from(*id);
+                let code_u32 = code.into_u32();
+                let uuid_hex: String = uuid.iter().map(|b| format!("{:02X}", b)).collect();
+                format!(
+                    "Gamepad {} [uuid={}]: RAW BTN {{ button: {:?}, PadCode[0x{:08X}], value: {:.3}, pressed: {} }}",
+                    dev,
+                    uuid_hex,
+                    button,
+                    code_u32,
+                    value,
+                    pressed,
+                )
+            }
+            PadEvent::RawAxis { id, axis, code, uuid, value } => {
+                let dev = usize::from(*id);
+                let code_u32 = code.into_u32();
+                let uuid_hex: String = uuid.iter().map(|b| format!("{:02X}", b)).collect();
+                format!(
+                    "Gamepad {} [uuid={}]: RAW AXIS {{ axis: {:?}, PadCode[0x{:08X}], value: {:.3} }}",
+                    dev,
+                    uuid_hex,
+                    axis,
+                    code_u32,
+                    value,
+                )
+            }
         };
         state.last_inputs.push_front((pad_str, Instant::now()));
         if state.last_inputs.len() > INPUT_LOG_MAX_ITEMS {
             state.last_inputs.pop_back();
         }
+    }
+}
+
+pub fn handle_gamepad_system_event(state: &mut State, ev: &GpSystemEvent) {
+    let now = Instant::now();
+    let msg = match ev {
+        GpSystemEvent::Connected {
+            name,
+            id,
+            vendor_id,
+            product_id,
+            mapping,
+        } => {
+            let dev = usize::from(*id);
+            let vid = vendor_id
+                .map(|v| format!("0x{:04X}", v))
+                .unwrap_or_else(|| "n/a".to_string());
+            let pid = product_id
+                .map(|p| format!("0x{:04X}", p))
+                .unwrap_or_else(|| "n/a".to_string());
+            format!(
+                "[SYS] Gamepad {} CONNECTED: \"{}\" vid={} pid={} mapping={:?}",
+                dev,
+                name,
+                vid,
+                pid,
+                mapping,
+            )
+        }
+        GpSystemEvent::Disconnected { name, id } => {
+            let dev = usize::from(*id);
+            format!("[SYS] Gamepad {} DISCONNECTED: \"{}\"", dev, name)
+        }
+    };
+    state.last_inputs.push_front((msg, now));
+    if state.last_inputs.len() > INPUT_LOG_MAX_ITEMS {
+        state.last_inputs.pop_back();
     }
 }
 

@@ -69,15 +69,47 @@ You can edit `deadsync.ini` to change various settings, including renderer, vide
 
 ### Input bindings
 
-You can fully customize keyboard and gamepad controls in the `[Keymaps]` section of `deadsync.ini`. DeadSync maps **physical inputs** to **virtual actions**, which the game then uses internally.
+You can fully customize keyboard and gamepad controls in the `[Keymaps]` section of `deadsync.ini`. DeadSync maps **virtual actions** (e.g. `P1_Up`, `P1_Start`, `P1_Back`) to one or more **physical inputs**.
 
-Gamepad controls (e.g. Xbox controllers) can be bound with:
+#### Keyboard
 
-- `PadN::Dir::Up|Down|Left|Right`
-- `PadN::Button::Confirm|Back`
-- `PadN::Face::SouthA|EastB|WestX|NorthY`
+Use `KeyCode::<Name>` values, for example:
 
-Here `N` is the gamepad index (Pad0, Pad1, …).
+- `KeyCode::ArrowLeft`, `KeyCode::ArrowRight`
+- `KeyCode::KeyA`, `KeyCode::KeyS`, `KeyCode::KeyD`, `KeyCode::KeyW`
+
+Example:
+
+```ini
+[Keymaps]
+P1_Up=KeyCode::ArrowUp,KeyCode::KeyW
+P1_Start=KeyCode::Enter
+P1_Back=KeyCode::Escape
+```
+
+#### Gamepad (low-level codes)
+
+Gamepad bindings are based on gilrs’ low-level event codes. The recommended way to bind a button is:
+
+- `PadCode[0xDEADBEEF]` — bind to any gamepad button with that raw code.
+- `PadCode[0xDEADBEEF]@0` — bind to that code, but only on gamepad `ID 0` (as shown in logs / sandbox).
+
+To discover the codes for your device:
+
+1. Start the game and go to the **Sandbox** screen by pressing `F4`.
+2. Press buttons on your controller; you will see lines like:
+   - `Gamepad 0 [uuid=...]: RAW BTN { button: South, PadCode[0x00030030], ... }`
+3. Copy the `PadCode[...]` part (and optionally the `@0` device index) into `deadsync.ini`.
+
+Example: bind P1 Start/Back to a specific button on gamepad 0:
+
+```ini
+[Keymaps]
+P1_Start=PadCode[0x00030030]@0
+P1_Back=PadCode[0x00030031]@0
+```
+
+Legacy high-level bindings like `PadDir::Up`, `PadButton::Confirm`, and `PadN::Dir::Left` are still accepted for convenience, but low-level `PadCode[...]` bindings are the most accurate and device-agnostic way to configure controllers.
 
 ### Profile & Online Features
 A `save` directory is also created to store your personal data.

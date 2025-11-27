@@ -8,7 +8,8 @@ use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 // Gamepad (gilrs)
-use gilrs::{Axis, Button, Event, EventType, GamepadId, Gilrs};
+use gilrs::{Axis, Button, Event, EventType, GamepadId, Gilrs, MappingSource};
+use gilrs::ev::Code as GpCode;
 
 /* ------------------------ Gamepad types + poll ------------------------ */
 
@@ -26,12 +27,38 @@ pub enum PadEvent {
     Dir { id: GamepadId, dir: PadDir, pressed: bool },
     Button { id: GamepadId, btn: PadButton, pressed: bool },
     Face { id: GamepadId, btn: FaceBtn, pressed: bool },
+    /// Raw low-level button event with platform-specific code and device UUID.
+    RawButton {
+        id: GamepadId,
+        button: Button,
+        code: GpCode,
+        uuid: [u8; 16],
+        value: f32,
+        pressed: bool,
+    },
+    /// Raw low-level axis event with platform-specific code and device UUID.
+    RawAxis {
+        id: GamepadId,
+        axis: Axis,
+        code: GpCode,
+        uuid: [u8; 16],
+        value: f32,
+    },
 }
 
 #[derive(Clone, Debug)]
 pub enum GpSystemEvent {
-    Connected { name: String, id: GamepadId },
-    Disconnected { name: String, id: GamepadId },
+    Connected {
+        name: String,
+        id: GamepadId,
+        vendor_id: Option<u16>,
+        product_id: Option<u16>,
+        mapping: MappingSource,
+    },
+    Disconnected {
+        name: String,
+        id: GamepadId,
+    },
 }
 
 #[derive(Default, Clone, Copy)]
@@ -84,13 +111,24 @@ pub fn poll_and_collect(
         // These are processed for ANY gamepad, not just the active one.
         match event {
             EventType::Connected => {
-                let name = gilrs.gamepad(id).name().to_string();
-                sys_out.push(GpSystemEvent::Connected { name, id });
+                let gp = gilrs.gamepad(id);
+                let name = gp.name().to_string();
+                let vendor_id = gp.vendor_id();
+                let product_id = gp.product_id();
+                let mapping = gp.mapping_source();
+                sys_out.push(GpSystemEvent::Connected {
+                    name,
+                    id,
+                    vendor_id,
+                    product_id,
+                    mapping,
+                });
                 if active_id.is_none() { *active_id = Some(id); }
                 continue; // Don't process this event as an input.
             }
             EventType::Disconnected => {
-                let name = gilrs.gamepad(id).name().to_string();
+                let gp = gilrs.gamepad(id);
+                let name = gp.name().to_string();
                 sys_out.push(GpSystemEvent::Disconnected { name, id });
                 // Release any buttons/dirs for this device and drop its state.
                 if let Some(ps) = state.states.remove(&id) {
@@ -110,9 +148,22 @@ pub fn poll_and_collect(
         if active_id.is_none() { *active_id = Some(id); }
 
         let ps = state.states.entry(id).or_default();
+        // Cache per-event device metadata for raw reporting.
+        let gp = gilrs.gamepad(id);
+        let uuid = gp.uuid();
 
         match event {
-            EventType::ButtonPressed(btn, _) => {
+            EventType::ButtonPressed(btn, code) => {
+                // Always emit a raw button event so nothing is dropped.
+                out.push(PadEvent::RawButton {
+                    id,
+                    button: btn,
+                    code,
+                    uuid,
+                    value: 1.0,
+                    pressed: true,
+                });
+
                 match btn {
                     // Face buttons → Face events
                     Button::South => out.push(PadEvent::Face { id, btn: FaceBtn::SouthA, pressed: true }),
@@ -137,7 +188,16 @@ pub fn poll_and_collect(
                 }
             }
 
-            EventType::ButtonReleased(btn, _) => {
+            EventType::ButtonReleased(btn, code) => {
+                out.push(PadEvent::RawButton {
+                    id,
+                    button: btn,
+                    code,
+                    uuid,
+                    value: 0.0,
+                    pressed: false,
+                });
+
                 match btn {
                     Button::South => out.push(PadEvent::Face { id, btn: FaceBtn::SouthA, pressed: false }),
                     Button::East  => out.push(PadEvent::Face { id, btn: FaceBtn::EastB,  pressed: false }),
@@ -159,7 +219,15 @@ pub fn poll_and_collect(
                 }
             }
 
-            EventType::AxisChanged(axis, value, _) => {
+            EventType::AxisChanged(axis, value, code) => {
+                out.push(PadEvent::RawAxis {
+                    id,
+                    axis,
+                    code,
+                    uuid,
+                    value,
+                });
+
                 match axis {
                     Axis::LeftStickX => ps.lx = value,
                     Axis::LeftStickY => ps.ly = value,
@@ -253,6 +321,18 @@ pub enum VirtualAction {
     p1_restart,
 }
 
+/// Low-level gamepad binding to a platform-specific element code.
+///
+/// - `code_u32` is `gilrs::ev::Code::into_u32()` for the element.
+/// - `device` is an optional runtime `GamepadId` index (from `usize::from(id)`).
+/// - `uuid` is an optional SDL-style device UUID (`gilrs::Gamepad::uuid()`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct GamepadCodeBinding {
+    pub code_u32: u32,
+    pub device: Option<usize>,
+    pub uuid: Option<[u8; 16]>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum InputBinding {
     Key(KeyCode),
@@ -262,6 +342,7 @@ pub enum InputBinding {
     PadDirOn { device: usize, dir: PadDir },
     PadButtonOn { device: usize, btn: PadButton },
     FaceOn { device: usize, btn: FaceBtn },
+    GamepadCode(GamepadCodeBinding),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -333,6 +414,38 @@ impl Keymap {
                         }
                     }
                 }
+            }
+            PadEvent::RawButton { id, code, uuid, pressed, .. } => {
+                let dev = usize::from(id);
+                let code_u32 = code.into_u32();
+                for (act, binds) in &self.map {
+                    for b in binds {
+                        match *b {
+                            InputBinding::GamepadCode(binding) => {
+                                if binding.code_u32 != code_u32 {
+                                    continue;
+                                }
+                                if let Some(d_expected) = binding.device {
+                                    if d_expected != dev {
+                                        continue;
+                                    }
+                                }
+                                if let Some(u_expected) = binding.uuid {
+                                    if u_expected != uuid {
+                                        continue;
+                                    }
+                                }
+                                out.push((*act, pressed));
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            PadEvent::RawAxis { .. } => {
+                // Axis events are exposed for debugging but are not yet
+                // mapped directly to virtual actions.
             }
         }
         out

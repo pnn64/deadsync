@@ -540,14 +540,17 @@ impl ApplicationHandler<UserEvent> for App {
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::GamepadSystem(ev) => {
-                let msg = match ev {
-                    GpSystemEvent::Connected { name, id } => {
-                        info!("Gamepad connected: {} (ID: {})", name, usize::from(id));
-                        format!("Connected: {} (ID: {})", name, usize::from(id))
+                if self.current_screen == CurrentScreen::Sandbox {
+                    crate::screens::sandbox::handle_gamepad_system_event(&mut self.sandbox_state, &ev);
+                }
+                let msg = match &ev {
+                    GpSystemEvent::Connected { name, id, .. } => {
+                        info!("Gamepad connected: {} (ID: {})", name, usize::from(*id));
+                        format!("Connected: {} (ID: {})", name, usize::from(*id))
                     }
                     GpSystemEvent::Disconnected { name, id } => {
-                        info!("Gamepad disconnected: {} (ID: {})", name, usize::from(id));
-                        format!("Disconnected: {} (ID: {})", name, usize::from(id))
+                        info!("Gamepad disconnected: {} (ID: {})", name, usize::from(*id));
+                        format!("Disconnected: {} (ID: {})", name, usize::from(*id))
                     }
                 };
                 self.gamepad_overlay_state = Some((msg, Instant::now()));
