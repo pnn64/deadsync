@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use crate::game::note::{HoldResult, MineResult, Note, NoteType};
@@ -30,6 +31,48 @@ pub struct Judgment {
     pub time_error_ms: f32,
     pub grade: JudgeGrade,          // The grade of this specific note
     pub window: Option<TimingWindow>, // Optional detailed window (W0-W5) for FA+/EX-style features
+}
+
+/// Aggregates per-note judgments on a single row into the final row judgment,
+/// mirroring the logic used by gameplay scoring:
+/// - Any Miss on the row yields a Miss row judgment.
+/// - Otherwise, the note with the largest absolute timing error determines
+///   the row's grade and timing window.
+#[inline(always)]
+pub fn aggregate_row_final_judgment<'a, I>(judgments: I) -> Option<&'a Judgment>
+where
+    I: IntoIterator<Item = &'a Judgment>,
+{
+    let mut has_miss = false;
+    let mut chosen: Option<&'a Judgment> = None;
+
+    for j in judgments {
+        if j.grade == JudgeGrade::Miss {
+            if !has_miss {
+                has_miss = true;
+                chosen = Some(j);
+            }
+            continue;
+        }
+
+        if has_miss {
+            continue;
+        }
+
+        match chosen {
+            None => chosen = Some(j),
+            Some(current) => {
+                let a = j.time_error_ms.abs();
+                let b = current.time_error_ms.abs();
+                let ord = a.partial_cmp(&b).unwrap_or(Ordering::Equal);
+                if ord == Ordering::Greater {
+                    chosen = Some(j);
+                }
+            }
+        }
+    }
+
+    chosen
 }
 
 pub const HOLD_SCORE_HELD: i32 = 5;
@@ -81,7 +124,39 @@ pub fn calculate_itg_score_percent(
         mines_hit_for_score,
     );
 
-    (total_points as f64 / possible_grade_points as f64).max(0.0)
+    if total_points <= 0 {
+        return 0.0;
+    }
+    if total_points >= possible_grade_points {
+        // Correct for rounding error at the top end, mirroring
+        // PlayerStageStats::MakePercentScore when actual == possible.
+        return 1.0;
+    }
+
+    // Base ITG percent as a 0.0–1.0 ratio.
+    let mut percent = total_points as f64 / possible_grade_points as f64;
+    if percent < 0.0 {
+        percent = 0.0;
+    }
+
+    // Mirror ITGmania's MakePercentScore truncation semantics so that the
+    // displayed percent never rounds up beyond what the underlying grade
+    // thresholds would allow.
+    //
+    // CommonMetrics::PercentScoreDecimalPlaces is 2 in ITGmania, which yields:
+    //   iPercentTotalDigits = 3 + 2 = 5 ("100.00")
+    //   fTruncInterval      = 10^-(5-1) = 0.0001
+    //
+    // We hard-code the same behavior here.
+    const DECIMAL_PLACES: i32 = 2;
+    let percent_total_digits = 3 + DECIMAL_PLACES;
+    let trunc_interval = 10_f64.powi(-(percent_total_digits - 1));
+
+    // Small boost to avoid ftruncf-style underflow when very close to 1.0.
+    percent += 0.000001_f64;
+
+    let scaled = (percent / trunc_interval).floor() * trunc_interval;
+    scaled.max(0.0)
 }
 
 // ----------------------------- FA+ EX Scoring -----------------------------
@@ -186,53 +261,16 @@ pub fn calculate_ex_score_from_notes(
     fail_time: Option<f32>,
     mines_disabled: bool,
 ) -> f64 {
-    let mut windows = WindowCounts::default();
     let mut total_steps: u32 = 0;
     let mut held: u32 = 0;
     let mut let_go: u32 = 0;
     let mut hit_mine: u32 = 0;
 
+    // Pass 1: aggregate step, hold/roll, and mine results using the same
+    // failure gating semantics as Simply Love's TrackExScoreJudgments.
     for (i, note) in notes.iter().enumerate() {
         if note.is_fake || !note.can_be_judged {
             continue;
-        }
-
-        let note_time = *note_times.get(i).unwrap_or(&0.0);
-        let active_at_fail = match fail_time {
-            None => true,
-            Some(ft) => note_time <= ft,
-        };
-
-        if active_at_fail {
-            if matches!(note.note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll) {
-                if let Some(j) = note.result.as_ref() {
-                    match j.grade {
-                        JudgeGrade::Fantastic => match j.window {
-                            Some(TimingWindow::W0) => {
-                                windows.w0 = windows.w0.saturating_add(1);
-                            }
-                            _ => {
-                                windows.w1 = windows.w1.saturating_add(1);
-                            }
-                        },
-                        JudgeGrade::Excellent => {
-                            windows.w2 = windows.w2.saturating_add(1);
-                        }
-                        JudgeGrade::Great => {
-                            windows.w3 = windows.w3.saturating_add(1);
-                        }
-                        JudgeGrade::Decent => {
-                            windows.w4 = windows.w4.saturating_add(1);
-                        }
-                        JudgeGrade::WayOff => {
-                            windows.w5 = windows.w5.saturating_add(1);
-                        }
-                        JudgeGrade::Miss => {
-                            windows.miss = windows.miss.saturating_add(1);
-                        }
-                    }
-                }
-            }
         }
 
         match note.note_type {
@@ -242,6 +280,7 @@ pub fn calculate_ex_score_from_notes(
             NoteType::Hold | NoteType::Roll => {
                 total_steps = total_steps.saturating_add(1);
 
+                let note_time = *note_times.get(i).unwrap_or(&0.0);
                 let end_time = hold_end_times
                     .get(i)
                     .and_then(|t| *t)
@@ -266,6 +305,7 @@ pub fn calculate_ex_score_from_notes(
                 }
             }
             NoteType::Mine => {
+                let note_time = *note_times.get(i).unwrap_or(&0.0);
                 let include_mine = match fail_time {
                     None => true,
                     Some(ft) => note_time <= ft,
@@ -275,6 +315,76 @@ pub fn calculate_ex_score_from_notes(
                 }
             }
             NoteType::Fake => {}
+        }
+    }
+
+    // Pass 2: aggregate tap window counts row-by-row, mirroring ITGmania's
+    // row-based TapNoteScore semantics and Simply Love's EX tracking
+    // (TrackExScoreJudgments) with failure gating.
+    let mut windows = WindowCounts::default();
+
+    if !notes.is_empty() {
+        let mut idx: usize = 0;
+        let len = notes.len();
+
+        while idx < len {
+            let row_index = notes[idx].row_index;
+            let mut row_time = f32::INFINITY;
+            let mut row_judgments: Vec<&Judgment> = Vec::new();
+
+            while idx < len && notes[idx].row_index == row_index {
+                let note = &notes[idx];
+                if !note.is_fake && note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+                    let note_time = *note_times.get(idx).unwrap_or(&0.0);
+                    if note_time < row_time {
+                        row_time = note_time;
+                    }
+                    if let Some(j) = note.result.as_ref() {
+                        row_judgments.push(j);
+                    }
+                }
+                idx += 1;
+            }
+
+            if row_judgments.is_empty() {
+                continue;
+            }
+
+            let active_at_fail = match fail_time {
+                None => true,
+                Some(ft) => row_time <= ft,
+            };
+            if !active_at_fail {
+                continue;
+            }
+
+            if let Some(j) = aggregate_row_final_judgment(row_judgments.iter().copied()) {
+                match j.grade {
+                    JudgeGrade::Fantastic => match j.window {
+                        Some(TimingWindow::W0) => {
+                            windows.w0 = windows.w0.saturating_add(1);
+                        }
+                        _ => {
+                            windows.w1 = windows.w1.saturating_add(1);
+                        }
+                    },
+                    JudgeGrade::Excellent => {
+                        windows.w2 = windows.w2.saturating_add(1);
+                    }
+                    JudgeGrade::Great => {
+                        windows.w3 = windows.w3.saturating_add(1);
+                    }
+                    JudgeGrade::Decent => {
+                        windows.w4 = windows.w4.saturating_add(1);
+                    }
+                    JudgeGrade::WayOff => {
+                        windows.w5 = windows.w5.saturating_add(1);
+                    }
+                    JudgeGrade::Miss => {
+                        windows.miss = windows.miss.saturating_add(1);
+                    }
+                }
+            }
         }
     }
 

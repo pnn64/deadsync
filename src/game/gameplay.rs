@@ -1098,11 +1098,7 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
     if judgments_in_row.is_empty() { return; }
     let row_has_miss = judgments_in_row.iter().any(|judgment| judgment.grade == JudgeGrade::Miss);
     let row_has_successful_hit = judgments_in_row.iter().any(|judgment| matches!(judgment.grade, JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great));
-    let final_judgment = if row_has_miss {
-        judgments_in_row.iter().find(|judgment| judgment.grade == JudgeGrade::Miss).cloned()
-    } else {
-        judgments_in_row.iter().max_by(|a, b| a.time_error_ms.abs().partial_cmp(&b.time_error_ms.abs()).unwrap_or(std::cmp::Ordering::Equal)).cloned()
-    };
+    let final_judgment = judgment::aggregate_row_final_judgment(judgments_in_row.iter()).cloned();
     let Some(final_judgment) = final_judgment else { return; };
     let final_grade = final_judgment.grade;
     *state.judgment_counts.entry(final_grade).or_insert(0) += 1;
