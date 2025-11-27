@@ -105,6 +105,8 @@ impl Backend {
     }
 
     pub fn dispose_textures(&mut self, textures: &mut HashMap<String, Texture>) {
+        self.wait_for_idle();
+
         let old_textures = std::mem::take(textures);
         match &mut self.0 {
             BackendImpl::Vulkan(_) => {
