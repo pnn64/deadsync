@@ -2005,6 +2005,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             &state.notes,
             &state.note_time_cache,
             &state.hold_end_time_cache,
+            state.chart.stats.total_steps, // <- use this
             state.holds_total,
             state.rolls_total,
             state.mines_total,

@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use crate::game::note::{HoldResult, MineResult, Note, NoteType};
-use crate::game::timing::WindowCounts;
+use crate::game::timing::{self, WindowCounts};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TimingWindow {
@@ -167,206 +167,89 @@ const EX_WEIGHT_W0: f64 = 3.5;
 const EX_WEIGHT_W1: f64 = 3.0;
 const EX_WEIGHT_W2: f64 = 2.0;
 const EX_WEIGHT_W3: f64 = 1.0;
-const EX_WEIGHT_W4: f64 = 0.0;
-const EX_WEIGHT_W5: f64 = 0.0;
-const EX_WEIGHT_MISS: f64 = 0.0;
-const EX_WEIGHT_LET_GO: f64 = 0.0;
 const EX_WEIGHT_HELD: f64 = 1.0;
 const EX_WEIGHT_HIT_MINE: f64 = -1.0;
 
-/// Calculates FA+ style EX score percentage (0.00–100.00) given:
-/// - detailed tap window counts (including W0),
-/// - hold/roll results (Held/LetGo),
-/// - mine hits,
-/// - and total step/hold/roll/mine counts from chart radar data.
+/// Calculates FA+ EX score using the same algebra as SL:
 ///
-/// The formula is:
-///   total_possible = total_steps * W0_weight + (total_holds + total_rolls) * Held_weight
-///   total_points   = sum(count_i * weight_i)
+///   total_possible = total_steps * 3.5 + (total_holds + total_rolls)
+///   total_points   = W0*3.5 + W1*3 + W2*2 + W3 + holds_held - mines_hit
 ///   ex_percent     = floor(total_points / total_possible * 10000) / 100
 ///
-/// `mines_disabled` implements the “NoMines still affect EX score” rule:
-/// when true we pretend all mines were hit by adding total_mines * HitMine_weight
-/// to the numerator before applying the actual hit_mine count.
-pub fn calculate_ex_score_fa_plus(
-    windows: &WindowCounts,
-    held: u32,
-    let_go: u32,
-    hit_mine: u32,
-    total_steps: u32,
-    total_holds: u32,
-    total_rolls: u32,
-    total_mines: u32,
-    mines_disabled: bool,
-) -> f64 {
-    let total_steps_f = total_steps as f64;
-    let total_holds_f = total_holds as f64;
-    let total_rolls_f = total_rolls as f64;
-
-    let total_possible =
-        total_steps_f * EX_WEIGHT_W0 + (total_holds_f + total_rolls_f) * EX_WEIGHT_HELD;
-    if total_possible <= 0.0 {
-        return 0.0;
-    }
-
-    let mut total_points = 0.0_f64;
-
-    // Mines disabled: still account for them as if they could have been hit.
-    if mines_disabled && total_mines > 0 {
-        total_points += (total_mines as f64) * EX_WEIGHT_HIT_MINE;
-    }
-
-    total_points += (windows.w0 as f64) * EX_WEIGHT_W0;
-    total_points += (windows.w1 as f64) * EX_WEIGHT_W1;
-    total_points += (windows.w2 as f64) * EX_WEIGHT_W2;
-    total_points += (windows.w3 as f64) * EX_WEIGHT_W3;
-    total_points += (windows.w4 as f64) * EX_WEIGHT_W4;
-    total_points += (windows.w5 as f64) * EX_WEIGHT_W5;
-    total_points += (windows.miss as f64) * EX_WEIGHT_MISS;
-
-    total_points += (held as f64) * EX_WEIGHT_HELD;
-    total_points += (let_go as f64) * EX_WEIGHT_LET_GO;
-    total_points += (hit_mine as f64) * EX_WEIGHT_HIT_MINE;
-
-    let ratio = (total_points / total_possible).max(0.0);
-    // Match Simply Love: floor(total_points/total_possible * 10000) / 100
-    ((ratio * 10000.0).floor()) / 100.0
-}
-
-/// Calculates FA+ EX score from a full gameplay note stream, applying failure
-/// semantics so that score no longer increases after the moment of failure.
+/// where W0..W3 are taken from the final per-row window counts used by the FA+
+/// pane, holds_held counts successful holds only (rolls are reported
+/// separately), and mines_hit is the number of mines actually hit.
 ///
-/// - `notes`:           Full note list for the chart.
-/// - `note_times`:      Cached absolute times (seconds) for each note.
-/// - `hold_end_times`:  Optional cached end times (seconds) for holds/rolls.
-/// - `holds_total`:     Total chart holds (for denominator).
-/// - `rolls_total`:     Total chart rolls (for denominator).
-/// - `mines_total`:     Total chart mines (for denominator).
-/// - `fail_time`:       First music time (seconds) when life reached 0, if any.
-/// - `mines_disabled`:  Whether NoMines is active (EX still counts mines).
-///
-/// This mirrors Simply Love's CalculateExScore semantics and additionally
-/// enforces that:
-/// - taps and tap windows only count for notes scheduled at or before fail,
-/// - hold/roll Held/LetGo results only count if their end time is at or before fail,
-/// - mine hits only count if their scheduled time is at or before fail,
-/// while the denominator (total_steps/holds/rolls/mines) remains chart-wide.
+/// For now, this function intentionally mirrors the spreadsheet semantics and
+/// does not gate counts by `fail_time`; EX score keeps changing even after a
+/// failure, matching the data the sheet is built from.
 pub fn calculate_ex_score_from_notes(
     notes: &[Note],
-    note_times: &[f32],
-    hold_end_times: &[Option<f32>],
+    _note_times: &[f32],
+    _hold_end_times: &[Option<f32>],
+    total_steps: u32,
     holds_total: u32,
     rolls_total: u32,
     mines_total: u32,
-    fail_time: Option<f32>,
-    mines_disabled: bool,
+    _fail_time: Option<f32>,
+    _mines_disabled: bool,
 ) -> f64 {
-    let mut total_steps: u32 = 0;
-    let mut held: u32 = 0;
-    let mut let_go: u32 = 0;
-    let mut windows = WindowCounts::default();
-    let mut hit_mine: u32 = 0;
+    if total_steps == 0 {
+        return 0.0;
+    }
 
-    // Single-pass aggregation that mirrors Simply Love's TrackExScoreJudgments:
-    // - total_steps is chart-wide (taps + hold/roll heads), unaffected by failure,
-    // - window counts (W0–W5/Miss) are per-note TapNoteScore-style, gated by fail_time,
-    // - Held/LetGo and HitMine are gated using hold end times / mine times.
-    for (i, note) in notes.iter().enumerate() {
+    // Per-row window counts used by the FA+ evaluation pane.
+    let windows: WindowCounts = timing::compute_window_counts(notes);
+
+    // Count successful holds (not rolls) and mines hit.
+    let mut holds_held: u32 = 0;
+    let mut mines_hit: u32 = 0;
+
+    for note in notes {
         if note.is_fake || !note.can_be_judged {
             continue;
         }
 
-        let note_time = *note_times.get(i).unwrap_or(&0.0);
-        let active_at_fail = match fail_time {
-            None => true,
-            Some(ft) => note_time <= ft,
-        };
-
         match note.note_type {
-            NoteType::Tap | NoteType::Hold | NoteType::Roll => {
-                // Denominator: all taps and hold/roll heads.
-                total_steps = total_steps.saturating_add(1);
-
-                // Numerator: per-note window counts only up to fail_time.
-                if active_at_fail {
-                    if let Some(j) = note.result.as_ref() {
-                        match j.grade {
-                            JudgeGrade::Fantastic => match j.window {
-                                Some(TimingWindow::W0) => {
-                                    windows.w0 = windows.w0.saturating_add(1);
-                                }
-                                _ => {
-                                    windows.w1 = windows.w1.saturating_add(1);
-                                }
-                            },
-                            JudgeGrade::Excellent => {
-                                windows.w2 = windows.w2.saturating_add(1);
-                            }
-                            JudgeGrade::Great => {
-                                windows.w3 = windows.w3.saturating_add(1);
-                            }
-                            JudgeGrade::Decent => {
-                                windows.w4 = windows.w4.saturating_add(1);
-                            }
-                            JudgeGrade::WayOff => {
-                                windows.w5 = windows.w5.saturating_add(1);
-                            }
-                            JudgeGrade::Miss => {
-                                windows.miss = windows.miss.saturating_add(1);
-                            }
-                        }
-                    }
-                }
-
-                // Hold/roll scoring is based on HoldNoteScore at the tail, which should
-                // stop contributing once the player has failed.
-                if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
-                    let end_time = hold_end_times
-                        .get(i)
-                        .and_then(|t| *t)
-                        .unwrap_or(note_time);
-                    let include_hold = match fail_time {
-                        None => true,
-                        Some(ft) => end_time <= ft,
-                    };
-
-                    if include_hold {
-                        if let Some(h) = note.hold.as_ref() {
-                            match h.result {
-                                Some(HoldResult::Held) => {
-                                    held = held.saturating_add(1);
-                                }
-                                Some(HoldResult::LetGo) => {
-                                    let_go = let_go.saturating_add(1);
-                                }
-                                None => {}
-                            }
-                        }
+            NoteType::Hold => {
+                if let Some(h) = note.hold.as_ref() {
+                    if h.result == Some(HoldResult::Held) {
+                        holds_held = holds_held.saturating_add(1);
                     }
                 }
             }
             NoteType::Mine => {
-                let include_mine = match fail_time {
-                    None => true,
-                    Some(ft) => note_time <= ft,
-                };
-                if include_mine && note.mine_result == Some(MineResult::Hit) {
-                    hit_mine = hit_mine.saturating_add(1);
+                if note.mine_result == Some(MineResult::Hit) {
+                    mines_hit = mines_hit.saturating_add(1);
                 }
             }
-            NoteType::Fake => {}
+            _ => {}
         }
     }
 
-    calculate_ex_score_fa_plus(
-        &windows,
-        held,
-        let_go,
-        hit_mine,
-        total_steps,
-        holds_total,
-        rolls_total,
-        mines_total,
-        mines_disabled,
-    )
+    let total_steps_f = total_steps as f64;
+    let total_holds_f = holds_total as f64;
+    let total_rolls_f = rolls_total as f64;
+
+    let total_possible = total_steps_f * EX_WEIGHT_W0 + (total_holds_f + total_rolls_f) * EX_WEIGHT_HELD;
+    if total_possible <= 0.0 {
+        return 0.0;
+    }
+
+    // Spreadsheet-style EX points, ignoring rolls in the numerator:
+    let mut total_points = 0.0_f64;
+    total_points += (windows.w0 as f64) * EX_WEIGHT_W0;
+    total_points += (windows.w1 as f64) * EX_WEIGHT_W1;
+    total_points += (windows.w2 as f64) * EX_WEIGHT_W2;
+    total_points += (windows.w3 as f64) * EX_WEIGHT_W3;
+
+    total_points += (holds_held as f64) * EX_WEIGHT_HELD;
+
+    // Mines always subtract, even if some of them were effectively disabled in-game.
+    // This matches the sheet behavior the project is validating against.
+    let mines_effective = mines_hit.min(mines_total);
+    total_points += (mines_effective as f64) * EX_WEIGHT_HIT_MINE;
+
+    let ratio = (total_points / total_possible).max(0.0);
+    ((ratio * 10000.0).floor()) / 100.0
 }

@@ -135,6 +135,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             &gs.notes,
             &gs.note_time_cache,
             &gs.hold_end_time_cache,
+            gs.chart.stats.total_steps,
             gs.holds_total,
             gs.rolls_total,
             gs.mines_total,
