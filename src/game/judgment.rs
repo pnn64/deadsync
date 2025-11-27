@@ -264,48 +264,88 @@ pub fn calculate_ex_score_from_notes(
     let mut total_steps: u32 = 0;
     let mut held: u32 = 0;
     let mut let_go: u32 = 0;
+    let mut windows = WindowCounts::default();
     let mut hit_mine: u32 = 0;
 
-    // Pass 1: aggregate step, hold/roll, and mine results using the same
-    // failure gating semantics as Simply Love's TrackExScoreJudgments.
+    // Single-pass aggregation that mirrors Simply Love's TrackExScoreJudgments:
+    // - total_steps is chart-wide (taps + hold/roll heads), unaffected by failure,
+    // - window counts (W0–W5/Miss) are per-note TapNoteScore-style, gated by fail_time,
+    // - Held/LetGo and HitMine are gated using hold end times / mine times.
     for (i, note) in notes.iter().enumerate() {
         if note.is_fake || !note.can_be_judged {
             continue;
         }
 
+        let note_time = *note_times.get(i).unwrap_or(&0.0);
+        let active_at_fail = match fail_time {
+            None => true,
+            Some(ft) => note_time <= ft,
+        };
+
         match note.note_type {
-            NoteType::Tap => {
-                total_steps = total_steps.saturating_add(1);
-            }
-            NoteType::Hold | NoteType::Roll => {
+            NoteType::Tap | NoteType::Hold | NoteType::Roll => {
+                // Denominator: all taps and hold/roll heads.
                 total_steps = total_steps.saturating_add(1);
 
-                let note_time = *note_times.get(i).unwrap_or(&0.0);
-                let end_time = hold_end_times
-                    .get(i)
-                    .and_then(|t| *t)
-                    .unwrap_or(note_time);
-                let include_hold = match fail_time {
-                    None => true,
-                    Some(ft) => end_time <= ft,
-                };
+                // Numerator: per-note window counts only up to fail_time.
+                if active_at_fail {
+                    if let Some(j) = note.result.as_ref() {
+                        match j.grade {
+                            JudgeGrade::Fantastic => match j.window {
+                                Some(TimingWindow::W0) => {
+                                    windows.w0 = windows.w0.saturating_add(1);
+                                }
+                                _ => {
+                                    windows.w1 = windows.w1.saturating_add(1);
+                                }
+                            },
+                            JudgeGrade::Excellent => {
+                                windows.w2 = windows.w2.saturating_add(1);
+                            }
+                            JudgeGrade::Great => {
+                                windows.w3 = windows.w3.saturating_add(1);
+                            }
+                            JudgeGrade::Decent => {
+                                windows.w4 = windows.w4.saturating_add(1);
+                            }
+                            JudgeGrade::WayOff => {
+                                windows.w5 = windows.w5.saturating_add(1);
+                            }
+                            JudgeGrade::Miss => {
+                                windows.miss = windows.miss.saturating_add(1);
+                            }
+                        }
+                    }
+                }
 
-                if include_hold {
-                    if let Some(h) = note.hold.as_ref() {
-                        match h.result {
-                            Some(HoldResult::Held) => {
-                                held = held.saturating_add(1);
+                // Hold/roll scoring is based on HoldNoteScore at the tail, which should
+                // stop contributing once the player has failed.
+                if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                    let end_time = hold_end_times
+                        .get(i)
+                        .and_then(|t| *t)
+                        .unwrap_or(note_time);
+                    let include_hold = match fail_time {
+                        None => true,
+                        Some(ft) => end_time <= ft,
+                    };
+
+                    if include_hold {
+                        if let Some(h) = note.hold.as_ref() {
+                            match h.result {
+                                Some(HoldResult::Held) => {
+                                    held = held.saturating_add(1);
+                                }
+                                Some(HoldResult::LetGo) => {
+                                    let_go = let_go.saturating_add(1);
+                                }
+                                None => {}
                             }
-                            Some(HoldResult::LetGo) => {
-                                let_go = let_go.saturating_add(1);
-                            }
-                            None => {}
                         }
                     }
                 }
             }
             NoteType::Mine => {
-                let note_time = *note_times.get(i).unwrap_or(&0.0);
                 let include_mine = match fail_time {
                     None => true,
                     Some(ft) => note_time <= ft,
@@ -315,76 +355,6 @@ pub fn calculate_ex_score_from_notes(
                 }
             }
             NoteType::Fake => {}
-        }
-    }
-
-    // Pass 2: aggregate tap window counts row-by-row, mirroring ITGmania's
-    // row-based TapNoteScore semantics and Simply Love's EX tracking
-    // (TrackExScoreJudgments) with failure gating.
-    let mut windows = WindowCounts::default();
-
-    if !notes.is_empty() {
-        let mut idx: usize = 0;
-        let len = notes.len();
-
-        while idx < len {
-            let row_index = notes[idx].row_index;
-            let mut row_time = f32::INFINITY;
-            let mut row_judgments: Vec<&Judgment> = Vec::new();
-
-            while idx < len && notes[idx].row_index == row_index {
-                let note = &notes[idx];
-                if !note.is_fake && note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
-                    let note_time = *note_times.get(idx).unwrap_or(&0.0);
-                    if note_time < row_time {
-                        row_time = note_time;
-                    }
-                    if let Some(j) = note.result.as_ref() {
-                        row_judgments.push(j);
-                    }
-                }
-                idx += 1;
-            }
-
-            if row_judgments.is_empty() {
-                continue;
-            }
-
-            let active_at_fail = match fail_time {
-                None => true,
-                Some(ft) => row_time <= ft,
-            };
-            if !active_at_fail {
-                continue;
-            }
-
-            if let Some(j) = aggregate_row_final_judgment(row_judgments.iter().copied()) {
-                match j.grade {
-                    JudgeGrade::Fantastic => match j.window {
-                        Some(TimingWindow::W0) => {
-                            windows.w0 = windows.w0.saturating_add(1);
-                        }
-                        _ => {
-                            windows.w1 = windows.w1.saturating_add(1);
-                        }
-                    },
-                    JudgeGrade::Excellent => {
-                        windows.w2 = windows.w2.saturating_add(1);
-                    }
-                    JudgeGrade::Great => {
-                        windows.w3 = windows.w3.saturating_add(1);
-                    }
-                    JudgeGrade::Decent => {
-                        windows.w4 = windows.w4.saturating_add(1);
-                    }
-                    JudgeGrade::WayOff => {
-                        windows.w5 = windows.w5.saturating_add(1);
-                    }
-                    JudgeGrade::Miss => {
-                        windows.miss = windows.miss.saturating_add(1);
-                    }
-                }
-            }
         }
     }
 
