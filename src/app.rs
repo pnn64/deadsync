@@ -268,9 +268,8 @@ impl App {
     }
 
     fn build_screen<'a>(&self, actors: &'a [Actor], clear_color: [f32; 4], total_elapsed: f32) -> RenderList<'a> {
-        self.asset_manager.with_fonts(|fonts| {
-            crate::ui::compose::build_screen(actors, clear_color, &self.metrics, fonts, total_elapsed)
-        })
+        let fonts = self.asset_manager.fonts();
+        crate::ui::compose::build_screen(actors, clear_color, &self.metrics, fonts, total_elapsed)
     }
 
     fn get_current_actors(&self) -> (Vec<Actor>, [f32; 4]) {

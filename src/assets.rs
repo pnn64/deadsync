@@ -157,6 +157,10 @@ impl AssetManager {
         self.fonts.insert(name, font);
     }
 
+    pub fn fonts(&self) -> &HashMap<&'static str, Font> {
+        &self.fonts
+    }
+
     pub fn with_fonts<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&HashMap<&'static str, Font>) -> R,

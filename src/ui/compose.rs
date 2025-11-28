@@ -874,7 +874,7 @@ fn layout_text<'a>(
     let mut dims_cache: HashMap<&str, (f32, f32)> = HashMap::new();
 
     #[inline(always)]
-    fn atlas_dims<'a>(cache: &mut HashMap<&'a str, (f32, f32)>, key: &'a str) -> (f32, f32) {
+    fn atlas_dims<'t>(cache: &mut HashMap<&'t str, (f32, f32)>, key: &'t str) -> (f32, f32) {
         if let Some(&d) = cache.get(key) {
             return d;
         }
