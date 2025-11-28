@@ -2,7 +2,6 @@ use crate::game::{
     chart::ChartData,
     song::{set_song_cache, SongData, SongPack},
 };
-use crate::game::timing::TimingData;
 use log::{info, warn};
 use rssp::{analyze, AnalysisOptions};
 use std::fs;
@@ -514,46 +513,6 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
                 c.rating_str,
                 c.minimized_note_data.len()
             );
-            // Per-chart #FAKES string has already been extracted by rssp, and
-            // the global normalized #FAKES string is available on the summary.
-            let chart_fakes = c.chart_fakes.clone();
-
-            // Pre-compute non-fake, non-warp mines once per chart so that
-            // SelectMusic and other screens never need to walk the raw note
-            // data on the main thread.
-            let mines_nonfake = {
-                let timing = TimingData::from_chart_data(
-                    -summary.offset as f32,
-                    0.0,
-                    c.chart_bpms.as_deref(),
-                    &summary.normalized_bpms,
-                    c.chart_stops.as_deref(),
-                    &summary.normalized_stops,
-                    c.chart_delays.as_deref(),
-                    &summary.normalized_delays,
-                    c.chart_warps.as_deref(),
-                    &summary.normalized_warps,
-                    c.chart_speeds.as_deref(),
-                    &summary.normalized_speeds,
-                    c.chart_scrolls.as_deref(),
-                    &summary.normalized_scrolls,
-                    chart_fakes.as_deref(),
-                    &summary.normalized_fakes,
-                    &c.minimized_note_data,
-                );
-                let parsed = crate::game::parsing::notes::parse_chart_notes(&c.minimized_note_data);
-                let mut mines_nonfake: u32 = 0;
-                for pn in parsed {
-                    if matches!(pn.note_type, crate::game::note::NoteType::Mine)
-                        && let Some(beat) = timing.get_beat_for_row(pn.row_index)
-                        && timing.is_judgable_at_beat(beat)
-                    {
-                        mines_nonfake = mines_nonfake.saturating_add(1);
-                    }
-                }
-                mines_nonfake
-            };
-
             ChartData {
                 chart_type: c.step_type_str,
                 difficulty: c.difficulty_str,
@@ -563,7 +522,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
                 short_hash: c.short_hash,
                 stats: c.stats,
                 tech_counts: c.tech_counts,
-                mines_nonfake,
+                mines_nonfake: c.mines_nonfake,
                 total_streams: c.total_streams,
                 total_measures: c.total_measures,
                 max_nps: c.max_nps,
@@ -577,7 +536,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
                 chart_warps: c.chart_warps,
                 chart_speeds: c.chart_speeds,
                 chart_scrolls: c.chart_scrolls,
-                chart_fakes,
+                chart_fakes: c.chart_fakes,
             }
         })
         .collect();
