@@ -166,6 +166,55 @@ impl AppState {
             shift_held: false,
         }
     }
+
+    fn step_idle(&mut self, delta_time: f32, now: Instant) -> Option<ScreenAction> {
+        match self.current_screen {
+            CurrentScreen::Gameplay => {
+                if let Some(gs) = &mut self.gameplay_state {
+                    Some(gameplay::update(gs, delta_time))
+                } else {
+                    None
+                }
+            }
+            CurrentScreen::Init => {
+                Some(init::update(&mut self.init_state, delta_time))
+            }
+            CurrentScreen::Options => {
+                options::update(&mut self.options_state, delta_time);
+                None
+            }
+            CurrentScreen::PlayerOptions => {
+                if let Some(pos) = &mut self.player_options_state {
+                    player_options::update(pos, delta_time);
+                }
+                None
+            }
+            CurrentScreen::Sandbox => {
+                sandbox::update(&mut self.sandbox_state, delta_time);
+                None
+            }
+            CurrentScreen::SelectColor => {
+                select_color::update(&mut self.select_color_state, delta_time);
+                None
+            }
+            CurrentScreen::Evaluation => {
+                if let Some(start) = self.session_start_time {
+                    self.evaluation_state.session_elapsed = now.duration_since(start).as_secs_f32();
+                }
+                evaluation::update(&mut self.evaluation_state, delta_time);
+                None
+            }
+            CurrentScreen::SelectMusic => {
+                if let Some(start) = self.session_start_time {
+                    self.select_music_state.session_elapsed = now.duration_since(start).as_secs_f32();
+                }
+                Some(select_music::update(&mut self.select_music_state, delta_time))
+            }
+            CurrentScreen::Menu => {
+                None
+            }
+        }
+    }
 }
 
 impl App {
@@ -271,8 +320,49 @@ impl App {
                     event_loop.exit();
                 }
             }
-            ScreenAction::RequestBanner(_) => {}
-            ScreenAction::RequestDensityGraph(_) => {}
+            ScreenAction::RequestBanner(path_opt) => {
+                if let Some(backend) = self.backend.as_mut() {
+                    if let Some(path) = path_opt {
+                        let key = self.asset_manager.set_dynamic_banner(backend, Some(path));
+                        self.state.select_music_state.current_banner_key = key;
+                    } else {
+                        self.asset_manager.destroy_dynamic_assets(backend);
+                        let color_index = self.state.select_music_state.active_color_index;
+                        let banner_num = color_index.rem_euclid(12) + 1;
+                        let key = format!("banner{}.png", banner_num);
+                        self.state.select_music_state.current_banner_key = key;
+                    }
+                }
+            }
+            ScreenAction::RequestDensityGraph(chart_opt) => {
+                if let Some(backend) = self.backend.as_mut() {
+                    let graph_request = if let Some(chart) = chart_opt {
+                        let graph_width = 1024;
+                        let graph_height = 256;
+                        let bottom_color = [0, 184, 204];
+                        let top_color    = [130, 0, 161];
+                        let bg_color     = [30, 40, 47];
+
+                        let graph_data = rssp::graph::generate_density_graph_rgba_data(
+                            &chart.measure_nps_vec,
+                            chart.max_nps,
+                            graph_width,
+                            graph_height,
+                            bottom_color,
+                            top_color,
+                            bg_color,
+                        )
+                        .ok();
+
+                        graph_data.map(|data| (chart.short_hash, data))
+                    } else {
+                        None
+                    };
+
+                    let key = self.asset_manager.set_density_graph(backend, graph_request);
+                    self.state.select_music_state.current_graph_key = key;
+                }
+            }
             ScreenAction::FetchOnlineGrade(hash) => {
                 info!("Fetching online grade for chart hash: {}", hash);
                 let profile = profile::get();
@@ -703,82 +793,10 @@ impl ApplicationHandler<UserEvent> for App {
                         }
                     }
                     TransitionState::Idle => {
-                        match self.state.current_screen {
-                            CurrentScreen::Gameplay => if let Some(gs) = &mut self.state.gameplay_state {
-                                let action = gameplay::update(gs, delta_time);
-                                if let ScreenAction::Navigate(_) | ScreenAction::Exit = action.clone()
-                                    && self.handle_action(action, event_loop).is_err() {}
-                            },
-                            CurrentScreen::Init => {
-                                let action = init::update(&mut self.state.init_state, delta_time);
-                                if let ScreenAction::Navigate(_) | ScreenAction::Exit = action.clone()
-                                    && self.handle_action(action, event_loop).is_err() {}
+                        if let Some(action) = self.state.step_idle(delta_time, now) {
+                            if !matches!(action, ScreenAction::None) {
+                                let _ = self.handle_action(action, event_loop);
                             }
-                            CurrentScreen::Options => {
-                                options::update(&mut self.state.options_state, delta_time);
-                            }
-                            CurrentScreen::PlayerOptions => {
-                                if let Some(pos) = &mut self.state.player_options_state {
-                                    player_options::update(pos, delta_time);
-                                }
-                            }
-                            CurrentScreen::Sandbox => sandbox::update(&mut self.state.sandbox_state, delta_time),
-                            CurrentScreen::SelectColor => select_color::update(&mut self.state.select_color_state, delta_time),
-                            CurrentScreen::Evaluation => {
-                                if let Some(start) = self.state.session_start_time {
-                                    self.state.evaluation_state.session_elapsed = now.duration_since(start).as_secs_f32();
-                                }
-                                evaluation::update(&mut self.state.evaluation_state, delta_time);
-                            },
-                            CurrentScreen::SelectMusic => {
-                                if let Some(start) = self.state.session_start_time {
-                                    self.state.select_music_state.session_elapsed = now.duration_since(start).as_secs_f32();
-                                }
-                                let action = select_music::update(&mut self.state.select_music_state, delta_time);
-                                if let Some(backend) = self.backend.as_mut() {
-                                    match action {
-                                        ScreenAction::RequestBanner(path_opt) => {
-                                                if let Some(path) = path_opt {
-                                                    let key = self.asset_manager.set_dynamic_banner(backend, Some(path));
-                                                    self.state.select_music_state.current_banner_key = key;
-                                                } else {
-                                                    self.asset_manager.destroy_dynamic_assets(backend);
-                                                    let color_index = self.state.select_music_state.active_color_index;
-                                                    let banner_num = color_index.rem_euclid(12) + 1;
-                                                    let key = format!("banner{}.png", banner_num);
-                                                    self.state.select_music_state.current_banner_key = key;
-                                                }
-                                        }
-                                        ScreenAction::RequestDensityGraph(chart_opt) => {
-                                            let graph_request = if let Some(chart) = chart_opt {
-                                                let graph_width = 1024;
-                                                let graph_height = 256;
-                                                let bottom_color = [0, 184, 204];
-                                                let top_color    = [130, 0, 161];
-                                                let bg_color     = [30, 40, 47];
-
-                                                let graph_data = rssp::graph::generate_density_graph_rgba_data(
-                                                    &chart.measure_nps_vec,
-                                                    chart.max_nps,
-                                                    graph_width, graph_height,
-                                                    bottom_color,
-                                                    top_color,
-                                                    bg_color,
-                                                ).ok();
-                                                
-                                                graph_data.map(|data| (chart.short_hash, data))
-                                            } else {
-                                                None
-                                            };
-
-                                            let key = self.asset_manager.set_density_graph(backend, graph_request);
-                                            self.state.select_music_state.current_graph_key = key;
-                                        }
-                                        _ => { let _ = self.handle_action(action, event_loop); },
-                                    }
-                                }
-                            }
-                            _ => {}
                         }
                     }
                 }
