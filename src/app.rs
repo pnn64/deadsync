@@ -89,18 +89,19 @@ pub struct App {
 
 impl AppState {
     fn new(
-        vsync_enabled: bool,
-        fullscreen_enabled: bool,
+        config: crate::config::Config,
+        profile_data: profile::Profile,
         show_overlay: bool,
         color_index: i32,
     ) -> Self {
-        let config = crate::config::get();
         let display_width = config.display_width;
         let display_height = config.display_height;
 
+        let vsync_enabled = config.vsync;
+        let fullscreen_enabled = !config.windowed;
+
         // Seed preferred difficulty from the profile's last-played
         // difficulty, clamped to the known range of file difficulty names.
-        let profile_data = profile::get();
         let max_diff_index = crate::ui::color::FILE_DIFFICULTY_NAMES
             .len()
             .saturating_sub(1);
@@ -231,12 +232,12 @@ impl AppState {
 impl App {
     fn new(
         backend_type: BackendType,
-        vsync_enabled: bool,
-        fullscreen_enabled: bool,
         show_overlay: bool,
         color_index: i32,
+        config: crate::config::Config,
+        profile_data: profile::Profile,
     ) -> Self {
-        let state = AppState::new(vsync_enabled, fullscreen_enabled, show_overlay, color_index);
+        let state = AppState::new(config, profile_data, show_overlay, color_index);
         Self {
             window: None,
             backend: None,
@@ -1077,10 +1078,9 @@ impl ApplicationHandler<UserEvent> for App {
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let config = crate::config::get();
     let backend_type = config.video_renderer;
-    let vsync_enabled = config.vsync;
-    let fullscreen_enabled = !config.windowed;
     let show_stats = config.show_stats;
     let color_index = config.simply_love_color;
+    let profile_data = profile::get();
 
     song_loading::scan_and_load_songs("songs");
     let event_loop: EventLoop<UserEvent> = EventLoop::<UserEvent>::with_user_event().build()?;
@@ -1105,7 +1105,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let mut app = App::new(backend_type, vsync_enabled, fullscreen_enabled, show_stats, color_index);
+    let mut app = App::new(backend_type, show_stats, color_index, config, profile_data);
     event_loop.run_app(&mut app)?;
     Ok(())
 }
