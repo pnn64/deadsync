@@ -9,13 +9,13 @@ use cgmath::{Deg, Matrix4, Vector2, Vector3};
 /* ======================= RENDERER SCREEN BUILDER ======================= */
 
 #[inline(always)]
-pub fn build_screen(
-    actors: &[actors::Actor],
+pub fn build_screen<'a>(
+    actors: &'a [actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
     fonts: &std::collections::HashMap<&'static str, font::Font>,
     total_elapsed: f32,
-) -> RenderList {
+) -> RenderList<'a> {
     let mut objects = Vec::with_capacity(estimate_object_count(actors, fonts));
     let mut order_counter: u32 = 0;
 
@@ -107,14 +107,14 @@ struct SmRect {
 }
 
 #[inline(always)]
-fn build_actor_recursive(
-    actor: &actors::Actor,
+fn build_actor_recursive<'a>(
+    actor: &'a actors::Actor,
     parent: SmRect,
     m: &Metrics,
     fonts: &std::collections::HashMap<&'static str, font::Font>,
     base_z: i16,
     order_counter: &mut u32,
-    out: &mut Vec<RenderObject>,
+    out: &mut Vec<RenderObject<'a>>,
     total_elapsed: f32,
 ) {
     match actor {
@@ -197,8 +197,8 @@ fn build_actor_recursive(
             let rect = place_rect(parent, *align, *offset, resolved_size);
 
             let before = out.len();
-            push_sprite(
-                out,
+                push_sprite(
+                    out,
                 rect,
                 m,
                 is_solid,
@@ -582,12 +582,12 @@ fn calculate_uvs(
 }
 
 #[inline(always)]
-fn push_sprite(
-    out: &mut Vec<renderer::RenderObject>,
+fn push_sprite<'a>(
+    out: &mut Vec<renderer::RenderObject<'a>>,
     rect: SmRect,
     m: &Metrics,
     is_solid: bool,
-    texture_id: &str,
+    texture_id: &'a str,
     tint: [f32; 4],
     uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
@@ -670,9 +670,9 @@ fn push_sprite(
         * Matrix4::from_nonuniform_scale(size_x, size_y, 1.0);
 
     let final_texture_id = if is_solid {
-        "__white".to_string()
+        std::borrow::Cow::Borrowed("__white")
     } else {
-        texture_id.to_string()
+        std::borrow::Cow::Borrowed(texture_id)
     };
 
     out.push(renderer::RenderObject {
@@ -739,7 +739,7 @@ fn quantize_up_even_i32(v: i32) -> i32 {
     }
 }
 
-fn layout_text(
+fn layout_text<'a>(
     font: &font::Font,
     fonts: &std::collections::HashMap<&'static str, font::Font>,
     text: &str,
@@ -757,7 +757,7 @@ fn layout_text(
     offset: [f32; 2],
     text_align: actors::TextAlign,
     m: &Metrics,
-) -> Vec<RenderObject> {
+) -> Vec<RenderObject<'a>> {
     if text.is_empty() {
         return vec![];
     }
@@ -928,7 +928,7 @@ fn layout_text(
 
                 objects.push(RenderObject {
                     object_type: renderer::ObjectType::Sprite {
-                        texture_id: glyph.texture_key.clone(),
+                        texture_id: std::borrow::Cow::Owned(glyph.texture_key.clone()),
                         tint: [1.0; 4],
                         uv_scale,
                         uv_offset,

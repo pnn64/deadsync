@@ -267,7 +267,7 @@ impl App {
         Ok(())
     }
 
-    fn build_screen(&self, actors: &[Actor], clear_color: [f32; 4], total_elapsed: f32) -> RenderList {
+    fn build_screen<'a>(&self, actors: &'a [Actor], clear_color: [f32; 4], total_elapsed: f32) -> RenderList<'a> {
         self.asset_manager.with_fonts(|fonts| {
             crate::ui::compose::build_screen(actors, clear_color, &self.metrics, fonts, total_elapsed)
         })

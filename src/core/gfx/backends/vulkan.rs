@@ -537,9 +537,9 @@ unsafe fn bytes_of<T>(v: &T) -> &[u8] {
     }
 }
 
-pub fn draw(
+pub fn draw<'a>(
     state: &mut State,
-    render_list: &RenderList,
+    render_list: &RenderList<'a>,
     textures: &HashMap<String, RendererTexture>,
 ) -> Result<u32, Box<dyn Error>> {
     if !state.swapchain_valid
@@ -648,7 +648,7 @@ pub fn draw(
                 }
             };
 
-            let set_opt = textures.get(texture_id).and_then(|t| {
+            let set_opt = textures.get(texture_id.as_ref()).and_then(|t| {
                 if let RendererTexture::Vulkan(tex) = t {
                     Some(tex.descriptor_set)
                 } else {

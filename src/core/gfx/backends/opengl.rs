@@ -185,9 +185,9 @@ pub fn create_texture(gl: &glow::Context, image: &RgbaImage) -> Result<Texture, 
     }
 }
 
-pub fn draw(
+pub fn draw<'a>(
     state: &mut State,
-    render_list: &RenderList,
+    render_list: &RenderList<'a>,
     textures: &HashMap<String, RendererTexture>,
 ) -> Result<u32, Box<dyn Error>> {
     let (width, height) = state.window_size;
@@ -258,7 +258,7 @@ pub fn draw(
 
             match &obj.object_type {
                 ObjectType::Sprite { texture_id, tint, uv_scale, uv_offset, edge_fade } => {
-                    if let Some(RendererTexture::OpenGL(gl_tex)) = textures.get(texture_id) {
+                    if let Some(RendererTexture::OpenGL(gl_tex)) = textures.get(texture_id.as_ref()) {
                         if last_bound_tex != Some(gl_tex.0) {
                             gl.bind_texture(glow::TEXTURE_2D, Some(gl_tex.0));
                             last_bound_tex = Some(gl_tex.0);

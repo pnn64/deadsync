@@ -4,27 +4,27 @@ use crate::core::gfx::backends::{opengl, vulkan};
 use cgmath::Matrix4;
 use glow::HasContext;
 use image::RgbaImage;
-use std::{collections::HashMap, error::Error, str::FromStr, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, error::Error, str::FromStr, sync::Arc};
 use winit::window::Window;
 
 // --- Public Data Contract ---
 #[derive(Clone)]
-pub struct RenderList {
+pub struct RenderList<'a> {
     pub clear_color: [f32; 4],
-    pub objects: Vec<RenderObject>,
+    pub objects: Vec<RenderObject<'a>>,
 }
 #[derive(Clone)]
-pub struct RenderObject {
-    pub object_type: ObjectType,
+pub struct RenderObject<'a> {
+    pub object_type: ObjectType<'a>,
     pub transform: Matrix4<f32>,
     pub blend: BlendMode,
     pub z: i16,
     pub order: u32,
 }
 #[derive(Clone)]
-pub enum ObjectType {
+pub enum ObjectType<'a> {
     Sprite {
-        texture_id: String,
+        texture_id: Cow<'a, str>,
         tint: [f32; 4],
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
@@ -66,9 +66,9 @@ enum BackendImpl {
 pub struct Backend(BackendImpl);
 
 impl Backend {
-    pub fn draw(
+    pub fn draw<'a>(
         &mut self,
-        render_list: &RenderList,
+        render_list: &RenderList<'a>,
         textures: &HashMap<String, Texture>,
     ) -> Result<u32, Box<dyn Error>> {
         match &mut self.0 {
