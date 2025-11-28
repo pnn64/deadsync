@@ -655,6 +655,257 @@ impl App {
     #[cfg(any())]
     #[inline(always)]
     fn poll_gamepad_and_dispatch(&mut self, _event_loop: &ActiveEventLoop) {}
+
+    fn on_fade_complete(&mut self, target: CurrentScreen, event_loop: &ActiveEventLoop) {
+        if self.state.pending_exit {
+            info!("Fade-out complete; exiting application.");
+            event_loop.exit();
+            return;
+        }
+
+        let prev = self.state.current_screen;
+        self.state.current_screen = target;
+
+        if target == CurrentScreen::SelectColor {
+            crate::core::audio::play_music(
+                std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
+                crate::core::audio::Cut::default(),
+                true,
+                1.0,
+            );
+        } else if !((prev == CurrentScreen::SelectMusic && target == CurrentScreen::PlayerOptions)
+            || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic))
+        {
+            crate::core::audio::stop_music();
+        }
+
+        if prev == CurrentScreen::Gameplay {
+            crate::core::audio::stop_music();
+            if let Some(backend) = self.backend.as_mut() {
+                self.asset_manager.set_dynamic_background(backend, None);
+            }
+        }
+
+        if prev == CurrentScreen::SelectMusic || prev == CurrentScreen::PlayerOptions {
+            if prev == CurrentScreen::PlayerOptions
+                && let Some(po_state) = &self.state.player_options_state
+            {
+                let setting = match po_state.speed_mod.mod_type.as_str() {
+                    "C" => Some(ScrollSpeedSetting::CMod(po_state.speed_mod.value)),
+                    "X" => Some(ScrollSpeedSetting::XMod(po_state.speed_mod.value)),
+                    "M" => Some(ScrollSpeedSetting::MMod(po_state.speed_mod.value)),
+                    _ => None,
+                };
+
+                if let Some(setting) = setting {
+                    profile::update_scroll_speed(setting);
+                    info!("Saved scroll speed: {}", setting);
+                } else {
+                    warn!(
+                        "Unsupported speed mod '{}' not saved to profile.",
+                        po_state.speed_mod.mod_type
+                    );
+                }
+
+                crate::game::profile::set_session_music_rate(po_state.music_rate);
+                info!("Session music rate set to {:.2}x", po_state.music_rate);
+
+                self.state.preferred_difficulty_index = po_state.chart_difficulty_index;
+                info!(
+                    "Updated preferred difficulty index to {} from PlayerOptions",
+                    self.state.preferred_difficulty_index
+                );
+            }
+
+            if !(target == CurrentScreen::SelectMusic || target == CurrentScreen::PlayerOptions) {
+                crate::core::audio::stop_music();
+            }
+        }
+
+        if prev == CurrentScreen::SelectMusic {
+            self.state.preferred_difficulty_index =
+                self.state.select_music_state.preferred_difficulty_index;
+        }
+
+        if prev == CurrentScreen::SelectColor {
+            let idx = self.state.select_color_state.active_color_index;
+            self.state.menu_state.active_color_index = idx;
+            self.state.select_music_state.active_color_index = idx;
+            self.state.options_state.active_color_index = idx;
+            if let Some(gs) = self.state.gameplay_state.as_mut() {
+                gs.active_color_index = idx;
+                gs.player_color = color::simply_love_rgba(idx);
+            }
+        }
+
+        if target == CurrentScreen::Menu {
+            let current_color_index = self.state.menu_state.active_color_index;
+            self.state.menu_state = menu::init();
+            self.state.menu_state.active_color_index = current_color_index;
+        } else if target == CurrentScreen::Options {
+            let current_color_index = self.state.options_state.active_color_index;
+            self.state.options_state = options::init();
+            self.state.options_state.active_color_index = current_color_index;
+        } else if target == CurrentScreen::PlayerOptions {
+            let (song_arc, chart_difficulty_index) = {
+                let sm_state = &self.state.select_music_state;
+                let entry = sm_state.entries.get(sm_state.selected_index).unwrap();
+                let song = match entry {
+                    select_music::MusicWheelEntry::Song(s) => s,
+                    _ => panic!("Cannot open player options on a pack header"),
+                };
+                (song.clone(), sm_state.selected_difficulty_index)
+            };
+
+            let color_index = self.state.select_music_state.active_color_index;
+            self.state.player_options_state =
+                Some(player_options::init(song_arc, chart_difficulty_index, color_index));
+        }
+
+        if target == CurrentScreen::Gameplay {
+            if let Some(po_state) = self.state.player_options_state.take() {
+                let song_arc = po_state.song;
+                let chart_difficulty_index = po_state.chart_difficulty_index;
+                let difficulty_name = color::FILE_DIFFICULTY_NAMES[chart_difficulty_index];
+                let chart_ref = song_arc
+                    .charts
+                    .iter()
+                    .find(|c| {
+                        c.chart_type.eq_ignore_ascii_case("dance-single")
+                            && c.difficulty.eq_ignore_ascii_case(difficulty_name)
+                    })
+                    .or_else(|| {
+                        song_arc
+                            .charts
+                            .iter()
+                            .find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name))
+                    })
+                    .expect("No chart found for selected difficulty");
+                let chart = Arc::new(chart_ref.clone());
+
+                profile::update_last_played(song_arc.music_path.as_deref(), chart_difficulty_index);
+
+                let color_index = po_state.active_color_index;
+                let mut gs = gameplay::init(song_arc, chart, color_index, po_state.music_rate);
+
+                if let Some(backend) = self.backend.as_mut() {
+                    gs.background_texture_key = self
+                        .asset_manager
+                        .set_dynamic_background(backend, gs.song.background_path.clone());
+                }
+                self.state.gameplay_state = Some(gs);
+            } else {
+                panic!("Navigating to Gameplay without PlayerOptions state!");
+            }
+        }
+
+        if target == CurrentScreen::Evaluation {
+            let gameplay_results = self.state.gameplay_state.take();
+            let color_idx = gameplay_results
+                .as_ref()
+                .map_or(self.state.evaluation_state.active_color_index, |gs| {
+                    gs.active_color_index
+                });
+            self.state.evaluation_state = evaluation::init(gameplay_results);
+            self.state.evaluation_state.active_color_index = color_idx;
+
+            if let Some(backend) = self.backend.as_mut() {
+                let graph_request = if let Some(score_info) = &self.state.evaluation_state.score_info
+                {
+                    let graph_width = 1024;
+                    let graph_height = 256;
+                    let bg_color = [16, 21, 25];
+                    let top_color = [54, 25, 67];
+                    let bottom_color = [38, 84, 91];
+
+                    let graph_data = rssp::graph::generate_density_graph_rgba_data(
+                        &score_info.chart.measure_nps_vec,
+                        score_info.chart.max_nps,
+                        graph_width,
+                        graph_height,
+                        bottom_color,
+                        top_color,
+                        bg_color,
+                    )
+                    .ok();
+
+                    let key = format!("{}_eval", score_info.chart.short_hash);
+                    graph_data.map(|data| (key, data))
+                } else {
+                    None
+                };
+
+                let key = if let Some((key, data)) = graph_request {
+                    self.asset_manager
+                        .set_density_graph(backend, Some((key, data)))
+                } else {
+                    self.asset_manager.set_density_graph(backend, None)
+                };
+                self.state.evaluation_state.density_graph_texture_key = key;
+            }
+        }
+
+        if target == CurrentScreen::SelectMusic {
+            if self.state.session_start_time.is_none() {
+                self.state.session_start_time = Some(Instant::now());
+                info!("Session timer started.");
+            }
+
+            match prev {
+                CurrentScreen::PlayerOptions => {
+                    let preferred = self.state.preferred_difficulty_index;
+                    self.state.select_music_state.preferred_difficulty_index = preferred;
+                    self.state.select_music_state.selected_difficulty_index = preferred;
+
+                    if let Some(select_music::MusicWheelEntry::Song(song)) = self
+                        .state
+                        .select_music_state
+                        .entries
+                        .get(self.state.select_music_state.selected_index)
+                    {
+                        let mut best_match_index = None;
+                        let mut min_diff = i32::MAX;
+                        for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
+                            if select_music::is_difficulty_playable(song, i) {
+                                let diff = (i as i32 - preferred as i32).abs();
+                                if diff < min_diff {
+                                    min_diff = diff;
+                                    best_match_index = Some(i);
+                                }
+                            }
+                        }
+                        if let Some(idx) = best_match_index {
+                            self.state.select_music_state.selected_difficulty_index = idx;
+                        }
+                    }
+
+                    select_music::trigger_immediate_refresh(&mut self.state.select_music_state);
+                }
+                CurrentScreen::Gameplay | CurrentScreen::Evaluation => {
+                    select_music::reset_preview_after_gameplay(
+                        &mut self.state.select_music_state,
+                    );
+                }
+                _ => {
+                    let current_color_index = self.state.select_music_state.active_color_index;
+                    self.state.select_music_state = select_music::init();
+                    self.state.select_music_state.active_color_index = current_color_index;
+                    self.state.select_music_state.selected_difficulty_index =
+                        self.state.preferred_difficulty_index;
+                    self.state.select_music_state.preferred_difficulty_index =
+                        self.state.preferred_difficulty_index;
+                }
+            }
+        }
+
+        let (_, in_duration) = self.get_in_transition_for_screen(target);
+        self.state.transition = TransitionState::FadingIn {
+            elapsed: 0.0,
+            duration: in_duration,
+        };
+        crate::ui::runtime::clear_all();
+    }
+
 }
 
 impl ApplicationHandler<UserEvent> for App {
@@ -806,240 +1057,7 @@ impl ApplicationHandler<UserEvent> for App {
                 }
 
                 if let Some(target) = finished_fading_out_to {
-                    if self.state.pending_exit {
-                        info!("Fade-out complete; exiting application.");
-                        event_loop.exit();
-                        return;
-                    }
-                    let prev = self.state.current_screen;
-                    self.state.current_screen = target;
-                    // Only SelectColor has looping BGM; keep SelectMusic preview when moving
-                    // between SelectMusic and PlayerOptions.
-                    if target == CurrentScreen::SelectColor {
-                        crate::core::audio::play_music(
-                            std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
-                            crate::core::audio::Cut::default(),
-                            true,
-                            1.0,
-                        );
-                    } else if !((prev == CurrentScreen::SelectMusic && target == CurrentScreen::PlayerOptions)
-                        || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic)) {
-                        crate::core::audio::stop_music();
-                    }
-                    
-                    // When leaving gameplay, stop music and unload the dynamic background
-                    if prev == CurrentScreen::Gameplay { 
-                        crate::core::audio::stop_music();
-                        if let Some(backend) = self.backend.as_mut() {
-                            self.asset_manager.set_dynamic_background(backend, None);
-                        }
-                    }
-
-                        if prev == CurrentScreen::SelectMusic || prev == CurrentScreen::PlayerOptions {
-                        // When leaving PlayerOptions, persist any user-chosen settings
-                        if prev == CurrentScreen::PlayerOptions
-                            && let Some(po_state) = &self.state.player_options_state {
-                                // Save speed mod to profile
-                                let setting = match po_state.speed_mod.mod_type.as_str() {
-                                    "C" => Some(ScrollSpeedSetting::CMod(po_state.speed_mod.value)),
-                                    "X" => Some(ScrollSpeedSetting::XMod(po_state.speed_mod.value)),
-                                    "M" => Some(ScrollSpeedSetting::MMod(po_state.speed_mod.value)),
-                                    _ => None,
-                                };
-
-                                if let Some(setting) = setting {
-                                    profile::update_scroll_speed(setting);
-                                    info!("Saved scroll speed: {}", setting);
-                                } else {
-                                    warn!(
-                                        "Unsupported speed mod '{}' not saved to profile.",
-                                        po_state.speed_mod.mod_type
-                                    );
-                                }
-
-                                // Persist session music rate
-                                crate::game::profile::set_session_music_rate(po_state.music_rate);
-                                info!("Session music rate set to {:.2}x", po_state.music_rate);
-
-                                // Reflect difficulty changes back to SelectMusic
-                                self.state.preferred_difficulty_index = po_state.chart_difficulty_index;
-                                info!("Updated preferred difficulty index to {} from PlayerOptions", self.state.preferred_difficulty_index);
-                            }
-                        // Keep preview alive when returning to SelectMusic/PlayerOptions.
-                        if !(target == CurrentScreen::SelectMusic || target == CurrentScreen::PlayerOptions) {
-                            crate::core::audio::stop_music();
-                        }
-                    }
-
-                            if prev == CurrentScreen::SelectMusic {
-                                self.state.preferred_difficulty_index = self.state.select_music_state.preferred_difficulty_index;
-                            }
-
-                    if prev == CurrentScreen::SelectColor {
-                                let idx = self.state.select_color_state.active_color_index;
-                                self.state.menu_state.active_color_index = idx;
-                                self.state.select_music_state.active_color_index = idx;
-                                self.state.options_state.active_color_index = idx;
-                                if let Some(gs) = self.state.gameplay_state.as_mut() {
-                            gs.active_color_index = idx;
-                            gs.player_color = color::simply_love_rgba(idx);
-                        }
-                    }
-
-                    if target == CurrentScreen::Menu {
-                        let current_color_index = self.state.menu_state.active_color_index;
-                        self.state.menu_state = menu::init();
-                        self.state.menu_state.active_color_index = current_color_index;
-                    } else if target == CurrentScreen::Options {
-                        let current_color_index = self.state.options_state.active_color_index;
-                        self.state.options_state = options::init();
-                        self.state.options_state.active_color_index = current_color_index;
-                    } else if target == CurrentScreen::PlayerOptions {
-                        let (song_arc, chart_difficulty_index) = {
-                            let sm_state = &self.state.select_music_state;
-                            let entry = sm_state.entries.get(sm_state.selected_index).unwrap();
-                            let song = match entry {
-                                select_music::MusicWheelEntry::Song(s) => s,
-                                _ => panic!("Cannot open player options on a pack header"),
-                            };
-                            (song.clone(), sm_state.selected_difficulty_index)
-                        };
-                        
-                        let color_index = self.state.select_music_state.active_color_index;
-                        self.state.player_options_state = Some(player_options::init(song_arc, chart_difficulty_index, color_index));
-                    }
-
-                    if target == CurrentScreen::Gameplay {
-                        if let Some(po_state) = self.state.player_options_state.take() {
-                            let song_arc = po_state.song;
-                            let chart_difficulty_index = po_state.chart_difficulty_index;
-                            let difficulty_name = color::FILE_DIFFICULTY_NAMES[chart_difficulty_index];
-                            // Prefer a dance-single chart for the selected difficulty; fall back to any matching difficulty.
-                            let chart_ref = song_arc
-                                .charts
-                                .iter()
-                                .find(|c| c.chart_type.eq_ignore_ascii_case("dance-single") && c.difficulty.eq_ignore_ascii_case(difficulty_name))
-                                .or_else(|| song_arc.charts.iter().find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name)))
-                                .expect("No chart found for selected difficulty");
-                            let chart = Arc::new(chart_ref.clone());
-
-                            // Persist this as the "last played" selection so that
-                            // future visits to SelectMusic reopen on this song+difficulty.
-                            profile::update_last_played(
-                                song_arc.music_path.as_deref(),
-                                chart_difficulty_index,
-                            );
-
-                            let color_index = po_state.active_color_index;
-                            let mut gs = gameplay::init(song_arc, chart, color_index, po_state.music_rate);
-                            
-                            if let Some(backend) = self.backend.as_mut() {
-                                gs.background_texture_key = self.asset_manager.set_dynamic_background(backend, gs.song.background_path.clone());
-                            }
-                            self.state.gameplay_state = Some(gs);
-                        } else {
-                            panic!("Navigating to Gameplay without PlayerOptions state!");
-                        }
-                    }
-
-                    if target == CurrentScreen::Evaluation {
-                            let gameplay_results = self.state.gameplay_state.take();
-                            let color_idx = gameplay_results.as_ref().map_or(
-                                self.state.evaluation_state.active_color_index,
-                                |gs| gs.active_color_index
-                            );
-                            self.state.evaluation_state = evaluation::init(gameplay_results);
-                            self.state.evaluation_state.active_color_index = color_idx;
-
-                            if let Some(backend) = self.backend.as_mut() {
-                                let graph_request = if let Some(score_info) = &self.state.evaluation_state.score_info {
-                                 let graph_width = 1024;
-                                 let graph_height = 256;
-                                 let bg_color     = [16, 21, 25];
-                                 let top_color    = [54, 25, 67];
-                                 let bottom_color = [38, 84, 91];
- 
-                                 let graph_data = rssp::graph::generate_density_graph_rgba_data(
-                                     &score_info.chart.measure_nps_vec,
-                                     score_info.chart.max_nps,
-                                     graph_width, graph_height,
-                                     bottom_color,
-                                     top_color,
-                                     bg_color,
-                                 ).ok();
-                                 
-                                let key = format!("{}_eval", score_info.chart.short_hash);
-                                graph_data.map(|data| (key, data))
-                            } else {
-                                None
-                            };
-                            
-                            let key = if let Some((key, data)) = graph_request {
-                                self.asset_manager.set_density_graph(backend, Some((key, data)))
-                            } else {
-                                self.asset_manager.set_density_graph(backend, None)
-                            };
-                            self.state.evaluation_state.density_graph_texture_key = key;
-                        }
-                    }
-
-                    if target == CurrentScreen::SelectMusic {
-                        if self.state.session_start_time.is_none() {
-                            self.state.session_start_time = Some(Instant::now());
-                            info!("Session timer started.");
-                        }
-
-                        match prev {
-                            CurrentScreen::PlayerOptions => {
-                                // Preserve wheel state; only sync difficulty choice back from PlayerOptions
-                                let preferred = self.state.preferred_difficulty_index;
-                                self.state.select_music_state.preferred_difficulty_index = preferred;
-                                self.state.select_music_state.selected_difficulty_index = preferred;
-
-                                // Clamp to the nearest playable difficulty for the currently selected song
-                                if let Some(select_music::MusicWheelEntry::Song(song)) =
-                                    self.state.select_music_state.entries.get(self.state.select_music_state.selected_index)
-                                {
-                                    let mut best_match_index = None;
-                                    let mut min_diff = i32::MAX;
-                                    for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
-                                        if select_music::is_difficulty_playable(song, i) {
-                                            let diff = (i as i32 - preferred as i32).abs();
-                                            if diff < min_diff {
-                                                min_diff = diff;
-                                                best_match_index = Some(i);
-                                            }
-                                        }
-                                    }
-                                    if let Some(idx) = best_match_index {
-                                        self.state.select_music_state.selected_difficulty_index = idx;
-                                    }
-                                }
-
-                                // Nudge delayed updates to refresh graph immediately on return
-                                select_music::trigger_immediate_refresh(&mut self.state.select_music_state);
-                            }
-                            CurrentScreen::Gameplay | CurrentScreen::Evaluation => {
-                                // Gameplay/Evaluation stop the actual preview music; ask SelectMusic
-                                // to invalidate preview state and regenerate delayed assets.
-                                select_music::reset_preview_after_gameplay(&mut self.state.select_music_state);
-                            }
-                            _ => {
-                                let current_color_index = self.state.select_music_state.active_color_index;
-                                self.state.select_music_state = select_music::init();
-                                self.state.select_music_state.active_color_index = current_color_index;
-                                self.state.select_music_state.selected_difficulty_index = self.state.preferred_difficulty_index;
-                                self.state.select_music_state.preferred_difficulty_index = self.state.preferred_difficulty_index;
-                            }
-                        }
-                    }
-
-                    let (_, in_duration) = self.get_in_transition_for_screen(target);
-                    self.state.transition = TransitionState::FadingIn { 
-                        elapsed: 0.0,
-                        duration: in_duration,
-                    };
-                    crate::ui::runtime::clear_all();
+                    self.on_fade_complete(target, event_loop);
                 }
 
                 let (actors, clear_color) = self.get_current_actors();
