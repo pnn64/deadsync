@@ -167,6 +167,17 @@ impl AppState {
         }
     }
 
+    fn update_gamepad_overlay(&mut self, now: Instant) {
+        if let Some((_, start_time)) = self.gamepad_overlay_state {
+            const HOLD_DURATION: f32 = 3.33;
+            const FADE_OUT_DURATION: f32 = 0.25;
+            const TOTAL_DURATION: f32 = HOLD_DURATION + FADE_OUT_DURATION;
+            if now.duration_since(start_time).as_secs_f32() > TOTAL_DURATION {
+                self.gamepad_overlay_state = None;
+            }
+        }
+    }
+
     fn step_idle(&mut self, delta_time: f32, now: Instant) -> Option<ScreenAction> {
         match self.current_screen {
             CurrentScreen::Gameplay => {
@@ -717,15 +728,7 @@ impl ApplicationHandler<UserEvent> for App {
                 crate::ui::runtime::tick(delta_time);
 
                 // --- Manage gamepad overlay lifetime ---
-                if let Some((_, start_time)) = self.state.gamepad_overlay_state {
-                    // Corresponds to the animation durations in gamepad_overlay.rs
-                    const HOLD_DURATION: f32 = 3.33;
-                    const FADE_OUT_DURATION: f32 = 0.25;
-                    const TOTAL_DURATION: f32 = HOLD_DURATION + FADE_OUT_DURATION;
-                        if now.duration_since(start_time).as_secs_f32() > TOTAL_DURATION {
-                            self.state.gamepad_overlay_state = None;
-                    }
-                }
+                self.state.update_gamepad_overlay(now);
 
                 let mut finished_fading_out_to: Option<CurrentScreen> = None;
 
