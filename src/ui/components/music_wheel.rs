@@ -213,7 +213,9 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     if let Some(chart) = info.charts.iter().find(|c| {
                         c.difficulty.eq_ignore_ascii_case(difficulty_name)
                     }) {
-                        if let Some(cached_score) = scores::get_cached_score(&chart.short_hash) {
+                        if let Some(cached_score) = scores::get_cached_score(&chart.short_hash)
+                            && cached_score.grade != scores::Grade::Failed
+                        {
                             if let Actor::Sprite { visible, cell, .. } = &mut grade_actor {
                                 *visible = true;
                                 *cell = Some((cached_score.grade.to_sprite_state(), u32::MAX));
@@ -222,7 +224,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             if let Some(idx) = cached_score.lamp_index {
                                 // Lamp indices are StageAward-like (1=W1 FC, 2=FEC/W2 FC, ...).
                                 // Map 1->Fantastic, 2->Excellent, etc. by shifting into 0-based.
-                                let lamp_color_index = (idx.saturating_sub(1) as usize) % color::JUDGMENT_HEX.len();
+                                let lamp_color_index =
+                                    (idx.saturating_sub(1) as usize) % color::JUDGMENT_HEX.len();
                                 let lamp_color = color::rgba_hex(color::JUDGMENT_HEX[lamp_color_index]);
 
                                 // Position and size mirror Simply Love's lamp quad.
