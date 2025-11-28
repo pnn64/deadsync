@@ -57,11 +57,6 @@ impl TimingProfile {
 }
 
 #[inline(always)]
-pub fn effective_windows_s() -> [f32; 5] {
-    TimingProfile::default_itg_with_fa_plus().windows_s
-}
-
-#[inline(always)]
 pub fn effective_windows_ms() -> [f32; 5] {
     TimingProfile::default_itg_with_fa_plus().windows_ms()
 }

@@ -396,13 +396,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
     // --- Playfield Positioning (1:1 with Simply Love) ---
-    // Mini%: Simply Love passes Mini() a value in [0, 2] where 0 = normal, 1 = 100% Mini.
-    // ITGmania uses field_zoom = 1 - Mini * 0.5 for note field scaling.
-    let mini_value = (profile.mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
-    let mut field_zoom = 1.0 - mini_value * 0.5;
-    if field_zoom.abs() < 0.01 {
-        field_zoom = 0.01;
-    }
+    // Use the cached field_zoom from gameplay state so visual layout and
+    // scroll math share the exact same scaling as gameplay.
+    let field_zoom = state.field_zoom;
     // NoteFieldOffsetX is stored as a non-negative magnitude; for a single P1-style field,
     // positive values move the field left, mirroring Simply Love's use of a sign flip.
     let notefield_offset_x = -(profile.note_field_offset_x.clamp(0, 50) as f32);
@@ -1917,7 +1913,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             continue;
         }
         // Hold judgments scale with Mini/Tiny in ITGmania as pow(0.5, mini+tiny), clamped to 1.0.
-        let mini_for_holds = mini_value.max(0.0);
+        let mini_for_holds = ((profile.mini_percent as f32).clamp(-100.0, 150.0) / 100.0).max(0.0);
         let hold_judgment_zoom_mod = 0.5_f32.powf(mini_for_holds).min(1.0);
         let zoom = if elapsed < 0.3 {
             let progress = (elapsed / 0.3).clamp(0.0, 1.0);
