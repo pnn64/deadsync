@@ -666,6 +666,19 @@ impl App {
         let prev = self.state.current_screen;
         self.state.current_screen = target;
 
+        self.handle_audio_and_profile_on_fade(prev, target);
+        self.handle_screen_state_on_fade(prev, target);
+        self.handle_screen_entry_on_fade(prev, target);
+
+        let (_, in_duration) = self.get_in_transition_for_screen(target);
+        self.state.transition = TransitionState::FadingIn {
+            elapsed: 0.0,
+            duration: in_duration,
+        };
+        crate::ui::runtime::clear_all();
+    }
+
+    fn handle_audio_and_profile_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
         if target == CurrentScreen::SelectColor {
             crate::core::audio::play_music(
                 std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
@@ -726,7 +739,9 @@ impl App {
             self.state.preferred_difficulty_index =
                 self.state.select_music_state.preferred_difficulty_index;
         }
+    }
 
+    fn handle_screen_state_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
         if prev == CurrentScreen::SelectColor {
             let idx = self.state.select_color_state.active_color_index;
             self.state.menu_state.active_color_index = idx;
@@ -761,7 +776,9 @@ impl App {
             self.state.player_options_state =
                 Some(player_options::init(song_arc, chart_difficulty_index, color_index));
         }
+    }
 
+    fn handle_screen_entry_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
         if target == CurrentScreen::Gameplay {
             if let Some(po_state) = self.state.player_options_state.take() {
                 let song_arc = po_state.song;
@@ -897,13 +914,6 @@ impl App {
                 }
             }
         }
-
-        let (_, in_duration) = self.get_in_transition_for_screen(target);
-        self.state.transition = TransitionState::FadingIn {
-            elapsed: 0.0,
-            duration: in_duration,
-        };
-        crate::ui::runtime::clear_all();
     }
 
 }
