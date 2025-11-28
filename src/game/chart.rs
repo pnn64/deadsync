@@ -11,6 +11,9 @@ pub struct ChartData {
     pub short_hash: String,
     pub stats: ArrowStats,
     pub tech_counts: TechCounts,
+    /// Count of mines that are actually judgable in gameplay, excluding
+    /// any mines that fall within fake or warp segments.
+    pub mines_nonfake: u32,
     pub total_streams: u32,
     pub max_nps: f64,
     pub detailed_breakdown: String,

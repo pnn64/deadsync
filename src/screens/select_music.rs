@@ -222,9 +222,6 @@ pub struct State {
     prev_selected_index: usize,
     time_since_selection_change: f32,
     pub displayed_chart_data: Option<Arc<ChartData>>,
-    // Cached mines count excluding fake segments for the currently displayed chart
-    cached_displayed_mines_hash: Option<String>,
-    cached_displayed_mines_value: u32,
 }
 
 /// Helper function to check if a specific difficulty index has a playable chart
@@ -411,8 +408,6 @@ pub fn init() -> State {
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
         displayed_chart_data: None,
-        cached_displayed_mines_hash: None,
-        cached_displayed_mines_value: 0,
     };
 
     rebuild_displayed_entries(&mut state);
@@ -772,33 +767,6 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             song.charts.iter().find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name)).cloned()
         });
         state.displayed_chart_data = chart_to_display.clone().map(Arc::new);
-        // Compute and cache Mines (excluding fakes) once per displayed chart
-        if let (Some(song), Some(chart)) = (selected_song.as_ref(), chart_to_display.as_ref()) {
-            let chart_hash = &chart.short_hash;
-            if state.cached_displayed_mines_hash.as_deref() != Some(chart_hash) {
-                let config = crate::config::get();
-                let timing = crate::game::timing::TimingData::from_chart_data(
-                    -song.offset, config.global_offset_seconds,
-                    chart.chart_bpms.as_deref(), &song.normalized_bpms,
-                    chart.chart_stops.as_deref(), &song.normalized_stops,
-                    chart.chart_delays.as_deref(), &song.normalized_delays,
-                    chart.chart_warps.as_deref(), &song.normalized_warps,
-                    chart.chart_speeds.as_deref(), &song.normalized_speeds,
-                    chart.chart_scrolls.as_deref(), &song.normalized_scrolls,
-                    chart.chart_fakes.as_deref(), &song.normalized_fakes,
-                    &chart.notes,
-                );
-                let parsed = crate::game::parsing::notes::parse_chart_notes(&chart.notes);
-                let mut mines_nonfake: u32 = 0;
-                for pn in parsed {
-                    if matches!(pn.note_type, crate::game::note::NoteType::Mine)
-                        && let Some(beat) = timing.get_beat_for_row(pn.row_index)
-                            && timing.is_judgable_at_beat(beat) { mines_nonfake = mines_nonfake.saturating_add(1); }
-                }
-                state.cached_displayed_mines_hash = Some(chart_hash.clone());
-                state.cached_displayed_mines_value = mines_nonfake;
-            }
-        }
         
         // Density Graph
         let new_chart_hash = chart_to_display.as_ref().map(|c| c.short_hash.clone());
@@ -1299,7 +1267,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 chart.stats.total_steps.to_string(),
                 chart.stats.jumps.to_string(),
                 chart.stats.holds.to_string(),
-                state.cached_displayed_mines_value.to_string(),
+                chart.mines_nonfake.to_string(),
                 chart.stats.hands.to_string(),
                 chart.stats.rolls.to_string(),
             )
