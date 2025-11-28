@@ -22,6 +22,8 @@ pub struct Config {
     pub master_volume: u8,
     pub music_volume: u8,
     pub sfx_volume: u8,
+    // None = auto (use device default sample rate)
+    pub audio_sample_rate_hz: Option<u32>,
     pub fastload: bool,
     pub cachesongs: bool,
     // Whether to apply Gaussian smoothing to the eval histogram (Simply Love style)
@@ -42,6 +44,7 @@ impl Default for Config {
             master_volume: 90,
             music_volume: 100,
             sfx_volume: 100,
+            audio_sample_rate_hz: None,
             fastload: true,
             cachesongs: true,
             smooth_histogram: true,
@@ -63,6 +66,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
 
     // [Options] section - keys in alphabetical order
     content.push_str("[Options]\n");
+    content.push_str("AudioSampleRateHz=Auto\n");
     content.push_str(&format!("CacheSongs={}\n", if default.cachesongs { "1" } else { "0" }));
     content.push_str(&format!("DisplayHeight={}\n", default.display_height));
     content.push_str(&format!("DisplayWidth={}\n", default.display_width));
@@ -130,6 +134,17 @@ pub fn load() {
                 cfg.master_volume = conf.get("Options", "MasterVolume").and_then(|v| v.parse().ok()).map(|v: u8| v.clamp(0, 100)).unwrap_or(default.master_volume);
                 cfg.music_volume = conf.get("Options", "MusicVolume").and_then(|v| v.parse().ok()).map(|v: u8| v.clamp(0, 100)).unwrap_or(default.music_volume);
                 cfg.sfx_volume = conf.get("Options", "SFXVolume").and_then(|v| v.parse().ok()).map(|v: u8| v.clamp(0, 100)).unwrap_or(default.sfx_volume);
+                cfg.audio_sample_rate_hz = conf
+                    .get("Options", "AudioSampleRateHz")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.eq_ignore_ascii_case("auto") || v.is_empty() {
+                            None
+                        } else {
+                            v.parse::<u32>().ok()
+                        }
+                    })
+                    .or(default.audio_sample_rate_hz);
                 cfg.fastload = conf.get("Options", "FastLoad").and_then(|v| v.parse::<u8>().ok()).map_or(default.fastload, |v| v != 0);
                 cfg.cachesongs = conf.get("Options", "CacheSongs").and_then(|v| v.parse::<u8>().ok()).map_or(default.cachesongs, |v| v != 0);
                 cfg.smooth_histogram = conf.get("Options", "SmoothHistogram").and_then(|v| v.parse::<u8>().ok()).map_or(default.smooth_histogram, |v| v != 0);
@@ -196,7 +211,7 @@ pub fn load() {
                 let has = |sec: &str, key: &str| conf.get(sec, key).is_some();
                 let mut miss = false;
                 let options_keys = [
-                    "CacheSongs","DisplayHeight","DisplayWidth","FastLoad","GlobalOffsetSeconds",
+                    "AudioSampleRateHz","CacheSongs","DisplayHeight","DisplayWidth","FastLoad","GlobalOffsetSeconds",
                     "MasterVolume","MusicVolume","ShowStats","SmoothHistogram","SFXVolume",
                     "VideoRenderer","Vsync","Windowed"
                 ];
@@ -487,6 +502,11 @@ fn save_without_keymaps() {
 
     // [Options] (alphabetical order)
     content.push_str("[Options]\n");
+    let audio_rate_str = match cfg.audio_sample_rate_hz {
+        None => "Auto".to_string(),
+        Some(hz) => hz.to_string(),
+    };
+    content.push_str(&format!("AudioSampleRateHz={}\n", audio_rate_str));
     content.push_str(&format!("CacheSongs={}\n", if cfg.cachesongs { "1" } else { "0" }));
     content.push_str(&format!("DisplayHeight={}\n", cfg.display_height));
     content.push_str(&format!("DisplayWidth={}\n", cfg.display_width));

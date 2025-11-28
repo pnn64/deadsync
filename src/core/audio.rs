@@ -115,15 +115,78 @@ fn init_engine_and_thread() -> AudioEngine {
 
     let host = cpal::default_host();
     let device = host.default_output_device().expect("no audio output device");
-    let config = device.default_output_config().expect("no default audio config");
-    let stream_config: StreamConfig = config.clone().into();
+    let device_name = device.name().unwrap_or_else(|_| "<unknown>".to_string());
+    let default_config = device.default_output_config().expect("no default audio config");
+    let mut stream_config: StreamConfig = default_config.clone().into();
+
+    // Log all available output devices and their supported configurations for debugging.
+    match host.output_devices() {
+        Ok(devices) => {
+            info!("Enumerating audio output devices for host {:?}:", host.id());
+            for (idx, dev) in devices.enumerate() {
+                let name = dev.name().unwrap_or_else(|_| "<unknown>".to_string());
+                let is_default = name == device_name;
+                let tag = if is_default { " (default)" } else { "" };
+                info!("  Device {}: '{}'{}", idx, name, tag);
+                match dev.supported_output_configs() {
+                    Ok(configs) => {
+                        for cfg_range in configs {
+                            let min = cfg_range.min_sample_rate().0;
+                            let max = cfg_range.max_sample_rate().0;
+                            let channels = cfg_range.channels();
+                            let fmt = cfg_range.sample_format();
+                            info!(
+                                "    - {:?}, {} ch, {}..{} Hz",
+                                fmt, channels, min, max
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        warn!("    ! Failed to query supported output configs: {}", e);
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Failed to enumerate audio output devices: {}", e);
+        }
+    }
+
+    let cfg = crate::config::get();
+    let requested_rate = cfg.audio_sample_rate_hz;
+    if let Some(target_hz) = requested_rate {
+        info!(
+            "Audio sample rate override requested: {} Hz (device default {} Hz).",
+            target_hz,
+            stream_config.sample_rate.0
+        );
+        stream_config.sample_rate = cpal::SampleRate(target_hz);
+    } else {
+        info!(
+            "Audio sample rate override: auto (using device default {} Hz).",
+            stream_config.sample_rate.0
+        );
+    }
+
+    info!(
+        "Audio device: '{}' (sample_format={:?}, default={} Hz, channels={}).",
+        device_name,
+        default_config.sample_format(),
+        default_config.sample_rate().0,
+        default_config.channels()
+    );
+    info!(
+        "Audio output stream config: {} Hz, {} ch (may be resampled by OS/driver).",
+        stream_config.sample_rate.0,
+        stream_config.channels
+    );
 
     let device_sample_rate = stream_config.sample_rate.0;
     let device_channels = stream_config.channels as usize;
 
     // Spawn the audio manager thread (owns the CPAL stream and command loop)
     thread::spawn(move || {
-        audio_manager_thread(command_receiver);
+        audio_manager_thread(command_receiver, device, default_config.sample_format(), stream_config);
     });
 
     info!("Audio engine initialized ({} Hz, {} ch).", device_sample_rate, device_channels);
@@ -136,15 +199,15 @@ fn init_engine_and_thread() -> AudioEngine {
 }
 
 /// Manager thread: builds the CPAL stream, mixes SFX, and forwards music via ring.
-fn audio_manager_thread(command_receiver: Receiver<AudioCommand>) {
+fn audio_manager_thread(
+    command_receiver: Receiver<AudioCommand>,
+    device: cpal::Device,
+    sample_format: SampleFormat,
+    stream_config: StreamConfig,
+) {
     let mut music_stream: Option<MusicStream> = None;
     let music_ring = internal::ring_new(internal::RING_CAP_SAMPLES);
     let (sfx_sender, sfx_receiver) = channel::<Arc<Vec<i16>>>();
-
-    let host = cpal::default_host();
-    let device = host.default_output_device().expect("no audio output device");
-    let config = device.default_output_config().expect("no default audio config");
-    let stream_config: StreamConfig = config.clone().into();
 
     // State captured by the audio callback
     let music_ring_for_callback = music_ring.clone();
@@ -154,8 +217,8 @@ fn audio_manager_thread(command_receiver: Receiver<AudioCommand>) {
     let mut mix_f32: Vec<f32> = Vec::new();
     let mut active_sfx_for_callback: Vec<(Arc<Vec<i16>>, usize)> = Vec::new();
 
-    // Build the output stream matching device sample format (like v1)
-    let stream = match config.sample_format() {
+    // Build the output stream matching chosen sample format (like v1)
+    let stream = match sample_format {
         SampleFormat::I16 => device.build_output_stream(
             &stream_config,
             move |out: &mut [i16], _| {
@@ -413,6 +476,16 @@ fn music_decoder_thread_loop(
 
     let out_ch = ENGINE.device_channels;
     let out_hz = ENGINE.device_sample_rate;
+
+    info!(
+        "Music decode start: {:?} ({} ch @ {} Hz) -> output {} ch @ {} Hz (rate x{}).",
+        path,
+        in_ch,
+        in_hz,
+        out_ch,
+        out_hz,
+        f32::from_bits(rate_bits.load(Ordering::Relaxed))
+    );
 
     // --- Handle negative start time as preroll silence ---
     if cut.start_sec < 0.0 {
@@ -797,6 +870,16 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
         OUT_FRAMES_PER_CALL,
         in_ch,
     )?;
+
+    info!(
+        "SFX decode: '{}' ({} ch @ {} Hz) -> output {} ch @ {} Hz (ratio {:.6}).",
+        path,
+        in_ch,
+        in_hz,
+        out_ch,
+        out_hz,
+        ratio
+    );
 
     let mut resampled_data: Vec<i16> = Vec::new();
     let mut in_planar: Vec<Vec<f32>> = vec![Vec::with_capacity(4096); in_ch];
