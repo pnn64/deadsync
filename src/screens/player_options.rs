@@ -424,6 +424,7 @@ fn build_advanced_rows() -> Vec<Row> {
                 "Split".to_string(),
                 "Alternate".to_string(),
                 "Cross".to_string(),
+                "Centered".to_string(),
             ],
             selected_choice_index: 0,
             help: vec!["Change how notes scroll relative to the receptors.".to_string()],
@@ -951,6 +952,11 @@ fn apply_profile_defaults(rows: &mut [Row]) -> (u8, u8) {
                 }
         if profile.scroll_option.contains(ScrollOption::Cross)
             && let Some(idx) = row.choices.iter().position(|c| c == "Cross")
+                && idx < 8 {
+                    scroll_active_mask |= 1u8 << (idx as u8);
+                }
+        if profile.scroll_option.contains(ScrollOption::Centered)
+            && let Some(idx) = row.choices.iter().position(|c| c == "Centered")
                 && idx < 8 {
                     scroll_active_mask |= 1u8 << (idx as u8);
                 }
@@ -1496,6 +1502,9 @@ fn toggle_scroll_row(state: &mut State) {
         }
         if (state.scroll_active_mask & (1u8 << 3)) != 0 {
             setting = setting.union(ScrollOption::Cross);
+        }
+        if (state.scroll_active_mask & (1u8 << 4)) != 0 {
+            setting = setting.union(ScrollOption::Centered);
         }
     }
     crate::game::profile::update_scroll_option(setting);

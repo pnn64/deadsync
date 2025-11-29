@@ -411,6 +411,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let receptor_y_reverse =
         screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE + notefield_offset_y;
 
+    
+    let is_centered = profile.scroll_option.contains(profile::ScrollOption::Centered);
+    let receptor_y_centered = screen_center_y() + notefield_offset_y;
+
     // --- Banner (1:1 with Simply Love, including parent frame logic) ---
     if let Some(banner_path) = &state.song.banner_path {
         let banner_key = banner_path.to_string_lossy().into_owned();
@@ -484,7 +488,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         // downwards lanes anchor to the reverse row.
         let compute_lane_y_dynamic = |beat: f32, dir: f32| -> f32 {
             let dir = if dir >= 0.0 { 1.0 } else { -1.0 };
-            let receptor_y_lane = if dir >= 0.0 {
+            let receptor_y_lane = if is_centered {
+                receptor_y_centered
+            } else if dir >= 0.0 {
                 receptor_y_normal
             } else {
                 receptor_y_reverse
@@ -527,7 +533,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 .copied()
                 .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
             let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
-            let receptor_y_lane = if dir >= 0.0 {
+            let receptor_y_lane = if is_centered {
+                receptor_y_centered
+            } else if dir >= 0.0 {
                 receptor_y_normal
             } else {
                 receptor_y_reverse
@@ -631,7 +639,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         .copied()
                         .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
                     let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
-                    let receptor_y_lane = if dir >= 0.0 {
+                    let receptor_y_lane = if is_centered {
+                        receptor_y_centered
+                    } else if dir >= 0.0 {
                         receptor_y_normal
                     } else {
                         receptor_y_reverse
@@ -708,7 +718,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     .copied()
                     .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
                 let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
-                let receptor_y_lane = if dir >= 0.0 {
+                let receptor_y_lane = if is_centered {
+                    receptor_y_centered
+                } else if dir >= 0.0 {
                     receptor_y_normal
                 } else {
                     receptor_y_reverse
@@ -781,7 +793,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 .copied()
                 .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
             let dir = if col_dir >= 0.0 { 1.0 } else { -1.0 };
-            let lane_receptor_y = if col_dir >= 0.0 {
+            let lane_receptor_y = if is_centered {
+                receptor_y_centered
+            } else if col_dir >= 0.0 {
                 receptor_y_normal
             } else {
                 receptor_y_reverse
@@ -1488,7 +1502,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 .copied()
                 .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
             let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
-            let receptor_y_lane = if dir >= 0.0 {
+            let receptor_y_lane = if is_centered {
+                receptor_y_centered
+            } else if dir >= 0.0 {
                 receptor_y_normal
             } else {
                 receptor_y_reverse
@@ -1729,7 +1745,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
     // Combo
     if state.miss_combo >= SHOW_COMBO_AT {
-        let combo_y = if state.reverse_scroll {
+        let combo_y = if is_centered {
+            // With centered, put combo below the center line by offset
+            screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
+        } else if state.reverse_scroll {
             screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
         } else {
             screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
@@ -1754,7 +1773,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
         }
     } else if state.combo >= SHOW_COMBO_AT {
-        let combo_y = if state.reverse_scroll {
+        let combo_y = if is_centered {
+            screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
+        } else if state.reverse_scroll {
             screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
         } else {
             screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
@@ -1892,7 +1913,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     "judgements/Wendy Chroma 2x7 (doubleres).png",
                     profile::JudgmentGraphic::None => unreachable!("JudgmentGraphic::None is filtered above"),
                 };
-                let judgment_y = if state.reverse_scroll {
+                let judgment_y = if is_centered {
+                    // With centered, put judgments above the center line by offset
+                    screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
+                } else if state.reverse_scroll {
                     screen_center_y() + TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
                 } else {
                     screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
@@ -1933,7 +1957,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 .copied()
                 .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
             let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
-            let receptor_y_lane = if dir >= 0.0 {
+            let receptor_y_lane = if is_centered {
+                receptor_y_centered
+            } else if dir >= 0.0 {
                 receptor_y_normal
             } else {
                 receptor_y_reverse

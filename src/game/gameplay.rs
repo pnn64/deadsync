@@ -486,6 +486,8 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
     let scroll_speed = profile.scroll_speed;
     let initial_bpm = timing.get_bpm_for_beat(first_note_beat);
 
+    let centered = profile.scroll_option.contains(profile::ScrollOption::Centered);
+
     let mut reference_bpm = get_reference_bpm_from_display_tag(&song.display_bpm).unwrap_or_else(|| {
         let mut actual_max = timing.get_capped_max_bpm(Some(M_MOD_HIGH_CAP));
         if !actual_max.is_finite() || actual_max <= 0.0 { actual_max = initial_bpm.max(120.0); }
@@ -498,7 +500,14 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         pixels_per_second = ScrollSpeedSetting::default().pixels_per_second(initial_bpm, reference_bpm, rate);
     }
     let draw_distance_before_targets = screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER;
-    let draw_distance_after_targets = DRAW_DISTANCE_AFTER_TARGETS;
+    
+    // If Centered, we need to draw arrows well past the center line.
+    let draw_distance_after_targets = if centered {
+        screen_height() * 0.6
+    } else {
+        DRAW_DISTANCE_AFTER_TARGETS
+    };
+
     let mut travel_time = scroll_speed.travel_time_seconds(
         draw_distance_before_targets,
         initial_bpm,
@@ -1433,10 +1442,22 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         }
     };
 
+    let profile = profile::get();
+    let is_centered = profile.scroll_option.contains(profile::ScrollOption::Centered);
+
     for (col_idx, col_arrows) in state.arrows.iter_mut().enumerate() {
         let raw_dir = state.column_scroll_dirs.get(col_idx).copied().unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
         let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
-        let receptor_y = if dir >= 0.0 { receptor_y_normal } else { receptor_y_reverse };
+        let receptor_y = if is_centered {
+            // Centered receptors ignore Reverse for positioning (but not for direction)
+            // We apply notefield offset here too for consistency
+            screen_center_y() + profile.note_field_offset_y as f32
+        } else if dir >= 0.0 { 
+            receptor_y_normal 
+        } else { 
+            receptor_y_reverse 
+        };
+
         let miss_cull_threshold = receptor_y - dir * state.draw_distance_after_targets;
         col_arrows.retain(|arrow| {
             let note = &state.notes[arrow.note_index];
@@ -1543,7 +1564,13 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
 
     let draw_distance_before_targets = screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER;
     state.draw_distance_before_targets = draw_distance_before_targets;
-    state.draw_distance_after_targets = DRAW_DISTANCE_AFTER_TARGETS;
+
+    
+    // Dynamic update of draw distance logic based on profile
+    let is_centered = profile::get().scroll_option.contains(profile::ScrollOption::Centered);
+    state.draw_distance_after_targets = if is_centered { screen_height() * 0.6 } else { DRAW_DISTANCE_AFTER_TARGETS };
+
+
     let mut travel_time = state.scroll_speed.travel_time_seconds(draw_distance_before_targets, current_bpm, state.scroll_reference_bpm, state.music_rate);
     if !travel_time.is_finite() || travel_time <= 0.0 { travel_time = draw_distance_before_targets / dynamic_speed; }
     state.scroll_travel_time = travel_time;

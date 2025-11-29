@@ -746,6 +746,9 @@ fn build_modifiers_pane(state: &State) -> Vec<Actor> {
     if scroll.contains(profile::ScrollOption::Cross) {
         parts.push("Cross".to_string());
     }
+    if scroll.contains(profile::ScrollOption::Centered) {
+        parts.push("Centered".to_string());
+    }
     parts.push("Overhead".to_string());
     let final_text = parts.join(", ");
 

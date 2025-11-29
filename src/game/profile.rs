@@ -17,6 +17,7 @@ impl ScrollOption {
     pub const Split: ScrollOption = ScrollOption(1 << 1);
     pub const Alternate: ScrollOption = ScrollOption(1 << 2);
     pub const Cross: ScrollOption = ScrollOption(1 << 3);
+    pub const Centered: ScrollOption = ScrollOption(1 << 4);
 
     #[inline(always)]
     pub const fn empty() -> ScrollOption {
@@ -69,6 +70,7 @@ impl FromStr for ScrollOption {
                 "split" => ScrollOption::Split,
                 "alternate" => ScrollOption::Alternate,
                 "cross" => ScrollOption::Cross,
+                "centered" => ScrollOption::Centered,
                 other => {
                     return Err(format!("'{}' is not a valid Scroll setting", other));
                 }
@@ -103,7 +105,8 @@ impl core::fmt::Display for ScrollOption {
         write_flag("Reverse", self.contains(ScrollOption::Reverse), f)?;
         write_flag("Split", self.contains(ScrollOption::Split), f)?;
         write_flag("Alternate", self.contains(ScrollOption::Alternate), f)?;
-        write_flag("Cross", self.contains(ScrollOption::Cross), f)
+        write_flag("Cross", self.contains(ScrollOption::Cross), f)?;
+        write_flag("Centered", self.contains(ScrollOption::Centered), f)
     }
 }
 
