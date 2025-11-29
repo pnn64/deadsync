@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use crate::game::note::{HoldResult, MineResult, Note, NoteType};
-use crate::game::timing::{self, WindowCounts};
+use crate::game::timing::WindowCounts;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TimingWindow {
