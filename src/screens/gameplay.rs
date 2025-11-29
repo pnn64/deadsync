@@ -1746,8 +1746,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Combo
     if state.miss_combo >= SHOW_COMBO_AT {
         let combo_y = if is_centered {
-            // With centered, put combo below the center line by offset
-            screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
+            receptor_y_centered + 155.0
         } else if state.reverse_scroll {
             screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
         } else {
@@ -1774,7 +1773,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     } else if state.combo >= SHOW_COMBO_AT {
         let combo_y = if is_centered {
-            screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
+            receptor_y_centered + 155.0
         } else if state.reverse_scroll {
             screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
         } else {
@@ -1914,8 +1913,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     profile::JudgmentGraphic::None => unreachable!("JudgmentGraphic::None is filtered above"),
                 };
                 let judgment_y = if is_centered {
-                    // With centered, put judgments above the center line by offset
-                    screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
+                    receptor_y_centered + 95.0
                 } else if state.reverse_scroll {
                     screen_center_y() + TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
                 } else {
