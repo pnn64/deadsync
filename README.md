@@ -116,3 +116,32 @@ A `save` directory is also created to store your personal data.
 
 *   To enable online features with **GrooveStats**, edit the `save/profiles/00000000/groovestats.ini` file and add your API key and username. This allows the game to fetch your online scores.
 *   You can also change your in-game display name in `save/profiles/00000000/profile.ini`.
+
+<h2>Acknowledgements</h2>
+<p>
+    DeadSync would not exist without years of work from the StepMania and ITG communities.
+    In particular, we would like to acknowledge:
+</p>
+<ul>
+    <li>
+        <a href="https://github.com/stepmania/stepmania">StepMania</a> and its contributors
+        for creating the original engine that made all of this possible, including the
+        <a href="https://github.com/itgmania/itgmania/blob/beta/Docs/credits_old_Stepmania_Team.txt">original StepMania Team</a>
+        and the
+        <a href="https://github.com/itgmania/itgmania/blob/beta/Docs/credits_SM5.txt">StepMania 5 developers</a>.
+    </li>
+    <li>
+        <a href="https://github.com/itgmania/itgmania">ITGmania</a> and its developers
+        for shaping the modern ITG experience on dedicated machines.
+    </li>
+    <li>
+        <a href="https://github.com/Simply-Love/Simply-Love-SM5">Simply Love</a>, its maintainers,
+        and important forks such as
+        <a href="https://github.com/zarzob/Simply-Love-SM5">zmod</a>, whose work defines much of
+        the current ITG player experience.
+    </li>
+</ul>
+<p>
+    And more broadly, everyone who has written themes, noteskins, tools, and simfiles for the
+    community over the years. ❤️
+</p>
