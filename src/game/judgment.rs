@@ -180,34 +180,101 @@ const EX_WEIGHT_HIT_MINE: f64 = -1.0;
 /// pane, holds_held counts successful holds only (rolls are reported
 /// separately), and mines_hit is the number of mines actually hit.
 ///
-/// For now, this function intentionally mirrors the spreadsheet semantics and
-/// does not gate counts by `fail_time`; EX score keeps changing even after a
-/// failure, matching the data the sheet is built from.
+/// This version respects `fail_time` to stop accumulating points if the player
+/// has failed the song.
 pub fn calculate_ex_score_from_notes(
     notes: &[Note],
-    _note_times: &[f32],
-    _hold_end_times: &[Option<f32>],
+    note_times: &[f32],
+    hold_end_times: &[Option<f32>],
     total_steps: u32,
     holds_total: u32,
     rolls_total: u32,
     mines_total: u32,
-    _fail_time: Option<f32>,
+    fail_time: Option<f32>,
     _mines_disabled: bool,
 ) -> f64 {
     if total_steps == 0 {
         return 0.0;
     }
 
-    // Per-row window counts used by the FA+ evaluation pane.
-    let windows: WindowCounts = timing::compute_window_counts(notes);
+    // Compute window counts manually here so we can filter by fail_time.
+    // We cannot use timing::compute_window_counts directly as it lacks time-awareness.
+    let mut windows = WindowCounts::default();
+    {
+        let mut idx: usize = 0;
+        let len = notes.len();
+        while idx < len {
+            let row_index = notes[idx].row_index;
+            
+            // Determine if this row happened before failure.
+            // Assuming notes are ordered, the time of the first note in the row is sufficient.
+            let row_time = note_times.get(idx).copied().unwrap_or(0.0);
+            let row_is_playable = match fail_time {
+                Some(t) => row_time <= t,
+                None => true,
+            };
+
+            let mut row_judgments: Vec<&Judgment> = Vec::new();
+
+            while idx < len && notes[idx].row_index == row_index {
+                let note = &notes[idx];
+                // Only include this note in the window count if the row is playable (pre-failure)
+                if row_is_playable 
+                    && !note.is_fake 
+                    && note.can_be_judged 
+                    && !matches!(note.note_type, NoteType::Mine) 
+                {
+                    if let Some(j) = note.result.as_ref() {
+                        row_judgments.push(j);
+                    }
+                }
+                idx += 1;
+            }
+
+            if row_judgments.is_empty() {
+                continue;
+            }
+
+            if let Some(j) = aggregate_row_final_judgment(row_judgments.iter().copied()) {
+                match j.grade {
+                    JudgeGrade::Fantastic => {
+                        match j.window {
+                            Some(TimingWindow::W0) => windows.w0 = windows.w0.saturating_add(1),
+                            _ => windows.w1 = windows.w1.saturating_add(1),
+                        }
+                    }
+                    JudgeGrade::Excellent => windows.w2 = windows.w2.saturating_add(1),
+                    JudgeGrade::Great => windows.w3 = windows.w3.saturating_add(1),
+                    JudgeGrade::Decent => windows.w4 = windows.w4.saturating_add(1),
+                    JudgeGrade::WayOff => windows.w5 = windows.w5.saturating_add(1),
+                    JudgeGrade::Miss => windows.miss = windows.miss.saturating_add(1),
+                }
+            }
+        }
+    }
 
     // Count successful holds (not rolls) and mines hit.
     let mut holds_held: u32 = 0;
     let mut mines_hit: u32 = 0;
 
-    for note in notes {
+    for (i, note) in notes.iter().enumerate() {
         if note.is_fake || !note.can_be_judged {
             continue;
+        }
+
+        // Filter out holds/mines that occur after failure
+        if let Some(ft) = fail_time {
+            let relevant_time = if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                // For holds, we check the end time (must complete the hold while alive)
+                hold_end_times.get(i).and_then(|t| *t).unwrap_or(0.0)
+            } else {
+                // For mines, check the note time
+                note_times.get(i).copied().unwrap_or(0.0)
+            };
+            
+            if relevant_time > ft {
+                continue;
+            }
         }
 
         match note.note_type {
@@ -245,8 +312,7 @@ pub fn calculate_ex_score_from_notes(
 
     total_points += (holds_held as f64) * EX_WEIGHT_HELD;
 
-    // Mines always subtract, even if some of them were effectively disabled in-game.
-    // This matches the sheet behavior the project is validating against.
+    // Mines subtract if hit while alive.
     let mines_effective = mines_hit.min(mines_total);
     total_points += (mines_effective as f64) * EX_WEIGHT_HIT_MINE;
 
