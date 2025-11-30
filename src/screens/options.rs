@@ -29,11 +29,13 @@ const BAR_H: f32 = 32.0;
 const LEFT_MARGIN_PX: f32 = 33.0;
 const RIGHT_MARGIN_PX: f32 = 25.0;
 const FIRST_ROW_TOP_MARGIN_PX: f32 = 18.0;
+const BOTTOM_MARGIN_PX: f32 = 0.0;
 
 /// Unscaled spec constants (we’ll uniformly scale).
 const VISIBLE_ROWS: usize = 10; // how many rows are shown at once
-const ROW_H: f32 = 34.0;
-const ROW_GAP: f32 = 2.0;
+// Match player_options.rs row height.
+const ROW_H: f32 = 33.0;
+const ROW_GAP: f32 = 2.66;
 const LIST_W: f32 = 515.0;
 
 const SEP_W: f32 = 2.0;     // gap/stripe between rows and description
@@ -41,16 +43,16 @@ const DESC_W: f32 = 292.0;  // description panel width (WideScale(287,292) in SL
 // derive description height from visible rows so it never includes a trailing gap
 const DESC_H: f32 = (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
 
-/// Text sizing (unscaled). Picked to sit nicely inside 55px rows.
-const TEXT_PX: f32 = 13.0;
 /// Left margin for row labels (in content-space pixels).
-const TEXT_LEFT_PAD: f32 = 40.0;
+const TEXT_LEFT_PAD: f32 = 40.66;
 /// Left margin for the heart icon (in content-space pixels).
 const HEART_LEFT_PAD: f32 = 13.0;
+/// Label text zoom, matched to the left column titles in player_options.rs.
+const ITEM_TEXT_ZOOM: f32 = 0.88;
 
 /// Heart sprite zoom for the options list rows.
 /// This is a StepMania-style "zoom" factor applied to the native heart.png size.
-const HEART_ZOOM: f32 = 0.025;
+const HEART_ZOOM: f32 = 0.026;
 
 /// A simple item model with help text for the description box.
 pub struct Item<'a> {
@@ -292,8 +294,9 @@ fn scaled_block_origin_with_margins() -> (f32, f32, f32) {
 
     // available width between fixed left/right gutters
     let avail_w = (sw - LEFT_MARGIN_PX - RIGHT_MARGIN_PX).max(0.0);
-    // available height after the fixed top margin (inside content area)
-    let avail_h = (content_h - FIRST_ROW_TOP_MARGIN_PX).max(0.0);
+    // available height after the fixed top margin (inside content area),
+    // and before an adjustable bottom margin.
+    let avail_h = (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
 
     // candidate scales
     let s_w = if total_w > 0.0 { avail_w / total_w } else { 1.0 };
@@ -454,7 +457,6 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
         // Content placement inside row
         let row_mid_y   = row_y + 0.5 * ROW_H * s;
-        let text_h      = TEXT_PX * s;
         let heart_x     = list_x + HEART_LEFT_PAD * s;
         let text_x_base = list_x + TEXT_LEFT_PAD * s;
 
@@ -489,9 +491,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         };
 
         ui_actors.push(act!(text:
-            align(0.0, 0.0):
-            xy(text_x, row_mid_y - 0.5 * text_h):
-            zoomtoheight(text_h):
+            align(0.0, 0.5):
+            xy(text_x, row_mid_y):
+            zoom(ITEM_TEXT_ZOOM):
             diffuse(color_t[0], color_t[1], color_t[2], color_t[3]):
             font("miso"):
             settext(label):
