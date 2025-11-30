@@ -26,28 +26,25 @@ const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
 const BAR_H: f32 = 32.0;
 
 /// Screen-space margins (pixels, not scaled)
-const LEFT_MARGIN_PX: f32 = 25.0;
-const RIGHT_MARGIN_PX: f32 = 17.0;
-const FIRST_ROW_TOP_MARGIN_PX: f32 = 17.0;
+const LEFT_MARGIN_PX: f32 = 33.0;
+const RIGHT_MARGIN_PX: f32 = 25.0;
+const FIRST_ROW_TOP_MARGIN_PX: f32 = 18.0;
 
 /// Unscaled spec constants (we’ll uniformly scale).
 const VISIBLE_ROWS: usize = 10; // how many rows are shown at once
-const ROW_H: f32 = 55.0;
-const ROW_GAP: f32 = 3.0;
-const LIST_W: f32 = 721.0;
+const ROW_H: f32 = 34.0;
+const ROW_GAP: f32 = 2.0;
+const LIST_W: f32 = 515.0;
 
-const SEP_W: f32 = 3.0;     // gap/stripe between rows and description
-const DESC_W: f32 = 484.0;  // description panel width
+const SEP_W: f32 = 2.0;     // gap/stripe between rows and description
+const DESC_W: f32 = 292.0;  // description panel width (WideScale(287,292) in SL)
 // derive description height from visible rows so it never includes a trailing gap
 const DESC_H: f32 = (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
 
 /// Text sizing (unscaled). Picked to sit nicely inside 55px rows.
-const TEXT_PX: f32 = 26.0;
-const TEXT_LEFT_PAD: f32 = 19.0; // padding inside a row before the heart
-const HEART_TEXT_GAP: f32 = 17.0;
-
-/// Baseline nudge for row labels (screen pixels, not scaled)
-const TEXT_BASELINE_NUDGE_PX: f32 = 1.0;
+const TEXT_PX: f32 = 13.0;
+const TEXT_LEFT_PAD: f32 = 13.0; // padding inside a row before the heart (≈ WideScale(20,40))
+const HEART_TEXT_GAP: f32 = 9.0;
 
 /// Heart native aspect (for aspect-correct scaling).
 const HEART_NATIVE_W: f32 = 668.0;
@@ -61,23 +58,83 @@ pub struct Item<'a> {
 }
 
 pub const ITEMS: &[Item] = &[
-    Item { name: "System Options",                  help: &["Game", "Theme", "Language", "Announcer", "Default NoteSkin", "Editor Noteskin"] },
-    Item { name: "Configure Keyboard/Pad Mappings", help: &["Bind keys/buttons for each player."] },
-    Item { name: "Test Input",                      help: &["View live input state for debugging."] },
-    Item { name: "Input Options",                   help: &["Debounce, menu buttons, coin mode…"] },
-    Item { name: "Graphics/Sound Options",          help: &["Resolution, VSync, sound device…"] },
-    Item { name: "Visual Options",                  help: &["Judgment, combo, lifebar, etc."] },
-    Item { name: "Arcade Options",                  help: &["Coin mode, premium, attract mode…"] },
-    Item { name: "View Bookkeeping Data",           help: &["Audit play counts, coins, uptime."] },
-    Item { name: "Advanced Options",                help: &["Low-level engine toggles."] },
-    Item { name: "MenuTimer Options",               help: &["Per-screen time limits."] },
-    Item { name: "Network Options",                 help: &["Online features, matchmaking, latency…"] },
-    Item { name: "Profiles",                        help: &["Create, select, and edit player profiles."] },
-    Item { name: "Theme Options",                   help: &["UI skin, colorway, layout, accessibility."] },
-    Item { name: "Data Management",                 help: &["Save data, screenshots, logs, cache."] },
-    Item { name: "Service Options",                 help: &["Cabinet/service settings for operators."] },
-    Item { name: "Credits",                         help: &["Project contributors and licenses."] },
-    Item { name: "Exit",                            help: &["Return to the main menu."] },
+    // Top-level ScreenOptionsService rows, ordered to match Simply Love's LineNames.
+    Item {
+        name: "System Options",
+        help: &["Game", "Theme", "Language", "Announcer", "Default NoteSkin", "Editor Noteskin"],
+    },
+    Item {
+        name: "Configure Keyboard/Pad Mappings",
+        help: &["Map keyboard keys, panels, and menu buttons to game functions."],
+    },
+    Item {
+        name: "Test Input",
+        help: &["Test dance pads, controllers, and menu buttons; verify everything is mapped."],
+    },
+    Item {
+        name: "Input Options",
+        help: &["Joystick automapping, dedicated menu buttons, and input debounce."],
+    },
+    Item {
+        name: "Graphics/Sound Options",
+        help: &["Aspect ratio, resolution, renderer, and audio output device."],
+    },
+    Item {
+        name: "Visual Options",
+        help: &["Lyrics, backgrounds, overscan, and other gameplay visuals."],
+    },
+    Item {
+        name: "Arcade Options",
+        help: &["Coin mode, premium, songs per play, and related arcade settings."],
+    },
+    Item {
+        name: "View Bookkeeping Data",
+        help: &["View coins, credits, uptime, and other bookkeeping stats."],
+    },
+    Item {
+        name: "Advanced Options",
+        help: &["Timing windows, default fail type, and low-level engine toggles."],
+    },
+    Item {
+        name: "MenuTimer Options",
+        help: &["Enable the MenuTimer and configure per-screen time limits."],
+    },
+    Item {
+        name: "USB Profile Options",
+        help: &["USB profiles, custom song limits, and load timeouts."],
+    },
+    Item {
+        name: "Manage Local Profiles",
+        help: &["Create, edit, and manage player profiles stored on this machine."],
+    },
+    Item {
+        name: "Simply Love Options",
+        help: &["Theme-specific options that only affect Simply Love's behavior."],
+    },
+    Item {
+        name: "Tournament Mode Options",
+        help: &["Settings intended to keep machines tournament-friendly and consistent."],
+    },
+    Item {
+        name: "GrooveStats Options",
+        help: &["Configure GrooveStats integration and related network settings."],
+    },
+    Item {
+        name: "StepMania Credits",
+        help: &["View StepMania's credits and acknowledgments."],
+    },
+    Item {
+        name: "Clear Credits",
+        help: &["Reset accumulated coin credits back to zero."],
+    },
+    Item {
+        name: "Reload Songs/Courses",
+        help: &["Reload all songs and courses from disk without restarting."],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main menu."],
+    },
 ];
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NavDirection {
@@ -320,8 +377,8 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     // Simply Love brand color (now uses the active theme color).
     let col_brand_bg   = color::simply_love_rgba(state.active_color_index); // <-- CHANGED
 
-    // Active text color (for normal rows) – keep using a palette color keyed by selection.
-    let col_active_text = color::simply_love_rgba(state.selected as i32);
+    // Active text color (for normal rows) – Simply Love uses row index + global color index.
+    let col_active_text = color::simply_love_rgba(state.active_color_index + state.selected as i32);
 
     // --- scale & origin honoring fixed screen-space margins ---
     let (s, list_x, list_y) = scaled_block_origin_with_margins();
@@ -438,7 +495,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
         ui_actors.push(act!(text:
             align(0.0, 0.0):
-            xy(text_x, row_mid_y - 0.5 * text_h + TEXT_BASELINE_NUDGE_PX):
+            xy(text_x, row_mid_y - 0.5 * text_h):
             zoomtoheight(text_h):
             diffuse(color_t[0], color_t[1], color_t[2], color_t[3]):
             font("miso"):
@@ -449,11 +506,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     // ------------------- Description content (selected) -------------------
     let sel = state.selected.min(ITEMS.len() - 1);
-    let title_px = 28.0 * s;
-    let body_px  = 28.0 * s;
+    let title_px = 20.0 * s;
+    let body_px  = 18.0 * s;
 
-    let desc_pad_x = 18.0 * s;
-    let mut cursor_y = list_y + 18.0 * s;
+    let desc_pad_x = 14.0 * s;
+    let mut cursor_y = list_y + 14.0 * s;
 
     // Title (selected item name)
     ui_actors.push(act!(text:
