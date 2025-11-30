@@ -43,13 +43,14 @@ const DESC_H: f32 = (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) 
 
 /// Text sizing (unscaled). Picked to sit nicely inside 55px rows.
 const TEXT_PX: f32 = 13.0;
-const TEXT_LEFT_PAD: f32 = 13.0; // padding inside a row before the heart (≈ WideScale(20,40))
-const HEART_TEXT_GAP: f32 = 9.0;
+/// Left margin for row labels (in content-space pixels).
+const TEXT_LEFT_PAD: f32 = 40.0;
+/// Left margin for the heart icon (in content-space pixels).
+const HEART_LEFT_PAD: f32 = 13.0;
 
-/// Heart native aspect (for aspect-correct scaling).
-const HEART_NATIVE_W: f32 = 668.0;
-const HEART_NATIVE_H: f32 = 566.0;
-const HEART_ASPECT: f32 = HEART_NATIVE_W / HEART_NATIVE_H;
+/// Heart sprite zoom for the options list rows.
+/// This is a StepMania-style "zoom" factor applied to the native heart.png size.
+const HEART_ZOOM: f32 = 0.025;
 
 /// A simple item model with help text for the description box.
 pub struct Item<'a> {
@@ -452,23 +453,18 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         ));
 
         // Content placement inside row
-        let row_mid_y = row_y + 0.5 * ROW_H * s;
-        let text_h    = TEXT_PX * s;
-
-        // Heart/icon sizing
-        let heart_h = text_h;
-        let heart_w = heart_h * HEART_ASPECT;
-
-        // Left padding INSIDE the row
-        let content_left = list_x + TEXT_LEFT_PAD * s;
+        let row_mid_y   = row_y + 0.5 * ROW_H * s;
+        let text_h      = TEXT_PX * s;
+        let heart_x     = list_x + HEART_LEFT_PAD * s;
+        let text_x_base = list_x + TEXT_LEFT_PAD * s;
 
         // Heart sprite (skip for Exit)
         if !is_exit {
             let heart_tint = if is_active { col_active_text } else { col_white };
             ui_actors.push(act!(sprite("heart.png"):
                 align(0.0, 0.5):
-                xy(content_left, row_mid_y):
-                zoomto(heart_w, heart_h):
+                xy(heart_x, row_mid_y):
+                zoom(HEART_ZOOM):
                 diffuse(heart_tint[0], heart_tint[1], heart_tint[2], heart_tint[3])
             ));
         }
@@ -476,10 +472,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         // Text (Miso)
         let text_x = if is_exit {
             // no heart => start at left pad
-            content_left
+            text_x_base
         } else {
-            // heart + gap
-            content_left + heart_w + HEART_TEXT_GAP * s
+            text_x_base
         };
 
         let label = ITEMS[item_idx].name;
