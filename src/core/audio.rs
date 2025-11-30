@@ -153,7 +153,6 @@ pub fn get_music_stream_position_seconds() -> f32 {
     if let Some(cb_instant) = cb_instant_opt {
         let now = Instant::now();
         let dt = now.saturating_duration_since(cb_instant).as_secs_f32();
-        let buf_dur = (buf_frames as f32) / (sample_rate as f32);
         let frames_since_cb = (dt * sample_rate as f32)
             .clamp(0.0, buf_frames as f32);
         let frames_now = base_frames as f32 + frames_since_cb;

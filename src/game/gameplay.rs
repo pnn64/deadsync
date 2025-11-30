@@ -19,7 +19,7 @@ use log::{info, debug};
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use winit::event::KeyEvent;
 use winit::keyboard::KeyCode;
 
@@ -183,8 +183,6 @@ pub struct State {
     pub timing: Arc<TimingData>,
     pub timing_profile: TimingProfile,
     pub notes: Vec<Note>,
-
-    pub song_start_instant: Instant,
     pub audio_lead_in_seconds: f32,
     pub current_beat: f32,
     pub current_music_time: f32,
@@ -309,7 +307,7 @@ fn apply_life_change(state: &mut State, delta: f32) {
     }
 }
 
-pub fn queue_input_edge(state: &mut State, source: InputSource, lane: Lane, pressed: bool, timestamp: Instant) {
+pub fn queue_input_edge(state: &mut State, source: InputSource, lane: Lane, pressed: bool, _timestamp: Instant) {
     // Map this input edge directly into the gameplay music time using the
     // audio device clock, so judgments are not tied to frame timing.
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
@@ -318,7 +316,7 @@ pub fn queue_input_edge(state: &mut State, source: InputSource, lane: Lane, pres
     let stream_pos = audio::get_music_stream_position_seconds();
     let event_music_time = (stream_pos - lead_in) * rate + anchor * (1.0 - rate);
 
-    state.pending_edges.push_back(InputEdge { lane, pressed, source, timestamp, event_music_time });
+    state.pending_edges.push_back(InputEdge { lane, pressed, source, event_music_time });
 }
 
 fn get_reference_bpm_from_display_tag(display_bpm_str: &str) -> Option<f32> {
@@ -483,8 +481,6 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
     if start_delay < 0.0 {
         start_delay = 0.0;
     }
-    let song_start_instant = Instant::now() + Duration::from_secs_f32(start_delay);
-
     if let Some(music_path) = &song.music_path {
         info!("Starting music with a preroll delay of {:.2}s", start_delay);
         let cut = audio::Cut { start_sec: (-start_delay) as f64, length_sec: f64::INFINITY, ..Default::default() };
@@ -537,7 +533,6 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         timing,
         timing_profile,
         notes,
-        song_start_instant,
         audio_lead_in_seconds: start_delay,
         current_beat: 0.0,
         current_music_time: -start_delay,
@@ -1246,7 +1241,7 @@ fn update_judged_rows(state: &mut State) {
 }
 
 #[inline(always)]
-fn process_input_edges(state: &mut State, now: Instant) {
+fn process_input_edges(state: &mut State) {
     while let Some(edge) = state.pending_edges.pop_front() {
         let lane_idx = edge.lane.index();
         let was_down = state.keyboard_lane_state[lane_idx] || state.gamepad_lane_state[lane_idx];
@@ -1611,7 +1606,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             };
         }
     state.total_elapsed_in_screen += delta_time;
-    let now = std::time::Instant::now();
+
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
     let anchor = -state.global_offset_seconds;
 
@@ -1656,7 +1651,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         return ScreenAction::Navigate(Screen::Evaluation);
     }
 
-    process_input_edges(state, now);
+    process_input_edges(state);
     let current_inputs = [
         state.keyboard_lane_state[0] || state.gamepad_lane_state[0],
         state.keyboard_lane_state[1] || state.gamepad_lane_state[1],
