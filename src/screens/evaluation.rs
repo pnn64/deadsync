@@ -989,14 +989,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));
         let score_bg_color = color::rgba_hex("#101519");
         let show_fa_plus_pane = matches!(state.active_pane, EvalPane::FaPlus);
-        let show_ex_score = profile.show_ex_score;
 
         let mut children = Vec::new();
 
         if show_fa_plus_pane {
             // FA+ pane: stretch the background down (height 88, y-offset 14)
-            // to match Simply Love's Pane2 percentage container, and optionally
-            // show EX score beneath the normal ITG percent when EX scoring is enabled.
+            // to match Simply Love's Pane2 percentage container, and always
+            // show EX score beneath the normal ITG percent (independent of the
+            // in-game EX HUD option).
             children.push(act!(quad:
                 align(0.0, 0.5):
                 xy(-150.0, 14.0):
@@ -1015,31 +1015,29 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 horizalign(right)
             ));
 
-            if show_ex_score {
-                // EX score (bottom line, Fantastic blue / turquoise), smaller than ITG score
-                let ex_color = color::rgba_hex(color::JUDGMENT_HEX[0]);
-                // "EX" label to the left of the numeric EX score.
-                children.push(act!(text:
-                    font("wendy_white"):
-                    settext("EX"):
-                    align(1.0, 0.5):
-                    // Near the left edge of the background box.
-                    xy(-108.0, 40.0):
-                    zoom(0.31):
-                    horizalign(right):
-                    diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
-                ));
-                children.push(act!(text:
-                    font("wendy_white"):
-                    settext(ex_percent_text):
-                    align(1.0, 0.5):
-                    // EX numeric value aligned with label, further below ITG percent.
-                    xy(0, 40.0):
-                    zoom(0.31):
-                    horizalign(right):
-                    diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
-                ));
-            }
+            // EX score (bottom line, Fantastic blue / turquoise), smaller than ITG score
+            let ex_color = color::rgba_hex(color::JUDGMENT_HEX[0]);
+            // "EX" label to the left of the numeric EX score.
+            children.push(act!(text:
+                font("wendy_white"):
+                settext("EX"):
+                align(1.0, 0.5):
+                // Near the left edge of the background box.
+                xy(-108.0, 40.0):
+                zoom(0.31):
+                horizalign(right):
+                diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
+            ));
+            children.push(act!(text:
+                font("wendy_white"):
+                settext(ex_percent_text):
+                align(1.0, 0.5):
+                // EX numeric value aligned with label, further below ITG percent.
+                xy(0, 40.0):
+                zoom(0.31):
+                horizalign(right):
+                diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
+            ));
         } else {
             // Standard pane: original 60px-tall background and single ITG percent.
             children.push(act!(quad:
