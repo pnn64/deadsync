@@ -36,7 +36,10 @@ const VISIBLE_ROWS: usize = 10; // how many rows are shown at once
 // Match player_options.rs row height.
 const ROW_H: f32 = 33.0;
 const ROW_GAP: f32 = 2.66;
-const LIST_W: f32 = 515.0;
+const LIST_W: f32 = 509.0;
+
+/// Rough character budget per line for description text before we break.
+const DESC_CHARS_PER_LINE: usize = 42;
 
 const SEP_W: f32 = 2.0;     // gap/stripe between rows and description
 const DESC_W: f32 = 292.0;  // description panel width (WideScale(287,292) in SL)
@@ -60,75 +63,90 @@ pub struct Item<'a> {
     help: &'a [&'a str],
 }
 
+/// Description pane layout (mirrors Simply Love's ScreenOptionsService overlay).
+const DESC_PADDING_PX: f32 = 10.0;        // inner padding from quad edge
+const DESC_TITLE_GAP_PX: f32 = 8.0;       // gap between title and body text
+const DESC_BULLET_INDENT_PX: f32 = 10.0;  // extra indent for bullet lists
+const DESC_TITLE_ZOOM: f32 = 1.0;         // title text zoom (roughly header-sized)
+const DESC_BODY_ZOOM: f32 = 1.0;          // body/bullet text zoom (similar to help text)
+
 pub const ITEMS: &[Item] = &[
     // Top-level ScreenOptionsService rows, ordered to match Simply Love's LineNames.
     Item {
         name: "System Options",
-        help: &["Game", "Theme", "Language", "Announcer", "Default NoteSkin", "Editor Noteskin"],
+        help: &[
+            "Adjust high-level settings like game type, theme, language, and more.",
+            "Game",
+            "Theme",
+            "Language",
+            "Announcer",
+            "Default NoteSkin",
+            "Editor Noteskin",
+        ],
     },
     Item {
         name: "Configure Keyboard/Pad Mappings",
-        help: &["Map keyboard keys, panels, and menu buttons to game functions."],
+        help: &["Map keyboard keys, panels, menu buttons, etc. to game functions."],
     },
     Item {
         name: "Test Input",
-        help: &["Test dance pads, controllers, and menu buttons; verify everything is mapped."],
+        help: &["Test your dance pad/controller and menu buttons.\n\nIf one of your buttons is not mapped to a game function, it will appear here as \"not mapped\"."],
     },
     Item {
         name: "Input Options",
-        help: &["Joystick automapping, dedicated menu buttons, and input debounce."],
+        help: &["Adjust input options such as joystick automapping, dedicated menu buttons, and input debounce."],
     },
     Item {
         name: "Graphics/Sound Options",
-        help: &["Aspect ratio, resolution, renderer, and audio output device."],
+        help: &["Change screen aspect ratio, resolution, graphics quality, and miscellaneous sound options."],
     },
     Item {
         name: "Visual Options",
-        help: &["Lyrics, backgrounds, overscan, and other gameplay visuals."],
+        help: &["Change the way lyrics, backgrounds, etc. are displayed during gameplay; adjust overscan."],
     },
     Item {
         name: "Arcade Options",
-        help: &["Coin mode, premium, songs per play, and related arcade settings."],
+        help: &["Change options typically associated with arcade games."],
     },
     Item {
         name: "View Bookkeeping Data",
-        help: &["View coins, credits, uptime, and other bookkeeping stats."],
+        help: &["Check credits history"],
     },
     Item {
         name: "Advanced Options",
-        help: &["Timing windows, default fail type, and low-level engine toggles."],
+        help: &["Adjust advanced settings for difficulty scaling, default fail type, song deletion, and more."],
     },
     Item {
         name: "MenuTimer Options",
-        help: &["Enable the MenuTimer and configure per-screen time limits."],
+        help: &["Turn the MenuTimer On or Off and set the MenuTimer values for various screens."],
     },
     Item {
         name: "USB Profile Options",
-        help: &["USB profiles, custom song limits, and load timeouts."],
+        help: &["Adjust settings related to USB Profiles, including loading custom songs from USB sticks."],
     },
     Item {
         name: "Manage Local Profiles",
-        help: &["Create, edit, and manage player profiles stored on this machine."],
+        help: &["Create, edit, and manage player profiles that are stored on this computer.\n\nYou'll need a keyboard to use this screen."],
     },
     Item {
         name: "Simply Love Options",
-        help: &["Theme-specific options that only affect Simply Love's behavior."],
+        help: &["Adjust settings that only apply to this Simply Love theme."],
     },
     Item {
         name: "Tournament Mode Options",
-        help: &["Settings intended to keep machines tournament-friendly and consistent."],
+        help: &["Adjust settings to enforce for consistency during tournament play."],
     },
     Item {
         name: "GrooveStats Options",
-        help: &["Configure GrooveStats integration and related network settings."],
+        help: &["Manage GrooveStats settings."],
     },
     Item {
         name: "StepMania Credits",
-        help: &["View StepMania's credits and acknowledgments."],
+        help: &["Celebrate those who made StepMania possible."],
     },
     Item {
         name: "Clear Credits",
-        help: &["Reset accumulated coin credits back to zero."],
+        help: &["Reset coin credits to 0."],
     },
     Item {
         name: "Reload Songs/Courses",
@@ -503,34 +521,98 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     // ------------------- Description content (selected) -------------------
     let sel = state.selected.min(ITEMS.len() - 1);
-    let title_px = 20.0 * s;
-    let body_px  = 18.0 * s;
+    let item = &ITEMS[sel];
 
-    let desc_pad_x = 14.0 * s;
-    let mut cursor_y = list_y + 14.0 * s;
+    // Match Simply Love's description box feel:
+    // - inner padding and line width derived from DESC_PADDING_PX
+    // - text zoom similar to other help text (player options, etc.)
+    let desc_pad = DESC_PADDING_PX * s;
+    let mut cursor_y = list_y + desc_pad;
+    let title_step_px = 20.0 * s; // approximate vertical advance for title line
 
-    // Title (selected item name)
+    // Title/explanation text:
+    // - For System Options, use the first help line as the long explanation, with the
+    //   remaining lines rendered as the bullet list (Game, Theme, Language, ...).
+    // - For items with a single help line, use that as the explanation.
+    // - Fallback to the item name if there is no help text.
+    let help = item.help;
+    let is_system_options = item.name == "System Options";
+
+    let (raw_title_text, bullet_lines): (&str, &[&str]) = if is_system_options && !help.is_empty() {
+        (help[0], &help[1..])
+    } else if help.len() == 1 {
+        (help[0], &[][..])
+    } else if help.is_empty() {
+        (item.name, &[][..])
+    } else {
+        (item.name, help)
+    };
+
+    // Simple word-wrapping by character count so longer explanations don't shrink:
+    // we break lines when adding a word would exceed DESC_CHARS_PER_LINE.
+    let mut wrapped_title = String::new();
+    for (seg_idx, segment) in raw_title_text.split('\n').enumerate() {
+        if seg_idx > 0 {
+            wrapped_title.push('\n');
+        }
+        let trimmed = segment.trim_end();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let mut line_len = 0usize;
+        let mut first_word = true;
+        for word in trimmed.split_whitespace() {
+            let w_len = word.chars().count();
+            if first_word {
+                wrapped_title.push_str(word);
+                line_len = w_len;
+                first_word = false;
+            } else if line_len + 1 + w_len <= DESC_CHARS_PER_LINE {
+                wrapped_title.push(' ');
+                wrapped_title.push_str(word);
+                line_len += 1 + w_len;
+            } else {
+                wrapped_title.push('\n');
+                wrapped_title.push_str(word);
+                line_len = w_len;
+            }
+        }
+    }
+    let title_lines = wrapped_title.lines().count().max(1) as f32;
+
+    // Draw the wrapped explanation/title text.
     ui_actors.push(act!(text:
         align(0.0, 0.0):
-        xy(desc_x + desc_pad_x, cursor_y):
-        zoomtoheight(title_px):
+        xy(desc_x + desc_pad, cursor_y):
+        zoom(DESC_TITLE_ZOOM):
         diffuse(1.0, 1.0, 1.0, 1.0):
-        font("miso"): settext(ITEMS[sel].name):
+        font("miso"): settext(wrapped_title):
         horizalign(left)
     ));
-    cursor_y += title_px + 12.0 * s;
+    cursor_y += title_step_px * title_lines + DESC_TITLE_GAP_PX * s;
 
-    // Help text
-    for &line in ITEMS[sel].help {
+    // Optional bullet list (e.g. System Options: Game / Theme / Language / ...).
+    if !bullet_lines.is_empty() {
+        let mut bullet_text = String::new();
+        // Add a leading blank line between the explanation and bullets.
+        bullet_text.push('\n');
+        for (i, line) in bullet_lines.iter().enumerate() {
+            if i > 0 {
+                bullet_text.push('\n');
+            }
+            bullet_text.push('•');
+            bullet_text.push(' ');
+            bullet_text.push_str(line);
+        }
+        let bullet_x = desc_x + desc_pad + DESC_BULLET_INDENT_PX * s;
         ui_actors.push(act!(text:
             align(0.0, 0.0):
-            xy(desc_x + desc_pad_x + 12.0 * s, cursor_y):
-            zoomtoheight(body_px):
+            xy(bullet_x, cursor_y):
+            zoom(DESC_BODY_ZOOM):
             diffuse(1.0, 1.0, 1.0, 1.0):
-            font("miso"): settext(line):
+            font("miso"): settext(bullet_text):
             horizalign(left)
         ));
-        cursor_y += body_px + 8.0 * s;
     }
 
     for actor in &mut ui_actors {
