@@ -3,15 +3,16 @@ use cpal::{Sample, SampleFormat, StreamConfig};
 use lewton::inside_ogg::OggStreamReader;
 use log::{error, info, warn};
 use once_cell::sync::Lazy;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use rubato::{Resampler, SincFixedOut, SincInterpolationParameters, SincInterpolationType, WindowFunction};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Instant;
 
 /* ============================== Public API ============================== */
 
@@ -60,6 +61,21 @@ struct MusicStream {
     rate_bits: Arc<AtomicU32>,
 }
 
+// Global playback position tracking for the current music stream.
+// All counters are in *frames* at the device sample rate (not interleaved samples).
+static MUSIC_TOTAL_FRAMES: AtomicU64 = AtomicU64::new(0);
+static MUSIC_TRACK_START_FRAME: AtomicU64 = AtomicU64::new(0);
+static MUSIC_TRACK_HAS_STARTED: AtomicBool = AtomicBool::new(false);
+static MUSIC_TRACK_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+// Last audio callback timing, used to interpolate the playback position
+// between callback invocations so that the reported stream time is
+// continuous instead of jumping in whole buffer increments.
+static LAST_CALLBACK_INSTANT: Lazy<Mutex<Option<Instant>>> =
+    Lazy::new(|| Mutex::new(None));
+static LAST_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
+static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
+
 /* ============================ Public functions ============================ */
 
 /// Initializes the audio engine. Must be called once at startup.
@@ -106,6 +122,53 @@ pub fn stop_music() {
 pub fn set_music_rate(rate: f32) {
     let rate = if rate.is_finite() && rate > 0.0 { rate } else { 1.0 };
     let _ = ENGINE.command_sender.send(AudioCommand::SetMusicRate(rate));
+}
+
+/// Returns the elapsed real time (in seconds) of the currently playing
+/// music stream, measured from the moment the first sample of that stream
+/// reached the output callback. This is derived from the device's sample
+/// clock and is independent of wall-clock time. The value is smoothed
+/// between callbacks using the callback timestamp so it advances
+/// continuously instead of in buffer-sized jumps.
+pub fn get_music_stream_position_seconds() -> f32 {
+    let sample_rate = ENGINE.device_sample_rate.max(1);
+
+    let has_started = MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire);
+    if !has_started {
+        return 0.0;
+    }
+
+    let start = MUSIC_TRACK_START_FRAME.load(Ordering::Acquire);
+
+    // Snapshot last callback timing under a mutex to avoid tearing.
+    let (cb_instant_opt, base_frames, buf_frames) = {
+        let guard = LAST_CALLBACK_INSTANT.lock().unwrap();
+        (
+            *guard,
+            LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
+            LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
+        )
+    };
+
+    if let Some(cb_instant) = cb_instant_opt {
+        let now = Instant::now();
+        let dt = now.saturating_duration_since(cb_instant).as_secs_f32();
+        let buf_dur = (buf_frames as f32) / (sample_rate as f32);
+        let frames_since_cb = (dt * sample_rate as f32)
+            .clamp(0.0, buf_frames as f32);
+        let frames_now = base_frames as f32 + frames_since_cb;
+        let frames_from_start = frames_now.max(start as f32) - start as f32;
+        frames_from_start / sample_rate as f32
+    } else {
+        // Fallback: no callback yet; use the coarse total counter.
+        let total = MUSIC_TOTAL_FRAMES.load(Ordering::Acquire);
+        if total <= start {
+            0.0
+        } else {
+            let frames = total.saturating_sub(start) as f32;
+            frames / sample_rate as f32
+        }
+    }
 }
 
 /* ============================ Engine internals ============================ */
@@ -212,6 +275,8 @@ fn audio_manager_thread(
     // State captured by the audio callback
     let music_ring_for_callback = music_ring.clone();
 
+    let device_channels = stream_config.channels as usize;
+
     // Reusable buffers captured by the callback to avoid allocations
     let mut mix_i16: Vec<i16> = Vec::new();
     let mut mix_f32: Vec<f32> = Vec::new();
@@ -222,6 +287,14 @@ fn audio_manager_thread(
         SampleFormat::I16 => device.build_output_stream(
             &stream_config,
             move |out: &mut [i16], _| {
+                let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
+                let cb_instant = Instant::now();
+                LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
+                LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
+                {
+                    let mut guard = LAST_CALLBACK_INSTANT.lock().unwrap();
+                    *guard = Some(cb_instant);
+                }
                 let config = crate::config::get();
                 let master_vol = (config.master_volume.clamp(0, 100) as f32) / 100.0;
                 let music_vol = (config.music_volume.clamp(0, 100) as f32) / 100.0;
@@ -233,7 +306,17 @@ fn audio_manager_thread(
                 if mix_f32.len() != out.len() { mix_f32.resize(out.len(), 0.0); }
 
                 // Pull music samples
-                internal::callback_fill_from_ring_i16(&music_ring_for_callback, &mut mix_i16[..]);
+                let popped = internal::callback_fill_from_ring_i16(&music_ring_for_callback, &mut mix_i16[..]);
+
+                // Detect the first callback that actually consumed music data
+                // for the currently active track and record its starting frame.
+                if MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed)
+                    && !MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire)
+                    && popped > 0
+                {
+                    MUSIC_TRACK_START_FRAME.store(total_before, Ordering::Release);
+                    MUSIC_TRACK_HAS_STARTED.store(true, Ordering::Release);
+                }
 
                 // Convert music to f32 with volume
                 for (f, s) in mix_f32.iter_mut().zip(&mix_i16) {
@@ -257,6 +340,16 @@ fn audio_manager_thread(
                 for (o, f) in out.iter_mut().zip(&mix_f32) {
                     *o = i16::from_sample(*f);
                 }
+
+                // Advance the global frame counter after emitting this buffer.
+                let frames = if device_channels == 0 { 0 } else { out.len() / device_channels };
+                if frames > 0 {
+                    LAST_CALLBACK_FRAMES.store(frames as u64, Ordering::Relaxed);
+                    MUSIC_TOTAL_FRAMES.store(
+                        total_before.saturating_add(frames as u64),
+                        Ordering::Release,
+                    );
+                }
             },
             |err| error!("Audio stream error: {}", err),
             None,
@@ -264,6 +357,14 @@ fn audio_manager_thread(
         SampleFormat::U16 => device.build_output_stream(
             &stream_config,
             move |out: &mut [u16], _| {
+                let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
+                let cb_instant = Instant::now();
+                LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
+                LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
+                {
+                    let mut guard = LAST_CALLBACK_INSTANT.lock().unwrap();
+                    *guard = Some(cb_instant);
+                }
                 let config = crate::config::get();
                 let master_vol = (config.master_volume.clamp(0, 100) as f32) / 100.0;
                 let music_vol = (config.music_volume.clamp(0, 100) as f32) / 100.0;
@@ -274,7 +375,15 @@ fn audio_manager_thread(
                 if mix_i16.len() != out.len() { mix_i16.resize(out.len(), 0); }
                 if mix_f32.len() != out.len() { mix_f32.resize(out.len(), 0.0); }
 
-                internal::callback_fill_from_ring_i16(&music_ring_for_callback, &mut mix_i16[..]);
+                let popped = internal::callback_fill_from_ring_i16(&music_ring_for_callback, &mut mix_i16[..]);
+
+                if MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed)
+                    && !MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire)
+                    && popped > 0
+                {
+                    MUSIC_TRACK_START_FRAME.store(total_before, Ordering::Release);
+                    MUSIC_TRACK_HAS_STARTED.store(true, Ordering::Release);
+                }
 
                 for (f, s) in mix_f32.iter_mut().zip(&mix_i16) {
                     *f = s.to_sample::<f32>() * final_music_vol;
@@ -297,6 +406,15 @@ fn audio_manager_thread(
                 for (o, f) in out.iter_mut().zip(&mix_f32) {
                     *o = u16::from_sample(*f);
                 }
+
+                let frames = if device_channels == 0 { 0 } else { out.len() / device_channels };
+                if frames > 0 {
+                    LAST_CALLBACK_FRAMES.store(frames as u64, Ordering::Relaxed);
+                    MUSIC_TOTAL_FRAMES.store(
+                        total_before.saturating_add(frames as u64),
+                        Ordering::Release,
+                    );
+                }
             },
             |err| error!("Audio stream error: {}", err),
             None,
@@ -304,6 +422,14 @@ fn audio_manager_thread(
         SampleFormat::F32 => device.build_output_stream(
             &stream_config,
             move |out: &mut [f32], _| {
+                let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
+                let cb_instant = Instant::now();
+                LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
+                LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
+                {
+                    let mut guard = LAST_CALLBACK_INSTANT.lock().unwrap();
+                    *guard = Some(cb_instant);
+                }
                 let config = crate::config::get();
                 let master_vol = (config.master_volume.clamp(0, 100) as f32) / 100.0;
                 let music_vol = (config.music_volume.clamp(0, 100) as f32) / 100.0;
@@ -313,7 +439,15 @@ fn audio_manager_thread(
 
                 if mix_i16.len() != out.len() { mix_i16.resize(out.len(), 0); }
 
-                internal::callback_fill_from_ring_i16(&music_ring_for_callback, &mut mix_i16[..]);
+                let popped = internal::callback_fill_from_ring_i16(&music_ring_for_callback, &mut mix_i16[..]);
+
+                if MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed)
+                    && !MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire)
+                    && popped > 0
+                {
+                    MUSIC_TRACK_START_FRAME.store(total_before, Ordering::Release);
+                    MUSIC_TRACK_HAS_STARTED.store(true, Ordering::Release);
+                }
 
                 for (o, s) in out.iter_mut().zip(&mix_i16) {
                     *o = s.to_sample::<f32>() * final_music_vol;
@@ -332,6 +466,15 @@ fn audio_manager_thread(
                     *cursor += n;
                     *cursor < data.len()
                 });
+
+                let frames = if device_channels == 0 { 0 } else { out.len() / device_channels };
+                if frames > 0 {
+                    LAST_CALLBACK_FRAMES.store(frames as u64, Ordering::Relaxed);
+                    MUSIC_TOTAL_FRAMES.store(
+                        total_before.saturating_add(frames as u64),
+                        Ordering::Release,
+                    );
+                }
             },
             |err| error!("Audio stream error: {}", err),
             None,
@@ -351,6 +494,8 @@ fn audio_manager_thread(
                     let _ = old.thread.join();
                 }
                 internal::ring_clear(&music_ring);
+                MUSIC_TRACK_ACTIVE.store(true, Ordering::Relaxed);
+                MUSIC_TRACK_HAS_STARTED.store(false, Ordering::Relaxed);
                 let rate_bits = Arc::new(AtomicU32::new(rate.to_bits()));
                 music_stream = Some(spawn_music_decoder_thread(path, cut, looping, rate_bits, music_ring.clone()));
             }
@@ -360,6 +505,8 @@ fn audio_manager_thread(
                     let _ = old.thread.join();
                 }
                 internal::ring_clear(&music_ring);
+                MUSIC_TRACK_ACTIVE.store(false, Ordering::Relaxed);
+                MUSIC_TRACK_HAS_STARTED.store(false, Ordering::Relaxed);
             }
             Ok(AudioCommand::SetMusicRate(new_rate)) => {
                 if let Some(ms) = &music_stream {
@@ -1023,7 +1170,9 @@ mod internal {
         r.head.store(tail_pos, Ordering::Release);
     }
 
-    pub fn callback_fill_from_ring_i16(ring: &SpscRingI16, dst: &mut [i16]) {
+    /// Fill `dst` from the ring buffer, returning the number of interleaved
+    /// samples actually popped from the ring. Any remaining slots are zeroed.
+    pub fn callback_fill_from_ring_i16(ring: &SpscRingI16, dst: &mut [i16]) -> usize {
         let mut filled = 0;
         while filled < dst.len() {
             let got = ring_pop(ring, &mut dst[filled..]);
@@ -1034,5 +1183,6 @@ mod internal {
             }
             filled += got;
         }
+        filled
     }
 }

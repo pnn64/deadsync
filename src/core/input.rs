@@ -297,6 +297,10 @@ pub struct InputEdge {
     pub pressed: bool,
     pub source: InputSource,
     pub timestamp: Instant,
+    // Music time (seconds) at which this edge occurred, in the gameplay
+    // screen's timebase (includes music rate and global offset). Filled in
+    // by the gameplay code using the audio device clock.
+    pub event_music_time: f32,
 }
 
 // Removed legacy per-key state helpers in favor of virtual action mapping.

@@ -185,6 +185,7 @@ pub struct State {
     pub notes: Vec<Note>,
 
     pub song_start_instant: Instant,
+    pub audio_lead_in_seconds: f32,
     pub current_beat: f32,
     pub current_music_time: f32,
     pub note_spawn_cursor: usize,
@@ -309,7 +310,15 @@ fn apply_life_change(state: &mut State, delta: f32) {
 }
 
 pub fn queue_input_edge(state: &mut State, source: InputSource, lane: Lane, pressed: bool, timestamp: Instant) {
-    state.pending_edges.push_back(InputEdge { lane, pressed, source, timestamp });
+    // Map this input edge directly into the gameplay music time using the
+    // audio device clock, so judgments are not tied to frame timing.
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+    let lead_in = state.audio_lead_in_seconds.max(0.0);
+    let anchor = -state.global_offset_seconds;
+    let stream_pos = audio::get_music_stream_position_seconds();
+    let event_music_time = (stream_pos - lead_in) * rate + anchor * (1.0 - rate);
+
+    state.pending_edges.push_back(InputEdge { lane, pressed, source, timestamp, event_music_time });
 }
 
 fn get_reference_bpm_from_display_tag(display_bpm_str: &str) -> Option<f32> {
@@ -529,6 +538,7 @@ pub fn init(song: Arc<SongData>, chart: Arc<ChartData>, active_color_index: i32,
         timing_profile,
         notes,
         song_start_instant,
+        audio_lead_in_seconds: start_delay,
         current_beat: 0.0,
         current_music_time: -start_delay,
         note_spawn_cursor: 0,
@@ -930,6 +940,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     let way_off_window = windows[4];
     let mine_window = state.timing_profile.mine_window_s;
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+    let song_offset_s = state.song.offset;
+    let global_offset_s = state.global_offset_seconds;
+    let lead_in_s = state.audio_lead_in_seconds.max(0.0);
     let mut best: Option<(usize, usize, f32)> = None;
     for (idx, arrow) in state.arrows[column].iter().enumerate().filter(|(_, a)| state.notes[a.note_index].result.is_none()) {
         let n = &state.notes[arrow.note_index];
@@ -975,6 +988,11 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
 
             let (grade, window) = classify_offset_s(time_error_real, &state.timing_profile);
 
+            // Capture the current audio stream position (device sample clock) once
+            // per tap window evaluation so we can compare it against both the
+            // intended note time and the inferred hit time.
+            let stream_pos_s = audio::get_music_stream_position_seconds();
+
             for &idx in &notes_on_row {
                 let note_col = state.notes[idx].column;
                 let row_note_time = state.note_time_cache[idx];
@@ -985,17 +1003,52 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     grade,
                     window: Some(window),
                 });
-                debug!(
-                    "JUDGE TAP: grade={:?}, row={}, col={}, beat={:.3}, note_time={:.4}s, press_time={:.4}s, offset_ms={:.2}, rate={:.3}",
+
+                // Map chart times into the shared audio device clock space to
+                // see how well the atomic sample clock aligns with both the
+                // scheduled note time and the inferred hit time.
+                //
+                // The mapping mirrors gameplay::update, which computes
+                //   music_time = (stream_pos - lead_in) * rate + anchor * (1 - rate)
+                // where anchor = -global_offset_seconds.
+                // Inverting for a given music_time (t_music) gives:
+                //   stream_pos = t_music / rate + lead_in + global_offset * (1 - rate) / rate
+                let expected_stream_for_note_s =
+                    row_note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                let expected_stream_for_hit_s =
+                    current_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+
+                let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
+                let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
+
+                info!(
+                    concat!(
+                        "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
+                        "song_offset_s={:.4}, global_offset_s={:.4}, ",
+                        "note_time_s={:.6}, event_time_s={:.6}, music_now_s={:.6}, ",
+                        "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
+                        "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
+                        "stream_hit_s={:.6}, stream_delta_hit_ms={:.2}"
+                    ),
                     grade,
                     note_row_index,
                     note_col,
                     state.notes[idx].beat,
+                    song_offset_s,
+                    global_offset_s,
                     row_note_time,
                     current_time,
+                    state.current_music_time,
                     te_real * 1000.0,
-                    rate
+                    rate,
+                    lead_in_s,
+                    stream_pos_s,
+                    expected_stream_for_note_s,
+                    stream_delta_note_ms,
+                    expected_stream_for_hit_s,
+                    stream_delta_hit_ms,
                 );
+
                 for col_arrows in &mut state.arrows {
                     if let Some(pos) = col_arrows.iter().position(|a| a.note_index == idx) {
                         col_arrows.remove(pos);
@@ -1193,7 +1246,7 @@ fn update_judged_rows(state: &mut State) {
 }
 
 #[inline(always)]
-fn process_input_edges(state: &mut State, music_time_sec: f32, now: Instant) {
+fn process_input_edges(state: &mut State, now: Instant) {
     while let Some(edge) = state.pending_edges.pop_front() {
         let lane_idx = edge.lane.index();
         let was_down = state.keyboard_lane_state[lane_idx] || state.gamepad_lane_state[lane_idx];
@@ -1203,8 +1256,7 @@ fn process_input_edges(state: &mut State, music_time_sec: f32, now: Instant) {
         }
         let is_down = state.keyboard_lane_state[lane_idx] || state.gamepad_lane_state[lane_idx];
         if edge.pressed && is_down && !was_down {
-            let elapsed = now.saturating_duration_since(edge.timestamp).as_secs_f32();
-            let event_music_time = music_time_sec - elapsed * state.music_rate;
+            let event_music_time = edge.event_music_time;
             let hit_note = judge_a_tap(state, lane_idx, event_music_time);
             refresh_roll_life_on_step(state, lane_idx);
             if !hit_note { state.receptor_bop_timers[lane_idx] = 0.11; }
@@ -1381,6 +1433,9 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
 fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
     let way_off_window = state.timing_profile.windows_s[4];
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+    let song_offset_s = state.song.offset;
+    let global_offset_s = state.global_offset_seconds;
+    let lead_in_s = state.audio_lead_in_seconds.max(0.0);
     let cutoff_time = music_time_sec - way_off_window * rate;
     let len = state.notes.len();
     while state.next_tap_miss_cursor < len {
@@ -1397,15 +1452,39 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                     grade: JudgeGrade::Miss,
                     window: None,
                 });
-                debug!(
-                    "JUDGE TAP MISS (time-based): row={}, col={}, beat={:.3}, note_time={:.4}s, miss_time={:.4}s, offset_ms={:.2}, rate={:.3}",
+
+                let stream_pos_s = audio::get_music_stream_position_seconds();
+                let expected_stream_for_note_s =
+                    note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                let expected_stream_for_miss_s =
+                    music_time_sec / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
+                let stream_delta_miss_ms = (stream_pos_s - expected_stream_for_miss_s) * 1000.0;
+
+                info!(
+                    concat!(
+                        "TIMING MISS: row={}, col={}, beat={:.3}, ",
+                        "song_offset_s={:.4}, global_offset_s={:.4}, ",
+                        "note_time_s={:.6}, miss_time_s={:.6}, ",
+                        "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
+                        "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
+                        "stream_miss_s={:.6}, stream_delta_miss_ms={:.2}"
+                    ),
                     row,
                     note.column,
                     note.beat,
+                    song_offset_s,
+                    global_offset_s,
                     note_time,
                     music_time_sec,
                     time_err_real * 1000.0,
-                    rate
+                    rate,
+                    lead_in_s,
+                    stream_pos_s,
+                    expected_stream_for_note_s,
+                    stream_delta_note_ms,
+                    expected_stream_for_miss_s,
+                    stream_delta_miss_ms,
                 );
                 if let Some(hold) = note.hold.as_mut()
                     && hold.result != Some(HoldResult::Held) {
@@ -1535,16 +1614,12 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     let now = std::time::Instant::now();
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
     let anchor = -state.global_offset_seconds;
-    let music_time_sec = if now < state.song_start_instant {
-        // Before the song actually starts, simulate ITGmania's behavior of using
-        // a negative song position that advances at MusicRate. This keeps XMod/MMod
-        // scroll speeds consistent during the lead-in.
-        let delta = state.song_start_instant.saturating_duration_since(now).as_secs_f32();
-        anchor * (1.0 - rate) - delta * rate
-    } else {
-        let elapsed = now.saturating_duration_since(state.song_start_instant).as_secs_f32();
-        elapsed * rate + anchor * (1.0 - rate)
-    };
+
+    // Music time driven directly by the audio device clock, interpolated
+    // between callbacks for smooth, continuous motion.
+    let stream_pos = crate::core::audio::get_music_stream_position_seconds();
+    let lead_in = state.audio_lead_in_seconds.max(0.0);
+    let music_time_sec = (stream_pos - lead_in) * rate + anchor * (1.0 - rate);
     state.current_music_time = music_time_sec;
     
     // Optimization: only record if time has advanced slightly to avoid duplicates
@@ -1581,7 +1656,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         return ScreenAction::Navigate(Screen::Evaluation);
     }
 
-    process_input_edges(state, music_time_sec, now);
+    process_input_edges(state, now);
     let current_inputs = [
         state.keyboard_lane_state[0] || state.gamepad_lane_state[0],
         state.keyboard_lane_state[1] || state.gamepad_lane_state[1],
