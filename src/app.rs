@@ -419,7 +419,7 @@ impl App {
                     gameplay::get_actors(gs, &self.asset_manager)
                 } else { vec![] }
             },
-            CurrentScreen::Options  => options::get_actors(&self.state.options_state, screen_alpha_multiplier),
+            CurrentScreen::Options  => options::get_actors(&self.state.options_state, &self.asset_manager, screen_alpha_multiplier),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &self.state.player_options_state {
                     player_options::get_actors(pos, &self.asset_manager)

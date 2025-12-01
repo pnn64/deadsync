@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::AssetManager;
 use crate::core::space::*;
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::core::audio;
@@ -11,6 +12,7 @@ use crate::ui::color;
 use crate::ui::components::{heart_bg, screen_bar};
 use crate::ui::components::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::ui::actors;
+use crate::ui::font;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -35,13 +37,10 @@ const BOTTOM_MARGIN_PX: f32 = 0.0;
 const VISIBLE_ROWS: usize = 10; // how many rows are shown at once
 // Match player_options.rs row height.
 const ROW_H: f32 = 33.0;
-const ROW_GAP: f32 = 2.66;
+const ROW_GAP: f32 = 2.5;
 const LIST_W: f32 = 509.0;
 
-/// Rough character budget per line for description text before we break.
-const DESC_CHARS_PER_LINE: usize = 42;
-
-const SEP_W: f32 = 2.0;     // gap/stripe between rows and description
+const SEP_W: f32 = 2.5;     // gap/stripe between rows and description
 const DESC_W: f32 = 292.0;  // description panel width (WideScale(287,292) in SL)
 // derive description height from visible rows so it never includes a trailing gap
 const DESC_H: f32 = (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
@@ -64,11 +63,14 @@ pub struct Item<'a> {
 }
 
 /// Description pane layout (mirrors Simply Love's ScreenOptionsService overlay).
-const DESC_PADDING_PX: f32 = 10.0;        // inner padding from quad edge
-const DESC_TITLE_GAP_PX: f32 = 8.0;       // gap between title and body text
-const DESC_BULLET_INDENT_PX: f32 = 10.0;  // extra indent for bullet lists
-const DESC_TITLE_ZOOM: f32 = 1.0;         // title text zoom (roughly header-sized)
-const DESC_BODY_ZOOM: f32 = 1.0;          // body/bullet text zoom (similar to help text)
+/// Title and bullet list use separate top/side padding so they can be tuned independently.
+const DESC_TITLE_TOP_PAD_PX: f32 = 9.75;      // padding from box top to title
+const DESC_TITLE_SIDE_PAD_PX: f32 = 7.5;     // left/right padding for title text
+const DESC_BULLET_TOP_PAD_PX: f32 = 23.25;     // vertical gap between title and bullet list
+const DESC_BULLET_SIDE_PAD_PX: f32 = 7.5;    // left/right padding for bullet text
+const DESC_BULLET_INDENT_PX: f32 = 10.0;      // extra indent for bullet marker + text
+const DESC_TITLE_ZOOM: f32 = 1.0;            // title text zoom (roughly header-sized)
+const DESC_BODY_ZOOM: f32 = 1.0;             // body/bullet text zoom (similar to help text)
 
 pub const ITEMS: &[Item] = &[
     // Top-level ScreenOptionsService rows, ordered to match Simply Love's LineNames.
@@ -94,19 +96,51 @@ pub const ITEMS: &[Item] = &[
     },
     Item {
         name: "Input Options",
-        help: &["Adjust input options such as joystick automapping, dedicated menu buttons, and input debounce."],
+        help: &[
+            "Adjust input options such as joystick automapping, dedicated menu buttons, and input debounce.",
+            "AutoMap",
+            "OnlyDedicatedMenu",
+            "OptionsNav",
+            "Debounce",
+            "Three Button Navigation",
+            "AxisFix",
+        ],
     },
     Item {
         name: "Graphics/Sound Options",
-        help: &["Change screen aspect ratio, resolution, graphics quality, and miscellaneous sound options."],
+        help: &[
+            "Change screen aspect ratio, resolution, graphics quality, and miscellaneous sound options.",
+            "Video Renderer",
+            "DisplayMode",
+            "DisplayAspectRatio",
+            "DisplayResolution",
+            "RefreshRate",
+            "FullscreenType",
+            "...",
+        ],
     },
     Item {
         name: "Visual Options",
-        help: &["Change the way lyrics, backgrounds, etc. are displayed during gameplay; adjust overscan."],
+        help: &[
+            "Change the way lyrics, backgrounds, etc. are displayed during gameplay; adjust overscan.",
+            "Appearance Options",
+            "Set Background Fit",
+            "Overscan Adjustment",
+            "CRT Test Patterns",
+        ],
     },
     Item {
         name: "Arcade Options",
-        help: &["Change options typically associated with arcade games."],
+        help: &[
+            "Change options typically associated with arcade games.",
+            "Event",
+            "Coin",
+            "Coins Per Credit",
+            "Maximum Credits",
+            "Reset Coins At Startup",
+            "Premium",
+            "...",
+        ],
     },
     Item {
         name: "View Bookkeeping Data",
@@ -114,15 +148,41 @@ pub const ITEMS: &[Item] = &[
     },
     Item {
         name: "Advanced Options",
-        help: &["Adjust advanced settings for difficulty scaling, default fail type, song deletion, and more."],
+        help: &[
+            "Adjust advanced settings for difficulty scaling, default fail type, song deletion, and more.",
+            "DefaultFailType",
+            "TimingWindowScale",
+            "LifeDifficulty",
+            "HiddenSongs",
+            "EasterEggs",
+            "AllowExtraStage",
+            "...",
+        ],
     },
     Item {
         name: "MenuTimer Options",
-        help: &["Turn the MenuTimer On or Off and set the MenuTimer values for various screens."],
+        help: &[
+            "Turn the MenuTimer On or Off and set the MenuTimer values for various screens.",
+            "MenuTimer",
+            "GrooveStats Login",
+            "Select Music",
+            "Select Music Casual Mode",
+            "Player Options",
+            "Evaluation",
+            "...",
+        ],
     },
     Item {
         name: "USB Profile Options",
-        help: &["Adjust settings related to USB Profiles, including loading custom songs from USB sticks."],
+        help: &[
+            "Adjust settings related to USB Profiles, including loading custom songs from USB sticks.",
+            "USB Profiles",
+            "CustomSongs",
+            "Max Songs per USB",
+            "Song Load Timeout",
+            "Song Duration Limit",
+            "Song File Size Limit",
+        ],
     },
     Item {
         name: "Manage Local Profiles",
@@ -130,15 +190,36 @@ pub const ITEMS: &[Item] = &[
     },
     Item {
         name: "Simply Love Options",
-        help: &["Adjust settings that only apply to this Simply Love theme."],
+        help: &[
+            "Adjust settings that only apply to this Simply Love theme.",
+            "Visual Style",
+            "Rainbow Mode",
+            "MusicWheel Scroll Speed",
+            "MusicWheel Style",
+            "Preferred Style",
+            "Default Game Mode",
+            "...",
+        ],
     },
     Item {
         name: "Tournament Mode Options",
-        help: &["Adjust settings to enforce for consistency during tournament play."],
+        help: &[
+            "Adjust settings to enforce for consistency during tournament play.",
+            "Enable Tournament Mode",
+            "Scoring System",
+            "Step Stats",
+            "Enforce No Cmod",
+        ],
     },
     Item {
         name: "GrooveStats Options",
-        help: &["Manage GrooveStats settings."],
+        help: &[
+            "Manage GrooveStats settings.",
+            "Enable GrooveStats",
+            "Auto-Download Unlocks",
+            "Separate Unlocks By Player",
+            "Display GrooveStats QR Login",
+        ],
     },
     Item {
         name: "StepMania Credits",
@@ -354,7 +435,7 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
     }
 }
 
-pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
+pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier: f32) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(320);
 
     /* -------------------------- HEART BACKGROUND -------------------------- */
@@ -524,87 +605,126 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let item = &ITEMS[sel];
 
     // Match Simply Love's description box feel:
-    // - inner padding and line width derived from DESC_PADDING_PX
+    // - explicit top/side padding for title and bullets so they can be tuned
     // - text zoom similar to other help text (player options, etc.)
-    let desc_pad = DESC_PADDING_PX * s;
-    let mut cursor_y = list_y + desc_pad;
+    let mut cursor_y = list_y + DESC_TITLE_TOP_PAD_PX * s;
+    let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
     let title_step_px = 20.0 * s; // approximate vertical advance for title line
 
     // Title/explanation text:
-    // - For System Options, use the first help line as the long explanation, with the
-    //   remaining lines rendered as the bullet list (Game, Theme, Language, ...).
-    // - For items with a single help line, use that as the explanation.
+    // - For any item with help lines, use the first help line as the long explanation,
+    //   with remaining lines rendered as the bullet list (if any).
     // - Fallback to the item name if there is no help text.
     let help = item.help;
-    let is_system_options = item.name == "System Options";
+    let (raw_title_text, bullet_lines): (&str, &[&str]) =
+        if help.is_empty() {
+            (item.name, &[][..])
+        } else {
+            (help[0], &help[1..])
+        };
 
-    let (raw_title_text, bullet_lines): (&str, &[&str]) = if is_system_options && !help.is_empty() {
-        (help[0], &help[1..])
-    } else if help.len() == 1 {
-        (help[0], &[][..])
-    } else if help.is_empty() {
-        (item.name, &[][..])
-    } else {
-        (item.name, help)
-    };
+    // Word-wrapping using actual font metrics so the title respects the
+    // description box's inner width and padding exactly.
+    let wrapped_title = asset_manager
+        .with_fonts(|all_fonts| {
+            asset_manager.with_font("miso", |miso_font| {
+                let max_width_px = (DESC_W * s) - 2.0 * DESC_TITLE_SIDE_PAD_PX * s;
+                let mut out = String::new();
+                let mut is_first_output_line = true;
 
-    // Simple word-wrapping by character count so longer explanations don't shrink:
-    // we break lines when adding a word would exceed DESC_CHARS_PER_LINE.
-    let mut wrapped_title = String::new();
-    for (seg_idx, segment) in raw_title_text.split('\n').enumerate() {
-        if seg_idx > 0 {
-            wrapped_title.push('\n');
-        }
-        let trimmed = segment.trim_end();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let mut line_len = 0usize;
-        let mut first_word = true;
-        for word in trimmed.split_whitespace() {
-            let w_len = word.chars().count();
-            if first_word {
-                wrapped_title.push_str(word);
-                line_len = w_len;
-                first_word = false;
-            } else if line_len + 1 + w_len <= DESC_CHARS_PER_LINE {
-                wrapped_title.push(' ');
-                wrapped_title.push_str(word);
-                line_len += 1 + w_len;
-            } else {
-                wrapped_title.push('\n');
-                wrapped_title.push_str(word);
-                line_len = w_len;
-            }
-        }
-    }
+                for segment in raw_title_text.split('\n') {
+                    let trimmed = segment.trim_end();
+                    if trimmed.is_empty() {
+                        // Preserve explicit blank lines (e.g. \"\\n\\n\" in help text)
+                        // as an empty row between wrapped paragraphs.
+                        if !is_first_output_line {
+                            out.push('\n');
+                        }
+                        continue;
+                    }
+
+                    let mut current_line = String::new();
+                    for word in trimmed.split_whitespace() {
+                        let candidate = if current_line.is_empty() {
+                            word.to_owned()
+                        } else {
+                            let mut tmp = current_line.clone();
+                            tmp.push(' ');
+                            tmp.push_str(word);
+                            tmp
+                        };
+
+                        let logical_w =
+                            font::measure_line_width_logical(miso_font, &candidate, all_fonts) as f32;
+                        let pixel_w = logical_w * DESC_TITLE_ZOOM * s;
+
+                        if !current_line.is_empty() && pixel_w > max_width_px {
+                            if !is_first_output_line {
+                                out.push('\n');
+                            }
+                            out.push_str(&current_line);
+                            is_first_output_line = false;
+                            current_line.clear();
+                            current_line.push_str(word);
+                        } else {
+                            current_line = candidate;
+                        }
+                    }
+
+                    if !current_line.is_empty() {
+                        if !is_first_output_line {
+                            out.push('\n');
+                        }
+                        out.push_str(&current_line);
+                        is_first_output_line = false;
+                    }
+                }
+
+                if out.is_empty() {
+                    raw_title_text.to_string()
+                } else {
+                    out
+                }
+            })
+        })
+        .unwrap_or_else(|| raw_title_text.to_string());
     let title_lines = wrapped_title.lines().count().max(1) as f32;
 
     // Draw the wrapped explanation/title text.
     ui_actors.push(act!(text:
         align(0.0, 0.0):
-        xy(desc_x + desc_pad, cursor_y):
+        xy(desc_x + title_side_pad, cursor_y):
         zoom(DESC_TITLE_ZOOM):
         diffuse(1.0, 1.0, 1.0, 1.0):
         font("miso"): settext(wrapped_title):
         horizalign(left)
     ));
-    cursor_y += title_step_px * title_lines + DESC_TITLE_GAP_PX * s;
+    cursor_y += title_step_px * title_lines + DESC_BULLET_TOP_PAD_PX * s;
 
     // Optional bullet list (e.g. System Options: Game / Theme / Language / ...).
     if !bullet_lines.is_empty() {
         let mut bullet_text = String::new();
-        // Add a leading blank line between the explanation and bullets.
-        bullet_text.push('\n');
-        for (i, line) in bullet_lines.iter().enumerate() {
-            if i > 0 {
+        let mut first = true;
+        for line in bullet_lines {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if !first {
                 bullet_text.push('\n');
             }
-            bullet_text.push('•');
-            bullet_text.push(' ');
-            bullet_text.push_str(line);
+            // Ellipsis lines ("...") should not have a bullet to match Simply Love.
+            if trimmed == "..." {
+                bullet_text.push_str("...");
+            } else {
+                bullet_text.push('•');
+                bullet_text.push(' ');
+                bullet_text.push_str(line);
+            }
+            first = false;
         }
-        let bullet_x = desc_x + desc_pad + DESC_BULLET_INDENT_PX * s;
+        let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
+        let bullet_x = desc_x + bullet_side_pad + DESC_BULLET_INDENT_PX * s;
         ui_actors.push(act!(text:
             align(0.0, 0.0):
             xy(bullet_x, cursor_y):
