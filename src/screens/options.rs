@@ -798,12 +798,14 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier: f32) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(320);
+    let is_fading_submenu = !matches!(state.submenu_transition, SubmenuTransition::None);
 
     /* -------------------------- HEART BACKGROUND -------------------------- */
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index, // <-- CHANGED
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: state.content_alpha,
+        // Only participate in global screen fades (alpha_multiplier), not local submenu fades.
+        alpha_mul: alpha_multiplier,
     }));
 
     if alpha_multiplier <= 0.0 {
@@ -1207,7 +1209,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                         }
 
                         // Encircling cursor ring around the active option when this row is active.
-                        if is_active && !widths.is_empty() {
+                        // During submenu fades, hide the ring to avoid exposing its construction.
+                        if is_active && !widths.is_empty() && !is_fading_submenu {
                             let sel_idx = selected_choice.min(widths.len().saturating_sub(1));
                             if let Some(target_left_x) = x_positions.get(sel_idx).copied() {
                                 let draw_w = widths.get(sel_idx).copied().unwrap_or(40.0);
@@ -1344,7 +1347,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                     ));
 
                     // Draw the selection cursor ring for the Exit row when active.
-                    if is_active {
+                    // During submenu fades, hide the ring to avoid exposing its construction.
+                    if is_active && !is_fading_submenu {
                         asset_manager.with_fonts(|all_fonts| {
                             asset_manager.with_font("miso", |metrics_font| {
                                 let mut text_w =
