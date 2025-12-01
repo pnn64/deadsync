@@ -971,7 +971,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
         }
         OptionsView::SystemSubmenu => {
             // Active text color for submenu rows.
-            let col_active_text = color::simply_love_rgba(state.active_color_index + state.sub_selected as i32);
+            let col_active_text = color::simply_love_rgba(state.active_color_index);
 
             let total_rows = SYSTEM_OPTIONS_ROWS.len() + 1; // + Exit row
             let anchor_row: usize = 4;
@@ -1080,14 +1080,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
 
                         for (idx, choice) in choices.iter().enumerate() {
                             let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
-                            let is_choice_selected = idx == selected_choice;
-                            let choice_color = if is_active {
-                                if is_choice_selected { col_white } else { col_white }
-                            } else if is_choice_selected {
-                                col_white
-                            } else {
-                                sl_gray
-                            };
+                            let choice_color = if is_active { col_white } else { sl_gray };
 
                             ui_actors.push(act!(text:
                                 align(0.0, 0.5):
@@ -1098,6 +1091,30 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                                 settext(*choice):
                                 horizalign(left)
                             ));
+                        }
+
+                        // Underline the selected option when this row is active or inactive,
+                        // matching the inline underline behavior from player_options.rs.
+                        if let Some(sel_x) = x_positions.get(selected_choice).copied() {
+                            let draw_w = widths.get(selected_choice).copied().unwrap_or(40.0);
+                            asset_manager.with_fonts(|_all_fonts| {
+                                asset_manager.with_font("miso", |metrics_font| {
+                                    let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
+                                    let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                                    let underline_w = draw_w.ceil();
+                                    let offset = widescale(3.0, 4.0);
+                                    let underline_y = row_mid_y + text_h * 0.5 + offset;
+                                    let mut line_color = color::decorative_rgba(state.active_color_index);
+                                    line_color[3] = 1.0;
+                                    ui_actors.push(act!(quad:
+                                        align(0.0, 0.5):
+                                        xy(sel_x, underline_y):
+                                        zoomto(underline_w, line_thickness):
+                                        diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                        z(101)
+                                    ));
+                                });
+                            });
                         }
 
                         // Encircling cursor ring around the active option when this row is active.
