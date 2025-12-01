@@ -985,6 +985,95 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
             let label_bg_w = 127.0 * s;
             let label_text_x = list_x + 7.0 * s;
 
+            // Helper to compute the cursor center X for a given submenu row index.
+            let calc_row_center_x = |row_idx: usize| -> f32 {
+                if row_idx >= total_rows {
+                    return list_x + list_w * 0.5;
+                }
+                if row_idx >= SYSTEM_OPTIONS_ROWS.len() {
+                    // Exit row is centered in the items column.
+                    return list_x + list_w * 0.5;
+                }
+                let choices = SYSTEM_OPTIONS_ROWS[row_idx].choices;
+                if choices.is_empty() {
+                    return list_x + list_w * 0.5;
+                }
+                let value_zoom = 0.835_f32;
+                let choice_inner_left = list_x + label_bg_w + 16.0 * s;
+                let mut widths: Vec<f32> = Vec::with_capacity(choices.len());
+                asset_manager.with_fonts(|all_fonts| {
+                    asset_manager.with_font("miso", |metrics_font| {
+                        for text in choices {
+                            let mut w =
+                                font::measure_line_width_logical(metrics_font, text, all_fonts)
+                                    as f32;
+                            if !w.is_finite() || w <= 0.0 {
+                                w = 1.0;
+                            }
+                            widths.push(w * value_zoom);
+                        }
+                    });
+                });
+                if widths.is_empty() {
+                    return list_x + list_w * 0.5;
+                }
+                let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
+                let mut x = choice_inner_left;
+                for w in &widths {
+                    x_positions.push(x);
+                    x += *w + INLINE_SPACING;
+                }
+                let sel_idx = state
+                    .sub_choice_indices
+                    .get(row_idx)
+                    .copied()
+                    .unwrap_or(0)
+                    .min(widths.len().saturating_sub(1));
+                x_positions[sel_idx] + widths[sel_idx] * 0.5
+            };
+
+            // Helper to compute draw_w/draw_h (text box) for the selected item of a submenu row.
+            let calc_row_dims = |row_idx: usize| -> (f32, f32) {
+                let value_zoom = 0.835_f32;
+                let mut out_w = 40.0_f32;
+                let mut out_h = 16.0_f32;
+                asset_manager.with_fonts(|all_fonts| {
+                    asset_manager.with_font("miso", |metrics_font| {
+                        out_h = (metrics_font.height as f32).max(1.0) * value_zoom;
+                        if row_idx >= SYSTEM_OPTIONS_ROWS.len() {
+                            // Exit row
+                            let text = "Exit";
+                            let mut w =
+                                font::measure_line_width_logical(metrics_font, text, all_fonts)
+                                    as f32;
+                            if !w.is_finite() || w <= 0.0 {
+                                w = 1.0;
+                            }
+                            out_w = w * value_zoom;
+                        } else {
+                            let choices = SYSTEM_OPTIONS_ROWS[row_idx].choices;
+                            if choices.is_empty() {
+                                return;
+                            }
+                            let sel_idx = state
+                                .sub_choice_indices
+                                .get(row_idx)
+                                .copied()
+                                .unwrap_or(0)
+                                .min(choices.len().saturating_sub(1));
+                            let mut w =
+                                font::measure_line_width_logical(metrics_font, choices[sel_idx], all_fonts)
+                                    as f32;
+                            if !w.is_finite() || w <= 0.0 {
+                                w = 1.0;
+                            }
+                            out_w = w * value_zoom;
+                        }
+                    });
+                });
+                (out_w, out_h)
+            };
+
             for i_vis in 0..VISIBLE_ROWS {
                 let row_idx = offset_rows + i_vis;
                 if row_idx >= total_rows {
@@ -1141,16 +1230,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                                         let mut ring_w = draw_w + pad_x_to * 2.0;
                                         let mut ring_h = text_h + pad_y * 2.0;
 
+                                        // Determine animated center X when tweening, otherwise snap to target.
                                         let mut center_x = target_left_x + draw_w * 0.5;
+                                        // Vertical tween for row transitions
                                         let mut center_y = row_mid_y;
-
-                                        // Vertical tween between rows.
                                         if state.cursor_row_anim_t < 1.0 {
                                             let t = ease_out_cubic(state.cursor_row_anim_t);
+                                            if let Some(from_row) = state.cursor_row_anim_from_row {
+                                                let from_x = calc_row_center_x(from_row);
+                                                center_x = from_x + (center_x - from_x) * t;
+                                            }
                                             center_y = state.cursor_row_anim_from_y
                                                 + (row_mid_y - state.cursor_row_anim_from_y) * t;
                                         }
-
                                         // Horizontal tween between choices within a row.
                                         if let Some(anim_row) = state.cursor_anim_row
                                             && anim_row == row_idx && state.cursor_anim_t < 1.0 {
@@ -1171,6 +1263,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                                                 if pad_x_from > max_pad_by_spacing { pad_x_from = max_pad_by_spacing; }
                                                 let ring_w_from = from_draw_w + pad_x_from * 2.0;
                                                 let ring_h_from = text_h + pad_y * 2.0;
+                                                ring_w = ring_w_from + (ring_w - ring_w_from) * t;
+                                                ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                                            }
+                                        // If not horizontally tweening, but vertically tweening rows, interpolate size
+                                        if state.cursor_row_anim_t < 1.0
+                                            && (state.cursor_anim_row.is_none()
+                                                || state.cursor_anim_row != Some(row_idx))
+                                            && let Some(from_row) = state.cursor_row_anim_from_row {
+                                                let (from_dw, from_dh) = calc_row_dims(from_row);
+                                                let mut size_t_from = from_dw / width_ref;
+                                                if !size_t_from.is_finite() { size_t_from = 0.0; }
+                                                if size_t_from < 0.0 { size_t_from = 0.0; }
+                                                if size_t_from > 1.0 { size_t_from = 1.0; }
+                                                let mut pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                                let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
+                                                if pad_x_from > max_pad_by_spacing { pad_x_from = max_pad_by_spacing; }
+                                                let ring_w_from = from_dw + pad_x_from * 2.0;
+                                                let ring_h_from = from_dh + pad_y * 2.0;
+                                                let t = ease_out_cubic(state.cursor_row_anim_t);
                                                 ring_w = ring_w_from + (ring_w - ring_w_from) * t;
                                                 ring_h = ring_h_from + (ring_h - ring_h_from) * t;
                                             }
@@ -1219,17 +1330,140 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                     let label = "Exit";
                     let value_zoom = 0.835_f32;
                     let choice_color = if is_active { col_white } else { col_white };
-                    let center_x = list_x + list_w * 0.5;
+                    let mut center_x = list_x + list_w * 0.5;
+                    let mut center_y = row_mid_y;
 
                     ui_actors.push(act!(text:
                         align(0.5, 0.5):
-                        xy(center_x, row_mid_y):
+                        xy(center_x, center_y):
                         zoom(value_zoom):
                         diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                         font("miso"):
                         settext(label):
                         horizalign(center)
                     ));
+
+                    // Draw the selection cursor ring for the Exit row when active.
+                    if is_active {
+                        asset_manager.with_fonts(|all_fonts| {
+                            asset_manager.with_font("miso", |metrics_font| {
+                                let mut text_w =
+                                    font::measure_line_width_logical(metrics_font, label, all_fonts) as f32;
+                                if !text_w.is_finite() || text_w <= 0.0 {
+                                    text_w = 1.0;
+                                }
+                                let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
+                                let draw_w = text_w * value_zoom;
+                                let draw_h = text_h;
+
+                                let pad_y = widescale(6.0, 8.0);
+                                let min_pad_x = widescale(2.0, 3.0);
+                                let max_pad_x = widescale(22.0, 28.0);
+                                let width_ref = widescale(180.0, 220.0);
+                                let mut size_t = draw_w / width_ref;
+                                if !size_t.is_finite() {
+                                    size_t = 0.0;
+                                }
+                                if size_t < 0.0 {
+                                    size_t = 0.0;
+                                }
+                                if size_t > 1.0 {
+                                    size_t = 1.0;
+                                }
+                                let mut pad_x = min_pad_x + (max_pad_x - min_pad_x) * size_t;
+                                let border_w = widescale(2.0, 2.5);
+                                let max_pad_by_spacing =
+                                    (INLINE_SPACING - border_w).max(min_pad_x);
+                                if pad_x > max_pad_by_spacing {
+                                    pad_x = max_pad_by_spacing;
+                                }
+                                let mut ring_w = draw_w + pad_x * 2.0;
+                                let mut ring_h = draw_h + pad_y * 2.0;
+
+                                // Vertical tween for row transitions (and horizontal tween between rows).
+                                if state.cursor_row_anim_t < 1.0 {
+                                    let t = ease_out_cubic(state.cursor_row_anim_t);
+                                    if let Some(from_row) = state.cursor_row_anim_from_row {
+                                        // Interpolate X from previous row's cursor center to Exit center.
+                                        let from_x = calc_row_center_x(from_row);
+                                        center_x = from_x + (center_x - from_x) * t;
+                                    }
+                                    center_y = state.cursor_row_anim_from_y
+                                        + (row_mid_y - state.cursor_row_anim_from_y) * t;
+
+                                    // Interpolate ring size from previous row to Exit row.
+                                    if let Some(from_row) = state.cursor_row_anim_from_row {
+                                        let from_idx = from_row.min(total_rows.saturating_sub(2));
+                                        if from_idx < SYSTEM_OPTIONS_ROWS.len() {
+                                            // Approximate previous row dims by reusing current draw_w/draw_h.
+                                            let from_draw_w = draw_w;
+                                            let mut size_t_from = from_draw_w / width_ref;
+                                            if !size_t_from.is_finite() {
+                                                size_t_from = 0.0;
+                                            }
+                                            if size_t_from < 0.0 {
+                                                size_t_from = 0.0;
+                                            }
+                                            if size_t_from > 1.0 {
+                                                size_t_from = 1.0;
+                                            }
+                                            let mut pad_x_from =
+                                                min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                            let max_pad_by_spacing =
+                                                (INLINE_SPACING - border_w).max(min_pad_x);
+                                            if pad_x_from > max_pad_by_spacing {
+                                                pad_x_from = max_pad_by_spacing;
+                                            }
+                                            let ring_w_from = from_draw_w + pad_x_from * 2.0;
+                                            let ring_h_from = draw_h + pad_y * 2.0;
+                                            let tsize = ease_out_cubic(state.cursor_row_anim_t);
+                                            ring_w =
+                                                ring_w_from + (ring_w - ring_w_from) * tsize;
+                                            ring_h =
+                                                ring_h_from + (ring_h - ring_h_from) * tsize;
+                                        }
+                                    }
+                                }
+
+                                let left = center_x - ring_w * 0.5;
+                                let right = center_x + ring_w * 0.5;
+                                let top = center_y - ring_h * 0.5;
+                                let bottom = center_y + ring_h * 0.5;
+                                let mut ring_color =
+                                    color::decorative_rgba(state.active_color_index);
+                                ring_color[3] = 1.0;
+
+                                ui_actors.push(act!(quad:
+                                    align(0.5, 0.5):
+                                    xy((left + right) * 0.5, top + border_w * 0.5):
+                                    zoomto(ring_w, border_w):
+                                    diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                    z(101)
+                                ));
+                                ui_actors.push(act!(quad:
+                                    align(0.5, 0.5):
+                                    xy((left + right) * 0.5, bottom - border_w * 0.5):
+                                    zoomto(ring_w, border_w):
+                                    diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                    z(101)
+                                ));
+                                ui_actors.push(act!(quad:
+                                    align(0.5, 0.5):
+                                    xy(left + border_w * 0.5, (top + bottom) * 0.5):
+                                    zoomto(border_w, ring_h):
+                                    diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                    z(101)
+                                ));
+                                ui_actors.push(act!(quad:
+                                    align(0.5, 0.5):
+                                    xy(right - border_w * 0.5, (top + bottom) * 0.5):
+                                    zoomto(border_w, ring_h):
+                                    diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                    z(101)
+                                ));
+                            });
+                        });
+                    }
                 }
             }
 
