@@ -22,6 +22,19 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(300);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
 
+/* ----------------------------- cursor tweening ----------------------------- */
+// Match Simply Love's CursorTweenSeconds for OptionRow cursor movement
+const CURSOR_TWEEN_SECONDS: f32 = 0.1;
+// Spacing between inline items in OptionRows (pixels at current zoom)
+const INLINE_SPACING: f32 = 15.75;
+
+#[inline(always)]
+fn ease_out_cubic(t: f32) -> f32 {
+    let clamped = if t < 0.0 { 0.0 } else if t > 1.0 { 1.0 } else { t };
+    let u = 1.0 - clamped;
+    1.0 - u * u * u
+}
+
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
 /// Bars in `screen_bar.rs` use 32.0 px height.
@@ -238,11 +251,71 @@ pub const ITEMS: &[Item] = &[
         help: &["Return to the main menu."],
     },
 ];
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NavDirection {
     Up,
     Down,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OptionsView {
+    Main,
+    SystemSubmenu,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SubmenuTransition {
+    None,
+    FadeOutToSubmenu,
+    FadeInSubmenu,
+    FadeOutToMain,
+    FadeInMain,
+}
+
+// Local fade timing when swapping between main options list and System Options submenu.
+const SUBMENU_FADE_DURATION: f32 = 0.2;
+
+pub struct SubRow<'a> {
+    pub label: &'a str,
+    pub choices: &'a [&'a str],
+}
+
+// Placeholder System Options submenu rows for parity scaffolding.
+pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: "Option Label 1",
+        choices: &["Off", "On"],
+    },
+    SubRow {
+        label: "Option Label 2",
+        choices: &["Off", "On"],
+    },
+    SubRow {
+        label: "Option Label 3",
+        choices: &["Off", "On"],
+    },
+];
+
+// Description metadata for the System Options submenu (mirrors Item model).
+pub const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: "Option Label 1",
+        help: &["description for option goes here."],
+    },
+    Item {
+        name: "Option Label 2",
+        help: &["description for option goes here."],
+    },
+    Item {
+        name: "Option Label 3",
+        help: &["description for option goes here."],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
 
 pub struct State {
     pub selected: usize,
@@ -252,6 +325,23 @@ pub struct State {
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     nav_key_last_scrolled_at: Option<Instant>,
+    view: OptionsView,
+    submenu_transition: SubmenuTransition,
+    submenu_fade_t: f32,
+    content_alpha: f32,
+    // System Options submenu state
+    sub_selected: usize,
+    sub_prev_selected: usize,
+    sub_choice_indices: [usize; 3],
+    // Inline option cursor tween (left/right between items)
+    cursor_anim_row: Option<usize>,
+    cursor_anim_from_choice: usize,
+    cursor_anim_to_choice: usize,
+    cursor_anim_t: f32,
+    // Vertical tween when changing selected row
+    cursor_row_anim_from_y: f32,
+    cursor_row_anim_t: f32,
+    cursor_row_anim_from_row: Option<usize>,
 }
 
 pub fn init() -> State {
@@ -264,6 +354,20 @@ pub fn init() -> State {
         nav_key_held_direction: None,
         nav_key_held_since: None,
         nav_key_last_scrolled_at: None,
+        submenu_transition: SubmenuTransition::None,
+        submenu_fade_t: 0.0,
+        content_alpha: 1.0,
+        view: OptionsView::Main,
+        sub_selected: 0,
+        sub_prev_selected: 0,
+        sub_choice_indices: [0; 3],
+        cursor_anim_row: None,
+        cursor_anim_from_choice: 0,
+        cursor_anim_to_choice: 0,
+        cursor_anim_t: 1.0,
+        cursor_row_anim_from_y: 0.0,
+        cursor_row_anim_t: 1.0,
+        cursor_row_anim_from_row: None,
     }
 }
 
@@ -294,31 +398,178 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
-pub fn update(state: &mut State, _dt: f32) {
+pub fn update(state: &mut State, dt: f32) {
+    // ------------------------- local submenu fade ------------------------- //
+    match state.submenu_transition {
+        SubmenuTransition::None => {
+            state.content_alpha = 1.0;
+        }
+        SubmenuTransition::FadeOutToSubmenu => {
+            let step = if SUBMENU_FADE_DURATION > 0.0 {
+                dt / SUBMENU_FADE_DURATION
+            } else {
+                1.0
+            };
+            state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
+            state.content_alpha = 1.0 - state.submenu_fade_t;
+            if state.submenu_fade_t >= 1.0 {
+                // Switch view to the System Options submenu, then fade it in.
+                state.view = OptionsView::SystemSubmenu;
+                state.sub_selected = 0;
+                state.sub_prev_selected = 0;
+                state.cursor_anim_row = None;
+                state.cursor_anim_t = 1.0;
+                state.cursor_row_anim_t = 1.0;
+                state.cursor_row_anim_from_row = None;
+                state.nav_key_held_direction = None;
+                state.nav_key_held_since = None;
+                state.nav_key_last_scrolled_at = None;
+                state.submenu_transition = SubmenuTransition::FadeInSubmenu;
+                state.submenu_fade_t = 0.0;
+                state.content_alpha = 0.0;
+            }
+        }
+        SubmenuTransition::FadeInSubmenu => {
+            let step = if SUBMENU_FADE_DURATION > 0.0 {
+                dt / SUBMENU_FADE_DURATION
+            } else {
+                1.0
+            };
+            state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
+            state.content_alpha = state.submenu_fade_t;
+            if state.submenu_fade_t >= 1.0 {
+                state.submenu_transition = SubmenuTransition::None;
+                state.submenu_fade_t = 0.0;
+                state.content_alpha = 1.0;
+            }
+        }
+        SubmenuTransition::FadeOutToMain => {
+            let step = if SUBMENU_FADE_DURATION > 0.0 {
+                dt / SUBMENU_FADE_DURATION
+            } else {
+                1.0
+            };
+            state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
+            state.content_alpha = 1.0 - state.submenu_fade_t;
+            if state.submenu_fade_t >= 1.0 {
+                // Return to the main options list and fade it in.
+                state.view = OptionsView::Main;
+                state.cursor_anim_row = None;
+                state.cursor_anim_t = 1.0;
+                state.cursor_row_anim_t = 1.0;
+                state.cursor_row_anim_from_row = None;
+                state.nav_key_held_direction = None;
+                state.nav_key_held_since = None;
+                state.nav_key_last_scrolled_at = None;
+                state.submenu_transition = SubmenuTransition::FadeInMain;
+                state.submenu_fade_t = 0.0;
+                state.content_alpha = 0.0;
+            }
+        }
+        SubmenuTransition::FadeInMain => {
+            let step = if SUBMENU_FADE_DURATION > 0.0 {
+                dt / SUBMENU_FADE_DURATION
+            } else {
+                1.0
+            };
+            state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
+            state.content_alpha = state.submenu_fade_t;
+            if state.submenu_fade_t >= 1.0 {
+                state.submenu_transition = SubmenuTransition::None;
+                state.submenu_fade_t = 0.0;
+                state.content_alpha = 1.0;
+            }
+        }
+    }
+
+    // While fading, freeze hold-to-scroll to avoid odd jumps.
+    if !matches!(state.submenu_transition, SubmenuTransition::None) {
+        return;
+    }
+
     if let (Some(direction), Some(held_since), Some(last_scrolled_at)) =
         (state.nav_key_held_direction, state.nav_key_held_since, state.nav_key_last_scrolled_at)
     {
         let now = Instant::now();
         if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
             && now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL {
-                let total = ITEMS.len();
-                if total > 0 {
-                    match direction {
-                        NavDirection::Up => {
-                            state.selected = if state.selected == 0 { total - 1 } else { state.selected - 1 };
-                        }
-                        NavDirection::Down => {
-                            state.selected = (state.selected + 1) % total;
+                match state.view {
+                    OptionsView::Main => {
+                        let total = ITEMS.len();
+                        if total > 0 {
+                            match direction {
+                                NavDirection::Up => {
+                                    state.selected = if state.selected == 0 { total - 1 } else { state.selected - 1 };
+                                }
+                                NavDirection::Down => {
+                                    state.selected = (state.selected + 1) % total;
+                                }
+                            }
+                            state.nav_key_last_scrolled_at = Some(now);
                         }
                     }
-                    state.nav_key_last_scrolled_at = Some(now);
+                    OptionsView::SystemSubmenu => {
+                        let total = SYSTEM_OPTIONS_ROWS.len() + 1; // + Exit row
+                        if total > 0 {
+                            match direction {
+                                NavDirection::Up => {
+                                    state.sub_selected = if state.sub_selected == 0 { total - 1 } else { state.sub_selected - 1 };
+                                }
+                                NavDirection::Down => {
+                                    state.sub_selected = (state.sub_selected + 1) % total;
+                                }
+                            }
+                            state.nav_key_last_scrolled_at = Some(now);
+                        }
+                    }
                 }
             }
     }
 
-    if state.selected != state.prev_selected {
-        audio::play_sfx("assets/sounds/change.ogg");
-        state.prev_selected = state.selected;
+    match state.view {
+        OptionsView::Main => {
+            if state.selected != state.prev_selected {
+                audio::play_sfx("assets/sounds/change.ogg");
+                state.prev_selected = state.selected;
+            }
+        }
+        OptionsView::SystemSubmenu => {
+            if state.sub_selected != state.sub_prev_selected {
+                audio::play_sfx("assets/sounds/change.ogg");
+
+                // Start a simple vertical cursor tween between rows in the submenu.
+                let (s, _, list_y) = scaled_block_origin_with_margins();
+                let prev_idx = state.sub_prev_selected;
+                let from_y = list_y + (prev_idx as f32) * (ROW_H + ROW_GAP) * s;
+                state.cursor_row_anim_from_y = from_y + 0.5 * ROW_H * s;
+                state.cursor_row_anim_t = 0.0;
+                state.cursor_row_anim_from_row = Some(prev_idx);
+
+                state.sub_prev_selected = state.sub_selected;
+            }
+        }
+    }
+
+    // Advance cursor tween, if any (submenu only).
+    if state.cursor_anim_row.is_some() && state.cursor_anim_t < 1.0 {
+        if CURSOR_TWEEN_SECONDS > 0.0 {
+            state.cursor_anim_t = (state.cursor_anim_t + dt / CURSOR_TWEEN_SECONDS).min(1.0);
+        } else {
+            state.cursor_anim_t = 1.0;
+        }
+        if state.cursor_anim_t >= 1.0 {
+            state.cursor_anim_row = None;
+        }
+    }
+    if state.cursor_row_anim_t < 1.0 {
+        if CURSOR_TWEEN_SECONDS > 0.0 {
+            state.cursor_row_anim_t = (state.cursor_row_anim_t + dt / CURSOR_TWEEN_SECONDS).min(1.0);
+        } else {
+            state.cursor_row_anim_t = 1.0;
+        }
+        if state.cursor_row_anim_t >= 1.0 {
+            state.cursor_row_anim_from_row = None;
+        }
     }
 }
 
@@ -337,14 +588,80 @@ pub fn on_nav_release(state: &mut State, dir: NavDirection) {
     }
 }
 
+fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
+    if !matches!(state.submenu_transition, SubmenuTransition::None) {
+        return;
+    }
+    if state.view != OptionsView::SystemSubmenu {
+        return;
+    }
+    let rows_len = SYSTEM_OPTIONS_ROWS.len();
+    if rows_len == 0 {
+        return;
+    }
+    let row_index = state.sub_selected;
+    if row_index >= rows_len {
+        // Exit row – no choices to change.
+        return;
+    }
+
+    let choice_index = state.sub_choice_indices[row_index];
+    let num_choices = SYSTEM_OPTIONS_ROWS[row_index].choices.len();
+    if num_choices == 0 {
+        return;
+    }
+    let cur = choice_index as isize;
+    let n = num_choices as isize;
+    let mut new_index = ((cur + delta).rem_euclid(n)) as usize;
+    if new_index >= num_choices {
+        new_index = num_choices.saturating_sub(1);
+    }
+    if new_index == choice_index {
+        return;
+    }
+
+    state.sub_choice_indices[row_index] = new_index;
+    audio::play_sfx("assets/sounds/change_value.ogg");
+
+    // Begin cursor animation for inline Off/On choices.
+    state.cursor_anim_row = Some(row_index);
+    state.cursor_anim_from_choice = choice_index;
+    state.cursor_anim_to_choice = new_index;
+    state.cursor_anim_t = 0.0;
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    // Ignore new navigation while a local submenu fade is in progress.
+    if !matches!(state.submenu_transition, SubmenuTransition::None) {
+        return ScreenAction::None;
+    }
+
     match ev.action {
-        VirtualAction::p1_back if ev.pressed => return ScreenAction::Navigate(Screen::Menu),
+        VirtualAction::p1_back if ev.pressed => {
+            match state.view {
+                OptionsView::Main => return ScreenAction::Navigate(Screen::Menu),
+                OptionsView::SystemSubmenu => {
+                    // Fade back to the main Options list.
+                    state.submenu_transition = SubmenuTransition::FadeOutToMain;
+                    state.submenu_fade_t = 0.0;
+                }
+            }
+        }
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
             if ev.pressed {
-                let total = ITEMS.len();
-                if total > 0 {
-                    state.selected = if state.selected == 0 { total - 1 } else { state.selected - 1 };
+                match state.view {
+                    OptionsView::Main => {
+                        let total = ITEMS.len();
+                        if total > 0 {
+                            state.selected = if state.selected == 0 { total - 1 } else { state.selected - 1 };
+                        }
+                    }
+                    OptionsView::SystemSubmenu => {
+                        let total = SYSTEM_OPTIONS_ROWS.len() + 1;
+                        if total > 0 {
+                            state.sub_selected = if state.sub_selected == 0 { total - 1 } else { state.sub_selected - 1 };
+                        }
+                    }
                 }
                 on_nav_press(state, NavDirection::Up);
             } else {
@@ -353,19 +670,63 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
             if ev.pressed {
-                let total = ITEMS.len();
-                if total > 0 {
-                    state.selected = (state.selected + 1) % total;
+                match state.view {
+                    OptionsView::Main => {
+                        let total = ITEMS.len();
+                        if total > 0 {
+                            state.selected = (state.selected + 1) % total;
+                        }
+                    }
+                    OptionsView::SystemSubmenu => {
+                        let total = SYSTEM_OPTIONS_ROWS.len() + 1;
+                        if total > 0 {
+                            state.sub_selected = (state.sub_selected + 1) % total;
+                        }
+                    }
                 }
                 on_nav_press(state, NavDirection::Down);
             } else {
                 on_nav_release(state, NavDirection::Down);
             }
         }
+        VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+            if ev.pressed {
+                apply_submenu_choice_delta(state, -1);
+            }
+        }
+        VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+            if ev.pressed {
+                apply_submenu_choice_delta(state, 1);
+            }
+        }
         VirtualAction::p1_start if ev.pressed => {
-            let total = ITEMS.len();
-            if total > 0 && state.selected == total - 1 {
-                return ScreenAction::Navigate(Screen::Menu);
+            match state.view {
+                OptionsView::Main => {
+                    let total = ITEMS.len();
+                    if total == 0 {
+                        return ScreenAction::None;
+                    }
+                    // Last row is Exit from the Options screen back to the main menu.
+                    if state.selected == total - 1 {
+                        return ScreenAction::Navigate(Screen::Menu);
+                    }
+                    // Enter System Options submenu when selecting the first row for now.
+                    if state.selected == 0 {
+                        state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                        state.submenu_fade_t = 0.0;
+                    }
+                }
+                OptionsView::SystemSubmenu => {
+                    let total = SYSTEM_OPTIONS_ROWS.len() + 1;
+                    if total == 0 {
+                        return ScreenAction::None;
+                    }
+                    // Exit row in the submenu: back to the main Options list.
+                    if state.sub_selected == total - 1 {
+                        state.submenu_transition = SubmenuTransition::FadeOutToMain;
+                        state.submenu_fade_t = 0.0;
+                    }
+                }
             }
         }
         _ => {}
@@ -442,7 +803,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index, // <-- CHANGED
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
+        alpha_mul: state.content_alpha,
     }));
 
     if alpha_multiplier <= 0.0 {
@@ -480,9 +841,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
     // Simply Love brand color (now uses the active theme color).
     let col_brand_bg   = color::simply_love_rgba(state.active_color_index); // <-- CHANGED
 
-    // Active text color (for normal rows) – Simply Love uses row index + global color index.
-    let col_active_text = color::simply_love_rgba(state.active_color_index + state.selected as i32);
-
     // --- scale & origin honoring fixed screen-space margins ---
     let (s, list_x, list_y) = scaled_block_origin_with_margins();
 
@@ -509,234 +867,504 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
         diffuse(col_active_bg[0], col_active_bg[1], col_active_bg[2], col_active_bg[3]) // #333333
     ));
 
-    // ---------------------------- Scrolling math ---------------------------
-    let total_items = ITEMS.len();
-    let anchor_row: usize = 4; // keep cursor near middle (5th visible row)
-    let max_offset = total_items.saturating_sub(VISIBLE_ROWS);
-    let offset_rows = if total_items <= VISIBLE_ROWS {
-        0
-    } else {
-        state.selected.saturating_sub(anchor_row).min(max_offset)
-    };
+    // -------------------------- Rows + Description -------------------------
+    let mut selected_item: Option<&Item> = None;
 
-    // Row loop (backgrounds + content). We render the visible window.
-    for i_vis in 0..VISIBLE_ROWS {
-        let item_idx = offset_rows + i_vis;
-        if item_idx >= total_items { break; }
+    match state.view {
+        OptionsView::Main => {
+            // Active text color (for normal rows) – Simply Love uses row index + global color index.
+            let col_active_text = color::simply_love_rgba(state.active_color_index + state.selected as i32);
 
-        let row_y = list_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s;
+            // ---------------------------- Scrolling math ---------------------------
+            let total_items = ITEMS.len();
+            let anchor_row: usize = 4; // keep cursor near middle (5th visible row)
+            let max_offset = total_items.saturating_sub(VISIBLE_ROWS);
+            let offset_rows = if total_items <= VISIBLE_ROWS {
+                0
+            } else {
+                state.selected.saturating_sub(anchor_row).min(max_offset)
+            };
 
-        let is_active = item_idx == state.selected;
-        let is_exit   = item_idx == total_items - 1;
+            // Row loop (backgrounds + content). We render the visible window.
+            for i_vis in 0..VISIBLE_ROWS {
+                let item_idx = offset_rows + i_vis;
+                if item_idx >= total_items { break; }
 
-        // Row background width:
-        // - Exit: always keep the 3px gap (even when active)
-        // - Normal items: inactive keeps gap; active touches the separator
-        let row_w = if is_exit {
-            list_w - sep_w
-        } else if is_active {
-            list_w
-        } else {
-            list_w - sep_w
-        };
+                let row_y = list_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s;
 
-        // Choose bg color with special case for active Exit row
-        let bg = if is_active {
-            if is_exit { col_brand_bg } else { col_active_bg }
-        } else {
-            col_inactive_bg
-        };
+                let is_active = item_idx == state.selected;
+                let is_exit   = item_idx == total_items - 1;
 
-        ui_actors.push(act!(quad:
-            align(0.0, 0.0):
-            xy(list_x, row_y):
-            zoomto(row_w, ROW_H * s):
-            diffuse(bg[0], bg[1], bg[2], bg[3])
-        ));
+                // Row background width:
+                // - Exit: always keep the 3px gap (even when active)
+                // - Normal items: inactive keeps gap; active touches the separator
+                let row_w = if is_exit {
+                    list_w - sep_w
+                } else if is_active {
+                    list_w
+                } else {
+                    list_w - sep_w
+                };
 
-        // Content placement inside row
-        let row_mid_y   = row_y + 0.5 * ROW_H * s;
-        let heart_x     = list_x + HEART_LEFT_PAD * s;
-        let text_x_base = list_x + TEXT_LEFT_PAD * s;
+                // Choose bg color with special case for active Exit row
+                let bg = if is_active {
+                    if is_exit { col_brand_bg } else { col_active_bg }
+                } else {
+                    col_inactive_bg
+                };
 
-        // Heart sprite (skip for Exit)
-        if !is_exit {
-            let heart_tint = if is_active { col_active_text } else { col_white };
-            ui_actors.push(act!(sprite("heart.png"):
-                align(0.0, 0.5):
-                xy(heart_x, row_mid_y):
-                zoom(HEART_ZOOM):
-                diffuse(heart_tint[0], heart_tint[1], heart_tint[2], heart_tint[3])
-            ));
+                ui_actors.push(act!(quad:
+                    align(0.0, 0.0):
+                    xy(list_x, row_y):
+                    zoomto(row_w, ROW_H * s):
+                    diffuse(bg[0], bg[1], bg[2], bg[3])
+                ));
+
+                // Content placement inside row
+                let row_mid_y   = row_y + 0.5 * ROW_H * s;
+                let heart_x     = list_x + HEART_LEFT_PAD * s;
+                let text_x_base = list_x + TEXT_LEFT_PAD * s;
+
+                // Heart sprite (skip for Exit)
+                if !is_exit {
+                    let heart_tint = if is_active { col_active_text } else { col_white };
+                    ui_actors.push(act!(sprite("heart.png"):
+                        align(0.0, 0.5):
+                        xy(heart_x, row_mid_y):
+                        zoom(HEART_ZOOM):
+                        diffuse(heart_tint[0], heart_tint[1], heart_tint[2], heart_tint[3])
+                    ));
+                }
+
+                // Text (Miso)
+                let text_x = if is_exit {
+                    // no heart => start at left pad
+                    text_x_base
+                } else {
+                    text_x_base
+                };
+
+                let label = ITEMS[item_idx].name;
+
+                // Exit text: white when inactive; black when active.
+                let color_t = if is_exit {
+                    if is_active { col_black } else { col_white }
+                } else if is_active {
+                    col_active_text
+                } else {
+                    col_white
+                };
+
+                ui_actors.push(act!(text:
+                    align(0.0, 0.5):
+                    xy(text_x, row_mid_y):
+                    zoom(ITEM_TEXT_ZOOM):
+                    diffuse(color_t[0], color_t[1], color_t[2], color_t[3]):
+                    font("miso"):
+                    settext(label):
+                    horizalign(left)
+                ));
+            }
+
+            let sel = state.selected.min(ITEMS.len() - 1);
+            selected_item = Some(&ITEMS[sel]);
         }
+        OptionsView::SystemSubmenu => {
+            // Active text color for submenu rows.
+            let col_active_text = color::simply_love_rgba(state.active_color_index + state.sub_selected as i32);
 
-        // Text (Miso)
-        let text_x = if is_exit {
-            // no heart => start at left pad
-            text_x_base
-        } else {
-            text_x_base
-        };
+            let total_rows = SYSTEM_OPTIONS_ROWS.len() + 1; // + Exit row
+            let anchor_row: usize = 4;
+            let max_offset = total_rows.saturating_sub(VISIBLE_ROWS);
+            let offset_rows = if total_rows <= VISIBLE_ROWS {
+                0
+            } else {
+                state.sub_selected.saturating_sub(anchor_row).min(max_offset)
+            };
 
-        let label = ITEMS[item_idx].name;
+            let label_bg_w = 127.0 * s;
+            let label_text_x = list_x + 7.0 * s;
 
-        // Exit text: white when inactive; black when active.
-        let color_t = if is_exit {
-            if is_active { col_black } else { col_white }
-        } else if is_active {
-            col_active_text
-        } else {
-            col_white
-        };
+            for i_vis in 0..VISIBLE_ROWS {
+                let row_idx = offset_rows + i_vis;
+                if row_idx >= total_rows {
+                    break;
+                }
 
-        ui_actors.push(act!(text:
-            align(0.0, 0.5):
-            xy(text_x, row_mid_y):
-            zoom(ITEM_TEXT_ZOOM):
-            diffuse(color_t[0], color_t[1], color_t[2], color_t[3]):
-            font("miso"):
-            settext(label):
-            horizalign(left)
-        ));
+                let row_y = list_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s;
+                let row_mid_y = row_y + 0.5 * ROW_H * s;
+
+                let is_active = row_idx == state.sub_selected;
+                let is_exit = row_idx == total_rows - 1;
+
+                let row_w = if is_exit {
+                    list_w - sep_w
+                } else if is_active {
+                    list_w
+                } else {
+                    list_w - sep_w
+                };
+
+                let bg = if is_active { col_active_bg } else { col_inactive_bg };
+
+                ui_actors.push(act!(quad:
+                    align(0.0, 0.0):
+                    xy(list_x, row_y):
+                    zoomto(row_w, ROW_H * s):
+                    diffuse(bg[0], bg[1], bg[2], bg[3])
+                ));
+
+                if !is_exit && row_idx < SYSTEM_OPTIONS_ROWS.len() {
+                    // Left label background column (matches player options style).
+                    ui_actors.push(act!(quad:
+                        align(0.0, 0.0):
+                        xy(list_x, row_y):
+                        zoomto(label_bg_w, ROW_H * s):
+                        diffuse(0.0, 0.0, 0.0, 0.25)
+                    ));
+
+                    let label = SYSTEM_OPTIONS_ROWS[row_idx].label;
+                    let title_color = if is_active {
+                        let mut c = col_active_text;
+                        c[3] = 1.0;
+                        c
+                    } else {
+                        col_white
+                    };
+
+                    ui_actors.push(act!(text:
+                        align(0.0, 0.5):
+                        xy(label_text_x, row_mid_y):
+                        zoom(ITEM_TEXT_ZOOM):
+                        diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                        font("miso"):
+                        settext(label):
+                        horizalign(left)
+                    ));
+
+                    // Inline Off/On options in the items column.
+                    let choices = SYSTEM_OPTIONS_ROWS[row_idx].choices;
+                    if !choices.is_empty() {
+                        let value_zoom = 0.835_f32;
+                        let mut widths: Vec<f32> = Vec::with_capacity(choices.len());
+                        asset_manager.with_fonts(|all_fonts| {
+                            asset_manager.with_font("miso", |metrics_font| {
+                                for text in choices {
+                                    let mut w = font::measure_line_width_logical(metrics_font, text, all_fonts) as f32;
+                                    if !w.is_finite() || w <= 0.0 {
+                                        w = 1.0;
+                                    }
+                                    widths.push(w * value_zoom);
+                                }
+                            });
+                        });
+
+                        let choice_inner_left = list_x + label_bg_w + 16.0 * s;
+                        let mut x_positions: Vec<f32> = Vec::with_capacity(choices.len());
+                        {
+                            let mut x = choice_inner_left;
+                            for w in &widths {
+                                x_positions.push(x);
+                                x += *w + INLINE_SPACING;
+                            }
+                        }
+
+                        let selected_choice = state.sub_choice_indices
+                            .get(row_idx)
+                            .copied()
+                            .unwrap_or(0)
+                            .min(choices.len().saturating_sub(1));
+
+                        // Inactive option text color should be #808080 (alpha 1.0), match player options.
+                        let sl_gray = color::rgba_hex("#808080");
+
+                        for (idx, choice) in choices.iter().enumerate() {
+                            let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
+                            let is_choice_selected = idx == selected_choice;
+                            let choice_color = if is_active {
+                                if is_choice_selected { col_white } else { col_white }
+                            } else if is_choice_selected {
+                                col_white
+                            } else {
+                                sl_gray
+                            };
+
+                            ui_actors.push(act!(text:
+                                align(0.0, 0.5):
+                                xy(x, row_mid_y):
+                                zoom(value_zoom):
+                                diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+                                font("miso"):
+                                settext(*choice):
+                                horizalign(left)
+                            ));
+                        }
+
+                        // Encircling cursor ring around the active option when this row is active.
+                        if is_active && !widths.is_empty() {
+                            let sel_idx = selected_choice.min(widths.len().saturating_sub(1));
+                            if let Some(target_left_x) = x_positions.get(sel_idx).copied() {
+                                let draw_w = widths.get(sel_idx).copied().unwrap_or(40.0);
+                                asset_manager.with_fonts(|_all_fonts| {
+                                    asset_manager.with_font("miso", |metrics_font| {
+                                        let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
+                                        let pad_y = widescale(6.0, 8.0);
+                                        let min_pad_x = widescale(2.0, 3.0);
+                                        let max_pad_x = widescale(22.0, 28.0);
+                                        let width_ref = widescale(180.0, 220.0);
+                                        let mut size_t_to = draw_w / width_ref;
+                                        if !size_t_to.is_finite() { size_t_to = 0.0; }
+                                        if size_t_to < 0.0 { size_t_to = 0.0; }
+                                        if size_t_to > 1.0 { size_t_to = 1.0; }
+                                        let mut pad_x_to = min_pad_x + (max_pad_x - min_pad_x) * size_t_to;
+                                        let border_w = widescale(2.0, 2.5);
+                                        // Cap pad so ring doesn't encroach neighbours.
+                                        let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
+                                        if pad_x_to > max_pad_by_spacing { pad_x_to = max_pad_by_spacing; }
+                                        let mut ring_w = draw_w + pad_x_to * 2.0;
+                                        let mut ring_h = text_h + pad_y * 2.0;
+
+                                        let mut center_x = target_left_x + draw_w * 0.5;
+                                        let mut center_y = row_mid_y;
+
+                                        // Vertical tween between rows.
+                                        if state.cursor_row_anim_t < 1.0 {
+                                            let t = ease_out_cubic(state.cursor_row_anim_t);
+                                            center_y = state.cursor_row_anim_from_y
+                                                + (row_mid_y - state.cursor_row_anim_from_y) * t;
+                                        }
+
+                                        // Horizontal tween between choices within a row.
+                                        if let Some(anim_row) = state.cursor_anim_row
+                                            && anim_row == row_idx && state.cursor_anim_t < 1.0 {
+                                                let from_idx = state.cursor_anim_from_choice.min(widths.len().saturating_sub(1));
+                                                let to_idx = sel_idx.min(widths.len().saturating_sub(1));
+                                                let from_center_x = x_positions[from_idx] + widths[from_idx] * 0.5;
+                                                let to_center_x = x_positions[to_idx] + widths[to_idx] * 0.5;
+                                                let t = ease_out_cubic(state.cursor_anim_t);
+                                                center_x = from_center_x + (to_center_x - from_center_x) * t;
+                                                // Also interpolate ring size from previous choice to current choice.
+                                                let from_draw_w = widths[from_idx];
+                                                let mut size_t_from = from_draw_w / width_ref;
+                                                if !size_t_from.is_finite() { size_t_from = 0.0; }
+                                                if size_t_from < 0.0 { size_t_from = 0.0; }
+                                                if size_t_from > 1.0 { size_t_from = 1.0; }
+                                                let mut pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                                let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
+                                                if pad_x_from > max_pad_by_spacing { pad_x_from = max_pad_by_spacing; }
+                                                let ring_w_from = from_draw_w + pad_x_from * 2.0;
+                                                let ring_h_from = text_h + pad_y * 2.0;
+                                                ring_w = ring_w_from + (ring_w - ring_w_from) * t;
+                                                ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                                            }
+
+                                        let left = center_x - ring_w * 0.5;
+                                        let right = center_x + ring_w * 0.5;
+                                        let top = center_y - ring_h * 0.5;
+                                        let bottom = center_y + ring_h * 0.5;
+                                        let mut ring_color = color::decorative_rgba(state.active_color_index);
+                                        ring_color[3] = 1.0;
+                                        ui_actors.push(act!(quad:
+                                            align(0.5, 0.5):
+                                            xy(center_x, top + border_w * 0.5):
+                                            zoomto(ring_w, border_w):
+                                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                            z(101)
+                                        ));
+                                        ui_actors.push(act!(quad:
+                                            align(0.5, 0.5):
+                                            xy(center_x, bottom - border_w * 0.5):
+                                            zoomto(ring_w, border_w):
+                                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                            z(101)
+                                        ));
+                                        ui_actors.push(act!(quad:
+                                            align(0.5, 0.5):
+                                            xy(left + border_w * 0.5, center_y):
+                                            zoomto(border_w, ring_h):
+                                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                            z(101)
+                                        ));
+                                        ui_actors.push(act!(quad:
+                                            align(0.5, 0.5):
+                                            xy(right - border_w * 0.5, center_y):
+                                            zoomto(border_w, ring_h):
+                                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                            z(101)
+                                        ));
+                                    });
+                                });
+                            }
+                        }
+                    }
+                } else {
+                    // Exit row: centered "Exit" text in the items column.
+                    let label = "Exit";
+                    let value_zoom = 0.835_f32;
+                    let choice_color = if is_active { col_white } else { col_white };
+                    let center_x = list_x + list_w * 0.5;
+
+                    ui_actors.push(act!(text:
+                        align(0.5, 0.5):
+                        xy(center_x, row_mid_y):
+                        zoom(value_zoom):
+                        diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+                        font("miso"):
+                        settext(label):
+                        horizalign(center)
+                    ));
+                }
+            }
+
+            // Description items for the submenu
+            let total_rows = SYSTEM_OPTIONS_ROWS.len() + 1;
+            let sel = state.sub_selected.min(total_rows.saturating_sub(1));
+            let item = if sel < SYSTEM_OPTIONS_ROWS.len() {
+                &SYSTEM_OPTIONS_ITEMS[sel]
+            } else {
+                &SYSTEM_OPTIONS_ITEMS[SYSTEM_OPTIONS_ITEMS.len().saturating_sub(1)]
+            };
+            selected_item = Some(item);
+        }
     }
 
     // ------------------- Description content (selected) -------------------
-    let sel = state.selected.min(ITEMS.len() - 1);
-    let item = &ITEMS[sel];
+    if let Some(item) = selected_item {
+        // Match Simply Love's description box feel:
+        // - explicit top/side padding for title and bullets so they can be tuned
+        // - text zoom similar to other help text (player options, etc.)
+        let mut cursor_y = list_y + DESC_TITLE_TOP_PAD_PX * s;
+        let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
+        let title_step_px = 20.0 * s; // approximate vertical advance for title line
 
-    // Match Simply Love's description box feel:
-    // - explicit top/side padding for title and bullets so they can be tuned
-    // - text zoom similar to other help text (player options, etc.)
-    let mut cursor_y = list_y + DESC_TITLE_TOP_PAD_PX * s;
-    let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
-    let title_step_px = 20.0 * s; // approximate vertical advance for title line
+        // Title/explanation text:
+        // - For any item with help lines, use the first help line as the long explanation,
+        //   with remaining lines rendered as the bullet list (if any).
+        // - Fallback to the item name if there is no help text.
+        let help = item.help;
+        let (raw_title_text, bullet_lines): (&str, &[&str]) =
+            if help.is_empty() {
+                (item.name, &[][..])
+            } else {
+                (help[0], &help[1..])
+            };
 
-    // Title/explanation text:
-    // - For any item with help lines, use the first help line as the long explanation,
-    //   with remaining lines rendered as the bullet list (if any).
-    // - Fallback to the item name if there is no help text.
-    let help = item.help;
-    let (raw_title_text, bullet_lines): (&str, &[&str]) =
-        if help.is_empty() {
-            (item.name, &[][..])
-        } else {
-            (help[0], &help[1..])
-        };
+        // Word-wrapping using actual font metrics so the title respects the
+        // description box's inner width and padding exactly.
+        let wrapped_title = asset_manager
+            .with_fonts(|all_fonts| {
+                asset_manager.with_font("miso", |miso_font| {
+                    let max_width_px = (DESC_W * s) - 2.0 * DESC_TITLE_SIDE_PAD_PX * s;
+                    let mut out = String::new();
+                    let mut is_first_output_line = true;
 
-    // Word-wrapping using actual font metrics so the title respects the
-    // description box's inner width and padding exactly.
-    let wrapped_title = asset_manager
-        .with_fonts(|all_fonts| {
-            asset_manager.with_font("miso", |miso_font| {
-                let max_width_px = (DESC_W * s) - 2.0 * DESC_TITLE_SIDE_PAD_PX * s;
-                let mut out = String::new();
-                let mut is_first_output_line = true;
-
-                for segment in raw_title_text.split('\n') {
-                    let trimmed = segment.trim_end();
-                    if trimmed.is_empty() {
-                        // Preserve explicit blank lines (e.g. \"\\n\\n\" in help text)
-                        // as an empty row between wrapped paragraphs.
-                        if !is_first_output_line {
-                            out.push('\n');
+                    for segment in raw_title_text.split('\n') {
+                        let trimmed = segment.trim_end();
+                        if trimmed.is_empty() {
+                            // Preserve explicit blank lines (e.g. \"\\n\\n\" in help text)
+                            // as an empty row between wrapped paragraphs.
+                            if !is_first_output_line {
+                                out.push('\n');
+                            }
+                            continue;
                         }
-                        continue;
-                    }
 
-                    let mut current_line = String::new();
-                    for word in trimmed.split_whitespace() {
-                        let candidate = if current_line.is_empty() {
-                            word.to_owned()
-                        } else {
-                            let mut tmp = current_line.clone();
-                            tmp.push(' ');
-                            tmp.push_str(word);
-                            tmp
-                        };
+                        let mut current_line = String::new();
+                        for word in trimmed.split_whitespace() {
+                            let candidate = if current_line.is_empty() {
+                                word.to_owned()
+                            } else {
+                                let mut tmp = current_line.clone();
+                                tmp.push(' ');
+                                tmp.push_str(word);
+                                tmp
+                            };
 
-                        let logical_w =
-                            font::measure_line_width_logical(miso_font, &candidate, all_fonts) as f32;
-                        let pixel_w = logical_w * DESC_TITLE_ZOOM * s;
+                            let logical_w =
+                                font::measure_line_width_logical(miso_font, &candidate, all_fonts) as f32;
+                            let pixel_w = logical_w * DESC_TITLE_ZOOM * s;
 
-                        if !current_line.is_empty() && pixel_w > max_width_px {
+                            if !current_line.is_empty() && pixel_w > max_width_px {
+                                if !is_first_output_line {
+                                    out.push('\n');
+                                }
+                                out.push_str(&current_line);
+                                is_first_output_line = false;
+                                current_line.clear();
+                                current_line.push_str(word);
+                            } else {
+                                current_line = candidate;
+                            }
+                        }
+
+                        if !current_line.is_empty() {
                             if !is_first_output_line {
                                 out.push('\n');
                             }
                             out.push_str(&current_line);
                             is_first_output_line = false;
-                            current_line.clear();
-                            current_line.push_str(word);
-                        } else {
-                            current_line = candidate;
                         }
                     }
 
-                    if !current_line.is_empty() {
-                        if !is_first_output_line {
-                            out.push('\n');
-                        }
-                        out.push_str(&current_line);
-                        is_first_output_line = false;
+                    if out.is_empty() {
+                        raw_title_text.to_string()
+                    } else {
+                        out
                     }
-                }
-
-                if out.is_empty() {
-                    raw_title_text.to_string()
-                } else {
-                    out
-                }
+                })
             })
-        })
-        .unwrap_or_else(|| raw_title_text.to_string());
-    let title_lines = wrapped_title.lines().count().max(1) as f32;
+            .unwrap_or_else(|| raw_title_text.to_string());
+        let title_lines = wrapped_title.lines().count().max(1) as f32;
 
-    // Draw the wrapped explanation/title text.
-    ui_actors.push(act!(text:
-        align(0.0, 0.0):
-        xy(desc_x + title_side_pad, cursor_y):
-        zoom(DESC_TITLE_ZOOM):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        font("miso"): settext(wrapped_title):
-        horizalign(left)
-    ));
-    cursor_y += title_step_px * title_lines + DESC_BULLET_TOP_PAD_PX * s;
-
-    // Optional bullet list (e.g. System Options: Game / Theme / Language / ...).
-    if !bullet_lines.is_empty() {
-        let mut bullet_text = String::new();
-        let mut first = true;
-        for line in bullet_lines {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            if !first {
-                bullet_text.push('\n');
-            }
-            // Ellipsis lines ("...") should not have a bullet to match Simply Love.
-            if trimmed == "..." {
-                bullet_text.push_str("...");
-            } else {
-                bullet_text.push('•');
-                bullet_text.push(' ');
-                bullet_text.push_str(line);
-            }
-            first = false;
-        }
-        let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
-        let bullet_x = desc_x + bullet_side_pad + DESC_BULLET_INDENT_PX * s;
+        // Draw the wrapped explanation/title text.
         ui_actors.push(act!(text:
             align(0.0, 0.0):
-            xy(bullet_x, cursor_y):
-            zoom(DESC_BODY_ZOOM):
+            xy(desc_x + title_side_pad, cursor_y):
+            zoom(DESC_TITLE_ZOOM):
             diffuse(1.0, 1.0, 1.0, 1.0):
-            font("miso"): settext(bullet_text):
+            font("miso"): settext(wrapped_title):
             horizalign(left)
         ));
+        cursor_y += title_step_px * title_lines + DESC_BULLET_TOP_PAD_PX * s;
+
+        // Optional bullet list (e.g. System Options: Game / Theme / Language / ...).
+        if !bullet_lines.is_empty() {
+            let mut bullet_text = String::new();
+            let mut first = true;
+            for line in bullet_lines {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                if !first {
+                    bullet_text.push('\n');
+                }
+                // Ellipsis lines ("...") should not have a bullet to match Simply Love.
+                if trimmed == "..." {
+                    bullet_text.push_str("...");
+                } else {
+                    bullet_text.push('•');
+                    bullet_text.push(' ');
+                    bullet_text.push_str(line);
+                }
+                first = false;
+            }
+            let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
+            let bullet_x = desc_x + bullet_side_pad + DESC_BULLET_INDENT_PX * s;
+            ui_actors.push(act!(text:
+                align(0.0, 0.0):
+                xy(bullet_x, cursor_y):
+                zoom(DESC_BODY_ZOOM):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                font("miso"): settext(bullet_text):
+                horizalign(left)
+            ));
+        }
     }
 
+    let combined_alpha = alpha_multiplier * state.content_alpha;
     for actor in &mut ui_actors {
-        apply_alpha_to_actor(actor, alpha_multiplier);
+        apply_alpha_to_actor(actor, combined_alpha);
     }
     actors.extend(ui_actors);
 
