@@ -64,6 +64,10 @@ const TEXT_LEFT_PAD: f32 = 40.66;
 const HEART_LEFT_PAD: f32 = 13.0;
 /// Label text zoom, matched to the left column titles in player_options.rs.
 const ITEM_TEXT_ZOOM: f32 = 0.88;
+/// Width of the System Options submenu label column (content-space pixels).
+const SUB_LABEL_COL_W: f32 = 142.5;
+/// Left padding for text inside the System Options submenu label column.
+const SUB_LABEL_TEXT_LEFT_PAD: f32 = 11.0;
 
 /// Heart sprite zoom for the options list rows.
 /// This is a StepMania-style "zoom" factor applied to the native heart.png size.
@@ -281,35 +285,57 @@ pub struct SubRow<'a> {
     pub choices: &'a [&'a str],
 }
 
-// Placeholder System Options submenu rows for parity scaffolding.
 pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: "Option Label 1",
-        choices: &["Off", "On"],
+        label: "Game",
+        choices: &["dance", "pump"],
     },
     SubRow {
-        label: "Option Label 2",
-        choices: &["Off", "On"],
+        label: "Theme",
+        choices: &["Simply Love"],
     },
     SubRow {
-        label: "Option Label 3",
-        choices: &["Off", "On"],
+        label: "Language",
+        choices: &["English", "Japanese"],
+    },
+    SubRow {
+        label: "Announcer",
+        choices: &["None", "ITG"],
+    },
+    SubRow {
+        label: "Default NoteSkin",
+        choices: &["cel", "metal", "enchantment-v2", "devcel-2024-v3"],
+    },
+    SubRow {
+        label: "Editor NoteSkin",
+        choices: &["cel", "metal", "enchantment-v2", "devcel-2024-v3"],
     },
 ];
 
-// Description metadata for the System Options submenu (mirrors Item model).
 pub const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
     Item {
-        name: "Option Label 1",
-        help: &["description for option goes here."],
+        name: "Game",
+        help: &["Select the default game type used by the engine."],
     },
     Item {
-        name: "Option Label 2",
-        help: &["description for option goes here."],
+        name: "Theme",
+        help: &["Choose which theme is active."],
     },
     Item {
-        name: "Option Label 3",
-        help: &["description for option goes here."],
+        name: "Language",
+        help: &["Select the active language for menus and prompts."],
+    },
+    Item {
+        name: "Announcer",
+        help: &["Enable or change the gameplay announcer."],
+    },
+    Item {
+        name: "Default NoteSkin",
+        help: &["Choose the default noteskin used in gameplay."],
+    },
+    Item {
+        name: "Editor NoteSkin",
+        help: &["Choose the noteskin used in the step editor."],
     },
     Item {
         name: "Exit",
@@ -332,7 +358,7 @@ pub struct State {
     // System Options submenu state
     sub_selected: usize,
     sub_prev_selected: usize,
-    sub_choice_indices: [usize; 3],
+    sub_choice_indices: Vec<usize>,
     // Inline option cursor tween (left/right between items)
     cursor_anim_row: Option<usize>,
     cursor_anim_from_choice: usize,
@@ -360,7 +386,7 @@ pub fn init() -> State {
         view: OptionsView::Main,
         sub_selected: 0,
         sub_prev_selected: 0,
-        sub_choice_indices: [0; 3],
+        sub_choice_indices: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         cursor_anim_row: None,
         cursor_anim_from_choice: 0,
         cursor_anim_to_choice: 0,
@@ -816,8 +842,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
 
     /* ------------------------------ TOP BAR ------------------------------- */
     const FG: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+    let title_text = match state.view {
+        OptionsView::Main => "OPTIONS",
+        OptionsView::SystemSubmenu => "SYSTEM OPTIONS",
+    };
     ui_actors.push(screen_bar::build(screen_bar::ScreenBarParams {
-        title: "OPTIONS",
+        title: title_text,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
         transparent: false,
@@ -974,6 +1004,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
         OptionsView::SystemSubmenu => {
             // Active text color for submenu rows.
             let col_active_text = color::simply_love_rgba(state.active_color_index);
+            // Inactive option text color should be #808080 (alpha 1.0), match player options.
+            let sl_gray = color::rgba_hex("#808080");
 
             let total_rows = SYSTEM_OPTIONS_ROWS.len() + 1; // + Exit row
             let anchor_row: usize = 4;
@@ -984,8 +1016,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                 state.sub_selected.saturating_sub(anchor_row).min(max_offset)
             };
 
-            let label_bg_w = 127.0 * s;
-            let label_text_x = list_x + 7.0 * s;
+            let label_bg_w = SUB_LABEL_COL_W * s;
+            let label_text_x = list_x + SUB_LABEL_TEXT_LEFT_PAD * s;
 
             // Helper to compute the cursor center X for a given submenu row index.
             let calc_row_center_x = |row_idx: usize| -> f32 {
@@ -1166,9 +1198,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                             .unwrap_or(0)
                             .min(choices.len().saturating_sub(1));
 
-                        // Inactive option text color should be #808080 (alpha 1.0), match player options.
-                        let sl_gray = color::rgba_hex("#808080");
-
                         for (idx, choice) in choices.iter().enumerate() {
                             let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
                             let choice_color = if is_active { col_white } else { sl_gray };
@@ -1332,7 +1361,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                     // Exit row: centered "Exit" text in the items column.
                     let label = "Exit";
                     let value_zoom = 0.835_f32;
-                    let choice_color = if is_active { col_white } else { col_white };
+                    let choice_color = if is_active { col_white } else { sl_gray };
                     let mut center_x = list_x + list_w * 0.5;
                     let mut center_y = row_mid_y;
 
