@@ -9,6 +9,9 @@ use crate::ui::color;
 use crate::ui::components::{heart_bg, screen_bar};
 use crate::ui::components::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::ui::font;
+use winit::event::KeyEvent;
+use winit::event::ElementState;
+use winit::keyboard::{KeyCode, PhysicalKey};
 use std::time::{Duration, Instant};
 
 /* ---------------------------- transitions ---------------------------- */
@@ -56,6 +59,28 @@ const CURSOR_TWEEN_SECONDS: f32 = 0.1;
 
 /// Spacing between inline items (for cursor ring sizing).
 const INLINE_SPACING: f32 = 15.75;
+
+/// Physical keys that are considered "default" and are not
+/// accepted as candidates when capturing a new mapping.
+const DEFAULT_PROTECTED_KEYS: &[KeyCode] = &[
+    // P1 defaults (arrows + WASD + Enter/Escape)
+    KeyCode::ArrowUp,
+    KeyCode::ArrowDown,
+    KeyCode::ArrowLeft,
+    KeyCode::ArrowRight,
+    KeyCode::KeyW,
+    KeyCode::KeyA,
+    KeyCode::KeyS,
+    KeyCode::KeyD,
+    KeyCode::Enter,
+    KeyCode::Escape,
+    // P2 defaults (numpad directions + Start)
+    KeyCode::Numpad8,
+    KeyCode::Numpad2,
+    KeyCode::Numpad4,
+    KeyCode::Numpad6,
+    KeyCode::NumpadEnter,
+];
 
 /// Logical mapping rows we expose in this prototype.
 const NUM_MAPPING_ROWS: usize = 18;
@@ -183,6 +208,12 @@ pub struct State {
     slot_anim_from: ActiveSlot,
     slot_anim_to: ActiveSlot,
     slot_anim_t: f32,
+    // Capture state: when true, the active slot's value pulses and
+    // navigation is locked until a non-default key is pressed.
+    capture_active: bool,
+    capture_row: Option<usize>,
+    capture_slot: Option<ActiveSlot>,
+    capture_pulse_t: f32,
 }
 
 pub fn init() -> State {
@@ -201,6 +232,10 @@ pub fn init() -> State {
         slot_anim_from: ActiveSlot::P1Primary,
         slot_anim_to: ActiveSlot::P1Primary,
         slot_anim_t: 1.0,
+        capture_active: false,
+        capture_row: None,
+        capture_slot: None,
+        capture_pulse_t: 0.0,
     }
 }
 
@@ -368,9 +403,59 @@ pub fn update(state: &mut State, dt: f32) {
             state.slot_anim_t = 1.0;
         }
     }
+
+    // Advance capture pulse timer for the "heartbeat" animation.
+    if state.capture_active {
+        // Slightly faster than 1 Hz for a snappier heartbeat.
+        state.capture_pulse_t += dt * 2.5 * std::f32::consts::PI;
+        if !state.capture_pulse_t.is_finite() {
+            state.capture_pulse_t = 0.0;
+        }
+    } else {
+        state.capture_pulse_t = 0.0;
+    }
+}
+
+/// Raw keyboard handler used only while capturing a new mapping.
+/// This sees the physical key code so we can decide which keys are
+/// allowed to end capture (non-default) and which are ignored.
+pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAction {
+    if !state.capture_active {
+        return ScreenAction::None;
+    }
+
+    if key_event.state != ElementState::Pressed || key_event.repeat {
+        return ScreenAction::None;
+    }
+
+    let PhysicalKey::Code(code) = key_event.physical_key else {
+        return ScreenAction::None;
+    };
+
+    // Default/protected keys do nothing while capturing; remain locked.
+    if DEFAULT_PROTECTED_KEYS.iter().any(|k| *k == code) {
+        return ScreenAction::None;
+    }
+
+    // Any non-default key ends capture for now (no binding yet).
+    state.capture_active = false;
+    state.capture_row = None;
+    state.capture_slot = None;
+    state.capture_pulse_t = 0.0;
+
+    ScreenAction::None
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    // While capturing, lock navigation and only allow backing out
+    // of the screen; candidate keys are handled in handle_raw_key_event.
+    if state.capture_active {
+        if ev.action == VirtualAction::p1_back && ev.pressed {
+            return ScreenAction::Navigate(Screen::Options);
+        }
+        return ScreenAction::None;
+    }
+
     match ev.action {
         VirtualAction::p1_back if ev.pressed => {
             return ScreenAction::Navigate(Screen::Options);
@@ -422,6 +507,19 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 audio::play_sfx("assets/sounds/start.ogg");
                 return ScreenAction::Navigate(Screen::Options);
             }
+
+            // Begin capture on the currently focused slot in this row.
+            if state.selected_row < NUM_MAPPING_ROWS {
+                state.capture_active = true;
+                state.capture_row = Some(state.selected_row);
+                state.capture_slot = Some(state.active_slot);
+                state.capture_pulse_t = 0.0;
+                // Stop any held navigation so the list does not keep scrolling.
+                state.nav_key_held_direction = None;
+                state.nav_key_held_since = None;
+                state.nav_key_last_scrolled_at = None;
+                audio::play_sfx("assets/sounds/change_value.ogg");
+            }
         }
         _ => {}
     }
@@ -447,6 +545,31 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
             apply_alpha_to_actor(child, alpha);
         }
     }
+}
+
+#[inline(always)]
+fn slot_pulse_zoom_and_color(
+    pulse_opt: Option<f32>,
+    capture_slot: Option<ActiveSlot>,
+    slot: ActiveSlot,
+    base_zoom: f32,
+    base_color: [f32; 4],
+    col_white: [f32; 4],
+) -> (f32, [f32; 4]) {
+    let Some(pulse) = pulse_opt else {
+        return (base_zoom, base_color);
+    };
+    if capture_slot != Some(slot) {
+        return (base_zoom, base_color);
+    }
+    // Zoom out (shrink) instead of in: scale from 1.0 down to ~0.8.
+    let scale = 1.0 - 0.20 * pulse;
+    let brighten = 0.35 * pulse;
+    let mut color = base_color;
+    color[0] = base_color[0] + (col_white[0] - base_color[0]) * brighten;
+    color[1] = base_color[1] + (col_white[1] - base_color[1]) * brighten;
+    color[2] = base_color[2] + (col_white[2] - base_color[2]) * brighten;
+    (base_zoom * scale, color)
 }
 
 pub fn get_actors(
@@ -784,13 +907,54 @@ pub fn get_actors(
                 col_gray
             };
 
+            // Heartbeat-style pulse for the slot currently being captured.
+            let pulse_opt = if state.capture_active && state.capture_row == Some(row_idx) {
+                let t = state.capture_pulse_t.sin() * 0.5 + 0.5;
+                Some(t.clamp(0.0, 1.0))
+            } else {
+                None
+            };
+
+            let (p1_primary_zoom, p1_primary_color) = slot_pulse_zoom_and_color(
+                pulse_opt,
+                state.capture_slot,
+                ActiveSlot::P1Primary,
+                value_zoom,
+                active_value_color,
+                col_white,
+            );
+            let (p1_secondary_zoom, p1_secondary_color) = slot_pulse_zoom_and_color(
+                pulse_opt,
+                state.capture_slot,
+                ActiveSlot::P1Secondary,
+                value_zoom,
+                active_value_color,
+                col_white,
+            );
+            let (p2_primary_zoom, p2_primary_color) = slot_pulse_zoom_and_color(
+                pulse_opt,
+                state.capture_slot,
+                ActiveSlot::P2Primary,
+                value_zoom,
+                active_value_color,
+                col_white,
+            );
+            let (p2_secondary_zoom, p2_secondary_color) = slot_pulse_zoom_and_color(
+                pulse_opt,
+                state.capture_slot,
+                ActiveSlot::P2Secondary,
+                value_zoom,
+                active_value_color,
+                col_white,
+            );
+
             // P1 columns: Primary, Secondary, Default.
             // P1 primary / secondary (editable).
             ui_actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(p1_primary_x, row_mid_y):
-                zoom(value_zoom):
-                diffuse(active_value_color[0], active_value_color[1], active_value_color[2], active_value_color[3]):
+                zoom(p1_primary_zoom):
+                diffuse(p1_primary_color[0], p1_primary_color[1], p1_primary_color[2], p1_primary_color[3]):
                 font("miso"):
                 settext(value_text):
                 horizalign(center)
@@ -798,8 +962,8 @@ pub fn get_actors(
             ui_actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(p1_secondary_x, row_mid_y):
-                zoom(value_zoom):
-                diffuse(active_value_color[0], active_value_color[1], active_value_color[2], active_value_color[3]):
+                zoom(p1_secondary_zoom):
+                diffuse(p1_secondary_color[0], p1_secondary_color[1], p1_secondary_color[2], p1_secondary_color[3]):
                 font("miso"):
                 settext(value_text):
                 horizalign(center)
@@ -820,8 +984,8 @@ pub fn get_actors(
             ui_actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(p2_primary_x, row_mid_y):
-                zoom(value_zoom):
-                diffuse(active_value_color[0], active_value_color[1], active_value_color[2], active_value_color[3]):
+                zoom(p2_primary_zoom):
+                diffuse(p2_primary_color[0], p2_primary_color[1], p2_primary_color[2], p2_primary_color[3]):
                 font("miso"):
                 settext(value_text):
                 horizalign(center)
@@ -829,8 +993,8 @@ pub fn get_actors(
             ui_actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(p2_secondary_x, row_mid_y):
-                zoom(value_zoom):
-                diffuse(active_value_color[0], active_value_color[1], active_value_color[2], active_value_color[3]):
+                zoom(p2_secondary_zoom):
+                diffuse(p2_secondary_color[0], p2_secondary_color[1], p2_secondary_color[2], p2_secondary_color[3]):
                 font("miso"):
                 settext(value_text):
                 horizalign(center)

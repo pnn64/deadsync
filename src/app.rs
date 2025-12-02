@@ -618,6 +618,17 @@ impl App {
                 }
                 return;
             }
+        } else if self.state.current_screen == CurrentScreen::Mappings {
+            let action = crate::screens::mappings::handle_raw_key_event(
+                &mut self.state.mappings_state,
+                &key_event,
+            );
+            if !matches!(action, ScreenAction::None) {
+                if let Err(e) = self.handle_action(action, event_loop) {
+                    log::error!("Failed to handle Mappings raw key action: {}", e);
+                }
+                return;
+            }
         } else if self.state.current_screen == CurrentScreen::SelectMusic {
             // Route screen-specific raw key handling (e.g., F7 fetch) to the screen
             let action = crate::screens::select_music::handle_raw_key_event(&mut self.state.select_music_state, &key_event);
