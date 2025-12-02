@@ -437,7 +437,31 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAc
         return ScreenAction::None;
     }
 
-    // Any non-default key ends capture for now (no binding yet).
+    // Map the captured key into the appropriate binding slot based on
+    // the active row and slot, then persist to deadsync.ini.
+    if let (Some(row_idx), Some(slot)) = (state.capture_row, state.capture_slot)
+    {
+        let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
+        let action_opt = match slot {
+            ActiveSlot::P1Primary | ActiveSlot::P1Secondary => p1_act_opt,
+            ActiveSlot::P2Primary | ActiveSlot::P2Secondary => p2_act_opt,
+        };
+
+        if let Some(action) = action_opt {
+            let index = match slot {
+                ActiveSlot::P1Primary | ActiveSlot::P2Primary => 1,
+                ActiveSlot::P1Secondary | ActiveSlot::P2Secondary => 2,
+            };
+            crate::config::update_keymap_binding(
+                action,
+                index,
+                InputBinding::Key(code),
+            );
+            audio::play_sfx("assets/sounds/change_value.ogg");
+        }
+    }
+
+    // Any captured key ends capture.
     state.capture_active = false;
     state.capture_row = None;
     state.capture_slot = None;

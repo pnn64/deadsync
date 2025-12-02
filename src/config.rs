@@ -353,6 +353,73 @@ fn parse_action_key_lower(k: &str) -> Option<VirtualAction> {
 }
 
 #[inline(always)]
+fn action_to_ini_key(action: VirtualAction) -> &'static str {
+    use VirtualAction::*;
+    match action {
+        p1_up => "P1_Up",
+        p1_down => "P1_Down",
+        p1_left => "P1_Left",
+        p1_right => "P1_Right",
+        p1_start => "P1_Start",
+        p1_back => "P1_Back",
+        p1_menu_up => "P1_MenuUp",
+        p1_menu_down => "P1_MenuDown",
+        p1_menu_left => "P1_MenuLeft",
+        p1_menu_right => "P1_MenuRight",
+        p1_select => "P1_Select",
+        p1_operator => "P1_Operator",
+        p1_restart => "P1_Restart",
+        p2_up => "P2_Up",
+        p2_down => "P2_Down",
+        p2_left => "P2_Left",
+        p2_right => "P2_Right",
+        p2_start => "P2_Start",
+        p2_back => "P2_Back",
+        p2_menu_up => "P2_MenuUp",
+        p2_menu_down => "P2_MenuDown",
+        p2_menu_left => "P2_MenuLeft",
+        p2_menu_right => "P2_MenuRight",
+        p2_select => "P2_Select",
+        p2_operator => "P2_Operator",
+        p2_restart => "P2_Restart",
+    }
+}
+
+#[inline(always)]
+fn binding_to_token(binding: InputBinding) -> String {
+    match binding {
+        InputBinding::Key(code) => format!("KeyCode::{:?}", code),
+        InputBinding::PadDir(dir) => format!("PadDir::{:?}", dir),
+        InputBinding::PadButton(btn) => format!("PadButton::{:?}", btn),
+        InputBinding::Face(btn) => format!("Face::{:?}", btn),
+        InputBinding::PadDirOn { device, dir } => {
+            format!("Pad{}::Dir::{:?}", device, dir)
+        }
+        InputBinding::PadButtonOn { device, btn } => {
+            format!("Pad{}::Button::{:?}", device, btn)
+        }
+        InputBinding::FaceOn { device, btn } => {
+            format!("Pad{}::Face::{:?}", device, btn)
+        }
+        InputBinding::GamepadCode(binding) => {
+            let mut s = String::new();
+            use std::fmt::Write;
+            let _ = write!(&mut s, "PadCode[0x{:08X}]", binding.code_u32);
+            if let Some(device) = binding.device {
+                let _ = write!(&mut s, "@{}", device);
+            }
+            if let Some(uuid) = binding.uuid {
+                s.push('#');
+                for b in &uuid {
+                    let _ = write!(&mut s, "{:02X}", b);
+                }
+            }
+            s
+        }
+    }
+}
+
+#[inline(always)]
 fn parse_binding_token(tok: &str) -> Option<InputBinding> {
     let t = tok.trim();
     // Keyboard
@@ -566,6 +633,66 @@ fn load_keymap_from_ini_local(conf: &Ini) -> Keymap {
         return km;
     }
     default_keymap_local()
+}
+
+/// Update a single binding slot for the given virtual action in the [Keymaps]
+/// section, then refresh the global keymap. The `index` follows the same
+/// ordering used by the UI:
+///   0 = Default, 1 = Primary, 2 = Secondary.
+pub fn update_keymap_binding(action: VirtualAction, index: usize, binding: InputBinding) {
+    let mut conf = Ini::new();
+    if let Err(e) = conf.load(CONFIG_PATH) {
+        warn!("Failed to load '{}' for keymap update: {}", CONFIG_PATH, e);
+        return;
+    }
+
+    let has_keymaps_new = conf.get_map_ref().get("Keymaps").is_some();
+    let has_keymaps_old = conf.get_map_ref().get("keymaps").is_some();
+    let sec_name = if has_keymaps_new {
+        "Keymaps"
+    } else if has_keymaps_old {
+        "keymaps"
+    } else {
+        "Keymaps"
+    };
+
+    let key_name = action_to_ini_key(action);
+    let mut bindings: Vec<InputBinding> = Vec::new();
+    if let Some(value) = conf.get(sec_name, key_name) {
+        for tok in value.split(',') {
+            if let Some(b) = parse_binding_token(tok) {
+                bindings.push(b);
+            }
+        }
+    }
+
+    if index < bindings.len() {
+        bindings[index] = binding;
+    } else {
+        while bindings.len() < index {
+            if let Some(last) = bindings.last().copied() {
+                bindings.push(last);
+            } else {
+                bindings.push(binding);
+            }
+        }
+        bindings.push(binding);
+    }
+
+    let new_val = bindings
+        .iter()
+        .map(|b| binding_to_token(*b))
+        .collect::<Vec<_>>()
+        .join(",");
+    conf.set(sec_name, key_name, Some(new_val));
+
+    if let Err(e) = conf.write(CONFIG_PATH) {
+        warn!("Failed to write updated keymaps to '{}': {}", CONFIG_PATH, e);
+        return;
+    }
+
+    let km = load_keymap_from_ini_local(&conf);
+    crate::core::input::set_keymap(km);
 }
 
 fn save_without_keymaps() {
