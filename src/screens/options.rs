@@ -860,8 +860,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index, // <-- CHANGED
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        // Only participate in global screen fades (alpha_multiplier), not local submenu fades.
-        alpha_mul: alpha_multiplier,
+        // Keep hearts always visible for actor-only fades (Options/Menu/Mappings);
+        // local submenu fades are handled via content_alpha on UI actors only.
+        alpha_mul: 1.0,
     }));
 
     if alpha_multiplier <= 0.0 {

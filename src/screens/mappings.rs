@@ -314,7 +314,8 @@ pub fn get_actors(
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: alpha_multiplier,
+        // Keep hearts always visible for actor-only fades; UI rows fade separately.
+        alpha_mul: 1.0,
     }));
 
     if alpha_multiplier <= 0.0 {

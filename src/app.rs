@@ -309,7 +309,10 @@ impl App {
                     let is_actor_only_fade =
                         (from == CurrentScreen::Menu &&
                             (to == CurrentScreen::Options || to == CurrentScreen::SelectColor)) ||
-                        ((from == CurrentScreen::Options || from == CurrentScreen::SelectColor) && to == CurrentScreen::Menu);
+                        ((from == CurrentScreen::Options || from == CurrentScreen::SelectColor) && to == CurrentScreen::Menu) ||
+                        // Options ↔ Mappings should keep the heart background and only fade UI.
+                        (from == CurrentScreen::Options && to == CurrentScreen::Mappings) ||
+                        (from == CurrentScreen::Mappings && to == CurrentScreen::Options);
 
                     if is_actor_only_fade {
                         info!("Starting actor-only fade out to screen: {:?}", screen);
@@ -411,7 +414,13 @@ impl App {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
 
-        let is_actor_fade_screen = matches!(self.state.current_screen, CurrentScreen::Menu | CurrentScreen::Options | CurrentScreen::SelectColor);
+        let is_actor_fade_screen = matches!(
+            self.state.current_screen,
+            CurrentScreen::Menu
+                | CurrentScreen::Options
+                | CurrentScreen::SelectColor
+                | CurrentScreen::Mappings
+        );
 
         if is_actor_fade_screen {
             match self.state.transition {
