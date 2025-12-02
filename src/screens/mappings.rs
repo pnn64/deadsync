@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::core::audio;
-use crate::core::input::{get_keymap, InputEvent, VirtualAction};
+use crate::core::input::{get_keymap, InputEvent, VirtualAction, InputBinding};
 use crate::core::space::*;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
@@ -572,6 +572,40 @@ fn slot_pulse_zoom_and_color(
     (base_zoom * scale, color)
 }
 
+#[inline(always)]
+fn format_binding_for_display(binding: InputBinding) -> String {
+    match binding {
+        InputBinding::Key(code) => format!("{:?}", code),
+        InputBinding::PadDir(dir) => format!("PadDir::{:?}", dir),
+        InputBinding::PadButton(btn) => format!("PadButton::{:?}", btn),
+        InputBinding::Face(btn) => format!("Face::{:?}", btn),
+        InputBinding::PadDirOn { device, dir } => {
+            format!("Pad{}::Dir::{:?}", device, dir)
+        }
+        InputBinding::PadButtonOn { device, btn } => {
+            format!("Pad{}::Button::{:?}", device, btn)
+        }
+        InputBinding::FaceOn { device, btn } => {
+            format!("Pad{}::Face::{:?}", device, btn)
+        }
+        InputBinding::GamepadCode(binding) => {
+            let mut s = String::new();
+            use std::fmt::Write;
+            let _ = write!(&mut s, "PadCode[0x{:08X}]", binding.code_u32);
+            if let Some(device) = binding.device {
+                let _ = write!(&mut s, "@{}", device);
+            }
+            if let Some(uuid) = binding.uuid {
+                s.push('#');
+                for b in &uuid {
+                    let _ = write!(&mut s, "{:02X}", b);
+                }
+            }
+            s
+        }
+    }
+}
+
 pub fn get_actors(
     state: &State,
     asset_manager: &AssetManager,
@@ -889,17 +923,32 @@ pub fn get_actors(
                 diffuse(default_bg_color[0], default_bg_color[1], default_bg_color[2], default_bg_color[3])
             ));
 
-            // Editable slots still use placeholder text; default columns show
-            // the first key listed for each action in deadsync.ini.
-            let value_text = "------";
             let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
+            // Config order: first = Default, second = Primary, third = Secondary.
+            let p1_primary_text = p1_act_opt
+                .and_then(|act| keymap.binding_at(act, 1))
+                .map(format_binding_for_display)
+                .unwrap_or_else(|| "------".to_string());
+            let p1_secondary_text = p1_act_opt
+                .and_then(|act| keymap.binding_at(act, 2))
+                .map(format_binding_for_display)
+                .unwrap_or_else(|| "------".to_string());
+            let p2_primary_text = p2_act_opt
+                .and_then(|act| keymap.binding_at(act, 1))
+                .map(format_binding_for_display)
+                .unwrap_or_else(|| "------".to_string());
+            let p2_secondary_text = p2_act_opt
+                .and_then(|act| keymap.binding_at(act, 2))
+                .map(format_binding_for_display)
+                .unwrap_or_else(|| "------".to_string());
+
             let p1_default_text = p1_act_opt
                 .and_then(|act| keymap.first_key_binding(act))
-                .map(|code| format!("KeyCode::{:?}", code))
+                .map(|code| format!("{:?}", code))
                 .unwrap_or_else(|| "------".to_string());
             let p2_default_text = p2_act_opt
                 .and_then(|act| keymap.first_key_binding(act))
-                .map(|code| format!("KeyCode::{:?}", code))
+                .map(|code| format!("{:?}", code))
                 .unwrap_or_else(|| "------".to_string());
             let active_value_color = if is_active {
                 col_white
@@ -956,7 +1005,7 @@ pub fn get_actors(
                 zoom(p1_primary_zoom):
                 diffuse(p1_primary_color[0], p1_primary_color[1], p1_primary_color[2], p1_primary_color[3]):
                 font("miso"):
-                settext(value_text):
+                settext(p1_primary_text):
                 horizalign(center)
             ));
             ui_actors.push(act!(text:
@@ -965,7 +1014,7 @@ pub fn get_actors(
                 zoom(p1_secondary_zoom):
                 diffuse(p1_secondary_color[0], p1_secondary_color[1], p1_secondary_color[2], p1_secondary_color[3]):
                 font("miso"):
-                settext(value_text):
+                settext(p1_secondary_text):
                 horizalign(center)
             ));
 
@@ -987,7 +1036,7 @@ pub fn get_actors(
                 zoom(p2_primary_zoom):
                 diffuse(p2_primary_color[0], p2_primary_color[1], p2_primary_color[2], p2_primary_color[3]):
                 font("miso"):
-                settext(value_text):
+                settext(p2_primary_text):
                 horizalign(center)
             ));
             ui_actors.push(act!(text:
@@ -996,7 +1045,7 @@ pub fn get_actors(
                 zoom(p2_secondary_zoom):
                 diffuse(p2_secondary_color[0], p2_secondary_color[1], p2_secondary_color[2], p2_secondary_color[3]):
                 font("miso"):
-                settext(value_text):
+                settext(p2_secondary_text):
                 horizalign(center)
             ));
 

@@ -390,13 +390,16 @@ impl Keymap {
             .get(&action)
             .and_then(|bindings| {
                 bindings.iter().find_map(|b| {
-                    if let InputBinding::Key(code) = b {
-                        Some(*code)
-                    } else {
-                        None
-                    }
+                    if let InputBinding::Key(code) = b { Some(*code) } else { None }
                 })
             })
+    }
+
+    /// Returns the raw binding at the given index for this virtual action,
+    /// preserving the order parsed from deadsync.ini.
+    #[inline(always)]
+    pub fn binding_at(&self, action: VirtualAction, index: usize) -> Option<InputBinding> {
+        self.map.get(&action).and_then(|bindings| bindings.get(index)).copied()
     }
 
     #[inline(always)]
