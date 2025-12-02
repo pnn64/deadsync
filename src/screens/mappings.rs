@@ -38,14 +38,17 @@ const ROW_GAP: f32 = 2.5;
 const SIDE_W_BASE: f32 = 260.0;
 const DESC_W_BASE: f32 = 260.0;
 const SIDE_GAP_BASE: f32 = 35.0;
+/// Extra vertical padding so the mappings table sits well below the top screen bar.
+const TABLE_TOP_EXTRA_PX: f32 = 32.0;
+/// Vertical offset (in px, unscaled) from the first row to the column headers
+/// ("Primary / Secondary / Default"). Smaller values move these closer to the
+/// items table; larger values push them upward toward the top bar.
+const COLUMN_HEADER_OFFSET_PX: f32 = 7.0;
+/// Vertical gap (in px, unscaled) between the Player labels ("Player 1/2")
+/// and the column headers beneath them. Adjust this to move the Player labels
+/// up or down together relative to the column header row.
+const PLAYER_HEADER_GAP_PX: f32 = 19.0;
 
-/// Description pane layout.
-const DESC_TITLE_TOP_PAD_PX: f32 = 9.75;
-const DESC_TITLE_SIDE_PAD_PX: f32 = 7.5;
-const DESC_BULLET_TOP_PAD_PX: f32 = 23.25;
-const DESC_BULLET_SIDE_PAD_PX: f32 = 7.5;
-const DESC_BULLET_INDENT_PX: f32 = 10.0;
-const DESC_TITLE_ZOOM: f32 = 1.0;
 const DESC_BODY_ZOOM: f32 = 1.0;
 
 /// Cursor tween duration for vertical movement.
@@ -382,7 +385,8 @@ pub fn get_actors(
     let gap = SIDE_GAP_BASE * s;
 
     let content_center_x = content_left + avail_w * 0.5;
-    let first_row_y = content_top + FIRST_ROW_TOP_MARGIN_PX;
+    let first_row_y =
+        content_top + FIRST_ROW_TOP_MARGIN_PX + TABLE_TOP_EXTRA_PX;
 
     let desc_x = content_center_x - desc_w * 0.5;
     let p1_side_x = desc_x - gap - side_w;
@@ -453,7 +457,10 @@ pub fn get_actors(
     let value_zoom = 0.9_f32;
 
     // Wendy-style column headers above each side's three columns.
-    let header_y = first_row_y - 16.0 * s;
+    // First line: "Player 1"/"Player 2" centered over each side.
+    // Second line: "Primary"/"Secondary"/"Default" per column.
+    let header_sub_y = first_row_y - COLUMN_HEADER_OFFSET_PX * s;
+    let header_main_y = header_sub_y - PLAYER_HEADER_GAP_PX * s;
     let p1_primary_x = p1_side_x + col_w * 0.5;
     let p1_secondary_x = p1_side_x + col_w * 1.5;
     let p1_default_x = p1_side_x + col_w * 2.5;
@@ -461,56 +468,82 @@ pub fn get_actors(
     let p2_secondary_x = p2_side_x + col_w * 1.5;
     let p2_default_x = p2_side_x + col_w * 2.5;
 
-    let header_zoom = 0.75_f32;
+    let header_zoom = 0.25_f32;
+    let header_main_zoom = 0.65_f32;
+    let p1_center_x = p1_side_x + side_w * 0.5;
+    let p2_center_x = p2_side_x + side_w * 0.5;
+
+    // Top line: Player labels (Wendy, white).
+    ui_actors.push(act!(text:
+        align(0.5, 0.5):
+        xy(p1_center_x, header_main_y):
+        zoom(header_main_zoom):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        font("wendy"): settext("Player 1"):
+        horizalign(center)
+    ));
+    ui_actors.push(act!(text:
+        align(0.5, 0.5):
+        xy(p2_center_x, header_main_y):
+        zoom(header_main_zoom):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        font("wendy"): settext("Player 2"):
+        horizalign(center)
+    ));
+
+    // Column headers: Primary / Secondary / Default in decorative Wendy color.
+    let mut header_dec = color::decorative_rgba(state.active_color_index);
+    header_dec[3] = 1.0;
+
     // P1 headers
     ui_actors.push(act!(text:
         align(0.5, 0.5):
-        xy(p1_primary_x, header_y):
+        xy(p1_primary_x, header_sub_y):
         zoom(header_zoom):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        font("miso"): settext("P1 PRIMARY"):
+        diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
+        font("wendy"): settext("Primary"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
         align(0.5, 0.5):
-        xy(p1_secondary_x, header_y):
+        xy(p1_secondary_x, header_sub_y):
         zoom(header_zoom):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        font("miso"): settext("P1 SECONDARY"):
+        diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
+        font("wendy"): settext("Secondary"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
         align(0.5, 0.5):
-        xy(p1_default_x, header_y):
+        xy(p1_default_x, header_sub_y):
         zoom(header_zoom):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        font("miso"): settext("P1 DEFAULT"):
+        diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
+        font("wendy"): settext("Default"):
         horizalign(center)
     ));
 
     // P2 headers
     ui_actors.push(act!(text:
         align(0.5, 0.5):
-        xy(p2_primary_x, header_y):
+        xy(p2_primary_x, header_sub_y):
         zoom(header_zoom):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        font("miso"): settext("P2 PRIMARY"):
+        diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
+        font("wendy"): settext("Primary"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
         align(0.5, 0.5):
-        xy(p2_secondary_x, header_y):
+        xy(p2_secondary_x, header_sub_y):
         zoom(header_zoom):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        font("miso"): settext("P2 SECONDARY"):
+        diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
+        font("wendy"): settext("Secondary"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
         align(0.5, 0.5):
-        xy(p2_default_x, header_y):
+        xy(p2_default_x, header_sub_y):
         zoom(header_zoom):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        font("miso"): settext("P2 DEFAULT"):
+        diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
+        font("wendy"): settext("Default"):
         horizalign(center)
     ));
 
