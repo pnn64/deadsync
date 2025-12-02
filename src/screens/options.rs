@@ -68,6 +68,8 @@ const ITEM_TEXT_ZOOM: f32 = 0.88;
 const SUB_LABEL_COL_W: f32 = 142.5;
 /// Left padding for text inside the System Options submenu label column.
 const SUB_LABEL_TEXT_LEFT_PAD: f32 = 11.0;
+/// Left padding for inline option values in the System Options submenu (content-space pixels).
+const SUB_INLINE_ITEMS_LEFT_PAD: f32 = 13.0;
 /// Horizontal offset (content-space pixels) for single-value submenu items
 /// (e.g. Language and Exit) within the items column.
 const SUB_SINGLE_VALUE_CENTER_OFFSET: f32 = -43.0;
@@ -747,10 +749,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     }
                     // Last row is Exit from the Options screen back to the main menu.
                     if state.selected == total - 1 {
+                        audio::play_sfx("assets/sounds/start.ogg");
                         return ScreenAction::Navigate(Screen::Menu);
                     }
                     // Enter System Options submenu when selecting the first row for now.
                     if state.selected == 0 {
+                        audio::play_sfx("assets/sounds/start.ogg");
                         state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                         state.submenu_fade_t = 0.0;
                     }
@@ -762,6 +766,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     }
                     // Exit row in the submenu: back to the main Options list.
                     if state.sub_selected == total - 1 {
+                        audio::play_sfx("assets/sounds/start.ogg");
                         state.submenu_transition = SubmenuTransition::FadeOutToMain;
                         state.submenu_fade_t = 0.0;
                     }
@@ -1058,7 +1063,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                     return list_x + list_w * 0.5;
                 }
                 let value_zoom = 0.835_f32;
-                let choice_inner_left = list_x + label_bg_w + 16.0 * s;
+                let choice_inner_left = list_x + label_bg_w + SUB_INLINE_ITEMS_LEFT_PAD * s;
                 let mut widths: Vec<f32> = Vec::with_capacity(choices.len());
                 asset_manager.with_fonts(|all_fonts| {
                     asset_manager.with_font("miso", |metrics_font| {
@@ -1208,7 +1213,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                             });
                         });
 
-                        let choice_inner_left = list_x + label_bg_w + 16.0 * s;
+                        let choice_inner_left = list_x + label_bg_w + SUB_INLINE_ITEMS_LEFT_PAD * s;
                         let mut x_positions: Vec<f32> = Vec::with_capacity(choices.len());
                         {
                             let mut x = choice_inner_left;
