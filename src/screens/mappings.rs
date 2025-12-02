@@ -137,10 +137,19 @@ pub struct State {
     bg: heart_bg::State,
     /// 0..NUM_MAPPING_ROWS-1 = mapping rows, NUM_MAPPING_ROWS = Exit.
     selected_row: usize,
+    prev_selected_row: usize,
     active_slot: ActiveSlot,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     nav_key_last_scrolled_at: Option<Instant>,
+    // Vertical tween when changing selected row
+    cursor_row_anim_from_y: f32,
+    cursor_row_anim_t: f32,
+    cursor_row_anim_from_row: Option<usize>,
+    // Horizontal tween when changing active slot within a row
+    slot_anim_from: ActiveSlot,
+    slot_anim_to: ActiveSlot,
+    slot_anim_t: f32,
 }
 
 pub fn init() -> State {
@@ -148,10 +157,17 @@ pub fn init() -> State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: heart_bg::State::new(),
         selected_row: 0,
+        prev_selected_row: 0,
         active_slot: ActiveSlot::P1Primary,
         nav_key_held_direction: None,
         nav_key_held_since: None,
         nav_key_last_scrolled_at: None,
+        cursor_row_anim_from_y: 0.0,
+        cursor_row_anim_t: 1.0,
+        cursor_row_anim_from_row: None,
+        slot_anim_from: ActiveSlot::P1Primary,
+        slot_anim_to: ActiveSlot::P1Primary,
+        slot_anim_t: 1.0,
     }
 }
 
@@ -216,6 +232,9 @@ fn move_selection(state: &mut State, dir: NavDirection) {
     };
     if new != old {
         state.selected_row = new;
+        // Reset row tween; update() will compute from_y based on layout.
+        state.cursor_row_anim_t = 0.0;
+        state.cursor_row_anim_from_row = Some(old);
         audio::play_sfx("assets/sounds/change.ogg");
     }
 }
@@ -235,7 +254,87 @@ pub fn update(state: &mut State, dt: f32) {
             state.nav_key_last_scrolled_at = Some(now);
         }
     }
+    // Start vertical cursor tween when the selected row changes.
+    if state.selected_row != state.prev_selected_row {
+        // Duplicate layout math needed to compute row centers (mirrors get_actors()).
+        let sw = screen_width();
+        let sh = screen_height();
 
+        let content_top = BAR_H;
+        let content_bottom = sh - BAR_H;
+        let content_h = (content_bottom - content_top).max(0.0);
+
+        let content_left = LEFT_MARGIN_PX;
+        let content_right = sw - RIGHT_MARGIN_PX;
+        let avail_w = (content_right - content_left).max(0.0);
+        let avail_h =
+            (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
+
+        let total_w_base =
+            SIDE_W_BASE * 2.0 + DESC_W_BASE * 0.8 + SIDE_GAP_BASE * 2.0;
+        let rows_h_base =
+            (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
+
+        let s_w = if total_w_base > 0.0 {
+            avail_w / total_w_base
+        } else {
+            1.0
+        };
+        let s_h = if rows_h_base > 0.0 {
+            avail_h / rows_h_base
+        } else {
+            1.0
+        };
+        let s = s_w.min(s_h).max(0.0);
+
+        let first_row_y =
+            content_top + FIRST_ROW_TOP_MARGIN_PX + TABLE_TOP_EXTRA_PX;
+
+        let total = total_rows();
+        let anchor_row: usize = 4;
+        let max_offset = total.saturating_sub(VISIBLE_ROWS);
+        let offset_rows = if total <= VISIBLE_ROWS {
+            0
+        } else {
+            state
+                .selected_row
+                .saturating_sub(anchor_row)
+                .min(max_offset)
+        };
+
+        let prev_idx = state.prev_selected_row;
+        let i_prev_vis = (prev_idx as isize) - (offset_rows as isize);
+        let row_step = (ROW_H + ROW_GAP) * s;
+        let from_y_center =
+            first_row_y + (i_prev_vis as f32) * row_step + 0.5 * ROW_H * s;
+        state.cursor_row_anim_from_y = from_y_center;
+        state.cursor_row_anim_t = 0.0;
+        state.cursor_row_anim_from_row = Some(prev_idx);
+        state.prev_selected_row = state.selected_row;
+    }
+
+    // Advance vertical row tween, if any.
+    if state.cursor_row_anim_t < 1.0 {
+        if CURSOR_TWEEN_SECONDS > 0.0 {
+            state.cursor_row_anim_t =
+                (state.cursor_row_anim_t + dt / CURSOR_TWEEN_SECONDS).min(1.0);
+        } else {
+            state.cursor_row_anim_t = 1.0;
+        }
+        if state.cursor_row_anim_t >= 1.0 {
+            state.cursor_row_anim_from_row = None;
+        }
+    }
+
+    // Advance horizontal slot tween, if any.
+    if state.slot_anim_t < 1.0 {
+        if CURSOR_TWEEN_SECONDS > 0.0 {
+            state.slot_anim_t =
+                (state.slot_anim_t + dt / CURSOR_TWEEN_SECONDS).min(1.0);
+        } else {
+            state.slot_anim_t = 1.0;
+        }
+    }
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -261,13 +360,27 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
-                state.active_slot = state.active_slot.prev();
+                let old_slot = state.active_slot;
+                let new_slot = state.active_slot.prev();
+                if new_slot != old_slot {
+                    state.active_slot = new_slot;
+                    state.slot_anim_from = old_slot;
+                    state.slot_anim_to = new_slot;
+                    state.slot_anim_t = 0.0;
+                }
                 audio::play_sfx("assets/sounds/change_value.ogg");
             }
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
-                state.active_slot = state.active_slot.next();
+                let old_slot = state.active_slot;
+                let new_slot = state.active_slot.next();
+                if new_slot != old_slot {
+                    state.active_slot = new_slot;
+                    state.slot_anim_from = old_slot;
+                    state.slot_anim_to = new_slot;
+                    state.slot_anim_t = 0.0;
+                }
                 audio::play_sfx("assets/sounds/change_value.ogg");
             }
         }
@@ -474,6 +587,23 @@ pub fn get_actors(
     let p1_center_x = p1_side_x + side_w * 0.5;
     let p2_center_x = p2_side_x + side_w * 0.5;
 
+    // Helper for computing the cursor center X for a given row index and slot.
+    let slot_center_x_for_row = |row_idx: usize, slot: ActiveSlot| -> f32 {
+        if row_idx >= total_rows() {
+            content_center_x
+        } else if row_idx == NUM_MAPPING_ROWS {
+            // Exit row always uses the centered Exit label.
+            content_center_x
+        } else {
+            match slot {
+                ActiveSlot::P1Primary => p1_primary_x,
+                ActiveSlot::P1Secondary => p1_secondary_x,
+                ActiveSlot::P2Primary => p2_primary_x,
+                ActiveSlot::P2Secondary => p2_secondary_x,
+            }
+        }
+    };
+
     // Top line: Player labels (Wendy, white).
     ui_actors.push(act!(text:
         align(0.5, 0.5):
@@ -673,13 +803,33 @@ pub fn get_actors(
 
             // Selection ring around active slot.
             if is_active {
-                let center_x = match state.active_slot {
-                    ActiveSlot::P1Primary => p1_primary_x,
-                    ActiveSlot::P1Secondary => p1_secondary_x,
-                    ActiveSlot::P2Primary => p2_primary_x,
-                    ActiveSlot::P2Secondary => p2_secondary_x,
-                };
-                let center_y = row_mid_y;
+                let center_x_target =
+                    slot_center_x_for_row(row_idx, state.active_slot);
+                let mut center_x = center_x_target;
+                let mut center_y = row_mid_y;
+
+                // Vertical + (optional) diagonal tween between rows.
+                if state.cursor_row_anim_t < 1.0 {
+                    if let Some(from_row) = state.cursor_row_anim_from_row {
+                        let t = ease_out_cubic(state.cursor_row_anim_t);
+                        let from_x = slot_center_x_for_row(
+                            from_row,
+                            state.active_slot,
+                        );
+                        let from_y = state.cursor_row_anim_from_y;
+                        center_x = from_x + (center_x_target - from_x) * t;
+                        center_y =
+                            from_y + (row_mid_y - from_y) * t;
+                    }
+                } else if state.slot_anim_t < 1.0 {
+                    // Horizontal tween within the current row when changing slots.
+                    let t = ease_out_cubic(state.slot_anim_t);
+                    let from_x =
+                        slot_center_x_for_row(row_idx, state.slot_anim_from);
+                    let to_x =
+                        slot_center_x_for_row(row_idx, state.slot_anim_to);
+                    center_x = from_x + (to_x - from_x) * t;
+                }
 
                 let ring_w = col_w * 0.9;
                 let ring_h = ROW_H * s * 0.9;
@@ -763,12 +913,11 @@ pub fn get_actors(
                 let value_zoom = 0.835_f32;
                 asset_manager.with_fonts(|all_fonts| {
                     asset_manager.with_font("miso", |metrics_font| {
-                        let mut text_w =
-                            font::measure_line_width_logical(
-                                metrics_font,
-                                exit_label,
-                                all_fonts,
-                            ) as f32;
+                        let mut text_w = font::measure_line_width_logical(
+                            metrics_font,
+                            exit_label,
+                            all_fonts,
+                        ) as f32;
                         if !text_w.is_finite() || text_w <= 0.0 {
                             text_w = 1.0;
                         }
@@ -797,8 +946,35 @@ pub fn get_actors(
                         let mut ring_w = draw_w + pad_x * 2.0;
                         let mut ring_h = draw_h + pad_y * 2.0;
 
-                        let center_x = exit_center_x;
-                        let center_y = exit_y;
+                        let mut center_x = exit_center_x;
+                        let mut center_y = exit_y;
+
+                        // Diagonal tween from the previous row's cursor center
+                        // (mapping slot or the previous Exit) to this Exit row.
+                        if state.cursor_row_anim_t < 1.0 {
+                            if let Some(from_row) = state.cursor_row_anim_from_row
+                            {
+                                let t = ease_out_cubic(state.cursor_row_anim_t);
+                                let from_x = slot_center_x_for_row(
+                                    from_row,
+                                    state.active_slot,
+                                );
+                                let from_y = state.cursor_row_anim_from_y;
+                                center_x =
+                                    from_x + (exit_center_x - from_x) * t;
+                                center_y = from_y + (exit_y - from_y) * t;
+
+                                // Interpolate ring size from a mapping-sized
+                                // cursor to the Exit-sized cursor.
+                                let ring_w_from = col_w * 0.9;
+                                let ring_h_from = ROW_H * s * 0.9;
+                                let tsize = t;
+                                ring_w =
+                                    ring_w_from + (ring_w - ring_w_from) * tsize;
+                                ring_h =
+                                    ring_h_from + (ring_h - ring_h_from) * tsize;
+                            }
+                        }
 
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;
