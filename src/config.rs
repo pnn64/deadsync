@@ -101,7 +101,21 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str("P1_Right=KeyCode::ArrowRight,KeyCode::KeyD\n");
     content.push_str("P1_Select=\n");
     content.push_str("P1_Start=KeyCode::Enter\n");
-    content.push_str("P1_Up=KeyCode::ArrowUp,KeyCode::KeyW\n\n");
+    content.push_str("P1_Up=KeyCode::ArrowUp,KeyCode::KeyW\n");
+    // Player 2 keyboard defaults: numpad directions + Start on NumpadEnter.
+    content.push_str("P2_Back=\n");
+    content.push_str("P2_Down=KeyCode::Numpad2\n");
+    content.push_str("P2_Left=KeyCode::Numpad4\n");
+    content.push_str("P2_MenuDown=\n");
+    content.push_str("P2_MenuLeft=\n");
+    content.push_str("P2_MenuRight=\n");
+    content.push_str("P2_MenuUp=\n");
+    content.push_str("P2_Operator=\n");
+    content.push_str("P2_Restart=\n");
+    content.push_str("P2_Right=KeyCode::Numpad6\n");
+    content.push_str("P2_Select=\n");
+    content.push_str("P2_Start=KeyCode::NumpadEnter\n");
+    content.push_str("P2_Up=KeyCode::Numpad8\n\n");
 
     std::fs::write(CONFIG_PATH, content)
 }
@@ -186,6 +200,20 @@ pub fn load() {
                 conf2.set("Keymaps", "P1_Select", Some("".to_string()));
                 conf2.set("Keymaps", "P1_Operator", Some("".to_string()));
                 conf2.set("Keymaps", "P1_Restart", Some("".to_string()));
+                // Player 2 defaults (numpad) – no pad bindings.
+                conf2.set("Keymaps", "P2_Back", Some("".to_string()));
+                conf2.set("Keymaps", "P2_Start", Some("KeyCode::NumpadEnter".to_string()));
+                conf2.set("Keymaps", "P2_Up", Some("KeyCode::Numpad8".to_string()));
+                conf2.set("Keymaps", "P2_Down", Some("KeyCode::Numpad2".to_string()));
+                conf2.set("Keymaps", "P2_Left", Some("KeyCode::Numpad4".to_string()));
+                conf2.set("Keymaps", "P2_Right", Some("KeyCode::Numpad6".to_string()));
+                conf2.set("Keymaps", "P2_MenuUp", Some("".to_string()));
+                conf2.set("Keymaps", "P2_MenuDown", Some("".to_string()));
+                conf2.set("Keymaps", "P2_MenuLeft", Some("".to_string()));
+                conf2.set("Keymaps", "P2_MenuRight", Some("".to_string()));
+                conf2.set("Keymaps", "P2_Select", Some("".to_string()));
+                conf2.set("Keymaps", "P2_Operator", Some("".to_string()));
+                conf2.set("Keymaps", "P2_Restart", Some("".to_string()));
                 need_write_keymaps = true;
             } else {
                 // Add only missing keys
@@ -202,6 +230,20 @@ pub fn load() {
                 need_write_keymaps |= ensure(&mut conf2, "P1_Select", "");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Operator", "");
                 need_write_keymaps |= ensure(&mut conf2, "P1_Restart", "");
+                // P2 keys
+                need_write_keymaps |= ensure(&mut conf2, "P2_Back", "");
+                need_write_keymaps |= ensure(&mut conf2, "P2_Start", "KeyCode::NumpadEnter");
+                need_write_keymaps |= ensure(&mut conf2, "P2_Up", "KeyCode::Numpad8");
+                need_write_keymaps |= ensure(&mut conf2, "P2_Down", "KeyCode::Numpad2");
+                need_write_keymaps |= ensure(&mut conf2, "P2_Left", "KeyCode::Numpad4");
+                need_write_keymaps |= ensure(&mut conf2, "P2_Right", "KeyCode::Numpad6");
+                need_write_keymaps |= ensure(&mut conf2, "P2_MenuUp", "");
+                need_write_keymaps |= ensure(&mut conf2, "P2_MenuDown", "");
+                need_write_keymaps |= ensure(&mut conf2, "P2_MenuLeft", "");
+                need_write_keymaps |= ensure(&mut conf2, "P2_MenuRight", "");
+                need_write_keymaps |= ensure(&mut conf2, "P2_Select", "");
+                need_write_keymaps |= ensure(&mut conf2, "P2_Operator", "");
+                need_write_keymaps |= ensure(&mut conf2, "P2_Restart", "");
             }
             if need_write_keymaps
                 && let Err(e) = conf2.write(CONFIG_PATH) { warn!("Failed to append missing keymaps: {}", e); }
@@ -237,6 +279,7 @@ pub fn load() {
 fn default_keymap_local() -> Keymap {
     use VirtualAction as A;
     let mut km = Keymap::default();
+    // Player 1 defaults (WASD + arrows, Enter/Escape).
     km.bind(A::p1_up,    &[
         InputBinding::Key(KeyCode::ArrowUp), InputBinding::Key(KeyCode::KeyW),
     ]);
@@ -255,6 +298,23 @@ fn default_keymap_local() -> Keymap {
     km.bind(A::p1_back, &[
         InputBinding::Key(KeyCode::Escape)
     ]);
+    // Player 2 defaults (numpad directions + Start on NumpadEnter).
+    km.bind(A::p2_up, &[
+        InputBinding::Key(KeyCode::Numpad8),
+    ]);
+    km.bind(A::p2_down, &[
+        InputBinding::Key(KeyCode::Numpad2),
+    ]);
+    km.bind(A::p2_left, &[
+        InputBinding::Key(KeyCode::Numpad4),
+    ]);
+    km.bind(A::p2_right, &[
+        InputBinding::Key(KeyCode::Numpad6),
+    ]);
+    km.bind(A::p2_start, &[
+        InputBinding::Key(KeyCode::NumpadEnter),
+    ]);
+    // Leave P2_Back/Menu/Select/Operator/Restart unbound by default for now.
     km
 }
 
@@ -275,6 +335,19 @@ fn parse_action_key_lower(k: &str) -> Option<VirtualAction> {
         "p1_select" => Some(p1_select),
         "p1_operator" => Some(p1_operator),
         "p1_restart" => Some(p1_restart),
+        "p2_up" => Some(p2_up),
+        "p2_down" => Some(p2_down),
+        "p2_left" => Some(p2_left),
+        "p2_right" => Some(p2_right),
+        "p2_start" => Some(p2_start),
+        "p2_back" => Some(p2_back),
+        "p2_menuup" => Some(p2_menu_up),
+        "p2_menudown" => Some(p2_menu_down),
+        "p2_menuleft" => Some(p2_menu_left),
+        "p2_menuright" => Some(p2_menu_right),
+        "p2_select" => Some(p2_select),
+        "p2_operator" => Some(p2_operator),
+        "p2_restart" => Some(p2_restart),
         _ => None,
     }
 }
@@ -292,6 +365,25 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
             "ArrowDown" => KeyCode::ArrowDown,
             "ArrowLeft" => KeyCode::ArrowLeft,
             "ArrowRight" => KeyCode::ArrowRight,
+            // Numpad keys
+            "Numpad0" => KeyCode::Numpad0,
+            "Numpad1" => KeyCode::Numpad1,
+            "Numpad2" => KeyCode::Numpad2,
+            "Numpad3" => KeyCode::Numpad3,
+            "Numpad4" => KeyCode::Numpad4,
+            "Numpad5" => KeyCode::Numpad5,
+            "Numpad6" => KeyCode::Numpad6,
+            "Numpad7" => KeyCode::Numpad7,
+            "Numpad8" => KeyCode::Numpad8,
+            "Numpad9" => KeyCode::Numpad9,
+            "NumpadAdd" => KeyCode::NumpadAdd,
+            "NumpadDivide" => KeyCode::NumpadDivide,
+            "NumpadDecimal" => KeyCode::NumpadDecimal,
+            "NumpadComma" => KeyCode::NumpadComma,
+            "NumpadEnter" => KeyCode::NumpadEnter,
+            "NumpadEqual" => KeyCode::NumpadEqual,
+            "NumpadMultiply" => KeyCode::NumpadMultiply,
+            "NumpadSubtract" => KeyCode::NumpadSubtract,
             // Letter keys A-Z
             "KeyA" => KeyCode::KeyA, "KeyB" => KeyCode::KeyB, "KeyC" => KeyCode::KeyC, "KeyD" => KeyCode::KeyD,
             "KeyE" => KeyCode::KeyE, "KeyF" => KeyCode::KeyF, "KeyG" => KeyCode::KeyG, "KeyH" => KeyCode::KeyH,

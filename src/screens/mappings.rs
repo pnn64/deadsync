@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::core::audio;
-use crate::core::input::{InputEvent, VirtualAction};
+use crate::core::input::{get_keymap, InputEvent, VirtualAction};
 use crate::core::space::*;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
@@ -79,6 +79,39 @@ const MAPPING_LABELS: [&str; NUM_MAPPING_ROWS] = [
     "UpLeft",
     "UpRight",
 ];
+
+/// Map each visual row to the underlying virtual actions for P1/P2.
+#[inline(always)]
+fn row_actions(row_idx: usize) -> (Option<VirtualAction>, Option<VirtualAction>) {
+    use VirtualAction::*;
+    match row_idx {
+        // Menu navigation
+        0 => (Some(p1_menu_left),  Some(p2_menu_left)),
+        1 => (Some(p1_menu_right), Some(p2_menu_right)),
+        2 => (Some(p1_menu_up),    Some(p2_menu_up)),
+        3 => (Some(p1_menu_down),  Some(p2_menu_down)),
+        // System buttons
+        4 => (Some(p1_start),      Some(p2_start)),
+        5 => (Some(p1_select),     Some(p2_select)),
+        6 => (Some(p1_back),       Some(p2_back)),
+        7 => (Some(p1_restart),    Some(p2_restart)),
+        // Insert Coin currently global-only; no per-player virtual action yet.
+        8 => (None,                None),
+        // Operator
+        9  => (Some(p1_operator),  Some(p2_operator)),
+        // EffectUp/EffectDown, UpLeft/UpRight reserved for future expansion.
+        10 => (None,               None),
+        11 => (None,               None),
+        // Gameplay directions
+        12 => (Some(p1_left),      Some(p2_left)),
+        13 => (Some(p1_right),     Some(p2_right)),
+        14 => (Some(p1_up),        Some(p2_up)),
+        15 => (Some(p1_down),      Some(p2_down)),
+        16 => (None,               None),
+        17 => (None,               None),
+        _ => (None, None),
+    }
+}
 
 #[inline(always)]
 fn ease_out_cubic(t: f32) -> f32 {
@@ -461,6 +494,9 @@ pub fn get_actors(
     let col_white = [1.0, 1.0, 1.0, 1.0];
     let col_gray = color::rgba_hex("#808080");
 
+    // Snapshot of current virtual keymap so defaults reflect deadsync.ini.
+    let keymap = get_keymap();
+
     // Compute available content area between top/bottom bars and side margins.
     let sw = screen_width();
     let sh = screen_height();
@@ -730,8 +766,18 @@ pub fn get_actors(
                 diffuse(default_bg_color[0], default_bg_color[1], default_bg_color[2], default_bg_color[3])
             ));
 
-            // For now, every slot shows the placeholder value "------".
+            // Editable slots still use placeholder text; default columns show
+            // the first key listed for each action in deadsync.ini.
             let value_text = "------";
+            let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
+            let p1_default_text = p1_act_opt
+                .and_then(|act| keymap.first_key_binding(act))
+                .map(|code| format!("KeyCode::{:?}", code))
+                .unwrap_or_else(|| "------".to_string());
+            let p2_default_text = p2_act_opt
+                .and_then(|act| keymap.first_key_binding(act))
+                .map(|code| format!("KeyCode::{:?}", code))
+                .unwrap_or_else(|| "------".to_string());
             let active_value_color = if is_active {
                 col_white
             } else {
@@ -766,7 +812,7 @@ pub fn get_actors(
                 zoom(value_zoom):
                 diffuse(col_white[0], col_white[1], col_white[2], col_white[3]):
                 font("miso"):
-                settext(value_text):
+                settext(p1_default_text):
                 horizalign(center)
             ));
 
@@ -797,7 +843,7 @@ pub fn get_actors(
                 zoom(value_zoom):
                 diffuse(col_white[0], col_white[1], col_white[2], col_white[3]):
                 font("miso"):
-                settext(value_text):
+                settext(p2_default_text):
                 horizalign(center)
             ));
 

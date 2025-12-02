@@ -322,6 +322,20 @@ pub enum VirtualAction {
     p1_select,
     p1_operator,
     p1_restart,
+    // Player 2 virtual actions (mirroring P1 for future 2P support).
+    p2_up,
+    p2_down,
+    p2_left,
+    p2_right,
+    p2_start,
+    p2_back,
+    p2_menu_up,
+    p2_menu_down,
+    p2_menu_left,
+    p2_menu_right,
+    p2_select,
+    p2_operator,
+    p2_restart,
 }
 
 /// Low-level gamepad binding to a platform-specific element code.
@@ -365,6 +379,24 @@ impl Keymap {
     #[inline(always)]
     pub fn bind(&mut self, action: VirtualAction, inputs: &[InputBinding]) {
         self.map.insert(action, inputs.to_vec());
+    }
+
+    /// Returns the first keyboard key bound to this virtual action, if any.
+    /// This reflects the first `KeyCode::...` token listed for the action
+    /// in `deadsync.ini` (or the hardcoded default keymap).
+    #[inline(always)]
+    pub fn first_key_binding(&self, action: VirtualAction) -> Option<KeyCode> {
+        self.map
+            .get(&action)
+            .and_then(|bindings| {
+                bindings.iter().find_map(|b| {
+                    if let InputBinding::Key(code) = b {
+                        Some(*code)
+                    } else {
+                        None
+                    }
+                })
+            })
     }
 
     #[inline(always)]
@@ -522,6 +554,10 @@ fn dedup_menu_variants(actions: &mut Vec<(VirtualAction, bool)>) {
         A::p1_menu_down  => !(has(A::p1_down,  *pr)),
         A::p1_menu_left  => !(has(A::p1_left,  *pr)),
         A::p1_menu_right => !(has(A::p1_right, *pr)),
+        A::p2_menu_up    => !(has(A::p2_up,    *pr)),
+        A::p2_menu_down  => !(has(A::p2_down,  *pr)),
+        A::p2_menu_left  => !(has(A::p2_left,  *pr)),
+        A::p2_menu_right => !(has(A::p2_right, *pr)),
         _ => true,
     });
 }
