@@ -54,13 +54,28 @@ const CURSOR_TWEEN_SECONDS: f32 = 0.1;
 /// Spacing between inline items (for cursor ring sizing).
 const INLINE_SPACING: f32 = 15.75;
 
-/// Cardinal directions we expose in this prototype.
-const NUM_MAPPING_ROWS: usize = 4;
-const MAPPING_LABELS: [&str; NUM_MAPPING_ROWS] = ["Left", "Down", "Up", "Right"];
-
-/// Static description lines for the center box.
-const DESC_TITLE: &str = "Configure mappings for these directions:";
-const DESC_LINES: [&str; NUM_MAPPING_ROWS] = ["Left", "Down", "Up", "Right"];
+/// Logical mapping rows we expose in this prototype.
+const NUM_MAPPING_ROWS: usize = 18;
+const MAPPING_LABELS: [&str; NUM_MAPPING_ROWS] = [
+    "MenuLeft",
+    "MenuRight",
+    "MenuUp",
+    "MenuDown",
+    "Start",
+    "Select",
+    "Back",
+    "Restart",
+    "Insert Coin",
+    "Operator",
+    "EffectUp",
+    "EffectDown",
+    "Left",
+    "Right",
+    "Up",
+    "Down",
+    "UpLeft",
+    "UpRight",
+];
 
 #[inline(always)]
 fn ease_out_cubic(t: f32) -> f32 {
@@ -123,9 +138,6 @@ pub struct State {
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     nav_key_last_scrolled_at: Option<Instant>,
-    // Vertical tween when changing selected row
-    cursor_row_anim_from_y: f32,
-    cursor_row_anim_t: f32,
 }
 
 pub fn init() -> State {
@@ -137,8 +149,6 @@ pub fn init() -> State {
         nav_key_held_direction: None,
         nav_key_held_since: None,
         nav_key_last_scrolled_at: None,
-        cursor_row_anim_from_y: 0.0,
-        cursor_row_anim_t: 1.0,
     }
 }
 
@@ -223,15 +233,6 @@ pub fn update(state: &mut State, dt: f32) {
         }
     }
 
-    // Advance vertical row tween.
-    if state.cursor_row_anim_t < 1.0 {
-        if CURSOR_TWEEN_SECONDS > 0.0 {
-            state.cursor_row_anim_t = (state.cursor_row_anim_t + dt / CURSOR_TWEEN_SECONDS)
-                .min(1.0);
-        } else {
-            state.cursor_row_anim_t = 1.0;
-        }
-    }
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -360,8 +361,9 @@ pub fn get_actors(
     // Base layout extents (unscaled).
     let total_w_base =
         SIDE_W_BASE * 2.0 + DESC_W_BASE * 0.8 + SIDE_GAP_BASE * 2.0;
-    let rows_h_base = (NUM_MAPPING_ROWS as f32) * ROW_H
-        + ((NUM_MAPPING_ROWS.saturating_sub(1)) as f32) * ROW_GAP;
+    // Only VISIBLE_ROWS participate in vertical fit; the list scrolls inside.
+    let rows_h_base =
+        (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
 
     let s_w = if total_w_base > 0.0 {
         avail_w / total_w_base
@@ -386,10 +388,37 @@ pub fn get_actors(
     let p1_side_x = desc_x - gap - side_w;
     let p2_side_x = desc_x + desc_w + gap;
 
-    let rows_h = rows_h_base * s;
-    let desc_h = rows_h;
+    // Scrolling window (like PlayerOptions): only VISIBLE_ROWS rows shown.
+    let total = total_rows();
+    let anchor_row: usize = 4;
+    let max_offset = total.saturating_sub(VISIBLE_ROWS);
+    let offset_rows = if total <= VISIBLE_ROWS {
+        0
+    } else {
+        state
+            .selected_row
+            .saturating_sub(anchor_row)
+            .min(max_offset)
+    };
 
-    // Description box (center).
+    // Description height should end at the last visible mapping row (not including Exit).
+    let mut visible_mapping_rows = 0_usize;
+    for i_vis in 0..VISIBLE_ROWS {
+        let row_idx = offset_rows + i_vis;
+        if row_idx >= NUM_MAPPING_ROWS {
+            break;
+        }
+        visible_mapping_rows += 1;
+    }
+    let desc_rows_h_base = if visible_mapping_rows == 0 {
+        0.0
+    } else {
+        (visible_mapping_rows as f32) * ROW_H
+            + ((visible_mapping_rows.saturating_sub(1)) as f32) * ROW_GAP
+    };
+    let desc_h = desc_rows_h_base * s;
+
+    // Description box (center) – height matched to visible mapping rows only.
     ui_actors.push(act!(quad:
         align(0.0, 0.0):
         xy(desc_x, first_row_y):
@@ -397,115 +426,24 @@ pub fn get_actors(
         diffuse(col_active_bg[0], col_active_bg[1], col_active_bg[2], col_active_bg[3])
     ));
 
-    // Description content: title + bullet list.
+    // Description content: per-row labels aligned with mapping rows.
     {
-        let mut cursor_y = first_row_y + DESC_TITLE_TOP_PAD_PX * s;
-        let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
-        let title_step_px = 20.0 * s;
-
-        let wrapped_title = asset_manager
-            .with_fonts(|all_fonts| {
-                asset_manager.with_font("miso", |miso_font| {
-                    let max_width_px =
-                        (desc_w / s - 2.0 * DESC_TITLE_SIDE_PAD_PX).max(0.0) * s;
-                    let mut out = String::new();
-                    let mut is_first_output_line = true;
-
-                    for segment in DESC_TITLE.split('\n') {
-                        let trimmed = segment.trim_end();
-                        if trimmed.is_empty() {
-                            if !is_first_output_line {
-                                out.push('\n');
-                            }
-                            continue;
-                        }
-
-                        let mut current_line = String::new();
-                        for word in trimmed.split_whitespace() {
-                            let candidate = if current_line.is_empty() {
-                                word.to_owned()
-                            } else {
-                                let mut tmp = current_line.clone();
-                                tmp.push(' ');
-                                tmp.push_str(word);
-                                tmp
-                            };
-
-                            let logical_w =
-                                font::measure_line_width_logical(
-                                    miso_font,
-                                    &candidate,
-                                    all_fonts,
-                                ) as f32;
-                            let pixel_w = logical_w * DESC_TITLE_ZOOM * s;
-
-                            if !current_line.is_empty() && pixel_w > max_width_px {
-                                if !is_first_output_line {
-                                    out.push('\n');
-                                }
-                                out.push_str(&current_line);
-                                is_first_output_line = false;
-                                current_line.clear();
-                                current_line.push_str(word);
-                            } else {
-                                current_line = candidate;
-                            }
-                        }
-
-                        if !current_line.is_empty() {
-                            if !is_first_output_line {
-                                out.push('\n');
-                            }
-                            out.push_str(&current_line);
-                            is_first_output_line = false;
-                        }
-                    }
-
-                    if out.is_empty() {
-                        DESC_TITLE.to_string()
-                    } else {
-                        out
-                    }
-                })
-            })
-            .unwrap_or_else(|| DESC_TITLE.to_string());
-        let title_lines = wrapped_title.lines().count().max(1) as f32;
-
-        ui_actors.push(act!(text:
-            align(0.0, 0.0):
-            xy(desc_x + title_side_pad, cursor_y):
-            zoom(DESC_TITLE_ZOOM):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            font("miso"): settext(wrapped_title):
-            horizalign(left)
-        ));
-        cursor_y += title_step_px * title_lines + DESC_BULLET_TOP_PAD_PX * s;
-
-        if !DESC_LINES.is_empty() {
-            let mut bullet_text = String::new();
-            let mut first = true;
-            for line in DESC_LINES {
-                let trimmed = line.trim();
-                if trimmed.is_empty() {
-                    continue;
-                }
-                if !first {
-                    bullet_text.push('\n');
-                }
-                bullet_text.push('•');
-                bullet_text.push(' ');
-                bullet_text.push_str(trimmed);
-                first = false;
+        let labels_center_x = desc_x + desc_w * 0.5;
+        for i_vis in 0..VISIBLE_ROWS {
+            let row_idx = offset_rows + i_vis;
+            if row_idx >= NUM_MAPPING_ROWS {
+                break;
             }
-            let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
-            let bullet_x = desc_x + bullet_side_pad + DESC_BULLET_INDENT_PX * s;
+            let row_center_y =
+                first_row_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s
+                    + 0.5 * ROW_H * s;
             ui_actors.push(act!(text:
-                align(0.0, 0.0):
-                xy(bullet_x, cursor_y):
+                align(0.5, 0.5):
+                xy(labels_center_x, row_center_y):
                 zoom(DESC_BODY_ZOOM):
                 diffuse(1.0, 1.0, 1.0, 1.0):
-                font("miso"): settext(bullet_text):
-                horizalign(left)
+                font("miso"): settext(MAPPING_LABELS[row_idx]):
+                horizalign(center)
             ));
         }
     }
@@ -513,12 +451,78 @@ pub fn get_actors(
     // Side columns: three columns per side (Primary, Secondary, Default).
     let col_w = side_w / 3.0;
     let value_zoom = 0.9_f32;
-    let total_rows = total_rows();
 
-    for row_idx in 0..total_rows {
-        let is_exit = row_idx == total_rows - 1;
+    // Wendy-style column headers above each side's three columns.
+    let header_y = first_row_y - 16.0 * s;
+    let p1_primary_x = p1_side_x + col_w * 0.5;
+    let p1_secondary_x = p1_side_x + col_w * 1.5;
+    let p1_default_x = p1_side_x + col_w * 2.5;
+    let p2_primary_x = p2_side_x + col_w * 0.5;
+    let p2_secondary_x = p2_side_x + col_w * 1.5;
+    let p2_default_x = p2_side_x + col_w * 2.5;
+
+    let header_zoom = 0.75_f32;
+    // P1 headers
+    ui_actors.push(act!(text:
+        align(0.5, 0.5):
+        xy(p1_primary_x, header_y):
+        zoom(header_zoom):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        font("miso"): settext("P1 PRIMARY"):
+        horizalign(center)
+    ));
+    ui_actors.push(act!(text:
+        align(0.5, 0.5):
+        xy(p1_secondary_x, header_y):
+        zoom(header_zoom):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        font("miso"): settext("P1 SECONDARY"):
+        horizalign(center)
+    ));
+    ui_actors.push(act!(text:
+        align(0.5, 0.5):
+        xy(p1_default_x, header_y):
+        zoom(header_zoom):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        font("miso"): settext("P1 DEFAULT"):
+        horizalign(center)
+    ));
+
+    // P2 headers
+    ui_actors.push(act!(text:
+        align(0.5, 0.5):
+        xy(p2_primary_x, header_y):
+        zoom(header_zoom):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        font("miso"): settext("P2 PRIMARY"):
+        horizalign(center)
+    ));
+    ui_actors.push(act!(text:
+        align(0.5, 0.5):
+        xy(p2_secondary_x, header_y):
+        zoom(header_zoom):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        font("miso"): settext("P2 SECONDARY"):
+        horizalign(center)
+    ));
+    ui_actors.push(act!(text:
+        align(0.5, 0.5):
+        xy(p2_default_x, header_y):
+        zoom(header_zoom):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        font("miso"): settext("P2 DEFAULT"):
+        horizalign(center)
+    ));
+
+    for i_vis in 0..VISIBLE_ROWS {
+        let row_idx = offset_rows + i_vis;
+        if row_idx >= total {
+            break;
+        }
+
+        let is_exit = row_idx == total - 1;
         let row_y =
-            first_row_y + (row_idx as f32) * (ROW_H + ROW_GAP) * s;
+            first_row_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s;
         let row_mid_y = row_y + 0.5 * ROW_H * s;
         let is_active = row_idx == state.selected_row;
 
@@ -571,15 +575,6 @@ pub fn get_actors(
             };
 
             // P1 columns: Primary, Secondary, Default.
-            let p1_primary_x = p1_side_x + col_w * 0.5;
-            let p1_secondary_x = p1_side_x + col_w * 1.5;
-            let p1_default_x = p1_side_x + col_w * 2.5;
-
-            // P2 columns: Primary, Secondary, Default.
-            let p2_primary_x = p2_side_x + col_w * 0.5;
-            let p2_secondary_x = p2_side_x + col_w * 1.5;
-            let p2_default_x = p2_side_x + col_w * 2.5;
-
             // P1 primary / secondary (editable).
             ui_actors.push(act!(text:
                 align(0.5, 0.5):
@@ -644,19 +639,13 @@ pub fn get_actors(
 
             // Selection ring around active slot.
             if is_active {
-                let mut center_x = match state.active_slot {
+                let center_x = match state.active_slot {
                     ActiveSlot::P1Primary => p1_primary_x,
                     ActiveSlot::P1Secondary => p1_secondary_x,
                     ActiveSlot::P2Primary => p2_primary_x,
                     ActiveSlot::P2Secondary => p2_secondary_x,
                 };
-                let mut center_y = row_mid_y;
-
-                if state.cursor_row_anim_t < 1.0 {
-                    let t = ease_out_cubic(state.cursor_row_anim_t);
-                    center_y = state.cursor_row_anim_from_y
-                        + (row_mid_y - state.cursor_row_anim_from_y) * t;
-                }
+                let center_y = row_mid_y;
 
                 let ring_w = col_w * 0.9;
                 let ring_h = ROW_H * s * 0.9;
@@ -700,7 +689,8 @@ pub fn get_actors(
                 ));
             }
         } else {
-            // Exit row centered below everything, similar spirit to PlayerOptions.
+            // Exit row: full-width background across the content area and centered text,
+            // similar in spirit to PlayerOptions.
             let exit_label = "Exit";
             let exit_y = row_mid_y;
             let choice_color = if is_active {
@@ -709,6 +699,21 @@ pub fn get_actors(
                 col_gray
             };
             let exit_center_x = content_center_x;
+
+            // Full-width background from content_left to content_right.
+            let exit_row_left = content_left;
+            let exit_row_width = (content_right - content_left).max(0.0);
+            let exit_bg = if is_active {
+                col_active_bg
+            } else {
+                col_inactive_bg
+            };
+            ui_actors.push(act!(quad:
+                align(0.0, 0.0):
+                xy(exit_row_left, row_y):
+                zoomto(exit_row_width, ROW_H * s):
+                diffuse(exit_bg[0], exit_bg[1], exit_bg[2], exit_bg[3])
+            ));
 
             ui_actors.push(act!(text:
                 align(0.5, 0.5):
@@ -758,13 +763,8 @@ pub fn get_actors(
                         let mut ring_w = draw_w + pad_x * 2.0;
                         let mut ring_h = draw_h + pad_y * 2.0;
 
-                        let mut center_x = exit_center_x;
-                        let mut center_y = exit_y;
-                        if state.cursor_row_anim_t < 1.0 {
-                            let t = ease_out_cubic(state.cursor_row_anim_t);
-                            center_y = state.cursor_row_anim_from_y
-                                + (exit_y - state.cursor_row_anim_from_y) * t;
-                        }
+                        let center_x = exit_center_x;
+                        let center_y = exit_y;
 
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;
