@@ -747,16 +747,28 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     if total == 0 {
                         return ScreenAction::None;
                     }
-                    // Last row is Exit from the Options screen back to the main menu.
-                    if state.selected == total - 1 {
-                        audio::play_sfx("assets/sounds/start.ogg");
-                        return ScreenAction::Navigate(Screen::Menu);
-                    }
-                    // Enter System Options submenu when selecting the first row for now.
-                    if state.selected == 0 {
-                        audio::play_sfx("assets/sounds/start.ogg");
-                        state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
-                        state.submenu_fade_t = 0.0;
+                    let sel = state.selected.min(total - 1);
+                    let item = &ITEMS[sel];
+
+                    // Route based on the selected row label.
+                    match item.name {
+                        // Enter System Options submenu.
+                        "System Options" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                            state.submenu_fade_t = 0.0;
+                        }
+                        // Navigate to the new mappings screen.
+                        "Configure Keyboard/Pad Mappings" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            return ScreenAction::Navigate(Screen::Mappings);
+                        }
+                        // Exit from Options back to Menu.
+                        "Exit" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            return ScreenAction::Navigate(Screen::Menu);
+                        }
+                        _ => {}
                     }
                 }
                 OptionsView::SystemSubmenu => {

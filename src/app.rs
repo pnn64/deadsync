@@ -4,7 +4,10 @@ use crate::core::space::{self as space, Metrics};
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting};
 use crate::assets::AssetManager;
 use crate::ui::color;
-use crate::screens::{gameplay, menu, options, init, select_color, select_music, sandbox, evaluation, player_options, Screen as CurrentScreen, ScreenAction};
+use crate::screens::{
+    evaluation, gameplay, init, mappings, menu, options, player_options, sandbox, select_color,
+    select_music, Screen as CurrentScreen, ScreenAction,
+};
 use crate::game::parsing::simfile as song_loading;
 use winit::{
     application::ApplicationHandler,
@@ -52,6 +55,7 @@ pub struct AppState {
     menu_state: menu::State,
     gameplay_state: Option<gameplay::State>,
     options_state: options::State,
+    mappings_state: mappings::State,
     player_options_state: Option<player_options::State>,
     frame_count: u32,
     last_title_update: Instant,
@@ -129,6 +133,9 @@ impl AppState {
         let mut options_state = options::init();
         options_state.active_color_index = color_index;
 
+        let mut mappings_state = mappings::init();
+        mappings_state.active_color_index = color_index;
+
         let mut init_state = init::init();
         init_state.active_color_index = color_index;
 
@@ -140,6 +147,7 @@ impl AppState {
             menu_state,
             gameplay_state: None,
             options_state,
+            mappings_state,
             player_options_state: None,
             frame_count: 0,
             last_title_update: Instant::now(),
@@ -193,6 +201,10 @@ impl AppState {
             }
             CurrentScreen::Options => {
                 options::update(&mut self.options_state, delta_time);
+                None
+            }
+            CurrentScreen::Mappings => {
+                mappings::update(&mut self.mappings_state, delta_time);
                 None
             }
             CurrentScreen::PlayerOptions => {
@@ -252,6 +264,7 @@ impl App {
             CurrentScreen::Menu => crate::screens::menu::handle_input(&mut self.state.menu_state, &ev),
             CurrentScreen::SelectColor => crate::screens::select_color::handle_input(&mut self.state.select_color_state, &ev),
             CurrentScreen::Options => crate::screens::options::handle_input(&mut self.state.options_state, &ev),
+            CurrentScreen::Mappings => crate::screens::mappings::handle_input(&mut self.state.mappings_state, &ev),
             CurrentScreen::SelectMusic => crate::screens::select_music::handle_input(&mut self.state.select_music_state, &ev),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &mut self.state.player_options_state { crate::screens::player_options::handle_input(pos, &ev) } else { ScreenAction::None }
@@ -420,6 +433,7 @@ impl App {
                 } else { vec![] }
             },
             CurrentScreen::Options  => options::get_actors(&self.state.options_state, &self.asset_manager, screen_alpha_multiplier),
+            CurrentScreen::Mappings => mappings::get_actors(&self.state.mappings_state, &self.asset_manager, screen_alpha_multiplier),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &self.state.player_options_state {
                     player_options::get_actors(pos, &self.asset_manager)
@@ -473,6 +487,7 @@ impl App {
             CurrentScreen::Menu => menu::out_transition(self.state.menu_state.active_color_index),
             CurrentScreen::Gameplay => gameplay::out_transition(),
             CurrentScreen::Options => options::out_transition(),
+            CurrentScreen::Mappings => mappings::out_transition(),
             CurrentScreen::PlayerOptions => player_options::out_transition(),
             CurrentScreen::SelectColor => select_color::out_transition(),
             CurrentScreen::SelectMusic => select_music::out_transition(),
@@ -487,6 +502,7 @@ impl App {
             CurrentScreen::Menu => menu::in_transition(),
             CurrentScreen::Gameplay => gameplay::in_transition(),
             CurrentScreen::Options => options::in_transition(),
+            CurrentScreen::Mappings => mappings::in_transition(),
             CurrentScreen::PlayerOptions => player_options::in_transition(),
             CurrentScreen::SelectColor => select_color::in_transition(),
             CurrentScreen::SelectMusic => select_music::in_transition(),

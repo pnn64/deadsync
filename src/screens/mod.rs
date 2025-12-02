@@ -3,6 +3,7 @@ pub mod menu;
 pub mod options;
 pub mod init;
 pub mod select_color;
+pub mod mappings;
 pub mod select_music;
 pub mod sandbox;
 pub mod evaluation;
@@ -26,6 +27,7 @@ pub enum Screen {
     Gameplay,
     Options,
     Init,
+    Mappings,
     SelectColor,
     SelectMusic,
     Sandbox,
