@@ -614,49 +614,6 @@ fn load_keymap_from_ini_local(conf: &Ini) -> Keymap {
     }
 }
 
-/// Update a single binding slot for the given virtual action in the [Keymaps]
-/// section, then refresh the global keymap. The `index` follows the same
-/// ordering used by the UI:
-///   0 = Default, 1 = Primary, 2 = Secondary.
-pub fn update_keymap_binding(action: VirtualAction, index: usize, binding: InputBinding) {
-    // Rebuild the in-memory keymap for all virtual actions, updating only the
-    // requested slot for `action`, then persist the full config back to disk.
-    let current = crate::core::input::get_keymap();
-    let mut new_map = Keymap::default();
-
-    for act in ALL_VIRTUAL_ACTIONS {
-        let mut bindings: Vec<InputBinding> = Vec::new();
-        let mut i = 0;
-        while let Some(b) = current.binding_at(act, i) {
-            bindings.push(b);
-            i += 1;
-        }
-
-        if act == action {
-            if index == 0 {
-                if bindings.is_empty() {
-                    bindings.push(binding);
-                } else {
-                    bindings[0] = binding;
-                }
-            } else if index < bindings.len() {
-                bindings[index] = binding;
-            } else if bindings.is_empty() {
-                // No existing bindings; treat this as the first slot.
-                bindings.push(binding);
-            } else {
-                // Append as an additional slot when index is beyond current len.
-                bindings.push(binding);
-            }
-        }
-
-        new_map.bind(act, &bindings);
-    }
-
-    crate::core::input::set_keymap(new_map);
-    save_without_keymaps();
-}
-
 /// Update a keyboard binding in Primary/Secondary slots, ensuring that the
 /// given key code is not used in any other Primary/Secondary slot for P1/P2.
 /// Default slots (index 0) are never modified.

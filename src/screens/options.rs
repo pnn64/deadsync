@@ -931,7 +931,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
     ));
 
     // -------------------------- Rows + Description -------------------------
-    let mut selected_item: Option<&Item> = None;
+    let selected_item: Option<&Item>;
 
     match state.view {
         OptionsView::Main => {
