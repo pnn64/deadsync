@@ -1,7 +1,14 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::core::audio;
-use crate::core::input::{get_keymap, InputEvent, VirtualAction, InputBinding};
+use crate::core::input::{
+    get_keymap,
+    InputEvent,
+    VirtualAction,
+    InputBinding,
+    PadEvent,
+    GamepadCodeBinding,
+};
 use crate::core::space::*;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
@@ -63,15 +70,11 @@ const INLINE_SPACING: f32 = 15.75;
 /// Physical keys that are considered "default" and are not
 /// accepted as candidates when capturing a new mapping.
 const DEFAULT_PROTECTED_KEYS: &[KeyCode] = &[
-    // P1 defaults (arrows + WASD + Enter/Escape)
+    // P1 defaults (arrows + Enter/Escape)
     KeyCode::ArrowUp,
     KeyCode::ArrowDown,
     KeyCode::ArrowLeft,
     KeyCode::ArrowRight,
-    KeyCode::KeyW,
-    KeyCode::KeyA,
-    KeyCode::KeyS,
-    KeyCode::KeyD,
     KeyCode::Enter,
     KeyCode::Escape,
     // P2 defaults (numpad directions + Start)
@@ -417,30 +420,177 @@ pub fn update(state: &mut State, dt: f32) {
 }
 
 /// Raw keyboard handler used only while capturing a new mapping.
-/// This sees the physical key code so we can decide which keys are
-/// allowed to end capture (non-default) and which are ignored.
 pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAction {
-    if !state.capture_active {
+    if key_event.repeat {
         return ScreenAction::None;
     }
 
-    if key_event.state != ElementState::Pressed || key_event.repeat {
-        return ScreenAction::None;
-    }
-
+    let is_pressed = key_event.state == ElementState::Pressed;
     let PhysicalKey::Code(code) = key_event.physical_key else {
         return ScreenAction::None;
     };
 
-    // Default/protected keys do nothing while capturing; remain locked.
-    if DEFAULT_PROTECTED_KEYS.iter().any(|k| *k == code) {
+    // If we're capturing, treat this as a candidate mapping; otherwise,
+    // interpret arrows / Enter / Escape as navigation/back/capture.
+    if state.capture_active {
+        if !is_pressed {
+            return ScreenAction::None;
+        }
+        // Default/protected keys do nothing while capturing; remain locked.
+        if DEFAULT_PROTECTED_KEYS.iter().any(|k| *k == code) {
+            return ScreenAction::None;
+        }
+
+        // Map the captured key into the appropriate binding slot based on
+        // the active row and slot, then persist to deadsync.ini with unique
+        // keyboard bindings across all P1/P2 actions.
+        if let (Some(row_idx), Some(slot)) = (state.capture_row, state.capture_slot)
+        {
+            let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
+            let action_opt = match slot {
+                ActiveSlot::P1Primary | ActiveSlot::P1Secondary => p1_act_opt,
+                ActiveSlot::P2Primary | ActiveSlot::P2Secondary => p2_act_opt,
+            };
+
+            if let Some(action) = action_opt {
+                let index = match slot {
+                    ActiveSlot::P1Primary | ActiveSlot::P2Primary => 1,
+                    ActiveSlot::P1Secondary | ActiveSlot::P2Secondary => 2,
+                };
+                crate::config::update_keymap_binding_unique_keyboard(
+                    action,
+                    index,
+                    code,
+                );
+                audio::play_sfx("assets/sounds/change_value.ogg");
+            }
+        }
+
+        // Any captured key ends capture.
+        state.capture_active = false;
+        state.capture_row = None;
+        state.capture_slot = None;
+        state.capture_pulse_t = 0.0;
+
         return ScreenAction::None;
     }
 
-    // Map the captured key into the appropriate binding slot based on
-    // the active row and slot, then persist to deadsync.ini.
-    if let (Some(row_idx), Some(slot)) = (state.capture_row, state.capture_slot)
-    {
+    // Not capturing: only arrow keys, Enter, and Escape drive navigation.
+    match code {
+        KeyCode::ArrowUp => {
+            if is_pressed {
+                move_selection(state, NavDirection::Up);
+                on_nav_press(state, NavDirection::Up);
+            } else {
+                on_nav_release(state, NavDirection::Up);
+            }
+        }
+        KeyCode::ArrowDown => {
+            if is_pressed {
+                move_selection(state, NavDirection::Down);
+                on_nav_press(state, NavDirection::Down);
+            } else {
+                on_nav_release(state, NavDirection::Down);
+            }
+        }
+        KeyCode::ArrowLeft => {
+            if is_pressed && state.selected_row < NUM_MAPPING_ROWS {
+                let old_slot = state.active_slot;
+                let new_slot = state.active_slot.prev();
+                if new_slot != old_slot {
+                    state.active_slot = new_slot;
+                    state.slot_anim_from = old_slot;
+                    state.slot_anim_to = new_slot;
+                    state.slot_anim_t = 0.0;
+                }
+                audio::play_sfx("assets/sounds/change_value.ogg");
+            }
+        }
+        KeyCode::ArrowRight => {
+            if is_pressed && state.selected_row < NUM_MAPPING_ROWS {
+                let old_slot = state.active_slot;
+                let new_slot = state.active_slot.next();
+                if new_slot != old_slot {
+                    state.active_slot = new_slot;
+                    state.slot_anim_from = old_slot;
+                    state.slot_anim_to = new_slot;
+                    state.slot_anim_t = 0.0;
+                }
+                audio::play_sfx("assets/sounds/change_value.ogg");
+            }
+        }
+        KeyCode::Enter => {
+            if is_pressed {
+                if state.selected_row == NUM_MAPPING_ROWS {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    return ScreenAction::Navigate(Screen::Options);
+                }
+                if state.selected_row < NUM_MAPPING_ROWS {
+                    state.capture_active = true;
+                    state.capture_row = Some(state.selected_row);
+                    state.capture_slot = Some(state.active_slot);
+                    state.capture_pulse_t = 0.0;
+                    state.nav_key_held_direction = None;
+                    state.nav_key_held_since = None;
+                    state.nav_key_last_scrolled_at = None;
+                    audio::play_sfx("assets/sounds/change_value.ogg");
+                }
+            }
+        }
+        KeyCode::Escape => {
+            if is_pressed {
+                return ScreenAction::Navigate(Screen::Options);
+            }
+        }
+        _ => {}
+    }
+
+    ScreenAction::None
+}
+
+/// Raw gamepad handler used only while capturing a new mapping.
+/// This consumes the first pressed gamepad element and writes it into
+/// the appropriate binding slot for the active row/slot.
+pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
+    if !state.capture_active {
+        return;
+    }
+
+    // Only react to press edges; releases and pure axis motion are ignored.
+    let binding_opt = match *pad_event {
+        PadEvent::RawButton { id, code, pressed, .. } => {
+            if !pressed { return; }
+            let dev = usize::from(id);
+            let code_u32 = code.into_u32();
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32,
+                device: Some(dev),
+                uuid: None,
+            }))
+        }
+        PadEvent::Dir { id, dir, pressed } => {
+            if !pressed { return; }
+            let dev = usize::from(id);
+            Some(InputBinding::PadDirOn { device: dev, dir })
+        }
+        PadEvent::Button { id, btn, pressed } => {
+            if !pressed { return; }
+            let dev = usize::from(id);
+            Some(InputBinding::PadButtonOn { device: dev, btn })
+        }
+        PadEvent::Face { id, btn, pressed } => {
+            if !pressed { return; }
+            let dev = usize::from(id);
+            Some(InputBinding::FaceOn { device: dev, btn })
+        }
+        PadEvent::RawAxis { .. } => None,
+    };
+
+    let Some(binding) = binding_opt else {
+        return;
+    };
+
+    if let (Some(row_idx), Some(slot)) = (state.capture_row, state.capture_slot) {
         let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
         let action_opt = match slot {
             ActiveSlot::P1Primary | ActiveSlot::P1Secondary => p1_act_opt,
@@ -452,22 +602,16 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAc
                 ActiveSlot::P1Primary | ActiveSlot::P2Primary => 1,
                 ActiveSlot::P1Secondary | ActiveSlot::P2Secondary => 2,
             };
-            crate::config::update_keymap_binding(
-                action,
-                index,
-                InputBinding::Key(code),
-            );
+            crate::config::update_keymap_binding(action, index, binding);
             audio::play_sfx("assets/sounds/change_value.ogg");
         }
     }
 
-    // Any captured key ends capture.
+    // Any captured pad input ends capture.
     state.capture_active = false;
     state.capture_row = None;
     state.capture_slot = None;
     state.capture_pulse_t = 0.0;
-
-    ScreenAction::None
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -613,19 +757,23 @@ fn format_binding_for_display(binding: InputBinding) -> String {
             format!("Pad{}::Face::{:?}", device, btn)
         }
         InputBinding::GamepadCode(binding) => {
-            let mut s = String::new();
-            use std::fmt::Write;
-            let _ = write!(&mut s, "PadCode[0x{:08X}]", binding.code_u32);
-            if let Some(device) = binding.device {
-                let _ = write!(&mut s, "@{}", device);
+            let dev = binding.device.unwrap_or(0);
+            // Display the full code but cropped at the first non-zero hex
+            // digit for readability, e.g.:
+            //   0x00000016 → "0x16"
+            //   0x00010131 → "0x10131"
+            let mut hex = format!("{:08X}", binding.code_u32);
+            while hex.len() > 1 && hex.starts_with('0') {
+                hex.remove(0);
             }
-            if let Some(uuid) = binding.uuid {
-                s.push('#');
-                for b in &uuid {
-                    let _ = write!(&mut s, "{:02X}", b);
-                }
+            let mut label = format!("Pad {} Btn 0x{}", dev, hex);
+            // Soft max-width to avoid overflowing the column; in practice the
+            // cropped code is short so this rarely triggers.
+            const MAX_LABEL_CHARS: usize = 18;
+            if label.len() > MAX_LABEL_CHARS {
+                label.truncate(MAX_LABEL_CHARS);
             }
-            s
+            label
         }
     }
 }

@@ -420,6 +420,48 @@ fn binding_to_token(binding: InputBinding) -> String {
 }
 
 #[inline(always)]
+fn keymaps_section_name(conf: &Ini) -> &'static str {
+    let has_keymaps_new = conf.get_map_ref().get("Keymaps").is_some();
+    let has_keymaps_old = conf.get_map_ref().get("keymaps").is_some();
+    if has_keymaps_new {
+        "Keymaps"
+    } else if has_keymaps_old {
+        "keymaps"
+    } else {
+        "Keymaps"
+    }
+}
+
+#[inline(always)]
+fn update_keymap_binding_in_conf(
+    conf: &mut Ini,
+    sec_name: &str,
+    action: VirtualAction,
+    index: usize,
+    binding: InputBinding,
+) {
+    let key_name = action_to_ini_key(action);
+    let existing = conf.get(sec_name, key_name).unwrap_or_default();
+    let mut tokens: Vec<String> = if existing.is_empty() {
+        Vec::new()
+    } else {
+        existing
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect()
+    };
+
+    if tokens.len() <= index {
+        tokens.resize(index + 1, String::new());
+    }
+
+    tokens[index] = binding_to_token(binding);
+
+    let new_val = tokens.join(",");
+    conf.set(sec_name, key_name, Some(new_val));
+}
+
+#[inline(always)]
 fn parse_binding_token(tok: &str) -> Option<InputBinding> {
     let t = tok.trim();
     // Keyboard
@@ -646,48 +688,105 @@ pub fn update_keymap_binding(action: VirtualAction, index: usize, binding: Input
         return;
     }
 
-    let has_keymaps_new = conf.get_map_ref().get("Keymaps").is_some();
-    let has_keymaps_old = conf.get_map_ref().get("keymaps").is_some();
-    let sec_name = if has_keymaps_new {
-        "Keymaps"
-    } else if has_keymaps_old {
-        "keymaps"
-    } else {
-        "Keymaps"
-    };
-
-    let key_name = action_to_ini_key(action);
-    let mut bindings: Vec<InputBinding> = Vec::new();
-    if let Some(value) = conf.get(sec_name, key_name) {
-        for tok in value.split(',') {
-            if let Some(b) = parse_binding_token(tok) {
-                bindings.push(b);
-            }
-        }
-    }
-
-    if index < bindings.len() {
-        bindings[index] = binding;
-    } else {
-        while bindings.len() < index {
-            if let Some(last) = bindings.last().copied() {
-                bindings.push(last);
-            } else {
-                bindings.push(binding);
-            }
-        }
-        bindings.push(binding);
-    }
-
-    let new_val = bindings
-        .iter()
-        .map(|b| binding_to_token(*b))
-        .collect::<Vec<_>>()
-        .join(",");
-    conf.set(sec_name, key_name, Some(new_val));
+    let sec_name = keymaps_section_name(&conf);
+    update_keymap_binding_in_conf(&mut conf, sec_name, action, index, binding);
 
     if let Err(e) = conf.write(CONFIG_PATH) {
         warn!("Failed to write updated keymaps to '{}': {}", CONFIG_PATH, e);
+        return;
+    }
+
+    let km = load_keymap_from_ini_local(&conf);
+    crate::core::input::set_keymap(km);
+}
+
+/// Update a keyboard binding in Primary/Secondary slots, ensuring that the
+/// given key code is not used in any other Primary/Secondary slot for P1/P2.
+/// Default slots (index 0) are never modified.
+pub fn update_keymap_binding_unique_keyboard(
+    action: VirtualAction,
+    index: usize,
+    keycode: KeyCode,
+) {
+    let mut conf = Ini::new();
+    if let Err(e) = conf.load(CONFIG_PATH) {
+        warn!(
+            "Failed to load '{}' for unique keymap update: {}",
+            CONFIG_PATH, e
+        );
+        return;
+    }
+
+    let sec_name = keymaps_section_name(&conf);
+
+    // If the requested index is Secondary (2) but there is no Primary yet,
+    // collapse this to the first non-default slot so we don't implicitly
+    // duplicate defaults into Primary.
+    let mut effective_index = index;
+    if index >= 2 {
+        let key_name = action_to_ini_key(action);
+        let slot_count = conf
+            .get(sec_name, key_name)
+            .map(|v| v.split(',').count())
+            .unwrap_or(0);
+        if slot_count <= 1 {
+            effective_index = 1;
+        }
+    }
+
+    // Remove this key from all Primary/Secondary slots (index >= 1)
+    if let Some(section) = conf.get_map_ref().get(sec_name) {
+        // Collect keys first to avoid aliasing immutable and mutable borrows.
+        let keys: Vec<String> = section.keys().cloned().collect();
+        for key in keys {
+            let mut bindings: Vec<InputBinding> = Vec::new();
+            if let Some(value) = conf.get(sec_name, &key) {
+                for tok in value.split(',') {
+                    if let Some(b) = parse_binding_token(tok) {
+                        bindings.push(b);
+                    }
+                }
+            }
+
+            let mut changed = false;
+            let mut filtered: Vec<InputBinding> = Vec::with_capacity(bindings.len());
+            for (i, b) in bindings.iter().enumerate() {
+                if i >= 1 {
+                    if let InputBinding::Key(code) = b {
+                        if *code == keycode {
+                            changed = true;
+                            continue;
+                        }
+                    }
+                }
+                filtered.push(*b);
+            }
+
+            if changed {
+                let new_val = filtered
+                    .iter()
+                    .map(|b| binding_to_token(*b))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                conf.set(sec_name, &key, Some(new_val));
+            }
+        }
+    }
+
+    // Now set the requested slot for the target action.
+    update_keymap_binding_in_conf(
+        &mut conf,
+        sec_name,
+        action,
+        effective_index,
+        InputBinding::Key(keycode),
+    );
+
+    if let Err(e) = conf.write(CONFIG_PATH) {
+        warn!(
+            "Failed to write updated keymaps to '{}': {}",
+            CONFIG_PATH, e
+        );
         return;
     }
 

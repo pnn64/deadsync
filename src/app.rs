@@ -627,8 +627,10 @@ impl App {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle Mappings raw key action: {}", e);
                 }
-                return;
             }
+            // On the Mappings screen, arrows/Enter/Escape are handled entirely
+            // via raw keycodes; do not route through the virtual keymap.
+            return;
         } else if self.state.current_screen == CurrentScreen::SelectMusic {
             // Route screen-specific raw key handling (e.g., F7 fetch) to the screen
             let action = crate::screens::select_music::handle_raw_key_event(&mut self.state.select_music_state, &key_event);
@@ -797,6 +799,10 @@ impl App {
             let current_color_index = self.state.options_state.active_color_index;
             self.state.options_state = options::init();
             self.state.options_state.active_color_index = current_color_index;
+        } else if target == CurrentScreen::Mappings {
+            let color_index = self.state.options_state.active_color_index;
+            self.state.mappings_state = mappings::init();
+            self.state.mappings_state.active_color_index = color_index;
         } else if target == CurrentScreen::PlayerOptions {
             let (song_arc, chart_difficulty_index) = {
                 let sm_state = &self.state.select_music_state;
@@ -975,7 +981,15 @@ impl ApplicationHandler<UserEvent> for App {
             }
             UserEvent::Pad(ev) => {
                 if self.state.current_screen == CurrentScreen::Sandbox {
-                    crate::screens::sandbox::handle_raw_pad_event(&mut self.state.sandbox_state, &ev);
+                    crate::screens::sandbox::handle_raw_pad_event(
+                        &mut self.state.sandbox_state,
+                        &ev,
+                    );
+                } else if self.state.current_screen == CurrentScreen::Mappings {
+                    crate::screens::mappings::handle_raw_pad_event(
+                        &mut self.state.mappings_state,
+                        &ev,
+                    );
                 }
                 self.handle_pad_event(event_loop, ev);
             }
@@ -1064,6 +1078,10 @@ impl ApplicationHandler<UserEvent> for App {
                                 let current_color_index = self.state.options_state.active_color_index;
                                 self.state.options_state = options::init();
                                 self.state.options_state.active_color_index = current_color_index;
+                            } else if *target == CurrentScreen::Mappings {
+                                let color_index = self.state.options_state.active_color_index;
+                                self.state.mappings_state = mappings::init();
+                                self.state.mappings_state.active_color_index = color_index;
                             }
 
                             if prev == CurrentScreen::SelectColor {
