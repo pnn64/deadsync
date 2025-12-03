@@ -8,6 +8,7 @@ use crate::core::input::{
     InputBinding,
     PadEvent,
     GamepadCodeBinding,
+    InputSource,
 };
 use crate::core::space::*;
 use crate::screens::{Screen, ScreenAction};
@@ -602,7 +603,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
                 ActiveSlot::P1Primary | ActiveSlot::P2Primary => 1,
                 ActiveSlot::P1Secondary | ActiveSlot::P2Secondary => 2,
             };
-            crate::config::update_keymap_binding(action, index, binding);
+            crate::config::update_keymap_binding_unique_gamepad(action, index, binding);
             audio::play_sfx("assets/sounds/change_value.ogg");
         }
     }
@@ -621,6 +622,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         if ev.action == VirtualAction::p1_back && ev.pressed {
             return ScreenAction::Navigate(Screen::Options);
         }
+        return ScreenAction::None;
+    }
+
+    // Outside of capture, navigation on this screen is strictly keyboard-only.
+    // Gamepad inputs should not move the cursor or activate UI here; they are
+    // used only when explicitly capturing a new mapping.
+    if ev.source == InputSource::Gamepad {
         return ScreenAction::None;
     }
 

@@ -82,11 +82,6 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!("Windowed={}\n", if default.windowed { "1" } else { "0" }));
     content.push('\n');
 
-    // [Theme] section
-    content.push_str("[Theme]\n");
-    content.push_str(&format!("SimplyLoveColor={}\n", default.simply_love_color));
-    content.push('\n');
-
     // [Keymaps] section with sane defaults (comma-separated)
     content.push_str("[Keymaps]\n");
     content.push_str("P1_Back=KeyCode::Escape\n");
@@ -115,7 +110,13 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str("P2_Right=KeyCode::Numpad6\n");
     content.push_str("P2_Select=\n");
     content.push_str("P2_Start=KeyCode::NumpadEnter\n");
-    content.push_str("P2_Up=KeyCode::Numpad8\n\n");
+    content.push_str("P2_Up=KeyCode::Numpad8\n");
+    content.push('\n');
+
+    // [Theme] section should be last
+    content.push_str("[Theme]\n");
+    content.push_str(&format!("SimplyLoveColor={}\n", default.simply_love_color));
+    content.push('\n');
 
     std::fs::write(CONFIG_PATH, content)
 }
@@ -167,86 +168,9 @@ pub fn load() {
                 info!("Configuration loaded from '{}'.", CONFIG_PATH);
             } // Lock on CONFIG is released here.
 
-            // Load keymaps from the same INI and publish globally
+            // Load keymaps from the same INI and publish globally.
             let km = load_keymap_from_ini_local(&conf);
             crate::core::input::set_keymap(km);
-
-            // Ensure [Keymaps] exist with primary bindings if missing; do not overwrite existing keys.
-            let mut need_write_keymaps = false;
-            let mut conf2 = conf.clone();
-            let has_keymaps_new = conf.get_map_ref().get("Keymaps").is_some();
-            let has_keymaps_old = conf.get_map_ref().get("keymaps").is_some();
-            let section_present = has_keymaps_new || has_keymaps_old;
-            let sec_name = if has_keymaps_new { "Keymaps" } else if has_keymaps_old { "keymaps" } else { "Keymaps" };
-            let ensure = |ini: &mut Ini, key: &str, val: &str| -> bool {
-                let cur = ini.get(sec_name, key);
-                if cur.is_none() {
-                    ini.set(sec_name, key, Some(val.to_string()));
-                    true
-                } else { false }
-            };
-            if !section_present {
-                // Seed the whole section (no default pad bindings)
-                conf2.set("Keymaps", "P1_Back", Some("KeyCode::Escape".to_string()));
-                conf2.set("Keymaps", "P1_Start", Some("KeyCode::Enter".to_string()));
-                conf2.set("Keymaps", "P1_Up", Some("KeyCode::ArrowUp,KeyCode::KeyW".to_string()));
-                conf2.set("Keymaps", "P1_Down", Some("KeyCode::ArrowDown,KeyCode::KeyS".to_string()));
-                conf2.set("Keymaps", "P1_Left", Some("KeyCode::ArrowLeft,KeyCode::KeyA".to_string()));
-                conf2.set("Keymaps", "P1_Right", Some("KeyCode::ArrowRight,KeyCode::KeyD".to_string()));
-                conf2.set("Keymaps", "P1_MenuUp", Some("".to_string()));
-                conf2.set("Keymaps", "P1_MenuDown", Some("".to_string()));
-                conf2.set("Keymaps", "P1_MenuLeft", Some("".to_string()));
-                conf2.set("Keymaps", "P1_MenuRight", Some("".to_string()));
-                conf2.set("Keymaps", "P1_Select", Some("".to_string()));
-                conf2.set("Keymaps", "P1_Operator", Some("".to_string()));
-                conf2.set("Keymaps", "P1_Restart", Some("".to_string()));
-                // Player 2 defaults (numpad) – no pad bindings.
-                conf2.set("Keymaps", "P2_Back", Some("".to_string()));
-                conf2.set("Keymaps", "P2_Start", Some("KeyCode::NumpadEnter".to_string()));
-                conf2.set("Keymaps", "P2_Up", Some("KeyCode::Numpad8".to_string()));
-                conf2.set("Keymaps", "P2_Down", Some("KeyCode::Numpad2".to_string()));
-                conf2.set("Keymaps", "P2_Left", Some("KeyCode::Numpad4".to_string()));
-                conf2.set("Keymaps", "P2_Right", Some("KeyCode::Numpad6".to_string()));
-                conf2.set("Keymaps", "P2_MenuUp", Some("".to_string()));
-                conf2.set("Keymaps", "P2_MenuDown", Some("".to_string()));
-                conf2.set("Keymaps", "P2_MenuLeft", Some("".to_string()));
-                conf2.set("Keymaps", "P2_MenuRight", Some("".to_string()));
-                conf2.set("Keymaps", "P2_Select", Some("".to_string()));
-                conf2.set("Keymaps", "P2_Operator", Some("".to_string()));
-                conf2.set("Keymaps", "P2_Restart", Some("".to_string()));
-                need_write_keymaps = true;
-            } else {
-                // Add only missing keys
-                need_write_keymaps |= ensure(&mut conf2, "P1_Back", "KeyCode::Escape");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Start", "KeyCode::Enter");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Up", "KeyCode::ArrowUp,KeyCode::KeyW");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Down", "KeyCode::ArrowDown,KeyCode::KeyS");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Left", "KeyCode::ArrowLeft,KeyCode::KeyA");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Right", "KeyCode::ArrowRight,KeyCode::KeyD");
-                need_write_keymaps |= ensure(&mut conf2, "P1_MenuUp", "");
-                need_write_keymaps |= ensure(&mut conf2, "P1_MenuDown", "");
-                need_write_keymaps |= ensure(&mut conf2, "P1_MenuLeft", "");
-                need_write_keymaps |= ensure(&mut conf2, "P1_MenuRight", "");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Select", "");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Operator", "");
-                need_write_keymaps |= ensure(&mut conf2, "P1_Restart", "");
-                // P2 keys
-                need_write_keymaps |= ensure(&mut conf2, "P2_Back", "");
-                need_write_keymaps |= ensure(&mut conf2, "P2_Start", "KeyCode::NumpadEnter");
-                need_write_keymaps |= ensure(&mut conf2, "P2_Up", "KeyCode::Numpad8");
-                need_write_keymaps |= ensure(&mut conf2, "P2_Down", "KeyCode::Numpad2");
-                need_write_keymaps |= ensure(&mut conf2, "P2_Left", "KeyCode::Numpad4");
-                need_write_keymaps |= ensure(&mut conf2, "P2_Right", "KeyCode::Numpad6");
-                need_write_keymaps |= ensure(&mut conf2, "P2_MenuUp", "");
-                need_write_keymaps |= ensure(&mut conf2, "P2_MenuDown", "");
-                need_write_keymaps |= ensure(&mut conf2, "P2_MenuLeft", "");
-                need_write_keymaps |= ensure(&mut conf2, "P2_MenuRight", "");
-                need_write_keymaps |= ensure(&mut conf2, "P2_Select", "");
-                need_write_keymaps |= ensure(&mut conf2, "P2_Operator", "");
-                need_write_keymaps |= ensure(&mut conf2, "P2_Restart", "");
-            }
-            if need_write_keymaps
-                && let Err(e) = conf2.write(CONFIG_PATH) { warn!("Failed to append missing keymaps: {}", e); }
 
             // Only write [Options]/[Theme] if any of those keys are missing.
             let missing_opts = {
@@ -263,7 +187,7 @@ pub fn load() {
             };
             if missing_opts {
                 save_without_keymaps();
-                info!("'{}' updated with default values for any missing fields (keymaps preserved).", CONFIG_PATH);
+                info!("'{}' updated with default values for any missing fields.", CONFIG_PATH);
             } else {
                 info!("Configuration OK; no write needed.");
             }
@@ -275,6 +199,36 @@ pub fn load() {
 }
 
 // --- Keymap defaults and parsing (kept in config to avoid coupling input.rs to config) ---
+
+// Stable iteration order for all virtual actions when serializing [Keymaps].
+const ALL_VIRTUAL_ACTIONS: [VirtualAction; 26] = [
+    VirtualAction::p1_back,
+    VirtualAction::p1_down,
+    VirtualAction::p1_left,
+    VirtualAction::p1_menu_down,
+    VirtualAction::p1_menu_left,
+    VirtualAction::p1_menu_right,
+    VirtualAction::p1_menu_up,
+    VirtualAction::p1_operator,
+    VirtualAction::p1_restart,
+    VirtualAction::p1_right,
+    VirtualAction::p1_select,
+    VirtualAction::p1_start,
+    VirtualAction::p1_up,
+    VirtualAction::p2_back,
+    VirtualAction::p2_down,
+    VirtualAction::p2_left,
+    VirtualAction::p2_menu_down,
+    VirtualAction::p2_menu_left,
+    VirtualAction::p2_menu_right,
+    VirtualAction::p2_menu_up,
+    VirtualAction::p2_operator,
+    VirtualAction::p2_restart,
+    VirtualAction::p2_right,
+    VirtualAction::p2_select,
+    VirtualAction::p2_start,
+    VirtualAction::p2_up,
+];
 
 fn default_keymap_local() -> Keymap {
     use VirtualAction as A;
@@ -417,48 +371,6 @@ fn binding_to_token(binding: InputBinding) -> String {
             s
         }
     }
-}
-
-#[inline(always)]
-fn keymaps_section_name(conf: &Ini) -> &'static str {
-    let has_keymaps_new = conf.get_map_ref().get("Keymaps").is_some();
-    let has_keymaps_old = conf.get_map_ref().get("keymaps").is_some();
-    if has_keymaps_new {
-        "Keymaps"
-    } else if has_keymaps_old {
-        "keymaps"
-    } else {
-        "Keymaps"
-    }
-}
-
-#[inline(always)]
-fn update_keymap_binding_in_conf(
-    conf: &mut Ini,
-    sec_name: &str,
-    action: VirtualAction,
-    index: usize,
-    binding: InputBinding,
-) {
-    let key_name = action_to_ini_key(action);
-    let existing = conf.get(sec_name, key_name).unwrap_or_default();
-    let mut tokens: Vec<String> = if existing.is_empty() {
-        Vec::new()
-    } else {
-        existing
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .collect()
-    };
-
-    if tokens.len() <= index {
-        tokens.resize(index + 1, String::new());
-    }
-
-    tokens[index] = binding_to_token(binding);
-
-    let new_val = tokens.join(",");
-    conf.set(sec_name, key_name, Some(new_val));
 }
 
 #[inline(always)]
@@ -654,27 +566,52 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
 }
 
 fn load_keymap_from_ini_local(conf: &Ini) -> Keymap {
-    let section = conf
+    // When [Keymaps] is present, start from explicit user entries and then fill
+    // in any completely missing actions from built-in defaults. When the whole
+    // section is absent, fall back to defaults entirely.
+    if let Some(section) = conf
         .get_map_ref()
         .get("Keymaps")
-        .or_else(|| conf.get_map_ref().get("keymaps"));
-    if let Some(section) = section {
+        .or_else(|| conf.get_map_ref().get("keymaps"))
+    {
         let mut km = Keymap::default();
+        let mut seen: Vec<VirtualAction> = Vec::new();
+
         for (k, v_opt) in section {
             let key = k.to_ascii_lowercase();
             if let Some(action) = parse_action_key_lower(&key) {
                 let mut bindings = Vec::new();
                 if let Some(value) = v_opt.as_deref() {
                     for tok in value.split(',') {
-                        if let Some(b) = parse_binding_token(tok) { bindings.push(b); }
+                        if let Some(b) = parse_binding_token(tok) {
+                            bindings.push(b);
+                        }
                     }
                 }
                 km.bind(action, &bindings);
+                seen.push(action);
             }
         }
-        return km;
+
+        let defaults = default_keymap_local();
+        for act in ALL_VIRTUAL_ACTIONS {
+            if !seen.contains(&act) {
+                let mut bindings = Vec::new();
+                let mut i = 0;
+                while let Some(b) = defaults.binding_at(act, i) {
+                    bindings.push(b);
+                    i += 1;
+                }
+                if !bindings.is_empty() {
+                    km.bind(act, &bindings);
+                }
+            }
+        }
+
+        km
+    } else {
+        default_keymap_local()
     }
-    default_keymap_local()
 }
 
 /// Update a single binding slot for the given virtual action in the [Keymaps]
@@ -682,22 +619,42 @@ fn load_keymap_from_ini_local(conf: &Ini) -> Keymap {
 /// ordering used by the UI:
 ///   0 = Default, 1 = Primary, 2 = Secondary.
 pub fn update_keymap_binding(action: VirtualAction, index: usize, binding: InputBinding) {
-    let mut conf = Ini::new();
-    if let Err(e) = conf.load(CONFIG_PATH) {
-        warn!("Failed to load '{}' for keymap update: {}", CONFIG_PATH, e);
-        return;
+    // Rebuild the in-memory keymap for all virtual actions, updating only the
+    // requested slot for `action`, then persist the full config back to disk.
+    let current = crate::core::input::get_keymap();
+    let mut new_map = Keymap::default();
+
+    for act in ALL_VIRTUAL_ACTIONS {
+        let mut bindings: Vec<InputBinding> = Vec::new();
+        let mut i = 0;
+        while let Some(b) = current.binding_at(act, i) {
+            bindings.push(b);
+            i += 1;
+        }
+
+        if act == action {
+            if index == 0 {
+                if bindings.is_empty() {
+                    bindings.push(binding);
+                } else {
+                    bindings[0] = binding;
+                }
+            } else if index < bindings.len() {
+                bindings[index] = binding;
+            } else if bindings.is_empty() {
+                // No existing bindings; treat this as the first slot.
+                bindings.push(binding);
+            } else {
+                // Append as an additional slot when index is beyond current len.
+                bindings.push(binding);
+            }
+        }
+
+        new_map.bind(act, &bindings);
     }
 
-    let sec_name = keymaps_section_name(&conf);
-    update_keymap_binding_in_conf(&mut conf, sec_name, action, index, binding);
-
-    if let Err(e) = conf.write(CONFIG_PATH) {
-        warn!("Failed to write updated keymaps to '{}': {}", CONFIG_PATH, e);
-        return;
-    }
-
-    let km = load_keymap_from_ini_local(&conf);
-    crate::core::input::set_keymap(km);
+    crate::core::input::set_keymap(new_map);
+    save_without_keymaps();
 }
 
 /// Update a keyboard binding in Primary/Secondary slots, ensuring that the
@@ -708,113 +665,140 @@ pub fn update_keymap_binding_unique_keyboard(
     index: usize,
     keycode: KeyCode,
 ) {
-    let mut conf = Ini::new();
-    if let Err(e) = conf.load(CONFIG_PATH) {
-        warn!(
-            "Failed to load '{}' for unique keymap update: {}",
-            CONFIG_PATH, e
-        );
-        return;
-    }
+    // Update keyboard bindings while ensuring that `keycode` is unique across
+    // all Primary/Secondary slots (index >= 1) for P1/P2.
+    let current = crate::core::input::get_keymap();
+    let mut new_map = Keymap::default();
 
-    let sec_name = keymaps_section_name(&conf);
-
-    // If the requested index is Secondary (2) but there is no Primary yet,
-    // collapse this to the first non-default slot so we don't implicitly
-    // duplicate defaults into Primary.
-    let mut effective_index = index;
-    if index >= 2 {
-        let key_name = action_to_ini_key(action);
-        let slot_count = conf
-            .get(sec_name, key_name)
-            .map(|v| v.split(',').count())
-            .unwrap_or(0);
-        if slot_count <= 1 {
-            effective_index = 1;
+    for act in ALL_VIRTUAL_ACTIONS {
+        let mut bindings: Vec<InputBinding> = Vec::new();
+        let mut i = 0;
+        while let Some(b) = current.binding_at(act, i) {
+            bindings.push(b);
+            i += 1;
         }
-    }
 
-    // Remove this key from all Primary/Secondary slots (index >= 1)
-    if let Some(section) = conf.get_map_ref().get(sec_name) {
-        // Collect keys first to avoid aliasing immutable and mutable borrows.
-        let keys: Vec<String> = section.keys().cloned().collect();
-        for key in keys {
-            let mut bindings: Vec<InputBinding> = Vec::new();
-            if let Some(value) = conf.get(sec_name, &key) {
-                for tok in value.split(',') {
-                    if let Some(b) = parse_binding_token(tok) {
-                        bindings.push(b);
-                    }
-                }
-            }
-
-            let mut changed = false;
+        // Remove this key from all Primary/Secondary slots (index >= 1).
+        if !bindings.is_empty() {
             let mut filtered: Vec<InputBinding> = Vec::with_capacity(bindings.len());
-            for (i, b) in bindings.iter().enumerate() {
-                if i >= 1 {
+            for (slot_idx, b) in bindings.iter().enumerate() {
+                if slot_idx >= 1 {
                     if let InputBinding::Key(code) = b {
                         if *code == keycode {
-                            changed = true;
                             continue;
                         }
                     }
                 }
                 filtered.push(*b);
             }
+            bindings = filtered;
+        }
 
-            if changed {
-                let new_val = filtered
-                    .iter()
-                    .map(|b| binding_to_token(*b))
-                    .collect::<Vec<_>>()
-                    .join(",");
-                conf.set(sec_name, &key, Some(new_val));
+        if act == action {
+            // If Secondary requested but there is no Primary yet, collapse this
+            // to the first non-default slot so we don't implicitly duplicate
+            // defaults into Primary.
+            let slot_count_before = bindings.len();
+            let mut effective_index = index;
+            if index >= 2 && slot_count_before <= 1 {
+                effective_index = 1;
+            }
+
+            let new_binding = InputBinding::Key(keycode);
+            if effective_index == 0 {
+                if bindings.is_empty() {
+                    bindings.push(new_binding);
+                } else {
+                    bindings[0] = new_binding;
+                }
+            } else if bindings.len() <= effective_index {
+                if bindings.is_empty() {
+                    bindings.push(new_binding);
+                } else {
+                    bindings.push(new_binding);
+                }
+            } else {
+                bindings[effective_index] = new_binding;
             }
         }
+
+        new_map.bind(act, &bindings);
     }
 
-    // Now set the requested slot for the target action.
-    update_keymap_binding_in_conf(
-        &mut conf,
-        sec_name,
-        action,
-        effective_index,
-        InputBinding::Key(keycode),
-    );
+    crate::core::input::set_keymap(new_map);
+    save_without_keymaps();
+}
 
-    if let Err(e) = conf.write(CONFIG_PATH) {
-        warn!(
-            "Failed to write updated keymaps to '{}': {}",
-            CONFIG_PATH, e
-        );
-        return;
+/// Update a gamepad binding in Primary/Secondary slots, ensuring that the
+/// given physical binding is not used in any other Primary/Secondary slot
+/// for P1/P2. Default slots (index 0) are never modified.
+pub fn update_keymap_binding_unique_gamepad(
+    action: VirtualAction,
+    index: usize,
+    binding: InputBinding,
+) {
+    let current = crate::core::input::get_keymap();
+    let mut new_map = Keymap::default();
+
+    for act in ALL_VIRTUAL_ACTIONS {
+        let mut bindings: Vec<InputBinding> = Vec::new();
+        let mut i = 0;
+        while let Some(b) = current.binding_at(act, i) {
+            bindings.push(b);
+            i += 1;
+        }
+
+        // Remove this binding from all Primary/Secondary slots (index >= 1).
+        if !bindings.is_empty() {
+            let mut filtered: Vec<InputBinding> = Vec::with_capacity(bindings.len());
+            for (slot_idx, b) in bindings.iter().enumerate() {
+                if slot_idx >= 1 && *b == binding {
+                    continue;
+                }
+                filtered.push(*b);
+            }
+            bindings = filtered;
+        }
+
+        if act == action {
+            // If Secondary requested but there is no Primary yet, collapse this
+            // to the first non-default slot so we don't implicitly duplicate
+            // defaults into Primary.
+            let slot_count_before = bindings.len();
+            let mut effective_index = index;
+            if index >= 2 && slot_count_before <= 1 {
+                effective_index = 1;
+            }
+
+            if effective_index == 0 {
+                if bindings.is_empty() {
+                    bindings.push(binding);
+                } else {
+                    bindings[0] = binding;
+                }
+            } else if bindings.len() <= effective_index {
+                if bindings.is_empty() {
+                    bindings.push(binding);
+                } else {
+                    bindings.push(binding);
+                }
+            } else {
+                bindings[effective_index] = binding;
+            }
+        }
+
+        new_map.bind(act, &bindings);
     }
 
-    let km = load_keymap_from_ini_local(&conf);
-    crate::core::input::set_keymap(km);
+    crate::core::input::set_keymap(new_map);
+    save_without_keymaps();
 }
 
 fn save_without_keymaps() {
-    // Manual writer that keeps [Options]/[Theme] sorted and preserves existing [keymaps] block.
+    // Manual writer that keeps [Options]/[Theme] sorted and emits a stable,
+    // CamelCase [Keymaps] section derived from the current in-memory keymap.
     let cfg = CONFIG.lock().unwrap();
-
-    // Try to extract existing [Keymaps] (or legacy [keymaps]) block verbatim
-    let existing = std::fs::read_to_string(CONFIG_PATH).unwrap_or_default();
-    let mut keymaps_block = String::new();
-    if let Some(start) = existing.find("[Keymaps]").or_else(|| existing.find("[keymaps]")) {
-        // find next section header or EOF
-        let rest = &existing[start..];
-        let mut end_idx = rest.len();
-        for (i, line) in rest.lines().enumerate().skip(1) {
-            if line.starts_with('[') && line.ends_with(']') {
-                // end before this line
-                end_idx = rest[..].lines().take(i).map(|l| l.len() + 1).sum();
-                break;
-            }
-        }
-        keymaps_block = rest[..end_idx].to_string();
-        if !keymaps_block.ends_with('\n') { keymaps_block.push('\n'); }
-    }
+    let keymap = crate::core::input::get_keymap();
 
     let mut content = String::new();
 
@@ -840,16 +824,28 @@ fn save_without_keymaps() {
     content.push_str(&format!("Windowed={}\n", if cfg.windowed { "1" } else { "0" }));
     content.push('\n');
 
-    // [Theme]
+    // [Keymaps] – stable order with CamelCase keys.
+    content.push_str("[Keymaps]\n");
+    for act in ALL_VIRTUAL_ACTIONS {
+        let key_name = action_to_ini_key(act);
+        let mut tokens: Vec<String> = Vec::new();
+        let mut i = 0;
+        while let Some(binding) = keymap.binding_at(act, i) {
+            tokens.push(binding_to_token(binding));
+            i += 1;
+        }
+        let value = tokens.join(",");
+        content.push_str(key_name);
+        content.push('=');
+        content.push_str(&value);
+        content.push('\n');
+    }
+
+    // [Theme] – last section
+    content.push('\n');
     content.push_str("[Theme]\n");
     content.push_str(&format!("SimplyLoveColor={}\n", cfg.simply_love_color));
     content.push('\n');
-
-    // Append preserved [keymaps] if present
-    if !keymaps_block.is_empty() {
-        content.push_str(&keymaps_block);
-        if !content.ends_with('\n') { content.push('\n'); }
-    }
 
     if let Err(e) = std::fs::write(CONFIG_PATH, content) {
         warn!("Failed to save config file: {}", e);
