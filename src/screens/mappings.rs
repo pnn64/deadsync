@@ -752,17 +752,19 @@ fn slot_pulse_zoom_and_color(
 fn format_binding_for_display(binding: InputBinding) -> String {
     match binding {
         InputBinding::Key(code) => format!("{:?}", code),
-        InputBinding::PadDir(dir) => format!("PadDir::{:?}", dir),
-        InputBinding::PadButton(btn) => format!("PadButton::{:?}", btn),
-        InputBinding::Face(btn) => format!("Face::{:?}", btn),
+        // Any-pad bindings
+        InputBinding::PadDir(dir) => format!("Dir {:?}", dir),
+        InputBinding::PadButton(btn) => format!("Btn {:?}", btn),
+        InputBinding::Face(btn) => format!("Face {:?}", btn),
+        // Device-specific bindings, aligned with "Pad N Btn 0x.." style.
         InputBinding::PadDirOn { device, dir } => {
-            format!("Pad{}::Dir::{:?}", device, dir)
+            format!("Pad {} Dir {:?}", device, dir)
         }
         InputBinding::PadButtonOn { device, btn } => {
-            format!("Pad{}::Button::{:?}", device, btn)
+            format!("Pad {} Btn {:?}", device, btn)
         }
         InputBinding::FaceOn { device, btn } => {
-            format!("Pad{}::Face::{:?}", device, btn)
+            format!("Pad {} Face {:?}", device, btn)
         }
         InputBinding::GamepadCode(binding) => {
             let dev = binding.device.unwrap_or(0);
@@ -1185,7 +1187,8 @@ pub fn get_actors(
                 zoom(p1_primary_zoom):
                 diffuse(p1_primary_color[0], p1_primary_color[1], p1_primary_color[2], p1_primary_color[3]):
                 font("miso"):
-                settext(p1_primary_text):
+                settext(p1_primary_text.clone()):
+                maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
             ui_actors.push(act!(text:
@@ -1194,7 +1197,8 @@ pub fn get_actors(
                 zoom(p1_secondary_zoom):
                 diffuse(p1_secondary_color[0], p1_secondary_color[1], p1_secondary_color[2], p1_secondary_color[3]):
                 font("miso"):
-                settext(p1_secondary_text):
+                settext(p1_secondary_text.clone()):
+                maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
 
@@ -1206,6 +1210,7 @@ pub fn get_actors(
                 diffuse(col_white[0], col_white[1], col_white[2], col_white[3]):
                 font("miso"):
                 settext(p1_default_text):
+                maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
 
@@ -1216,7 +1221,8 @@ pub fn get_actors(
                 zoom(p2_primary_zoom):
                 diffuse(p2_primary_color[0], p2_primary_color[1], p2_primary_color[2], p2_primary_color[3]):
                 font("miso"):
-                settext(p2_primary_text):
+                settext(p2_primary_text.clone()):
+                maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
             ui_actors.push(act!(text:
@@ -1225,7 +1231,8 @@ pub fn get_actors(
                 zoom(p2_secondary_zoom):
                 diffuse(p2_secondary_color[0], p2_secondary_color[1], p2_secondary_color[2], p2_secondary_color[3]):
                 font("miso"):
-                settext(p2_secondary_text):
+                settext(p2_secondary_text.clone()):
+                maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
 
@@ -1237,6 +1244,7 @@ pub fn get_actors(
                 diffuse(col_white[0], col_white[1], col_white[2], col_white[3]):
                 font("miso"):
                 settext(p2_default_text):
+                maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
 
@@ -1246,6 +1254,58 @@ pub fn get_actors(
                     slot_center_x_for_row(row_idx, state.active_slot);
                 let mut center_x = center_x_target;
                 let mut center_y = row_mid_y;
+
+                // Base ring size (current fixed behavior) – used as an upper bound
+                // so the cursor never grows larger than the existing standard.
+                let base_ring_w = col_w * 0.9;
+                let base_ring_h = ROW_H * s * 0.9;
+
+                // Measure the active slot's text and adapt the ring size to it,
+                // clamped so it never exceeds the base size.
+                let (active_text, active_zoom) = match state.active_slot {
+                    ActiveSlot::P1Primary => (&p1_primary_text, p1_primary_zoom),
+                    ActiveSlot::P1Secondary => (&p1_secondary_text, p1_secondary_zoom),
+                    ActiveSlot::P2Primary => (&p2_primary_text, p2_primary_zoom),
+                    ActiveSlot::P2Secondary => (&p2_secondary_text, p2_secondary_zoom),
+                };
+
+                let border_w = widescale(2.0, 2.5);
+                let mut ring_w = base_ring_w;
+                let mut ring_h = base_ring_h;
+
+                asset_manager.with_fonts(|all_fonts| {
+                    asset_manager.with_font("miso", |metrics_font| {
+                        let mut text_w = font::measure_line_width_logical(
+                            metrics_font,
+                            active_text,
+                            all_fonts,
+                        ) as f32;
+                        if !text_w.is_finite() || text_w <= 0.0 {
+                            text_w = 1.0;
+                        }
+                        let text_h = (metrics_font.height as f32).max(1.0);
+                        let draw_w = text_w * active_zoom;
+                        let draw_h = text_h * active_zoom;
+
+                        let pad_y = widescale(6.0, 8.0);
+                        let min_pad_x = widescale(2.0, 3.0);
+                        let max_pad_x = widescale(22.0, 28.0);
+                        let width_ref = widescale(180.0, 220.0);
+                        let t = (draw_w / width_ref).clamp(0.0, 1.0);
+                        let mut pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
+                        // Ensure the ring does not invade adjacent inline column space.
+                        let max_pad_by_spacing =
+                            (INLINE_SPACING - border_w).max(min_pad_x);
+                        if pad_x > max_pad_by_spacing {
+                            pad_x = max_pad_by_spacing;
+                        }
+
+                        let desired_w = draw_w + pad_x * 2.0;
+                        let desired_h = draw_h + pad_y * 2.0;
+                        ring_w = desired_w.min(base_ring_w);
+                        ring_h = desired_h.min(base_ring_h);
+                    });
+                });
 
                 // Vertical + (optional) diagonal tween between rows.
                 if state.cursor_row_anim_t < 1.0 {
@@ -1269,10 +1329,6 @@ pub fn get_actors(
                         slot_center_x_for_row(row_idx, state.slot_anim_to);
                     center_x = from_x + (to_x - from_x) * t;
                 }
-
-                let ring_w = col_w * 0.9;
-                let ring_h = ROW_H * s * 0.9;
-                let border_w = widescale(2.0, 2.5);
 
                 let left = center_x - ring_w * 0.5;
                 let right = center_x + ring_w * 0.5;
