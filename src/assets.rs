@@ -205,6 +205,13 @@ impl AssetManager {
             ("logo.png".to_string(), "logo.png".to_string()),
             ("init_arrow.png".to_string(), "init_arrow.png".to_string()),
             ("dance.png".to_string(), "dance.png".to_string()),
+            // Test Input pad assets (Simply Love-style)
+            ("test_input/dance.png".to_string(), "test_input/dance.png".to_string()),
+            ("test_input/buttons.png".to_string(), "test_input/buttons.png".to_string()),
+            ("test_input/highlight.png".to_string(), "test_input/highlight.png".to_string()),
+            ("test_input/highlightgreen.png".to_string(), "test_input/highlightgreen.png".to_string()),
+            ("test_input/highlightred.png".to_string(), "test_input/highlightred.png".to_string()),
+            ("test_input/highlightarrow.png".to_string(), "test_input/highlightarrow.png".to_string()),
             ("meter_arrow.png".to_string(), "meter_arrow.png".to_string()),
             ("rounded-square.png".to_string(), "rounded-square.png".to_string()),
             ("circle.png".to_string(), "circle.png".to_string()),

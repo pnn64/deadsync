@@ -763,6 +763,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                             audio::play_sfx("assets/sounds/start.ogg");
                             return ScreenAction::Navigate(Screen::Mappings);
                         }
+                        // Navigate to Test Input screen.
+                        "Test Input" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            return ScreenAction::Navigate(Screen::Input);
+                        }
                         // Exit from Options back to Menu.
                         "Exit" => {
                             audio::play_sfx("assets/sounds/start.ogg");
