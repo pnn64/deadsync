@@ -1,6 +1,6 @@
 mod backends;
 
-use crate::core::gfx::backends::{opengl, vulkan};
+use crate::core::gfx::backends::{opengl, software, vulkan};
 use cgmath::Matrix4;
 use glow::HasContext;
 use image::RgbaImage;
@@ -47,18 +47,21 @@ pub enum BlendMode {
 pub enum BackendType {
     Vulkan,
     OpenGL,
+    Software,
 }
 
 // A handle to a backend-specific texture resource.
 pub enum Texture {
     Vulkan(vulkan::Texture),
     OpenGL(opengl::Texture),
+    Software(software::Texture),
 }
 
 // An internal enum to hold the state for the active rendering backend.
 enum BackendImpl {
     Vulkan(vulkan::State),
     OpenGL(opengl::State),
+    Software(software::State),
 }
 
 /// A public, opaque wrapper around the active rendering backend.
@@ -74,6 +77,7 @@ impl Backend {
         match &mut self.0 {
             BackendImpl::Vulkan(state) => vulkan::draw(state, render_list, textures),
             BackendImpl::OpenGL(state) => opengl::draw(state, render_list, textures),
+            BackendImpl::Software(state) => software::draw(state, render_list, textures),
         }
     }
 
@@ -81,6 +85,7 @@ impl Backend {
         match &mut self.0 {
             BackendImpl::Vulkan(state) => vulkan::resize(state, width, height),
             BackendImpl::OpenGL(state) => opengl::resize(state, width, height),
+            BackendImpl::Software(state) => software::resize(state, width, height),
         }
     }
 
@@ -88,6 +93,7 @@ impl Backend {
         match &mut self.0 {
             BackendImpl::Vulkan(state) => vulkan::cleanup(state),
             BackendImpl::OpenGL(state) => opengl::cleanup(state),
+            BackendImpl::Software(state) => software::cleanup(state),
         }
     }
 
@@ -100,6 +106,10 @@ impl Backend {
             BackendImpl::OpenGL(state) => {
                 let tex = opengl::create_texture(&state.gl, image)?;
                 Ok(Texture::OpenGL(tex))
+            }
+            BackendImpl::Software(_state) => {
+                let tex = software::create_texture(image)?;
+                Ok(Texture::Software(tex))
             }
         }
     }
@@ -120,6 +130,9 @@ impl Backend {
                     }
                 }
             },
+            BackendImpl::Software(_) => {
+                drop(old_textures);
+            }
         }
     }
 
@@ -135,6 +148,9 @@ impl Backend {
             BackendImpl::OpenGL(_) => {
                 // This is a no-op for OpenGL.
             }
+            BackendImpl::Software(_) => {
+                // CPU renderer is synchronous; nothing to wait for.
+            }
         }
     }
 }
@@ -148,6 +164,7 @@ pub fn create_backend(
     let backend_impl = match backend_type {
         BackendType::Vulkan => BackendImpl::Vulkan(vulkan::init(&window, vsync_enabled)?),
         BackendType::OpenGL => BackendImpl::OpenGL(opengl::init(window, vsync_enabled)?),
+        BackendType::Software => BackendImpl::Software(software::init(window, vsync_enabled)?),
     };
     Ok(Backend(backend_impl))
 }
@@ -158,6 +175,7 @@ impl core::fmt::Display for BackendType {
         match self {
             Self::Vulkan => write!(f, "Vulkan"),
             Self::OpenGL => write!(f, "OpenGL"),
+            Self::Software => write!(f, "Software"),
         }
     }
 }
@@ -167,6 +185,7 @@ impl FromStr for BackendType {
         match s.to_lowercase().as_str() {
             "vulkan" => Ok(BackendType::Vulkan),
             "opengl" => Ok(BackendType::OpenGL),
+            "software" | "cpu" | "software-renderer" => Ok(BackendType::Software),
             _ => Err(format!("'{}' is not a valid video renderer", s)),
         }
     }
