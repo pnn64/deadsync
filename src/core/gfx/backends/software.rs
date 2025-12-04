@@ -3,7 +3,16 @@ use crate::core::space::ortho_for_window;
 use cgmath::{Matrix4, Vector4};
 use image::RgbaImage;
 use log::info;
-use std::{collections::HashMap, error::Error, num::NonZeroU32, sync::Arc};
+use std::{
+    collections::HashMap,
+    error::Error,
+    num::NonZeroU32,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+    thread,
+};
 use winit::{dpi::PhysicalSize, window::Window};
 
 pub struct Texture {
@@ -15,6 +24,7 @@ pub struct State {
     surface: softbuffer::Surface<Arc<Window>, Arc<Window>>,
     window_size: PhysicalSize<u32>,
     projection: Matrix4<f32>,
+    thread_hint: Option<usize>,
 }
 
 pub fn init(window: Arc<Window>, _vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
@@ -31,7 +41,12 @@ pub fn init(window: Arc<Window>, _vsync_enabled: bool) -> Result<State, Box<dyn 
         surface,
         window_size,
         projection,
+        thread_hint: None,
     })
+}
+
+pub fn set_thread_hint(state: &mut State, threads: Option<usize>) {
+    state.thread_hint = threads;
 }
 
 pub fn create_texture(image: &RgbaImage) -> Result<Texture, Box<dyn Error>> {
@@ -66,39 +81,118 @@ pub fn draw<'a>(
     }
 
     let proj = state.projection;
-    let mut total_vertices: u32 = 0;
+    let vertex_counter = AtomicU32::new(0);
 
-    for obj in &render_list.objects {
-        let ObjectType::Sprite {
-            texture_id,
-            tint,
-            uv_scale,
-            uv_offset,
-            edge_fade: _,
-        } = &obj.object_type;
+    let threads_auto = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .max(1);
 
-        let tex_key = texture_id.as_ref();
-        let Some(RendererTexture::Software(tex)) = textures.get(tex_key) else {
-            continue;
-        };
+    let threads = match state.thread_hint {
+        Some(t) if t >= 1 => t.min(threads_auto),
+        _ => threads_auto,
+    };
 
-        total_vertices += rasterize_sprite(
-            &proj,
-            &obj.transform,
-            *tint,
-            *uv_scale,
-            *uv_offset,
-            obj.blend,
-            &tex.image,
-            w,
-            h,
-            &mut buffer,
-        );
+    let use_parallel = threads > 1 && h >= 64 && render_list.objects.len() > 1;
+
+    if use_parallel {
+        let rows_per = (h + threads - 1) / threads;
+
+        thread::scope(|scope| {
+            let mut remainder: &mut [u32] = &mut buffer;
+
+            for worker in 0..threads {
+                let y_start = worker * rows_per;
+                if y_start >= h {
+                    break;
+                }
+                let y_end = ((worker + 1) * rows_per).min(h);
+                let rows = y_end - y_start;
+                let len = rows * w;
+
+                let (stripe, rest) = remainder.split_at_mut(len);
+                remainder = rest;
+
+                let objects = &render_list.objects;
+                let textures = textures;
+                let proj = proj;
+                let width = w;
+                let height = h;
+                let counter = &vertex_counter;
+
+                scope.spawn(move || {
+                    let mut local_vertices: u32 = 0;
+
+                    for obj in objects {
+                        let ObjectType::Sprite {
+                            texture_id,
+                            tint,
+                            uv_scale,
+                            uv_offset,
+                            edge_fade: _,
+                        } = &obj.object_type;
+
+                        let tex_key = texture_id.as_ref();
+                        let Some(RendererTexture::Software(tex)) = textures.get(tex_key) else {
+                            continue;
+                        };
+
+                        local_vertices += rasterize_sprite(
+                            &proj,
+                            &obj.transform,
+                            *tint,
+                            *uv_scale,
+                            *uv_offset,
+                            obj.blend,
+                            &tex.image,
+                            width,
+                            height,
+                            y_start,
+                            y_end,
+                            stripe,
+                        );
+                    }
+
+                    counter.fetch_add(local_vertices, Ordering::Relaxed);
+                });
+            }
+        });
+    } else {
+        for obj in &render_list.objects {
+            let ObjectType::Sprite {
+                texture_id,
+                tint,
+                uv_scale,
+                uv_offset,
+                edge_fade: _,
+            } = &obj.object_type;
+
+            let tex_key = texture_id.as_ref();
+            let Some(RendererTexture::Software(tex)) = textures.get(tex_key) else {
+                continue;
+            };
+
+            let v = rasterize_sprite(
+                &proj,
+                &obj.transform,
+                *tint,
+                *uv_scale,
+                *uv_offset,
+                obj.blend,
+                &tex.image,
+                w,
+                h,
+                0,
+                h,
+                &mut buffer,
+            );
+            vertex_counter.fetch_add(v, Ordering::Relaxed);
+        }
     }
 
     buffer.present()?;
 
-    Ok(total_vertices)
+    Ok(vertex_counter.load(Ordering::Relaxed))
 }
 
 pub fn resize(state: &mut State, width: u32, height: u32) {
@@ -152,9 +246,11 @@ fn rasterize_sprite(
     image: &RgbaImage,
     width: usize,
     height: usize,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
     buffer: &mut [u32],
 ) -> u32 {
-    if tint[3] <= 0.0 || width == 0 || height == 0 {
+    if tint[3] <= 0.0 || width == 0 || height == 0 || stripe_y_start >= stripe_y_end {
         return 0;
     }
 
@@ -195,8 +291,32 @@ fn rasterize_sprite(
         v[i] = ScreenVertex { x: sx, y: sy, u, v: vv };
     }
 
-    rasterize_triangle(&v[0], &v[1], &v[2], tint, blend, image, width, height, buffer);
-    rasterize_triangle(&v[0], &v[2], &v[3], tint, blend, image, width, height, buffer);
+    rasterize_triangle(
+        &v[0],
+        &v[1],
+        &v[2],
+        tint,
+        blend,
+        image,
+        width,
+        height,
+        stripe_y_start,
+        stripe_y_end,
+        buffer,
+    );
+    rasterize_triangle(
+        &v[0],
+        &v[2],
+        &v[3],
+        tint,
+        blend,
+        image,
+        width,
+        height,
+        stripe_y_start,
+        stripe_y_end,
+        buffer,
+    );
 
     4
 }
@@ -211,15 +331,32 @@ fn rasterize_triangle(
     image: &RgbaImage,
     width: usize,
     height: usize,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
     buffer: &mut [u32],
 ) {
     let min_x = v0.x.min(v1.x).min(v2.x).floor().max(0.0) as i32;
     let max_x = v0.x.max(v1.x).max(v2.x).ceil().min((width - 1) as f32) as i32;
-    let min_y = v0.y.min(v1.y).min(v2.y).floor().max(0.0) as i32;
-    let max_y = v0.y.max(v1.y).max(v2.y).ceil().min((height - 1) as f32) as i32;
+    let mut min_y = v0.y.min(v1.y).min(v2.y).floor().max(0.0) as i32;
+    let mut max_y = v0.y.max(v1.y).max(v2.y).ceil().min((height - 1) as f32) as i32;
 
     if min_x > max_x || min_y > max_y {
         return;
+    }
+
+    let stripe_start = stripe_y_start as i32;
+    let stripe_end = (stripe_y_end as i32) - 1;
+    if stripe_start > stripe_end {
+        return;
+    }
+    if max_y < stripe_start || min_y > stripe_end {
+        return;
+    }
+    if min_y < stripe_start {
+        min_y = stripe_start;
+    }
+    if max_y > stripe_end {
+        max_y = stripe_end;
     }
 
     let denom = edge_function(v0.x, v0.y, v1.x, v1.y, v2.x, v2.y);
@@ -235,6 +372,7 @@ fn rasterize_triangle(
 
     for y in min_y..=max_y {
         let py = y as f32 + 0.5;
+        let row = (y - stripe_start) as usize;
         for x in min_x..=max_x {
             let px = x as f32 + 0.5;
 
@@ -279,7 +417,7 @@ fn rasterize_triangle(
             sb = sb.clamp(0.0, 1.0);
             sa = sa.clamp(0.0, 1.0);
 
-            let dst_idx = (y as usize * width + x as usize) as usize;
+            let dst_idx = row * width + x as usize;
             let dst = buffer[dst_idx];
 
             let dr = ((dst >> 16) & 0xFF) as f32 / 255.0;

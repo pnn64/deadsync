@@ -90,6 +90,7 @@ pub struct App {
     backend_type: BackendType,
     asset_manager: AssetManager,
     state: AppState,
+    software_renderer_threads: u8,
 }
 
 impl AppState {
@@ -265,6 +266,7 @@ impl App {
             backend_type,
             asset_manager: AssetManager::new(),
             state,
+            software_renderer_threads: config.software_renderer_threads,
         }
     }
 
@@ -587,7 +589,15 @@ impl App {
         self.state.metrics = crate::core::space::metrics_for_window(sz.width, sz.height);
         crate::core::space::set_current_metrics(self.state.metrics);
         let mut backend = create_backend(self.backend_type, window.clone(), self.state.vsync_enabled)?;
-        
+
+        if self.backend_type == BackendType::Software {
+            let threads = match self.software_renderer_threads {
+                0 => None,
+                n => Some(n as usize),
+            };
+            backend.configure_software_threads(threads);
+        }
+
         self.asset_manager.load_initial_assets(&mut backend)?;
 
         self.window = Some(window);

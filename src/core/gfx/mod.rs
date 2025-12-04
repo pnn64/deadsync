@@ -81,6 +81,12 @@ impl Backend {
         }
     }
 
+    pub fn configure_software_threads(&mut self, threads: Option<usize>) {
+        if let BackendImpl::Software(state) = &mut self.0 {
+            software::set_thread_hint(state, threads);
+        }
+    }
+
     pub fn resize(&mut self, width: u32, height: u32) {
         match &mut self.0 {
             BackendImpl::Vulkan(state) => vulkan::resize(state, width, height),
