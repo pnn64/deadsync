@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.1.364"
+version = "0.1.366"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "Rust-based ITG engine with switchable Vulkan/OpenGL backends, designed for accurate sync and competitive performance."
@@ -50,10 +50,17 @@ twox-hash = "2.1.2"
 # rssp submodule
 rssp = { path = "src/extern/rssp" }
 
-# Joystick / Input
+# DirectX + Input (Windows)
 [target.'cfg(windows)'.dependencies]
+wgpu = { version = "27.0.1", features = ["dx12"] }
+pollster = "0.4"
+gpu-allocator = "0.28.0"
 gilrs = { version = "0.11.0", default-features = false, features = ["xinput"] }
+windows = "0.58.0"
+windows-core = "0.58.0"
+windows-targets = "0.52.6"
 
+# Input (Unix)
 [target.'cfg(unix)'.dependencies]
 gilrs = "0.11.0"
 

@@ -1,6 +1,6 @@
 mod backends;
 
-use crate::core::gfx::backends::{opengl, software, vulkan};
+use crate::core::gfx::backends::{opengl, software, vulkan, wgpu_dx};
 use cgmath::Matrix4;
 use glow::HasContext;
 use image::RgbaImage;
@@ -48,6 +48,7 @@ pub enum BackendType {
     Vulkan,
     OpenGL,
     Software,
+    DirectX,
 }
 
 // A handle to a backend-specific texture resource.
@@ -55,6 +56,7 @@ pub enum Texture {
     Vulkan(vulkan::Texture),
     OpenGL(opengl::Texture),
     Software(software::Texture),
+    DirectX(wgpu_dx::Texture),
 }
 
 // An internal enum to hold the state for the active rendering backend.
@@ -62,6 +64,7 @@ enum BackendImpl {
     Vulkan(vulkan::State),
     OpenGL(opengl::State),
     Software(software::State),
+    DirectX(wgpu_dx::State),
 }
 
 /// A public, opaque wrapper around the active rendering backend.
@@ -78,6 +81,7 @@ impl Backend {
             BackendImpl::Vulkan(state) => vulkan::draw(state, render_list, textures),
             BackendImpl::OpenGL(state) => opengl::draw(state, render_list, textures),
             BackendImpl::Software(state) => software::draw(state, render_list, textures),
+            BackendImpl::DirectX(state) => wgpu_dx::draw(state, render_list, textures),
         }
     }
 
@@ -92,6 +96,7 @@ impl Backend {
             BackendImpl::Vulkan(state) => vulkan::resize(state, width, height),
             BackendImpl::OpenGL(state) => opengl::resize(state, width, height),
             BackendImpl::Software(state) => software::resize(state, width, height),
+            BackendImpl::DirectX(state) => wgpu_dx::resize(state, width, height),
         }
     }
 
@@ -100,6 +105,7 @@ impl Backend {
             BackendImpl::Vulkan(state) => vulkan::cleanup(state),
             BackendImpl::OpenGL(state) => opengl::cleanup(state),
             BackendImpl::Software(state) => software::cleanup(state),
+            BackendImpl::DirectX(state) => wgpu_dx::cleanup(state),
         }
     }
 
@@ -116,6 +122,10 @@ impl Backend {
             BackendImpl::Software(_state) => {
                 let tex = software::create_texture(image)?;
                 Ok(Texture::Software(tex))
+            }
+            BackendImpl::DirectX(state) => {
+                let tex = wgpu_dx::create_texture(state, image)?;
+                Ok(Texture::DirectX(tex))
             }
         }
     }
@@ -139,6 +149,9 @@ impl Backend {
             BackendImpl::Software(_) => {
                 drop(old_textures);
             }
+            BackendImpl::DirectX(_) => {
+                drop(old_textures);
+            }
         }
     }
 
@@ -157,6 +170,9 @@ impl Backend {
             BackendImpl::Software(_) => {
                 // CPU renderer is synchronous; nothing to wait for.
             }
+            BackendImpl::DirectX(state) => {
+                let _ = state.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: None });
+            }
         }
     }
 }
@@ -171,6 +187,7 @@ pub fn create_backend(
         BackendType::Vulkan => BackendImpl::Vulkan(vulkan::init(&window, vsync_enabled)?),
         BackendType::OpenGL => BackendImpl::OpenGL(opengl::init(window, vsync_enabled)?),
         BackendType::Software => BackendImpl::Software(software::init(window, vsync_enabled)?),
+        BackendType::DirectX => BackendImpl::DirectX(wgpu_dx::init(window, vsync_enabled)?),
     };
     Ok(Backend(backend_impl))
 }
@@ -182,6 +199,7 @@ impl core::fmt::Display for BackendType {
             Self::Vulkan => write!(f, "Vulkan"),
             Self::OpenGL => write!(f, "OpenGL"),
             Self::Software => write!(f, "Software"),
+            Self::DirectX => write!(f, "DirectX (wgpu)"),
         }
     }
 }
@@ -192,6 +210,7 @@ impl FromStr for BackendType {
             "vulkan" => Ok(BackendType::Vulkan),
             "opengl" => Ok(BackendType::OpenGL),
             "software" | "cpu" | "software-renderer" => Ok(BackendType::Software),
+            "directx" | "dx12" | "wgpu" | "directx (wgpu)" => Ok(BackendType::DirectX),
             _ => Err(format!("'{}' is not a valid video renderer", s)),
         }
     }
