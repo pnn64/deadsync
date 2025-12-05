@@ -1,6 +1,8 @@
 mod backends;
 
-use crate::core::gfx::backends::{opengl, software, vulkan, wgpu_dx};
+use crate::core::gfx::backends::{opengl, software, vulkan, wgpu_vk};
+#[cfg(target_os = "windows")]
+use crate::core::gfx::backends::wgpu_dx;
 use cgmath::Matrix4;
 use glow::HasContext;
 use image::RgbaImage;
@@ -46,24 +48,30 @@ pub enum BlendMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendType {
     Vulkan,
+    VulkanWgpu,
     OpenGL,
     Software,
+    #[cfg(target_os = "windows")]
     DirectX,
 }
 
 // A handle to a backend-specific texture resource.
 pub enum Texture {
     Vulkan(vulkan::Texture),
+    VulkanWgpu(wgpu_vk::Texture),
     OpenGL(opengl::Texture),
     Software(software::Texture),
+    #[cfg(target_os = "windows")]
     DirectX(wgpu_dx::Texture),
 }
 
 // An internal enum to hold the state for the active rendering backend.
 enum BackendImpl {
     Vulkan(vulkan::State),
+    VulkanWgpu(wgpu_vk::State),
     OpenGL(opengl::State),
     Software(software::State),
+    #[cfg(target_os = "windows")]
     DirectX(wgpu_dx::State),
 }
 
@@ -79,8 +87,10 @@ impl Backend {
     ) -> Result<u32, Box<dyn Error>> {
         match &mut self.0 {
             BackendImpl::Vulkan(state) => vulkan::draw(state, render_list, textures),
+            BackendImpl::VulkanWgpu(state) => wgpu_vk::draw(state, render_list, textures),
             BackendImpl::OpenGL(state) => opengl::draw(state, render_list, textures),
             BackendImpl::Software(state) => software::draw(state, render_list, textures),
+            #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => wgpu_dx::draw(state, render_list, textures),
         }
     }
@@ -94,8 +104,10 @@ impl Backend {
     pub fn resize(&mut self, width: u32, height: u32) {
         match &mut self.0 {
             BackendImpl::Vulkan(state) => vulkan::resize(state, width, height),
+            BackendImpl::VulkanWgpu(state) => wgpu_vk::resize(state, width, height),
             BackendImpl::OpenGL(state) => opengl::resize(state, width, height),
             BackendImpl::Software(state) => software::resize(state, width, height),
+            #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => wgpu_dx::resize(state, width, height),
         }
     }
@@ -103,8 +115,10 @@ impl Backend {
     pub fn cleanup(&mut self) {
         match &mut self.0 {
             BackendImpl::Vulkan(state) => vulkan::cleanup(state),
+            BackendImpl::VulkanWgpu(state) => wgpu_vk::cleanup(state),
             BackendImpl::OpenGL(state) => opengl::cleanup(state),
             BackendImpl::Software(state) => software::cleanup(state),
+            #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => wgpu_dx::cleanup(state),
         }
     }
@@ -115,6 +129,10 @@ impl Backend {
                 let tex = vulkan::create_texture(state, image)?;
                 Ok(Texture::Vulkan(tex))
             }
+            BackendImpl::VulkanWgpu(state) => {
+                let tex = wgpu_vk::create_texture(state, image)?;
+                Ok(Texture::VulkanWgpu(tex))
+            }
             BackendImpl::OpenGL(state) => {
                 let tex = opengl::create_texture(&state.gl, image)?;
                 Ok(Texture::OpenGL(tex))
@@ -123,6 +141,7 @@ impl Backend {
                 let tex = software::create_texture(image)?;
                 Ok(Texture::Software(tex))
             }
+            #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => {
                 let tex = wgpu_dx::create_texture(state, image)?;
                 Ok(Texture::DirectX(tex))
@@ -139,6 +158,9 @@ impl Backend {
                 // Vulkan textures are cleaned up by their Drop implementation.
                 drop(old_textures);
             }
+            BackendImpl::VulkanWgpu(_) => {
+                drop(old_textures);
+            }
             BackendImpl::OpenGL(state) => unsafe {
                 for tex in old_textures.values() {
                     if let Texture::OpenGL(opengl::Texture(handle)) = tex {
@@ -149,6 +171,7 @@ impl Backend {
             BackendImpl::Software(_) => {
                 drop(old_textures);
             }
+            #[cfg(target_os = "windows")]
             BackendImpl::DirectX(_) => {
                 drop(old_textures);
             }
@@ -164,12 +187,16 @@ impl Backend {
                     }
                 }
             }
+            BackendImpl::VulkanWgpu(state) => {
+                let _ = state.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: None });
+            }
             BackendImpl::OpenGL(_) => {
                 // This is a no-op for OpenGL.
             }
             BackendImpl::Software(_) => {
                 // CPU renderer is synchronous; nothing to wait for.
             }
+            #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => {
                 let _ = state.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: None });
             }
@@ -185,8 +212,10 @@ pub fn create_backend(
 ) -> Result<Backend, Box<dyn Error>> {
     let backend_impl = match backend_type {
         BackendType::Vulkan => BackendImpl::Vulkan(vulkan::init(&window, vsync_enabled)?),
+        BackendType::VulkanWgpu => BackendImpl::VulkanWgpu(wgpu_vk::init(window, vsync_enabled)?),
         BackendType::OpenGL => BackendImpl::OpenGL(opengl::init(window, vsync_enabled)?),
         BackendType::Software => BackendImpl::Software(software::init(window, vsync_enabled)?),
+        #[cfg(target_os = "windows")]
         BackendType::DirectX => BackendImpl::DirectX(wgpu_dx::init(window, vsync_enabled)?),
     };
     Ok(Backend(backend_impl))
@@ -197,8 +226,10 @@ impl core::fmt::Display for BackendType {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Vulkan => write!(f, "Vulkan"),
+            Self::VulkanWgpu => write!(f, "Vulkan (wgpu)"),
             Self::OpenGL => write!(f, "OpenGL"),
             Self::Software => write!(f, "Software"),
+            #[cfg(target_os = "windows")]
             Self::DirectX => write!(f, "DirectX (wgpu)"),
         }
     }
@@ -208,8 +239,10 @@ impl FromStr for BackendType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "vulkan" => Ok(BackendType::Vulkan),
+            "vulkan (wgpu)" | "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" | "wgpu vulkan" => Ok(BackendType::VulkanWgpu),
             "opengl" => Ok(BackendType::OpenGL),
             "software" | "cpu" | "software-renderer" => Ok(BackendType::Software),
+            #[cfg(target_os = "windows")]
             "directx" | "dx12" | "wgpu" | "directx (wgpu)" => Ok(BackendType::DirectX),
             _ => Err(format!("'{}' is not a valid video renderer", s)),
         }

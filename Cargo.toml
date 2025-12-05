@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.1.366"
+version = "0.1.367"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "Rust-based ITG engine with switchable Vulkan/OpenGL backends, designed for accurate sync and competitive performance."
@@ -30,6 +30,8 @@ cgmath = "0.18.0"
 glow = "0.16.0"
 glutin = "0.32.3"
 raw-window-handle = "0.6.2"
+wgpu = { version = "27.0.1", features = ["dx12", "vulkan"] }
+pollster = "0.4"
 
 # Audio
 cpal = "0.16.0"
@@ -52,8 +54,6 @@ rssp = { path = "src/extern/rssp" }
 
 # DirectX + Input (Windows)
 [target.'cfg(windows)'.dependencies]
-wgpu = { version = "27.0.1", features = ["dx12"] }
-pollster = "0.4"
 gpu-allocator = "0.28.0"
 gilrs = { version = "0.11.0", default-features = false, features = ["xinput"] }
 windows = "0.58.0"
