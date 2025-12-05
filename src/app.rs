@@ -9,6 +9,7 @@ use crate::screens::{
     sandbox, select_color, select_music, Screen as CurrentScreen, ScreenAction,
 };
 use crate::game::parsing::simfile as song_loading;
+use crate::game::chart::ChartData;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -18,7 +19,7 @@ use winit::{
 };
 
 use log::{error, warn, info};
-use std::{error::Error, sync::Arc, time::Instant};
+use std::{error::Error, path::PathBuf, sync::Arc, time::Instant};
 use std::cmp;
 
 use crate::ui::actors::Actor;
@@ -31,6 +32,14 @@ use crate::core::input::{GpSystemEvent, PadEvent};
 pub enum UserEvent {
     Pad(PadEvent),
     GamepadSystem(GpSystemEvent),
+}
+
+/// Imperative effects to be executed by the shell.
+enum Command {
+    ExitNow,
+    SetBanner(Option<PathBuf>),
+    SetDensityGraph(Option<ChartData>),
+    FetchOnlineGrade(String),
 }
 
 /* -------------------- transition timing constants -------------------- */
@@ -328,6 +337,8 @@ impl App {
     }
 
     fn handle_action(&mut self, action: ScreenAction, event_loop: &ActiveEventLoop) -> Result<(), Box<dyn Error>> {
+        let mut commands: Vec<Command> = Vec::new();
+
         match action {
             ScreenAction::Navigate(screen) => {
                 let from = self.state.screens.current_screen;
@@ -366,11 +377,11 @@ impl App {
                         } else {
                             FADE_OUT_DURATION
                         };
-                        self.state.shell.transition = TransitionState::ActorsFadeOut { elapsed: 0.0, duration, target: screen };
-                    } else {
-                        info!("Starting global fade out to screen: {:?}", screen);                        
-                        let (_, out_duration) = self.get_out_transition_for_screen(self.state.screens.current_screen);
-                        self.state.shell.transition = TransitionState::FadingOut {
+                    self.state.shell.transition = TransitionState::ActorsFadeOut { elapsed: 0.0, duration, target: screen };
+                } else {
+                    info!("Starting global fade out to screen: {:?}", screen);                        
+                    let (_, out_duration) = self.get_out_transition_for_screen(self.state.screens.current_screen);
+                    self.state.shell.transition = TransitionState::FadingOut {
                             elapsed: 0.0,
                             duration: out_duration,
                             target: screen,
@@ -390,62 +401,83 @@ impl App {
                     self.state.shell.pending_exit = true;
                 } else {
                     info!("Exit action received. Shutting down.");
-                    event_loop.exit();
+                    commands.push(Command::ExitNow);
                 }
             }
             ScreenAction::RequestBanner(path_opt) => {
-                if let Some(backend) = self.backend.as_mut() {
-                    if let Some(path) = path_opt {
-                        let key = self.asset_manager.set_dynamic_banner(backend, Some(path));
-                        self.state.screens.select_music_state.current_banner_key = key;
-                    } else {
-                        self.asset_manager.destroy_dynamic_assets(backend);
-                        let color_index = self.state.screens.select_music_state.active_color_index;
-                        let banner_num = color_index.rem_euclid(12) + 1;
-                        let key = format!("banner{}.png", banner_num);
-                        self.state.screens.select_music_state.current_banner_key = key;
-                    }
-                }
+                commands.push(Command::SetBanner(path_opt));
             }
             ScreenAction::RequestDensityGraph(chart_opt) => {
-                if let Some(backend) = self.backend.as_mut() {
-                    let graph_request = if let Some(chart) = chart_opt {
-                        let graph_width = 1024;
-                        let graph_height = 256;
-                        let bottom_color = [0, 184, 204];
-                        let top_color    = [130, 0, 161];
-                        let bg_color     = [30, 40, 47];
-
-                        let graph_data = rssp::graph::generate_density_graph_rgba_data(
-                            &chart.measure_nps_vec,
-                            chart.max_nps,
-                            graph_width,
-                            graph_height,
-                            bottom_color,
-                            top_color,
-                            bg_color,
-                        )
-                        .ok();
-
-                        graph_data.map(|data| (chart.short_hash, data))
-                    } else {
-                        None
-                    };
-
-                    let key = self.asset_manager.set_density_graph(backend, graph_request);
-                    self.state.screens.select_music_state.current_graph_key = key;
-                }
+                commands.push(Command::SetDensityGraph(chart_opt));
             }
             ScreenAction::FetchOnlineGrade(hash) => {
-                info!("Fetching online grade for chart hash: {}", hash);
-                let profile = profile::get();
-                std::thread::spawn(move || {
-                    if let Err(e) = scores::fetch_and_store_grade(profile, hash) {
-                        warn!("Failed to fetch online grade: {}", e);
-                    }
-                });
+                commands.push(Command::FetchOnlineGrade(hash));
             }
             ScreenAction::None => {}
+        }
+
+        self.run_commands(commands, event_loop)
+    }
+
+    fn run_commands(&mut self, commands: Vec<Command>, event_loop: &ActiveEventLoop) -> Result<(), Box<dyn Error>> {
+        for command in commands {
+            match command {
+                Command::ExitNow => {
+                    event_loop.exit();
+                }
+                Command::SetBanner(path_opt) => {
+                    if let Some(backend) = self.backend.as_mut() {
+                        if let Some(path) = path_opt {
+                            let key = self.asset_manager.set_dynamic_banner(backend, Some(path));
+                            self.state.screens.select_music_state.current_banner_key = key;
+                        } else {
+                            self.asset_manager.destroy_dynamic_assets(backend);
+                            let color_index = self.state.screens.select_music_state.active_color_index;
+                            let banner_num = color_index.rem_euclid(12) + 1;
+                            let key = format!("banner{}.png", banner_num);
+                            self.state.screens.select_music_state.current_banner_key = key;
+                        }
+                    }
+                }
+                Command::SetDensityGraph(chart_opt) => {
+                    if let Some(backend) = self.backend.as_mut() {
+                        let graph_request = if let Some(chart) = chart_opt {
+                            let graph_width = 1024;
+                            let graph_height = 256;
+                            let bottom_color = [0, 184, 204];
+                            let top_color    = [130, 0, 161];
+                            let bg_color     = [30, 40, 47];
+
+                            let graph_data = rssp::graph::generate_density_graph_rgba_data(
+                                &chart.measure_nps_vec,
+                                chart.max_nps,
+                                graph_width,
+                                graph_height,
+                                bottom_color,
+                                top_color,
+                                bg_color,
+                            )
+                            .ok();
+
+                            graph_data.map(|data| (chart.short_hash, data))
+                        } else {
+                            None
+                        };
+
+                        let key = self.asset_manager.set_density_graph(backend, graph_request);
+                        self.state.screens.select_music_state.current_graph_key = key;
+                    }
+                }
+                Command::FetchOnlineGrade(hash) => {
+                    info!("Fetching online grade for chart hash: {}", hash);
+                    let profile = profile::get();
+                    std::thread::spawn(move || {
+                        if let Err(e) = scores::fetch_and_store_grade(profile, hash) {
+                            warn!("Failed to fetch online grade: {}", e);
+                        }
+                    });
+                }
+            }
         }
         Ok(())
     }
