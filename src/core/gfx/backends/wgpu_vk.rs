@@ -83,9 +83,6 @@ pub struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     projection: Matrix4<f32>,
-    projection_buffer: wgpu::Buffer,
-    projection_group: wgpu::BindGroup,
-    proj_layout: wgpu::BindGroupLayout,
     bind_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     shader: wgpu::ShaderModule,
@@ -101,7 +98,6 @@ pub struct State {
     window_size: (u32, u32),
     vsync_enabled: bool,
     next_texture_id: u64,
-    projection_dirty: bool,
 }
 
 pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
@@ -128,8 +124,11 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
     let (device, queue) = pollster::block_on(adapter.request_device(
         &wgpu::DeviceDescriptor {
             label: Some("deadsync vk device"),
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::default(),
+            required_features: wgpu::Features::PUSH_CONSTANTS,
+            required_limits: wgpu::Limits {
+                max_push_constant_size: mem::size_of::<[[f32; 4]; 4]>() as u32,
+                ..wgpu::Limits::default()
+            },
             memory_hints: wgpu::MemoryHints::Performance,
             trace: Default::default(),
             experimental_features: Default::default(),
@@ -155,34 +154,6 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
     surface.configure(&device, &config);
 
     let projection = ortho_for_window(size.width, size.height);
-    let proj_array: [[f32; 4]; 4] = projection.into();
-    let projection_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("vk projection"),
-        contents: cast_slice(&proj_array),
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-    });
-
-    let proj_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("vk proj layout"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: wgpu::BufferSize::new((mem::size_of::<[[f32; 4]; 4]>()) as u64),
-            },
-            count: None,
-        }],
-    });
-    let projection_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("vk proj group"),
-        layout: &proj_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: projection_buffer.as_entire_binding(),
-        }],
-    });
 
     let bind_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("vk texture layout"),
@@ -217,7 +188,7 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         ..Default::default()
     });
 
-    let (shader, pipeline_layout, pipelines) = build_pipeline_set(&device, &proj_layout, &bind_layout, format);
+    let (shader, pipeline_layout, pipelines) = build_pipeline_set(&device, &bind_layout, format);
 
     let vertex_data = [
         Vertex { pos: [-0.5, -0.5], uv: [0.0, 1.0] },
@@ -256,9 +227,6 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         queue,
         config,
         projection,
-        projection_buffer,
-        projection_group,
-        proj_layout,
         bind_layout,
         sampler,
         shader,
@@ -274,7 +242,6 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         window_size: (size.width, size.height),
         vsync_enabled,
         next_texture_id: 1,
-        projection_dirty: false,
     })
 }
 
@@ -414,11 +381,7 @@ pub fn draw<'a>(
     if instance_len > 0 {
         state.queue.write_buffer(&state.instance_buffer, 0, cast_slice(state.scratch_instances.as_slice()));
     }
-
-    if state.projection_dirty {
-        write_projection(&state.queue, &state.projection_buffer, state.projection);
-        state.projection_dirty = false;
-    }
+    let proj_array: [[f32; 4]; 4] = state.projection.into();
 
     let frame = match state.surface.get_current_texture() {
         Ok(f) => f,
@@ -460,11 +423,19 @@ pub fn draw<'a>(
         pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
         pass.set_vertex_buffer(1, state.instance_buffer.slice(..));
         pass.set_index_buffer(state.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        pass.set_bind_group(0, &state.projection_group, &[]);
 
+        let mut last_blend: Option<BlendMode> = None;
+        let mut last_bind: Option<u64> = None;
         for run in state.scratch_runs.iter() {
-            pass.set_pipeline(state.pipelines.get(run.blend));
-            pass.set_bind_group(1, Some(run.bind_group.as_ref()), &[]);
+            if last_blend != Some(run.blend) {
+                pass.set_pipeline(state.pipelines.get(run.blend));
+                pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, cast_slice(&proj_array));
+                last_blend = Some(run.blend);
+            }
+            if last_bind != Some(run.key) {
+                pass.set_bind_group(0, Some(run.bind_group.as_ref()), &[]);
+                last_bind = Some(run.key);
+            }
             pass.draw_indexed(0..state.index_count, 0, run.start..(run.start + run.count));
         }
         drop(pass);
@@ -483,7 +454,6 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     }
     state.window_size = (width, height);
     state.projection = ortho_for_window(width, height);
-    state.projection_dirty = true;
     reconfigure_surface(state);
 }
 
@@ -518,14 +488,9 @@ fn reconfigure_surface(state: &mut State) {
     state.config.width = state.window_size.0;
     state.config.height = state.window_size.1;
     state.surface.configure(&state.device, &state.config);
-    if state.projection_dirty {
-        write_projection(&state.queue, &state.projection_buffer, state.projection);
-        state.projection_dirty = false;
-    }
     if format_changed {
         let (shader, pipeline_layout, pipelines) = build_pipeline_set(
             &state.device,
-            &state.proj_layout,
             &state.bind_layout,
             state.config.format,
         );
@@ -582,7 +547,6 @@ fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
 
 fn build_pipeline_set(
     device: &wgpu::Device,
-    proj_layout: &wgpu::BindGroupLayout,
     bind_layout: &wgpu::BindGroupLayout,
     format: wgpu::TextureFormat,
 ) -> (wgpu::ShaderModule, wgpu::PipelineLayout, PipelineSet) {
@@ -593,8 +557,11 @@ fn build_pipeline_set(
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("vk pipeline layout"),
-        bind_group_layouts: &[proj_layout, bind_layout],
-        push_constant_ranges: &[],
+        bind_group_layouts: &[bind_layout],
+        push_constant_ranges: &[wgpu::PushConstantRange {
+            stages: wgpu::ShaderStages::VERTEX,
+            range: 0..(mem::size_of::<[[f32; 4]; 4]>() as u32),
+        }],
     });
 
     let pipelines = PipelineSet {
@@ -686,20 +653,14 @@ fn cast_slice<T>(data: &[T]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, len) }
 }
 
-#[inline(always)]
-fn write_projection(queue: &wgpu::Queue, buffer: &wgpu::Buffer, proj: Matrix4<f32>) {
-    let arr: [[f32; 4]; 4] = proj.into();
-    queue.write_buffer(buffer, 0, cast_slice(&arr));
-}
-
 const SHADER: &str = r#"
 struct Proj {
     proj: mat4x4<f32>,
 };
 
-@group(0) @binding(0) var<uniform> u_proj: Proj;
-@group(1) @binding(0) var u_sampler: sampler;
-@group(1) @binding(1) var u_tex: texture_2d<f32>;
+@group(0) @binding(0) var u_sampler: sampler;
+@group(0) @binding(1) var u_tex: texture_2d<f32>;
+var<push_constant> u_proj: Proj;
 
 struct VertexIn {
     @location(0) pos: vec2<f32>,
