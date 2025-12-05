@@ -54,6 +54,14 @@ pub struct Texture {
     bind_group: Arc<wgpu::BindGroup>,
 }
 
+struct Run {
+    start: u32,
+    count: u32,
+    blend: BlendMode,
+    bind_group: Arc<wgpu::BindGroup>,
+    key: u64,
+}
+
 struct OwnedWindowHandle(pub Arc<Window>);
 
 impl HasWindowHandle for OwnedWindowHandle {
@@ -88,9 +96,12 @@ pub struct State {
     index_count: u32,
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
+    scratch_instances: Vec<InstanceRaw>,
+    scratch_runs: Vec<Run>,
     window_size: (u32, u32),
     vsync_enabled: bool,
     next_texture_id: u64,
+    projection_dirty: bool,
 }
 
 pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
@@ -119,7 +130,7 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
             label: Some("deadsync vk device"),
             required_features: wgpu::Features::empty(),
             required_limits: wgpu::Limits::default(),
-            memory_hints: Default::default(),
+            memory_hints: wgpu::MemoryHints::Performance,
             trace: Default::default(),
             experimental_features: Default::default(),
         },
@@ -258,9 +269,12 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         index_count: indices.len() as u32,
         instance_buffer,
         instance_capacity,
+        scratch_instances: Vec::with_capacity(instance_capacity),
+        scratch_runs: Vec::with_capacity(32),
         window_size: (size.width, size.height),
         vsync_enabled,
         next_texture_id: 1,
+        projection_dirty: false,
     })
 }
 
@@ -330,75 +344,81 @@ pub fn draw<'a>(
         return Ok(0);
     }
 
-    struct Run {
-        start: u32,
-        count: u32,
-        blend: BlendMode,
-        bind_group: Arc<wgpu::BindGroup>,
-        key: u64,
-    }
-
-    let mut instances: Vec<InstanceRaw> = Vec::with_capacity(render_list.objects.len());
-    let mut runs: Vec<Run> = Vec::new();
-
-    #[inline(always)]
-    fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
-        let center = [m[3][0], m[3][1]];
-        let c0 = [m[0][0], m[0][1]];
-        let c1 = [m[1][0], m[1][1]];
-        let sx = (c0[0] * c0[0] + c0[1] * c0[1]).sqrt().max(1e-12);
-        let sy = (c1[0] * c1[0] + c1[1] * c1[1]).sqrt().max(1e-12);
-        let cos_t = c0[0] / sx;
-        let sin_t = c0[1] / sx;
-        (center, [sx, sy], [sin_t, cos_t])
-    }
-
-    for obj in &render_list.objects {
-        let (texture_id, tint, uv_scale, uv_offset, edge_fade) = match &obj.object_type {
-            ObjectType::Sprite { texture_id, tint, uv_scale, uv_offset, edge_fade } => {
-                (texture_id, tint, uv_scale, uv_offset, edge_fade)
-            }
-        };
-
-        let tex = match textures.get(texture_id.as_ref()) {
-            Some(RendererTexture::VulkanWgpu(t)) => t,
-            _ => continue,
-        };
-
-        let model: [[f32; 4]; 4] = obj.transform.into();
-        let (center, size, sincos) = decompose_2d(model);
-        let start = instances.len() as u32;
-        instances.push(InstanceRaw {
-            center,
-            size,
-            rot_sin_cos: sincos,
-            tint: *tint,
-            uv_scale: *uv_scale,
-            uv_offset: *uv_offset,
-            edge_fade: *edge_fade,
-        });
-
-        if let Some(last) = runs.last_mut() {
-            if last.key == tex.id && last.blend == obj.blend {
-                last.count += 1;
-                continue;
-            }
+    {
+        let instances = &mut state.scratch_instances;
+        instances.clear();
+        if instances.capacity() < render_list.objects.len() {
+            instances.reserve(render_list.objects.len() - instances.capacity());
         }
-        runs.push(Run {
-            start,
-            count: 1,
-            blend: obj.blend,
-            bind_group: tex.bind_group.clone(),
-            key: tex.id,
-        });
+        let runs = &mut state.scratch_runs;
+        runs.clear();
+        if runs.capacity() < render_list.objects.len() {
+            runs.reserve(render_list.objects.len() - runs.capacity());
+        }
+
+        #[inline(always)]
+        fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
+            let center = [m[3][0], m[3][1]];
+            let c0 = [m[0][0], m[0][1]];
+            let c1 = [m[1][0], m[1][1]];
+            let sx = (c0[0] * c0[0] + c0[1] * c0[1]).sqrt().max(1e-12);
+            let sy = (c1[0] * c1[0] + c1[1] * c1[1]).sqrt().max(1e-12);
+            let cos_t = c0[0] / sx;
+            let sin_t = c0[1] / sx;
+            (center, [sx, sy], [sin_t, cos_t])
+        }
+
+        for obj in &render_list.objects {
+            let (texture_id, tint, uv_scale, uv_offset, edge_fade) = match &obj.object_type {
+                ObjectType::Sprite { texture_id, tint, uv_scale, uv_offset, edge_fade } => {
+                    (texture_id, tint, uv_scale, uv_offset, edge_fade)
+                }
+            };
+
+            let tex = match textures.get(texture_id.as_ref()) {
+                Some(RendererTexture::VulkanWgpu(t)) => t,
+                _ => continue,
+            };
+
+            let model: [[f32; 4]; 4] = obj.transform.into();
+            let (center, size, sincos) = decompose_2d(model);
+            let start = instances.len() as u32;
+            instances.push(InstanceRaw {
+                center,
+                size,
+                rot_sin_cos: sincos,
+                tint: *tint,
+                uv_scale: *uv_scale,
+                uv_offset: *uv_offset,
+                edge_fade: *edge_fade,
+            });
+
+            if let Some(last) = runs.last_mut() {
+                if last.key == tex.id && last.blend == obj.blend {
+                    last.count += 1;
+                    continue;
+                }
+            }
+            runs.push(Run {
+                start,
+                count: 1,
+                blend: obj.blend,
+                bind_group: tex.bind_group.clone(),
+                key: tex.id,
+            });
+        }
     }
 
-    ensure_instance_capacity(state, instances.len());
-    if !instances.is_empty() {
-        state.queue.write_buffer(&state.instance_buffer, 0, cast_slice(&instances));
+    let instance_len = state.scratch_instances.len();
+    ensure_instance_capacity(state, instance_len);
+    if instance_len > 0 {
+        state.queue.write_buffer(&state.instance_buffer, 0, cast_slice(state.scratch_instances.as_slice()));
     }
 
-    write_projection(&state.queue, &state.projection_buffer, state.projection);
+    if state.projection_dirty {
+        write_projection(&state.queue, &state.projection_buffer, state.projection);
+        state.projection_dirty = false;
+    }
 
     let frame = match state.surface.get_current_texture() {
         Ok(f) => f,
@@ -442,7 +462,7 @@ pub fn draw<'a>(
         pass.set_index_buffer(state.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         pass.set_bind_group(0, &state.projection_group, &[]);
 
-        for run in runs {
+        for run in state.scratch_runs.iter() {
             pass.set_pipeline(state.pipelines.get(run.blend));
             pass.set_bind_group(1, Some(run.bind_group.as_ref()), &[]);
             pass.draw_indexed(0..state.index_count, 0, run.start..(run.start + run.count));
@@ -453,7 +473,7 @@ pub fn draw<'a>(
     state.queue.submit(Some(encoder.finish()));
     frame.present();
 
-    Ok((instances.len() as u32) * 4)
+    Ok((instance_len as u32) * 4)
 }
 
 pub fn resize(state: &mut State, width: u32, height: u32) {
@@ -463,6 +483,7 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     }
     state.window_size = (width, height);
     state.projection = ortho_for_window(width, height);
+    state.projection_dirty = true;
     reconfigure_surface(state);
 }
 
@@ -497,7 +518,10 @@ fn reconfigure_surface(state: &mut State) {
     state.config.width = state.window_size.0;
     state.config.height = state.window_size.1;
     state.surface.configure(&state.device, &state.config);
-    write_projection(&state.queue, &state.projection_buffer, state.projection);
+    if state.projection_dirty {
+        write_projection(&state.queue, &state.projection_buffer, state.projection);
+        state.projection_dirty = false;
+    }
     if format_changed {
         let (shader, pipeline_layout, pipelines) = build_pipeline_set(
             &state.device,
