@@ -48,16 +48,8 @@ enum TransitionState {
     ActorsFadeIn { elapsed: f32 },
 }
 
-/// Pure-ish container for the high-level game state.
-/// This keeps screen flow, timing and UI state separate from the window/renderer shell.
-pub struct AppState {
-    current_screen: CurrentScreen,
-    menu_state: menu::State,
-    gameplay_state: Option<gameplay::State>,
-    options_state: options::State,
-    mappings_state: mappings::State,
-    input_state: input_screen::State,
-    player_options_state: Option<player_options::State>,
+/// Shell-level state: timing, window, renderer flags.
+pub struct ShellState {
     frame_count: u32,
     last_title_update: Instant,
     last_frame_time: Instant,
@@ -70,13 +62,6 @@ pub struct AppState {
     current_frame_vpf: u32,
     show_overlay: bool,
     transition: TransitionState,
-    init_state: init::State,
-    select_color_state: select_color::State,
-    select_music_state: select_music::State,
-    preferred_difficulty_index: usize,
-    sandbox_state: sandbox::State,
-    evaluation_state: evaluation::State,
-    session_start_time: Option<Instant>,
     display_width: u32,
     display_height: u32,
     gamepad_overlay_state: Option<(String, Instant)>,
@@ -84,98 +69,54 @@ pub struct AppState {
     shift_held: bool,
 }
 
-pub struct App {
-    window: Option<Arc<Window>>,
-    backend: Option<renderer::Backend>,
-    backend_type: BackendType,
-    asset_manager: AssetManager,
-    state: AppState,
-    software_renderer_threads: u8,
+/// Active screen data bundle.
+pub struct ScreensState {
+    current_screen: CurrentScreen,
+    menu_state: menu::State,
+    gameplay_state: Option<gameplay::State>,
+    options_state: options::State,
+    mappings_state: mappings::State,
+    input_state: input_screen::State,
+    player_options_state: Option<player_options::State>,
+    init_state: init::State,
+    select_color_state: select_color::State,
+    select_music_state: select_music::State,
+    sandbox_state: sandbox::State,
+    evaluation_state: evaluation::State,
 }
 
-impl AppState {
-    fn new(
-        config: crate::config::Config,
-        profile_data: profile::Profile,
-        show_overlay: bool,
-        color_index: i32,
-    ) -> Self {
-        let display_width = config.display_width;
-        let display_height = config.display_height;
+/// Session-wide values that survive screen swaps.
+pub struct SessionState {
+    preferred_difficulty_index: usize,
+    session_start_time: Option<Instant>,
+}
 
-        let vsync_enabled = config.vsync;
-        let fullscreen_enabled = !config.windowed;
+/// Pure-ish container for the high-level game state.
+/// This keeps screen flow, timing and UI state separate from the window/renderer shell.
+pub struct AppState {
+    shell: ShellState,
+    screens: ScreensState,
+    session: SessionState,
+}
 
-        // Seed preferred difficulty from the profile's last-played
-        // difficulty, clamped to the known range of file difficulty names.
-        let max_diff_index = crate::ui::color::FILE_DIFFICULTY_NAMES
-            .len()
-            .saturating_sub(1);
-        let initial_pref_diff = if max_diff_index == 0 {
-            0
-        } else {
-            cmp::min(profile_data.last_difficulty_index, max_diff_index)
-        };
-
-        let mut menu_state = menu::init();
-        menu_state.active_color_index = color_index;
-
-        let mut select_color_state = select_color::init();
-        select_color_state.active_color_index = color_index;
-        select_color_state.scroll = color_index as f32;
-        select_color_state.bg_from_index = color_index;
-        select_color_state.bg_to_index = color_index;
-
-        let mut select_music_state = select_music::init();
-        select_music_state.active_color_index = color_index;
-        // Ensure SelectMusic's preferred difficulty matches the app's seed.
-        select_music_state.preferred_difficulty_index = initial_pref_diff;
-        select_music_state.selected_difficulty_index = initial_pref_diff;
-
-        let mut options_state = options::init();
-        options_state.active_color_index = color_index;
-
-        let mut mappings_state = mappings::init();
-        mappings_state.active_color_index = color_index;
-
-        let mut input_state = input_screen::init();
-        input_state.active_color_index = color_index;
-
-        let mut init_state = init::init();
-        init_state.active_color_index = color_index;
-
-        let mut evaluation_state = evaluation::init(None);
-        evaluation_state.active_color_index = color_index;
-
-        AppState {
-            current_screen: CurrentScreen::Init,
-            menu_state,
-            gameplay_state: None,
-            options_state,
-            mappings_state,
-            input_state,
-            player_options_state: None,
+impl ShellState {
+    fn new(config: &crate::config::Config, show_overlay: bool) -> Self {
+        let metrics = space::metrics_for_window(config.display_width, config.display_height);
+        ShellState {
             frame_count: 0,
             last_title_update: Instant::now(),
             last_frame_time: Instant::now(),
             start_time: Instant::now(),
-            vsync_enabled,
-            fullscreen_enabled,
-            metrics: space::metrics_for_window(display_width, display_height),
+            vsync_enabled: config.vsync,
+            fullscreen_enabled: !config.windowed,
+            metrics,
             last_fps: 0.0,
             last_vpf: 0,
             current_frame_vpf: 0,
             show_overlay,
             transition: TransitionState::Idle,
-            init_state,
-            select_color_state,
-            select_music_state,
-            preferred_difficulty_index: initial_pref_diff,
-            sandbox_state: sandbox::init(),
-            evaluation_state,
-            session_start_time: None,
-            display_width,
-            display_height,
+            display_width: config.display_width,
+            display_height: config.display_height,
             gamepad_overlay_state: None,
             pending_exit: false,
             shift_held: false,
@@ -192,8 +133,65 @@ impl AppState {
             }
         }
     }
+}
 
-    fn step_idle(&mut self, delta_time: f32, now: Instant) -> Option<ScreenAction> {
+impl SessionState {
+    fn new(preferred_difficulty_index: usize) -> Self {
+        SessionState {
+            preferred_difficulty_index,
+            session_start_time: None,
+        }
+    }
+}
+
+impl ScreensState {
+    fn new(color_index: i32, preferred_difficulty_index: usize) -> Self {
+        let mut menu_state = menu::init();
+        menu_state.active_color_index = color_index;
+
+        let mut select_color_state = select_color::init();
+        select_color_state.active_color_index = color_index;
+        select_color_state.scroll = color_index as f32;
+        select_color_state.bg_from_index = color_index;
+        select_color_state.bg_to_index = color_index;
+
+        let mut select_music_state = select_music::init();
+        select_music_state.active_color_index = color_index;
+        select_music_state.preferred_difficulty_index = preferred_difficulty_index;
+        select_music_state.selected_difficulty_index = preferred_difficulty_index;
+
+        let mut options_state = options::init();
+        options_state.active_color_index = color_index;
+
+        let mut mappings_state = mappings::init();
+        mappings_state.active_color_index = color_index;
+
+        let mut input_state = input_screen::init();
+        input_state.active_color_index = color_index;
+
+        let mut init_state = init::init();
+        init_state.active_color_index = color_index;
+
+        let mut evaluation_state = evaluation::init(None);
+        evaluation_state.active_color_index = color_index;
+
+        ScreensState {
+            current_screen: CurrentScreen::Init,
+            menu_state,
+            gameplay_state: None,
+            options_state,
+            mappings_state,
+            input_state,
+            player_options_state: None,
+            init_state,
+            select_color_state,
+            select_music_state,
+            sandbox_state: sandbox::init(),
+            evaluation_state,
+        }
+    }
+
+    fn step_idle(&mut self, delta_time: f32, now: Instant, session: &SessionState) -> Option<ScreenAction> {
         match self.current_screen {
             CurrentScreen::Gameplay => {
                 if let Some(gs) = &mut self.gameplay_state {
@@ -232,14 +230,14 @@ impl AppState {
                 None
             }
             CurrentScreen::Evaluation => {
-                if let Some(start) = self.session_start_time {
+                if let Some(start) = session.session_start_time {
                     self.evaluation_state.session_elapsed = now.duration_since(start).as_secs_f32();
                 }
                 evaluation::update(&mut self.evaluation_state, delta_time);
                 None
             }
             CurrentScreen::SelectMusic => {
-                if let Some(start) = self.session_start_time {
+                if let Some(start) = session.session_start_time {
                     self.select_music_state.session_elapsed = now.duration_since(start).as_secs_f32();
                 }
                 Some(select_music::update(&mut self.select_music_state, delta_time))
@@ -251,6 +249,40 @@ impl AppState {
     }
 }
 
+impl AppState {
+    fn new(
+        config: crate::config::Config,
+        profile_data: profile::Profile,
+        show_overlay: bool,
+        color_index: i32,
+    ) -> Self {
+        let max_diff_index = crate::ui::color::FILE_DIFFICULTY_NAMES
+            .len()
+            .saturating_sub(1);
+        let preferred = if max_diff_index == 0 {
+            0
+        } else {
+            cmp::min(profile_data.last_difficulty_index, max_diff_index)
+        };
+
+        let shell = ShellState::new(&config, show_overlay);
+        let session = SessionState::new(preferred);
+        let screens = ScreensState::new(color_index, preferred);
+
+        AppState { shell, screens, session }
+    }
+}
+
+pub struct App {
+    window: Option<Arc<Window>>,
+    backend: Option<renderer::Backend>,
+    backend_type: BackendType,
+    asset_manager: AssetManager,
+    state: AppState,
+    software_renderer_threads: u8,
+}
+
+
 impl App {
     fn new(
         backend_type: BackendType,
@@ -259,6 +291,7 @@ impl App {
         config: crate::config::Config,
         profile_data: profile::Profile,
     ) -> Self {
+        let software_renderer_threads = config.software_renderer_threads;
         let state = AppState::new(config, profile_data, show_overlay, color_index);
         Self {
             window: None,
@@ -266,26 +299,26 @@ impl App {
             backend_type,
             asset_manager: AssetManager::new(),
             state,
-            software_renderer_threads: config.software_renderer_threads,
+            software_renderer_threads,
         }
     }
 
     fn route_input_event(&mut self, event_loop: &ActiveEventLoop, ev: InputEvent) -> Result<(), Box<dyn Error>> {
-        let action = match self.state.current_screen {
-            CurrentScreen::Menu => crate::screens::menu::handle_input(&mut self.state.menu_state, &ev),
-            CurrentScreen::SelectColor => crate::screens::select_color::handle_input(&mut self.state.select_color_state, &ev),
-            CurrentScreen::Options => crate::screens::options::handle_input(&mut self.state.options_state, &ev),
-            CurrentScreen::Mappings => crate::screens::mappings::handle_input(&mut self.state.mappings_state, &ev),
-            CurrentScreen::Input => crate::screens::input::handle_input(&mut self.state.input_state, &ev),
-            CurrentScreen::SelectMusic => crate::screens::select_music::handle_input(&mut self.state.select_music_state, &ev),
+        let action = match self.state.screens.current_screen {
+            CurrentScreen::Menu => crate::screens::menu::handle_input(&mut self.state.screens.menu_state, &ev),
+            CurrentScreen::SelectColor => crate::screens::select_color::handle_input(&mut self.state.screens.select_color_state, &ev),
+            CurrentScreen::Options => crate::screens::options::handle_input(&mut self.state.screens.options_state, &ev),
+            CurrentScreen::Mappings => crate::screens::mappings::handle_input(&mut self.state.screens.mappings_state, &ev),
+            CurrentScreen::Input => crate::screens::input::handle_input(&mut self.state.screens.input_state, &ev),
+            CurrentScreen::SelectMusic => crate::screens::select_music::handle_input(&mut self.state.screens.select_music_state, &ev),
             CurrentScreen::PlayerOptions => {
-                if let Some(pos) = &mut self.state.player_options_state { crate::screens::player_options::handle_input(pos, &ev) } else { ScreenAction::None }
+                if let Some(pos) = &mut self.state.screens.player_options_state { crate::screens::player_options::handle_input(pos, &ev) } else { ScreenAction::None }
             }
-            CurrentScreen::Evaluation => crate::screens::evaluation::handle_input(&mut self.state.evaluation_state, &ev),
-            CurrentScreen::Sandbox => crate::screens::sandbox::handle_input(&mut self.state.sandbox_state, &ev),
-            CurrentScreen::Init => crate::screens::init::handle_input(&mut self.state.init_state, &ev),
+            CurrentScreen::Evaluation => crate::screens::evaluation::handle_input(&mut self.state.screens.evaluation_state, &ev),
+            CurrentScreen::Sandbox => crate::screens::sandbox::handle_input(&mut self.state.screens.sandbox_state, &ev),
+            CurrentScreen::Init => crate::screens::init::handle_input(&mut self.state.screens.init_state, &ev),
             CurrentScreen::Gameplay => {
-                if let Some(gs) = &mut self.state.gameplay_state {
+                if let Some(gs) = &mut self.state.screens.gameplay_state {
                     crate::game::gameplay::handle_input(gs, &ev)
                 } else { ScreenAction::None }
             }
@@ -297,27 +330,27 @@ impl App {
     fn handle_action(&mut self, action: ScreenAction, event_loop: &ActiveEventLoop) -> Result<(), Box<dyn Error>> {
         match action {
             ScreenAction::Navigate(screen) => {
-                let from = self.state.current_screen;
+                let from = self.state.screens.current_screen;
                 let to = screen;
 
                 // Persist any pending global offset changes when leaving Gameplay.
                 if from == CurrentScreen::Gameplay && to != CurrentScreen::Gameplay
-                    && let Some(gs) = &self.state.gameplay_state
+                    && let Some(gs) = &self.state.screens.gameplay_state
                         && (gs.global_offset_seconds - gs.initial_global_offset_seconds).abs() > f32::EPSILON {
                             crate::config::update_global_offset(gs.global_offset_seconds);
                         }
 
                 if from == CurrentScreen::Init && to == CurrentScreen::Menu {
                     info!("Instant navigation Init→Menu (out-transition handled by Init screen)");
-                    self.state.current_screen = screen;
-                    self.state.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
+                    self.state.screens.current_screen = screen;
+                    self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
                     crate::ui::runtime::clear_all();
                     return Ok(());
                 }
 
-                if matches!(self.state.transition, TransitionState::Idle) {
+                if matches!(self.state.shell.transition, TransitionState::Idle) {
                     // Any new navigation cancels a pending exit.
-                    self.state.pending_exit = false;
+                    self.state.shell.pending_exit = false;
                     let is_actor_only_fade =
                         (from == CurrentScreen::Menu &&
                             (to == CurrentScreen::Options || to == CurrentScreen::SelectColor)) ||
@@ -333,11 +366,11 @@ impl App {
                         } else {
                             FADE_OUT_DURATION
                         };
-                        self.state.transition = TransitionState::ActorsFadeOut { elapsed: 0.0, duration, target: screen };
+                        self.state.shell.transition = TransitionState::ActorsFadeOut { elapsed: 0.0, duration, target: screen };
                     } else {
                         info!("Starting global fade out to screen: {:?}", screen);                        
-                        let (_, out_duration) = self.get_out_transition_for_screen(self.state.current_screen);
-                        self.state.transition = TransitionState::FadingOut {
+                        let (_, out_duration) = self.get_out_transition_for_screen(self.state.screens.current_screen);
+                        self.state.shell.transition = TransitionState::FadingOut {
                             elapsed: 0.0,
                             duration: out_duration,
                             target: screen,
@@ -346,15 +379,15 @@ impl App {
                 }
             }
             ScreenAction::Exit => {
-                if self.state.current_screen == CurrentScreen::Menu && matches!(self.state.transition, TransitionState::Idle) {
+                if self.state.screens.current_screen == CurrentScreen::Menu && matches!(self.state.shell.transition, TransitionState::Idle) {
                     info!("Exit requested from Menu; playing menu out-transition before shutdown.");
-                    let (_, out_duration) = self.get_out_transition_for_screen(self.state.current_screen);
-                    self.state.transition = TransitionState::FadingOut {
+                    let (_, out_duration) = self.get_out_transition_for_screen(self.state.screens.current_screen);
+                    self.state.shell.transition = TransitionState::FadingOut {
                         elapsed: 0.0,
                         duration: out_duration,
-                        target: self.state.current_screen,
+                        target: self.state.screens.current_screen,
                     };
-                    self.state.pending_exit = true;
+                    self.state.shell.pending_exit = true;
                 } else {
                     info!("Exit action received. Shutting down.");
                     event_loop.exit();
@@ -364,13 +397,13 @@ impl App {
                 if let Some(backend) = self.backend.as_mut() {
                     if let Some(path) = path_opt {
                         let key = self.asset_manager.set_dynamic_banner(backend, Some(path));
-                        self.state.select_music_state.current_banner_key = key;
+                        self.state.screens.select_music_state.current_banner_key = key;
                     } else {
                         self.asset_manager.destroy_dynamic_assets(backend);
-                        let color_index = self.state.select_music_state.active_color_index;
+                        let color_index = self.state.screens.select_music_state.active_color_index;
                         let banner_num = color_index.rem_euclid(12) + 1;
                         let key = format!("banner{}.png", banner_num);
-                        self.state.select_music_state.current_banner_key = key;
+                        self.state.screens.select_music_state.current_banner_key = key;
                     }
                 }
             }
@@ -400,7 +433,7 @@ impl App {
                     };
 
                     let key = self.asset_manager.set_density_graph(backend, graph_request);
-                    self.state.select_music_state.current_graph_key = key;
+                    self.state.screens.select_music_state.current_graph_key = key;
                 }
             }
             ScreenAction::FetchOnlineGrade(hash) => {
@@ -419,7 +452,7 @@ impl App {
 
     fn build_screen<'a>(&self, actors: &'a [Actor], clear_color: [f32; 4], total_elapsed: f32) -> RenderList<'a> {
         let fonts = self.asset_manager.fonts();
-        crate::ui::compose::build_screen(actors, clear_color, &self.state.metrics, fonts, total_elapsed)
+        crate::ui::compose::build_screen(actors, clear_color, &self.state.shell.metrics, fonts, total_elapsed)
     }
 
     fn get_current_actors(&self) -> (Vec<Actor>, [f32; 4]) {
@@ -427,7 +460,7 @@ impl App {
         let mut screen_alpha_multiplier = 1.0;
 
         let is_actor_fade_screen = matches!(
-            self.state.current_screen,
+            self.state.screens.current_screen,
             CurrentScreen::Menu
                 | CurrentScreen::Options
                 | CurrentScreen::SelectColor
@@ -436,7 +469,7 @@ impl App {
         );
 
         if is_actor_fade_screen {
-            match self.state.transition {
+            match self.state.shell.transition {
                 TransitionState::ActorsFadeIn { elapsed } => {
                     screen_alpha_multiplier = (elapsed / MENU_ACTORS_FADE_DURATION).clamp(0.0, 1.0);
                 },
@@ -447,56 +480,56 @@ impl App {
             }
         }
 
-        let mut actors = match self.state.current_screen {
-            CurrentScreen::Menu     => menu::get_actors(&self.state.menu_state, screen_alpha_multiplier),
+        let mut actors = match self.state.screens.current_screen {
+            CurrentScreen::Menu     => menu::get_actors(&self.state.screens.menu_state, screen_alpha_multiplier),
             CurrentScreen::Gameplay => {
-                if let Some(gs) = &self.state.gameplay_state {
+                if let Some(gs) = &self.state.screens.gameplay_state {
                     gameplay::get_actors(gs, &self.asset_manager)
                 } else { vec![] }
             },
-            CurrentScreen::Options  => options::get_actors(&self.state.options_state, &self.asset_manager, screen_alpha_multiplier),
-            CurrentScreen::Mappings => mappings::get_actors(&self.state.mappings_state, &self.asset_manager, screen_alpha_multiplier),
-            CurrentScreen::Input => input_screen::get_actors(&self.state.input_state),
+            CurrentScreen::Options  => options::get_actors(&self.state.screens.options_state, &self.asset_manager, screen_alpha_multiplier),
+            CurrentScreen::Mappings => mappings::get_actors(&self.state.screens.mappings_state, &self.asset_manager, screen_alpha_multiplier),
+            CurrentScreen::Input => input_screen::get_actors(&self.state.screens.input_state),
             CurrentScreen::PlayerOptions => {
-                if let Some(pos) = &self.state.player_options_state {
+                if let Some(pos) = &self.state.screens.player_options_state {
                     player_options::get_actors(pos, &self.asset_manager)
                 } else { vec![] }
             },
-            CurrentScreen::SelectColor => select_color::get_actors(&self.state.select_color_state, screen_alpha_multiplier),
-            CurrentScreen::SelectMusic => select_music::get_actors(&self.state.select_music_state, &self.asset_manager),
-            CurrentScreen::Sandbox  => sandbox::get_actors(&self.state.sandbox_state),
-            CurrentScreen::Init     => init::get_actors(&self.state.init_state),
-            CurrentScreen::Evaluation => evaluation::get_actors(&self.state.evaluation_state, &self.asset_manager),
+            CurrentScreen::SelectColor => select_color::get_actors(&self.state.screens.select_color_state, screen_alpha_multiplier),
+            CurrentScreen::SelectMusic => select_music::get_actors(&self.state.screens.select_music_state, &self.asset_manager),
+            CurrentScreen::Sandbox  => sandbox::get_actors(&self.state.screens.sandbox_state),
+            CurrentScreen::Init     => init::get_actors(&self.state.screens.init_state),
+            CurrentScreen::Evaluation => evaluation::get_actors(&self.state.screens.evaluation_state, &self.asset_manager),
         };
 
-        if self.state.show_overlay {
-            let overlay = crate::ui::components::stats_overlay::build(self.backend_type, self.state.last_fps, self.state.last_vpf);
+        if self.state.shell.show_overlay {
+            let overlay = crate::ui::components::stats_overlay::build(self.backend_type, self.state.shell.last_fps, self.state.shell.last_vpf);
             actors.extend(overlay);
         }
 
         // Gamepad connection overlay (always on top of screen, but below transitions)
-        if let Some((msg, _)) = &self.state.gamepad_overlay_state {
+        if let Some((msg, _)) = &self.state.shell.gamepad_overlay_state {
             let params = crate::ui::components::gamepad_overlay::Params { message: msg };
             actors.extend(crate::ui::components::gamepad_overlay::build(params));
         }
 
-        match &self.state.transition {
+        match &self.state.shell.transition {
             TransitionState::FadingOut { .. } => {
-                let (out_actors, _) = self.get_out_transition_for_screen(self.state.current_screen);
+                let (out_actors, _) = self.get_out_transition_for_screen(self.state.screens.current_screen);
                 actors.extend(out_actors);
             }
             TransitionState::ActorsFadeOut { target, .. } => {
                 // Special case: Menu → SelectColor / Menu → Options should keep the heart
                 // background bright and only fade UI, but still play the hearts splash.
-                if self.state.current_screen == CurrentScreen::Menu
+                if self.state.screens.current_screen == CurrentScreen::Menu
                     && (*target == CurrentScreen::SelectColor || *target == CurrentScreen::Options)
                 {
-                    let splash = crate::ui::components::menu_splash::build(self.state.menu_state.active_color_index);
+                    let splash = crate::ui::components::menu_splash::build(self.state.screens.menu_state.active_color_index);
                     actors.extend(splash);
                 }
             }
             TransitionState::FadingIn { .. } => {
-                let (in_actors, _) = self.get_in_transition_for_screen(self.state.current_screen);
+                let (in_actors, _) = self.get_in_transition_for_screen(self.state.screens.current_screen);
                 actors.extend(in_actors);
             }
             _ => {}
@@ -507,7 +540,7 @@ impl App {
     
     fn get_out_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
         match screen {
-            CurrentScreen::Menu => menu::out_transition(self.state.menu_state.active_color_index),
+            CurrentScreen::Menu => menu::out_transition(self.state.screens.menu_state.active_color_index),
             CurrentScreen::Gameplay => gameplay::out_transition(),
             CurrentScreen::Options => options::out_transition(),
             CurrentScreen::Mappings => mappings::out_transition(),
@@ -539,16 +572,16 @@ impl App {
 
     #[inline(always)]
     fn update_fps_title(&mut self, window: &Window, now: Instant) {
-        self.state.frame_count += 1;
-        let elapsed = now.duration_since(self.state.last_title_update);
+        self.state.shell.frame_count += 1;
+        let elapsed = now.duration_since(self.state.shell.last_title_update);
         if elapsed.as_secs_f32() >= 1.0 {
-            let fps = self.state.frame_count as f32 / elapsed.as_secs_f32();
-            self.state.last_fps = fps;
-            self.state.last_vpf = self.state.current_frame_vpf;
-            let screen_name = format!("{:?}", self.state.current_screen);
+            let fps = self.state.shell.frame_count as f32 / elapsed.as_secs_f32();
+            self.state.shell.last_fps = fps;
+            self.state.shell.last_vpf = self.state.shell.current_frame_vpf;
+            let screen_name = format!("{:?}", self.state.screens.current_screen);
             window.set_title(&format!("DeadSync - {:?} | {} | {:.2} FPS", self.backend_type, screen_name, fps));
-            self.state.frame_count = 0;
-            self.state.last_title_update = now;
+            self.state.shell.frame_count = 0;
+            self.state.shell.last_title_update = now;
         }
     }
 
@@ -558,10 +591,10 @@ impl App {
             .with_resizable(true)
             .with_transparent(false);
 
-        let window_width = self.state.display_width;
-        let window_height = self.state.display_height;
+        let window_width = self.state.shell.display_width;
+        let window_height = self.state.shell.display_height;
 
-        if self.state.fullscreen_enabled {
+        if self.state.shell.fullscreen_enabled {
             let fullscreen = if let Some(mon) = event_loop.primary_monitor() {
                 let best_mode = mon.video_modes()
                     .filter(|m| { let sz = m.size(); sz.width == window_width && sz.height == window_height })
@@ -586,9 +619,9 @@ impl App {
         // Re-assert the opaque hint so compositors do not apply alpha-based blending.
         window.set_transparent(false);
         let sz = window.inner_size();
-        self.state.metrics = crate::core::space::metrics_for_window(sz.width, sz.height);
-        crate::core::space::set_current_metrics(self.state.metrics);
-        let mut backend = create_backend(self.backend_type, window.clone(), self.state.vsync_enabled)?;
+        self.state.shell.metrics = crate::core::space::metrics_for_window(sz.width, sz.height);
+        crate::core::space::set_current_metrics(self.state.shell.metrics);
+        let mut backend = create_backend(self.backend_type, window.clone(), self.state.shell.vsync_enabled)?;
 
         if self.backend_type == BackendType::Software {
             let threads = match self.software_renderer_threads {
@@ -620,31 +653,31 @@ impl App {
             use winit::keyboard::KeyCode;
             match code {
                 KeyCode::ShiftLeft | KeyCode::ShiftRight => {
-                    self.state.shift_held = key_event.state == ElementState::Pressed;
+                    self.state.shell.shift_held = key_event.state == ElementState::Pressed;
                 }
                 _ => {}
             }
         }
 
-        if self.state.current_screen == CurrentScreen::Sandbox {
-            let action = crate::screens::sandbox::handle_raw_key_event(&mut self.state.sandbox_state, &key_event);
+        if self.state.screens.current_screen == CurrentScreen::Sandbox {
+            let action = crate::screens::sandbox::handle_raw_key_event(&mut self.state.screens.sandbox_state, &key_event);
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle Sandbox raw key action: {}", e);
                 }
                 return;
             }
-        } else if self.state.current_screen == CurrentScreen::Menu {
-            let action = crate::screens::menu::handle_raw_key_event(&mut self.state.menu_state, &key_event);
+        } else if self.state.screens.current_screen == CurrentScreen::Menu {
+            let action = crate::screens::menu::handle_raw_key_event(&mut self.state.screens.menu_state, &key_event);
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle Menu raw key action: {}", e);
                 }
                 return;
             }
-        } else if self.state.current_screen == CurrentScreen::Mappings {
+        } else if self.state.screens.current_screen == CurrentScreen::Mappings {
             let action = crate::screens::mappings::handle_raw_key_event(
-                &mut self.state.mappings_state,
+                &mut self.state.screens.mappings_state,
                 &key_event,
             );
             if !matches!(action, ScreenAction::None) {
@@ -655,18 +688,18 @@ impl App {
             // On the Mappings screen, arrows/Enter/Escape are handled entirely
             // via raw keycodes; do not route through the virtual keymap.
             return;
-        } else if self.state.current_screen == CurrentScreen::SelectMusic {
+        } else if self.state.screens.current_screen == CurrentScreen::SelectMusic {
             // Route screen-specific raw key handling (e.g., F7 fetch) to the screen
-            let action = crate::screens::select_music::handle_raw_key_event(&mut self.state.select_music_state, &key_event);
+            let action = crate::screens::select_music::handle_raw_key_event(&mut self.state.screens.select_music_state, &key_event);
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle SelectMusic raw key action: {}", e);
                 }
                 return;
             }
-        } else if self.state.current_screen == CurrentScreen::Gameplay
-            && let Some(gs) = &mut self.state.gameplay_state {
-                let action = crate::game::gameplay::handle_raw_key_event(gs, &key_event, self.state.shift_held);
+        } else if self.state.screens.current_screen == CurrentScreen::Gameplay
+            && let Some(gs) = &mut self.state.screens.gameplay_state {
+                let action = crate::game::gameplay::handle_raw_key_event(gs, &key_event, self.state.shell.shift_held);
                 if !matches!(action, ScreenAction::None) {
                     if let Err(e) = self.handle_action(action, event_loop) {
                         log::error!("Failed to handle Gameplay raw key action: {}", e);
@@ -674,13 +707,13 @@ impl App {
                     return;
                 }
             }
-        let is_transitioning = !matches!(self.state.transition, TransitionState::Idle);
+        let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
         let _event_timestamp = Instant::now();
 
         if key_event.state == winit::event::ElementState::Pressed
             && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F3) = key_event.physical_key {
-                self.state.show_overlay = !self.state.show_overlay;
-                log::info!("Overlay {}", if self.state.show_overlay { "ON" } else { "OFF" });
+                self.state.shell.show_overlay = !self.state.shell.show_overlay;
+                log::info!("Overlay {}", if self.state.shell.show_overlay { "ON" } else { "OFF" });
             }
             // Screen-specific Escape handling resides in per-screen raw handlers now
 
@@ -699,8 +732,8 @@ impl App {
 
     #[inline(always)]
     fn handle_pad_event(&mut self, event_loop: &ActiveEventLoop, ev: PadEvent) {
-        let is_transitioning = !matches!(self.state.transition, TransitionState::Idle);
-        if is_transitioning || self.state.current_screen == CurrentScreen::Init {
+        let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
+        if is_transitioning || self.state.screens.current_screen == CurrentScreen::Init {
             return;
         }
         for iev in input::map_pad_event(&ev) {
@@ -719,21 +752,21 @@ impl App {
     fn poll_gamepad_and_dispatch(&mut self, _event_loop: &ActiveEventLoop) {}
 
     fn on_fade_complete(&mut self, target: CurrentScreen, event_loop: &ActiveEventLoop) {
-        if self.state.pending_exit {
+        if self.state.shell.pending_exit {
             info!("Fade-out complete; exiting application.");
             event_loop.exit();
             return;
         }
 
-        let prev = self.state.current_screen;
-        self.state.current_screen = target;
+        let prev = self.state.screens.current_screen;
+        self.state.screens.current_screen = target;
 
         self.handle_audio_and_profile_on_fade(prev, target);
         self.handle_screen_state_on_fade(prev, target);
         self.handle_screen_entry_on_fade(prev, target);
 
         let (_, in_duration) = self.get_in_transition_for_screen(target);
-        self.state.transition = TransitionState::FadingIn {
+        self.state.shell.transition = TransitionState::FadingIn {
             elapsed: 0.0,
             duration: in_duration,
         };
@@ -763,7 +796,7 @@ impl App {
 
         if prev == CurrentScreen::SelectMusic || prev == CurrentScreen::PlayerOptions {
             if prev == CurrentScreen::PlayerOptions
-                && let Some(po_state) = &self.state.player_options_state
+                && let Some(po_state) = &self.state.screens.player_options_state
             {
                 let setting = match po_state.speed_mod.mod_type.as_str() {
                     "C" => Some(ScrollSpeedSetting::CMod(po_state.speed_mod.value)),
@@ -785,10 +818,10 @@ impl App {
                 crate::game::profile::set_session_music_rate(po_state.music_rate);
                 info!("Session music rate set to {:.2}x", po_state.music_rate);
 
-                self.state.preferred_difficulty_index = po_state.chart_difficulty_index;
+                self.state.session.preferred_difficulty_index = po_state.chart_difficulty_index;
                 info!(
                     "Updated preferred difficulty index to {} from PlayerOptions",
-                    self.state.preferred_difficulty_index
+                    self.state.session.preferred_difficulty_index
                 );
             }
 
@@ -798,39 +831,39 @@ impl App {
         }
 
         if prev == CurrentScreen::SelectMusic {
-            self.state.preferred_difficulty_index =
-                self.state.select_music_state.preferred_difficulty_index;
+            self.state.session.preferred_difficulty_index =
+                self.state.screens.select_music_state.preferred_difficulty_index;
         }
     }
 
     fn handle_screen_state_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
         if prev == CurrentScreen::SelectColor {
-            let idx = self.state.select_color_state.active_color_index;
-            self.state.menu_state.active_color_index = idx;
-            self.state.select_music_state.active_color_index = idx;
-            self.state.options_state.active_color_index = idx;
-            self.state.input_state.active_color_index = idx;
-            if let Some(gs) = self.state.gameplay_state.as_mut() {
+            let idx = self.state.screens.select_color_state.active_color_index;
+            self.state.screens.menu_state.active_color_index = idx;
+            self.state.screens.select_music_state.active_color_index = idx;
+            self.state.screens.options_state.active_color_index = idx;
+            self.state.screens.input_state.active_color_index = idx;
+            if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                 gs.active_color_index = idx;
                 gs.player_color = color::simply_love_rgba(idx);
             }
         }
 
         if target == CurrentScreen::Menu {
-            let current_color_index = self.state.menu_state.active_color_index;
-            self.state.menu_state = menu::init();
-            self.state.menu_state.active_color_index = current_color_index;
+            let current_color_index = self.state.screens.menu_state.active_color_index;
+            self.state.screens.menu_state = menu::init();
+            self.state.screens.menu_state.active_color_index = current_color_index;
         } else if target == CurrentScreen::Options {
-            let current_color_index = self.state.options_state.active_color_index;
-            self.state.options_state = options::init();
-            self.state.options_state.active_color_index = current_color_index;
+            let current_color_index = self.state.screens.options_state.active_color_index;
+            self.state.screens.options_state = options::init();
+            self.state.screens.options_state.active_color_index = current_color_index;
         } else if target == CurrentScreen::Mappings {
-            let color_index = self.state.options_state.active_color_index;
-            self.state.mappings_state = mappings::init();
-            self.state.mappings_state.active_color_index = color_index;
+            let color_index = self.state.screens.options_state.active_color_index;
+            self.state.screens.mappings_state = mappings::init();
+            self.state.screens.mappings_state.active_color_index = color_index;
         } else if target == CurrentScreen::PlayerOptions {
             let (song_arc, chart_difficulty_index) = {
-                let sm_state = &self.state.select_music_state;
+                let sm_state = &self.state.screens.select_music_state;
                 let entry = sm_state.entries.get(sm_state.selected_index).unwrap();
                 let song = match entry {
                     select_music::MusicWheelEntry::Song(s) => s,
@@ -839,15 +872,15 @@ impl App {
                 (song.clone(), sm_state.selected_difficulty_index)
             };
 
-            let color_index = self.state.select_music_state.active_color_index;
-            self.state.player_options_state =
+            let color_index = self.state.screens.select_music_state.active_color_index;
+            self.state.screens.player_options_state =
                 Some(player_options::init(song_arc, chart_difficulty_index, color_index));
         }
     }
 
     fn handle_screen_entry_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
         if target == CurrentScreen::Gameplay {
-            if let Some(po_state) = self.state.player_options_state.take() {
+            if let Some(po_state) = self.state.screens.player_options_state.take() {
                 let song_arc = po_state.song;
                 let chart_difficulty_index = po_state.chart_difficulty_index;
                 let difficulty_name = color::FILE_DIFFICULTY_NAMES[chart_difficulty_index];
@@ -877,24 +910,24 @@ impl App {
                         .asset_manager
                         .set_dynamic_background(backend, gs.song.background_path.clone());
                 }
-                self.state.gameplay_state = Some(gs);
+                self.state.screens.gameplay_state = Some(gs);
             } else {
                 panic!("Navigating to Gameplay without PlayerOptions state!");
             }
         }
 
         if target == CurrentScreen::Evaluation {
-            let gameplay_results = self.state.gameplay_state.take();
+            let gameplay_results = self.state.screens.gameplay_state.take();
             let color_idx = gameplay_results
                 .as_ref()
-                .map_or(self.state.evaluation_state.active_color_index, |gs| {
+                .map_or(self.state.screens.evaluation_state.active_color_index, |gs| {
                     gs.active_color_index
                 });
-            self.state.evaluation_state = evaluation::init(gameplay_results);
-            self.state.evaluation_state.active_color_index = color_idx;
+            self.state.screens.evaluation_state = evaluation::init(gameplay_results);
+            self.state.screens.evaluation_state.active_color_index = color_idx;
 
             if let Some(backend) = self.backend.as_mut() {
-                let graph_request = if let Some(score_info) = &self.state.evaluation_state.score_info
+                let graph_request = if let Some(score_info) = &self.state.screens.evaluation_state.score_info
                 {
                     let graph_width = 1024;
                     let graph_height = 256;
@@ -925,27 +958,28 @@ impl App {
                 } else {
                     self.asset_manager.set_density_graph(backend, None)
                 };
-                self.state.evaluation_state.density_graph_texture_key = key;
+                self.state.screens.evaluation_state.density_graph_texture_key = key;
             }
         }
 
         if target == CurrentScreen::SelectMusic {
-            if self.state.session_start_time.is_none() {
-                self.state.session_start_time = Some(Instant::now());
+            if self.state.session.session_start_time.is_none() {
+                self.state.session.session_start_time = Some(Instant::now());
                 info!("Session timer started.");
             }
 
             match prev {
                 CurrentScreen::PlayerOptions => {
-                    let preferred = self.state.preferred_difficulty_index;
-                    self.state.select_music_state.preferred_difficulty_index = preferred;
-                    self.state.select_music_state.selected_difficulty_index = preferred;
+                    let preferred = self.state.session.preferred_difficulty_index;
+                    self.state.screens.select_music_state.preferred_difficulty_index = preferred;
+                    self.state.screens.select_music_state.selected_difficulty_index = preferred;
 
                     if let Some(select_music::MusicWheelEntry::Song(song)) = self
                         .state
+                        .screens
                         .select_music_state
                         .entries
-                        .get(self.state.select_music_state.selected_index)
+                        .get(self.state.screens.select_music_state.selected_index)
                     {
                         let mut best_match_index = None;
                         let mut min_diff = i32::MAX;
@@ -959,25 +993,25 @@ impl App {
                             }
                         }
                         if let Some(idx) = best_match_index {
-                            self.state.select_music_state.selected_difficulty_index = idx;
+                            self.state.screens.select_music_state.selected_difficulty_index = idx;
                         }
                     }
 
-                    select_music::trigger_immediate_refresh(&mut self.state.select_music_state);
+                    select_music::trigger_immediate_refresh(&mut self.state.screens.select_music_state);
                 }
                 CurrentScreen::Gameplay | CurrentScreen::Evaluation => {
                     select_music::reset_preview_after_gameplay(
-                        &mut self.state.select_music_state,
+                        &mut self.state.screens.select_music_state,
                     );
                 }
                 _ => {
-                    let current_color_index = self.state.select_music_state.active_color_index;
-                    self.state.select_music_state = select_music::init();
-                    self.state.select_music_state.active_color_index = current_color_index;
-                    self.state.select_music_state.selected_difficulty_index =
-                        self.state.preferred_difficulty_index;
-                    self.state.select_music_state.preferred_difficulty_index =
-                        self.state.preferred_difficulty_index;
+                    let current_color_index = self.state.screens.select_music_state.active_color_index;
+                    self.state.screens.select_music_state = select_music::init();
+                    self.state.screens.select_music_state.active_color_index = current_color_index;
+                    self.state.screens.select_music_state.selected_difficulty_index =
+                        self.state.session.preferred_difficulty_index;
+                    self.state.screens.select_music_state.preferred_difficulty_index =
+                        self.state.session.preferred_difficulty_index;
                 }
             }
         }
@@ -989,8 +1023,8 @@ impl ApplicationHandler<UserEvent> for App {
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::GamepadSystem(ev) => {
-                if self.state.current_screen == CurrentScreen::Sandbox {
-                    crate::screens::sandbox::handle_gamepad_system_event(&mut self.state.sandbox_state, &ev);
+                if self.state.screens.current_screen == CurrentScreen::Sandbox {
+                    crate::screens::sandbox::handle_gamepad_system_event(&mut self.state.screens.sandbox_state, &ev);
                 }
                 let msg = match &ev {
                     GpSystemEvent::Connected { name, id, .. } => {
@@ -1002,22 +1036,22 @@ impl ApplicationHandler<UserEvent> for App {
                         format!("Disconnected: {} (ID: {})", name, usize::from(*id))
                     }
                 };
-                self.state.gamepad_overlay_state = Some((msg, Instant::now()));
+                self.state.shell.gamepad_overlay_state = Some((msg, Instant::now()));
             }
             UserEvent::Pad(ev) => {
-                if self.state.current_screen == CurrentScreen::Sandbox {
+                if self.state.screens.current_screen == CurrentScreen::Sandbox {
                     crate::screens::sandbox::handle_raw_pad_event(
-                        &mut self.state.sandbox_state,
+                        &mut self.state.screens.sandbox_state,
                         &ev,
                     );
-                } else if self.state.current_screen == CurrentScreen::Mappings {
+                } else if self.state.screens.current_screen == CurrentScreen::Mappings {
                     crate::screens::mappings::handle_raw_pad_event(
-                        &mut self.state.mappings_state,
+                        &mut self.state.screens.mappings_state,
                         &ev,
                     );
-                } else if self.state.current_screen == CurrentScreen::Input {
+                } else if self.state.screens.current_screen == CurrentScreen::Input {
                     crate::screens::input::handle_raw_pad_event(
-                        &mut self.state.input_state,
+                        &mut self.state.screens.input_state,
                         &ev,
                     );
                 }
@@ -1052,8 +1086,8 @@ impl ApplicationHandler<UserEvent> for App {
             }
             WindowEvent::Resized(new_size) => {
                 if new_size.width > 0 && new_size.height > 0 {
-                    self.state.metrics = space::metrics_for_window(new_size.width, new_size.height);
-                    space::set_current_metrics(self.state.metrics);
+                    self.state.shell.metrics = space::metrics_for_window(new_size.width, new_size.height);
+                    space::set_current_metrics(self.state.shell.metrics);
                     if let Some(backend) = &mut self.backend {
                         backend.resize(new_size.width, new_size.height);
                     }
@@ -1064,17 +1098,17 @@ impl ApplicationHandler<UserEvent> for App {
             }
             WindowEvent::RedrawRequested => {
                 let now = Instant::now();
-                let delta_time = now.duration_since(self.state.last_frame_time).as_secs_f32();
-                self.state.last_frame_time = now;
-                let total_elapsed = now.duration_since(self.state.start_time).as_secs_f32();
+                let delta_time = now.duration_since(self.state.shell.last_frame_time).as_secs_f32();
+                self.state.shell.last_frame_time = now;
+                let total_elapsed = now.duration_since(self.state.shell.start_time).as_secs_f32();
                 crate::ui::runtime::tick(delta_time);
 
                 // --- Manage gamepad overlay lifetime ---
-                self.state.update_gamepad_overlay(now);
+                self.state.shell.update_gamepad_overlay(now);
 
                 let mut finished_fading_out_to: Option<CurrentScreen> = None;
 
-                match &mut self.state.transition {
+                match &mut self.state.shell.transition {
                     TransitionState::FadingOut { elapsed, duration, target } => {
                         *elapsed += delta_time;
                         if *elapsed >= *duration {
@@ -1084,8 +1118,8 @@ impl ApplicationHandler<UserEvent> for App {
                     TransitionState::ActorsFadeOut { elapsed, duration, target } => {
                         *elapsed += delta_time;
                         if *elapsed >= *duration {
-                            let prev = self.state.current_screen;
-                            self.state.current_screen = *target;
+                            let prev = self.state.screens.current_screen;
+                            self.state.screens.current_screen = *target;
                             // Only SelectColor has its own looping BGM; keep SelectMusic preview
                             // playing when moving to/from PlayerOptions.
                             if *target == CurrentScreen::SelectColor {
@@ -1101,48 +1135,48 @@ impl ApplicationHandler<UserEvent> for App {
                             }
 
                             if *target == CurrentScreen::Menu {
-                                let current_color_index = self.state.menu_state.active_color_index;
-                                self.state.menu_state = menu::init();
-                                self.state.menu_state.active_color_index = current_color_index;
+                                let current_color_index = self.state.screens.menu_state.active_color_index;
+                                self.state.screens.menu_state = menu::init();
+                                self.state.screens.menu_state.active_color_index = current_color_index;
                             } else if *target == CurrentScreen::Options {
-                                let current_color_index = self.state.options_state.active_color_index;
-                                self.state.options_state = options::init();
-                                self.state.options_state.active_color_index = current_color_index;
+                                let current_color_index = self.state.screens.options_state.active_color_index;
+                                self.state.screens.options_state = options::init();
+                                self.state.screens.options_state.active_color_index = current_color_index;
                             } else if *target == CurrentScreen::Mappings {
-                                let color_index = self.state.options_state.active_color_index;
-                                self.state.mappings_state = mappings::init();
-                                self.state.mappings_state.active_color_index = color_index;
+                                let color_index = self.state.screens.options_state.active_color_index;
+                                self.state.screens.mappings_state = mappings::init();
+                                self.state.screens.mappings_state.active_color_index = color_index;
                             }
 
                             if prev == CurrentScreen::SelectColor {
-                                let idx = self.state.select_color_state.active_color_index;
-                                self.state.menu_state.active_color_index = idx;
-                                self.state.select_music_state.active_color_index = idx;
-                                if let Some(gs) = self.state.gameplay_state.as_mut() {
+                                let idx = self.state.screens.select_color_state.active_color_index;
+                                self.state.screens.menu_state.active_color_index = idx;
+                                self.state.screens.select_music_state.active_color_index = idx;
+                                if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                                     gs.active_color_index = idx;
                                     gs.player_color = color::simply_love_rgba(idx);
                                 }
-                                self.state.options_state.active_color_index = idx;
+                                self.state.screens.options_state.active_color_index = idx;
                             }
 
-                            self.state.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
+                            self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
                             crate::ui::runtime::clear_all();
                         }
                     }
                     TransitionState::FadingIn { elapsed, duration } => {
                         *elapsed += delta_time;
                         if *elapsed >= *duration {
-                            self.state.transition = TransitionState::Idle;
+                            self.state.shell.transition = TransitionState::Idle;
                         }
                     }
                     TransitionState::ActorsFadeIn { elapsed } => {
                         *elapsed += delta_time;
                         if *elapsed >= MENU_ACTORS_FADE_DURATION {
-                            self.state.transition = TransitionState::Idle;
+                            self.state.shell.transition = TransitionState::Idle;
                         }
                     }
                     TransitionState::Idle => {
-                        if let Some(action) = self.state.step_idle(delta_time, now) {
+                        if let Some(action) = self.state.screens.step_idle(delta_time, now, &self.state.session) {
                             if !matches!(action, ScreenAction::None) {
                                 let _ = self.handle_action(action, event_loop);
                             }
@@ -1160,7 +1194,7 @@ impl ApplicationHandler<UserEvent> for App {
 
                 if let Some(backend) = &mut self.backend {
                     match backend.draw(&screen, &self.asset_manager.textures) {
-                        Ok(vpf) => self.state.current_frame_vpf = vpf,
+                        Ok(vpf) => self.state.shell.current_frame_vpf = vpf,
                         Err(e) => {
                             error!("Failed to draw frame: {}", e);
                             event_loop.exit();
