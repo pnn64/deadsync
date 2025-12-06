@@ -268,9 +268,15 @@ pub enum NavDirection {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SubmenuKind {
+    System,
+    GraphicsSound,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OptionsView {
     Main,
-    SystemSubmenu,
+    Submenu(SubmenuKind),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -348,6 +354,245 @@ pub const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
+pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: "Video Renderer",
+        choices: &["opengl", "d3d"],
+    },
+    SubRow {
+        label: "Display Mode",
+        choices: &["Windowed", "Fullscreen", "Borderless"],
+    },
+    SubRow {
+        label: "Display Aspect Ratio",
+        choices: &["Auto", "16:9", "16:10", "4:3", "5:4", "8:3", "1:1"],
+    },
+    SubRow {
+        label: "Display Resolution",
+        choices: &["1920x1080", "1600x900", "1280x720", "1024x768", "800x600"],
+    },
+    SubRow {
+        label: "Refresh Rate",
+        choices: &["Default", "60 Hz", "75 Hz", "120 Hz", "144 Hz", "165 Hz", "240 Hz", "360 Hz"],
+    },
+    SubRow {
+        label: "Fullscreen Type",
+        choices: &["Exclusive", "Borderless"],
+    },
+    SubRow {
+        label: "Display Color Depth",
+        choices: &["16bit", "32bit"],
+    },
+    SubRow {
+        label: "High Resolution Textures",
+        choices: &["Auto", "Force Off", "Force On"],
+    },
+    SubRow {
+        label: "Max Texture Resolution",
+        choices: &["256", "512", "1024", "2048"],
+    },
+    SubRow {
+        label: "Texture Color Depth",
+        choices: &["16bit", "32bit"],
+    },
+    SubRow {
+        label: "Movie Color Depth",
+        choices: &["16bit", "32bit"],
+    },
+    SubRow {
+        label: "Smooth Lines",
+        choices: &["Off", "On"],
+    },
+    SubRow {
+        label: "CelShade Models",
+        choices: &["Off", "On"],
+    },
+    SubRow {
+        label: "Delayed Texture Delete",
+        choices: &["Off", "On"],
+    },
+    SubRow {
+        label: "Vsync",
+        choices: &["Off", "On"],
+    },
+    SubRow {
+        label: "Fast Note Rendering",
+        choices: &["Off", "On"],
+    },
+    SubRow {
+        label: "Show Stats",
+        choices: &["Off", "On"],
+    },
+    SubRow {
+        label: "Attract Sound Frequency",
+        choices: &["Never", "Always", "2 Times", "3 Times", "4 Times", "5 Times"],
+    },
+    SubRow {
+        label: "Sound Volume",
+        choices: &["Silent", "10%", "25%", "50%", "75%", "100%"],
+    },
+    SubRow {
+        label: "Preferred Sample Rate",
+        choices: &["Default", "44100 Hz", "48000 Hz"],
+    },
+    SubRow {
+        label: "Enable Attack Sounds",
+        choices: &["Off", "On"],
+    },
+    SubRow {
+        label: "Enable Mine Hit Sound",
+        choices: &["Off", "On"],
+    },
+    SubRow {
+        label: "Global Offset Seconds",
+        choices: &["-30 ms", "-15 ms", "0 ms", "+15 ms", "+30 ms"],
+    },
+    SubRow {
+        label: "Visual Delay Seconds",
+        choices: &["-5 s", "-3 s", "-1 s", "0 s", "+1 s", "+3 s", "+5 s"],
+    },
+    SubRow {
+        label: "Default Sync Offset",
+        choices: &["NULL", "ITG"],
+    },
+    SubRow {
+        label: "RateMod Preserves Pitch",
+        choices: &["Off", "On"],
+    },
+];
+
+pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: "Video Renderer",
+        help: &["Select the rendering backend."],
+    },
+    Item {
+        name: "Display Mode",
+        help: &["Choose how the window is presented on screen."],
+    },
+    Item {
+        name: "Display Aspect Ratio",
+        help: &["Set the aspect ratio used for rendering."],
+    },
+    Item {
+        name: "Display Resolution",
+        help: &["Pick a rendering resolution."],
+    },
+    Item {
+        name: "Refresh Rate",
+        help: &["Pick a target display refresh rate."],
+    },
+    Item {
+        name: "Fullscreen Type",
+        help: &["Choose between exclusive or borderless fullscreen."],
+    },
+    Item {
+        name: "Display Color Depth",
+        help: &["Select 16-bit or 32-bit color output."],
+    },
+    Item {
+        name: "High Resolution Textures",
+        help: &["Control use of high resolution textures."],
+    },
+    Item {
+        name: "Max Texture Resolution",
+        help: &["Cap the maximum texture resolution."],
+    },
+    Item {
+        name: "Texture Color Depth",
+        help: &["Select the color depth for textures."],
+    },
+    Item {
+        name: "Movie Color Depth",
+        help: &["Select the color depth for movie playback."],
+    },
+    Item {
+        name: "Smooth Lines",
+        help: &["Toggle antialiasing for vector lines."],
+    },
+    Item {
+        name: "CelShade Models",
+        help: &["Toggle cel shading for 3D models."],
+    },
+    Item {
+        name: "Delayed Texture Delete",
+        help: &["Delay texture deletion to reduce hitches."],
+    },
+    Item {
+        name: "Vsync",
+        help: &["Enable vertical sync."],
+    },
+    Item {
+        name: "Fast Note Rendering",
+        help: &["Use fast note rendering optimizations."],
+    },
+    Item {
+        name: "Show Stats",
+        help: &["Display rendering statistics overlay."],
+    },
+    Item {
+        name: "Attract Sound Frequency",
+        help: &["Control how often attract-mode sounds play."],
+    },
+    Item {
+        name: "Sound Volume",
+        help: &["Set the master sound volume for gameplay."],
+    },
+    Item {
+        name: "Preferred Sample Rate",
+        help: &["Select an audio output sample rate."],
+    },
+    Item {
+        name: "Enable Attack Sounds",
+        help: &["Play sounds for attacks."],
+    },
+    Item {
+        name: "Enable Mine Hit Sound",
+        help: &["Play a sound when mines are hit."],
+    },
+    Item {
+        name: "Global Offset Seconds",
+        help: &["Apply a global audio timing offset."],
+    },
+    Item {
+        name: "Visual Delay Seconds",
+        help: &["Apply a visual timing offset."],
+    },
+    Item {
+        name: "Default Sync Offset",
+        help: &["Choose the sync profile used for judgments."],
+    },
+    Item {
+        name: "RateMod Preserves Pitch",
+        help: &["Keep pitch constant when rate mods are active."],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
+
+fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
+    match kind {
+        SubmenuKind::System => SYSTEM_OPTIONS_ROWS,
+        SubmenuKind::GraphicsSound => GRAPHICS_OPTIONS_ROWS,
+    }
+}
+
+fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
+    match kind {
+        SubmenuKind::System => SYSTEM_OPTIONS_ITEMS,
+        SubmenuKind::GraphicsSound => GRAPHICS_OPTIONS_ITEMS,
+    }
+}
+
+fn submenu_title(kind: SubmenuKind) -> &'static str {
+    match kind {
+        SubmenuKind::System => "SYSTEM OPTIONS",
+        SubmenuKind::GraphicsSound => "GRAPHICS/SOUND OPTIONS",
+    }
+}
+
 pub struct State {
     pub selected: usize,
     prev_selected: usize,
@@ -358,12 +603,14 @@ pub struct State {
     nav_key_last_scrolled_at: Option<Instant>,
     view: OptionsView,
     submenu_transition: SubmenuTransition,
+    pending_submenu_kind: Option<SubmenuKind>,
     submenu_fade_t: f32,
     content_alpha: f32,
-    // System Options submenu state
+    // Submenu state
     sub_selected: usize,
     sub_prev_selected: usize,
-    sub_choice_indices: Vec<usize>,
+    sub_choice_indices_system: Vec<usize>,
+    sub_choice_indices_graphics: Vec<usize>,
     // Inline option cursor tween (left/right between items)
     cursor_anim_row: Option<usize>,
     cursor_anim_from_choice: usize,
@@ -386,12 +633,14 @@ pub fn init() -> State {
         nav_key_held_since: None,
         nav_key_last_scrolled_at: None,
         submenu_transition: SubmenuTransition::None,
+        pending_submenu_kind: None,
         submenu_fade_t: 0.0,
         content_alpha: 1.0,
         view: OptionsView::Main,
         sub_selected: 0,
         sub_prev_selected: 0,
-        sub_choice_indices: vec![0; SYSTEM_OPTIONS_ROWS.len()],
+        sub_choice_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
+        sub_choice_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         cursor_anim_row: None,
         cursor_anim_from_choice: 0,
         cursor_anim_to_choice: 0,
@@ -399,6 +648,20 @@ pub fn init() -> State {
         cursor_row_anim_from_y: 0.0,
         cursor_row_anim_t: 1.0,
         cursor_row_anim_from_row: None,
+    }
+}
+
+fn submenu_choice_indices<'a>(state: &'a State, kind: SubmenuKind) -> &'a [usize] {
+    match kind {
+        SubmenuKind::System => &state.sub_choice_indices_system,
+        SubmenuKind::GraphicsSound => &state.sub_choice_indices_graphics,
+    }
+}
+
+fn submenu_choice_indices_mut<'a>(state: &'a mut State, kind: SubmenuKind) -> &'a mut Vec<usize> {
+    match kind {
+        SubmenuKind::System => &mut state.sub_choice_indices_system,
+        SubmenuKind::GraphicsSound => &mut state.sub_choice_indices_graphics,
     }
 }
 
@@ -444,8 +707,10 @@ pub fn update(state: &mut State, dt: f32) {
             state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
             state.content_alpha = 1.0 - state.submenu_fade_t;
             if state.submenu_fade_t >= 1.0 {
-                // Switch view to the System Options submenu, then fade it in.
-                state.view = OptionsView::SystemSubmenu;
+                // Switch view to the target submenu, then fade it in.
+                let target_kind = state.pending_submenu_kind.unwrap_or(SubmenuKind::System);
+                state.view = OptionsView::Submenu(target_kind);
+                state.pending_submenu_kind = None;
                 state.sub_selected = 0;
                 state.sub_prev_selected = 0;
                 state.cursor_anim_row = None;
@@ -485,6 +750,7 @@ pub fn update(state: &mut State, dt: f32) {
             if state.submenu_fade_t >= 1.0 {
                 // Return to the main options list and fade it in.
                 state.view = OptionsView::Main;
+                state.pending_submenu_kind = None;
                 state.cursor_anim_row = None;
                 state.cursor_anim_t = 1.0;
                 state.cursor_row_anim_t = 1.0;
@@ -539,8 +805,8 @@ pub fn update(state: &mut State, dt: f32) {
                             state.nav_key_last_scrolled_at = Some(now);
                         }
                     }
-                    OptionsView::SystemSubmenu => {
-                        let total = SYSTEM_OPTIONS_ROWS.len() + 1; // + Exit row
+                    OptionsView::Submenu(kind) => {
+                        let total = submenu_rows(kind).len() + 1; // + Exit row
                         if total > 0 {
                             match direction {
                                 NavDirection::Up => {
@@ -564,7 +830,7 @@ pub fn update(state: &mut State, dt: f32) {
                 state.prev_selected = state.selected;
             }
         }
-        OptionsView::SystemSubmenu => {
+        OptionsView::Submenu(_) => {
             if state.sub_selected != state.sub_prev_selected {
                 audio::play_sfx("assets/sounds/change.ogg");
 
@@ -623,10 +889,12 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
     if !matches!(state.submenu_transition, SubmenuTransition::None) {
         return;
     }
-    if state.view != OptionsView::SystemSubmenu {
-        return;
-    }
-    let rows_len = SYSTEM_OPTIONS_ROWS.len();
+    let kind = match state.view {
+        OptionsView::Submenu(k) => k,
+        _ => return,
+    };
+    let rows = submenu_rows(kind);
+    let rows_len = rows.len();
     if rows_len == 0 {
         return;
     }
@@ -636,8 +904,12 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
         return;
     }
 
-    let choice_index = state.sub_choice_indices[row_index];
-    let num_choices = SYSTEM_OPTIONS_ROWS[row_index].choices.len();
+    let choice_indices = submenu_choice_indices_mut(state, kind);
+    if row_index >= choice_indices.len() {
+        return;
+    }
+    let choice_index = choice_indices[row_index];
+    let num_choices = rows[row_index].choices.len();
     if num_choices == 0 {
         return;
     }
@@ -651,12 +923,12 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
         return;
     }
 
-    state.sub_choice_indices[row_index] = new_index;
+    choice_indices[row_index] = new_index;
     audio::play_sfx("assets/sounds/change_value.ogg");
 
     // Begin cursor animation when changing inline options, but treat the Language row
     // as a single-value row (no horizontal tween; value changes in-place).
-    let is_language_row = SYSTEM_OPTIONS_ROWS
+    let is_language_row = rows
         .get(row_index)
         .map(|r| r.label == "Language")
         .unwrap_or(false);
@@ -681,7 +953,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_back if ev.pressed => {
             match state.view {
                 OptionsView::Main => return ScreenAction::Navigate(Screen::Menu),
-                OptionsView::SystemSubmenu => {
+                OptionsView::Submenu(_) => {
                     // Fade back to the main Options list.
                     state.submenu_transition = SubmenuTransition::FadeOutToMain;
                     state.submenu_fade_t = 0.0;
@@ -697,8 +969,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                             state.selected = if state.selected == 0 { total - 1 } else { state.selected - 1 };
                         }
                     }
-                    OptionsView::SystemSubmenu => {
-                        let total = SYSTEM_OPTIONS_ROWS.len() + 1;
+                    OptionsView::Submenu(kind) => {
+                        let total = submenu_rows(kind).len() + 1;
                         if total > 0 {
                             state.sub_selected = if state.sub_selected == 0 { total - 1 } else { state.sub_selected - 1 };
                         }
@@ -718,8 +990,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                             state.selected = (state.selected + 1) % total;
                         }
                     }
-                    OptionsView::SystemSubmenu => {
-                        let total = SYSTEM_OPTIONS_ROWS.len() + 1;
+                    OptionsView::Submenu(kind) => {
+                        let total = submenu_rows(kind).len() + 1;
                         if total > 0 {
                             state.sub_selected = (state.sub_selected + 1) % total;
                         }
@@ -755,6 +1027,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         // Enter System Options submenu.
                         "System Options" => {
                             audio::play_sfx("assets/sounds/start.ogg");
+                            state.pending_submenu_kind = Some(SubmenuKind::System);
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                            state.submenu_fade_t = 0.0;
+                        }
+                        // Enter Graphics/Sound Options submenu.
+                        "Graphics/Sound Options" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            state.pending_submenu_kind = Some(SubmenuKind::GraphicsSound);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }
@@ -776,8 +1056,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         _ => {}
                     }
                 }
-                OptionsView::SystemSubmenu => {
-                    let total = SYSTEM_OPTIONS_ROWS.len() + 1;
+                OptionsView::Submenu(kind) => {
+                    let total = submenu_rows(kind).len() + 1;
                     if total == 0 {
                         return ScreenAction::None;
                     }
@@ -880,7 +1160,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
     const FG: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
     let title_text = match state.view {
         OptionsView::Main => "OPTIONS",
-        OptionsView::SystemSubmenu => "SYSTEM OPTIONS",
+        OptionsView::Submenu(kind) => submenu_title(kind),
     };
     ui_actors.push(screen_bar::build(screen_bar::ScreenBarParams {
         title: title_text,
@@ -1037,13 +1317,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
             let sel = state.selected.min(ITEMS.len() - 1);
             selected_item = Some(&ITEMS[sel]);
         }
-        OptionsView::SystemSubmenu => {
+        OptionsView::Submenu(kind) => {
+            let rows = submenu_rows(kind);
+            let choice_indices = submenu_choice_indices(state, kind);
+            let items = submenu_items(kind);
             // Active text color for submenu rows.
             let col_active_text = color::simply_love_rgba(state.active_color_index);
             // Inactive option text color should be #808080 (alpha 1.0), match player options.
             let sl_gray = color::rgba_hex("#808080");
 
-            let total_rows = SYSTEM_OPTIONS_ROWS.len() + 1; // + Exit row
+            let total_rows = rows.len() + 1; // + Exit row
             let anchor_row: usize = 4;
             let max_offset = total_rows.saturating_sub(VISIBLE_ROWS);
             let offset_rows = if total_rows <= VISIBLE_ROWS {
@@ -1060,14 +1343,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                 if row_idx >= total_rows {
                     return list_x + list_w * 0.5;
                 }
-                if row_idx >= SYSTEM_OPTIONS_ROWS.len() {
+                if row_idx >= rows.len() {
                     // Exit row: center within the items column (row width minus label column),
                     // matching how single-value rows like Music Rate are centered in player_options.rs.
                     let item_col_left = list_x + label_bg_w;
                     let item_col_w = list_w - label_bg_w;
                     return item_col_left + item_col_w * 0.5 + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
                 }
-                let row = &SYSTEM_OPTIONS_ROWS[row_idx];
+                let row = &rows[row_idx];
                 // Language behaves as a single-value row: keep the cursor centered
                 // on the center of the available items column (row width minus label column),
                 // regardless of which language is selected.
@@ -1105,8 +1388,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                     x_positions.push(x);
                     x += *w + INLINE_SPACING;
                 }
-                let sel_idx = state
-                    .sub_choice_indices
+                let sel_idx = choice_indices
                     .get(row_idx)
                     .copied()
                     .unwrap_or(0)
@@ -1122,7 +1404,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                 asset_manager.with_fonts(|all_fonts| {
                     asset_manager.with_font("miso", |metrics_font| {
                         out_h = (metrics_font.height as f32).max(1.0) * value_zoom;
-                        if row_idx >= SYSTEM_OPTIONS_ROWS.len() {
+                        if row_idx >= rows.len() {
                             // Exit row
                             let text = "Exit";
                             let mut w =
@@ -1133,12 +1415,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                             }
                             out_w = w * value_zoom;
                         } else {
-                            let choices = SYSTEM_OPTIONS_ROWS[row_idx].choices;
+                            let choices = rows[row_idx].choices;
                             if choices.is_empty() {
                                 return;
                             }
-                            let sel_idx = state
-                                .sub_choice_indices
+                            let sel_idx = choice_indices
                                 .get(row_idx)
                                 .copied()
                                 .unwrap_or(0)
@@ -1185,7 +1466,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                     diffuse(bg[0], bg[1], bg[2], bg[3])
                 ));
 
-                if !is_exit && row_idx < SYSTEM_OPTIONS_ROWS.len() {
+                if !is_exit && row_idx < rows.len() {
                     // Left label background column (matches player options style).
                     ui_actors.push(act!(quad:
                         align(0.0, 0.0):
@@ -1194,7 +1475,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                         diffuse(0.0, 0.0, 0.0, 0.25)
                     ));
 
-                    let label = SYSTEM_OPTIONS_ROWS[row_idx].label;
+                    let label = rows[row_idx].label;
                     let is_language_row = label == "Language";
                     let title_color = if is_active {
                         let mut c = col_active_text;
@@ -1215,7 +1496,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                     ));
 
                     // Inline Off/On options in the items column.
-                    let choices = SYSTEM_OPTIONS_ROWS[row_idx].choices;
+                    let choices = rows[row_idx].choices;
                     if !choices.is_empty() {
                         let value_zoom = 0.835_f32;
                         let mut widths: Vec<f32> = Vec::with_capacity(choices.len());
@@ -1241,7 +1522,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                             }
                         }
 
-                        let selected_choice = state.sub_choice_indices
+                        let selected_choice = choice_indices
                             .get(row_idx)
                             .copied()
                             .unwrap_or(0)
@@ -1510,7 +1791,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                                     // Interpolate ring size from previous row to Exit row.
                                     if let Some(from_row) = state.cursor_row_anim_from_row {
                                         let from_idx = from_row.min(total_rows.saturating_sub(2));
-                                        if from_idx < SYSTEM_OPTIONS_ROWS.len() {
+                                        if from_idx < rows.len() {
                                             // Approximate previous row dims by reusing current draw_w/draw_h.
                                             let from_draw_w = draw_w;
                                             let mut size_t_from = from_draw_w / width_ref;
@@ -1584,12 +1865,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
             }
 
             // Description items for the submenu
-            let total_rows = SYSTEM_OPTIONS_ROWS.len() + 1;
+            let total_rows = rows.len() + 1;
             let sel = state.sub_selected.min(total_rows.saturating_sub(1));
-            let item = if sel < SYSTEM_OPTIONS_ROWS.len() {
-                &SYSTEM_OPTIONS_ITEMS[sel]
+            let item = if sel < rows.len() {
+                &items[sel]
             } else {
-                &SYSTEM_OPTIONS_ITEMS[SYSTEM_OPTIONS_ITEMS.len().saturating_sub(1)]
+                &items[items.len().saturating_sub(1)]
             };
             selected_item = Some(item);
         }
