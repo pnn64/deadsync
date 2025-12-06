@@ -117,6 +117,16 @@ A `save` directory is also created to store your personal data.
 *   To enable online features with **GrooveStats**, edit the `save/profiles/00000000/groovestats.ini` file and add your API key and username. This allows the game to fetch your online scores.
 *   You can also change your in-game display name in `save/profiles/00000000/profile.ini`.
 
+## Contributing
+
+We welcome contributions of all sizes. These notes are directional, not law—open a discussion or draft PR if you are unsure.
+
+- Keep code simple and direct; stick to functional or procedural styles and avoid OOP patterns (even in Rust).
+- Write small, single-purpose functions with clear names; compose simple pieces instead of building deep abstractions.
+- Prefer immutability and pure functions; minimize global state and side effects so behavior stays predictable and testable.
+- Reduce duplication by reusing and composing functions rather than repeating logic or adding one-off helpers.
+- Bias toward efficient, low-overhead code: favor `Vec` and iterators, borrow instead of clone, and keep dependencies lean.
+
 <h2>Acknowledgements</h2>
 <p>
     DeadSync would not exist without years of work from the StepMania and ITG communities.
