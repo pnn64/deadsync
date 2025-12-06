@@ -40,6 +40,9 @@ enum Command {
     SetBanner(Option<PathBuf>),
     SetDensityGraph(Option<ChartData>),
     FetchOnlineGrade(String),
+    PlayMusic { path: PathBuf, looped: bool, volume: f32 },
+    StopMusic,
+    SetEvaluationGraphData(Option<(String, rssp::graph::GraphImageData)>),
 }
 
 /* -------------------- transition timing constants -------------------- */
@@ -377,11 +380,11 @@ impl App {
                         } else {
                             FADE_OUT_DURATION
                         };
-                    self.state.shell.transition = TransitionState::ActorsFadeOut { elapsed: 0.0, duration, target: screen };
-                } else {
-                    info!("Starting global fade out to screen: {:?}", screen);                        
-                    let (_, out_duration) = self.get_out_transition_for_screen(self.state.screens.current_screen);
-                    self.state.shell.transition = TransitionState::FadingOut {
+                        self.state.shell.transition = TransitionState::ActorsFadeOut { elapsed: 0.0, duration, target: screen };
+                    } else {
+                        info!("Starting global fade out to screen: {:?}", screen);                        
+                        let (_, out_duration) = self.get_out_transition_for_screen(self.state.screens.current_screen);
+                        self.state.shell.transition = TransitionState::FadingOut {
                             elapsed: 0.0,
                             duration: out_duration,
                             target: screen,
@@ -476,6 +479,28 @@ impl App {
                             warn!("Failed to fetch online grade: {}", e);
                         }
                     });
+                }
+                Command::PlayMusic { path, looped, volume } => {
+                    crate::core::audio::play_music(
+                        path,
+                        crate::core::audio::Cut::default(),
+                        looped,
+                        volume,
+                    );
+                }
+                Command::StopMusic => {
+                    crate::core::audio::stop_music();
+                }
+                Command::SetEvaluationGraphData(graph_request) => {
+                    if let Some(backend) = self.backend.as_mut() {
+                        let key = if let Some((key, data)) = graph_request {
+                            self.asset_manager
+                                .set_density_graph(backend, Some((key, data)))
+                        } else {
+                            self.asset_manager.set_density_graph(backend, None)
+                        };
+                        self.state.screens.evaluation_state.density_graph_texture_key = key;
+                    }
                 }
             }
         }
@@ -793,9 +818,11 @@ impl App {
         let prev = self.state.screens.current_screen;
         self.state.screens.current_screen = target;
 
-        self.handle_audio_and_profile_on_fade(prev, target);
+        let mut commands: Vec<Command> = Vec::new();
+
+        commands.extend(self.handle_audio_and_profile_on_fade(prev, target));
         self.handle_screen_state_on_fade(prev, target);
-        self.handle_screen_entry_on_fade(prev, target);
+        commands.extend(self.handle_screen_entry_on_fade(prev, target));
 
         let (_, in_duration) = self.get_in_transition_for_screen(target);
         self.state.shell.transition = TransitionState::FadingIn {
@@ -803,24 +830,25 @@ impl App {
             duration: in_duration,
         };
         crate::ui::runtime::clear_all();
+        let _ = self.run_commands(commands, event_loop);
     }
 
-    fn handle_audio_and_profile_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
+    fn handle_audio_and_profile_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) -> Vec<Command> {
+        let mut commands = Vec::new();
         if target == CurrentScreen::SelectColor {
-            crate::core::audio::play_music(
-                std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
-                crate::core::audio::Cut::default(),
-                true,
-                1.0,
-            );
+            commands.push(Command::PlayMusic {
+                path: PathBuf::from("assets/music/in_two (loop).ogg"),
+                looped: true,
+                volume: 1.0,
+            });
         } else if !((prev == CurrentScreen::SelectMusic && target == CurrentScreen::PlayerOptions)
             || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic))
         {
-            crate::core::audio::stop_music();
+            commands.push(Command::StopMusic);
         }
 
         if prev == CurrentScreen::Gameplay {
-            crate::core::audio::stop_music();
+            commands.push(Command::StopMusic);
             if let Some(backend) = self.backend.as_mut() {
                 self.asset_manager.set_dynamic_background(backend, None);
             }
@@ -858,7 +886,7 @@ impl App {
             }
 
             if !(target == CurrentScreen::SelectMusic || target == CurrentScreen::PlayerOptions) {
-                crate::core::audio::stop_music();
+                commands.push(Command::StopMusic);
             }
         }
 
@@ -866,6 +894,7 @@ impl App {
             self.state.session.preferred_difficulty_index =
                 self.state.screens.select_music_state.preferred_difficulty_index;
         }
+        commands
     }
 
     fn handle_screen_state_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
@@ -910,7 +939,8 @@ impl App {
         }
     }
 
-    fn handle_screen_entry_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
+    fn handle_screen_entry_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) -> Vec<Command> {
+        let mut commands = Vec::new();
         if target == CurrentScreen::Gameplay {
             if let Some(po_state) = self.state.screens.player_options_state.take() {
                 let song_arc = po_state.song;
@@ -958,40 +988,32 @@ impl App {
             self.state.screens.evaluation_state = evaluation::init(gameplay_results);
             self.state.screens.evaluation_state.active_color_index = color_idx;
 
-            if let Some(backend) = self.backend.as_mut() {
-                let graph_request = if let Some(score_info) = &self.state.screens.evaluation_state.score_info
-                {
-                    let graph_width = 1024;
-                    let graph_height = 256;
-                    let bg_color = [16, 21, 25];
-                    let top_color = [54, 25, 67];
-                    let bottom_color = [38, 84, 91];
+            let graph_request = if let Some(score_info) = &self.state.screens.evaluation_state.score_info
+            {
+                let graph_width = 1024;
+                let graph_height = 256;
+                let bg_color = [16, 21, 25];
+                let top_color = [54, 25, 67];
+                let bottom_color = [38, 84, 91];
 
-                    let graph_data = rssp::graph::generate_density_graph_rgba_data(
-                        &score_info.chart.measure_nps_vec,
-                        score_info.chart.max_nps,
-                        graph_width,
-                        graph_height,
-                        bottom_color,
-                        top_color,
-                        bg_color,
-                    )
-                    .ok();
+                let graph_data = rssp::graph::generate_density_graph_rgba_data(
+                    &score_info.chart.measure_nps_vec,
+                    score_info.chart.max_nps,
+                    graph_width,
+                    graph_height,
+                    bottom_color,
+                    top_color,
+                    bg_color,
+                )
+                .ok();
 
-                    let key = format!("{}_eval", score_info.chart.short_hash);
-                    graph_data.map(|data| (key, data))
-                } else {
-                    None
-                };
+                let key = format!("{}_eval", score_info.chart.short_hash);
+                graph_data.map(|data| (key, data))
+            } else {
+                None
+            };
 
-                let key = if let Some((key, data)) = graph_request {
-                    self.asset_manager
-                        .set_density_graph(backend, Some((key, data)))
-                } else {
-                    self.asset_manager.set_density_graph(backend, None)
-                };
-                self.state.screens.evaluation_state.density_graph_texture_key = key;
-            }
+            commands.push(Command::SetEvaluationGraphData(graph_request));
         }
 
         if target == CurrentScreen::SelectMusic {
@@ -1047,6 +1069,7 @@ impl App {
                 }
             }
         }
+        commands
     }
 
 }
