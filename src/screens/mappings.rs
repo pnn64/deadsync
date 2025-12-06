@@ -1268,6 +1268,11 @@ pub fn get_actors(
                     ActiveSlot::P2Primary => (&p2_primary_text, p2_primary_zoom),
                     ActiveSlot::P2Secondary => (&p2_secondary_text, p2_secondary_zoom),
                 };
+                let ring_text_zoom = if state.capture_active {
+                    value_zoom
+                } else {
+                    active_zoom
+                };
 
                 let border_w = widescale(2.0, 2.5);
                 let mut ring_w = base_ring_w;
@@ -1284,8 +1289,8 @@ pub fn get_actors(
                             text_w = 1.0;
                         }
                         let text_h = (metrics_font.height as f32).max(1.0);
-                        let draw_w = text_w * active_zoom;
-                        let draw_h = text_h * active_zoom;
+                        let draw_w = text_w * ring_text_zoom;
+                        let draw_h = text_h * ring_text_zoom;
 
                         let pad_y = widescale(6.0, 8.0);
                         let min_pad_x = widescale(2.0, 3.0);
