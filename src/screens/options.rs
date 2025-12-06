@@ -830,14 +830,17 @@ pub fn update(state: &mut State, dt: f32) {
                 state.prev_selected = state.selected;
             }
         }
-        OptionsView::Submenu(_) => {
+        OptionsView::Submenu(kind) => {
             if state.sub_selected != state.sub_prev_selected {
                 audio::play_sfx("assets/sounds/change.ogg");
 
                 // Start a simple vertical cursor tween between rows in the submenu.
                 let (s, _, list_y) = scaled_block_origin_with_margins();
                 let prev_idx = state.sub_prev_selected;
-                let from_y = list_y + (prev_idx as f32) * (ROW_H + ROW_GAP) * s;
+                let total_rows = submenu_rows(kind).len() + 1;
+                let offset_prev = scroll_offset(prev_idx, total_rows);
+                let prev_vis_idx = prev_idx.saturating_sub(offset_prev);
+                let from_y = list_y + (prev_vis_idx as f32) * (ROW_H + ROW_GAP) * s;
                 state.cursor_row_anim_from_y = from_y + 0.5 * ROW_H * s;
                 state.cursor_row_anim_t = 0.0;
                 state.cursor_row_anim_from_row = Some(prev_idx);
@@ -1115,6 +1118,17 @@ fn scaled_block_origin_with_margins() -> (f32, f32, f32) {
     (s, ox, oy)
 }
 
+#[inline(always)]
+fn scroll_offset(selected: usize, total_rows: usize) -> usize {
+    let anchor_row: usize = 4; // keep cursor near middle (5th visible row)
+    let max_offset = total_rows.saturating_sub(VISIBLE_ROWS);
+    if total_rows <= VISIBLE_ROWS {
+        0
+    } else {
+        selected.saturating_sub(anchor_row).min(max_offset)
+    }
+}
+
 /* -------------------------------- drawing -------------------------------- */
 
 fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
@@ -1225,13 +1239,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
 
             // ---------------------------- Scrolling math ---------------------------
             let total_items = ITEMS.len();
-            let anchor_row: usize = 4; // keep cursor near middle (5th visible row)
-            let max_offset = total_items.saturating_sub(VISIBLE_ROWS);
-            let offset_rows = if total_items <= VISIBLE_ROWS {
-                0
-            } else {
-                state.selected.saturating_sub(anchor_row).min(max_offset)
-            };
+            let offset_rows = scroll_offset(state.selected, total_items);
 
             // Row loop (backgrounds + content). We render the visible window.
             for i_vis in 0..VISIBLE_ROWS {
@@ -1327,13 +1335,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
             let sl_gray = color::rgba_hex("#808080");
 
             let total_rows = rows.len() + 1; // + Exit row
-            let anchor_row: usize = 4;
-            let max_offset = total_rows.saturating_sub(VISIBLE_ROWS);
-            let offset_rows = if total_rows <= VISIBLE_ROWS {
-                0
-            } else {
-                state.sub_selected.saturating_sub(anchor_row).min(max_offset)
-            };
+            let offset_rows = scroll_offset(state.sub_selected, total_rows);
 
             let label_bg_w = SUB_LABEL_COL_W * s;
             let label_text_x = list_x + SUB_LABEL_TEXT_LEFT_PAD * s;
