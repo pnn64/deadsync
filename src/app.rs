@@ -43,6 +43,11 @@ enum Command {
     PlayMusic { path: PathBuf, looped: bool, volume: f32 },
     StopMusic,
     SetEvaluationGraphData(Option<(String, rssp::graph::GraphImageData)>),
+    SetDynamicBackground(Option<PathBuf>),
+    UpdateScrollSpeed(ScrollSpeedSetting),
+    UpdateSessionMusicRate(f32),
+    UpdatePreferredDifficulty(usize),
+    UpdateLastPlayed { music_path: Option<PathBuf>, difficulty_index: usize },
 }
 
 /* -------------------- transition timing constants -------------------- */
@@ -502,6 +507,26 @@ impl App {
                         self.state.screens.evaluation_state.density_graph_texture_key = key;
                     }
                 }
+                Command::SetDynamicBackground(path_opt) => {
+                    if let Some(backend) = self.backend.as_mut() {
+                        let key = self.asset_manager.set_dynamic_background(backend, path_opt);
+                        if let Some(gs) = &mut self.state.screens.gameplay_state {
+                            gs.background_texture_key = key;
+                        }
+                    }
+                }
+                Command::UpdateScrollSpeed(setting) => {
+                    profile::update_scroll_speed(setting);
+                }
+                Command::UpdateSessionMusicRate(rate) => {
+                    crate::game::profile::set_session_music_rate(rate);
+                }
+                Command::UpdatePreferredDifficulty(idx) => {
+                    self.state.session.preferred_difficulty_index = idx;
+                }
+                Command::UpdateLastPlayed { music_path, difficulty_index } => {
+                    profile::update_last_played(music_path.as_deref(), difficulty_index);
+                }
             }
         }
         Ok(())
@@ -866,7 +891,7 @@ impl App {
                 };
 
                 if let Some(setting) = setting {
-                    profile::update_scroll_speed(setting);
+                    commands.push(Command::UpdateScrollSpeed(setting));
                     info!("Saved scroll speed: {}", setting);
                 } else {
                     warn!(
@@ -875,10 +900,11 @@ impl App {
                     );
                 }
 
-                crate::game::profile::set_session_music_rate(po_state.music_rate);
+                commands.push(Command::UpdateSessionMusicRate(po_state.music_rate));
                 info!("Session music rate set to {:.2}x", po_state.music_rate);
 
                 self.state.session.preferred_difficulty_index = po_state.chart_difficulty_index;
+                commands.push(Command::UpdatePreferredDifficulty(po_state.chart_difficulty_index));
                 info!(
                     "Updated preferred difficulty index to {} from PlayerOptions",
                     self.state.session.preferred_difficulty_index
@@ -962,16 +988,15 @@ impl App {
                     .expect("No chart found for selected difficulty");
                 let chart = Arc::new(chart_ref.clone());
 
-                profile::update_last_played(song_arc.music_path.as_deref(), chart_difficulty_index);
+                commands.push(Command::UpdateLastPlayed {
+                    music_path: song_arc.music_path.clone(),
+                    difficulty_index: chart_difficulty_index,
+                });
 
                 let color_index = po_state.active_color_index;
-                let mut gs = gameplay::init(song_arc, chart, color_index, po_state.music_rate);
+                let gs = gameplay::init(song_arc, chart, color_index, po_state.music_rate);
 
-                if let Some(backend) = self.backend.as_mut() {
-                    gs.background_texture_key = self
-                        .asset_manager
-                        .set_dynamic_background(backend, gs.song.background_path.clone());
-                }
+                commands.push(Command::SetDynamicBackground(gs.song.background_path.clone()));
                 self.state.screens.gameplay_state = Some(gs);
             } else {
                 panic!("Navigating to Gameplay without PlayerOptions state!");
