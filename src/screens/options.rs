@@ -294,32 +294,39 @@ const SUBMENU_FADE_DURATION: f32 = 0.2;
 pub struct SubRow<'a> {
     pub label: &'a str,
     pub choices: &'a [&'a str],
+    pub inline: bool, // whether to lay out choices inline (vs single centered value)
 }
 
 pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: "Game",
         choices: &["dance", "pump"],
+        inline: true,
     },
     SubRow {
         label: "Theme",
         choices: &["Simply Love"],
+        inline: true,
     },
     SubRow {
         label: "Language",
         choices: &["English", "Japanese"],
+        inline: false, // single centered value (no inline tween)
     },
     SubRow {
         label: "Announcer",
         choices: &["None", "ITG"],
+        inline: true,
     },
     SubRow {
         label: "Default NoteSkin",
         choices: &["cel", "metal", "enchantment-v2", "devcel-2024-v3"],
+        inline: true,
     },
     SubRow {
         label: "Editor NoteSkin",
         choices: &["cel", "metal", "enchantment-v2", "devcel-2024-v3"],
+        inline: true,
     },
 ];
 
@@ -358,106 +365,132 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: "Video Renderer",
         choices: &["opengl", "d3d"],
+        inline: true,
     },
     SubRow {
         label: "Display Mode",
         choices: &["Windowed", "Fullscreen", "Borderless"],
+        inline: true,
     },
     SubRow {
         label: "Display Aspect Ratio",
         choices: &["Auto", "16:9", "16:10", "4:3", "5:4", "8:3", "1:1"],
+        inline: true,
     },
     SubRow {
         label: "Display Resolution",
         choices: &["1920x1080", "1600x900", "1280x720", "1024x768", "800x600"],
+        inline: true,
     },
     SubRow {
         label: "Refresh Rate",
         choices: &["Default", "60 Hz", "75 Hz", "120 Hz", "144 Hz", "165 Hz", "240 Hz", "360 Hz"],
+        inline: true,
     },
     SubRow {
         label: "Fullscreen Type",
         choices: &["Exclusive", "Borderless"],
+        inline: true,
     },
     SubRow {
         label: "Display Color Depth",
         choices: &["16bit", "32bit"],
+        inline: true,
     },
     SubRow {
         label: "High Resolution Textures",
         choices: &["Auto", "Force Off", "Force On"],
+        inline: true,
     },
     SubRow {
         label: "Max Texture Resolution",
         choices: &["256", "512", "1024", "2048"],
+        inline: true,
     },
     SubRow {
         label: "Texture Color Depth",
         choices: &["16bit", "32bit"],
+        inline: true,
     },
     SubRow {
         label: "Movie Color Depth",
         choices: &["16bit", "32bit"],
+        inline: true,
     },
     SubRow {
         label: "Smooth Lines",
         choices: &["Off", "On"],
+        inline: true,
     },
     SubRow {
         label: "CelShade Models",
         choices: &["Off", "On"],
+        inline: true,
     },
     SubRow {
         label: "Delayed Texture Delete",
         choices: &["Off", "On"],
+        inline: true,
     },
     SubRow {
         label: "Vsync",
         choices: &["Off", "On"],
+        inline: true,
     },
     SubRow {
         label: "Fast Note Rendering",
         choices: &["Off", "On"],
+        inline: true,
     },
     SubRow {
         label: "Show Stats",
         choices: &["Off", "On"],
+        inline: true,
     },
     SubRow {
         label: "Attract Sound Frequency",
         choices: &["Never", "Always", "2 Times", "3 Times", "4 Times", "5 Times"],
+        inline: true,
     },
     SubRow {
         label: "Sound Volume",
         choices: &["Silent", "10%", "25%", "50%", "75%", "100%"],
+        inline: true,
     },
     SubRow {
         label: "Preferred Sample Rate",
         choices: &["Default", "44100 Hz", "48000 Hz"],
+        inline: true,
     },
     SubRow {
         label: "Enable Attack Sounds",
         choices: &["Off", "On"],
+        inline: true,
     },
     SubRow {
         label: "Enable Mine Hit Sound",
         choices: &["Off", "On"],
+        inline: true,
     },
     SubRow {
         label: "Global Offset Seconds",
         choices: &["-30 ms", "-15 ms", "0 ms", "+15 ms", "+30 ms"],
+        inline: true,
     },
     SubRow {
         label: "Visual Delay Seconds",
         choices: &["-5 s", "-3 s", "-1 s", "0 s", "+1 s", "+3 s", "+5 s"],
+        inline: true,
     },
     SubRow {
         label: "Default Sync Offset",
         choices: &["NULL", "ITG"],
+        inline: true,
     },
     SubRow {
         label: "RateMod Preserves Pitch",
         choices: &["Off", "On"],
+        inline: true,
     },
 ];
 
@@ -935,7 +968,11 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
         .get(row_index)
         .map(|r| r.label == "Language")
         .unwrap_or(false);
-    if !is_language_row {
+    let is_inline_row = rows
+        .get(row_index)
+        .map(|r| r.inline)
+        .unwrap_or(true);
+    if is_inline_row && !is_language_row {
         state.cursor_anim_row = Some(row_index);
         state.cursor_anim_from_choice = choice_index;
         state.cursor_anim_to_choice = new_index;
@@ -1353,10 +1390,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                     return item_col_left + item_col_w * 0.5 + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
                 }
                 let row = &rows[row_idx];
-                // Language behaves as a single-value row: keep the cursor centered
-                // on the center of the available items column (row width minus label column),
-                // regardless of which language is selected.
-                if row.label == "Language" {
+                // Non-inline rows behave as single-value rows: keep the cursor centered
+                // on the center of the available items column (row width minus label column).
+                if !row.inline {
                     let item_col_left = list_x + label_bg_w;
                     let item_col_w = list_w - label_bg_w;
                     return item_col_left + item_col_w * 0.5 + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
@@ -1477,8 +1513,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                         diffuse(0.0, 0.0, 0.0, 0.25)
                     ));
 
-                    let label = rows[row_idx].label;
-                    let is_language_row = label == "Language";
+                    let row = &rows[row_idx];
+                    let inline_row = row.inline;
+                    let label = row.label;
                     let title_color = if is_active {
                         let mut c = col_active_text;
                         c[3] = 1.0;
@@ -1497,8 +1534,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                         horizalign(left)
                     ));
 
-                    // Inline Off/On options in the items column.
-                    let choices = rows[row_idx].choices;
+                    // Inline Off/On options in the items column (or a single centered value if inline == false).
+                    let choices = row.choices;
                     if !choices.is_empty() {
                         let value_zoom = 0.835_f32;
                         let mut widths: Vec<f32> = Vec::with_capacity(choices.len());
@@ -1514,9 +1551,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                             });
                         });
 
+                        let selected_choice = choice_indices
+                            .get(row_idx)
+                            .copied()
+                            .unwrap_or(0)
+                            .min(choices.len().saturating_sub(1));
+                        let mut selected_left_x: Option<f32> = None;
+
                         let choice_inner_left = list_x + label_bg_w + SUB_INLINE_ITEMS_LEFT_PAD * s;
                         let mut x_positions: Vec<f32> = Vec::with_capacity(choices.len());
-                        {
+                        if inline_row {
                             let mut x = choice_inner_left;
                             for w in &widths {
                                 x_positions.push(x);
@@ -1524,35 +1568,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                             }
                         }
 
-                        let selected_choice = choice_indices
-                            .get(row_idx)
-                            .copied()
-                            .unwrap_or(0)
-                            .min(choices.len().saturating_sub(1));
-
-                        for (idx, choice) in choices.iter().enumerate() {
-                            let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
-                            let is_choice_selected = idx == selected_choice;
-
-                            if is_language_row {
-                                // Language behaves as a single-value row: draw only the
-                                // currently selected value centered on a fixed X so it
-                                // does not shift horizontally when the value changes.
-                                if !is_choice_selected {
-                                    continue;
+                        if inline_row {
+                            for (idx, choice) in choices.iter().enumerate() {
+                                let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
+                                let is_choice_selected = idx == selected_choice;
+                                if is_choice_selected {
+                                    selected_left_x = Some(x);
                                 }
-                                let choice_color = if is_active { col_white } else { sl_gray };
-                                let choice_center_x = calc_row_center_x(row_idx);
-                                ui_actors.push(act!(text:
-                                    align(0.5, 0.5):
-                                    xy(choice_center_x, row_mid_y):
-                                    zoom(value_zoom):
-                                    diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
-                                    font("miso"):
-                                    settext(*choice):
-                                    horizalign(center)
-                                ));
-                            } else {
+
                                 let choice_color = if is_active { col_white } else { sl_gray };
                                 ui_actors.push(act!(text:
                                     align(0.0, 0.5):
@@ -1564,11 +1587,26 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                                     horizalign(left)
                                 ));
                             }
+                        } else {
+                            let choice_color = if is_active { col_white } else { sl_gray };
+                            let choice_center_x = calc_row_center_x(row_idx);
+                            let choice_text = choices[selected_choice];
+                            let draw_w = widths.get(selected_choice).copied().unwrap_or(40.0);
+                            selected_left_x = Some(choice_center_x - draw_w * 0.5);
+                            ui_actors.push(act!(text:
+                                align(0.5, 0.5):
+                                xy(choice_center_x, row_mid_y):
+                                zoom(value_zoom):
+                                diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+                                font("miso"):
+                                settext(choice_text):
+                                horizalign(center)
+                            ));
                         }
 
                         // Underline the selected option when this row is active or inactive,
                         // matching the inline underline behavior from player_options.rs.
-                        if let Some(sel_x) = x_positions.get(selected_choice).copied() {
+                        if let Some(sel_left_x) = selected_left_x {
                             let draw_w = widths.get(selected_choice).copied().unwrap_or(40.0);
                             asset_manager.with_fonts(|_all_fonts| {
                                 asset_manager.with_font("miso", |metrics_font| {
@@ -1579,12 +1617,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                                     let underline_y = row_mid_y + text_h * 0.5 + offset;
                                     let mut line_color = color::decorative_rgba(state.active_color_index);
                                     line_color[3] = 1.0;
-                                    let underline_left_x = if is_language_row {
-                                        let cx = calc_row_center_x(row_idx);
-                                        cx - draw_w * 0.5
-                                    } else {
-                                        sel_x
-                                    };
+                                    let underline_left_x = sel_left_x;
                                     ui_actors.push(act!(quad:
                                         align(0.0, 0.5):
                                         xy(underline_left_x, underline_y):
@@ -1600,12 +1633,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                         // During submenu fades, hide the ring to avoid exposing its construction.
                         if is_active && !widths.is_empty() && !is_fading_submenu {
                             let sel_idx = selected_choice.min(widths.len().saturating_sub(1));
-                            if let Some(mut target_left_x) = x_positions.get(sel_idx).copied() {
+                            if let Some(mut target_left_x) = selected_left_x {
                                 let draw_w = widths.get(sel_idx).copied().unwrap_or(40.0);
-                                if is_language_row {
-                                    // Keep the cursor ring centered on the same X as the text
-                                    // for Language so moving left/right does not cause any
-                                    // horizontal tween; only the value changes.
+                                if !inline_row {
                                     let cx = calc_row_center_x(row_idx);
                                     target_left_x = cx - draw_w * 0.5;
                                 }
@@ -1642,7 +1672,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                                                 + (row_mid_y - state.cursor_row_anim_from_y) * t;
                                         }
                                         // Horizontal tween between choices within a row.
-                                        if let Some(anim_row) = state.cursor_anim_row
+                                        if inline_row && let Some(anim_row) = state.cursor_anim_row
                                             && anim_row == row_idx && state.cursor_anim_t < 1.0 {
                                                 let from_idx = state.cursor_anim_from_choice.min(widths.len().saturating_sub(1));
                                                 let to_idx = sel_idx.min(widths.len().saturating_sub(1));
