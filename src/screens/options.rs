@@ -6,6 +6,7 @@ use crate::core::audio;
 use crate::screens::{Screen, ScreenAction};
 use crate::core::input::{VirtualAction, InputEvent};
 use std::time::{Duration, Instant};
+use std::borrow::Cow;
 
 use crate::ui::actors::Actor;
 use crate::ui::color;
@@ -28,11 +29,34 @@ const CURSOR_TWEEN_SECONDS: f32 = 0.1;
 // Spacing between inline items in OptionRows (pixels at current zoom)
 const INLINE_SPACING: f32 = 15.75;
 
+// Match Simply Love operator menu ranges (±1000 ms) for these calibrations.
+const GLOBAL_OFFSET_MIN_MS: i32 = -1000;
+const GLOBAL_OFFSET_MAX_MS: i32 = 1000;
+const VISUAL_DELAY_MIN_MS: i32 = -1000;
+const VISUAL_DELAY_MAX_MS: i32 = 1000;
+
 #[inline(always)]
 fn ease_out_cubic(t: f32) -> f32 {
     let clamped = if t < 0.0 { 0.0 } else if t > 1.0 { 1.0 } else { t };
     let u = 1.0 - clamped;
     1.0 - u * u * u
+}
+
+#[inline(always)]
+fn format_ms(value: i32) -> String {
+    // Positive values omit a '+' and compact to the Simply Love "Nms" style.
+    format!("{}ms", value)
+}
+
+#[inline(always)]
+fn adjust_ms_value(value: &mut i32, delta: isize, min: i32, max: i32) -> bool {
+    let new_value = (*value + delta as i32).clamp(min, max);
+    if new_value == *value {
+        false
+    } else {
+        *value = new_value;
+        true
+    }
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
@@ -448,14 +472,14 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        label: "Global Offset Seconds",
-        choices: &["-30 ms", "-15 ms", "0 ms", "+15 ms", "+30 ms"],
-        inline: true,
+        label: "Global Offset (ms)",
+        choices: &["0 ms"],
+        inline: false,
     },
     SubRow {
-        label: "Visual Delay Seconds",
-        choices: &["-5 s", "-3 s", "-1 s", "0 s", "+1 s", "+3 s", "+5 s"],
-        inline: true,
+        label: "Visual Delay (ms)",
+        choices: &["0 ms"],
+        inline: false,
     },
     SubRow {
         label: "Default Sync Offset",
@@ -547,12 +571,12 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
         help: &["Play a sound when mines are hit."],
     },
     Item {
-        name: "Global Offset Seconds",
-        help: &["Apply a global audio timing offset."],
+        name: "Global Offset (ms)",
+        help: &["Apply a global audio timing offset in 1 ms steps."],
     },
     Item {
-        name: "Visual Delay Seconds",
-        help: &["Apply a visual timing offset."],
+        name: "Visual Delay (ms)",
+        help: &["Apply a visual timing offset in 1 ms steps."],
     },
     Item {
         name: "Default Sync Offset",
@@ -597,6 +621,9 @@ pub struct State {
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     nav_key_last_scrolled_at: Option<Instant>,
+    nav_lr_held_direction: Option<isize>,
+    nav_lr_held_since: Option<Instant>,
+    nav_lr_last_adjusted_at: Option<Instant>,
     view: OptionsView,
     submenu_transition: SubmenuTransition,
     pending_submenu_kind: Option<SubmenuKind>,
@@ -607,6 +634,8 @@ pub struct State {
     sub_prev_selected: usize,
     sub_choice_indices_system: Vec<usize>,
     sub_choice_indices_graphics: Vec<usize>,
+    global_offset_ms: i32,
+    visual_delay_ms: i32,
     // Inline option cursor tween (left/right between items)
     cursor_anim_row: Option<usize>,
     cursor_anim_from_choice: usize,
@@ -628,6 +657,9 @@ pub fn init() -> State {
         nav_key_held_direction: None,
         nav_key_held_since: None,
         nav_key_last_scrolled_at: None,
+        nav_lr_held_direction: None,
+        nav_lr_held_since: None,
+        nav_lr_last_adjusted_at: None,
         submenu_transition: SubmenuTransition::None,
         pending_submenu_kind: None,
         submenu_fade_t: 0.0,
@@ -637,6 +669,8 @@ pub fn init() -> State {
         sub_prev_selected: 0,
         sub_choice_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_choice_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
+        global_offset_ms: 0,
+        visual_delay_ms: 0,
         cursor_anim_row: None,
         cursor_anim_from_choice: 0,
         cursor_anim_to_choice: 0,
@@ -716,6 +750,9 @@ pub fn update(state: &mut State, dt: f32) {
                 state.nav_key_held_direction = None;
                 state.nav_key_held_since = None;
                 state.nav_key_last_scrolled_at = None;
+                state.nav_lr_held_direction = None;
+                state.nav_lr_held_since = None;
+                state.nav_lr_last_adjusted_at = None;
                 state.submenu_transition = SubmenuTransition::FadeInSubmenu;
                 state.submenu_fade_t = 0.0;
                 state.content_alpha = 0.0;
@@ -754,6 +791,9 @@ pub fn update(state: &mut State, dt: f32) {
                 state.nav_key_held_direction = None;
                 state.nav_key_held_since = None;
                 state.nav_key_last_scrolled_at = None;
+                state.nav_lr_held_direction = None;
+                state.nav_lr_held_since = None;
+                state.nav_lr_last_adjusted_at = None;
                 state.submenu_transition = SubmenuTransition::FadeInMain;
                 state.submenu_fade_t = 0.0;
                 state.content_alpha = 0.0;
@@ -817,6 +857,20 @@ pub fn update(state: &mut State, dt: f32) {
                     }
                 }
             }
+    }
+
+    if let (Some(delta_lr), Some(held_since), Some(last_adjusted)) =
+        (state.nav_lr_held_direction, state.nav_lr_held_since, state.nav_lr_last_adjusted_at)
+    {
+        let now = Instant::now();
+        if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
+            && now.duration_since(last_adjusted) >= NAV_REPEAT_SCROLL_INTERVAL
+        {
+            if matches!(state.view, OptionsView::Submenu(_)) {
+                apply_submenu_choice_delta(state, delta_lr);
+                state.nav_lr_last_adjusted_at = Some(now);
+            }
+        }
     }
 
     match state.view {
@@ -884,6 +938,21 @@ pub fn on_nav_release(state: &mut State, dir: NavDirection) {
     }
 }
 
+fn on_lr_press(state: &mut State, delta: isize) {
+    let now = Instant::now();
+    state.nav_lr_held_direction = Some(delta);
+    state.nav_lr_held_since = Some(now);
+    state.nav_lr_last_adjusted_at = Some(now);
+}
+
+fn on_lr_release(state: &mut State, delta: isize) {
+    if state.nav_lr_held_direction == Some(delta) {
+        state.nav_lr_held_direction = None;
+        state.nav_lr_held_since = None;
+        state.nav_lr_last_adjusted_at = None;
+    }
+}
+
 fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
     if !matches!(state.submenu_transition, SubmenuTransition::None) {
         return;
@@ -901,6 +970,36 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
     if row_index >= rows_len {
         // Exit row – no choices to change.
         return;
+    }
+
+    if let Some(row) = rows.get(row_index) {
+        if matches!(kind, SubmenuKind::GraphicsSound) {
+            match row.label {
+                "Global Offset (ms)" => {
+                    if adjust_ms_value(
+                        &mut state.global_offset_ms,
+                        delta,
+                        GLOBAL_OFFSET_MIN_MS,
+                        GLOBAL_OFFSET_MAX_MS,
+                    ) {
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                    }
+                    return;
+                }
+                "Visual Delay (ms)" => {
+                    if adjust_ms_value(
+                        &mut state.visual_delay_ms,
+                        delta,
+                        VISUAL_DELAY_MIN_MS,
+                        VISUAL_DELAY_MAX_MS,
+                    ) {
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                    }
+                    return;
+                }
+                _ => {}
+            }
+        }
     }
 
     let choice_indices = submenu_choice_indices_mut(state, kind);
@@ -1008,11 +1107,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             if ev.pressed {
                 apply_submenu_choice_delta(state, -1);
+                on_lr_press(state, -1);
+            } else {
+                on_lr_release(state, -1);
             }
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             if ev.pressed {
                 apply_submenu_choice_delta(state, 1);
+                on_lr_press(state, 1);
+            } else {
+                on_lr_release(state, 1);
             }
         }
         VirtualAction::p1_start if ev.pressed => {
@@ -1425,8 +1530,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                                 .copied()
                                 .unwrap_or(0)
                                 .min(choices.len().saturating_sub(1));
+                            let choice_text = if rows[row_idx].label == "Global Offset (ms)" {
+                                format_ms(state.global_offset_ms)
+                            } else if rows[row_idx].label == "Visual Delay (ms)" {
+                                format_ms(state.visual_delay_ms)
+                            } else {
+                                choices[sel_idx].to_string()
+                            };
                             let mut w =
-                                font::measure_line_width_logical(metrics_font, choices[sel_idx], all_fonts)
+                                font::measure_line_width_logical(metrics_font, &choice_text, all_fonts)
                                     as f32;
                             if !w.is_finite() || w <= 0.0 {
                                 w = 1.0;
@@ -1501,11 +1613,29 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                     let choices = row.choices;
                     if !choices.is_empty() {
                         let value_zoom = 0.835_f32;
-                        let mut widths: Vec<f32> = Vec::with_capacity(choices.len());
+                        let mut choice_texts: Vec<Cow<'_, str>> =
+                            choices.iter().map(|c| Cow::Borrowed(*c)).collect();
+                        if row.label == "Global Offset (ms)" {
+                            let formatted = Cow::Owned(format_ms(state.global_offset_ms));
+                            if choice_texts.is_empty() {
+                                choice_texts.push(formatted);
+                            } else {
+                                choice_texts[0] = formatted;
+                            }
+                        } else if row.label == "Visual Delay (ms)" {
+                            let formatted = Cow::Owned(format_ms(state.visual_delay_ms));
+                            if choice_texts.is_empty() {
+                                choice_texts.push(formatted);
+                            } else {
+                                choice_texts[0] = formatted;
+                            }
+                        }
+
+                        let mut widths: Vec<f32> = Vec::with_capacity(choice_texts.len());
                         asset_manager.with_fonts(|all_fonts| {
                             asset_manager.with_font("miso", |metrics_font| {
-                                for text in choices {
-                                    let mut w = font::measure_line_width_logical(metrics_font, text, all_fonts) as f32;
+                                for text in &choice_texts {
+                                    let mut w = font::measure_line_width_logical(metrics_font, text.as_ref(), all_fonts) as f32;
                                     if !w.is_finite() || w <= 0.0 {
                                         w = 1.0;
                                     }
@@ -1518,11 +1648,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                             .get(row_idx)
                             .copied()
                             .unwrap_or(0)
-                            .min(choices.len().saturating_sub(1));
+                            .min(choice_texts.len().saturating_sub(1));
                         let mut selected_left_x: Option<f32> = None;
 
                         let choice_inner_left = list_x + label_bg_w + SUB_INLINE_ITEMS_LEFT_PAD * s;
-                        let mut x_positions: Vec<f32> = Vec::with_capacity(choices.len());
+                        let mut x_positions: Vec<f32> = Vec::with_capacity(choice_texts.len());
                         if inline_row {
                             let mut x = choice_inner_left;
                             for w in &widths {
@@ -1532,7 +1662,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                         }
 
                         if inline_row {
-                            for (idx, choice) in choices.iter().enumerate() {
+                            for (idx, choice) in choice_texts.iter().enumerate() {
                                 let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
                                 let is_choice_selected = idx == selected_choice;
                                 if is_choice_selected {
@@ -1546,14 +1676,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                                     zoom(value_zoom):
                                     diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                                     font("miso"):
-                                    settext(*choice):
+                                    settext(choice.as_ref()):
                                     horizalign(left)
                                 ));
                             }
                         } else {
                             let choice_color = if is_active { col_white } else { sl_gray };
                             let choice_center_x = calc_row_center_x(row_idx);
-                            let choice_text = choices[selected_choice];
+                            let choice_text = choice_texts
+                                .get(selected_choice)
+                                .map(|c| c.as_ref())
+                                .unwrap_or("??");
                             let draw_w = widths.get(selected_choice).copied().unwrap_or(40.0);
                             selected_left_x = Some(choice_center_x - draw_w * 0.5);
                             ui_actors.push(act!(text:
