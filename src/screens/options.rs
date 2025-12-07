@@ -105,7 +105,6 @@ pub const ITEMS: &[Item] = &[
             "Language",
             "Announcer",
             "Default NoteSkin",
-            "Editor Noteskin",
         ],
     },
     Item {
@@ -323,11 +322,6 @@ pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
         choices: &["cel", "metal", "enchantment-v2", "devcel-2024-v3"],
         inline: true,
     },
-    SubRow {
-        label: "Editor NoteSkin",
-        choices: &["cel", "metal", "enchantment-v2", "devcel-2024-v3"],
-        inline: true,
-    },
 ];
 
 pub const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
@@ -350,10 +344,6 @@ pub const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: "Default NoteSkin",
         help: &["Choose the default noteskin used in gameplay."],
-    },
-    Item {
-        name: "Editor NoteSkin",
-        help: &["Choose the noteskin used in the step editor."],
     },
     Item {
         name: "Exit",
@@ -393,11 +383,6 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        label: "Display Color Depth",
-        choices: &["16bit", "32bit"],
-        inline: true,
-    },
-    SubRow {
         label: "High Resolution Textures",
         choices: &["Auto", "Force Off", "Force On"],
         inline: true,
@@ -405,16 +390,6 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: "Max Texture Resolution",
         choices: &["256", "512", "1024", "2048"],
-        inline: true,
-    },
-    SubRow {
-        label: "Texture Color Depth",
-        choices: &["16bit", "32bit"],
-        inline: true,
-    },
-    SubRow {
-        label: "Movie Color Depth",
-        choices: &["16bit", "32bit"],
         inline: true,
     },
     SubRow {
@@ -520,24 +495,12 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
         help: &["Choose between exclusive or borderless fullscreen."],
     },
     Item {
-        name: "Display Color Depth",
-        help: &["Select 16-bit or 32-bit color output."],
-    },
-    Item {
         name: "High Resolution Textures",
         help: &["Control use of high resolution textures."],
     },
     Item {
         name: "Max Texture Resolution",
         help: &["Cap the maximum texture resolution."],
-    },
-    Item {
-        name: "Texture Color Depth",
-        help: &["Select the color depth for textures."],
-    },
-    Item {
-        name: "Movie Color Depth",
-        help: &["Select the color depth for movie playback."],
     },
     Item {
         name: "Smooth Lines",
