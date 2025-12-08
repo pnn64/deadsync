@@ -320,6 +320,102 @@ impl App {
         }
     }
 
+    fn handle_action(&mut self, action: ScreenAction, event_loop: &ActiveEventLoop) -> Result<(), Box<dyn Error>> {
+        let commands = match action {
+            ScreenAction::Navigate(screen) => {
+                self.handle_navigation_action(screen);
+                Vec::new()
+            }
+            ScreenAction::Exit => self.handle_exit_action(),
+            ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
+            ScreenAction::RequestDensityGraph(chart_opt) => vec![Command::SetDensityGraph(chart_opt)],
+            ScreenAction::FetchOnlineGrade(hash) => vec![Command::FetchOnlineGrade(hash)],
+            ScreenAction::None => Vec::new(),
+        };
+        self.run_commands(commands, event_loop)
+    }
+
+    fn handle_navigation_action(&mut self, target: CurrentScreen) {
+        let from = self.state.screens.current_screen;
+        self.persist_gameplay_offset_if_changed(from, target);
+
+        if from == CurrentScreen::Init && target == CurrentScreen::Menu {
+            info!("Instant navigation Init→Menu (out-transition handled by Init screen)");
+            self.state.screens.current_screen = target;
+            self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
+            crate::ui::runtime::clear_all();
+            return;
+        }
+
+        if !matches!(self.state.shell.transition, TransitionState::Idle) {
+            return;
+        }
+
+        self.state.shell.pending_exit = false;
+        if self.is_actor_only_fade(from, target) {
+            self.start_actor_fade(from, target);
+        } else {
+            self.start_global_fade(target);
+        }
+    }
+
+    fn persist_gameplay_offset_if_changed(&self, from: CurrentScreen, to: CurrentScreen) {
+        if from != CurrentScreen::Gameplay || to == CurrentScreen::Gameplay {
+            return;
+        }
+        if let Some(gs) = &self.state.screens.gameplay_state
+            && (gs.global_offset_seconds - gs.initial_global_offset_seconds).abs() > f32::EPSILON
+        {
+            crate::config::update_global_offset(gs.global_offset_seconds);
+        }
+    }
+
+    fn is_actor_only_fade(&self, from: CurrentScreen, to: CurrentScreen) -> bool {
+        (from == CurrentScreen::Menu && (to == CurrentScreen::Options || to == CurrentScreen::SelectColor))
+            || ((from == CurrentScreen::Options || from == CurrentScreen::SelectColor) && to == CurrentScreen::Menu)
+            || (from == CurrentScreen::Options && to == CurrentScreen::Mappings)
+            || (from == CurrentScreen::Mappings && to == CurrentScreen::Options)
+    }
+
+    fn start_actor_fade(&mut self, from: CurrentScreen, target: CurrentScreen) {
+        info!("Starting actor-only fade out to screen: {:?}", target);
+        let duration = if from == CurrentScreen::Menu && (target == CurrentScreen::SelectColor || target == CurrentScreen::Options) {
+            MENU_TO_SELECT_COLOR_OUT_DURATION
+        } else {
+            FADE_OUT_DURATION
+        };
+        self.state.shell.transition = TransitionState::ActorsFadeOut { elapsed: 0.0, duration, target };
+    }
+
+    fn start_global_fade(&mut self, target: CurrentScreen) {
+        info!("Starting global fade out to screen: {:?}", target);
+        let (_, out_duration) = self.get_out_transition_for_screen(self.state.screens.current_screen);
+        self.state.shell.transition = TransitionState::FadingOut {
+            elapsed: 0.0,
+            duration: out_duration,
+            target,
+        };
+    }
+
+    fn handle_exit_action(&mut self) -> Vec<Command> {
+        if self.state.screens.current_screen == CurrentScreen::Menu
+            && matches!(self.state.shell.transition, TransitionState::Idle)
+        {
+            info!("Exit requested from Menu; playing menu out-transition before shutdown.");
+            let (_, out_duration) = self.get_out_transition_for_screen(self.state.screens.current_screen);
+            self.state.shell.transition = TransitionState::FadingOut {
+                elapsed: 0.0,
+                duration: out_duration,
+                target: self.state.screens.current_screen,
+            };
+            self.state.shell.pending_exit = true;
+            Vec::new()
+        } else {
+            info!("Exit action received. Shutting down.");
+            vec![Command::ExitNow]
+        }
+    }
+
     fn route_input_event(&mut self, event_loop: &ActiveEventLoop, ev: InputEvent) -> Result<(), Box<dyn Error>> {
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => crate::screens::menu::handle_input(&mut self.state.screens.menu_state, &ev),
@@ -344,192 +440,121 @@ impl App {
         self.handle_action(action, event_loop)
     }
 
-    fn handle_action(&mut self, action: ScreenAction, event_loop: &ActiveEventLoop) -> Result<(), Box<dyn Error>> {
-        let mut commands: Vec<Command> = Vec::new();
-
-        match action {
-            ScreenAction::Navigate(screen) => {
-                let from = self.state.screens.current_screen;
-                let to = screen;
-
-                // Persist any pending global offset changes when leaving Gameplay.
-                if from == CurrentScreen::Gameplay && to != CurrentScreen::Gameplay
-                    && let Some(gs) = &self.state.screens.gameplay_state
-                        && (gs.global_offset_seconds - gs.initial_global_offset_seconds).abs() > f32::EPSILON {
-                            crate::config::update_global_offset(gs.global_offset_seconds);
-                        }
-
-                if from == CurrentScreen::Init && to == CurrentScreen::Menu {
-                    info!("Instant navigation Init→Menu (out-transition handled by Init screen)");
-                    self.state.screens.current_screen = screen;
-                    self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
-                    crate::ui::runtime::clear_all();
-                    return Ok(());
-                }
-
-                if matches!(self.state.shell.transition, TransitionState::Idle) {
-                    // Any new navigation cancels a pending exit.
-                    self.state.shell.pending_exit = false;
-                    let is_actor_only_fade =
-                        (from == CurrentScreen::Menu &&
-                            (to == CurrentScreen::Options || to == CurrentScreen::SelectColor)) ||
-                        ((from == CurrentScreen::Options || from == CurrentScreen::SelectColor) && to == CurrentScreen::Menu) ||
-                        // Options ↔ Mappings should keep the heart background and only fade UI.
-                        (from == CurrentScreen::Options && to == CurrentScreen::Mappings) ||
-                        (from == CurrentScreen::Mappings && to == CurrentScreen::Options);
-
-                    if is_actor_only_fade {
-                        info!("Starting actor-only fade out to screen: {:?}", screen);
-                        let duration = if from == CurrentScreen::Menu && (to == CurrentScreen::SelectColor || to == CurrentScreen::Options) {
-                            MENU_TO_SELECT_COLOR_OUT_DURATION
-                        } else {
-                            FADE_OUT_DURATION
-                        };
-                        self.state.shell.transition = TransitionState::ActorsFadeOut { elapsed: 0.0, duration, target: screen };
-                    } else {
-                        info!("Starting global fade out to screen: {:?}", screen);                        
-                        let (_, out_duration) = self.get_out_transition_for_screen(self.state.screens.current_screen);
-                        self.state.shell.transition = TransitionState::FadingOut {
-                            elapsed: 0.0,
-                            duration: out_duration,
-                            target: screen,
-                        };
-                    }
-                }
-            }
-            ScreenAction::Exit => {
-                if self.state.screens.current_screen == CurrentScreen::Menu && matches!(self.state.shell.transition, TransitionState::Idle) {
-                    info!("Exit requested from Menu; playing menu out-transition before shutdown.");
-                    let (_, out_duration) = self.get_out_transition_for_screen(self.state.screens.current_screen);
-                    self.state.shell.transition = TransitionState::FadingOut {
-                        elapsed: 0.0,
-                        duration: out_duration,
-                        target: self.state.screens.current_screen,
-                    };
-                    self.state.shell.pending_exit = true;
-                } else {
-                    info!("Exit action received. Shutting down.");
-                    commands.push(Command::ExitNow);
-                }
-            }
-            ScreenAction::RequestBanner(path_opt) => {
-                commands.push(Command::SetBanner(path_opt));
-            }
-            ScreenAction::RequestDensityGraph(chart_opt) => {
-                commands.push(Command::SetDensityGraph(chart_opt));
-            }
-            ScreenAction::FetchOnlineGrade(hash) => {
-                commands.push(Command::FetchOnlineGrade(hash));
-            }
-            ScreenAction::None => {}
-        }
-
-        self.run_commands(commands, event_loop)
-    }
-
     fn run_commands(&mut self, commands: Vec<Command>, event_loop: &ActiveEventLoop) -> Result<(), Box<dyn Error>> {
         for command in commands {
-            match command {
-                Command::ExitNow => {
-                    event_loop.exit();
-                }
-                Command::SetBanner(path_opt) => {
-                    if let Some(backend) = self.backend.as_mut() {
-                        if let Some(path) = path_opt {
-                            let key = self.asset_manager.set_dynamic_banner(backend, Some(path));
-                            self.state.screens.select_music_state.current_banner_key = key;
-                        } else {
-                            self.asset_manager.destroy_dynamic_assets(backend);
-                            let color_index = self.state.screens.select_music_state.active_color_index;
-                            let banner_num = color_index.rem_euclid(12) + 1;
-                            let key = format!("banner{}.png", banner_num);
-                            self.state.screens.select_music_state.current_banner_key = key;
-                        }
-                    }
-                }
-                Command::SetDensityGraph(chart_opt) => {
-                    if let Some(backend) = self.backend.as_mut() {
-                        let graph_request = if let Some(chart) = chart_opt {
-                            let graph_width = 1024;
-                            let graph_height = 256;
-                            let bottom_color = [0, 184, 204];
-                            let top_color    = [130, 0, 161];
-                            let bg_color     = [30, 40, 47];
+            self.execute_command(command, event_loop)?;
+        }
+        Ok(())
+    }
 
-                            let graph_data = rssp::graph::generate_density_graph_rgba_data(
-                                &chart.measure_nps_vec,
-                                chart.max_nps,
-                                graph_width,
-                                graph_height,
-                                bottom_color,
-                                top_color,
-                                bg_color,
-                            )
-                            .ok();
-
-                            graph_data.map(|data| (chart.short_hash, data))
-                        } else {
-                            None
-                        };
-
-                        let key = self.asset_manager.set_density_graph(backend, graph_request);
-                        self.state.screens.select_music_state.current_graph_key = key;
-                    }
-                }
-                Command::FetchOnlineGrade(hash) => {
-                    info!("Fetching online grade for chart hash: {}", hash);
-                    let profile = profile::get();
-                    std::thread::spawn(move || {
-                        if let Err(e) = scores::fetch_and_store_grade(profile, hash) {
-                            warn!("Failed to fetch online grade: {}", e);
-                        }
-                    });
-                }
-                Command::PlayMusic { path, looped, volume } => {
-                    crate::core::audio::play_music(
-                        path,
-                        crate::core::audio::Cut::default(),
-                        looped,
-                        volume,
-                    );
-                }
-                Command::StopMusic => {
-                    crate::core::audio::stop_music();
-                }
-                Command::SetEvaluationGraphData(graph_request) => {
-                    if let Some(backend) = self.backend.as_mut() {
-                        let key = if let Some((key, data)) = graph_request {
-                            self.asset_manager
-                                .set_density_graph(backend, Some((key, data)))
-                        } else {
-                            self.asset_manager.set_density_graph(backend, None)
-                        };
-                        self.state.screens.evaluation_state.density_graph_texture_key = key;
-                    }
-                }
-                Command::SetDynamicBackground(path_opt) => {
-                    if let Some(backend) = self.backend.as_mut() {
-                        let key = self.asset_manager.set_dynamic_background(backend, path_opt);
-                        if let Some(gs) = &mut self.state.screens.gameplay_state {
-                            gs.background_texture_key = key;
-                        }
-                    }
-                }
-                Command::UpdateScrollSpeed(setting) => {
-                    profile::update_scroll_speed(setting);
-                }
-                Command::UpdateSessionMusicRate(rate) => {
-                    crate::game::profile::set_session_music_rate(rate);
-                }
-                Command::UpdatePreferredDifficulty(idx) => {
-                    self.state.session.preferred_difficulty_index = idx;
-                }
-                Command::UpdateLastPlayed { music_path, difficulty_index } => {
-                    profile::update_last_played(music_path.as_deref(), difficulty_index);
-                }
+    fn execute_command(&mut self, command: Command, event_loop: &ActiveEventLoop) -> Result<(), Box<dyn Error>> {
+        match command {
+            Command::ExitNow => {
+                event_loop.exit();
+            }
+            Command::SetBanner(path_opt) => self.apply_banner(path_opt),
+            Command::SetDensityGraph(chart_opt) => self.apply_density_graph(chart_opt),
+            Command::FetchOnlineGrade(hash) => self.spawn_grade_fetch(hash),
+            Command::PlayMusic { path, looped, volume } => self.play_music_command(path, looped, volume),
+            Command::StopMusic => self.stop_music_command(),
+            Command::SetEvaluationGraphData(graph_request) => self.apply_evaluation_graph(graph_request),
+            Command::SetDynamicBackground(path_opt) => self.apply_dynamic_background(path_opt),
+            Command::UpdateScrollSpeed(setting) => profile::update_scroll_speed(setting),
+            Command::UpdateSessionMusicRate(rate) => crate::game::profile::set_session_music_rate(rate),
+            Command::UpdatePreferredDifficulty(idx) => {
+                self.state.session.preferred_difficulty_index = idx;
+            }
+            Command::UpdateLastPlayed { music_path, difficulty_index } => {
+                profile::update_last_played(music_path.as_deref(), difficulty_index);
             }
         }
         Ok(())
+    }
+
+    fn apply_banner(&mut self, path_opt: Option<PathBuf>) {
+        if let Some(backend) = self.backend.as_mut() {
+            if let Some(path) = path_opt {
+                let key = self.asset_manager.set_dynamic_banner(backend, Some(path));
+                self.state.screens.select_music_state.current_banner_key = key;
+            } else {
+                self.asset_manager.destroy_dynamic_assets(backend);
+                let color_index = self.state.screens.select_music_state.active_color_index;
+                let banner_num = color_index.rem_euclid(12) + 1;
+                let key = format!("banner{}.png", banner_num);
+                self.state.screens.select_music_state.current_banner_key = key;
+            }
+        }
+    }
+
+    fn apply_density_graph(&mut self, chart_opt: Option<ChartData>) {
+        if let Some(backend) = self.backend.as_mut() {
+            let graph_request = chart_opt.and_then(|chart| {
+                let graph_width = 1024;
+                let graph_height = 256;
+                let bottom_color = [0, 184, 204];
+                let top_color    = [130, 0, 161];
+                let bg_color     = [30, 40, 47];
+
+                rssp::graph::generate_density_graph_rgba_data(
+                    &chart.measure_nps_vec,
+                    chart.max_nps,
+                    graph_width,
+                    graph_height,
+                    bottom_color,
+                    top_color,
+                    bg_color,
+                )
+                .ok()
+                .map(|data| (chart.short_hash, data))
+            });
+
+            let key = self.asset_manager.set_density_graph(backend, graph_request);
+            self.state.screens.select_music_state.current_graph_key = key;
+        }
+    }
+
+    fn spawn_grade_fetch(&self, hash: String) {
+        info!("Fetching online grade for chart hash: {}", hash);
+        let profile = profile::get();
+        std::thread::spawn(move || {
+            if let Err(e) = scores::fetch_and_store_grade(profile, hash) {
+                warn!("Failed to fetch online grade: {}", e);
+            }
+        });
+    }
+
+    fn play_music_command(&self, path: PathBuf, looped: bool, volume: f32) {
+        crate::core::audio::play_music(
+            path,
+            crate::core::audio::Cut::default(),
+            looped,
+            volume,
+        );
+    }
+
+    fn stop_music_command(&self) {
+        crate::core::audio::stop_music();
+    }
+
+    fn apply_evaluation_graph(&mut self, graph_request: Option<(String, rssp::graph::GraphImageData)>) {
+        if let Some(backend) = self.backend.as_mut() {
+            let key = if let Some((key, data)) = graph_request {
+                self.asset_manager
+                    .set_density_graph(backend, Some((key, data)))
+            } else {
+                self.asset_manager.set_density_graph(backend, None)
+            };
+            self.state.screens.evaluation_state.density_graph_texture_key = key;
+        }
+    }
+
+    fn apply_dynamic_background(&mut self, path_opt: Option<PathBuf>) {
+        if let Some(backend) = self.backend.as_mut() {
+            let key = self.asset_manager.set_dynamic_background(backend, path_opt);
+            if let Some(gs) = &mut self.state.screens.gameplay_state {
+                gs.background_texture_key = key;
+            }
+        }
     }
 
     fn build_screen<'a>(&self, actors: &'a [Actor], clear_color: [f32; 4], total_elapsed: f32) -> RenderList<'a> {
