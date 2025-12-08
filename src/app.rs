@@ -302,6 +302,35 @@ pub struct App {
 
 
 impl App {
+    fn default_window_position(
+        &self,
+        width: u32,
+        height: u32,
+        event_loop: &ActiveEventLoop,
+    ) -> Option<PhysicalPosition<i32>> {
+        let monitor = event_loop.primary_monitor()?;
+        let mon_pos = monitor.position();
+        let mon_size = monitor.size();
+        let mon_w = mon_size.width as i32;
+        let mon_h = mon_size.height as i32;
+        let win_w = width as i32;
+        let win_h = height as i32;
+        if mon_w <= 0 || mon_h <= 0 || win_w <= 0 || win_h <= 0 {
+            return None;
+        }
+
+        let center_x = mon_pos.x + (mon_w.saturating_sub(win_w)) / 2;
+        let center_y = mon_pos.y + (mon_h.saturating_sub(win_h)) / 2;
+        let min_x = mon_pos.x;
+        let min_y = mon_pos.y;
+        let max_x = mon_pos.x + mon_w.saturating_sub(win_w).max(0);
+        let max_y = mon_pos.y + mon_h.saturating_sub(win_h).max(0);
+
+        let x = center_x.clamp(min_x, max_x);
+        let y = center_y.clamp(min_y, max_y);
+        Some(PhysicalPosition::new(x, y))
+    }
+
     fn new(
         backend_type: BackendType,
         show_overlay: bool,
@@ -726,6 +755,8 @@ impl App {
         } else {
             window_attributes = window_attributes.with_inner_size(PhysicalSize::new(window_width, window_height));
             if let Some(pos) = self.state.shell.pending_window_position.take() {
+                window_attributes = window_attributes.with_position(pos);
+            } else if let Some(pos) = self.default_window_position(window_width, window_height, event_loop) {
                 window_attributes = window_attributes.with_position(pos);
             }
         }
