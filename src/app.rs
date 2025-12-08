@@ -12,7 +12,7 @@ use crate::game::parsing::simfile as song_loading;
 use crate::game::chart::ChartData;
 use winit::{
     application::ApplicationHandler,
-    dpi::PhysicalSize,
+    dpi::{PhysicalPosition, PhysicalSize},
     event::WindowEvent,
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     window::Window,
@@ -81,6 +81,7 @@ pub struct ShellState {
     transition: TransitionState,
     display_width: u32,
     display_height: u32,
+    pending_window_position: Option<PhysicalPosition<i32>>,
     gamepad_overlay_state: Option<(String, Instant)>,
     pending_exit: bool,
     shift_held: bool,
@@ -134,6 +135,7 @@ impl ShellState {
             transition: TransitionState::Idle,
             display_width: config.display_width,
             display_height: config.display_height,
+            pending_window_position: None,
             gamepad_overlay_state: None,
             pending_exit: false,
             shift_held: false,
@@ -723,6 +725,9 @@ impl App {
             window_attributes = window_attributes.with_fullscreen(fullscreen);
         } else {
             window_attributes = window_attributes.with_inner_size(PhysicalSize::new(window_width, window_height));
+            if let Some(pos) = self.state.shell.pending_window_position.take() {
+                window_attributes = window_attributes.with_position(pos);
+            }
         }
 
         let window = Arc::new(event_loop.create_window(window_attributes)?);
@@ -759,19 +764,27 @@ impl App {
         }
 
         let previous_backend = self.backend_type;
+        let mut old_window_pos: Option<PhysicalPosition<i32>> = None;
         if let Some(window) = &self.window {
             let sz = window.inner_size();
             self.state.shell.display_width = sz.width;
             self.state.shell.display_height = sz.height;
+            if !self.state.shell.fullscreen_enabled {
+                if let Ok(pos) = window.outer_position() {
+                    old_window_pos = Some(pos);
+                }
+            }
+            window.set_visible(false);
         }
 
-        if let Some(backend) = self.backend.as_mut() {
-            self.asset_manager.destroy_dynamic_assets(backend);
+        if let Some(mut backend) = self.backend.take() {
+            self.asset_manager.destroy_dynamic_assets(&mut backend);
             backend.dispose_textures(&mut self.asset_manager.textures);
             backend.cleanup();
         }
         self.backend = None;
         self.window = None;
+        self.state.shell.pending_window_position = old_window_pos;
 
         self.backend_type = target;
         self.state.shell.frame_count = 0;
@@ -803,6 +816,7 @@ impl App {
                     &mut self.state.screens.options_state,
                     previous_backend,
                 );
+                self.state.shell.pending_window_position = None;
                 crate::config::update_video_renderer(previous_backend);
                 Err(e)
             }
