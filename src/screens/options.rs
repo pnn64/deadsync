@@ -3,6 +3,7 @@ use crate::assets::AssetManager;
 use crate::core::space::*;
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::core::audio;
+use crate::config;
 use crate::screens::{Screen, ScreenAction};
 use crate::core::input::{VirtualAction, InputEvent};
 use std::time::{Duration, Instant};
@@ -669,7 +670,11 @@ pub fn init() -> State {
         sub_prev_selected: 0,
         sub_choice_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_choice_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
-        global_offset_ms: 0,
+        global_offset_ms: {
+            let cfg = config::get();
+            let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
+            ms.clamp(GLOBAL_OFFSET_MIN_MS, GLOBAL_OFFSET_MAX_MS)
+        },
         visual_delay_ms: 0,
         cursor_anim_row: None,
         cursor_anim_from_choice: 0,
@@ -982,6 +987,7 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
                         GLOBAL_OFFSET_MIN_MS,
                         GLOBAL_OFFSET_MAX_MS,
                     ) {
+                        config::update_global_offset(state.global_offset_ms as f32 / 1000.0);
                         audio::play_sfx("assets/sounds/change_value.ogg");
                     }
                     return;
