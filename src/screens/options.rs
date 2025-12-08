@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
+use crate::core::gfx::BackendType;
 use crate::core::space::*;
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::core::audio;
@@ -376,10 +377,48 @@ pub const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
+#[cfg(target_os = "windows")]
+const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
+    (BackendType::Vulkan, "Vulkan"),
+    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
+    (BackendType::OpenGL, "OpenGL"),
+    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
+    (BackendType::DirectX, "DirectX (wgpu)"),
+    (BackendType::Software, "Software"),
+];
+#[cfg(not(target_os = "windows"))]
+const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
+    (BackendType::Vulkan, "Vulkan"),
+    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
+    (BackendType::OpenGL, "OpenGL"),
+    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
+    (BackendType::Software, "Software"),
+];
+
+#[cfg(target_os = "windows")]
+const VIDEO_RENDERER_LABELS: &[&str] = &[
+    VIDEO_RENDERER_OPTIONS[0].1,
+    VIDEO_RENDERER_OPTIONS[1].1,
+    VIDEO_RENDERER_OPTIONS[2].1,
+    VIDEO_RENDERER_OPTIONS[3].1,
+    VIDEO_RENDERER_OPTIONS[4].1,
+    VIDEO_RENDERER_OPTIONS[5].1,
+];
+#[cfg(not(target_os = "windows"))]
+const VIDEO_RENDERER_LABELS: &[&str] = &[
+    VIDEO_RENDERER_OPTIONS[0].1,
+    VIDEO_RENDERER_OPTIONS[1].1,
+    VIDEO_RENDERER_OPTIONS[2].1,
+    VIDEO_RENDERER_OPTIONS[3].1,
+    VIDEO_RENDERER_OPTIONS[4].1,
+];
+
+const VIDEO_RENDERER_ROW_INDEX: usize = 0;
+
 pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: "Video Renderer",
-        choices: &["opengl", "d3d"],
+        choices: VIDEO_RENDERER_LABELS,
         inline: true,
     },
     SubRow {
@@ -614,6 +653,29 @@ fn submenu_title(kind: SubmenuKind) -> &'static str {
     }
 }
 
+fn backend_to_renderer_choice_index(backend: BackendType) -> usize {
+    VIDEO_RENDERER_OPTIONS
+        .iter()
+        .position(|(b, _)| *b == backend)
+        .unwrap_or(0)
+}
+
+fn renderer_choice_index_to_backend(idx: usize) -> BackendType {
+    VIDEO_RENDERER_OPTIONS
+        .get(idx)
+        .map(|(backend, _)| *backend)
+        .unwrap_or_else(|| VIDEO_RENDERER_OPTIONS[0].0)
+}
+
+fn selected_video_renderer(state: &State) -> BackendType {
+    let choice_idx = state
+        .sub_choice_indices_graphics
+        .get(VIDEO_RENDERER_ROW_INDEX)
+        .copied()
+        .unwrap_or(0);
+    renderer_choice_index_to_backend(choice_idx)
+}
+
 pub struct State {
     pub selected: usize,
     prev_selected: usize,
@@ -637,6 +699,7 @@ pub struct State {
     sub_choice_indices_graphics: Vec<usize>,
     global_offset_ms: i32,
     visual_delay_ms: i32,
+    video_renderer_at_load: BackendType,
     // Inline option cursor tween (left/right between items)
     cursor_anim_row: Option<usize>,
     cursor_anim_from_choice: usize,
@@ -649,7 +712,8 @@ pub struct State {
 }
 
 pub fn init() -> State {
-    State {
+    let cfg = config::get();
+    let mut state = State {
         selected: 0,
         prev_selected: 0,
         active_color_index: color::DEFAULT_COLOR_INDEX, // <-- ADDED
@@ -671,11 +735,11 @@ pub fn init() -> State {
         sub_choice_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_choice_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         global_offset_ms: {
-            let cfg = config::get();
             let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
             ms.clamp(GLOBAL_OFFSET_MIN_MS, GLOBAL_OFFSET_MAX_MS)
         },
         visual_delay_ms: 0,
+        video_renderer_at_load: cfg.video_renderer,
         cursor_anim_row: None,
         cursor_anim_from_choice: 0,
         cursor_anim_to_choice: 0,
@@ -683,7 +747,10 @@ pub fn init() -> State {
         cursor_row_anim_from_y: 0.0,
         cursor_row_anim_t: 1.0,
         cursor_row_anim_from_row: None,
-    }
+    };
+
+    sync_video_renderer(&mut state, cfg.video_renderer);
+    state
 }
 
 fn submenu_choice_indices<'a>(state: &'a State, kind: SubmenuKind) -> &'a [usize] {
@@ -697,6 +764,16 @@ fn submenu_choice_indices_mut<'a>(state: &'a mut State, kind: SubmenuKind) -> &'
     match kind {
         SubmenuKind::System => &mut state.sub_choice_indices_system,
         SubmenuKind::GraphicsSound => &mut state.sub_choice_indices_graphics,
+    }
+}
+
+pub fn sync_video_renderer(state: &mut State, renderer: BackendType) {
+    state.video_renderer_at_load = renderer;
+    if let Some(slot) = state
+        .sub_choice_indices_graphics
+        .get_mut(VIDEO_RENDERER_ROW_INDEX)
+    {
+        *slot = backend_to_renderer_choice_index(renderer);
     }
 }
 
@@ -727,7 +804,8 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
-pub fn update(state: &mut State, dt: f32) {
+pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
+    let mut pending_action: Option<ScreenAction> = None;
     // ------------------------- local submenu fade ------------------------- //
     match state.submenu_transition {
         SubmenuTransition::None => {
@@ -778,6 +856,13 @@ pub fn update(state: &mut State, dt: f32) {
             }
         }
         SubmenuTransition::FadeOutToMain => {
+            let leaving_graphics =
+                matches!(state.view, OptionsView::Submenu(SubmenuKind::GraphicsSound));
+            let desired_renderer = if leaving_graphics {
+                Some(selected_video_renderer(state))
+            } else {
+                None
+            };
             let step = if SUBMENU_FADE_DURATION > 0.0 {
                 dt / SUBMENU_FADE_DURATION
             } else {
@@ -802,6 +887,12 @@ pub fn update(state: &mut State, dt: f32) {
                 state.submenu_transition = SubmenuTransition::FadeInMain;
                 state.submenu_fade_t = 0.0;
                 state.content_alpha = 0.0;
+
+                if let Some(renderer) = desired_renderer {
+                    if renderer != state.video_renderer_at_load {
+                        pending_action = Some(ScreenAction::ChangeRenderer(renderer));
+                    }
+                }
             }
         }
         SubmenuTransition::FadeInMain => {
@@ -822,7 +913,7 @@ pub fn update(state: &mut State, dt: f32) {
 
     // While fading, freeze hold-to-scroll to avoid odd jumps.
     if !matches!(state.submenu_transition, SubmenuTransition::None) {
-        return;
+        return pending_action;
     }
 
     if let (Some(direction), Some(held_since), Some(last_scrolled_at)) =
@@ -926,6 +1017,8 @@ pub fn update(state: &mut State, dt: f32) {
             state.cursor_row_anim_from_row = None;
         }
     }
+
+    pending_action
 }
 
 // Small helpers to let the app dispatcher manage hold-to-scroll without exposing fields

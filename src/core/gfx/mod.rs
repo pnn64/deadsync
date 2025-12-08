@@ -257,12 +257,16 @@ impl FromStr for BackendType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "vulkan" => Ok(BackendType::Vulkan),
-            "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" => Ok(BackendType::VulkanWgpu),
+            "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" | "vulkan (wgpu)" => {
+                Ok(BackendType::VulkanWgpu)
+            }
             "opengl" => Ok(BackendType::OpenGL),
-             "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" => Ok(BackendType::OpenGLWgpu),
+             "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => {
+                Ok(BackendType::OpenGLWgpu)
+            }
             "software" | "cpu" => Ok(BackendType::Software),
             #[cfg(target_os = "windows")]
-            "directx" | "dx12" => Ok(BackendType::DirectX),
+            "directx" | "dx12" | "directx (wgpu)" => Ok(BackendType::DirectX),
             _ => Err(format!("'{}' is not a valid video renderer", s)),
         }
     }

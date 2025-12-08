@@ -832,6 +832,17 @@ pub fn get() -> Config {
     *CONFIG.lock().unwrap()
 }
 
+pub fn update_video_renderer(renderer: BackendType) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.video_renderer == renderer {
+            return;
+        }
+        cfg.video_renderer = renderer;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_simply_love_color(index: i32) {
     {
         let mut cfg = CONFIG.lock().unwrap();

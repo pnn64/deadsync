@@ -221,8 +221,7 @@ impl ScreensState {
                 Some(init::update(&mut self.init_state, delta_time))
             }
             CurrentScreen::Options => {
-                options::update(&mut self.options_state, delta_time);
-                None
+                options::update(&mut self.options_state, delta_time)
             }
             CurrentScreen::Mappings => {
                 mappings::update(&mut self.mappings_state, delta_time);
@@ -330,6 +329,10 @@ impl App {
             ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
             ScreenAction::RequestDensityGraph(chart_opt) => vec![Command::SetDensityGraph(chart_opt)],
             ScreenAction::FetchOnlineGrade(hash) => vec![Command::FetchOnlineGrade(hash)],
+            ScreenAction::ChangeRenderer(new_backend) => {
+                self.switch_renderer(new_backend, event_loop)?;
+                Vec::new()
+            }
             ScreenAction::None => Vec::new(),
         };
         self.run_commands(commands, event_loop)
@@ -744,6 +747,76 @@ impl App {
         self.backend = Some(backend);
         info!("Starting event loop...");
         Ok(())
+    }
+
+    fn switch_renderer(
+        &mut self,
+        target: BackendType,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<(), Box<dyn Error>> {
+        if target == self.backend_type {
+            return Ok(());
+        }
+
+        let previous_backend = self.backend_type;
+        if let Some(window) = &self.window {
+            let sz = window.inner_size();
+            self.state.shell.display_width = sz.width;
+            self.state.shell.display_height = sz.height;
+        }
+
+        if let Some(backend) = self.backend.as_mut() {
+            self.asset_manager.destroy_dynamic_assets(backend);
+            backend.dispose_textures(&mut self.asset_manager.textures);
+            backend.cleanup();
+        }
+        self.backend = None;
+        self.window = None;
+
+        self.backend_type = target;
+        self.state.shell.frame_count = 0;
+        self.state.shell.last_title_update = Instant::now();
+        self.state.shell.last_frame_time = Instant::now();
+
+        match self.init_graphics(event_loop) {
+            Ok(_) => {
+                crate::config::update_video_renderer(target);
+                options::sync_video_renderer(&mut self.state.screens.options_state, target);
+                crate::ui::runtime::clear_all();
+                self.reset_dynamic_assets_after_renderer_switch();
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+                info!("Switched renderer to {:?}", target);
+                Ok(())
+            }
+            Err(e) => {
+                error!("Failed to switch renderer to {:?}: {}", target, e);
+                self.backend_type = previous_backend;
+                if let Err(restoration_err) = self.init_graphics(event_loop) {
+                    error!(
+                        "Failed to restore previous renderer {:?}: {}",
+                        previous_backend, restoration_err
+                    );
+                }
+                options::sync_video_renderer(
+                    &mut self.state.screens.options_state,
+                    previous_backend,
+                );
+                crate::config::update_video_renderer(previous_backend);
+                Err(e)
+            }
+        }
+    }
+
+    fn reset_dynamic_assets_after_renderer_switch(&mut self) {
+        self.apply_banner(None);
+        self.apply_density_graph(None);
+        self.apply_evaluation_graph(None);
+        self.apply_dynamic_background(None);
+
+        select_music::trigger_immediate_refresh(&mut self.state.screens.select_music_state);
+        self.state.screens.select_music_state.current_graph_key = "__white".to_string();
     }
 
     /* -------------------- keyboard: map -> route -------------------- */
@@ -1291,6 +1364,10 @@ impl ApplicationHandler<UserEvent> for App {
 
                 if let Some(target) = finished_fading_out_to {
                     self.on_fade_complete(target, event_loop);
+                }
+
+                if self.window.as_ref().map(|w| w.id()) != Some(window_id) {
+                    return;
                 }
 
                 let (actors, clear_color) = self.get_current_actors();

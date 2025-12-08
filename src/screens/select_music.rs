@@ -813,6 +813,7 @@ pub fn trigger_immediate_refresh(state: &mut State) {
     state.time_since_selection_change = PREVIEW_DELAY_SECONDS;
     // Setting this to None forces a new density graph request for the selected chart
     state.last_requested_chart_hash = None;
+    state.last_requested_banner_path = None;
 }
 
 /// Reset preview state after returning from Gameplay/Evaluation so that the
