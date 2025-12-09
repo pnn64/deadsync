@@ -4,7 +4,7 @@ use crate::core::gfx::BackendType;
 use crate::core::space::*;
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::core::audio;
-use crate::config;
+use crate::config::{self, DisplayMode, FullscreenType};
 use crate::screens::{Screen, ScreenAction};
 use crate::core::input::{VirtualAction, InputEvent};
 use std::time::{Duration, Instant};
@@ -414,6 +414,8 @@ const VIDEO_RENDERER_LABELS: &[&str] = &[
 ];
 
 const VIDEO_RENDERER_ROW_INDEX: usize = 0;
+const DISPLAY_MODE_ROW_INDEX: usize = 1;
+const FULLSCREEN_TYPE_ROW_INDEX: usize = 5;
 
 pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
@@ -676,6 +678,51 @@ fn selected_video_renderer(state: &State) -> BackendType {
     renderer_choice_index_to_backend(choice_idx)
 }
 
+fn fullscreen_type_to_choice_index(fullscreen_type: FullscreenType) -> usize {
+    match fullscreen_type {
+        FullscreenType::Exclusive => 0,
+        FullscreenType::Borderless => 1,
+    }
+}
+
+fn choice_index_to_fullscreen_type(idx: usize) -> FullscreenType {
+    match idx {
+        1 => FullscreenType::Borderless,
+        _ => FullscreenType::Exclusive,
+    }
+}
+
+fn selected_fullscreen_type(state: &State) -> FullscreenType {
+    state
+        .sub_choice_indices_graphics
+        .get(FULLSCREEN_TYPE_ROW_INDEX)
+        .copied()
+        .map(choice_index_to_fullscreen_type)
+        .unwrap_or(FullscreenType::Exclusive)
+}
+
+fn display_mode_choice_index(mode: DisplayMode) -> usize {
+    match mode {
+        DisplayMode::Windowed => 0,
+        DisplayMode::Fullscreen(FullscreenType::Exclusive) => 1,
+        DisplayMode::Fullscreen(FullscreenType::Borderless) => 2,
+    }
+}
+
+fn selected_display_mode(state: &State) -> DisplayMode {
+    let display_choice = state
+        .sub_choice_indices_graphics
+        .get(DISPLAY_MODE_ROW_INDEX)
+        .copied()
+        .unwrap_or(0);
+    match display_choice {
+        0 => DisplayMode::Windowed,
+        1 => DisplayMode::Fullscreen(selected_fullscreen_type(state)),
+        2 => DisplayMode::Fullscreen(FullscreenType::Borderless),
+        _ => DisplayMode::Windowed,
+    }
+}
+
 pub struct State {
     pub selected: usize,
     prev_selected: usize,
@@ -700,6 +747,7 @@ pub struct State {
     global_offset_ms: i32,
     visual_delay_ms: i32,
     video_renderer_at_load: BackendType,
+    display_mode_at_load: DisplayMode,
     // Inline option cursor tween (left/right between items)
     cursor_anim_row: Option<usize>,
     cursor_anim_from_choice: usize,
@@ -740,6 +788,7 @@ pub fn init() -> State {
         },
         visual_delay_ms: 0,
         video_renderer_at_load: cfg.video_renderer,
+        display_mode_at_load: cfg.display_mode(),
         cursor_anim_row: None,
         cursor_anim_from_choice: 0,
         cursor_anim_to_choice: 0,
@@ -750,6 +799,7 @@ pub fn init() -> State {
     };
 
     sync_video_renderer(&mut state, cfg.video_renderer);
+    sync_display_mode(&mut state, cfg.display_mode(), cfg.fullscreen_type);
     state
 }
 
@@ -774,6 +824,30 @@ pub fn sync_video_renderer(state: &mut State, renderer: BackendType) {
         .get_mut(VIDEO_RENDERER_ROW_INDEX)
     {
         *slot = backend_to_renderer_choice_index(renderer);
+    }
+}
+
+pub fn sync_display_mode(
+    state: &mut State,
+    mode: DisplayMode,
+    fullscreen_type: FullscreenType,
+) {
+    state.display_mode_at_load = mode;
+    if let Some(slot) = state
+        .sub_choice_indices_graphics
+        .get_mut(DISPLAY_MODE_ROW_INDEX)
+    {
+        *slot = display_mode_choice_index(mode);
+    }
+    let target_type = match mode {
+        DisplayMode::Fullscreen(ft) => ft,
+        DisplayMode::Windowed => fullscreen_type,
+    };
+    if let Some(slot) = state
+        .sub_choice_indices_graphics
+        .get_mut(FULLSCREEN_TYPE_ROW_INDEX)
+    {
+        *slot = fullscreen_type_to_choice_index(target_type);
     }
 }
 
@@ -858,10 +932,13 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
         SubmenuTransition::FadeOutToMain => {
             let leaving_graphics =
                 matches!(state.view, OptionsView::Submenu(SubmenuKind::GraphicsSound));
-            let desired_renderer = if leaving_graphics {
-                Some(selected_video_renderer(state))
+            let (desired_renderer, desired_display_mode) = if leaving_graphics {
+                (
+                    Some(selected_video_renderer(state)),
+                    Some(selected_display_mode(state)),
+                )
             } else {
-                None
+                (None, None)
             };
             let step = if SUBMENU_FADE_DURATION > 0.0 {
                 dt / SUBMENU_FADE_DURATION
@@ -888,10 +965,25 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
                 state.submenu_fade_t = 0.0;
                 state.content_alpha = 0.0;
 
+                let mut renderer_change: Option<BackendType> = None;
+                let mut display_mode_change: Option<DisplayMode> = None;
+
                 if let Some(renderer) = desired_renderer {
                     if renderer != state.video_renderer_at_load {
-                        pending_action = Some(ScreenAction::ChangeRenderer(renderer));
+                        renderer_change = Some(renderer);
                     }
+                }
+                if let Some(display_mode) = desired_display_mode {
+                    if display_mode != state.display_mode_at_load {
+                        display_mode_change = Some(display_mode);
+                    }
+                }
+
+                if renderer_change.is_some() || display_mode_change.is_some() {
+                    pending_action = Some(ScreenAction::ChangeGraphics {
+                        renderer: renderer_change,
+                        display_mode: display_mode_change,
+                    });
                 }
             }
         }
@@ -1122,6 +1214,14 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
 
     choice_indices[row_index] = new_index;
     audio::play_sfx("assets/sounds/change_value.ogg");
+
+    if matches!(kind, SubmenuKind::GraphicsSound) && row_index == DISPLAY_MODE_ROW_INDEX {
+        if new_index == display_mode_choice_index(DisplayMode::Fullscreen(FullscreenType::Borderless)) {
+            if let Some(slot) = choice_indices.get_mut(FULLSCREEN_TYPE_ROW_INDEX) {
+                *slot = fullscreen_type_to_choice_index(FullscreenType::Borderless);
+            }
+        }
+    }
 
     // Begin cursor animation when changing inline options, but treat the Language row
     // as a single-value row (no horizontal tween; value changes in-place).

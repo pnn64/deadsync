@@ -12,6 +12,7 @@ pub mod player_options;
 use std::path::PathBuf;
 
 use crate::core::gfx::BackendType;
+use crate::config::DisplayMode;
 use crate::game::chart::ChartData;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ScreenAction {
@@ -22,6 +23,10 @@ pub enum ScreenAction {
     RequestDensityGraph(Option<ChartData>),
     FetchOnlineGrade(String),
     ChangeRenderer(BackendType),
+    ChangeGraphics {
+        renderer: Option<BackendType>,
+        display_mode: Option<DisplayMode>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -10,6 +10,7 @@ use crate::screens::{
 };
 use crate::game::parsing::simfile as song_loading;
 use crate::game::chart::ChartData;
+use crate::config::{self, DisplayMode, FullscreenType};
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
@@ -72,7 +73,7 @@ pub struct ShellState {
     last_frame_time: Instant,
     start_time: Instant,
     vsync_enabled: bool,
-    fullscreen_enabled: bool,
+    display_mode: DisplayMode,
     metrics: Metrics,
     last_fps: f32,
     last_vpf: u32,
@@ -118,23 +119,23 @@ pub struct AppState {
 }
 
 impl ShellState {
-    fn new(config: &crate::config::Config, show_overlay: bool) -> Self {
-        let metrics = space::metrics_for_window(config.display_width, config.display_height);
+    fn new(cfg: &config::Config, show_overlay: bool) -> Self {
+        let metrics = space::metrics_for_window(cfg.display_width, cfg.display_height);
         ShellState {
             frame_count: 0,
             last_title_update: Instant::now(),
             last_frame_time: Instant::now(),
             start_time: Instant::now(),
-            vsync_enabled: config.vsync,
-            fullscreen_enabled: !config.windowed,
+            vsync_enabled: cfg.vsync,
+            display_mode: cfg.display_mode(),
             metrics,
             last_fps: 0.0,
             last_vpf: 0,
             current_frame_vpf: 0,
             show_overlay,
             transition: TransitionState::Idle,
-            display_width: config.display_width,
-            display_height: config.display_height,
+            display_width: cfg.display_width,
+            display_height: cfg.display_height,
             pending_window_position: None,
             gamepad_overlay_state: None,
             pending_exit: false,
@@ -269,7 +270,7 @@ impl ScreensState {
 
 impl AppState {
     fn new(
-        config: crate::config::Config,
+        cfg: config::Config,
         profile_data: profile::Profile,
         show_overlay: bool,
         color_index: i32,
@@ -283,7 +284,7 @@ impl AppState {
             cmp::min(profile_data.last_difficulty_index, max_diff_index)
         };
 
-        let shell = ShellState::new(&config, show_overlay);
+        let shell = ShellState::new(&cfg, show_overlay);
         let session = SessionState::new(preferred);
         let screens = ScreensState::new(color_index, preferred);
 
@@ -331,11 +332,55 @@ impl App {
         Some(PhysicalPosition::new(x, y))
     }
 
+    fn fullscreen_mode(
+        &self,
+        fullscreen_type: FullscreenType,
+        width: u32,
+        height: u32,
+        event_loop: &ActiveEventLoop,
+    ) -> Option<winit::window::Fullscreen> {
+        match fullscreen_type {
+            FullscreenType::Exclusive => {
+                if let Some(mon) = event_loop.primary_monitor() {
+                    let best_mode = mon
+                        .video_modes()
+                        .filter(|m| {
+                            let sz = m.size();
+                            sz.width == width && sz.height == height
+                        })
+                        .max_by_key(|m| m.refresh_rate_millihertz());
+                    if let Some(mode) = best_mode {
+                        info!(
+                            "Fullscreen: using EXCLUSIVE {}x{} @ {} mHz",
+                            width,
+                            height,
+                            mode.refresh_rate_millihertz()
+                        );
+                        Some(winit::window::Fullscreen::Exclusive(mode))
+                    } else {
+                        warn!(
+                            "No exact EXCLUSIVE mode {}x{}; using BORDERLESS.",
+                            width, height
+                        );
+                        Some(winit::window::Fullscreen::Borderless(Some(mon)))
+                    }
+                } else {
+                    warn!("No primary monitor reported; using BORDERLESS fullscreen.");
+                    Some(winit::window::Fullscreen::Borderless(None))
+                }
+            }
+            FullscreenType::Borderless => {
+                let mon = event_loop.primary_monitor();
+                Some(winit::window::Fullscreen::Borderless(mon))
+            }
+        }
+    }
+
     fn new(
         backend_type: BackendType,
         show_overlay: bool,
         color_index: i32,
-        config: crate::config::Config,
+        config: config::Config,
         profile_data: profile::Profile,
     ) -> Self {
         let software_renderer_threads = config.software_renderer_threads;
@@ -360,6 +405,15 @@ impl App {
             ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
             ScreenAction::RequestDensityGraph(chart_opt) => vec![Command::SetDensityGraph(chart_opt)],
             ScreenAction::FetchOnlineGrade(hash) => vec![Command::FetchOnlineGrade(hash)],
+            ScreenAction::ChangeGraphics { renderer, display_mode } => {
+                if let Some(new_backend) = renderer {
+                    self.switch_renderer(new_backend, event_loop)?;
+                }
+                if let Some(mode) = display_mode {
+                    self.apply_display_mode(mode, event_loop)?;
+                }
+                Vec::new()
+            }
             ScreenAction::ChangeRenderer(new_backend) => {
                 self.switch_renderer(new_backend, event_loop)?;
                 Vec::new()
@@ -400,7 +454,7 @@ impl App {
         if let Some(gs) = &self.state.screens.gameplay_state
             && (gs.global_offset_seconds - gs.initial_global_offset_seconds).abs() > f32::EPSILON
         {
-            crate::config::update_global_offset(gs.global_offset_seconds);
+                    config::update_global_offset(gs.global_offset_seconds);
         }
     }
 
@@ -735,29 +789,22 @@ impl App {
         let window_width = self.state.shell.display_width;
         let window_height = self.state.shell.display_height;
 
-        if self.state.shell.fullscreen_enabled {
-            let fullscreen = if let Some(mon) = event_loop.primary_monitor() {
-                let best_mode = mon.video_modes()
-                    .filter(|m| { let sz = m.size(); sz.width == window_width && sz.height == window_height })
-                    .max_by_key(|m| m.refresh_rate_millihertz());
-                if let Some(mode) = best_mode {
-                    log::info!("Fullscreen: using EXCLUSIVE {}x{} @ {} mHz", window_width, window_height, mode.refresh_rate_millihertz());
-                    Some(winit::window::Fullscreen::Exclusive(mode))
-                } else {
-                    log::warn!("No exact EXCLUSIVE mode {}x{}; using BORDERLESS.", window_width, window_height);
-                    Some(winit::window::Fullscreen::Borderless(Some(mon)))
+        match self.state.shell.display_mode {
+            DisplayMode::Fullscreen(fullscreen_type) => {
+                let fullscreen =
+                    self.fullscreen_mode(fullscreen_type, window_width, window_height, event_loop);
+                window_attributes = window_attributes.with_fullscreen(fullscreen);
+            }
+            DisplayMode::Windowed => {
+                window_attributes =
+                    window_attributes.with_inner_size(PhysicalSize::new(window_width, window_height));
+                if let Some(pos) = self.state.shell.pending_window_position.take() {
+                    window_attributes = window_attributes.with_position(pos);
+                } else if let Some(pos) =
+                    self.default_window_position(window_width, window_height, event_loop)
+                {
+                    window_attributes = window_attributes.with_position(pos);
                 }
-            } else {
-                log::warn!("No primary monitor reported; using BORDERLESS fullscreen.");
-                Some(winit::window::Fullscreen::Borderless(None))
-            };
-            window_attributes = window_attributes.with_fullscreen(fullscreen);
-        } else {
-            window_attributes = window_attributes.with_inner_size(PhysicalSize::new(window_width, window_height));
-            if let Some(pos) = self.state.shell.pending_window_position.take() {
-                window_attributes = window_attributes.with_position(pos);
-            } else if let Some(pos) = self.default_window_position(window_width, window_height, event_loop) {
-                window_attributes = window_attributes.with_position(pos);
             }
         }
 
@@ -800,7 +847,7 @@ impl App {
             let sz = window.inner_size();
             self.state.shell.display_width = sz.width;
             self.state.shell.display_height = sz.height;
-            if !self.state.shell.fullscreen_enabled {
+            if matches!(self.state.shell.display_mode, DisplayMode::Windowed) {
                 if let Ok(pos) = window.outer_position() {
                     old_window_pos = Some(pos);
                 }
@@ -824,7 +871,7 @@ impl App {
 
         match self.init_graphics(event_loop) {
             Ok(_) => {
-                crate::config::update_video_renderer(target);
+                config::update_video_renderer(target);
                 options::sync_video_renderer(&mut self.state.screens.options_state, target);
                 crate::ui::runtime::clear_all();
                 self.reset_dynamic_assets_after_renderer_switch();
@@ -848,10 +895,86 @@ impl App {
                     previous_backend,
                 );
                 self.state.shell.pending_window_position = None;
-                crate::config::update_video_renderer(previous_backend);
+                config::update_video_renderer(previous_backend);
                 Err(e)
             }
         }
+    }
+
+    fn apply_display_mode(
+        &mut self,
+        mode: DisplayMode,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<(), Box<dyn Error>> {
+        if self.state.shell.display_mode == mode {
+            return Ok(());
+        }
+
+        let previous_mode = self.state.shell.display_mode;
+
+        if let Some(window) = &self.window {
+            if matches!(previous_mode, DisplayMode::Windowed) {
+                let sz = window.inner_size();
+                self.state.shell.display_width = sz.width;
+                self.state.shell.display_height = sz.height;
+                if let Ok(pos) = window.outer_position() {
+                    self.state.shell.pending_window_position = Some(pos);
+                }
+            }
+
+            match mode {
+                DisplayMode::Windowed => {
+                    window.set_fullscreen(None);
+                    let size = PhysicalSize::new(
+                        self.state.shell.display_width,
+                        self.state.shell.display_height,
+                    );
+                    window.request_inner_size(size);
+                    if let Some(pos) = self.state.shell.pending_window_position.take() {
+                        window.set_outer_position(pos);
+                    } else if let Some(pos) = self.default_window_position(
+                        self.state.shell.display_width,
+                        self.state.shell.display_height,
+                        event_loop,
+                    ) {
+                        window.set_outer_position(pos);
+                    }
+                }
+                DisplayMode::Fullscreen(fullscreen_type) => {
+                    let fullscreen = self.fullscreen_mode(
+                        fullscreen_type,
+                        self.state.shell.display_width,
+                        self.state.shell.display_height,
+                        event_loop,
+                    );
+                    window.set_fullscreen(fullscreen);
+                }
+            }
+
+            let sz = window.inner_size();
+            self.state.shell.metrics = space::metrics_for_window(sz.width, sz.height);
+            space::set_current_metrics(self.state.shell.metrics);
+            if let Some(backend) = &mut self.backend {
+                backend.resize(sz.width, sz.height);
+            }
+        }
+
+        self.state.shell.display_mode = mode;
+
+        let fullscreen_type = match mode {
+            DisplayMode::Fullscreen(ft) => ft,
+            DisplayMode::Windowed => match previous_mode {
+                DisplayMode::Fullscreen(ft) => ft,
+                DisplayMode::Windowed => config::get().fullscreen_type,
+            },
+        };
+        config::update_display_mode(mode);
+        options::sync_display_mode(
+            &mut self.state.screens.options_state,
+            mode,
+            fullscreen_type,
+        );
+        Ok(())
     }
 
     fn reset_dynamic_assets_after_renderer_switch(&mut self) {
@@ -1449,7 +1572,7 @@ impl ApplicationHandler<UserEvent> for App {
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let config = crate::config::get();
+    let config = config::get();
     let backend_type = config.video_renderer;
     let show_stats = config.show_stats;
     let color_index = config.simply_love_color;

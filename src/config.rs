@@ -9,10 +9,54 @@ use std::sync::Mutex;
 
 const CONFIG_PATH: &str = "deadsync.ini";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FullscreenType {
+    Exclusive,
+    Borderless,
+}
+
+impl FullscreenType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            FullscreenType::Exclusive => "Exclusive",
+            FullscreenType::Borderless => "Borderless",
+        }
+    }
+}
+
+impl FromStr for FullscreenType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "exclusive" => Ok(FullscreenType::Exclusive),
+            "borderless" => Ok(FullscreenType::Borderless),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisplayMode {
+    Windowed,
+    Fullscreen(FullscreenType),
+}
+
+impl DisplayMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DisplayMode::Windowed => "Windowed",
+            DisplayMode::Fullscreen(FullscreenType::Exclusive) => "Fullscreen",
+            DisplayMode::Fullscreen(FullscreenType::Borderless) => "Borderless",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub vsync: bool,
     pub windowed: bool,
+    pub fullscreen_type: FullscreenType,
     pub show_stats: bool,
     pub display_width: u32,
     pub display_height: u32,
@@ -40,6 +84,7 @@ impl Default for Config {
         Self {
             vsync: false,
             windowed: true,
+            fullscreen_type: FullscreenType::Exclusive,
             show_stats: false,
             display_width: 1600,
             display_height: 900,
@@ -54,6 +99,16 @@ impl Default for Config {
             fastload: true,
             cachesongs: true,
             smooth_histogram: true,
+        }
+    }
+}
+
+impl Config {
+    pub fn display_mode(&self) -> DisplayMode {
+        if self.windowed {
+            DisplayMode::Windowed
+        } else {
+            DisplayMode::Fullscreen(self.fullscreen_type)
         }
     }
 }
@@ -77,6 +132,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!("DisplayHeight={}\n", default.display_height));
     content.push_str(&format!("DisplayWidth={}\n", default.display_width));
     content.push_str(&format!("FastLoad={}\n", if default.fastload { "1" } else { "0" }));
+    content.push_str(&format!("FullscreenType={}\n", default.fullscreen_type.as_str()));
     content.push_str(&format!("GlobalOffsetSeconds={}\n", default.global_offset_seconds));
     content.push_str(&format!("MasterVolume={}\n", default.master_volume));
     content.push_str(&format!("MusicVolume={}\n", default.music_volume));
@@ -146,6 +202,10 @@ pub fn load() {
                 
                 cfg.vsync = conf.get("Options", "Vsync").and_then(|v| v.parse::<u8>().ok()).map_or(default.vsync, |v| v != 0);
                 cfg.windowed = conf.get("Options", "Windowed").and_then(|v| v.parse::<u8>().ok()).map_or(default.windowed, |v| v != 0);
+                cfg.fullscreen_type = conf
+                    .get("Options", "FullscreenType")
+                    .and_then(|v| FullscreenType::from_str(&v).ok())
+                    .unwrap_or(default.fullscreen_type);
                 cfg.show_stats = conf.get("Options", "ShowStats").and_then(|v| v.parse::<u8>().ok()).map_or(default.show_stats, |v| v != 0);
                 cfg.display_width = conf.get("Options", "DisplayWidth").and_then(|v| v.parse().ok()).unwrap_or(default.display_width);
                 cfg.display_height = conf.get("Options", "DisplayHeight").and_then(|v| v.parse().ok()).unwrap_or(default.display_height);
@@ -195,7 +255,7 @@ pub fn load() {
                 let has = |sec: &str, key: &str| conf.get(sec, key).is_some();
                 let mut miss = false;
                 let options_keys = [
-                    "AudioSampleRateHz","CacheSongs","DisplayHeight","DisplayWidth","FastLoad","GlobalOffsetSeconds",
+                    "AudioSampleRateHz","CacheSongs","DisplayHeight","DisplayWidth","FastLoad","FullscreenType","GlobalOffsetSeconds",
                     "MasterVolume","MusicVolume","ShowStats","SmoothHistogram","SFXVolume",
                     "SoftwareRendererThreads","VideoRenderer","Vsync","Windowed"
                 ];
@@ -788,6 +848,7 @@ fn save_without_keymaps() {
     content.push_str(&format!("DisplayHeight={}\n", cfg.display_height));
     content.push_str(&format!("DisplayWidth={}\n", cfg.display_width));
     content.push_str(&format!("FastLoad={}\n", if cfg.fastload { "1" } else { "0" }));
+    content.push_str(&format!("FullscreenType={}\n", cfg.fullscreen_type.as_str()));
     content.push_str(&format!("GlobalOffsetSeconds={}\n", cfg.global_offset_seconds));
     content.push_str(&format!("MasterVolume={}\n", cfg.master_volume));
     content.push_str(&format!("MusicVolume={}\n", cfg.music_volume));
@@ -830,6 +891,34 @@ fn save_without_keymaps() {
 
 pub fn get() -> Config {
     *CONFIG.lock().unwrap()
+}
+
+pub fn update_display_mode(mode: DisplayMode) {
+    let mut dirty = false;
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        match mode {
+            DisplayMode::Windowed => {
+                if !cfg.windowed {
+                    cfg.windowed = true;
+                    dirty = true;
+                }
+            }
+            DisplayMode::Fullscreen(fullscreen_type) => {
+                if cfg.windowed {
+                    cfg.windowed = false;
+                    dirty = true;
+                }
+                if cfg.fullscreen_type != fullscreen_type {
+                    cfg.fullscreen_type = fullscreen_type;
+                    dirty = true;
+                }
+            }
+        }
+    }
+    if dirty {
+        save_without_keymaps();
+    }
 }
 
 pub fn update_video_renderer(renderer: BackendType) {
