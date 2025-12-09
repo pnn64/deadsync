@@ -405,7 +405,16 @@ impl App {
             ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
             ScreenAction::RequestDensityGraph(chart_opt) => vec![Command::SetDensityGraph(chart_opt)],
             ScreenAction::FetchOnlineGrade(hash) => vec![Command::FetchOnlineGrade(hash)],
-            ScreenAction::ChangeGraphics { renderer, display_mode } => {
+            ScreenAction::ChangeGraphics { renderer, display_mode, resolution } => {
+                let mut pending_resolution = None;
+                if let Some((w, h)) = resolution {
+                    self.state.shell.display_width = w;
+                    self.state.shell.display_height = h;
+                    config::update_display_resolution(w, h);
+                    options::sync_display_resolution(&mut self.state.screens.options_state, w, h);
+                    pending_resolution = Some((w, h));
+                }
+
                 match (renderer, display_mode) {
                     (Some(new_backend), Some(mode)) => {
                         // When both change, avoid touching the old window; update state/config
@@ -428,20 +437,30 @@ impl App {
                             mode,
                             fullscreen_type,
                         );
-                        self.switch_renderer(new_backend, event_loop)?;
+                        self.switch_renderer(new_backend, pending_resolution, event_loop)?;
                     }
                     (None, Some(mode)) => {
+                        let prev_mode = self.state.shell.display_mode;
                         self.apply_display_mode(mode, event_loop)?;
+                        if let Some((w, h)) = pending_resolution {
+                            if prev_mode == mode {
+                                self.apply_resolution(w, h, event_loop)?;
+                            }
+                        }
                     }
                     (Some(new_backend), None) => {
-                        self.switch_renderer(new_backend, event_loop)?;
+                        self.switch_renderer(new_backend, pending_resolution, event_loop)?;
                     }
-                    (None, None) => {}
+                    (None, None) => {
+                        if let Some((w, h)) = pending_resolution {
+                            self.apply_resolution(w, h, event_loop)?;
+                        }
+                    }
                 }
                 Vec::new()
             }
             ScreenAction::ChangeRenderer(new_backend) => {
-                self.switch_renderer(new_backend, event_loop)?;
+                self.switch_renderer(new_backend, None, event_loop)?;
                 Vec::new()
             }
             ScreenAction::None => Vec::new(),
@@ -861,6 +880,7 @@ impl App {
     fn switch_renderer(
         &mut self,
         target: BackendType,
+        desired_size: Option<(u32, u32)>,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
         if target == self.backend_type {
@@ -869,10 +889,16 @@ impl App {
 
         let previous_backend = self.backend_type;
         let mut old_window_pos: Option<PhysicalPosition<i32>> = None;
+        if let Some((w, h)) = desired_size {
+            self.state.shell.display_width = w;
+            self.state.shell.display_height = h;
+        }
         if let Some(window) = &self.window {
-            let sz = window.inner_size();
-            self.state.shell.display_width = sz.width;
-            self.state.shell.display_height = sz.height;
+            if desired_size.is_none() {
+                let sz = window.inner_size();
+                self.state.shell.display_width = sz.width;
+                self.state.shell.display_height = sz.height;
+            }
             if matches!(self.state.shell.display_mode, DisplayMode::Fullscreen(_)) {
                 window.set_fullscreen(None);
             }
@@ -1003,6 +1029,39 @@ impl App {
             mode,
             fullscreen_type,
         );
+        Ok(())
+    }
+
+    fn apply_resolution(
+        &mut self,
+        width: u32,
+        height: u32,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<(), Box<dyn Error>> {
+        self.state.shell.display_width = width;
+        self.state.shell.display_height = height;
+
+        if let Some(window) = &self.window {
+            match self.state.shell.display_mode {
+                DisplayMode::Windowed => {
+                    let size = PhysicalSize::new(width, height);
+                    window.request_inner_size(size);
+                }
+                DisplayMode::Fullscreen(fullscreen_type) => {
+                    let fullscreen =
+                        self.fullscreen_mode(fullscreen_type, width, height, event_loop);
+                    window.set_fullscreen(fullscreen);
+                }
+            }
+
+            let sz = window.inner_size();
+            self.state.shell.metrics = space::metrics_for_window(sz.width, sz.height);
+            space::set_current_metrics(self.state.shell.metrics);
+            if let Some(backend) = &mut self.backend {
+                backend.resize(sz.width, sz.height);
+            }
+        }
+
         Ok(())
     }
 

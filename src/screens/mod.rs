@@ -26,6 +26,7 @@ pub enum ScreenAction {
     ChangeGraphics {
         renderer: Option<BackendType>,
         display_mode: Option<DisplayMode>,
+        resolution: Option<(u32, u32)>,
     },
 }
 

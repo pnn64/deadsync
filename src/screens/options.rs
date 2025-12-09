@@ -415,7 +415,17 @@ const VIDEO_RENDERER_LABELS: &[&str] = &[
 
 const VIDEO_RENDERER_ROW_INDEX: usize = 0;
 const DISPLAY_MODE_ROW_INDEX: usize = 1;
+const DISPLAY_ASPECT_RATIO_ROW_INDEX: usize = 2;
+const DISPLAY_RESOLUTION_ROW_INDEX: usize = 3;
 const FULLSCREEN_TYPE_ROW_INDEX: usize = 5;
+
+const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
+    (1920, 1080),
+    (1600, 900),
+    (1280, 720),
+    (1024, 768),
+    (800, 600),
+];
 
 pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
@@ -430,7 +440,7 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         label: "Display Aspect Ratio",
-        choices: &["Auto", "16:9", "16:10", "4:3", "5:4", "8:3", "1:1"],
+        choices: &["16:9", "16:10", "4:3", "1:1"],
         inline: true,
     },
     SubRow {
@@ -723,6 +733,86 @@ fn selected_display_mode(state: &State) -> DisplayMode {
     }
 }
 
+fn selected_aspect_label(state: &State) -> &'static str {
+    let idx = state
+        .sub_choice_indices_graphics
+        .get(DISPLAY_ASPECT_RATIO_ROW_INDEX)
+        .copied()
+        .unwrap_or(0);
+    GRAPHICS_OPTIONS_ROWS
+        .get(DISPLAY_ASPECT_RATIO_ROW_INDEX)
+        .and_then(|row| row.choices.get(idx))
+        .copied()
+        .unwrap_or("16:9")
+}
+
+fn push_unique_resolution(target: &mut Vec<(u32, u32)>, width: u32, height: u32) {
+    if !target.iter().any(|&(w, h)| w == width && h == height) {
+        target.push((width, height));
+    }
+}
+
+fn preset_resolutions_for_aspect(label: &str) -> Vec<(u32, u32)> {
+    match label.to_ascii_lowercase().as_str() {
+        "16:9" => vec![(1280, 720), (1600, 900), (1920, 1080)],
+        "16:10" => vec![(1280, 800), (1440, 900), (1680, 1050), (1920, 1200)],
+        "4:3" => vec![(640, 480), (800, 600), (1024, 768), (1280, 960), (1600, 1200)],
+        "1:1" => vec![(342, 342), (456, 456), (608, 608), (810, 810), (1080, 1080)],
+        _ => DEFAULT_RESOLUTION_CHOICES.to_vec(),
+    }
+}
+
+fn selected_resolution(state: &State) -> (u32, u32) {
+    let idx = state
+        .sub_choice_indices_graphics
+        .get(DISPLAY_RESOLUTION_ROW_INDEX)
+        .copied()
+        .unwrap_or(0);
+    state
+        .resolution_choices
+        .get(idx)
+        .copied()
+        .or_else(|| state.resolution_choices.get(0).copied())
+        .unwrap_or((state.display_width_at_load, state.display_height_at_load))
+}
+
+fn rebuild_resolution_choices(state: &mut State, width: u32, height: u32) {
+    let aspect_label = selected_aspect_label(state);
+    let mut list = preset_resolutions_for_aspect(aspect_label);
+    push_unique_resolution(&mut list, width, height);
+    state.resolution_choices = list;
+    if let Some(slot) = state
+        .sub_choice_indices_graphics
+        .get_mut(DISPLAY_RESOLUTION_ROW_INDEX)
+    {
+        *slot = state
+            .resolution_choices
+            .iter()
+            .position(|&(w, h)| w == width && h == height)
+            .unwrap_or(0);
+    }
+}
+
+fn row_choices<'a>(
+    state: &'a State,
+    kind: SubmenuKind,
+    rows: &'a [SubRow<'a>],
+    row_idx: usize,
+) -> Vec<Cow<'a, str>> {
+    if let Some(row) = rows.get(row_idx) {
+        if matches!(kind, SubmenuKind::GraphicsSound) && row.label == "Display Resolution" {
+            return state
+                .resolution_choices
+                .iter()
+                .map(|&(w, h)| Cow::Owned(format!("{w}x{h}")))
+                .collect();
+        }
+    }
+    rows.get(row_idx)
+        .map(|row| row.choices.iter().map(|c| Cow::Borrowed(*c)).collect())
+        .unwrap_or_default()
+}
+
 pub struct State {
     pub selected: usize,
     prev_selected: usize,
@@ -748,6 +838,9 @@ pub struct State {
     visual_delay_ms: i32,
     video_renderer_at_load: BackendType,
     display_mode_at_load: DisplayMode,
+    display_width_at_load: u32,
+    display_height_at_load: u32,
+    resolution_choices: Vec<(u32, u32)>,
     // Inline option cursor tween (left/right between items)
     cursor_anim_row: Option<usize>,
     cursor_anim_from_choice: usize,
@@ -789,6 +882,9 @@ pub fn init() -> State {
         visual_delay_ms: 0,
         video_renderer_at_load: cfg.video_renderer,
         display_mode_at_load: cfg.display_mode(),
+        display_width_at_load: cfg.display_width,
+        display_height_at_load: cfg.display_height,
+        resolution_choices: Vec::new(),
         cursor_anim_row: None,
         cursor_anim_from_choice: 0,
         cursor_anim_to_choice: 0,
@@ -800,6 +896,7 @@ pub fn init() -> State {
 
     sync_video_renderer(&mut state, cfg.video_renderer);
     sync_display_mode(&mut state, cfg.display_mode(), cfg.fullscreen_type);
+    sync_display_resolution(&mut state, cfg.display_width, cfg.display_height);
     state
 }
 
@@ -849,6 +946,12 @@ pub fn sync_display_mode(
     {
         *slot = fullscreen_type_to_choice_index(target_type);
     }
+}
+
+pub fn sync_display_resolution(state: &mut State, width: u32, height: u32) {
+    rebuild_resolution_choices(state, width, height);
+    state.display_width_at_load = width;
+    state.display_height_at_load = height;
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -932,14 +1035,16 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
         SubmenuTransition::FadeOutToMain => {
             let leaving_graphics =
                 matches!(state.view, OptionsView::Submenu(SubmenuKind::GraphicsSound));
-            let (desired_renderer, desired_display_mode) = if leaving_graphics {
-                (
-                    Some(selected_video_renderer(state)),
-                    Some(selected_display_mode(state)),
-                )
-            } else {
-                (None, None)
-            };
+            let (desired_renderer, desired_display_mode, desired_resolution) =
+                if leaving_graphics {
+                    (
+                        Some(selected_video_renderer(state)),
+                        Some(selected_display_mode(state)),
+                        Some(selected_resolution(state)),
+                    )
+                } else {
+                    (None, None, None)
+                };
             let step = if SUBMENU_FADE_DURATION > 0.0 {
                 dt / SUBMENU_FADE_DURATION
             } else {
@@ -967,6 +1072,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
 
                 let mut renderer_change: Option<BackendType> = None;
                 let mut display_mode_change: Option<DisplayMode> = None;
+                let mut resolution_change: Option<(u32, u32)> = None;
 
                 if let Some(renderer) = desired_renderer {
                     if renderer != state.video_renderer_at_load {
@@ -978,11 +1084,20 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
                         display_mode_change = Some(display_mode);
                     }
                 }
+                if let Some((w, h)) = desired_resolution {
+                    if w != state.display_width_at_load || h != state.display_height_at_load {
+                        resolution_change = Some((w, h));
+                    }
+                }
 
-                if renderer_change.is_some() || display_mode_change.is_some() {
+                if renderer_change.is_some()
+                    || display_mode_change.is_some()
+                    || resolution_change.is_some()
+                {
                     pending_action = Some(ScreenAction::ChangeGraphics {
                         renderer: renderer_change,
                         display_mode: display_mode_change,
+                        resolution: resolution_change,
                     });
                 }
             }
@@ -1193,54 +1308,85 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
         }
     }
 
-    let choice_indices = submenu_choice_indices_mut(state, kind);
-    if row_index >= choice_indices.len() {
-        return;
-    }
-    let choice_index = choice_indices[row_index];
-    let num_choices = rows[row_index].choices.len();
+    let load_size = (state.display_width_at_load, state.display_height_at_load);
+    let mut pending_resolution_list: Option<Vec<(u32, u32)>> = None;
+    let mut prev_choice_index: Option<usize> = None;
+    let mut new_choice_index: Option<usize> = None;
+    let choices = row_choices(state, kind, rows, row_index);
+    let num_choices = choices.len();
     if num_choices == 0 {
         return;
     }
-    let cur = choice_index as isize;
-    let n = num_choices as isize;
-    let mut new_index = ((cur + delta).rem_euclid(n)) as usize;
-    if new_index >= num_choices {
-        new_index = num_choices.saturating_sub(1);
-    }
-    if new_index == choice_index {
-        return;
-    }
+    {
+        let choice_indices = submenu_choice_indices_mut(state, kind);
+        if row_index >= choice_indices.len() {
+            return;
+        }
+        let choice_index = choice_indices[row_index].min(num_choices.saturating_sub(1));
+        let cur = choice_index as isize;
+        let n = num_choices as isize;
+        let mut new_index = ((cur + delta).rem_euclid(n)) as usize;
+        if new_index >= num_choices {
+            new_index = num_choices.saturating_sub(1);
+        }
+        if new_index == choice_index {
+            return;
+        }
 
-    choice_indices[row_index] = new_index;
-    audio::play_sfx("assets/sounds/change_value.ogg");
+        choice_indices[row_index] = new_index;
+        prev_choice_index = Some(choice_index);
+        new_choice_index = Some(new_index);
+        audio::play_sfx("assets/sounds/change_value.ogg");
 
-    if matches!(kind, SubmenuKind::GraphicsSound) && row_index == DISPLAY_MODE_ROW_INDEX {
-        if new_index == display_mode_choice_index(DisplayMode::Fullscreen(FullscreenType::Borderless)) {
-            if let Some(slot) = choice_indices.get_mut(FULLSCREEN_TYPE_ROW_INDEX) {
-                *slot = fullscreen_type_to_choice_index(FullscreenType::Borderless);
+        if matches!(kind, SubmenuKind::GraphicsSound) && row_index == DISPLAY_MODE_ROW_INDEX {
+            if new_index == display_mode_choice_index(DisplayMode::Fullscreen(FullscreenType::Borderless)) {
+                if let Some(slot) = choice_indices.get_mut(FULLSCREEN_TYPE_ROW_INDEX) {
+                    *slot = fullscreen_type_to_choice_index(FullscreenType::Borderless);
+                }
+            }
+        } else if matches!(kind, SubmenuKind::GraphicsSound)
+            && row_index == DISPLAY_ASPECT_RATIO_ROW_INDEX
+        {
+            let aspect_label = GRAPHICS_OPTIONS_ROWS
+                .get(DISPLAY_ASPECT_RATIO_ROW_INDEX)
+                .and_then(|row| row.choices.get(new_index))
+                .copied()
+                .unwrap_or("16:9");
+            let mut list = preset_resolutions_for_aspect(aspect_label);
+            if list.is_empty() {
+                list.push(load_size);
+            }
+            pending_resolution_list = Some(list);
+            if let Some(slot) = choice_indices.get_mut(DISPLAY_RESOLUTION_ROW_INDEX) {
+                *slot = 0;
             }
         }
     }
 
+    if let Some(list) = pending_resolution_list {
+        state.resolution_choices = list;
+    }
+
     // Begin cursor animation when changing inline options, but treat the Language row
     // as a single-value row (no horizontal tween; value changes in-place).
-    let is_language_row = rows
-        .get(row_index)
-        .map(|r| r.label == "Language")
-        .unwrap_or(false);
-    let is_inline_row = rows
-        .get(row_index)
-        .map(|r| r.inline)
-        .unwrap_or(true);
-    if is_inline_row && !is_language_row {
-        state.cursor_anim_row = Some(row_index);
-        state.cursor_anim_from_choice = choice_index;
-        state.cursor_anim_to_choice = new_index;
-        state.cursor_anim_t = 0.0;
-    } else {
-        state.cursor_anim_row = None;
-        state.cursor_anim_t = 1.0;
+    if let (Some(choice_index), Some(new_index)) = (prev_choice_index, new_choice_index) {
+        let is_language_row = rows
+            .get(row_index)
+            .map(|r| r.label == "Language")
+            .unwrap_or(false);
+        let is_inline_row = rows
+            .get(row_index)
+            .map(|r| r.inline)
+            .unwrap_or(true);
+        if is_inline_row && !is_language_row {
+            state.cursor_anim_row = Some(row_index);
+            state.cursor_anim_from_choice = choice_index;
+            state.cursor_anim_to_choice = new_index;
+            state.cursor_anim_t = 0.0;
+        } else {
+            state.cursor_anim_row = None;
+            state.cursor_anim_t = 1.0;
+        }
     }
 }
 
@@ -1664,7 +1810,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                     let item_col_w = list_w - label_bg_w;
                     return item_col_left + item_col_w * 0.5 + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
                 }
-                let choices = row.choices;
+                let choices = row_choices(state, kind, rows, row_idx);
                 if choices.is_empty() {
                     return list_x + list_w * 0.5;
                 }
@@ -1675,7 +1821,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                     asset_manager.with_font("miso", |metrics_font| {
                         for text in choices {
                             let mut w =
-                                font::measure_line_width_logical(metrics_font, text, all_fonts)
+                                font::measure_line_width_logical(metrics_font, text.as_ref(), all_fonts)
                                     as f32;
                             if !w.is_finite() || w <= 0.0 {
                                 w = 1.0;
@@ -1809,25 +1955,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                     ));
 
                     // Inline Off/On options in the items column (or a single centered value if inline == false).
-                    let choices = row.choices;
-                    if !choices.is_empty() {
+                    let mut choice_texts: Vec<Cow<'_, str>> = row_choices(state, kind, rows, row_idx);
+                    if !choice_texts.is_empty() {
                         let value_zoom = 0.835_f32;
-                        let mut choice_texts: Vec<Cow<'_, str>> =
-                            choices.iter().map(|c| Cow::Borrowed(*c)).collect();
                         if row.label == "Global Offset (ms)" {
                             let formatted = Cow::Owned(format_ms(state.global_offset_ms));
-                            if choice_texts.is_empty() {
-                                choice_texts.push(formatted);
-                            } else {
-                                choice_texts[0] = formatted;
-                            }
+                            choice_texts[0] = formatted;
                         } else if row.label == "Visual Delay (ms)" {
                             let formatted = Cow::Owned(format_ms(state.visual_delay_ms));
-                            if choice_texts.is_empty() {
-                                choice_texts.push(formatted);
-                            } else {
-                                choice_texts[0] = formatted;
-                            }
+                            choice_texts[0] = formatted;
                         }
 
                         let mut widths: Vec<f32> = Vec::with_capacity(choice_texts.len());

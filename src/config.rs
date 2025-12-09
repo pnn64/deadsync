@@ -921,6 +921,24 @@ pub fn update_display_mode(mode: DisplayMode) {
     }
 }
 
+pub fn update_display_resolution(width: u32, height: u32) {
+    let mut dirty = false;
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.display_width != width {
+            cfg.display_width = width;
+            dirty = true;
+        }
+        if cfg.display_height != height {
+            cfg.display_height = height;
+            dirty = true;
+        }
+    }
+    if dirty {
+        save_without_keymaps();
+    }
+}
+
 pub fn update_video_renderer(renderer: BackendType) {
     {
         let mut cfg = CONFIG.lock().unwrap();
