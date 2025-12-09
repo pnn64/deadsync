@@ -847,6 +847,9 @@ impl App {
             let sz = window.inner_size();
             self.state.shell.display_width = sz.width;
             self.state.shell.display_height = sz.height;
+            if matches!(self.state.shell.display_mode, DisplayMode::Fullscreen(_)) {
+                window.set_fullscreen(None);
+            }
             if matches!(self.state.shell.display_mode, DisplayMode::Windowed) {
                 if let Ok(pos) = window.outer_position() {
                     old_window_pos = Some(pos);
