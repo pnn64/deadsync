@@ -406,11 +406,37 @@ impl App {
             ScreenAction::RequestDensityGraph(chart_opt) => vec![Command::SetDensityGraph(chart_opt)],
             ScreenAction::FetchOnlineGrade(hash) => vec![Command::FetchOnlineGrade(hash)],
             ScreenAction::ChangeGraphics { renderer, display_mode } => {
-                if let Some(new_backend) = renderer {
-                    self.switch_renderer(new_backend, event_loop)?;
-                }
-                if let Some(mode) = display_mode {
-                    self.apply_display_mode(mode, event_loop)?;
+                match (renderer, display_mode) {
+                    (Some(new_backend), Some(mode)) => {
+                        // When both change, avoid touching the old window; update state/config
+                        // first so the new renderer is created directly in the target mode.
+                        let prev_mode = self.state.shell.display_mode;
+                        let fullscreen_type = match mode {
+                            DisplayMode::Fullscreen(ft) => ft,
+                            DisplayMode::Windowed => {
+                                if let DisplayMode::Fullscreen(ft) = prev_mode {
+                                    ft
+                                } else {
+                                    config::get().fullscreen_type
+                                }
+                            }
+                        };
+                        self.state.shell.display_mode = mode;
+                        config::update_display_mode(mode);
+                        options::sync_display_mode(
+                            &mut self.state.screens.options_state,
+                            mode,
+                            fullscreen_type,
+                        );
+                        self.switch_renderer(new_backend, event_loop)?;
+                    }
+                    (None, Some(mode)) => {
+                        self.apply_display_mode(mode, event_loop)?;
+                    }
+                    (Some(new_backend), None) => {
+                        self.switch_renderer(new_backend, event_loop)?;
+                    }
+                    (None, None) => {}
                 }
                 Vec::new()
             }
