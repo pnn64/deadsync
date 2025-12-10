@@ -519,6 +519,10 @@ impl App {
                         self.switch_renderer(new_backend, pending_resolution, event_loop)?;
                     }
                     (None, None) => {
+                        if monitor.is_some() {
+                            // Move the existing window/fullscreen session to the chosen monitor.
+                            self.apply_display_mode(self.state.shell.display_mode, Some(chosen_monitor), event_loop)?;
+                        }
                         if let Some((w, h)) = pending_resolution {
                             self.apply_resolution(w, h, event_loop)?;
                         }
@@ -1706,6 +1710,10 @@ impl ApplicationHandler<UserEvent> for App {
                                     gs.player_color = color::simply_love_rgba(idx);
                                 }
                                 self.state.screens.options_state.active_color_index = idx;
+                            }
+
+                            if *target == CurrentScreen::Options {
+                                self.update_options_monitor_specs(event_loop);
                             }
 
                             self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
