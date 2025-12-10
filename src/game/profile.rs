@@ -1,5 +1,5 @@
 pub use super::scroll::ScrollSpeedSetting;
-use configparser::ini::Ini;
+use crate::config::SimpleIni;
 use log::{info, warn};
 use once_cell::sync::Lazy;
 use std::fs;
@@ -629,7 +629,7 @@ pub fn load() {
         let default_profile = Profile::default();
 
         // Load profile.ini
-        let mut profile_conf = Ini::new();
+        let mut profile_conf = SimpleIni::new();
         if profile_conf.load(PROFILE_INI_PATH).is_ok() {
             profile.display_name = profile_conf
                 .get("userprofile", "DisplayName")
@@ -728,7 +728,7 @@ pub fn load() {
         }
 
         // Load groovestats.ini
-        let mut gs_conf = Ini::new();
+        let mut gs_conf = SimpleIni::new();
         if gs_conf.load(GROOVESTATS_INI_PATH).is_ok() {
             profile.groovestats_api_key = gs_conf
                 .get("GrooveStats", "ApiKey")

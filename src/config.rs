@@ -2,14 +2,79 @@ use crate::core::gfx::BackendType;
 use crate::core::input::{
     FaceBtn, GamepadCodeBinding, InputBinding, Keymap, PadButton, PadDir, VirtualAction,
 };
-use configparser::ini::Ini;
+use std::collections::HashMap;
 use log::{info, warn};
 use once_cell::sync::Lazy;
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Mutex;
 use winit::keyboard::KeyCode;
 
 const CONFIG_PATH: &str = "deadsync.ini";
+
+// --- Minimal INI reader ---
+#[derive(Debug, Default)]
+pub struct SimpleIni {
+    sections: HashMap<String, HashMap<String, String>>,
+}
+
+impl SimpleIni {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
+        let content = std::fs::read_to_string(path)?;
+        self.sections.clear();
+
+        let mut current_section: Option<String> = None;
+
+        for raw_line in content.lines() {
+            let line = raw_line.trim();
+            if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+                continue;
+            }
+
+            // Section header: [SectionName]
+            if line.starts_with('[') && line.ends_with(']') && line.len() >= 2 {
+                let name = &line[1..line.len() - 1];
+                let section = name.trim().to_string();
+                current_section = Some(section.clone());
+                self.sections.entry(section).or_default();
+                continue;
+            }
+
+            // Key/value pair: key=value
+            if let Some(eq_idx) = line.find('=') {
+                let (key_raw, value_raw) = line.split_at(eq_idx);
+                let key = key_raw.trim();
+                if key.is_empty() {
+                    continue;
+                }
+                // Skip '=' and trim whitespace from the value.
+                let value = value_raw[1..].trim().to_string();
+                let section = current_section.clone().unwrap_or_default();
+                self.sections
+                    .entry(section)
+                    .or_default()
+                    .insert(key.to_string(), value);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn get(&self, section: &str, key: &str) -> Option<String> {
+        self.sections
+            .get(section)
+            .and_then(|s| s.get(key))
+            .cloned()
+    }
+
+    pub fn get_section(&self, section: &str) -> Option<&HashMap<String, String>> {
+        self.sections.get(section)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FullscreenType {
@@ -229,7 +294,7 @@ pub fn load() {
         warn!("Failed to create default config file: {}", e);
     }
 
-    let mut conf = Ini::new();
+    let mut conf = SimpleIni::new();
     match conf.load(CONFIG_PATH) {
         Ok(_) => {
             // This block populates the global CONFIG struct from the file,
@@ -850,27 +915,24 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
     None
 }
 
-fn load_keymap_from_ini_local(conf: &Ini) -> Keymap {
+fn load_keymap_from_ini_local(conf: &SimpleIni) -> Keymap {
     // When [Keymaps] is present, start from explicit user entries and then fill
     // in any completely missing actions from built-in defaults. When the whole
     // section is absent, fall back to defaults entirely.
     if let Some(section) = conf
-        .get_map_ref()
-        .get("Keymaps")
-        .or_else(|| conf.get_map_ref().get("keymaps"))
+        .get_section("Keymaps")
+        .or_else(|| conf.get_section("keymaps"))
     {
         let mut km = Keymap::default();
         let mut seen: Vec<VirtualAction> = Vec::new();
 
-        for (k, v_opt) in section {
+        for (k, v) in section {
             let key = k.to_ascii_lowercase();
             if let Some(action) = parse_action_key_lower(&key) {
                 let mut bindings = Vec::new();
-                if let Some(value) = v_opt.as_deref() {
-                    for tok in value.split(',') {
-                        if let Some(b) = parse_binding_token(tok) {
-                            bindings.push(b);
-                        }
+                for tok in v.split(',') {
+                    if let Some(b) = parse_binding_token(tok) {
+                        bindings.push(b);
                     }
                 }
                 km.bind(action, &bindings);
