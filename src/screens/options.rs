@@ -951,8 +951,10 @@ fn rebuild_resolution_choices(state: &mut State, width: u32, height: u32) {
         list = preset_resolutions_for_aspect(aspect_label);
     }
     
-    // 3. Ensure the currently requested/active resolution is in the list so we don't lose it.
-    push_unique_resolution(&mut list, width, height);
+    // 3. Keep the current resolution only if it matches the selected aspect.
+    if aspect_matches(width, height, aspect_label) {
+        push_unique_resolution(&mut list, width, height);
+    }
     
     // Sort descending by width then height (typical UI preference).
     list.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));

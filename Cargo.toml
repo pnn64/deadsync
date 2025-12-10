@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.1.396"
+version = "0.1.397"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "Rust-based ITG engine with switchable Vulkan/OpenGL backends, designed for accurate sync and competitive performance."
