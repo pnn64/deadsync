@@ -1,4 +1,4 @@
-use fs_extra::dir::{copy, CopyOptions};
+use fs_extra::dir::{CopyOptions, copy};
 use shaderc::{Compiler, ShaderKind};
 use std::{
     error::Error,
@@ -76,10 +76,11 @@ fn compile_vulkan_shaders(compiler: &mut Compiler, out_dir: &Path) -> Result<(),
         // Timestamp short-circuit (fast path)
         if let Ok(dest_meta) = fs::metadata(&dest_path)
             && let Ok(dest_mtime) = dest_meta.modified()
-                && dest_mtime >= src_mtime {
-                    // .spv is up-to-date for this profile/options — skip
-                    continue;
-                }
+            && dest_mtime >= src_mtime
+        {
+            // .spv is up-to-date for this profile/options — skip
+            continue;
+        }
 
         let source = fs::read_to_string(&path)?;
         let src_name = path.to_string_lossy();

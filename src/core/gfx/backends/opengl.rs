@@ -59,9 +59,9 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
     let (shared_vao, _shared_vbo, _shared_ibo, index_count) = unsafe {
         const UNIT_QUAD_VERTICES: [[f32; 4]; 4] = [
             [-0.5, -0.5, 0.0, 1.0],
-            [ 0.5, -0.5, 1.0, 1.0],
-            [ 0.5,  0.5, 1.0, 0.0],
-            [-0.5,  0.5, 0.0, 0.0],
+            [0.5, -0.5, 1.0, 1.0],
+            [0.5, 0.5, 1.0, 0.0],
+            [-0.5, 0.5, 0.0, 0.0],
         ];
         const QUAD_INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
 
@@ -90,8 +90,15 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         gl.enable_vertex_attrib_array(0);
         gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
         gl.enable_vertex_attrib_array(1);
-        gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false, stride, (2 * mem::size_of::<f32>()) as i32);
-        
+        gl.vertex_attrib_pointer_f32(
+            1,
+            2,
+            glow::FLOAT,
+            false,
+            stride,
+            (2 * mem::size_of::<f32>()) as i32,
+        );
+
         gl.bind_vertex_array(None);
 
         (vao, vbo, ibo, QUAD_INDICES.len() as i32)
@@ -158,8 +165,16 @@ pub fn create_texture(gl: &glow::Context, image: &RgbaImage) -> Result<Texture, 
             glow::TEXTURE_WRAP_T,
             glow::CLAMP_TO_EDGE as i32,
         );
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_MIN_FILTER,
+            glow::LINEAR as i32,
+        );
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_MAG_FILTER,
+            glow::LINEAR as i32,
+        );
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_BASE_LEVEL, 0);
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAX_LEVEL, 0);
 
@@ -197,7 +212,9 @@ pub fn draw<'a>(
 
     #[inline(always)]
     fn apply_blend(gl: &glow::Context, want: BlendMode, last: &mut Option<BlendMode>) {
-        if *last == Some(want) { return; }
+        if *last == Some(want) {
+            return;
+        }
         unsafe {
             gl.enable(glow::BLEND);
             match want {
@@ -254,21 +271,40 @@ pub fn draw<'a>(
             apply_blend(gl, obj.blend, &mut last_blend);
 
             let mvp_array: [[f32; 4]; 4] = (state.projection * obj.transform).into();
-            gl.uniform_matrix_4_f32_slice(Some(&state.mvp_location), false, bytemuck::cast_slice(&mvp_array));
+            gl.uniform_matrix_4_f32_slice(
+                Some(&state.mvp_location),
+                false,
+                bytemuck::cast_slice(&mvp_array),
+            );
 
             match &obj.object_type {
-                ObjectType::Sprite { texture_id, tint, uv_scale, uv_offset, edge_fade } => {
-                    if let Some(RendererTexture::OpenGL(gl_tex)) = textures.get(texture_id.as_ref()) {
+                ObjectType::Sprite {
+                    texture_id,
+                    tint,
+                    uv_scale,
+                    uv_offset,
+                    edge_fade,
+                } => {
+                    if let Some(RendererTexture::OpenGL(gl_tex)) = textures.get(texture_id.as_ref())
+                    {
                         if last_bound_tex != Some(gl_tex.0) {
                             gl.bind_texture(glow::TEXTURE_2D, Some(gl_tex.0));
                             last_bound_tex = Some(gl_tex.0);
                         }
                         if last_uv_scale != Some(*uv_scale) {
-                            gl.uniform_2_f32(Some(&state.uv_scale_location), uv_scale[0], uv_scale[1]);
+                            gl.uniform_2_f32(
+                                Some(&state.uv_scale_location),
+                                uv_scale[0],
+                                uv_scale[1],
+                            );
                             last_uv_scale = Some(*uv_scale);
                         }
                         if last_uv_offset != Some(*uv_offset) {
-                            gl.uniform_2_f32(Some(&state.uv_offset_location), uv_offset[0], uv_offset[1]);
+                            gl.uniform_2_f32(
+                                Some(&state.uv_offset_location),
+                                uv_offset[0],
+                                uv_offset[1],
+                            );
                             last_uv_offset = Some(*uv_offset);
                         }
                         if last_color != Some(*tint) {
@@ -279,7 +315,12 @@ pub fn draw<'a>(
                             gl.uniform_4_f32_slice(Some(&state.edge_fade_location), edge_fade);
                             last_edge_fade = Some(*edge_fade);
                         }
-                        gl.draw_elements(glow::TRIANGLES, state.index_count, glow::UNSIGNED_SHORT, 0);
+                        gl.draw_elements(
+                            glow::TRIANGLES,
+                            state.index_count,
+                            glow::UNSIGNED_SHORT,
+                            0,
+                        );
                         vertices += 4;
                     }
                 }
@@ -322,7 +363,14 @@ pub fn cleanup(state: &mut State) {
 fn create_opengl_context(
     window: &Window,
     vsync_enabled: bool,
-) -> Result<(Surface<WindowSurface>, PossiblyCurrentContext, glow::Context), Box<dyn Error>> {
+) -> Result<
+    (
+        Surface<WindowSurface>,
+        PossiblyCurrentContext,
+        glow::Context,
+    ),
+    Box<dyn Error>,
+> {
     let display_handle = window.display_handle()?.as_raw();
 
     #[cfg(target_os = "windows")]
@@ -340,7 +388,10 @@ fn create_opengl_context(
                 let f: SwapIntervalFn = unsafe { std::mem::transmute(proc) };
                 let interval = if vsync_enabled { 1 } else { 0 };
                 if f(interval) != 0 {
-                    info!("Successfully set VSync to: {}", if vsync_enabled { "on" } else { "off" });
+                    info!(
+                        "Successfully set VSync to: {}",
+                        if vsync_enabled { "on" } else { "off" }
+                    );
                 } else {
                     warn!("wglSwapIntervalEXT call failed. VSync state may not be as requested.");
                 }
@@ -350,7 +401,7 @@ fn create_opengl_context(
         };
         (display, vsync_logic)
     };
-    
+
     #[cfg(not(target_os = "windows"))]
     let (display, vsync_logic) = {
         // Select the appropriate DisplayApiPreference based on the OS
@@ -368,8 +419,10 @@ fn create_opengl_context(
 
         // The rest of the logic is common for macOS and Linux/BSD
         let display = unsafe { Display::new(display_handle, preference)? };
-        
-        let vsync_logic = move |_display: &Display, surface: &Surface<WindowSurface>, context: &PossiblyCurrentContext| {
+
+        let vsync_logic = move |_display: &Display,
+                                surface: &Surface<WindowSurface>,
+                                context: &PossiblyCurrentContext| {
             use glutin::surface::SwapInterval;
             let interval = if vsync_enabled {
                 SwapInterval::Wait(std::num::NonZeroU32::new(1).unwrap())
@@ -380,7 +433,10 @@ fn create_opengl_context(
             if let Err(e) = surface.set_swap_interval(&context, interval) {
                 warn!("Failed to set swap interval (VSync): {:?}", e);
             } else {
-                info!("Successfully set VSync to: {}", if vsync_enabled { "on" } else { "off" });
+                info!(
+                    "Successfully set VSync to: {}",
+                    if vsync_enabled { "on" } else { "off" }
+                );
             }
         };
         (display, vsync_logic)
@@ -404,10 +460,9 @@ fn create_opengl_context(
     );
     let surface = unsafe { display.create_window_surface(&config, &surface_attributes)? };
 
-    let context_attributes =
-        ContextAttributesBuilder::new().build(Some(raw_window_handle));
-    let context = unsafe { display.create_context(&config, &context_attributes)? }
-        .make_current(&surface)?;
+    let context_attributes = ContextAttributesBuilder::new().build(Some(raw_window_handle));
+    let context =
+        unsafe { display.create_context(&config, &context_attributes)? }.make_current(&surface)?;
 
     #[cfg(target_os = "windows")]
     vsync_logic(&display);
@@ -422,7 +477,19 @@ fn create_opengl_context(
 
 fn create_graphics_program(
     gl: &glow::Context,
-) -> Result<(glow::Program, UniformLocation, UniformLocation, UniformLocation, UniformLocation, UniformLocation, UniformLocation, UniformLocation), String> {
+) -> Result<
+    (
+        glow::Program,
+        UniformLocation,
+        UniformLocation,
+        UniformLocation,
+        UniformLocation,
+        UniformLocation,
+        UniformLocation,
+        UniformLocation,
+    ),
+    String,
+> {
     unsafe {
         let program = gl.create_program()?;
         let compile = |ty, src: &str| -> Result<glow::Shader, String> {
@@ -437,23 +504,36 @@ fn create_graphics_program(
             Ok(sh)
         };
 
-        let vert = compile(glow::VERTEX_SHADER, include_str!("../shaders/opengl_shader.vert"))?;
-        let frag = compile(glow::FRAGMENT_SHADER, include_str!("../shaders/opengl_shader.frag"))?;
+        let vert = compile(
+            glow::VERTEX_SHADER,
+            include_str!("../shaders/opengl_shader.vert"),
+        )?;
+        let frag = compile(
+            glow::FRAGMENT_SHADER,
+            include_str!("../shaders/opengl_shader.frag"),
+        )?;
 
         gl.attach_shader(program, vert);
         gl.attach_shader(program, frag);
         gl.link_program(program);
         if !gl.get_program_link_status(program) {
             let log = gl.get_program_info_log(program);
-            gl.detach_shader(program, vert); gl.detach_shader(program, frag);
-            gl.delete_shader(vert); gl.delete_shader(frag);
+            gl.detach_shader(program, vert);
+            gl.detach_shader(program, frag);
+            gl.delete_shader(vert);
+            gl.delete_shader(frag);
             gl.delete_program(program);
             return Err(log);
         }
-        gl.detach_shader(program, vert); gl.detach_shader(program, frag);
-        gl.delete_shader(vert); gl.delete_shader(frag);
+        gl.detach_shader(program, vert);
+        gl.detach_shader(program, frag);
+        gl.delete_shader(vert);
+        gl.delete_shader(frag);
 
-        let get = |name: &str| gl.get_uniform_location(program, name).ok_or_else(|| name.to_string());
+        let get = |name: &str| {
+            gl.get_uniform_location(program, name)
+                .ok_or_else(|| name.to_string())
+        };
         let mvp_location = get("u_model_view_proj")?;
         let color_location = get("u_color")?;
         let texture_location = get("u_texture")?;
@@ -462,7 +542,16 @@ fn create_graphics_program(
         let edge_fade_location = get("u_edge_fade")?;
         let instanced_location = get("u_instanced")?;
 
-        Ok((program, mvp_location, color_location, texture_location, uv_scale_location, uv_offset_location, edge_fade_location, instanced_location))
+        Ok((
+            program,
+            mvp_location,
+            color_location,
+            texture_location,
+            uv_scale_location,
+            uv_offset_location,
+            edge_fade_location,
+            instanced_location,
+        ))
     }
 }
 
@@ -470,7 +559,10 @@ mod bytemuck {
     #[inline(always)]
     pub fn cast_slice<T, U>(slice: &[T]) -> &[U] {
         let (prefix, mid, suffix) = unsafe { slice.align_to::<U>() };
-        debug_assert!(prefix.is_empty() && suffix.is_empty(), "cast_slice: misaligned cast");
+        debug_assert!(
+            prefix.is_empty() && suffix.is_empty(),
+            "cast_slice: misaligned cast"
+        );
         mid
     }
 }

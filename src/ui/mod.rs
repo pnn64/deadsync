@@ -1,8 +1,8 @@
+pub mod actors;
+pub mod anim;
+pub mod color;
 pub mod components;
 pub mod compose;
-pub mod actors;
-pub mod color;
 pub mod dsl;
-pub mod anim;
-pub mod runtime;
 pub mod font;
+pub mod runtime;

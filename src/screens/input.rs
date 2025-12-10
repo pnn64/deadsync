@@ -1,11 +1,11 @@
 use crate::act;
+use crate::core::input::{InputEvent, PadEvent, VirtualAction, get_keymap};
 use crate::core::space::*;
 use crate::screens::{Screen, ScreenAction};
-use crate::core::input::{VirtualAction, InputEvent, PadEvent, get_keymap};
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use crate::ui::components::{heart_bg, screen_bar};
 use crate::ui::components::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
+use crate::ui::components::{heart_bg, screen_bar};
 use std::collections::HashMap;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -119,12 +119,14 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 fn player_from_action(act: VirtualAction) -> Option<PlayerSlot> {
     use VirtualAction::*;
     match act {
-        p1_up | p1_down | p1_left | p1_right
-        | p1_menu_up | p1_menu_down | p1_menu_left | p1_menu_right
-        | p1_start | p1_select | p1_back | p1_operator | p1_restart => Some(PlayerSlot::P1),
-        p2_up | p2_down | p2_left | p2_right
-        | p2_menu_up | p2_menu_down | p2_menu_left | p2_menu_right
-        | p2_start | p2_select | p2_back | p2_operator | p2_restart => Some(PlayerSlot::P2),
+        p1_up | p1_down | p1_left | p1_right | p1_menu_up | p1_menu_down | p1_menu_left
+        | p1_menu_right | p1_start | p1_select | p1_back | p1_operator | p1_restart => {
+            Some(PlayerSlot::P1)
+        }
+        p2_up | p2_down | p2_left | p2_right | p2_menu_up | p2_menu_down | p2_menu_left
+        | p2_menu_right | p2_start | p2_select | p2_back | p2_operator | p2_restart => {
+            Some(PlayerSlot::P2)
+        }
     }
 }
 
@@ -160,7 +162,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     // Update pad highlight state from virtual actions (for mapped inputs).
     if let Some(player) = player_from_action(ev.action) {
         if let Some(btn) = logical_button_from_action(ev.action) {
-            state.pad_visual.buttons_held.insert((player, btn), ev.pressed);
+            state
+                .pad_visual
+                .buttons_held
+                .insert((player, btn), ev.pressed);
         }
     }
 
@@ -179,26 +184,47 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
         }
         PE::Button { id, btn, pressed } => {
             let dev = usize::from(*id);
-            (format!("Gamepad {}: Button::{:?}", dev, btn), Some(*pressed))
+            (
+                format!("Gamepad {}: Button::{:?}", dev, btn),
+                Some(*pressed),
+            )
         }
         PE::Face { id, btn, pressed } => {
             let dev = usize::from(*id);
             (format!("Gamepad {}: Face::{:?}", dev, btn), Some(*pressed))
         }
-        PE::RawButton { id, button, code, pressed, .. } => {
+        PE::RawButton {
+            id,
+            button,
+            code,
+            pressed,
+            ..
+        } => {
             let dev = usize::from(*id);
             let code_u32 = code.into_u32();
             (
-                format!("Gamepad {}: RawButton {:?} [0x{:08X}]", dev, button, code_u32),
+                format!(
+                    "Gamepad {}: RawButton {:?} [0x{:08X}]",
+                    dev, button, code_u32
+                ),
                 Some(*pressed),
             )
         }
-        PE::RawAxis { id, axis, code, value, .. } => {
+        PE::RawAxis {
+            id,
+            axis,
+            code,
+            value,
+            ..
+        } => {
             let dev = usize::from(*id);
             let code_u32 = code.into_u32();
             // Axis inputs are continuous; treat them as always \"pressed\" for display.
             (
-                format!("Gamepad {}: RawAxis {:?} [0x{:08X}] ({:.3})", dev, axis, code_u32, value),
+                format!(
+                    "Gamepad {}: RawAxis {:?} [0x{:08X}] ({:.3})",
+                    dev, axis, code_u32, value
+                ),
                 None,
             )
         }
@@ -273,7 +299,10 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
     let menu_y = cy + 160.0;
     let menu_x_offset = 37.0_f32;
 
-    for (slot, x_offset) in [(PlayerSlot::P1, -pad_spacing), (PlayerSlot::P2, pad_spacing)] {
+    for (slot, x_offset) in [
+        (PlayerSlot::P1, -pad_spacing),
+        (PlayerSlot::P2, pad_spacing),
+    ] {
         let pad_x = cx + x_offset as f32;
         actors.push(act!(sprite("test_input/dance.png"):
             align(0.5, 0.5):
@@ -297,10 +326,26 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
 
         // Simple four-direction highlights roughly matching Simply Love layout.
         let held = &state.pad_visual.buttons_held;
-        let alpha_up = if *held.get(&(slot, LogicalButton::Up)).unwrap_or(&false) { 1.0 } else { 0.0 };
-        let alpha_down = if *held.get(&(slot, LogicalButton::Down)).unwrap_or(&false) { 1.0 } else { 0.0 };
-        let alpha_left = if *held.get(&(slot, LogicalButton::Left)).unwrap_or(&false) { 1.0 } else { 0.0 };
-        let alpha_right = if *held.get(&(slot, LogicalButton::Right)).unwrap_or(&false) { 1.0 } else { 0.0 };
+        let alpha_up = if *held.get(&(slot, LogicalButton::Up)).unwrap_or(&false) {
+            1.0
+        } else {
+            0.0
+        };
+        let alpha_down = if *held.get(&(slot, LogicalButton::Down)).unwrap_or(&false) {
+            1.0
+        } else {
+            0.0
+        };
+        let alpha_left = if *held.get(&(slot, LogicalButton::Left)).unwrap_or(&false) {
+            1.0
+        } else {
+            0.0
+        };
+        let alpha_right = if *held.get(&(slot, LogicalButton::Right)).unwrap_or(&false) {
+            1.0
+        } else {
+            0.0
+        };
 
         actors.push(act!(sprite("test_input/highlight.png"):
             align(0.5, 0.5):
@@ -328,10 +373,29 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         ));
 
         // Menu button cluster below pad (Start/Select/MenuLeft/MenuRight).
-        let alpha_start = if *held.get(&(slot, LogicalButton::Start)).unwrap_or(&false) { 1.0 } else { 0.0 };
-        let alpha_select = if *held.get(&(slot, LogicalButton::Select)).unwrap_or(&false) { 1.0 } else { 0.0 };
-        let alpha_mleft = if *held.get(&(slot, LogicalButton::MenuLeft)).unwrap_or(&false) { 1.0 } else { 0.0 };
-        let alpha_mright = if *held.get(&(slot, LogicalButton::MenuRight)).unwrap_or(&false) { 1.0 } else { 0.0 };
+        let alpha_start = if *held.get(&(slot, LogicalButton::Start)).unwrap_or(&false) {
+            1.0
+        } else {
+            0.0
+        };
+        let alpha_select = if *held.get(&(slot, LogicalButton::Select)).unwrap_or(&false) {
+            1.0
+        } else {
+            0.0
+        };
+        let alpha_mleft = if *held.get(&(slot, LogicalButton::MenuLeft)).unwrap_or(&false) {
+            1.0
+        } else {
+            0.0
+        };
+        let alpha_mright = if *held
+            .get(&(slot, LogicalButton::MenuRight))
+            .unwrap_or(&false)
+        {
+            1.0
+        } else {
+            0.0
+        };
 
         // Buttons background sprite (mirrors Simply Love's buttons.png).
         actors.push(act!(sprite("test_input/buttons.png"):

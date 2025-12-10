@@ -2,25 +2,19 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::core::audio;
 use crate::core::input::{
-    get_keymap,
-    InputEvent,
-    VirtualAction,
-    InputBinding,
-    PadEvent,
-    GamepadCodeBinding,
-    InputSource,
+    GamepadCodeBinding, InputBinding, InputEvent, InputSource, PadEvent, VirtualAction, get_keymap,
 };
 use crate::core::space::*;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use crate::ui::components::{heart_bg, screen_bar};
 use crate::ui::components::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
+use crate::ui::components::{heart_bg, screen_bar};
 use crate::ui::font;
-use winit::event::KeyEvent;
-use winit::event::ElementState;
-use winit::keyboard::{KeyCode, PhysicalKey};
 use std::time::{Duration, Instant};
+use winit::event::ElementState;
+use winit::event::KeyEvent;
+use winit::keyboard::{KeyCode, PhysicalKey};
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -115,29 +109,29 @@ fn row_actions(row_idx: usize) -> (Option<VirtualAction>, Option<VirtualAction>)
     use VirtualAction::*;
     match row_idx {
         // Menu navigation
-        0 => (Some(p1_menu_left),  Some(p2_menu_left)),
+        0 => (Some(p1_menu_left), Some(p2_menu_left)),
         1 => (Some(p1_menu_right), Some(p2_menu_right)),
-        2 => (Some(p1_menu_up),    Some(p2_menu_up)),
-        3 => (Some(p1_menu_down),  Some(p2_menu_down)),
+        2 => (Some(p1_menu_up), Some(p2_menu_up)),
+        3 => (Some(p1_menu_down), Some(p2_menu_down)),
         // System buttons
-        4 => (Some(p1_start),      Some(p2_start)),
-        5 => (Some(p1_select),     Some(p2_select)),
-        6 => (Some(p1_back),       Some(p2_back)),
-        7 => (Some(p1_restart),    Some(p2_restart)),
+        4 => (Some(p1_start), Some(p2_start)),
+        5 => (Some(p1_select), Some(p2_select)),
+        6 => (Some(p1_back), Some(p2_back)),
+        7 => (Some(p1_restart), Some(p2_restart)),
         // Insert Coin currently global-only; no per-player virtual action yet.
-        8 => (None,                None),
+        8 => (None, None),
         // Operator
-        9  => (Some(p1_operator),  Some(p2_operator)),
+        9 => (Some(p1_operator), Some(p2_operator)),
         // EffectUp/EffectDown, UpLeft/UpRight reserved for future expansion.
-        10 => (None,               None),
-        11 => (None,               None),
+        10 => (None, None),
+        11 => (None, None),
         // Gameplay directions
-        12 => (Some(p1_left),      Some(p2_left)),
-        13 => (Some(p1_right),     Some(p2_right)),
-        14 => (Some(p1_up),        Some(p2_up)),
-        15 => (Some(p1_down),      Some(p2_down)),
-        16 => (None,               None),
-        17 => (None,               None),
+        12 => (Some(p1_left), Some(p2_left)),
+        13 => (Some(p1_right), Some(p2_right)),
+        14 => (Some(p1_up), Some(p2_up)),
+        15 => (Some(p1_down), Some(p2_down)),
+        16 => (None, None),
+        17 => (None, None),
         _ => (None, None),
     }
 }
@@ -339,13 +333,10 @@ pub fn update(state: &mut State, dt: f32) {
         let content_left = LEFT_MARGIN_PX;
         let content_right = sw - RIGHT_MARGIN_PX;
         let avail_w = (content_right - content_left).max(0.0);
-        let avail_h =
-            (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
+        let avail_h = (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
 
-        let total_w_base =
-            SIDE_W_BASE * 2.0 + DESC_W_BASE * 0.8 + SIDE_GAP_BASE * 2.0;
-        let rows_h_base =
-            (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
+        let total_w_base = SIDE_W_BASE * 2.0 + DESC_W_BASE * 0.8 + SIDE_GAP_BASE * 2.0;
+        let rows_h_base = (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
 
         let s_w = if total_w_base > 0.0 {
             avail_w / total_w_base
@@ -359,8 +350,7 @@ pub fn update(state: &mut State, dt: f32) {
         };
         let s = s_w.min(s_h).max(0.0);
 
-        let first_row_y =
-            content_top + FIRST_ROW_TOP_MARGIN_PX + TABLE_TOP_EXTRA_PX;
+        let first_row_y = content_top + FIRST_ROW_TOP_MARGIN_PX + TABLE_TOP_EXTRA_PX;
 
         let total = total_rows();
         let anchor_row: usize = 4;
@@ -377,8 +367,7 @@ pub fn update(state: &mut State, dt: f32) {
         let prev_idx = state.prev_selected_row;
         let i_prev_vis = (prev_idx as isize) - (offset_rows as isize);
         let row_step = (ROW_H + ROW_GAP) * s;
-        let from_y_center =
-            first_row_y + (i_prev_vis as f32) * row_step + 0.5 * ROW_H * s;
+        let from_y_center = first_row_y + (i_prev_vis as f32) * row_step + 0.5 * ROW_H * s;
         state.cursor_row_anim_from_y = from_y_center;
         state.cursor_row_anim_t = 0.0;
         state.cursor_row_anim_from_row = Some(prev_idx);
@@ -401,8 +390,7 @@ pub fn update(state: &mut State, dt: f32) {
     // Advance horizontal slot tween, if any.
     if state.slot_anim_t < 1.0 {
         if CURSOR_TWEEN_SECONDS > 0.0 {
-            state.slot_anim_t =
-                (state.slot_anim_t + dt / CURSOR_TWEEN_SECONDS).min(1.0);
+            state.slot_anim_t = (state.slot_anim_t + dt / CURSOR_TWEEN_SECONDS).min(1.0);
         } else {
             state.slot_anim_t = 1.0;
         }
@@ -445,8 +433,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAc
         // Map the captured key into the appropriate binding slot based on
         // the active row and slot, then persist to deadsync.ini with unique
         // keyboard bindings across all P1/P2 actions.
-        if let (Some(row_idx), Some(slot)) = (state.capture_row, state.capture_slot)
-        {
+        if let (Some(row_idx), Some(slot)) = (state.capture_row, state.capture_slot) {
             let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
             let action_opt = match slot {
                 ActiveSlot::P1Primary | ActiveSlot::P1Secondary => p1_act_opt,
@@ -458,11 +445,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAc
                     ActiveSlot::P1Primary | ActiveSlot::P2Primary => 1,
                     ActiveSlot::P1Secondary | ActiveSlot::P2Secondary => 2,
                 };
-                crate::config::update_keymap_binding_unique_keyboard(
-                    action,
-                    index,
-                    code,
-                );
+                crate::config::update_keymap_binding_unique_keyboard(action, index, code);
                 audio::play_sfx("assets/sounds/change_value.ogg");
             }
         }
@@ -559,8 +542,12 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 
     // Only react to press edges; releases and pure axis motion are ignored.
     let binding_opt = match *pad_event {
-        PadEvent::RawButton { id, code, pressed, .. } => {
-            if !pressed { return; }
+        PadEvent::RawButton {
+            id, code, pressed, ..
+        } => {
+            if !pressed {
+                return;
+            }
             let dev = usize::from(id);
             let code_u32 = code.into_u32();
             Some(InputBinding::GamepadCode(GamepadCodeBinding {
@@ -570,17 +557,23 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             }))
         }
         PadEvent::Dir { id, dir, pressed } => {
-            if !pressed { return; }
+            if !pressed {
+                return;
+            }
             let dev = usize::from(id);
             Some(InputBinding::PadDirOn { device: dev, dir })
         }
         PadEvent::Button { id, btn, pressed } => {
-            if !pressed { return; }
+            if !pressed {
+                return;
+            }
             let dev = usize::from(id);
             Some(InputBinding::PadButtonOn { device: dev, btn })
         }
         PadEvent::Face { id, btn, pressed } => {
-            if !pressed { return; }
+            if !pressed {
+                return;
+            }
             let dev = usize::from(id);
             Some(InputBinding::FaceOn { device: dev, btn })
         }
@@ -708,7 +701,11 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
     match actor {
         Actor::Sprite { tint, .. } => tint[3] *= alpha,
         Actor::Text { color, .. } => color[3] *= alpha,
-        Actor::Frame { background, children, .. } => {
+        Actor::Frame {
+            background,
+            children,
+            ..
+        } => {
             if let Some(crate::ui::actors::Background::Color(c)) = background {
                 c[3] *= alpha;
             }
@@ -828,8 +825,7 @@ pub fn get_actors(
     // Colors
     let col_active_bg = color::rgba_hex("#333333");
     let base_inactive = color::rgba_hex("#071016");
-    let col_inactive_bg: [f32; 4] =
-        [base_inactive[0], base_inactive[1], base_inactive[2], 0.8];
+    let col_inactive_bg: [f32; 4] = [base_inactive[0], base_inactive[1], base_inactive[2], 0.8];
     let col_white = [1.0, 1.0, 1.0, 1.0];
     let col_gray = color::rgba_hex("#808080");
 
@@ -847,15 +843,12 @@ pub fn get_actors(
     let content_left = LEFT_MARGIN_PX;
     let content_right = sw - RIGHT_MARGIN_PX;
     let avail_w = (content_right - content_left).max(0.0);
-    let avail_h =
-        (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
+    let avail_h = (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
 
     // Base layout extents (unscaled).
-    let total_w_base =
-        SIDE_W_BASE * 2.0 + DESC_W_BASE * 0.8 + SIDE_GAP_BASE * 2.0;
+    let total_w_base = SIDE_W_BASE * 2.0 + DESC_W_BASE * 0.8 + SIDE_GAP_BASE * 2.0;
     // Only VISIBLE_ROWS participate in vertical fit; the list scrolls inside.
-    let rows_h_base =
-        (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
+    let rows_h_base = (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
 
     let s_w = if total_w_base > 0.0 {
         avail_w / total_w_base
@@ -874,8 +867,7 @@ pub fn get_actors(
     let gap = SIDE_GAP_BASE * s;
 
     let content_center_x = content_left + avail_w * 0.5;
-    let first_row_y =
-        content_top + FIRST_ROW_TOP_MARGIN_PX + TABLE_TOP_EXTRA_PX;
+    let first_row_y = content_top + FIRST_ROW_TOP_MARGIN_PX + TABLE_TOP_EXTRA_PX;
 
     let desc_x = content_center_x - desc_w * 0.5;
     let p1_side_x = desc_x - gap - side_w;
@@ -928,8 +920,7 @@ pub fn get_actors(
                 break;
             }
             let row_center_y =
-                first_row_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s
-                    + 0.5 * ROW_H * s;
+                first_row_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s + 0.5 * ROW_H * s;
             ui_actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(labels_center_x, row_center_y):
@@ -1060,8 +1051,7 @@ pub fn get_actors(
         }
 
         let is_exit = row_idx == total - 1;
-        let row_y =
-            first_row_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s;
+        let row_y = first_row_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s;
         let row_mid_y = row_y + 0.5 * ROW_H * s;
         let is_active = row_idx == state.selected_row;
 
@@ -1132,11 +1122,7 @@ pub fn get_actors(
                 .and_then(|act| keymap.first_key_binding(act))
                 .map(|code| format!("{:?}", code))
                 .unwrap_or_else(|| "------".to_string());
-            let active_value_color = if is_active {
-                col_white
-            } else {
-                col_gray
-            };
+            let active_value_color = if is_active { col_white } else { col_gray };
 
             // Heartbeat-style pulse for the slot currently being captured.
             let pulse_opt = if state.capture_active && state.capture_row == Some(row_idx) {
@@ -1250,8 +1236,7 @@ pub fn get_actors(
 
             // Selection ring around active slot.
             if is_active {
-                let center_x_target =
-                    slot_center_x_for_row(row_idx, state.active_slot);
+                let center_x_target = slot_center_x_for_row(row_idx, state.active_slot);
                 let mut center_x = center_x_target;
                 let mut center_y = row_mid_y;
 
@@ -1280,11 +1265,9 @@ pub fn get_actors(
 
                 asset_manager.with_fonts(|all_fonts| {
                     asset_manager.with_font("miso", |metrics_font| {
-                        let mut text_w = font::measure_line_width_logical(
-                            metrics_font,
-                            active_text,
-                            all_fonts,
-                        ) as f32;
+                        let mut text_w =
+                            font::measure_line_width_logical(metrics_font, active_text, all_fonts)
+                                as f32;
                         if !text_w.is_finite() || text_w <= 0.0 {
                             text_w = 1.0;
                         }
@@ -1299,8 +1282,7 @@ pub fn get_actors(
                         let t = (draw_w / width_ref).clamp(0.0, 1.0);
                         let mut pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
                         // Ensure the ring does not invade adjacent inline column space.
-                        let max_pad_by_spacing =
-                            (INLINE_SPACING - border_w).max(min_pad_x);
+                        let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
                         if pad_x > max_pad_by_spacing {
                             pad_x = max_pad_by_spacing;
                         }
@@ -1316,22 +1298,16 @@ pub fn get_actors(
                 if state.cursor_row_anim_t < 1.0 {
                     if let Some(from_row) = state.cursor_row_anim_from_row {
                         let t = ease_out_cubic(state.cursor_row_anim_t);
-                        let from_x = slot_center_x_for_row(
-                            from_row,
-                            state.active_slot,
-                        );
+                        let from_x = slot_center_x_for_row(from_row, state.active_slot);
                         let from_y = state.cursor_row_anim_from_y;
                         center_x = from_x + (center_x_target - from_x) * t;
-                        center_y =
-                            from_y + (row_mid_y - from_y) * t;
+                        center_y = from_y + (row_mid_y - from_y) * t;
                     }
                 } else if state.slot_anim_t < 1.0 {
                     // Horizontal tween within the current row when changing slots.
                     let t = ease_out_cubic(state.slot_anim_t);
-                    let from_x =
-                        slot_center_x_for_row(row_idx, state.slot_anim_from);
-                    let to_x =
-                        slot_center_x_for_row(row_idx, state.slot_anim_to);
+                    let from_x = slot_center_x_for_row(row_idx, state.slot_anim_from);
+                    let to_x = slot_center_x_for_row(row_idx, state.slot_anim_to);
                     center_x = from_x + (to_x - from_x) * t;
                 }
 
@@ -1339,8 +1315,7 @@ pub fn get_actors(
                 let right = center_x + ring_w * 0.5;
                 let top = center_y - ring_h * 0.5;
                 let bottom = center_y + ring_h * 0.5;
-                let mut ring_color =
-                    color::decorative_rgba(state.active_color_index);
+                let mut ring_color = color::decorative_rgba(state.active_color_index);
                 ring_color[3] = 1.0;
 
                 ui_actors.push(act!(quad:
@@ -1377,11 +1352,7 @@ pub fn get_actors(
             // similar in spirit to PlayerOptions.
             let exit_label = "Exit";
             let exit_y = row_mid_y;
-            let choice_color = if is_active {
-                col_white
-            } else {
-                col_gray
-            };
+            let choice_color = if is_active { col_white } else { col_gray };
             let exit_center_x = content_center_x;
 
             // Full-width background from content_left to content_right.
@@ -1413,16 +1384,13 @@ pub fn get_actors(
                 let value_zoom = 0.835_f32;
                 asset_manager.with_fonts(|all_fonts| {
                     asset_manager.with_font("miso", |metrics_font| {
-                        let mut text_w = font::measure_line_width_logical(
-                            metrics_font,
-                            exit_label,
-                            all_fonts,
-                        ) as f32;
+                        let mut text_w =
+                            font::measure_line_width_logical(metrics_font, exit_label, all_fonts)
+                                as f32;
                         if !text_w.is_finite() || text_w <= 0.0 {
                             text_w = 1.0;
                         }
-                        let text_h =
-                            (metrics_font.height as f32).max(1.0) * value_zoom;
+                        let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
                         let draw_w = text_w * value_zoom;
                         let draw_h = text_h;
 
@@ -1435,11 +1403,9 @@ pub fn get_actors(
                             size_t = 0.0;
                         }
                         size_t = size_t.clamp(0.0, 1.0);
-                        let mut pad_x =
-                            min_pad_x + (max_pad_x - min_pad_x) * size_t;
+                        let mut pad_x = min_pad_x + (max_pad_x - min_pad_x) * size_t;
                         let border_w = widescale(2.0, 2.5);
-                        let max_pad_by_spacing =
-                            (INLINE_SPACING - border_w).max(min_pad_x);
+                        let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
                         if pad_x > max_pad_by_spacing {
                             pad_x = max_pad_by_spacing;
                         }
@@ -1452,16 +1418,11 @@ pub fn get_actors(
                         // Diagonal tween from the previous row's cursor center
                         // (mapping slot or the previous Exit) to this Exit row.
                         if state.cursor_row_anim_t < 1.0 {
-                            if let Some(from_row) = state.cursor_row_anim_from_row
-                            {
+                            if let Some(from_row) = state.cursor_row_anim_from_row {
                                 let t = ease_out_cubic(state.cursor_row_anim_t);
-                                let from_x = slot_center_x_for_row(
-                                    from_row,
-                                    state.active_slot,
-                                );
+                                let from_x = slot_center_x_for_row(from_row, state.active_slot);
                                 let from_y = state.cursor_row_anim_from_y;
-                                center_x =
-                                    from_x + (exit_center_x - from_x) * t;
+                                center_x = from_x + (exit_center_x - from_x) * t;
                                 center_y = from_y + (exit_y - from_y) * t;
 
                                 // Interpolate ring size from a mapping-sized
@@ -1469,10 +1430,8 @@ pub fn get_actors(
                                 let ring_w_from = col_w * 0.9;
                                 let ring_h_from = ROW_H * s * 0.9;
                                 let tsize = t;
-                                ring_w =
-                                    ring_w_from + (ring_w - ring_w_from) * tsize;
-                                ring_h =
-                                    ring_h_from + (ring_h - ring_h_from) * tsize;
+                                ring_w = ring_w_from + (ring_w - ring_w_from) * tsize;
+                                ring_h = ring_h_from + (ring_h - ring_h_from) * tsize;
                             }
                         }
 
@@ -1480,8 +1439,7 @@ pub fn get_actors(
                         let right = center_x + ring_w * 0.5;
                         let top = center_y - ring_h * 0.5;
                         let bottom = center_y + ring_h * 0.5;
-                        let mut ring_color =
-                            color::decorative_rgba(state.active_color_index);
+                        let mut ring_color = color::decorative_rgba(state.active_color_index);
                         ring_color[3] = 1.0;
 
                         ui_actors.push(act!(quad:

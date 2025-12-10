@@ -1,26 +1,28 @@
 use crate::act;
+use crate::core::space::widescale;
 use crate::core::space::*;
 use crate::screens::Screen;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
+use crate::ui::components::screen_bar::{
+    AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
+};
 use crate::ui::components::{heart_bg, pad_display, screen_bar};
-use crate::ui::components::screen_bar::{AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement};
-use crate::core::space::widescale;
 
-use crate::game::judgment::{self, JudgeGrade};
-use crate::screens::gameplay;
-use crate::game::song::SongData;
+use crate::assets::AssetManager;
 use crate::game::chart::ChartData;
+use crate::game::judgment::{self, JudgeGrade};
 use crate::game::scores;
+use crate::game::scroll::ScrollSpeedSetting;
+use crate::game::song::SongData;
+use crate::game::timing as timing_stats;
+use crate::screens::gameplay;
+use crate::ui::font;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
-use crate::game::scroll::ScrollSpeedSetting;
-use crate::game::timing as timing_stats;
-use crate::assets::AssetManager;
-use crate::ui::font;
 
+use crate::core::input::{InputEvent, VirtualAction};
 use crate::game::profile;
-use crate::core::input::{VirtualAction, InputEvent};
 use crate::screens::ScreenAction;
 // Keyboard handling is centralized in app.rs via virtual actions
 use chrono::Local;
@@ -162,7 +164,11 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             histogram,
             graph_first_second,
             graph_last_second,
-            music_rate: if gs.music_rate.is_finite() && gs.music_rate > 0.0 { gs.music_rate } else { 1.0 },
+            music_rate: if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
+                gs.music_rate
+            } else {
+                1.0
+            },
             scroll_option: profile::get().scroll_option,
             life_history: gs.life_history,
             fail_time: gs.fail_time,
@@ -252,8 +258,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 // --- Statics and helper function for the P1 stats pane ---
 
 static JUDGMENT_ORDER: [JudgeGrade; 6] = [
-    JudgeGrade::Fantastic, JudgeGrade::Excellent, JudgeGrade::Great,
-    JudgeGrade::Decent, JudgeGrade::WayOff, JudgeGrade::Miss,
+    JudgeGrade::Fantastic,
+    JudgeGrade::Excellent,
+    JudgeGrade::Great,
+    JudgeGrade::Decent,
+    JudgeGrade::WayOff,
+    JudgeGrade::Miss,
 ];
 
 struct JudgmentDisplayInfo {
@@ -263,18 +273,56 @@ struct JudgmentDisplayInfo {
 
 static JUDGMENT_INFO: LazyLock<HashMap<JudgeGrade, JudgmentDisplayInfo>> = LazyLock::new(|| {
     HashMap::from([
-        (JudgeGrade::Fantastic, JudgmentDisplayInfo { label: "FANTASTIC", color: color::rgba_hex(color::JUDGMENT_HEX[0]) }),
-        (JudgeGrade::Excellent, JudgmentDisplayInfo { label: "EXCELLENT", color: color::rgba_hex(color::JUDGMENT_HEX[1]) }),
-        (JudgeGrade::Great,     JudgmentDisplayInfo { label: "GREAT",     color: color::rgba_hex(color::JUDGMENT_HEX[2]) }),
-        (JudgeGrade::Decent,    JudgmentDisplayInfo { label: "DECENT",    color: color::rgba_hex(color::JUDGMENT_HEX[3]) }),
-        (JudgeGrade::WayOff,    JudgmentDisplayInfo { label: "WAY OFF",   color: color::rgba_hex(color::JUDGMENT_HEX[4]) }),
-        (JudgeGrade::Miss,      JudgmentDisplayInfo { label: "MISS",      color: color::rgba_hex(color::JUDGMENT_HEX[5]) }),
+        (
+            JudgeGrade::Fantastic,
+            JudgmentDisplayInfo {
+                label: "FANTASTIC",
+                color: color::rgba_hex(color::JUDGMENT_HEX[0]),
+            },
+        ),
+        (
+            JudgeGrade::Excellent,
+            JudgmentDisplayInfo {
+                label: "EXCELLENT",
+                color: color::rgba_hex(color::JUDGMENT_HEX[1]),
+            },
+        ),
+        (
+            JudgeGrade::Great,
+            JudgmentDisplayInfo {
+                label: "GREAT",
+                color: color::rgba_hex(color::JUDGMENT_HEX[2]),
+            },
+        ),
+        (
+            JudgeGrade::Decent,
+            JudgmentDisplayInfo {
+                label: "DECENT",
+                color: color::rgba_hex(color::JUDGMENT_HEX[3]),
+            },
+        ),
+        (
+            JudgeGrade::WayOff,
+            JudgmentDisplayInfo {
+                label: "WAY OFF",
+                color: color::rgba_hex(color::JUDGMENT_HEX[4]),
+            },
+        ),
+        (
+            JudgeGrade::Miss,
+            JudgmentDisplayInfo {
+                label: "MISS",
+                color: color::rgba_hex(color::JUDGMENT_HEX[5]),
+            },
+        ),
     ])
 });
 
 /// Builds the entire P1 (left side) stats pane including judgments and radar counts.
 fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
-    let Some(score_info) = &state.score_info else { return vec![]; };
+    let Some(score_info) = &state.score_info else {
+        return vec![];
+    };
     let mut actors = Vec::new();
     let cy = screen_center_y();
 
@@ -287,9 +335,11 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
 
     // --- Calculate label shift for large numbers ---
     let max_judgment_count = if !show_fa_plus_pane {
-        JUDGMENT_ORDER.iter()
+        JUDGMENT_ORDER
+            .iter()
             .map(|grade| score_info.judgment_counts.get(grade).cloned().unwrap_or(0))
-            .max().unwrap_or(0)
+            .max()
+            .unwrap_or(0)
     } else {
         let wc = score_info.window_counts;
         *[wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss]
@@ -297,15 +347,22 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
             .max()
             .unwrap_or(&0)
     };
-    
+
     let (label_shift_x, label_zoom) = if max_judgment_count > 9999 {
         let length = (max_judgment_count as f32).log10().floor() as i32 + 1;
-        (-11.0 * (length - 4) as f32, 0.833 - 0.1 * (length - 4) as f32)
+        (
+            -11.0 * (length - 4) as f32,
+            0.833 - 0.1 * (length - 4) as f32,
+        )
     } else {
         (0.0, 0.833)
     };
 
-    let digits_needed = if max_judgment_count == 0 { 1 } else { (max_judgment_count as f32).log10().floor() as usize + 1 };
+    let digits_needed = if max_judgment_count == 0 {
+        1
+    } else {
+        (max_judgment_count as f32).log10().floor() as usize + 1
+    };
     let digits_to_fmt = digits_needed.max(4);
 
     asset_manager.with_fonts(|all_fonts| asset_manager.with_font("wendy_screenevaluation", |metrics_font| {
@@ -577,19 +634,21 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
 
     for (i, (label, grade_idx)) in judgment_labels.iter().enumerate() {
         let color = color::rgba_hex(color::JUDGMENT_HEX[*grade_idx]);
-        let window_ms = if i > 0 { timing_windows[i-1] } else { 0.0 };
+        let window_ms = if i > 0 { timing_windows[i - 1] } else { 0.0 };
         let next_window_ms = timing_windows[i];
         let mid_point_ms = (window_ms + next_window_ms) / 2.0_f32;
-        
+
         // Scale position from ms to pane coordinates
         let x_offset = (mid_point_ms / worst_window) * (pane_width / 2.0_f32);
 
-        if i == 0 { // "Fan" is centered
+        if i == 0 {
+            // "Fan" is centered
             children.push(act!(text: font("miso"): settext(*label):
                 align(0.5, 0.5): xy(pane_width / 2.0_f32, bottom_bar_center_y):
                 zoom(0.65): diffuse(color[0], color[1], color[2], color[3])
             ));
-        } else { // Others are symmetric
+        } else {
+            // Others are symmetric
             children.push(act!(text: font("miso"): settext(*label):
                 align(0.5, 0.5): xy(pane_width / 2.0_f32 - x_offset, bottom_bar_center_y):
                 zoom(0.65): diffuse(color[0], color[1], color[2], color[3])
@@ -613,36 +672,61 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
         use std::collections::HashMap;
         let worst_observed = score_info.histogram.worst_observed_ms.max(0.0);
         // Choose source (smoothed vs raw)
-        let (height_scale_peak, get_value_at_bin): (f32, Box<dyn Fn(i32) -> f32>) = if use_smoothing {
-            let mut smooth_map: HashMap<i32, f32> = HashMap::with_capacity(score_info.histogram.smoothed.len());
-            for (bin, val) in &score_info.histogram.smoothed { smooth_map.insert(*bin, *val); }
+        let (height_scale_peak, get_value_at_bin): (f32, Box<dyn Fn(i32) -> f32>) = if use_smoothing
+        {
+            let mut smooth_map: HashMap<i32, f32> =
+                HashMap::with_capacity(score_info.histogram.smoothed.len());
+            for (bin, val) in &score_info.histogram.smoothed {
+                smooth_map.insert(*bin, *val);
+            }
             let raw_peak = score_info.histogram.max_count.max(1) as f32;
-            (raw_peak, Box::new(move |b| *smooth_map.get(&b).unwrap_or(&0.0)))
+            (
+                raw_peak,
+                Box::new(move |b| *smooth_map.get(&b).unwrap_or(&0.0)),
+            )
         } else {
-            let mut count_map: HashMap<i32, u32> = HashMap::with_capacity(score_info.histogram.bins.len());
-            for (bin, cnt) in &score_info.histogram.bins { count_map.insert(*bin, *cnt); }
+            let mut count_map: HashMap<i32, u32> =
+                HashMap::with_capacity(score_info.histogram.bins.len());
+            for (bin, cnt) in &score_info.histogram.bins {
+                count_map.insert(*bin, *cnt);
+            }
             let max_count = score_info.histogram.max_count.max(1) as f32;
-            (max_count, Box::new(move |b| *count_map.get(&b).unwrap_or(&0) as f32))
+            (
+                max_count,
+                Box::new(move |b| *count_map.get(&b).unwrap_or(&0) as f32),
+            )
         };
 
         let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
-            if abs_ms <= timing_windows[0] { color::rgba_hex(color::JUDGMENT_HEX[0]) }
-            else if abs_ms <= timing_windows[1] { color::rgba_hex(color::JUDGMENT_HEX[1]) }
-            else if abs_ms <= timing_windows[2] { color::rgba_hex(color::JUDGMENT_HEX[2]) }
-            else if abs_ms <= timing_windows[3] { color::rgba_hex(color::JUDGMENT_HEX[3]) }
-            else { color::rgba_hex(color::JUDGMENT_HEX[4]) }
+            if abs_ms <= timing_windows[0] {
+                color::rgba_hex(color::JUDGMENT_HEX[0])
+            } else if abs_ms <= timing_windows[1] {
+                color::rgba_hex(color::JUDGMENT_HEX[1])
+            } else if abs_ms <= timing_windows[2] {
+                color::rgba_hex(color::JUDGMENT_HEX[2])
+            } else if abs_ms <= timing_windows[3] {
+                color::rgba_hex(color::JUDGMENT_HEX[3])
+            } else {
+                color::rgba_hex(color::JUDGMENT_HEX[4])
+            }
         };
 
         let mut draw_bin = |bin_idx: i32, y_val: f32| {
-            if y_val <= 0.0 { return; }
+            if y_val <= 0.0 {
+                return;
+            }
             let x = (bin_idx - (-worst_bin)) as f32 * bar_w;
             let abs_ms = (bin_idx as f32).abs();
             // Don't draw beyond the worst observed offset, matching SL's behavior
-            if abs_ms > worst_observed { return; }
+            if abs_ms > worst_observed {
+                return;
+            }
             let col = color_for_abs_ms(abs_ms);
             // Scale value by peak to 75% of graph area
             let h = (y_val / height_scale_peak) * (graph_area_height * 0.75);
-            if h <= 0.0 { return; }
+            if h <= 0.0 {
+                return;
+            }
             children.push(act!(quad:
                 align(0.0, 1.0): xy(x, y_bottom):
                 setsize(bar_w, h):
@@ -669,17 +753,19 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
         .unwrap_or_else(|| "0.0ms".to_string());
 
     let stats = state.score_info.as_ref();
-    let mean_abs_text = stats.map(|s| format!("{:.1}ms", s.timing.mean_abs_ms)).unwrap_or_else(|| "0.0ms".to_string());
-    let mean_text = stats.map(|s| format!("{:.1}ms", s.timing.mean_ms)).unwrap_or_else(|| "0.0ms".to_string());
-    let stddev3_text = stats.map(|s| format!("{:.1}ms", s.timing.stddev_ms * 3.0)).unwrap_or_else(|| "0.0ms".to_string());
+    let mean_abs_text = stats
+        .map(|s| format!("{:.1}ms", s.timing.mean_abs_ms))
+        .unwrap_or_else(|| "0.0ms".to_string());
+    let mean_text = stats
+        .map(|s| format!("{:.1}ms", s.timing.mean_ms))
+        .unwrap_or_else(|| "0.0ms".to_string());
+    let stddev3_text = stats
+        .map(|s| format!("{:.1}ms", s.timing.stddev_ms * 3.0))
+        .unwrap_or_else(|| "0.0ms".to_string());
 
     let labels_and_values = [
         ("mean abs error", 40.0, mean_abs_text),
-        (
-            "mean",
-            40.0 + (pane_width - 80.0_f32) / 3.0_f32,
-            mean_text,
-        ),
+        ("mean", 40.0 + (pane_width - 80.0_f32) / 3.0_f32, mean_text),
         (
             "std dev * 3",
             40.0 + (pane_width - 80.0_f32) / 3.0_f32 * 2.0_f32,
@@ -708,7 +794,6 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
         z: 101,
     }]
 }
-
 
 /// Builds the modifiers display pane for P1.
 fn build_modifiers_pane(state: &State) -> Vec<Actor> {
@@ -783,7 +868,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         position: ScreenBarPosition::Top,
         transparent: false,
         fg_color: [1.0; 4],
-        left_text: None, center_text: None, right_text: None,
+        left_text: None,
+        center_text: None,
+        right_text: None,
         left_avatar: None,
     }));
 
@@ -799,7 +886,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         diffuse(1.0, 1.0, 1.0, 1.0):
         horizalign(center)
     ));
-    
+
     let Some(score_info) = &state.score_info else {
         actors.push(act!(text:
             font("wendy"):
@@ -810,7 +897,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
         return actors;
     };
-    
+
     // --- Lower Stats Pane Background ---
     {
         let pane_width = (300.0 * 2.0) + 10.0;
@@ -834,7 +921,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // --- Title, Banner, and Song Features (Center Column) ---
     {
         // --- TitleAndBanner Group ---
-        let banner_key = score_info.song.banner_path.as_ref()
+        let banner_key = score_info
+            .song
+            .banner_path
+            .as_ref()
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_else(|| {
                 let banner_num = state.active_color_index.rem_euclid(12) + 1;
@@ -871,7 +961,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 format!("{} - {} bpm", min, max)
             };
-            if (score_info.music_rate - 1.0).abs() > 0.001 { format!("{} ({}x Music Rate)", base, format!("{:.2}", score_info.music_rate)) } else { base }
+            if (score_info.music_rate - 1.0).abs() > 0.001 {
+                format!(
+                    "{} ({}x Music Rate)",
+                    base,
+                    format!("{:.2}", score_info.music_rate)
+                )
+            } else {
+                base
+            }
         };
 
         let length_text = {
@@ -930,10 +1028,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Difficulty Text and Meter Block
     {
         // Find the index of the current difficulty to look up the display name.
-        let difficulty_index = color::FILE_DIFFICULTY_NAMES.iter().position(|&n| n.eq_ignore_ascii_case(&score_info.chart.difficulty)).unwrap_or(2);
+        let difficulty_index = color::FILE_DIFFICULTY_NAMES
+            .iter()
+            .position(|&n| n.eq_ignore_ascii_case(&score_info.chart.difficulty))
+            .unwrap_or(2);
         let difficulty_display_name = color::DISPLAY_DIFFICULTY_NAMES[difficulty_index];
 
-        let difficulty_color = color::difficulty_rgba(&score_info.chart.difficulty, state.active_color_index);
+        let difficulty_color =
+            color::difficulty_rgba(&score_info.chart.difficulty, state.active_color_index);
         let difficulty_text = format!("Single / {}", difficulty_display_name);
         actors.push(act!(text: font("miso"): settext(difficulty_text): align(0.0, 0.5): xy(p1_frame_x - 115.0, cy - 65.0): zoom(0.7): z(101): diffuse(1.0, 1.0, 1.0, 1.0) ));
         actors.push(act!(quad: align(0.5, 0.5): xy(p1_frame_x - 134.5, cy - 71.0): zoomto(30.0, 30.0): z(101): diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0) ));
@@ -956,7 +1058,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let max_allowed_logical_width = width_constraint / text_zoom;
 
                     let fits = |text: &str| {
-                        let logical_width = font::measure_line_width_logical(miso_font, text, all_fonts) as f32;
+                        let logical_width =
+                            font::measure_line_width_logical(miso_font, text, all_fonts) as f32;
                         logical_width <= max_allowed_logical_width
                     };
 
@@ -980,7 +1083,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         align(0.0, 0.5): xy(p1_frame_x - 150.0, cy - 95.0): zoom(0.7):
         maxwidth(155.0): horizalign(left): z(101): diffuse(1.0, 1.0, 1.0, 1.0)
     ));
-
 
     // --- Player 1 Score Percentage Display ---
     {
@@ -1068,7 +1170,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
         actors.push(score_display_frame);
     }
-    
+
     // --- P1 Stats Pane (Judgments & Radar) ---
     actors.extend(build_p1_stats_pane(state, asset_manager));
 
@@ -1085,7 +1187,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         let frame_center_x = screen_center_x();
         let frame_center_y = screen_center_y() + 124.0;
-        
+
         let graph_frame = Actor::Frame {
             align: [0.5, 0.0], // Center-Top alignment for the main frame
             offset: [frame_center_x, frame_center_y],
@@ -1104,10 +1206,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 ),
                 // The horizontal zero-line, centered vertically in the panel.
                 act!(quad:
-                    align(0.5, 0.5): 
+                    align(0.5, 0.5):
                     xy(GRAPH_WIDTH / 2.0_f32, GRAPH_HEIGHT / 2.0_f32):
                     setsize(GRAPH_WIDTH, 1.0):
-                    diffusealpha(0.1): 
+                    diffusealpha(0.1):
                     z(2)
                 ),
                 // Scatter plot overlay (judgment offsets over time)
@@ -1122,11 +1224,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                         let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
                             let tw = crate::game::timing::effective_windows_ms();
-                            if abs_ms <= tw[0] { color::rgba_hex(color::JUDGMENT_HEX[0]) }
-                            else if abs_ms <= tw[1] { color::rgba_hex(color::JUDGMENT_HEX[1]) }
-                            else if abs_ms <= tw[2] { color::rgba_hex(color::JUDGMENT_HEX[2]) }
-                            else if abs_ms <= tw[3] { color::rgba_hex(color::JUDGMENT_HEX[3]) }
-                            else { color::rgba_hex(color::JUDGMENT_HEX[4]) }
+                            if abs_ms <= tw[0] {
+                                color::rgba_hex(color::JUDGMENT_HEX[0])
+                            } else if abs_ms <= tw[1] {
+                                color::rgba_hex(color::JUDGMENT_HEX[1])
+                            } else if abs_ms <= tw[2] {
+                                color::rgba_hex(color::JUDGMENT_HEX[2])
+                            } else if abs_ms <= tw[3] {
+                                color::rgba_hex(color::JUDGMENT_HEX[3])
+                            } else {
+                                color::rgba_hex(color::JUDGMENT_HEX[4])
+                            }
                         };
 
                         for sp in &si.scatter {
@@ -1228,15 +1336,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     z(4)
                                 ));
                             }
-                            
+
                             last_x = x;
                             last_y = y;
                         }
 
                         // Draw Fail Marker if present
                         if let Some(fail_time) = si.fail_time {
-                            let x = ((fail_time - first) / (dur + padding)).clamp(0.0, 1.0) * GRAPH_WIDTH;
-                            
+                            let x = ((fail_time - first) / (dur + padding)).clamp(0.0, 1.0)
+                                * GRAPH_WIDTH;
+
                             // Red vertical line
                             life_children.push(act!(quad:
                                 align(0.5, 0.0): xy(x, 0.0):
@@ -1244,7 +1353,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 diffuse(1.0, 0.0, 0.0, 0.8):
                                 z(5)
                             ));
-                            
+
                             // Time remaining text calculation
                             // Match Simply Love's TrackFailTime behavior:
                             // display remaining time using chart length divided by MusicRate.
@@ -1266,25 +1375,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             };
                             let remaining = (total_display - death_display).max(0.0);
                             let remaining_str = format!("-{}", format_session_time(remaining));
-                            
+
                             // Flag box background (Black with Red border)
                             // Using a small frame to group the flag elements
                             let flag_w = 40.0;
                             let flag_h = 14.0;
-                            
+
                             life_children.push(act!(quad:
                                 align(1.0, 1.0): xy(x, GRAPH_HEIGHT):
                                 setsize(flag_w, flag_h):
                                 diffuse(1.0, 0.0, 0.0, 1.0): // Red border
                                 z(5)
                             ));
-                             life_children.push(act!(quad:
+                            life_children.push(act!(quad:
                                 align(1.0, 1.0): xy(x - 1.0, GRAPH_HEIGHT - 1.0):
                                 setsize(flag_w - 2.0, flag_h - 2.0):
                                 diffuse(0.0, 0.0, 0.0, 0.8): // Black fill
                                 z(6)
                             ));
-                            
+
                             // Flag Text
                             life_children.push(act!(text:
                                 font("miso"): settext(remaining_str):
@@ -1315,8 +1424,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let itg_text_x = screen_width() - widescale(55.0, 62.0);
         actors.push(act!(text: font("wendy"): settext("ITG"): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
         let final_pad_zoom = 0.24 * widescale(0.435, 0.525);
-        actors.push(pad_display::build(pad_display::PadDisplayParams { center_x: screen_width() - widescale(35.0, 41.0), center_y: widescale(22.0, 23.5), zoom: final_pad_zoom, z: 121, is_active: true, }));
-        actors.push(pad_display::build(pad_display::PadDisplayParams { center_x: screen_width() - widescale(15.0, 17.0), center_y: widescale(22.0, 23.5), zoom: final_pad_zoom, z: 121, is_active: false, }));
+        actors.push(pad_display::build(pad_display::PadDisplayParams {
+            center_x: screen_width() - widescale(35.0, 41.0),
+            center_y: widescale(22.0, 23.5),
+            zoom: final_pad_zoom,
+            z: 121,
+            is_active: true,
+        }));
+        actors.push(pad_display::build(pad_display::PadDisplayParams {
+            center_x: screen_width() - widescale(15.0, 17.0),
+            center_y: widescale(22.0, 23.5),
+            zoom: final_pad_zoom,
+            z: 121,
+            is_active: false,
+        }));
     }
 
     // 3. Bottom Bar
@@ -1330,11 +1451,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         position: screen_bar::ScreenBarPosition::Bottom,
         transparent: true,
         fg_color: [1.0; 4],
-        left_text: Some(&profile.display_name), center_text: None, right_text: None,
+        left_text: Some(&profile.display_name),
+        center_text: None,
+        right_text: None,
         left_avatar: footer_avatar,
     }));
 
-     // --- Date/Time in footer (like ScreenEvaluation decorations) ---
+    // --- Date/Time in footer (like ScreenEvaluation decorations) ---
     let now = Local::now();
     // The format matches YYYY/MM/DD HH:MM from the Lua script.
     let timestamp_text = now.format("%Y/%m/%d %H:%M").to_string();

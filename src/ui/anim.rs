@@ -23,7 +23,7 @@
 //!     diffuse(s.tint[0], s.tint[1], s.tint[2], s.tint[3])
 //! );
 //! ```
-#![allow(unused_assignments,dead_code)]
+#![allow(unused_assignments, dead_code)]
 use std::collections::VecDeque;
 
 #[derive(Clone, Copy, Debug, PartialEq)] // <-- removed Eq
@@ -43,10 +43,14 @@ fn ease_apply(e: Ease, t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
 
     #[inline(always)]
-    fn ease_in_quad(u: f32) -> f32 { u * u }
+    fn ease_in_quad(u: f32) -> f32 {
+        u * u
+    }
 
     #[inline(always)]
-    fn ease_out_quad(u: f32) -> f32 { 1.0 - (1.0 - u) * (1.0 - u) }
+    fn ease_out_quad(u: f32) -> f32 {
+        1.0 - (1.0 - u) * (1.0 - u)
+    }
 
     #[inline(always)]
     fn ease_weighted_inout(t: f32, fease: f32) -> f32 {
@@ -55,13 +59,23 @@ fn ease_apply(e: Ease, t: f32) -> f32 {
         // >0  => out-heavy (shorter accel, longer decel)
         // <0  => in-heavy  (longer accel, shorter decel)
         let w = fease.abs().min(100.0) * 0.01; // [0,1]
-        let s = if fease > 0.0 { 1.0 } else if fease < 0.0 { -1.0 } else { 0.0 };
-        let delta = 0.5 * w;                   // [0,0.5]
+        let s = if fease > 0.0 {
+            1.0
+        } else if fease < 0.0 {
+            -1.0
+        } else {
+            0.0
+        };
+        let delta = 0.5 * w; // [0,0.5]
         let d1 = (0.5 - s * delta).clamp(0.0, 1.0);
         let d2 = (1.0 - d1).max(0.0);
 
-        if d1 == 0.0 { return ease_out_quad(t); } // +100 → pure ease-out
-        if d2 == 0.0 { return ease_in_quad(t); }  // -100 → pure ease-in
+        if d1 == 0.0 {
+            return ease_out_quad(t);
+        } // +100 → pure ease-out
+        if d2 == 0.0 {
+            return ease_in_quad(t);
+        } // -100 → pure ease-in
 
         if t <= d1 {
             let u = (t / d1).clamp(0.0, 1.0);
@@ -73,10 +87,10 @@ fn ease_apply(e: Ease, t: f32) -> f32 {
     }
 
     match e {
-        Ease::Linear                 => t,
-        Ease::Accelerate             => ease_in_quad(t),
-        Ease::Decelerate             => ease_out_quad(t),
-        Ease::EaseInOut { bias }     => ease_weighted_inout(t, bias),
+        Ease::Linear => t,
+        Ease::Accelerate => ease_in_quad(t),
+        Ease::Decelerate => ease_out_quad(t),
+        Ease::EaseInOut { bias } => ease_weighted_inout(t, bias),
     }
 }
 
@@ -116,16 +130,26 @@ pub struct TweenState {
 impl Default for TweenState {
     fn default() -> Self {
         Self {
-            x: 0.0, y: 0.0, w: 0.0, h: 0.0,
-            hx: 0.5, vy: 0.5,
+            x: 0.0,
+            y: 0.0,
+            w: 0.0,
+            h: 0.0,
+            hx: 0.5,
+            vy: 0.5,
             tint: [1.0, 1.0, 1.0, 1.0],
             glow: [1.0, 1.0, 1.0, 0.0],
             visible: true,
             flip_x: false,
             flip_y: false,
             rot_z: 0.0, // NEW
-            fade_l: 0.0, fade_r: 0.0, fade_t: 0.0, fade_b: 0.0,
-            crop_l: 0.0, crop_r: 0.0, crop_t: 0.0, crop_b: 0.0,
+            fade_l: 0.0,
+            fade_r: 0.0,
+            fade_t: 0.0,
+            fade_b: 0.0,
+            crop_l: 0.0,
+            crop_r: 0.0,
+            crop_t: 0.0,
+            crop_b: 0.0,
             scale: [1.0, 1.0],
         }
     }
@@ -133,22 +157,29 @@ impl Default for TweenState {
 
 impl Step {
     pub fn fingerprint64(&self) -> u64 {
-        #[inline(always)] fn mix(h: &mut u64, v: u64) { 
-            *h ^= v.wrapping_mul(0x9E3779B97F4A7C15); 
+        #[inline(always)]
+        fn mix(h: &mut u64, v: u64) {
+            *h ^= v.wrapping_mul(0x9E3779B97F4A7C15);
             *h = h.rotate_left(27) ^ (*h >> 33);
         }
-        #[inline(always)] fn f32b(f: f32) -> u64 { f.to_bits() as u64 }
+        #[inline(always)]
+        fn f32b(f: f32) -> u64 {
+            f.to_bits() as u64
+        }
 
         let mut h = 0xcbf29ce484222325u64; // FNV-ish seed
         match self {
-            Step::Sleep(d) => { mix(&mut h, 0); mix(&mut h, f32b(*d)); }
+            Step::Sleep(d) => {
+                mix(&mut h, 0);
+                mix(&mut h, f32b(*d));
+            }
             Step::Segment(seg) => {
                 mix(&mut h, 1);
                 // These fields are private but we're in the same module
                 match seg.ease {
-                    Ease::Linear      => mix(&mut h, 0),
-                    Ease::Accelerate  => mix(&mut h, 1),
-                    Ease::Decelerate  => mix(&mut h, 2),
+                    Ease::Linear => mix(&mut h, 0),
+                    Ease::Accelerate => mix(&mut h, 1),
+                    Ease::Decelerate => mix(&mut h, 2),
                     Ease::EaseInOut { bias } => {
                         mix(&mut h, 3);
                         mix(&mut h, f32b(bias));
@@ -159,34 +190,110 @@ impl Step {
                 // Hash the requested ops (build_ops)
                 for op in &seg.build_ops {
                     use super::anim::{BuildOp, Target};
-                    #[inline(always)] fn mix_t(h:&mut u64, t:&Target){
+                    #[inline(always)]
+                    fn mix_t(h: &mut u64, t: &Target) {
                         match t {
-                            Target::Abs(v) => { mix(h, 0); mix(h, f32b(*v)); }
-                            Target::Rel(v) => { mix(h, 1); mix(h, f32b(*v)); }
+                            Target::Abs(v) => {
+                                mix(h, 0);
+                                mix(h, f32b(*v));
+                            }
+                            Target::Rel(v) => {
+                                mix(h, 1);
+                                mix(h, f32b(*v));
+                            }
                         }
                     }
                     match op {
-                        BuildOp::X(t)       => { mix(&mut h, 10); mix_t(&mut h, t); }
-                        BuildOp::Y(t)       => { mix(&mut h, 11); mix_t(&mut h, t); }
-                        BuildOp::Width(t)   => { mix(&mut h, 12); mix_t(&mut h, t); }
-                        BuildOp::Height(t)  => { mix(&mut h, 13); mix_t(&mut h, t); }
-                        BuildOp::ZoomBoth(t)=> { mix(&mut h, 14); mix_t(&mut h, t); }
-                        BuildOp::ZoomX(t)   => { mix(&mut h, 15); mix_t(&mut h, t); }
-                        BuildOp::ZoomY(t)   => { mix(&mut h, 16); mix_t(&mut h, t); }
-                        BuildOp::Tint(r,g,b,a)=>{ mix(&mut h, 17); mix_t(&mut h,r); mix_t(&mut h,g); mix_t(&mut h,b); mix_t(&mut h,a); }
-                        BuildOp::Glow(r,g,b,a)=>{ mix(&mut h, 18); mix_t(&mut h,r); mix_t(&mut h,g); mix_t(&mut h,b); mix_t(&mut h,a); }
-                        BuildOp::Visible(v) => { mix(&mut h, 19); mix(&mut h, u64::from(*v)); }
-                        BuildOp::FlipX(v)   => { mix(&mut h, 20); mix(&mut h, u64::from(*v)); }
-                        BuildOp::FlipY(v)   => { mix(&mut h, 21); mix(&mut h, u64::from(*v)); }
-                        BuildOp::RotZ(t)    => { mix(&mut h, 22); mix_t(&mut h, t); }
-                        BuildOp::CropL(t)   => { mix(&mut h, 23); mix_t(&mut h, t); }
-                        BuildOp::CropR(t)   => { mix(&mut h, 24); mix_t(&mut h, t); }
-                        BuildOp::CropT(t)   => { mix(&mut h, 25); mix_t(&mut h, t); }
-                        BuildOp::CropB(t)   => { mix(&mut h, 26); mix_t(&mut h, t); }
-                        BuildOp::FadeL(t)   => { mix(&mut h, 27); mix_t(&mut h, t); }
-                        BuildOp::FadeR(t)   => { mix(&mut h, 28); mix_t(&mut h, t); }
-                        BuildOp::FadeT(t)   => { mix(&mut h, 29); mix_t(&mut h, t); }
-                        BuildOp::FadeB(t)   => { mix(&mut h, 30); mix_t(&mut h, t); }
+                        BuildOp::X(t) => {
+                            mix(&mut h, 10);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::Y(t) => {
+                            mix(&mut h, 11);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::Width(t) => {
+                            mix(&mut h, 12);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::Height(t) => {
+                            mix(&mut h, 13);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::ZoomBoth(t) => {
+                            mix(&mut h, 14);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::ZoomX(t) => {
+                            mix(&mut h, 15);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::ZoomY(t) => {
+                            mix(&mut h, 16);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::Tint(r, g, b, a) => {
+                            mix(&mut h, 17);
+                            mix_t(&mut h, r);
+                            mix_t(&mut h, g);
+                            mix_t(&mut h, b);
+                            mix_t(&mut h, a);
+                        }
+                        BuildOp::Glow(r, g, b, a) => {
+                            mix(&mut h, 18);
+                            mix_t(&mut h, r);
+                            mix_t(&mut h, g);
+                            mix_t(&mut h, b);
+                            mix_t(&mut h, a);
+                        }
+                        BuildOp::Visible(v) => {
+                            mix(&mut h, 19);
+                            mix(&mut h, u64::from(*v));
+                        }
+                        BuildOp::FlipX(v) => {
+                            mix(&mut h, 20);
+                            mix(&mut h, u64::from(*v));
+                        }
+                        BuildOp::FlipY(v) => {
+                            mix(&mut h, 21);
+                            mix(&mut h, u64::from(*v));
+                        }
+                        BuildOp::RotZ(t) => {
+                            mix(&mut h, 22);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::CropL(t) => {
+                            mix(&mut h, 23);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::CropR(t) => {
+                            mix(&mut h, 24);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::CropT(t) => {
+                            mix(&mut h, 25);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::CropB(t) => {
+                            mix(&mut h, 26);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::FadeL(t) => {
+                            mix(&mut h, 27);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::FadeR(t) => {
+                            mix(&mut h, 28);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::FadeT(t) => {
+                            mix(&mut h, 29);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::FadeB(t) => {
+                            mix(&mut h, 30);
+                            mix_t(&mut h, t);
+                        }
                     }
                 }
             }
@@ -259,17 +366,21 @@ impl OpPrepared {
     #[inline(always)]
     fn apply_lerp(&self, s: &mut TweenState, a: f32) {
         match self.kind {
-            PreparedKind::X { from, to }  => s.x = from + (to - from) * a,
-            PreparedKind::Y { from, to }  => s.y = from + (to - from) * a,
+            PreparedKind::X { from, to } => s.x = from + (to - from) * a,
+            PreparedKind::Y { from, to } => s.y = from + (to - from) * a,
             PreparedKind::WX { from, to } => s.w = from + (to - from) * a,
             PreparedKind::HY { from, to } => s.h = from + (to - from) * a,
             PreparedKind::ScaleX { from, to } => s.scale[0] = from + (to - from) * a,
             PreparedKind::ScaleY { from, to } => s.scale[1] = from + (to - from) * a,
             PreparedKind::Tint { from, to } => {
-                for i in 0..4 { s.tint[i] = from[i] + (to[i] - from[i]) * a; }
+                for i in 0..4 {
+                    s.tint[i] = from[i] + (to[i] - from[i]) * a;
+                }
             }
             PreparedKind::Glow { from, to } => {
-                for i in 0..4 { s.glow[i] = from[i] + (to[i] - from[i]) * a; }
+                for i in 0..4 {
+                    s.glow[i] = from[i] + (to[i] - from[i]) * a;
+                }
             }
             PreparedKind::Visible(v) => s.visible = v,
             PreparedKind::FlipX(v) => s.flip_x = v,
@@ -282,7 +393,7 @@ impl OpPrepared {
             PreparedKind::FadeL { from, to } => s.fade_l = from + (to - from) * a,
             PreparedKind::FadeR { from, to } => s.fade_r = from + (to - from) * a,
             PreparedKind::FadeT { from, to } => s.fade_t = from + (to - from) * a,
-            PreparedKind::FadeB { from, to } => s.fade_b = from + (to - from) * a,        
+            PreparedKind::FadeB { from, to } => s.fade_b = from + (to - from) * a,
         }
     }
 
@@ -317,99 +428,235 @@ impl Segment {
     }
 
     fn prepare_if_needed(&mut self, s: &TweenState) {
-        if self.prepared_once { return; }
+        if self.prepared_once {
+            return;
+        }
         self.prepared.clear();
 
         for op in &self.build_ops {
             match *op {
                 BuildOp::X(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.x + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::X { from: s.x, to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.x + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::X { from: s.x, to },
+                    });
                 }
                 BuildOp::Y(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.y + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::Y { from: s.y, to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.y + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::Y { from: s.y, to },
+                    });
                 }
                 BuildOp::Width(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.w + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::WX { from: s.w, to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.w + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::WX { from: s.w, to },
+                    });
                 }
                 BuildOp::Height(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.h + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::HY { from: s.h, to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.h + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::HY { from: s.h, to },
+                    });
                 }
                 BuildOp::ZoomBoth(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.scale[0] + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::ScaleX { from: s.scale[0], to } });
-                    self.prepared.push(OpPrepared { kind: PreparedKind::ScaleY { from: s.scale[1], to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.scale[0] + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::ScaleX {
+                            from: s.scale[0],
+                            to,
+                        },
+                    });
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::ScaleY {
+                            from: s.scale[1],
+                            to,
+                        },
+                    });
                 }
                 BuildOp::ZoomX(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.scale[0] + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::ScaleX { from: s.scale[0], to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.scale[0] + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::ScaleX {
+                            from: s.scale[0],
+                            to,
+                        },
+                    });
                 }
                 BuildOp::ZoomY(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.scale[1] + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::ScaleY { from: s.scale[1], to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.scale[1] + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::ScaleY {
+                            from: s.scale[1],
+                            to,
+                        },
+                    });
                 }
                 BuildOp::Tint(tr, tg, tb, ta) => {
-                    let to0 = match tr { Target::Abs(v) => v, Target::Rel(dv) => s.tint[0] + dv };
-                    let to1 = match tg { Target::Abs(v) => v, Target::Rel(dv) => s.tint[1] + dv };
-                    let to2 = match tb { Target::Abs(v) => v, Target::Rel(dv) => s.tint[2] + dv };
-                    let to3 = match ta { Target::Abs(v) => v, Target::Rel(dv) => s.tint[3] + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::Tint { from: s.tint, to: [to0, to1, to2, to3] } });
+                    let to0 = match tr {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.tint[0] + dv,
+                    };
+                    let to1 = match tg {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.tint[1] + dv,
+                    };
+                    let to2 = match tb {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.tint[2] + dv,
+                    };
+                    let to3 = match ta {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.tint[3] + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::Tint {
+                            from: s.tint,
+                            to: [to0, to1, to2, to3],
+                        },
+                    });
                 }
                 BuildOp::Glow(gr, gg, gb, ga) => {
-                    let to0 = match gr { Target::Abs(v) => v, Target::Rel(dv) => s.glow[0] + dv };
-                    let to1 = match gg { Target::Abs(v) => v, Target::Rel(dv) => s.glow[1] + dv };
-                    let to2 = match gb { Target::Abs(v) => v, Target::Rel(dv) => s.glow[2] + dv };
-                    let to3 = match ga { Target::Abs(v) => v, Target::Rel(dv) => s.glow[3] + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::Glow { from: s.glow, to: [to0, to1, to2, to3] } });
+                    let to0 = match gr {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.glow[0] + dv,
+                    };
+                    let to1 = match gg {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.glow[1] + dv,
+                    };
+                    let to2 = match gb {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.glow[2] + dv,
+                    };
+                    let to3 = match ga {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.glow[3] + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::Glow {
+                            from: s.glow,
+                            to: [to0, to1, to2, to3],
+                        },
+                    });
                 }
                 BuildOp::Visible(v) => {
-                    self.prepared.push(OpPrepared { kind: PreparedKind::Visible(v) });
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::Visible(v),
+                    });
                 }
                 BuildOp::FlipX(v) => {
-                    self.prepared.push(OpPrepared { kind: PreparedKind::FlipX(v) });
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::FlipX(v),
+                    });
                 }
                 BuildOp::FlipY(v) => {
-                    self.prepared.push(OpPrepared { kind: PreparedKind::FlipY(v) });
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::FlipY(v),
+                    });
                 }
                 BuildOp::RotZ(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.rot_z + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::RotZ { from: s.rot_z, to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.rot_z + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::RotZ { from: s.rot_z, to },
+                    });
                 }
                 BuildOp::CropL(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.crop_l + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::CropL { from: s.crop_l, to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.crop_l + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::CropL { from: s.crop_l, to },
+                    });
                 }
                 BuildOp::CropR(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.crop_r + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::CropR { from: s.crop_r, to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.crop_r + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::CropR { from: s.crop_r, to },
+                    });
                 }
                 BuildOp::CropT(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.crop_t + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::CropT { from: s.crop_t, to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.crop_t + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::CropT { from: s.crop_t, to },
+                    });
                 }
                 BuildOp::CropB(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.crop_b + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::CropB { from: s.crop_b, to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.crop_b + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::CropB { from: s.crop_b, to },
+                    });
                 }
                 BuildOp::FadeL(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.fade_l + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::FadeL { from: s.fade_l, to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.fade_l + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::FadeL { from: s.fade_l, to },
+                    });
                 }
                 BuildOp::FadeR(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.fade_r + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::FadeR { from: s.fade_r, to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.fade_r + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::FadeR { from: s.fade_r, to },
+                    });
                 }
                 BuildOp::FadeT(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.fade_t + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::FadeT { from: s.fade_t, to } });
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.fade_t + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::FadeT { from: s.fade_t, to },
+                    });
                 }
                 BuildOp::FadeB(t) => {
-                    let to = match t { Target::Abs(v) => v, Target::Rel(dv) => s.fade_b + dv };
-                    self.prepared.push(OpPrepared { kind: PreparedKind::FadeB { from: s.fade_b, to } });
-                }                
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.fade_b + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::FadeB { from: s.fade_b, to },
+                    });
+                }
             }
         }
 
@@ -453,19 +700,35 @@ pub struct SegmentBuilder {
 
 impl SegmentBuilder {
     fn new(ease: Ease, dur: f32) -> Self {
-        Self { ease, dur: dur.max(0.0), ops: Vec::new() }
+        Self {
+            ease,
+            dur: dur.max(0.0),
+            ops: Vec::new(),
+        }
     }
 
     // --- position ---
-    pub fn x(mut self, v: f32) -> Self { self.ops.push(BuildOp::X(Target::Abs(v))); self }
-    pub fn y(mut self, v: f32) -> Self { self.ops.push(BuildOp::Y(Target::Abs(v))); self }
+    pub fn x(mut self, v: f32) -> Self {
+        self.ops.push(BuildOp::X(Target::Abs(v)));
+        self
+    }
+    pub fn y(mut self, v: f32) -> Self {
+        self.ops.push(BuildOp::Y(Target::Abs(v)));
+        self
+    }
     pub fn xy(mut self, x: f32, y: f32) -> Self {
         self.ops.push(BuildOp::X(Target::Abs(x)));
         self.ops.push(BuildOp::Y(Target::Abs(y)));
         self
     }
-    pub fn addx(mut self, dx: f32) -> Self { self.ops.push(BuildOp::X(Target::Rel(dx))); self }
-    pub fn addy(mut self, dy: f32) -> Self { self.ops.push(BuildOp::Y(Target::Rel(dy))); self }
+    pub fn addx(mut self, dx: f32) -> Self {
+        self.ops.push(BuildOp::X(Target::Rel(dx)));
+        self
+    }
+    pub fn addy(mut self, dy: f32) -> Self {
+        self.ops.push(BuildOp::Y(Target::Rel(dy)));
+        self
+    }
 
     // --- absolute size (zoomto/setsize) ---
     pub fn size(mut self, w: f32, h: f32) -> Self {
@@ -484,63 +747,158 @@ impl SegmentBuilder {
         }
         self
     }
-    pub fn zoomx(mut self, f: f32) -> Self { self.ops.push(BuildOp::ZoomX(Target::Abs(f))); self }
-    pub fn zoomy(mut self, f: f32) -> Self { self.ops.push(BuildOp::ZoomY(Target::Abs(f))); self }
-    pub fn addzoomx(mut self, df: f32) -> Self { self.ops.push(BuildOp::ZoomX(Target::Rel(df))); self }
-    pub fn addzoomy(mut self, df: f32) -> Self { self.ops.push(BuildOp::ZoomY(Target::Rel(df))); self }
+    pub fn zoomx(mut self, f: f32) -> Self {
+        self.ops.push(BuildOp::ZoomX(Target::Abs(f)));
+        self
+    }
+    pub fn zoomy(mut self, f: f32) -> Self {
+        self.ops.push(BuildOp::ZoomY(Target::Abs(f)));
+        self
+    }
+    pub fn addzoomx(mut self, df: f32) -> Self {
+        self.ops.push(BuildOp::ZoomX(Target::Rel(df)));
+        self
+    }
+    pub fn addzoomy(mut self, df: f32) -> Self {
+        self.ops.push(BuildOp::ZoomY(Target::Rel(df)));
+        self
+    }
 
     // --- tint / alpha ---
     pub fn diffuse(mut self, r: f32, g: f32, b: f32, a: f32) -> Self {
-        self.ops.push(BuildOp::Tint(Target::Abs(r), Target::Abs(g), Target::Abs(b), Target::Abs(a)));
+        self.ops.push(BuildOp::Tint(
+            Target::Abs(r),
+            Target::Abs(g),
+            Target::Abs(b),
+            Target::Abs(a),
+        ));
         self
     }
     pub fn diffuse_rgb(mut self, r: f32, g: f32, b: f32) -> Self {
-        self.ops.push(BuildOp::Tint(Target::Abs(r), Target::Abs(g), Target::Abs(b), Target::Rel(0.0)));
+        self.ops.push(BuildOp::Tint(
+            Target::Abs(r),
+            Target::Abs(g),
+            Target::Abs(b),
+            Target::Rel(0.0),
+        ));
         self
     }
     pub fn alpha(mut self, a: f32) -> Self {
-        self.ops.push(BuildOp::Tint(Target::Rel(0.0), Target::Rel(0.0), Target::Rel(0.0), Target::Abs(a)));
+        self.ops.push(BuildOp::Tint(
+            Target::Rel(0.0),
+            Target::Rel(0.0),
+            Target::Rel(0.0),
+            Target::Abs(a),
+        ));
         self
     }
 
     // --- glow ---
     pub fn glow(mut self, r: f32, g: f32, b: f32, a: f32) -> Self {
-        self.ops.push(BuildOp::Glow(Target::Abs(r), Target::Abs(g), Target::Abs(b), Target::Abs(a)));
+        self.ops.push(BuildOp::Glow(
+            Target::Abs(r),
+            Target::Abs(g),
+            Target::Abs(b),
+            Target::Abs(a),
+        ));
         self
     }
     pub fn glow_rgb(mut self, r: f32, g: f32, b: f32) -> Self {
-        self.ops.push(BuildOp::Glow(Target::Abs(r), Target::Abs(g), Target::Abs(b), Target::Rel(0.0)));
+        self.ops.push(BuildOp::Glow(
+            Target::Abs(r),
+            Target::Abs(g),
+            Target::Abs(b),
+            Target::Rel(0.0),
+        ));
         self
     }
     pub fn glow_alpha(mut self, a: f32) -> Self {
-        self.ops.push(BuildOp::Glow(Target::Rel(0.0), Target::Rel(0.0), Target::Rel(0.0), Target::Abs(a)));
+        self.ops.push(BuildOp::Glow(
+            Target::Rel(0.0),
+            Target::Rel(0.0),
+            Target::Rel(0.0),
+            Target::Abs(a),
+        ));
         self
     }
 
     // --- instants ---
-    pub fn set_visible(mut self, v: bool) -> Self { self.ops.push(BuildOp::Visible(v)); self }
-    pub fn flip_x(mut self, v: bool) -> Self { self.ops.push(BuildOp::FlipX(v)); self }
-    pub fn flip_y(mut self, v: bool) -> Self { self.ops.push(BuildOp::FlipY(v)); self }
+    pub fn set_visible(mut self, v: bool) -> Self {
+        self.ops.push(BuildOp::Visible(v));
+        self
+    }
+    pub fn flip_x(mut self, v: bool) -> Self {
+        self.ops.push(BuildOp::FlipX(v));
+        self
+    }
+    pub fn flip_y(mut self, v: bool) -> Self {
+        self.ops.push(BuildOp::FlipY(v));
+        self
+    }
 
     // --- rotation (degrees) ---  NEW
-    pub fn rotationz(mut self, deg: f32) -> Self { self.ops.push(BuildOp::RotZ(Target::Abs(deg))); self }
-    pub fn addrotationz(mut self, ddeg: f32) -> Self { self.ops.push(BuildOp::RotZ(Target::Rel(ddeg))); self }
+    pub fn rotationz(mut self, deg: f32) -> Self {
+        self.ops.push(BuildOp::RotZ(Target::Abs(deg)));
+        self
+    }
+    pub fn addrotationz(mut self, ddeg: f32) -> Self {
+        self.ops.push(BuildOp::RotZ(Target::Rel(ddeg)));
+        self
+    }
 
-    pub fn cropleft(mut self, v: f32) -> Self { self.ops.push(BuildOp::CropL(Target::Abs(v))); self }
-    pub fn cropright(mut self, v: f32) -> Self { self.ops.push(BuildOp::CropR(Target::Abs(v))); self }
-    pub fn croptop(mut self, v: f32) -> Self { self.ops.push(BuildOp::CropT(Target::Abs(v))); self }
-    pub fn cropbottom(mut self, v: f32) -> Self { self.ops.push(BuildOp::CropB(Target::Abs(v))); self }
-    pub fn addcropleft(mut self, dv: f32) -> Self { self.ops.push(BuildOp::CropL(Target::Rel(dv))); self }
-    pub fn addcropright(mut self, dv: f32) -> Self { self.ops.push(BuildOp::CropR(Target::Rel(dv))); self }
-    pub fn addcroptop(mut self, dv: f32) -> Self { self.ops.push(BuildOp::CropT(Target::Rel(dv))); self }
-    pub fn addcropbottom(mut self, dv: f32) -> Self { self.ops.push(BuildOp::CropB(Target::Rel(dv))); self }
+    pub fn cropleft(mut self, v: f32) -> Self {
+        self.ops.push(BuildOp::CropL(Target::Abs(v)));
+        self
+    }
+    pub fn cropright(mut self, v: f32) -> Self {
+        self.ops.push(BuildOp::CropR(Target::Abs(v)));
+        self
+    }
+    pub fn croptop(mut self, v: f32) -> Self {
+        self.ops.push(BuildOp::CropT(Target::Abs(v)));
+        self
+    }
+    pub fn cropbottom(mut self, v: f32) -> Self {
+        self.ops.push(BuildOp::CropB(Target::Abs(v)));
+        self
+    }
+    pub fn addcropleft(mut self, dv: f32) -> Self {
+        self.ops.push(BuildOp::CropL(Target::Rel(dv)));
+        self
+    }
+    pub fn addcropright(mut self, dv: f32) -> Self {
+        self.ops.push(BuildOp::CropR(Target::Rel(dv)));
+        self
+    }
+    pub fn addcroptop(mut self, dv: f32) -> Self {
+        self.ops.push(BuildOp::CropT(Target::Rel(dv)));
+        self
+    }
+    pub fn addcropbottom(mut self, dv: f32) -> Self {
+        self.ops.push(BuildOp::CropB(Target::Rel(dv)));
+        self
+    }
 
-    pub fn fadeleft(mut self, v: f32) -> Self { self.ops.push(BuildOp::FadeL(Target::Abs(v))); self }
-    pub fn faderight(mut self, v: f32) -> Self { self.ops.push(BuildOp::FadeR(Target::Abs(v))); self }
-    pub fn fadetop(mut self, v: f32) -> Self { self.ops.push(BuildOp::FadeT(Target::Abs(v))); self }
-    pub fn fadebottom(mut self, v: f32) -> Self { self.ops.push(BuildOp::FadeB(Target::Abs(v))); self }
+    pub fn fadeleft(mut self, v: f32) -> Self {
+        self.ops.push(BuildOp::FadeL(Target::Abs(v)));
+        self
+    }
+    pub fn faderight(mut self, v: f32) -> Self {
+        self.ops.push(BuildOp::FadeR(Target::Abs(v)));
+        self
+    }
+    pub fn fadetop(mut self, v: f32) -> Self {
+        self.ops.push(BuildOp::FadeT(Target::Abs(v)));
+        self
+    }
+    pub fn fadebottom(mut self, v: f32) -> Self {
+        self.ops.push(BuildOp::FadeB(Target::Abs(v)));
+        self
+    }
 
-    pub fn build(self) -> Step { Step::Segment(Segment::new(self.ease, self.dur, self.ops)) }
+    pub fn build(self) -> Step {
+        Step::Segment(Segment::new(self.ease, self.dur, self.ops))
+    }
 }
 
 /// Construct a `linear(t)` segment builder.

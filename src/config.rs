@@ -1,11 +1,13 @@
 use crate::core::gfx::BackendType;
-use crate::core::input::{Keymap, VirtualAction, InputBinding, PadDir, PadButton, FaceBtn, GamepadCodeBinding};
-use winit::keyboard::KeyCode;
+use crate::core::input::{
+    FaceBtn, GamepadCodeBinding, InputBinding, Keymap, PadButton, PadDir, VirtualAction,
+};
 use configparser::ini::Ini;
 use log::{info, warn};
 use once_cell::sync::Lazy;
 use std::str::FromStr;
 use std::sync::Mutex;
+use winit::keyboard::KeyCode;
 
 const CONFIG_PATH: &str = "deadsync.ini";
 
@@ -49,6 +51,7 @@ pub struct Config {
     pub fullscreen_type: FullscreenType,
     pub display_monitor: usize,
     pub show_stats: bool,
+    pub mine_hit_sound: bool,
     pub display_width: u32,
     pub display_height: u32,
     pub video_renderer: BackendType,
@@ -64,6 +67,7 @@ pub struct Config {
     pub sfx_volume: u8,
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
+    pub rate_mod_preserves_pitch: bool,
     pub fastload: bool,
     pub cachesongs: bool,
     // Whether to apply Gaussian smoothing to the eval histogram (Simply Love style)
@@ -78,6 +82,7 @@ impl Default for Config {
             fullscreen_type: FullscreenType::Exclusive,
             display_monitor: 0,
             show_stats: false,
+            mine_hit_sound: true,
             display_width: 1600,
             display_height: 900,
             video_renderer: BackendType::OpenGL,
@@ -88,6 +93,7 @@ impl Default for Config {
             music_volume: 100,
             sfx_volume: 100,
             audio_sample_rate_hz: None,
+            rate_mod_preserves_pitch: false,
             fastload: true,
             cachesongs: true,
             smooth_histogram: true,
@@ -108,7 +114,6 @@ impl Config {
 // Global, mutable configuration instance.
 static CONFIG: Lazy<Mutex<Config>> = Lazy::new(|| Mutex::new(Config::default()));
 
-
 // --- File I/O ---
 
 fn create_default_config_file() -> Result<(), std::io::Error> {
@@ -120,22 +125,61 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     // [Options] section - keys in alphabetical order
     content.push_str("[Options]\n");
     content.push_str("AudioSampleRateHz=Auto\n");
-    content.push_str(&format!("CacheSongs={}\n", if default.cachesongs { "1" } else { "0" }));
+    content.push_str(&format!(
+        "CacheSongs={}\n",
+        if default.cachesongs { "1" } else { "0" }
+    ));
     content.push_str(&format!("DisplayHeight={}\n", default.display_height));
     content.push_str(&format!("DisplayWidth={}\n", default.display_width));
     content.push_str(&format!("DisplayMonitor={}\n", default.display_monitor));
-    content.push_str(&format!("FastLoad={}\n", if default.fastload { "1" } else { "0" }));
-    content.push_str(&format!("FullscreenType={}\n", default.fullscreen_type.as_str()));
-    content.push_str(&format!("GlobalOffsetSeconds={}\n", default.global_offset_seconds));
+    content.push_str(&format!(
+        "FastLoad={}\n",
+        if default.fastload { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "FullscreenType={}\n",
+        default.fullscreen_type.as_str()
+    ));
+    content.push_str(&format!(
+        "GlobalOffsetSeconds={}\n",
+        default.global_offset_seconds
+    ));
     content.push_str(&format!("MasterVolume={}\n", default.master_volume));
+    content.push_str(&format!(
+        "MineHitSound={}\n",
+        if default.mine_hit_sound { "1" } else { "0" }
+    ));
     content.push_str(&format!("MusicVolume={}\n", default.music_volume));
-    content.push_str(&format!("ShowStats={}\n", if default.show_stats { "1" } else { "0" }));
-    content.push_str(&format!("SmoothHistogram={}\n", if default.smooth_histogram { "1" } else { "0" }));
-    content.push_str(&format!("SoftwareRendererThreads={}\n", default.software_renderer_threads));
+    content.push_str(&format!(
+        "RateModPreservesPitch={}\n",
+        if default.rate_mod_preserves_pitch {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "ShowStats={}\n",
+        if default.show_stats { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "SmoothHistogram={}\n",
+        if default.smooth_histogram { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "SoftwareRendererThreads={}\n",
+        default.software_renderer_threads
+    ));
     content.push_str(&format!("SFXVolume={}\n", default.sfx_volume));
     content.push_str(&format!("VideoRenderer={}\n", default.video_renderer));
-    content.push_str(&format!("Vsync={}\n", if default.vsync { "1" } else { "0" }));
-    content.push_str(&format!("Windowed={}\n", if default.windowed { "1" } else { "0" }));
+    content.push_str(&format!(
+        "Vsync={}\n",
+        if default.vsync { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "Windowed={}\n",
+        if default.windowed { "1" } else { "0" }
+    ));
     content.push('\n');
 
     // [Keymaps] section with sane defaults (comma-separated)
@@ -180,9 +224,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
 pub fn load() {
     // --- Load main deadsync.ini ---
     if !std::path::Path::new(CONFIG_PATH).exists()
-        && let Err(e) = create_default_config_file() {
-            warn!("Failed to create default config file: {}", e);
-        }
+        && let Err(e) = create_default_config_file()
+    {
+        warn!("Failed to create default config file: {}", e);
+    }
 
     let mut conf = Ini::new();
     match conf.load(CONFIG_PATH) {
@@ -192,9 +237,15 @@ pub fn load() {
             {
                 let mut cfg = CONFIG.lock().unwrap();
                 let default = Config::default();
-                
-                cfg.vsync = conf.get("Options", "Vsync").and_then(|v| v.parse::<u8>().ok()).map_or(default.vsync, |v| v != 0);
-                cfg.windowed = conf.get("Options", "Windowed").and_then(|v| v.parse::<u8>().ok()).map_or(default.windowed, |v| v != 0);
+
+                cfg.vsync = conf
+                    .get("Options", "Vsync")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.vsync, |v| v != 0);
+                cfg.windowed = conf
+                    .get("Options", "Windowed")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.windowed, |v| v != 0);
                 cfg.fullscreen_type = conf
                     .get("Options", "FullscreenType")
                     .and_then(|v| FullscreenType::from_str(&v).ok())
@@ -203,16 +254,45 @@ pub fn load() {
                     .get("Options", "DisplayMonitor")
                     .and_then(|v| v.parse::<usize>().ok())
                     .unwrap_or(default.display_monitor);
-                cfg.show_stats = conf.get("Options", "ShowStats").and_then(|v| v.parse::<u8>().ok()).map_or(default.show_stats, |v| v != 0);
-                cfg.display_width = conf.get("Options", "DisplayWidth").and_then(|v| v.parse().ok()).unwrap_or(default.display_width);
-                cfg.display_height = conf.get("Options", "DisplayHeight").and_then(|v| v.parse().ok()).unwrap_or(default.display_height);
-                cfg.video_renderer = conf.get("Options", "VideoRenderer")
+                cfg.mine_hit_sound = conf
+                    .get("Options", "MineHitSound")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.mine_hit_sound, |v| v != 0);
+                cfg.show_stats = conf
+                    .get("Options", "ShowStats")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_stats, |v| v != 0);
+                cfg.display_width = conf
+                    .get("Options", "DisplayWidth")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(default.display_width);
+                cfg.display_height = conf
+                    .get("Options", "DisplayHeight")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(default.display_height);
+                cfg.video_renderer = conf
+                    .get("Options", "VideoRenderer")
                     .and_then(|s| BackendType::from_str(&s).ok())
                     .unwrap_or(default.video_renderer);
-                cfg.global_offset_seconds = conf.get("Options", "GlobalOffsetSeconds").and_then(|v| v.parse().ok()).unwrap_or(default.global_offset_seconds);
-                cfg.master_volume = conf.get("Options", "MasterVolume").and_then(|v| v.parse().ok()).map(|v: u8| v.clamp(0, 100)).unwrap_or(default.master_volume);
-                cfg.music_volume = conf.get("Options", "MusicVolume").and_then(|v| v.parse().ok()).map(|v: u8| v.clamp(0, 100)).unwrap_or(default.music_volume);
-                cfg.sfx_volume = conf.get("Options", "SFXVolume").and_then(|v| v.parse().ok()).map(|v: u8| v.clamp(0, 100)).unwrap_or(default.sfx_volume);
+                cfg.global_offset_seconds = conf
+                    .get("Options", "GlobalOffsetSeconds")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(default.global_offset_seconds);
+                cfg.master_volume = conf
+                    .get("Options", "MasterVolume")
+                    .and_then(|v| v.parse().ok())
+                    .map(|v: u8| v.clamp(0, 100))
+                    .unwrap_or(default.master_volume);
+                cfg.music_volume = conf
+                    .get("Options", "MusicVolume")
+                    .and_then(|v| v.parse().ok())
+                    .map(|v: u8| v.clamp(0, 100))
+                    .unwrap_or(default.music_volume);
+                cfg.sfx_volume = conf
+                    .get("Options", "SFXVolume")
+                    .and_then(|v| v.parse().ok())
+                    .map(|v: u8| v.clamp(0, 100))
+                    .unwrap_or(default.sfx_volume);
                 cfg.audio_sample_rate_hz = conf
                     .get("Options", "AudioSampleRateHz")
                     .map(|v| v.trim().to_string())
@@ -224,9 +304,22 @@ pub fn load() {
                         }
                     })
                     .or(default.audio_sample_rate_hz);
-                cfg.fastload = conf.get("Options", "FastLoad").and_then(|v| v.parse::<u8>().ok()).map_or(default.fastload, |v| v != 0);
-                cfg.cachesongs = conf.get("Options", "CacheSongs").and_then(|v| v.parse::<u8>().ok()).map_or(default.cachesongs, |v| v != 0);
-                cfg.smooth_histogram = conf.get("Options", "SmoothHistogram").and_then(|v| v.parse::<u8>().ok()).map_or(default.smooth_histogram, |v| v != 0);
+                cfg.rate_mod_preserves_pitch = conf
+                    .get("Options", "RateModPreservesPitch")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.rate_mod_preserves_pitch, |v| v != 0);
+                cfg.fastload = conf
+                    .get("Options", "FastLoad")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.fastload, |v| v != 0);
+                cfg.cachesongs = conf
+                    .get("Options", "CacheSongs")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.cachesongs, |v| v != 0);
+                cfg.smooth_histogram = conf
+                    .get("Options", "SmoothHistogram")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.smooth_histogram, |v| v != 0);
                 cfg.software_renderer_threads = conf
                     .get("Options", "SoftwareRendererThreads")
                     .map(|v| v.trim().to_string())
@@ -238,8 +331,11 @@ pub fn load() {
                         }
                     })
                     .unwrap_or(default.software_renderer_threads);
-                cfg.simply_love_color = conf.get("Theme", "SimplyLoveColor").and_then(|v| v.parse().ok()).unwrap_or(default.simply_love_color);
-                
+                cfg.simply_love_color = conf
+                    .get("Theme", "SimplyLoveColor")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(default.simply_love_color);
+
                 info!("Configuration loaded from '{}'.", CONFIG_PATH);
             } // Lock on CONFIG is released here.
 
@@ -252,23 +348,51 @@ pub fn load() {
                 let has = |sec: &str, key: &str| conf.get(sec, key).is_some();
                 let mut miss = false;
                 let options_keys = [
-                    "AudioSampleRateHz","CacheSongs","DisplayHeight","DisplayWidth","FastLoad","FullscreenType","GlobalOffsetSeconds",
-                    "MasterVolume","MusicVolume","ShowStats","SmoothHistogram","SFXVolume",
-                    "SoftwareRendererThreads","VideoRenderer","Vsync","Windowed"
+                    "AudioSampleRateHz",
+                    "CacheSongs",
+                    "DisplayHeight",
+                    "DisplayWidth",
+                    "FastLoad",
+                    "FullscreenType",
+                    "GlobalOffsetSeconds",
+                    "MasterVolume",
+                    "MineHitSound",
+                    "MusicVolume",
+                    "RateModPreservesPitch",
+                    "ShowStats",
+                    "SmoothHistogram",
+                    "SFXVolume",
+                    "SoftwareRendererThreads",
+                    "VideoRenderer",
+                    "Vsync",
+                    "Windowed",
                 ];
-                for k in options_keys { if !has("Options", k) { miss = true; break; } }
-                if !miss && !has("Theme","SimplyLoveColor") { miss = true; }
+                for k in options_keys {
+                    if !has("Options", k) {
+                        miss = true;
+                        break;
+                    }
+                }
+                if !miss && !has("Theme", "SimplyLoveColor") {
+                    miss = true;
+                }
                 miss
             };
             if missing_opts {
                 save_without_keymaps();
-                info!("'{}' updated with default values for any missing fields.", CONFIG_PATH);
+                info!(
+                    "'{}' updated with default values for any missing fields.",
+                    CONFIG_PATH
+                );
             } else {
                 info!("Configuration OK; no write needed.");
             }
         }
         Err(e) => {
-            warn!("Failed to load '{}': {}. Using default values.", CONFIG_PATH, e);
+            warn!(
+                "Failed to load '{}': {}. Using default values.",
+                CONFIG_PATH, e
+            );
         }
     }
 }
@@ -309,40 +433,42 @@ fn default_keymap_local() -> Keymap {
     use VirtualAction as A;
     let mut km = Keymap::default();
     // Player 1 defaults (WASD + arrows, Enter/Escape).
-    km.bind(A::p1_up,    &[
-        InputBinding::Key(KeyCode::ArrowUp), InputBinding::Key(KeyCode::KeyW),
-    ]);
-    km.bind(A::p1_down,  &[
-        InputBinding::Key(KeyCode::ArrowDown), InputBinding::Key(KeyCode::KeyS),
-    ]);
-    km.bind(A::p1_left,  &[
-        InputBinding::Key(KeyCode::ArrowLeft), InputBinding::Key(KeyCode::KeyA),
-    ]);
-    km.bind(A::p1_right, &[
-        InputBinding::Key(KeyCode::ArrowRight), InputBinding::Key(KeyCode::KeyD),
-    ]);
-    km.bind(A::p1_start, &[
-        InputBinding::Key(KeyCode::Enter)
-    ]);
-    km.bind(A::p1_back, &[
-        InputBinding::Key(KeyCode::Escape)
-    ]);
+    km.bind(
+        A::p1_up,
+        &[
+            InputBinding::Key(KeyCode::ArrowUp),
+            InputBinding::Key(KeyCode::KeyW),
+        ],
+    );
+    km.bind(
+        A::p1_down,
+        &[
+            InputBinding::Key(KeyCode::ArrowDown),
+            InputBinding::Key(KeyCode::KeyS),
+        ],
+    );
+    km.bind(
+        A::p1_left,
+        &[
+            InputBinding::Key(KeyCode::ArrowLeft),
+            InputBinding::Key(KeyCode::KeyA),
+        ],
+    );
+    km.bind(
+        A::p1_right,
+        &[
+            InputBinding::Key(KeyCode::ArrowRight),
+            InputBinding::Key(KeyCode::KeyD),
+        ],
+    );
+    km.bind(A::p1_start, &[InputBinding::Key(KeyCode::Enter)]);
+    km.bind(A::p1_back, &[InputBinding::Key(KeyCode::Escape)]);
     // Player 2 defaults (numpad directions + Start on NumpadEnter).
-    km.bind(A::p2_up, &[
-        InputBinding::Key(KeyCode::Numpad8),
-    ]);
-    km.bind(A::p2_down, &[
-        InputBinding::Key(KeyCode::Numpad2),
-    ]);
-    km.bind(A::p2_left, &[
-        InputBinding::Key(KeyCode::Numpad4),
-    ]);
-    km.bind(A::p2_right, &[
-        InputBinding::Key(KeyCode::Numpad6),
-    ]);
-    km.bind(A::p2_start, &[
-        InputBinding::Key(KeyCode::NumpadEnter),
-    ]);
+    km.bind(A::p2_up, &[InputBinding::Key(KeyCode::Numpad8)]);
+    km.bind(A::p2_down, &[InputBinding::Key(KeyCode::Numpad2)]);
+    km.bind(A::p2_left, &[InputBinding::Key(KeyCode::Numpad4)]);
+    km.bind(A::p2_right, &[InputBinding::Key(KeyCode::Numpad6)]);
+    km.bind(A::p2_start, &[InputBinding::Key(KeyCode::NumpadEnter)]);
     // Leave P2_Back/Menu/Select/Operator/Restart unbound by default for now.
     km
 }
@@ -481,13 +607,32 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
             "NumpadMultiply" => KeyCode::NumpadMultiply,
             "NumpadSubtract" => KeyCode::NumpadSubtract,
             // Letter keys A-Z
-            "KeyA" => KeyCode::KeyA, "KeyB" => KeyCode::KeyB, "KeyC" => KeyCode::KeyC, "KeyD" => KeyCode::KeyD,
-            "KeyE" => KeyCode::KeyE, "KeyF" => KeyCode::KeyF, "KeyG" => KeyCode::KeyG, "KeyH" => KeyCode::KeyH,
-            "KeyI" => KeyCode::KeyI, "KeyJ" => KeyCode::KeyJ, "KeyK" => KeyCode::KeyK, "KeyL" => KeyCode::KeyL,
-            "KeyM" => KeyCode::KeyM, "KeyN" => KeyCode::KeyN, "KeyO" => KeyCode::KeyO, "KeyP" => KeyCode::KeyP,
-            "KeyQ" => KeyCode::KeyQ, "KeyR" => KeyCode::KeyR, "KeyS" => KeyCode::KeyS, "KeyT" => KeyCode::KeyT,
-            "KeyU" => KeyCode::KeyU, "KeyV" => KeyCode::KeyV, "KeyW" => KeyCode::KeyW, "KeyX" => KeyCode::KeyX,
-            "KeyY" => KeyCode::KeyY, "KeyZ" => KeyCode::KeyZ,
+            "KeyA" => KeyCode::KeyA,
+            "KeyB" => KeyCode::KeyB,
+            "KeyC" => KeyCode::KeyC,
+            "KeyD" => KeyCode::KeyD,
+            "KeyE" => KeyCode::KeyE,
+            "KeyF" => KeyCode::KeyF,
+            "KeyG" => KeyCode::KeyG,
+            "KeyH" => KeyCode::KeyH,
+            "KeyI" => KeyCode::KeyI,
+            "KeyJ" => KeyCode::KeyJ,
+            "KeyK" => KeyCode::KeyK,
+            "KeyL" => KeyCode::KeyL,
+            "KeyM" => KeyCode::KeyM,
+            "KeyN" => KeyCode::KeyN,
+            "KeyO" => KeyCode::KeyO,
+            "KeyP" => KeyCode::KeyP,
+            "KeyQ" => KeyCode::KeyQ,
+            "KeyR" => KeyCode::KeyR,
+            "KeyS" => KeyCode::KeyS,
+            "KeyT" => KeyCode::KeyT,
+            "KeyU" => KeyCode::KeyU,
+            "KeyV" => KeyCode::KeyV,
+            "KeyW" => KeyCode::KeyW,
+            "KeyX" => KeyCode::KeyX,
+            "KeyY" => KeyCode::KeyY,
+            "KeyZ" => KeyCode::KeyZ,
             _ => return None,
         };
         return Some(InputBinding::Key(code));
@@ -506,7 +651,10 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
             let code_str = &rest[..end];
             let mut tail = &rest[end + 1..];
 
-            let code_u32 = if let Some(hex) = code_str.strip_prefix("0x").or_else(|| code_str.strip_prefix("0X")) {
+            let code_u32 = if let Some(hex) = code_str
+                .strip_prefix("0x")
+                .or_else(|| code_str.strip_prefix("0X"))
+            {
                 u32::from_str_radix(hex, 16).ok()?
             } else {
                 u32::from_str(code_str).ok()?
@@ -580,15 +728,31 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
 
     // Gamepad (any pad): PadDir::Up, PadButton::Confirm, Face::WestX
     if let Some(rest) = t.strip_prefix("PadDir::") {
-        let dir = match rest { "Up" => PadDir::Up, "Down" => PadDir::Down, "Left" => PadDir::Left, "Right" => PadDir::Right, _ => return None };
+        let dir = match rest {
+            "Up" => PadDir::Up,
+            "Down" => PadDir::Down,
+            "Left" => PadDir::Left,
+            "Right" => PadDir::Right,
+            _ => return None,
+        };
         return Some(InputBinding::PadDir(dir));
     }
     if let Some(rest) = t.strip_prefix("PadButton::") {
-        let btn = match rest { "Confirm" => PadButton::Confirm, "Back" => PadButton::Back, _ => return None };
+        let btn = match rest {
+            "Confirm" => PadButton::Confirm,
+            "Back" => PadButton::Back,
+            _ => return None,
+        };
         return Some(InputBinding::PadButton(btn));
     }
     if let Some(rest) = t.strip_prefix("Face::") {
-        let btn = match rest { "SouthA" => FaceBtn::SouthA, "EastB" => FaceBtn::EastB, "WestX" => FaceBtn::WestX, "NorthY" => FaceBtn::NorthY, _ => return None };
+        let btn = match rest {
+            "SouthA" => FaceBtn::SouthA,
+            "EastB" => FaceBtn::EastB,
+            "WestX" => FaceBtn::WestX,
+            "NorthY" => FaceBtn::NorthY,
+            _ => return None,
+        };
         return Some(InputBinding::Face(btn));
     }
 
@@ -604,31 +768,77 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
                 // Treat as any-pad; handled at top via PadDir/PadButton/Face prefixes.
                 // But allow here too for flexibility.
                 return match kind {
-                    "Dir" => match name { "Up" => Some(InputBinding::PadDir(PadDir::Up)), "Down" => Some(InputBinding::PadDir(PadDir::Down)), "Left" => Some(InputBinding::PadDir(PadDir::Left)), "Right" => Some(InputBinding::PadDir(PadDir::Right)), _ => None },
-                    "Button" => match name { "Confirm" => Some(InputBinding::PadButton(PadButton::Confirm)), "Back" => Some(InputBinding::PadButton(PadButton::Back)), _ => None },
-                    "Face" => match name { "SouthA" => Some(InputBinding::Face(FaceBtn::SouthA)), "EastB" => Some(InputBinding::Face(FaceBtn::EastB)), "WestX" => Some(InputBinding::Face(FaceBtn::WestX)), "NorthY" => Some(InputBinding::Face(FaceBtn::NorthY)), _ => None },
+                    "Dir" => match name {
+                        "Up" => Some(InputBinding::PadDir(PadDir::Up)),
+                        "Down" => Some(InputBinding::PadDir(PadDir::Down)),
+                        "Left" => Some(InputBinding::PadDir(PadDir::Left)),
+                        "Right" => Some(InputBinding::PadDir(PadDir::Right)),
+                        _ => None,
+                    },
+                    "Button" => match name {
+                        "Confirm" => Some(InputBinding::PadButton(PadButton::Confirm)),
+                        "Back" => Some(InputBinding::PadButton(PadButton::Back)),
+                        _ => None,
+                    },
+                    "Face" => match name {
+                        "SouthA" => Some(InputBinding::Face(FaceBtn::SouthA)),
+                        "EastB" => Some(InputBinding::Face(FaceBtn::EastB)),
+                        "WestX" => Some(InputBinding::Face(FaceBtn::WestX)),
+                        "NorthY" => Some(InputBinding::Face(FaceBtn::NorthY)),
+                        _ => None,
+                    },
                     _ => None,
                 };
             }
             if let Ok(device) = dev_str.parse::<usize>() {
                 return match kind {
                     "Dir" => match name {
-                        "Up" => Some(InputBinding::PadDirOn { device, dir: PadDir::Up }),
-                        "Down" => Some(InputBinding::PadDirOn { device, dir: PadDir::Down }),
-                        "Left" => Some(InputBinding::PadDirOn { device, dir: PadDir::Left }),
-                        "Right" => Some(InputBinding::PadDirOn { device, dir: PadDir::Right }),
+                        "Up" => Some(InputBinding::PadDirOn {
+                            device,
+                            dir: PadDir::Up,
+                        }),
+                        "Down" => Some(InputBinding::PadDirOn {
+                            device,
+                            dir: PadDir::Down,
+                        }),
+                        "Left" => Some(InputBinding::PadDirOn {
+                            device,
+                            dir: PadDir::Left,
+                        }),
+                        "Right" => Some(InputBinding::PadDirOn {
+                            device,
+                            dir: PadDir::Right,
+                        }),
                         _ => None,
                     },
                     "Button" => match name {
-                        "Confirm" => Some(InputBinding::PadButtonOn { device, btn: PadButton::Confirm }),
-                        "Back" => Some(InputBinding::PadButtonOn { device, btn: PadButton::Back }),
+                        "Confirm" => Some(InputBinding::PadButtonOn {
+                            device,
+                            btn: PadButton::Confirm,
+                        }),
+                        "Back" => Some(InputBinding::PadButtonOn {
+                            device,
+                            btn: PadButton::Back,
+                        }),
                         _ => None,
                     },
                     "Face" => match name {
-                        "SouthA" => Some(InputBinding::FaceOn { device, btn: FaceBtn::SouthA }),
-                        "EastB" => Some(InputBinding::FaceOn { device, btn: FaceBtn::EastB }),
-                        "WestX" => Some(InputBinding::FaceOn { device, btn: FaceBtn::WestX }),
-                        "NorthY" => Some(InputBinding::FaceOn { device, btn: FaceBtn::NorthY }),
+                        "SouthA" => Some(InputBinding::FaceOn {
+                            device,
+                            btn: FaceBtn::SouthA,
+                        }),
+                        "EastB" => Some(InputBinding::FaceOn {
+                            device,
+                            btn: FaceBtn::EastB,
+                        }),
+                        "WestX" => Some(InputBinding::FaceOn {
+                            device,
+                            btn: FaceBtn::WestX,
+                        }),
+                        "NorthY" => Some(InputBinding::FaceOn {
+                            device,
+                            btn: FaceBtn::NorthY,
+                        }),
                         _ => None,
                     },
                     _ => None,
@@ -841,22 +1051,58 @@ fn save_without_keymaps() {
         Some(hz) => hz.to_string(),
     };
     content.push_str(&format!("AudioSampleRateHz={}\n", audio_rate_str));
-    content.push_str(&format!("CacheSongs={}\n", if cfg.cachesongs { "1" } else { "0" }));
+    content.push_str(&format!(
+        "CacheSongs={}\n",
+        if cfg.cachesongs { "1" } else { "0" }
+    ));
     content.push_str(&format!("DisplayHeight={}\n", cfg.display_height));
     content.push_str(&format!("DisplayWidth={}\n", cfg.display_width));
-    content.push_str(&format!("FastLoad={}\n", if cfg.fastload { "1" } else { "0" }));
-    content.push_str(&format!("FullscreenType={}\n", cfg.fullscreen_type.as_str()));
-    content.push_str(&format!("GlobalOffsetSeconds={}\n", cfg.global_offset_seconds));
+    content.push_str(&format!(
+        "FastLoad={}\n",
+        if cfg.fastload { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "FullscreenType={}\n",
+        cfg.fullscreen_type.as_str()
+    ));
+    content.push_str(&format!(
+        "GlobalOffsetSeconds={}\n",
+        cfg.global_offset_seconds
+    ));
     content.push_str(&format!("MasterVolume={}\n", cfg.master_volume));
+    content.push_str(&format!(
+        "MineHitSound={}\n",
+        if cfg.mine_hit_sound { "1" } else { "0" }
+    ));
     content.push_str(&format!("MusicVolume={}\n", cfg.music_volume));
-    content.push_str(&format!("ShowStats={}\n", if cfg.show_stats { "1" } else { "0" }));
-    content.push_str(&format!("SmoothHistogram={}\n", if cfg.smooth_histogram { "1" } else { "0" }));
+    content.push_str(&format!(
+        "RateModPreservesPitch={}\n",
+        if cfg.rate_mod_preserves_pitch {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "ShowStats={}\n",
+        if cfg.show_stats { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "SmoothHistogram={}\n",
+        if cfg.smooth_histogram { "1" } else { "0" }
+    ));
     content.push_str(&format!("DisplayMonitor={}\n", cfg.display_monitor));
-    content.push_str(&format!("SoftwareRendererThreads={}\n", cfg.software_renderer_threads));
+    content.push_str(&format!(
+        "SoftwareRendererThreads={}\n",
+        cfg.software_renderer_threads
+    ));
     content.push_str(&format!("SFXVolume={}\n", cfg.sfx_volume));
     content.push_str(&format!("VideoRenderer={}\n", cfg.video_renderer));
     content.push_str(&format!("Vsync={}\n", if cfg.vsync { "1" } else { "0" }));
-    content.push_str(&format!("Windowed={}\n", if cfg.windowed { "1" } else { "0" }));
+    content.push_str(&format!(
+        "Windowed={}\n",
+        if cfg.windowed { "1" } else { "0" }
+    ));
     content.push('\n');
 
     // [Keymaps] – stable order with CamelCase keys.
@@ -940,7 +1186,9 @@ pub fn update_display_resolution(width: u32, height: u32) {
 pub fn update_display_monitor(monitor: usize) {
     {
         let mut cfg = CONFIG.lock().unwrap();
-        if cfg.display_monitor == monitor { return; }
+        if cfg.display_monitor == monitor {
+            return;
+        }
         cfg.display_monitor = monitor;
     }
     save_without_keymaps();
@@ -961,7 +1209,9 @@ pub fn update_simply_love_color(index: i32) {
     {
         let mut cfg = CONFIG.lock().unwrap();
         // No change, no need to write to disk.
-        if cfg.simply_love_color == index { return; }
+        if cfg.simply_love_color == index {
+            return;
+        }
         cfg.simply_love_color = index;
     }
     save_without_keymaps();
@@ -971,8 +1221,77 @@ pub fn update_simply_love_color(index: i32) {
 pub fn update_global_offset(offset: f32) {
     {
         let mut cfg = CONFIG.lock().unwrap();
-        if (cfg.global_offset_seconds - offset).abs() < f32::EPSILON { return; }
+        if (cfg.global_offset_seconds - offset).abs() < f32::EPSILON {
+            return;
+        }
         cfg.global_offset_seconds = offset;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_vsync(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.vsync == enabled {
+            return;
+        }
+        cfg.vsync = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_stats(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.show_stats == enabled {
+            return;
+        }
+        cfg.show_stats = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_master_volume(volume: u8) {
+    let vol = volume.clamp(0, 100);
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.master_volume == vol {
+            return;
+        }
+        cfg.master_volume = vol;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_audio_sample_rate(rate: Option<u32>) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.audio_sample_rate_hz == rate {
+            return;
+        }
+        cfg.audio_sample_rate_hz = rate;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_mine_hit_sound(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.mine_hit_sound == enabled {
+            return;
+        }
+        cfg.mine_hit_sound = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_rate_mod_preserves_pitch(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.rate_mod_preserves_pitch == enabled {
+            return;
+        }
+        cfg.rate_mod_preserves_pitch = enabled;
     }
     save_without_keymaps();
 }

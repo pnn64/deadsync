@@ -1,11 +1,11 @@
-use crate::ui::actors::Actor;
 use crate::act;
 use crate::core::space::*;
+use crate::ui::actors::Actor;
 
 // --- CONSTANTS TO MATCH THE LUA SCRIPT'S STATIC STATE ---
-const MENU_BASE_PX: f32 = 32.0;       // An arbitrary base font size before zoom.
-const FOCUS_ZOOM: f32 = 0.5;          // Zoom factor when an item has focus.
-const UNFOCUSED_ZOOM: f32 = 0.4;      // Zoom factor when an item loses focus.
+const MENU_BASE_PX: f32 = 32.0; // An arbitrary base font size before zoom.
+const FOCUS_ZOOM: f32 = 0.5; // Zoom factor when an item has focus.
+const UNFOCUSED_ZOOM: f32 = 0.4; // Zoom factor when an item loses focus.
 
 #[derive(Clone, Copy)]
 pub struct MenuParams<'a> {
@@ -31,8 +31,16 @@ pub fn build_vertical_menu(p: MenuParams) -> Vec<Actor> {
         let is_selected = i == p.selected_index;
 
         // Determine zoom and color based on whether the item has focus.
-        let zoom_factor = if is_selected { FOCUS_ZOOM } else { UNFOCUSED_ZOOM };
-        let color = if is_selected { p.selected_color } else { p.normal_color };
+        let zoom_factor = if is_selected {
+            FOCUS_ZOOM
+        } else {
+            UNFOCUSED_ZOOM
+        };
+        let color = if is_selected {
+            p.selected_color
+        } else {
+            p.normal_color
+        };
         let center_y = p.start_center_y + (i as f32) * p.row_spacing;
 
         // Create a single, static text actor for each menu item.

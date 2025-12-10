@@ -8,8 +8,8 @@ use std::{
     error::Error,
     num::NonZeroU32,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     },
     thread,
 };
@@ -50,7 +50,9 @@ pub fn set_thread_hint(state: &mut State, threads: Option<usize>) {
 }
 
 pub fn create_texture(image: &RgbaImage) -> Result<Texture, Box<dyn Error>> {
-    Ok(Texture { image: image.clone() })
+    Ok(Texture {
+        image: image.clone(),
+    })
 }
 
 pub fn draw<'a>(
@@ -256,20 +258,15 @@ fn rasterize_sprite(
 
     let mvp = *proj * *transform;
 
-    const POS: [(f32, f32); 4] = [
-        (-0.5, -0.5),
-        (0.5, -0.5),
-        (0.5, 0.5),
-        (-0.5, 0.5),
-    ];
-    const UV_BASE: [(f32, f32); 4] = [
-        (0.0, 1.0),
-        (1.0, 1.0),
-        (1.0, 0.0),
-        (0.0, 0.0),
-    ];
+    const POS: [(f32, f32); 4] = [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)];
+    const UV_BASE: [(f32, f32); 4] = [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)];
 
-    let mut v = [ScreenVertex { x: 0.0, y: 0.0, u: 0.0, v: 0.0 }; 4];
+    let mut v = [ScreenVertex {
+        x: 0.0,
+        y: 0.0,
+        u: 0.0,
+        v: 0.0,
+    }; 4];
 
     for i in 0..4 {
         let (lx, ly) = POS[i];
@@ -288,7 +285,12 @@ fn rasterize_sprite(
         let u = u0 * uv_scale[0] + uv_offset[0];
         let vv = v0 * uv_scale[1] + uv_offset[1];
 
-        v[i] = ScreenVertex { x: sx, y: sy, u, v: vv };
+        v[i] = ScreenVertex {
+            x: sx,
+            y: sy,
+            u,
+            v: vv,
+        };
     }
 
     rasterize_triangle(

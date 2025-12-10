@@ -58,9 +58,7 @@ impl FromStr for ScrollOption {
         // Support both legacy single values ("Reverse") and combined values
         // like "Reverse+Cross" or "Reverse Cross".
         let mut result = ScrollOption::empty();
-        for token in lower
-            .split(|c: char| c == '+' || c == ',' || c.is_whitespace())
-        {
+        for token in lower.split(|c: char| c == '+' || c == ',' || c.is_whitespace()) {
             if token.is_empty() {
                 continue;
             }
@@ -116,8 +114,7 @@ const PROFILE_INI_PATH: &str = "save/profiles/00000000/profile.ini";
 const GROOVESTATS_INI_PATH: &str = "save/profiles/00000000/groovestats.ini";
 const PROFILE_AVATAR_PATH: &str = "save/profiles/00000000/profile.png";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BackgroundFilter {
     Off,
     Dark,
@@ -125,7 +122,6 @@ pub enum BackgroundFilter {
     #[default]
     Darkest,
 }
-
 
 impl FromStr for BackgroundFilter {
     type Err = String;
@@ -151,8 +147,7 @@ impl core::fmt::Display for BackgroundFilter {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HoldJudgmentGraphic {
     #[default]
     Love,
@@ -160,7 +155,6 @@ pub enum HoldJudgmentGraphic {
     ITG2,
     None,
 }
-
 
 impl FromStr for HoldJudgmentGraphic {
     type Err = String;
@@ -170,7 +164,10 @@ impl FromStr for HoldJudgmentGraphic {
             "mute" => Ok(Self::Mute),
             "itg2" => Ok(Self::ITG2),
             "none" => Ok(Self::None),
-            other => Err(format!("'{}' is not a valid HoldJudgmentGraphic setting", other)),
+            other => Err(format!(
+                "'{}' is not a valid HoldJudgmentGraphic setting",
+                other
+            )),
         }
     }
 }
@@ -186,8 +183,7 @@ impl core::fmt::Display for HoldJudgmentGraphic {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum JudgmentGraphic {
     Bebas,
     Censored,
@@ -212,7 +208,6 @@ pub enum JudgmentGraphic {
     WendyChroma,
     None,
 }
-
 
 impl FromStr for JudgmentGraphic {
     type Err = String;
@@ -244,7 +239,10 @@ impl FromStr for JudgmentGraphic {
             "wendy chroma" => Ok(Self::WendyChroma),
             "wendychroma" => Ok(Self::WendyChroma),
             "none" => Ok(Self::None),
-            other => Err(format!("'{}' is not a valid JudgmentGraphic setting", other)),
+            other => Err(format!(
+                "'{}' is not a valid JudgmentGraphic setting",
+                other
+            )),
         }
     }
 }
@@ -277,8 +275,7 @@ impl core::fmt::Display for JudgmentGraphic {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NoteSkin {
     #[default]
     Cel,
@@ -286,7 +283,6 @@ pub enum NoteSkin {
     EnchantmentV2,
     DevCel2024V3,
 }
-
 
 impl FromStr for NoteSkin {
     type Err = String;
@@ -312,8 +308,7 @@ impl core::fmt::Display for NoteSkin {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ComboFont {
     #[default]
     Wendy,
@@ -325,7 +320,6 @@ pub enum ComboFont {
     WendyCursed,
     None,
 }
-
 
 impl FromStr for ComboFont {
     type Err = String;
@@ -439,7 +433,8 @@ struct SessionState {
     music_rate: f32,
 }
 
-static SESSION: Lazy<Mutex<SessionState>> = Lazy::new(|| Mutex::new(SessionState { music_rate: 1.0 }));
+static SESSION: Lazy<Mutex<SessionState>> =
+    Lazy::new(|| Mutex::new(SessionState { music_rate: 1.0 }));
 
 /// Creates the default profile directory and .ini files if they don't exist.
 fn create_default_files() -> Result<(), std::io::Error> {
@@ -455,7 +450,10 @@ fn create_default_files() -> Result<(), std::io::Error> {
         let mut content = String::new();
 
         content.push_str("[PlayerOptions]\n");
-        content.push_str(&format!("BackgroundFilter = {}\n", default_profile.background_filter));
+        content.push_str(&format!(
+            "BackgroundFilter = {}\n",
+            default_profile.background_filter
+        ));
         content.push_str(&format!("ScrollSpeed = {}\n", default_profile.scroll_speed));
         content.push_str(&format!("Scroll = {}\n", default_profile.scroll_option));
         content.push_str(&format!(
@@ -464,7 +462,11 @@ fn create_default_files() -> Result<(), std::io::Error> {
         ));
         content.push_str(&format!(
             "ShowFaPlusWindow = {}\n",
-            if default_profile.show_fa_plus_window { 1 } else { 0 }
+            if default_profile.show_fa_plus_window {
+                1
+            } else {
+                0
+            }
         ));
         content.push_str(&format!(
             "ShowExScore = {}\n",
@@ -472,7 +474,11 @@ fn create_default_files() -> Result<(), std::io::Error> {
         ));
         content.push_str(&format!(
             "ShowFaPlusPane = {}\n",
-            if default_profile.show_fa_plus_pane { 1 } else { 0 }
+            if default_profile.show_fa_plus_pane {
+                1
+            } else {
+                0
+            }
         ));
         content.push_str(&format!(
             "HoldJudgmentGraphic = {}\n",
@@ -482,18 +488,9 @@ fn create_default_files() -> Result<(), std::io::Error> {
             "JudgmentGraphic = {}\n",
             default_profile.judgment_graphic
         ));
-        content.push_str(&format!(
-            "ComboFont = {}\n",
-            default_profile.combo_font
-        ));
-        content.push_str(&format!(
-            "NoteSkin = {}\n",
-            default_profile.noteskin
-        ));
-        content.push_str(&format!(
-            "MiniPercent = {}\n",
-            default_profile.mini_percent
-        ));
+        content.push_str(&format!("ComboFont = {}\n", default_profile.combo_font));
+        content.push_str(&format!("NoteSkin = {}\n", default_profile.noteskin));
+        content.push_str(&format!("MiniPercent = {}\n", default_profile.mini_percent));
         content.push_str(&format!(
             "NoteFieldOffsetX = {}\n",
             default_profile.note_field_offset_x
@@ -506,7 +503,10 @@ fn create_default_files() -> Result<(), std::io::Error> {
 
         content.push_str("[userprofile]\n");
         content.push_str(&format!("DisplayName = {}\n", default_profile.display_name));
-        content.push_str(&format!("PlayerInitials = {}\n", default_profile.player_initials));
+        content.push_str(&format!(
+            "PlayerInitials = {}\n",
+            default_profile.player_initials
+        ));
         content.push('\n');
 
         fs::write(PROFILE_INI_PATH, content)?;
@@ -556,19 +556,10 @@ fn save_profile_ini() {
         "HoldJudgmentGraphic={}\n",
         profile.hold_judgment_graphic
     ));
-    content.push_str(&format!(
-        "JudgmentGraphic={}\n",
-        profile.judgment_graphic
-    ));
-    content.push_str(&format!(
-        "ComboFont={}\n",
-        profile.combo_font
-    ));
+    content.push_str(&format!("JudgmentGraphic={}\n", profile.judgment_graphic));
+    content.push_str(&format!("ComboFont={}\n", profile.combo_font));
     content.push_str(&format!("NoteSkin={}\n", profile.noteskin));
-    content.push_str(&format!(
-        "MiniPercent={}\n",
-        profile.mini_percent
-    ));
+    content.push_str(&format!("MiniPercent={}\n", profile.mini_percent));
     content.push_str(&format!(
         "NoteFieldOffsetX={}\n",
         profile.note_field_offset_x
@@ -592,7 +583,10 @@ fn save_profile_ini() {
     } else {
         content.push_str("MusicPath=\n");
     }
-    content.push_str(&format!("DifficultyIndex={}\n", profile.last_difficulty_index));
+    content.push_str(&format!(
+        "DifficultyIndex={}\n",
+        profile.last_difficulty_index
+    ));
     content.push('\n');
 
     if let Err(e) = fs::write(PROFILE_INI_PATH, content) {
@@ -606,7 +600,14 @@ fn save_groovestats_ini() {
 
     content.push_str("[GrooveStats]\n");
     content.push_str(&format!("ApiKey={}\n", profile.groovestats_api_key));
-    content.push_str(&format!("IsPadPlayer={}\n", if profile.groovestats_is_pad_player { "1" } else { "0" }));
+    content.push_str(&format!(
+        "IsPadPlayer={}\n",
+        if profile.groovestats_is_pad_player {
+            "1"
+        } else {
+            "0"
+        }
+    ));
     content.push_str(&format!("Username={}\n", profile.groovestats_username));
     content.push('\n');
 
@@ -617,10 +618,11 @@ fn save_groovestats_ini() {
 
 pub fn load() {
     if (!Path::new(PROFILE_INI_PATH).exists() || !Path::new(GROOVESTATS_INI_PATH).exists())
-        && let Err(e) = create_default_files() {
-            warn!("Failed to create default profile files: {}", e);
-            // Proceed with default struct values and attempt to save them.
-        }
+        && let Err(e) = create_default_files()
+    {
+        warn!("Failed to create default profile files: {}", e);
+        // Proceed with default struct values and attempt to save them.
+    }
 
     {
         let mut profile = PROFILE.lock().unwrap();
@@ -691,7 +693,11 @@ pub fn load() {
                         .get("PlayerOptions", "ReverseScroll")
                         .and_then(|v| v.parse::<u8>().ok())
                         .map_or(default_profile.reverse_scroll, |v| v != 0);
-                    if reverse_enabled { ScrollOption::Reverse } else { default_profile.scroll_option }
+                    if reverse_enabled {
+                        ScrollOption::Reverse
+                    } else {
+                        default_profile.scroll_option
+                    }
                 });
             profile.reverse_scroll = profile.scroll_option.contains(ScrollOption::Reverse);
 
@@ -700,7 +706,11 @@ pub fn load() {
                 .get("LastPlayed", "MusicPath")
                 .map(|s| {
                     let trimmed = s.trim();
-                    if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+                    if trimmed.is_empty() {
+                        None
+                    } else {
+                        Some(trimmed.to_string())
+                    }
                 })
                 .unwrap_or(None);
 
@@ -770,7 +780,11 @@ pub fn get_session_music_rate() -> f32 {
 
 pub fn set_session_music_rate(rate: f32) {
     let mut s = SESSION.lock().unwrap();
-    s.music_rate = if rate.is_finite() && rate > 0.0 { rate.clamp(0.5, 3.0) } else { 1.0 };
+    s.music_rate = if rate.is_finite() && rate > 0.0 {
+        rate.clamp(0.5, 3.0)
+    } else {
+        1.0
+    };
 }
 
 /// Persist the last played song and difficulty to the on-disk profile.

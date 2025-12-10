@@ -1,9 +1,9 @@
 use crate::game::{
     chart::ChartData,
-    song::{set_song_cache, SongData, SongPack},
+    song::{SongData, SongPack, set_song_cache},
 };
 use log::{info, warn};
-use rssp::{analyze, AnalysisOptions};
+use rssp::{AnalysisOptions, analyze};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -245,9 +245,18 @@ impl From<&SongData> for SerializableSongData {
             title: song.title.clone(),
             subtitle: song.subtitle.clone(),
             artist: song.artist.clone(),
-            banner_path: song.banner_path.as_ref().map(|p| p.to_string_lossy().into_owned()),
-            background_path: song.background_path.as_ref().map(|p| p.to_string_lossy().into_owned()),
-            music_path: song.music_path.as_ref().map(|p| p.to_string_lossy().into_owned()),
+            banner_path: song
+                .banner_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().into_owned()),
+            background_path: song
+                .background_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().into_owned()),
+            music_path: song
+                .music_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().into_owned()),
             display_bpm: song.display_bpm.clone(),
             offset: song.offset,
             sample_start: song.sample_start,
@@ -263,7 +272,11 @@ impl From<&SongData> for SerializableSongData {
             normalized_fakes: song.normalized_fakes.clone(),
             music_length_seconds: song.music_length_seconds,
             total_length_seconds: song.total_length_seconds,
-            charts: song.charts.iter().map(SerializableChartData::from).collect(),
+            charts: song
+                .charts
+                .iter()
+                .map(SerializableChartData::from)
+                .collect(),
         }
     }
 }
@@ -332,7 +345,6 @@ fn get_cache_path(simfile_path: &Path) -> Result<PathBuf, std::io::Error> {
     Ok(cache_dir.join(file_name))
 }
 
-
 /// Scans the provided root directory (e.g., "songs/") for simfiles,
 /// parses them, and populates the global cache. This should be run once at startup.
 pub fn scan_and_load_songs(root_path_str: &'static str) {
@@ -343,12 +355,19 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
     // Ensure the cache directory exists before we start scanning.
     let cache_dir = Path::new("cache/songs");
     if let Err(e) = fs::create_dir_all(cache_dir) {
-        warn!("Could not create cache directory '{}': {}. Caching will be disabled.", cache_dir.to_string_lossy(), e);
+        warn!(
+            "Could not create cache directory '{}': {}. Caching will be disabled.",
+            cache_dir.to_string_lossy(),
+            e
+        );
     }
 
     let root_path = Path::new(root_path_str);
     if !root_path.exists() || !root_path.is_dir() {
-        warn!("Songs directory '{}' not found. No songs will be loaded.", root_path_str);
+        warn!(
+            "Songs directory '{}' not found. No songs will be loaded.",
+            root_path_str
+        );
         return;
     }
 
@@ -361,8 +380,15 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
             continue;
         }
 
-        let pack_name = pack_path.file_name().unwrap_or_default().to_string_lossy().to_string();
-        let mut current_pack = SongPack { name: pack_name, songs: Vec::new() };
+        let pack_name = pack_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let mut current_pack = SongPack {
+            name: pack_name,
+            songs: Vec::new(),
+        };
         info!("Scanning pack: {}", current_pack.name);
 
         // Each subdirectory in a pack is a song folder
@@ -377,16 +403,17 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
                 for file in files.flatten() {
                     let file_path = file.path();
                     if let Some(ext) = file_path.extension().and_then(|s| s.to_str())
-                        && (ext.eq_ignore_ascii_case("sm") || ext.eq_ignore_ascii_case("ssc")) {
-                            match load_song_from_file(&file_path, config.fastload, config.cachesongs) {
-                                Ok(song_data) => {
-                                    current_pack.songs.push(Arc::new(song_data));
-                                }
-                                Err(e) => warn!("Failed to load '{:?}': {}", file_path, e),
+                        && (ext.eq_ignore_ascii_case("sm") || ext.eq_ignore_ascii_case("ssc"))
+                    {
+                        match load_song_from_file(&file_path, config.fastload, config.cachesongs) {
+                            Ok(song_data) => {
+                                current_pack.songs.push(Arc::new(song_data));
                             }
-                            // Found the simfile, move to the next song directory
-                            break;
+                            Err(e) => warn!("Failed to load '{:?}': {}", file_path, e),
                         }
+                        // Found the simfile, move to the next song directory
+                        break;
+                    }
                 }
             }
         }
@@ -432,7 +459,10 @@ fn load_song_from_file(path: &Path, fastload: bool, cachesongs: bool) -> Result<
     let cache_path = match get_cache_path(path) {
         Ok(p) => Some(p),
         Err(e) => {
-            warn!("Could not generate cache path for {:?}: {}. Caching disabled for this file.", path, e);
+            warn!(
+                "Could not generate cache path for {:?}: {}. Caching disabled for this file.",
+                path, e
+            );
             None
         }
     };
@@ -440,7 +470,10 @@ fn load_song_from_file(path: &Path, fastload: bool, cachesongs: bool) -> Result<
     let content_hash = match get_content_hash(path) {
         Ok(h) => Some(h),
         Err(e) => {
-            warn!("Could not hash content of {:?}: {}. Caching disabled for this file.", path, e);
+            warn!(
+                "Could not hash content of {:?}: {}. Caching disabled for this file.",
+                path, e
+            );
             None
         }
     };
@@ -448,53 +481,63 @@ fn load_song_from_file(path: &Path, fastload: bool, cachesongs: bool) -> Result<
     // --- CACHE CHECK ---
     if fastload
         && let (Some(cp), Some(ch)) = (cache_path.as_ref(), content_hash)
-            && cp.exists()
-                && let Ok(mut file) = fs::File::open(cp) {
-                    let mut buffer = Vec::new();
-                    if file.read_to_end(&mut buffer).is_ok()
-                        && let Ok((cached_song, _)) = bincode::decode_from_slice::<CachedSong, _>(&buffer, bincode::config::standard()) {
-                            if cached_song.source_hash == ch && cached_song.rssp_version == rssp::RSSP_VERSION {
-                                info!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
-                                return Ok(cached_song.data.into());
-                            } else if cached_song.source_hash != ch {
-                                info!("Cache stale (content hash mismatch) for: {:?}", path.file_name().unwrap_or_default());
-                            } else {
-                                info!("Cache stale (rssp version mismatch) for: {:?}", path.file_name().unwrap_or_default());
-                            }
-                        }
-                }
+        && cp.exists()
+        && let Ok(mut file) = fs::File::open(cp)
+    {
+        let mut buffer = Vec::new();
+        if file.read_to_end(&mut buffer).is_ok()
+            && let Ok((cached_song, _)) =
+                bincode::decode_from_slice::<CachedSong, _>(&buffer, bincode::config::standard())
+        {
+            if cached_song.source_hash == ch && cached_song.rssp_version == rssp::RSSP_VERSION {
+                info!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
+                return Ok(cached_song.data.into());
+            } else if cached_song.source_hash != ch {
+                info!(
+                    "Cache stale (content hash mismatch) for: {:?}",
+                    path.file_name().unwrap_or_default()
+                );
+            } else {
+                info!(
+                    "Cache stale (rssp version mismatch) for: {:?}",
+                    path.file_name().unwrap_or_default()
+                );
+            }
+        }
+    }
 
     // --- CACHE MISS: PARSE AND WRITE ---
     if fastload {
         info!("Cache miss for: {:?}", path.file_name().unwrap_or_default());
     } else {
-        info!("Parsing (fastload disabled): {:?}", path.file_name().unwrap_or_default());
+        info!(
+            "Parsing (fastload disabled): {:?}",
+            path.file_name().unwrap_or_default()
+        );
     }
     let song_data = parse_and_process_song_file(path)?;
 
-    if cachesongs
-        && let (Some(cp), Some(ch)) = (cache_path, content_hash) {
-            let serializable_data: SerializableSongData = (&song_data).into();
-            let cached_song = CachedSong {
-                rssp_version: rssp::RSSP_VERSION.to_string(),
-                source_hash: ch,
-                data: serializable_data,
-            };
-            
-            if let Ok(encoded) = bincode::encode_to_vec(&cached_song, bincode::config::standard()) {
-                if let Ok(mut file) = fs::File::create(&cp) {
-                    if file.write_all(&encoded).is_err() {
-                        warn!("Failed to write cache file for {:?}", cp);
-                    }
-                } else {
-                     warn!("Failed to create cache file for {:?}", cp);
+    if cachesongs && let (Some(cp), Some(ch)) = (cache_path, content_hash) {
+        let serializable_data: SerializableSongData = (&song_data).into();
+        let cached_song = CachedSong {
+            rssp_version: rssp::RSSP_VERSION.to_string(),
+            source_hash: ch,
+            data: serializable_data,
+        };
+
+        if let Ok(encoded) = bincode::encode_to_vec(&cached_song, bincode::config::standard()) {
+            if let Ok(mut file) = fs::File::create(&cp) {
+                if file.write_all(&encoded).is_err() {
+                    warn!("Failed to write cache file for {:?}", cp);
                 }
+            } else {
+                warn!("Failed to create cache file for {:?}", cp);
             }
         }
+    }
 
     Ok(song_data)
 }
-
 
 /// The original parsing logic, now separated to be called on a cache miss.
 fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
@@ -541,7 +584,9 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
         })
         .collect();
 
-    let simfile_dir = path.parent().ok_or_else(|| "Could not determine simfile directory".to_string())?;
+    let simfile_dir = path
+        .parent()
+        .ok_or_else(|| "Could not determine simfile directory".to_string())?;
 
     // --- Background Path Logic (with autodetection) ---
     let mut background_path_opt: Option<PathBuf> = if !summary.background_path.is_empty() {
@@ -552,19 +597,22 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
     };
 
     if background_path_opt.is_none() {
-        info!("'{}' - BG path is missing or empty, attempting autodetection.", summary.title_str);
+        info!(
+            "'{}' - BG path is missing or empty, attempting autodetection.",
+            summary.title_str
+        );
         if let Ok(entries) = fs::read_dir(simfile_dir) {
             let image_files: Vec<PathBuf> = entries
                 .filter_map(Result::ok)
                 .map(|e| e.path())
                 .filter(|p| {
-                    p.is_file() &&
-                    p.extension().and_then(|s| s.to_str()).is_some_and(|ext| {
-                        matches!(ext.to_lowercase().as_str(), "png" | "jpg" | "jpeg" | "bmp")
-                    })
+                    p.is_file()
+                        && p.extension().and_then(|s| s.to_str()).is_some_and(|ext| {
+                            matches!(ext.to_lowercase().as_str(), "png" | "jpg" | "jpeg" | "bmp")
+                        })
                 })
                 .collect();
-            
+
             let mut found_bg: Option<String> = None;
 
             // Hint-based search first
@@ -582,17 +630,20 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
             if found_bg.is_none() {
                 for file in &image_files {
                     if let Some(file_name) = file.file_name().and_then(|s| s.to_str())
-                         && let Ok((w, h)) = image::image_dimensions(file)
-                             && w >= 320 && h >= 240 {
-                                let aspect = if h > 0 { w as f32 / h as f32 } else { 0.0 };
-                                if aspect < 2.0 { // Banners are usually wider than 2:1
-                                    found_bg = Some(file_name.to_string());
-                                    break;
-                                }
-                            }
+                        && let Ok((w, h)) = image::image_dimensions(file)
+                        && w >= 320
+                        && h >= 240
+                    {
+                        let aspect = if h > 0 { w as f32 / h as f32 } else { 0.0 };
+                        if aspect < 2.0 {
+                            // Banners are usually wider than 2:1
+                            found_bg = Some(file_name.to_string());
+                            break;
+                        }
+                    }
                 }
             }
-            
+
             if let Some(bg_filename) = found_bg {
                 info!("Autodetected background: '{}'", bg_filename);
                 background_path_opt = Some(simfile_dir.join(bg_filename));
@@ -639,8 +690,16 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
         background_path: background_path_opt,
         display_bpm: summary.display_bpm_str,
         offset: summary.offset as f32,
-        sample_start: if summary.sample_start > 0.0 { Some(summary.sample_start as f32) } else { None },
-        sample_length: if summary.sample_length > 0.0 { Some(summary.sample_length as f32) } else { None },
+        sample_start: if summary.sample_start > 0.0 {
+            Some(summary.sample_start as f32)
+        } else {
+            None
+        },
+        sample_length: if summary.sample_length > 0.0 {
+            Some(summary.sample_length as f32)
+        } else {
+            None
+        },
         min_bpm: summary.min_bpm,
         max_bpm: summary.max_bpm,
         normalized_bpms: summary.normalized_bpms,
@@ -691,8 +750,7 @@ fn ogg_length_seconds(path: &Path) -> Result<f32, String> {
     let file = fs::File::open(path).map_err(|e| format!("Cannot open file: {}", e))?;
 
     // Safe wrapper around the unsafe memmap2 API.
-    let mmap = unsafe { Mmap::map(&file) }
-        .map_err(|e| format!("Memory-map failed: {}", e))?;
+    let mmap = unsafe { Mmap::map(&file) }.map_err(|e| format!("Memory-map failed: {}", e))?;
 
     // Use lewton to get the sample rate from the header.
     let sample_rate_hz = {
@@ -730,10 +788,9 @@ fn find_last_granule_backwards(data: &[u8]) -> Result<u64, String> {
                         .map_err(|_| "Failed to read granule position".to_string())?,
                 );
 
-                if granule != u64::MAX
-                    && best_granule.is_none_or(|prev| granule > prev) {
-                        best_granule = Some(granule);
-                    }
+                if granule != u64::MAX && best_granule.is_none_or(|prev| granule > prev) {
+                    best_granule = Some(granule);
+                }
 
                 // Jump back far enough to definitely get past this page.
                 i = i.saturating_sub(27 + 255 * 255);

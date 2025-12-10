@@ -1015,9 +1015,10 @@ fn parse_properties(content: &str) -> HashMap<&str, &str> {
     }
 
     if start < content.len()
-        && let Some((key, value)) = content[start..].split_once('=') {
-            props.insert(key.trim(), value.trim());
-        }
+        && let Some((key, value)) = content[start..].split_once('=')
+    {
+        props.insert(key.trim(), value.trim());
+    }
 
     props
 }
@@ -1261,19 +1262,21 @@ fn parse_hold_component(
             );
         }
     } else if slot.source.is_none()
-        && let Some(source) = builder.default_sources.get(&default_key) {
-            slot.set_source(source.clone());
-        }
+        && let Some(source) = builder.default_sources.get(&default_key)
+    {
+        slot.set_source(source.clone());
+    }
 
     if slot.def.size == [0, 0]
-        && let Some(source) = slot.source.as_ref() {
-            if let Some(size) = source.frame_size() {
-                slot.def.size = size;
-            } else {
-                let dims = source.tex_dims();
-                slot.def.size = [dims.0 as i32, dims.1 as i32];
-            }
+        && let Some(source) = slot.source.as_ref()
+    {
+        if let Some(size) = source.frame_size() {
+            slot.def.size = size;
+        } else {
+            let dims = source.tex_dims();
+            slot.def.size = [dims.0 as i32, dims.1 as i32];
         }
+    }
 }
 
 fn parse_glow_sheet(
@@ -1525,17 +1528,18 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
             }
             "effectperiod" => {
                 if let Some(arg) = args.first()
-                    && let Ok(period) = arg.parse::<f32>() {
-                        if let Some(glow) = animation.glow.as_mut() {
-                            glow.period = period.max(0.0);
-                        } else {
-                            animation.glow = Some(GlowEffect {
-                                period: period.max(0.0),
-                                color1: [1.0, 1.0, 1.0, 0.0],
-                                color2: [1.0, 1.0, 1.0, 0.0],
-                            });
-                        }
+                    && let Ok(period) = arg.parse::<f32>()
+                {
+                    if let Some(glow) = animation.glow.as_mut() {
+                        glow.period = period.max(0.0);
+                    } else {
+                        animation.glow = Some(GlowEffect {
+                            period: period.max(0.0),
+                            color1: [1.0, 1.0, 1.0, 0.0],
+                            color2: [1.0, 1.0, 1.0, 0.0],
+                        });
                     }
+                }
             }
             "effectcolor1" => {
                 if let Some(color) = parse_color4(&args) {
@@ -1605,22 +1609,20 @@ fn parse_color4(args: &[&str]) -> Option<[f32; 4]> {
         values[i] = arg.parse().ok()?;
     }
 
-    if args.len() < 4 {
-        None
-    } else {
-        Some(values)
-    }
+    if args.len() < 4 { None } else { Some(values) }
 }
 
 fn apply_basic_sprite_properties(slot: &mut SlotBuilder, props: &HashMap<&str, &str>) {
     if let Some(src_str) = props.get("src")
-        && let Some((x_str, y_str)) = src_str.split_once(',') {
-            slot.def.src = [x_str.parse().unwrap_or(0), y_str.parse().unwrap_or(0)];
-        }
+        && let Some((x_str, y_str)) = src_str.split_once(',')
+    {
+        slot.def.src = [x_str.parse().unwrap_or(0), y_str.parse().unwrap_or(0)];
+    }
     if let Some(size_str) = props.get("size")
-        && let Some((w_str, h_str)) = size_str.split_once(',') {
-            slot.def.size = [w_str.parse().unwrap_or(0), h_str.parse().unwrap_or(0)];
-        }
+        && let Some((w_str, h_str)) = size_str.split_once(',')
+    {
+        slot.def.size = [w_str.parse().unwrap_or(0), h_str.parse().unwrap_or(0)];
+    }
     if let Some(rot_str) = props.get("rot") {
         slot.def.rotation_deg = rot_str.parse().unwrap_or(0);
     }
@@ -1643,13 +1645,15 @@ fn parse_sprite_rule(
     if !has_range_spec {
         let mut def = builder.defaults.get(tag).cloned().unwrap_or_default();
         if let Some(src_str) = props.get("src")
-            && let Some((x_str, y_str)) = src_str.split_once(',') {
-                def.src = [x_str.parse().unwrap_or(0), y_str.parse().unwrap_or(0)];
-            }
+            && let Some((x_str, y_str)) = src_str.split_once(',')
+        {
+            def.src = [x_str.parse().unwrap_or(0), y_str.parse().unwrap_or(0)];
+        }
         if let Some(size_str) = props.get("size")
-            && let Some((w_str, h_str)) = size_str.split_once(',') {
-                def.size = [w_str.parse().unwrap_or(0), h_str.parse().unwrap_or(0)];
-            }
+            && let Some((w_str, h_str)) = size_str.split_once(',')
+        {
+            def.size = [w_str.parse().unwrap_or(0), h_str.parse().unwrap_or(0)];
+        }
         if let Some(rot_str) = props.get("rot") {
             def.rotation_deg = rot_str.parse().unwrap_or(0);
         }

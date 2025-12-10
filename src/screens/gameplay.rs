@@ -5,7 +5,7 @@ use crate::core::space::{is_wide, widescale};
 use crate::game::judgment;
 use crate::game::judgment::{JudgeGrade, TimingWindow};
 use crate::game::note::{HoldResult, NoteType};
-use crate::game::parsing::noteskin::{Quantization, SpriteSlot, NUM_QUANTIZATIONS};
+use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Quantization, SpriteSlot};
 use crate::game::{profile, scroll::ScrollSpeedSetting, timing as timing_stats};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -13,19 +13,19 @@ use crate::ui::components::screen_bar::{self, ScreenBarParams};
 use crate::ui::font;
 use log::warn;
 use std::array::from_fn;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex};
 
-pub use crate::game::gameplay::{init, update, State};
 use crate::game::gameplay::active_hold_is_engaged;
 use crate::game::gameplay::{
-    ComboMilestoneKind, COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION,
+    COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind,
     HOLD_JUDGMENT_TOTAL_DURATION, MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION,
-    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
-    TRANSITION_IN_DURATION, TRANSITION_OUT_DURATION,
+    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, TRANSITION_IN_DURATION,
+    TRANSITION_OUT_DURATION,
 };
+pub use crate::game::gameplay::{State, init, update};
 
 // --- CONSTANTS ---
 
@@ -130,10 +130,11 @@ fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
     let mut width = slot.def.size[0];
     let mut height = slot.def.size[1];
     if (width <= 0 || height <= 0)
-        && let Some(frame) = slot.source.frame_size() {
-            width = frame[0];
-            height = frame[1];
-        }
+        && let Some(frame) = slot.source.frame_size()
+    {
+        width = frame[0];
+        height = frame[1];
+    }
 
     if width <= 0 || height <= 0 {
         warn!("Mine fill slot has invalid size for gradient sampling");
@@ -314,12 +315,48 @@ struct JudgmentDisplayInfo {
 
 static JUDGMENT_INFO: LazyLock<HashMap<JudgeGrade, JudgmentDisplayInfo>> = LazyLock::new(|| {
     HashMap::from([
-        (JudgeGrade::Fantastic, JudgmentDisplayInfo { label: "FANTASTIC", color: color::rgba_hex(color::JUDGMENT_HEX[0]) }),
-        (JudgeGrade::Excellent, JudgmentDisplayInfo { label: "EXCELLENT", color: color::rgba_hex(color::JUDGMENT_HEX[1]) }),
-        (JudgeGrade::Great,     JudgmentDisplayInfo { label: "GREAT",     color: color::rgba_hex(color::JUDGMENT_HEX[2]) }),
-        (JudgeGrade::Decent,    JudgmentDisplayInfo { label: "DECENT",    color: color::rgba_hex(color::JUDGMENT_HEX[3]) }),
-        (JudgeGrade::WayOff,    JudgmentDisplayInfo { label: "WAY OFF",   color: color::rgba_hex(color::JUDGMENT_HEX[4]) }),
-        (JudgeGrade::Miss,      JudgmentDisplayInfo { label: "MISS",      color: color::rgba_hex(color::JUDGMENT_HEX[5]) }),
+        (
+            JudgeGrade::Fantastic,
+            JudgmentDisplayInfo {
+                label: "FANTASTIC",
+                color: color::rgba_hex(color::JUDGMENT_HEX[0]),
+            },
+        ),
+        (
+            JudgeGrade::Excellent,
+            JudgmentDisplayInfo {
+                label: "EXCELLENT",
+                color: color::rgba_hex(color::JUDGMENT_HEX[1]),
+            },
+        ),
+        (
+            JudgeGrade::Great,
+            JudgmentDisplayInfo {
+                label: "GREAT",
+                color: color::rgba_hex(color::JUDGMENT_HEX[2]),
+            },
+        ),
+        (
+            JudgeGrade::Decent,
+            JudgmentDisplayInfo {
+                label: "DECENT",
+                color: color::rgba_hex(color::JUDGMENT_HEX[3]),
+            },
+        ),
+        (
+            JudgeGrade::WayOff,
+            JudgmentDisplayInfo {
+                label: "WAY OFF",
+                color: color::rgba_hex(color::JUDGMENT_HEX[4]),
+            },
+        ),
+        (
+            JudgeGrade::Miss,
+            JudgmentDisplayInfo {
+                label: "MISS",
+                color: color::rgba_hex(color::JUDGMENT_HEX[5]),
+            },
+        ),
     ])
 });
 
@@ -350,15 +387,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::new();
     let profile = profile::get();
     let hold_judgment_texture: Option<&str> = match profile.hold_judgment_graphic {
-        profile::HoldJudgmentGraphic::Love => {
-            Some("hold_judgements/Love 1x2 (doubleres).png")
-        }
-        profile::HoldJudgmentGraphic::Mute => {
-            Some("hold_judgements/mute 1x2 (doubleres).png")
-        }
-        profile::HoldJudgmentGraphic::ITG2 => {
-            Some("hold_judgements/ITG2 1x2 (doubleres).png")
-        }
+        profile::HoldJudgmentGraphic::Love => Some("hold_judgements/Love 1x2 (doubleres).png"),
+        profile::HoldJudgmentGraphic::Mute => Some("hold_judgements/mute 1x2 (doubleres).png"),
+        profile::HoldJudgmentGraphic::ITG2 => Some("hold_judgements/ITG2 1x2 (doubleres).png"),
         profile::HoldJudgmentGraphic::None => None,
     };
     // --- Background and Filter ---
@@ -406,13 +437,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
     let playfield_center_x = screen_center_x() - (clamped_width * 0.25) + notefield_offset_x;
-    let receptor_y_normal =
-        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + notefield_offset_y;
+    let receptor_y_normal = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + notefield_offset_y;
     let receptor_y_reverse =
         screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE + notefield_offset_y;
 
-    
-    let is_centered = profile.scroll_option.contains(profile::ScrollOption::Centered);
+    let is_centered = profile
+        .scroll_option
+        .contains(profile::ScrollOption::Centered);
     let receptor_y_centered = screen_center_y() + notefield_offset_y;
 
     // --- Banner (1:1 with Simply Love, including parent frame logic) ---
@@ -472,13 +503,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let (rate, cmod_pps_opt, curr_disp_beat, beatmod_multiplier) = match state.scroll_speed {
             ScrollSpeedSetting::CMod(c_bpm) => {
                 let pps = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-                let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+                let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+                    state.music_rate
+                } else {
+                    1.0
+                };
                 (rate, Some(pps), 0.0, 0.0)
             }
             ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                 let curr_disp = state.timing.get_displayed_beat(state.current_beat);
-                let speed_multiplier = state.timing.get_speed_multiplier(state.current_beat, state.current_music_time);
-                let player_multiplier = state.scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
+                let speed_multiplier = state
+                    .timing
+                    .get_speed_multiplier(state.current_beat, state.current_music_time);
+                let player_multiplier = state
+                    .scroll_speed
+                    .beat_multiplier(state.scroll_reference_bpm, state.music_rate);
                 let final_multiplier = player_multiplier * speed_multiplier;
                 (1.0, None, curr_disp, final_multiplier)
             }
@@ -506,13 +545,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let note_disp_beat = state.timing.get_displayed_beat(beat);
                     let beat_diff_disp = note_disp_beat - curr_disp_beat;
                     receptor_y_lane
-                        + dir * (beat_diff_disp
-                            * ScrollSpeedSetting::ARROW_SPACING * field_zoom
-                            * beatmod_multiplier)
+                        + dir
+                            * (beat_diff_disp
+                                * ScrollSpeedSetting::ARROW_SPACING
+                                * field_zoom
+                                * beatmod_multiplier)
                 }
             }
         };
-        
+
         let mine_explosion_size = {
             let base = assets::texture_dims("hit_mine_explosion.png")
                 .map(|meta| [meta.w.max(1) as f32, meta.h.max(1) as f32])
@@ -583,10 +624,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     } else {
                         &ns.hold
                     };
-                    visuals
-                        .explosion
-                        .as_ref()
-                        .or(ns.hold.explosion.as_ref())
+                    visuals.explosion.as_ref().or(ns.hold.explosion.as_ref())
                 })
             {
                 let hold_uv = hold_slot.uv_for_frame(0);
@@ -610,91 +648,92 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
             let glow_timer = state.receptor_glow_timers[i];
             if glow_timer > 0.0
-                && let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref()) {
-                    let glow_frame =
-                        glow_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
-                    let glow_uv = glow_slot.uv_for_frame(glow_frame);
-                    let glow_size = glow_slot.size();
-                    let alpha = (glow_timer / RECEPTOR_GLOW_DURATION).powf(0.75);
-                    actors.push(act!(sprite(glow_slot.texture_key().to_string()):
-                        align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
-                        zoomto(glow_size[0] as f32, glow_size[1] as f32):
-                        rotationz(-glow_slot.def.rotation_deg as f32):
-                        customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
-                        diffuse(1.0, 1.0, 1.0, alpha):
-                        blend(add):
-                        z(Z_HOLD_GLOW)
-                    ));
-                }
+                && let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref())
+            {
+                let glow_frame =
+                    glow_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
+                let glow_uv = glow_slot.uv_for_frame(glow_frame);
+                let glow_size = glow_slot.size();
+                let alpha = (glow_timer / RECEPTOR_GLOW_DURATION).powf(0.75);
+                actors.push(act!(sprite(glow_slot.texture_key().to_string()):
+                    align(0.5, 0.5):
+                    xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
+                    zoomto(glow_size[0] as f32, glow_size[1] as f32):
+                    rotationz(-glow_slot.def.rotation_deg as f32):
+                    customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
+                    diffuse(1.0, 1.0, 1.0, alpha):
+                    blend(add):
+                    z(Z_HOLD_GLOW)
+                ));
+            }
         }
         // Tap explosions
         for i in 0..4 {
             if let Some(active) = state.tap_explosions[i].as_ref()
-                && let Some(explosion) = ns.tap_explosions.get(&active.window) {
-                    let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
-                    let raw_dir = state
-                        .column_scroll_dirs
-                        .get(i)
-                        .copied()
-                        .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
-                    let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
-                    let receptor_y_lane = if is_centered {
-                        receptor_y_centered
-                    } else if dir >= 0.0 {
-                        receptor_y_normal
-                    } else {
-                        receptor_y_reverse
-                    };
-                    let anim_time = active.elapsed;
-                    let slot = &explosion.slot;
-                    let beat_for_anim = if slot.source.is_beat_based() {
-                        (state.current_beat - active.start_beat).max(0.0)
-                    } else {
-                        state.current_beat
-                    };
-                    let frame = slot.frame_index(anim_time, beat_for_anim);
-                    let uv = slot.uv_for_frame(frame);
-                    let size = scale_explosion(slot.size());
-                    let visual = explosion.animation.state_at(active.elapsed);
-                    let rotation_deg = ns
-                        .receptor_off
-                        .get(i)
-                        .map(|slot| slot.def.rotation_deg)
-                        .unwrap_or(0);
+                && let Some(explosion) = ns.tap_explosions.get(&active.window)
+            {
+                let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
+                let raw_dir = state
+                    .column_scroll_dirs
+                    .get(i)
+                    .copied()
+                    .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
+                let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
+                let receptor_y_lane = if is_centered {
+                    receptor_y_centered
+                } else if dir >= 0.0 {
+                    receptor_y_normal
+                } else {
+                    receptor_y_reverse
+                };
+                let anim_time = active.elapsed;
+                let slot = &explosion.slot;
+                let beat_for_anim = if slot.source.is_beat_based() {
+                    (state.current_beat - active.start_beat).max(0.0)
+                } else {
+                    state.current_beat
+                };
+                let frame = slot.frame_index(anim_time, beat_for_anim);
+                let uv = slot.uv_for_frame(frame);
+                let size = scale_explosion(slot.size());
+                let visual = explosion.animation.state_at(active.elapsed);
+                let rotation_deg = ns
+                    .receptor_off
+                    .get(i)
+                    .map(|slot| slot.def.rotation_deg)
+                    .unwrap_or(0);
+                actors.push(act!(sprite(slot.texture_key().to_string()):
+                    align(0.5, 0.5):
+                    xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
+                    zoomto(size[0], size[1]):
+                    zoom(visual.zoom):
+                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                    diffuse(
+                        visual.diffuse[0],
+                        visual.diffuse[1],
+                        visual.diffuse[2],
+                        visual.diffuse[3]
+                    ):
+                    rotationz(-(rotation_deg as f32)):
+                    blend(normal):
+                    z(101)
+                ));
+                let glow = visual.glow;
+                let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
+                if glow_strength > f32::EPSILON {
                     actors.push(act!(sprite(slot.texture_key().to_string()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
                         zoomto(size[0], size[1]):
                         zoom(visual.zoom):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                        diffuse(
-                            visual.diffuse[0],
-                            visual.diffuse[1],
-                            visual.diffuse[2],
-                            visual.diffuse[3]
-                        ):
+                        diffuse(glow[0], glow[1], glow[2], glow[3]):
                         rotationz(-(rotation_deg as f32)):
-                        blend(normal):
+                        blend(add):
                         z(101)
                     ));
-                    let glow = visual.glow;
-                    let glow_strength =
-                        glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
-                    if glow_strength > f32::EPSILON {
-                        actors.push(act!(sprite(slot.texture_key().to_string()):
-                            align(0.5, 0.5):
-                            xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
-                            zoomto(size[0], size[1]):
-                            zoom(visual.zoom):
-                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                            diffuse(glow[0], glow[1], glow[2], glow[3]):
-                            rotationz(-(rotation_deg as f32)):
-                            blend(add):
-                            z(101)
-                        ));
-                    }
                 }
+            }
         }
         // Mine explosions
         for i in 0..4 {
@@ -755,10 +794,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let mut render_indices: Vec<usize> = (min_visible_index..max_visible_index).collect();
         for a in &state.active_holds {
             if let Some(h) = a.as_ref()
-                && h.note_index < state.notes.len() { render_indices.push(h.note_index); }
+                && h.note_index < state.notes.len()
+            {
+                render_indices.push(h.note_index);
+            }
         }
         for &idx in &state.decaying_hold_indices {
-            if idx < state.notes.len() { render_indices.push(idx); }
+            if idx < state.notes.len() {
+                render_indices.push(idx);
+            }
         }
         // Deduplicate while roughly preserving order
         {
@@ -781,12 +825,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Prepare static/dynamic Y positions for the hold body
             // Head Y: dynamic if actively held or let go, otherwise static cache
             let mut head_beat = note.beat;
-            let is_head_dynamic = hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo);
-            
+            let is_head_dynamic =
+                hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo);
+
             if is_head_dynamic {
                 head_beat = hold.last_held_beat.clamp(note.beat, hold.end_beat);
             }
-            
+
             let col_dir = state
                 .column_scroll_dirs
                 .get(note.column)
@@ -805,7 +850,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let head_y = if is_head_dynamic {
                 compute_lane_y_dynamic(head_beat, col_dir)
             } else {
-                 match state.scroll_speed {
+                match state.scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
                         let pps_chart = cmod_pps_opt.expect("cmod pps computed");
                         let note_time_chart = state.note_time_cache[note_index];
@@ -816,9 +861,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let note_disp_beat = state.note_display_beat_cache[note_index];
                         let beat_diff_disp = note_disp_beat - curr_disp_beat;
                         lane_receptor_y
-                            + dir * (beat_diff_disp
-                                * ScrollSpeedSetting::ARROW_SPACING * field_zoom
-                                * beatmod_multiplier)
+                            + dir
+                                * (beat_diff_disp
+                                    * ScrollSpeedSetting::ARROW_SPACING
+                                    * field_zoom
+                                    * beatmod_multiplier)
                     }
                 }
             };
@@ -833,12 +880,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     // Use cached end display beat for O(1) lookup
-                    let note_end_disp_beat = state.hold_end_display_beat_cache[note_index].unwrap_or(0.0);
+                    let note_end_disp_beat =
+                        state.hold_end_display_beat_cache[note_index].unwrap_or(0.0);
                     let beat_diff_disp = note_end_disp_beat - curr_disp_beat;
                     lane_receptor_y
-                        + dir * (beat_diff_disp
-                            * ScrollSpeedSetting::ARROW_SPACING * field_zoom
-                            * beatmod_multiplier)
+                        + dir
+                            * (beat_diff_disp
+                                * ScrollSpeedSetting::ARROW_SPACING
+                                * field_zoom
+                                * beatmod_multiplier)
                 }
             };
 
@@ -931,451 +981,394 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         .body_inactive
                         .as_ref()
                         .or(visuals.body_active.as_ref())
-                } {
-                    let texture_size = body_slot.size();
-                    let texture_width = texture_size[0].max(1) as f32;
-                    let texture_height = texture_size[1].max(1) as f32;
-                    if texture_width > std::f32::EPSILON && texture_height > std::f32::EPSILON {
-                        let body_width = TARGET_ARROW_PIXEL_SIZE * field_zoom;
-                        let scale = body_width / texture_width;
-                        let segment_height = (texture_height * scale).max(std::f32::EPSILON);
-                        let body_uv = body_slot.uv_for_frame(0);
-                        let u0 = body_uv[0];
-                        let u1 = body_uv[2];
-                        let v_top = body_uv[1];
-                        let v_bottom = body_uv[3];
-                        let v_range = v_bottom - v_top;
-                        let natural_top = if head_is_top { head_y } else { tail_y };
-                        let natural_bottom = if head_is_top { tail_y } else { head_y };
-                        let hold_length = (natural_bottom - natural_top).abs();
-                        const SEGMENT_PHASE_EPS: f32 = 1e-4;
-                        let max_segments = 2048;
-                        let lane_reverse = col_dir < 0.0;
-                        if !lane_reverse {
-                            // Original segmentation path (normal scroll), which correctly
-                            // handles negative #SCROLLS and arbitrary timing warps.
-                            let visible_top_distance = if head_is_top {
-                                (body_top - natural_top).clamp(0.0, hold_length)
-                            } else {
-                                (natural_bottom - body_top).clamp(0.0, hold_length)
-                            };
-                            let visible_bottom_distance = if head_is_top {
-                                (body_bottom - natural_top).clamp(0.0, hold_length)
-                            } else {
-                                (natural_bottom - body_bottom).clamp(0.0, hold_length)
-                            };
-                            let mut emitted = 0;
-                            if head_is_top {
-                                let mut phase = visible_top_distance / segment_height;
-                                let phase_end = visible_bottom_distance / segment_height;
-                                // Shift the fractional remainder of the hold body height to the first
-                                // segment so the final segment can remain a full tile that lines up with
-                                // the tail cap. This avoids a visible seam between the last two body
-                                // segments. Base the offset on the full hold length so the amount trimmed
-                                // from the first segment stays consistent even when the hold is only
-                                // partially visible on screen.
-                                let mut phase_offset = 0.0_f32;
-                                let total_phase = hold_length / segment_height;
-                                if total_phase >= 1.0 + SEGMENT_PHASE_EPS {
-                                    let fractional = total_phase.fract();
-                                    if fractional > SEGMENT_PHASE_EPS
-                                        && (1.0 - fractional) > SEGMENT_PHASE_EPS
-                                    {
-                                        phase_offset = 1.0 - fractional;
-                                    }
-                                }
-                                phase += phase_offset;
-                                let phase_end_adjusted = phase_end + phase_offset;
-                                while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
-                                    && emitted < max_segments
+                }
+            {
+                let texture_size = body_slot.size();
+                let texture_width = texture_size[0].max(1) as f32;
+                let texture_height = texture_size[1].max(1) as f32;
+                if texture_width > std::f32::EPSILON && texture_height > std::f32::EPSILON {
+                    let body_width = TARGET_ARROW_PIXEL_SIZE * field_zoom;
+                    let scale = body_width / texture_width;
+                    let segment_height = (texture_height * scale).max(std::f32::EPSILON);
+                    let body_uv = body_slot.uv_for_frame(0);
+                    let u0 = body_uv[0];
+                    let u1 = body_uv[2];
+                    let v_top = body_uv[1];
+                    let v_bottom = body_uv[3];
+                    let v_range = v_bottom - v_top;
+                    let natural_top = if head_is_top { head_y } else { tail_y };
+                    let natural_bottom = if head_is_top { tail_y } else { head_y };
+                    let hold_length = (natural_bottom - natural_top).abs();
+                    const SEGMENT_PHASE_EPS: f32 = 1e-4;
+                    let max_segments = 2048;
+                    let lane_reverse = col_dir < 0.0;
+                    if !lane_reverse {
+                        // Original segmentation path (normal scroll), which correctly
+                        // handles negative #SCROLLS and arbitrary timing warps.
+                        let visible_top_distance = if head_is_top {
+                            (body_top - natural_top).clamp(0.0, hold_length)
+                        } else {
+                            (natural_bottom - body_top).clamp(0.0, hold_length)
+                        };
+                        let visible_bottom_distance = if head_is_top {
+                            (body_bottom - natural_top).clamp(0.0, hold_length)
+                        } else {
+                            (natural_bottom - body_bottom).clamp(0.0, hold_length)
+                        };
+                        let mut emitted = 0;
+                        if head_is_top {
+                            let mut phase = visible_top_distance / segment_height;
+                            let phase_end = visible_bottom_distance / segment_height;
+                            // Shift the fractional remainder of the hold body height to the first
+                            // segment so the final segment can remain a full tile that lines up with
+                            // the tail cap. This avoids a visible seam between the last two body
+                            // segments. Base the offset on the full hold length so the amount trimmed
+                            // from the first segment stays consistent even when the hold is only
+                            // partially visible on screen.
+                            let mut phase_offset = 0.0_f32;
+                            let total_phase = hold_length / segment_height;
+                            if total_phase >= 1.0 + SEGMENT_PHASE_EPS {
+                                let fractional = total_phase.fract();
+                                if fractional > SEGMENT_PHASE_EPS
+                                    && (1.0 - fractional) > SEGMENT_PHASE_EPS
                                 {
-                                    let mut next_phase =
-                                        (phase.floor() + 1.0).min(phase_end_adjusted);
-                                    if next_phase - phase < SEGMENT_PHASE_EPS {
-                                        next_phase = phase_end_adjusted;
-                                    }
-                                    if next_phase - phase < SEGMENT_PHASE_EPS {
-                                        break;
-                                    }
-                                    let distance_start =
-                                        (phase - phase_offset) * segment_height;
-                                    let distance_end =
-                                        (next_phase - phase_offset) * segment_height;
-                                    let y_start = natural_top + distance_start;
-                                    let y_end = natural_top + distance_end;
-                                    let segment_top = y_start.max(body_top);
-                                    let segment_bottom = y_end.min(body_bottom);
-                                    if segment_bottom - segment_top <= std::f32::EPSILON {
-                                        phase = next_phase;
-                                        continue;
-                                    }
-                                    let base_floor = phase.floor();
-                                    let start_fraction =
-                                        (phase - base_floor).clamp(0.0, 1.0);
-                                    let end_fraction =
-                                        (next_phase - base_floor).clamp(0.0, 1.0);
-                                    let mut v0 =
-                                        v_top + v_range * start_fraction;
-                                    let mut v1 =
-                                        v_top + v_range * end_fraction;
-                                    let segment_center =
-                                        (segment_top + segment_bottom) * 0.5;
-                                    let segment_size = segment_bottom - segment_top;
-                                    let portion = (segment_size / segment_height)
-                                        .clamp(0.0, 1.0);
-                                    let is_last_segment =
-                                        (body_bottom - segment_bottom).abs() <= 0.5
-                                            || next_phase >= phase_end_adjusted
-                                                - SEGMENT_PHASE_EPS;
-                                    if is_last_segment {
-                                        if v_range >= 0.0 {
-                                            v1 = v_bottom;
-                                            v0 = v_bottom - v_range.abs() * portion;
-                                        } else {
-                                            v1 = v_bottom;
-                                            v0 = v_bottom + v_range.abs() * portion;
-                                        }
-                                    }
-                                    rendered_body_top = Some(match rendered_body_top {
-                                        None => segment_top,
-                                        Some(v) => v.min(segment_top),
-                                    });
-                                    rendered_body_bottom =
-                                        Some(match rendered_body_bottom {
-                                            None => segment_bottom,
-                                            Some(v) => v.max(segment_bottom),
-                                        });
-                                    actors.push(act!(sprite(body_slot.texture_key().to_string()):
-                                        align(0.5, 0.5):
-                                        xy(playfield_center_x + col_x_offset as f32, segment_center):
-                                        zoomto(body_width, segment_size):
-                                        customtexturerect(u0, v0, u1, v1):
-                                        diffuse(
-                                            hold_diffuse[0],
-                                            hold_diffuse[1],
-                                            hold_diffuse[2],
-                                            hold_diffuse[3]
-                                        ):
-                                        z(Z_HOLD_BODY)
-                                    ));
-                                    phase = next_phase;
-                                    emitted += 1;
-                                }
-                            } else {
-                                let mut phase = visible_top_distance / segment_height;
-                                let phase_end = visible_bottom_distance / segment_height;
-                                let phase_offset = 0.0_f32; // anchor seam at the tail side
-                                let phase_end_adjusted = phase_end + phase_offset;
-                                while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
-                                    && emitted < max_segments
-                                {
-                                    let mut next_phase =
-                                        (phase.floor() + 1.0).min(phase_end_adjusted);
-                                    if next_phase - phase < SEGMENT_PHASE_EPS {
-                                        next_phase = phase_end_adjusted;
-                                    }
-                                    if next_phase - phase < SEGMENT_PHASE_EPS {
-                                        break;
-                                    }
-                                    let distance_start =
-                                        (phase - phase_offset) * segment_height;
-                                    let distance_end =
-                                        (next_phase - phase_offset) * segment_height;
-                                    let y_start = natural_top + distance_start;
-                                    let y_end = natural_top + distance_end;
-                                    let segment_top = y_start.max(body_top);
-                                    let segment_bottom = y_end.min(body_bottom);
-                                    if segment_bottom - segment_top <= std::f32::EPSILON {
-                                        phase = next_phase;
-                                        continue;
-                                    }
-                                    let base_floor = phase.floor();
-                                    let start_fraction =
-                                        (phase - base_floor).clamp(0.0, 1.0);
-                                    let end_fraction =
-                                        (next_phase - base_floor).clamp(0.0, 1.0);
-                                    let mut v0 =
-                                        v_top + v_range * start_fraction;
-                                    let mut v1 =
-                                        v_top + v_range * end_fraction;
-                                    let segment_center =
-                                        (segment_top + segment_bottom) * 0.5;
-                                    let segment_size = segment_bottom - segment_top;
-                                    let portion = (segment_size / segment_height)
-                                        .clamp(0.0, 1.0);
-                                    let is_last_segment =
-                                        (body_bottom - segment_bottom).abs() <= 0.5
-                                            || next_phase >= phase_end_adjusted
-                                                - SEGMENT_PHASE_EPS;
-                                    if is_last_segment {
-                                        if v_range >= 0.0 {
-                                            v1 = v_bottom;
-                                            v0 = v_bottom - v_range.abs() * portion;
-                                        } else {
-                                            v1 = v_bottom;
-                                            v0 = v_bottom + v_range.abs() * portion;
-                                        }
-                                    }
-                                    rendered_body_top = Some(match rendered_body_top {
-                                        None => segment_top,
-                                        Some(v) => v.min(segment_top),
-                                    });
-                                    rendered_body_bottom =
-                                        Some(match rendered_body_bottom {
-                                            None => segment_bottom,
-                                            Some(v) => v.max(segment_bottom),
-                                        });
-                                    actors.push(act!(sprite(body_slot.texture_key().to_string()):
-                                        align(0.5, 0.5):
-                                        xy(playfield_center_x + col_x_offset as f32, segment_center):
-                                        zoomto(body_width, segment_size):
-                                        customtexturerect(u0, v0, u1, v1):
-                                        diffuse(
-                                            hold_diffuse[0],
-                                            hold_diffuse[1],
-                                            hold_diffuse[2],
-                                            hold_diffuse[3]
-                                        ):
-                                        z(Z_HOLD_BODY)
-                                    ));
-                                    phase = next_phase;
-                                    emitted += 1;
+                                    phase_offset = 1.0 - fractional;
                                 }
                             }
-                        } else if hold_length > std::f32::EPSILON {
-                            // Reverse-scroll path: mirror the forward-segmentation logic around
-                            // the receptor line so that negative #SCROLLS behave identically.
-                            let receptor = lane_receptor_y;
-                            let head_y_fwd = 2.0 * receptor - head_y;
-                            let tail_y_fwd = 2.0 * receptor - tail_y;
-                            let body_top_fwd = 2.0 * receptor - body_bottom;
-                            let body_bottom_fwd = 2.0 * receptor - body_top;
-
-                            let head_is_top_fwd = head_y_fwd <= tail_y_fwd;
-                            let natural_top_fwd =
-                                if head_is_top_fwd { head_y_fwd } else { tail_y_fwd };
-                            let natural_bottom_fwd =
-                                if head_is_top_fwd { tail_y_fwd } else { head_y_fwd };
-
-                            let visible_top_distance = if head_is_top_fwd {
-                                (body_top_fwd - natural_top_fwd).clamp(0.0, hold_length)
-                            } else {
-                                (natural_bottom_fwd - body_top_fwd).clamp(0.0, hold_length)
-                            };
-                            let visible_bottom_distance = if head_is_top_fwd {
-                                (body_bottom_fwd - natural_top_fwd).clamp(0.0, hold_length)
-                            } else {
-                                (natural_bottom_fwd - body_bottom_fwd).clamp(0.0, hold_length)
-                            };
-
-                            let mut emitted = 0;
-                            if head_is_top_fwd {
-                                let mut phase = visible_top_distance / segment_height;
-                                let phase_end = visible_bottom_distance / segment_height;
-                                // Same tail-side seam anchoring as the forward path.
-                                let mut phase_offset = 0.0_f32;
-                                let total_phase = hold_length / segment_height;
-                                if total_phase >= 1.0 + SEGMENT_PHASE_EPS {
-                                    let fractional = total_phase.fract();
-                                    if fractional > SEGMENT_PHASE_EPS
-                                        && (1.0 - fractional) > SEGMENT_PHASE_EPS
-                                    {
-                                        phase_offset = 1.0 - fractional;
-                                    }
+                            phase += phase_offset;
+                            let phase_end_adjusted = phase_end + phase_offset;
+                            while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
+                                && emitted < max_segments
+                            {
+                                let mut next_phase = (phase.floor() + 1.0).min(phase_end_adjusted);
+                                if next_phase - phase < SEGMENT_PHASE_EPS {
+                                    next_phase = phase_end_adjusted;
                                 }
-                                phase += phase_offset;
-                                let phase_end_adjusted = phase_end + phase_offset;
-                                while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
-                                    && emitted < max_segments
-                                {
-                                    let mut next_phase =
-                                        (phase.floor() + 1.0).min(phase_end_adjusted);
-                                    if next_phase - phase < SEGMENT_PHASE_EPS {
-                                        next_phase = phase_end_adjusted;
-                                    }
-                                    if next_phase - phase < SEGMENT_PHASE_EPS {
-                                        break;
-                                    }
-                                    let distance_start =
-                                        (phase - phase_offset) * segment_height;
-                                    let distance_end =
-                                        (next_phase - phase_offset) * segment_height;
-                                    let y_start_fwd =
-                                        natural_top_fwd + distance_start;
-                                    let y_end_fwd =
-                                        natural_top_fwd + distance_end;
-                                    let segment_top_fwd =
-                                        y_start_fwd.max(body_top_fwd);
-                                    let segment_bottom_fwd =
-                                        y_end_fwd.min(body_bottom_fwd);
-                                    if segment_bottom_fwd - segment_top_fwd
-                                        <= std::f32::EPSILON
-                                    {
-                                        phase = next_phase;
-                                        continue;
-                                    }
-                                    let base_floor = phase.floor();
-                                    let start_fraction =
-                                        (phase - base_floor).clamp(0.0, 1.0);
-                                    let end_fraction =
-                                        (next_phase - base_floor).clamp(0.0, 1.0);
-                                    let mut v0 =
-                                        v_top + v_range * start_fraction;
-                                    let mut v1 =
-                                        v_top + v_range * end_fraction;
-                                    let segment_top_rev =
-                                        2.0 * receptor - segment_bottom_fwd;
-                                    let segment_bottom_rev =
-                                        2.0 * receptor - segment_top_fwd;
-                                    let segment_center_rev =
-                                        (segment_top_rev + segment_bottom_rev) * 0.5;
-                                    let segment_size_rev =
-                                        segment_bottom_rev - segment_top_rev;
-                                    let portion = (segment_size_rev / segment_height)
-                                        .clamp(0.0, 1.0);
-                                    let is_last_segment =
-                                        (body_bottom_fwd - segment_bottom_fwd).abs()
-                                            <= 0.5
-                                            || next_phase >= phase_end_adjusted
-                                                - SEGMENT_PHASE_EPS;
-                                    if is_last_segment {
-                                        if v_range >= 0.0 {
-                                            v1 = v_bottom;
-                                            v0 = v_bottom - v_range.abs() * portion;
-                                        } else {
-                                            v1 = v_bottom;
-                                            v0 = v_bottom + v_range.abs() * portion;
-                                        }
-                                    }
-                                    rendered_body_top = Some(match rendered_body_top {
-                                        None => segment_top_rev,
-                                        Some(v) => v.min(segment_top_rev),
-                                    });
-                                    rendered_body_bottom =
-                                        Some(match rendered_body_bottom {
-                                            None => segment_bottom_rev,
-                                            Some(v) => v.max(segment_bottom_rev),
-                                        });
-                                    actors.push(act!(sprite(body_slot.texture_key().to_string()):
-                                        align(0.5, 0.5):
-                                        xy(
-                                            playfield_center_x + col_x_offset as f32,
-                                            segment_center_rev
-                                        ):
-                                        zoomto(body_width, segment_size_rev):
-                                        rotationz(180.0):
-                                        customtexturerect(u0, v0, u1, v1):
-                                        diffuse(
-                                            hold_diffuse[0],
-                                            hold_diffuse[1],
-                                            hold_diffuse[2],
-                                            hold_diffuse[3]
-                                        ):
-                                        z(Z_HOLD_BODY)
-                                    ));
+                                if next_phase - phase < SEGMENT_PHASE_EPS {
+                                    break;
+                                }
+                                let distance_start = (phase - phase_offset) * segment_height;
+                                let distance_end = (next_phase - phase_offset) * segment_height;
+                                let y_start = natural_top + distance_start;
+                                let y_end = natural_top + distance_end;
+                                let segment_top = y_start.max(body_top);
+                                let segment_bottom = y_end.min(body_bottom);
+                                if segment_bottom - segment_top <= std::f32::EPSILON {
                                     phase = next_phase;
-                                    emitted += 1;
+                                    continue;
                                 }
-                            } else {
-                                let mut phase = visible_top_distance / segment_height;
-                                let phase_end = visible_bottom_distance / segment_height;
-                                let phase_offset = 0.0_f32; // anchor seam at the tail side
-                                let phase_end_adjusted = phase_end + phase_offset;
-                                while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
-                                    && emitted < max_segments
-                                {
-                                    let mut next_phase =
-                                        (phase.floor() + 1.0).min(phase_end_adjusted);
-                                    if next_phase - phase < SEGMENT_PHASE_EPS {
-                                        next_phase = phase_end_adjusted;
+                                let base_floor = phase.floor();
+                                let start_fraction = (phase - base_floor).clamp(0.0, 1.0);
+                                let end_fraction = (next_phase - base_floor).clamp(0.0, 1.0);
+                                let mut v0 = v_top + v_range * start_fraction;
+                                let mut v1 = v_top + v_range * end_fraction;
+                                let segment_center = (segment_top + segment_bottom) * 0.5;
+                                let segment_size = segment_bottom - segment_top;
+                                let portion = (segment_size / segment_height).clamp(0.0, 1.0);
+                                let is_last_segment = (body_bottom - segment_bottom).abs() <= 0.5
+                                    || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
+                                if is_last_segment {
+                                    if v_range >= 0.0 {
+                                        v1 = v_bottom;
+                                        v0 = v_bottom - v_range.abs() * portion;
+                                    } else {
+                                        v1 = v_bottom;
+                                        v0 = v_bottom + v_range.abs() * portion;
                                     }
-                                    if next_phase - phase < SEGMENT_PHASE_EPS {
-                                        break;
-                                    }
-                                    let distance_start =
-                                        (phase - phase_offset) * segment_height;
-                                    let distance_end =
-                                        (next_phase - phase_offset) * segment_height;
-                                    let y_start_fwd =
-                                        natural_top_fwd + distance_start;
-                                    let y_end_fwd =
-                                        natural_top_fwd + distance_end;
-                                    let segment_top_fwd =
-                                        y_start_fwd.max(body_top_fwd);
-                                    let segment_bottom_fwd =
-                                        y_end_fwd.min(body_bottom_fwd);
-                                    if segment_bottom_fwd - segment_top_fwd
-                                        <= std::f32::EPSILON
-                                    {
-                                        phase = next_phase;
-                                        continue;
-                                    }
-                                    let base_floor = phase.floor();
-                                    let start_fraction =
-                                        (phase - base_floor).clamp(0.0, 1.0);
-                                    let end_fraction =
-                                        (next_phase - base_floor).clamp(0.0, 1.0);
-                                    let mut v0 =
-                                        v_top + v_range * start_fraction;
-                                    let mut v1 =
-                                        v_top + v_range * end_fraction;
-                                    let segment_top_rev =
-                                        2.0 * receptor - segment_bottom_fwd;
-                                    let segment_bottom_rev =
-                                        2.0 * receptor - segment_top_fwd;
-                                    let segment_center_rev =
-                                        (segment_top_rev + segment_bottom_rev) * 0.5;
-                                    let segment_size_rev =
-                                        segment_bottom_rev - segment_top_rev;
-                                    let portion = (segment_size_rev / segment_height)
-                                        .clamp(0.0, 1.0);
-                                    let is_last_segment =
-                                        (body_bottom_fwd - segment_bottom_fwd).abs()
-                                            <= 0.5
-                                            || next_phase >= phase_end_adjusted
-                                                - SEGMENT_PHASE_EPS;
-                                    if is_last_segment {
-                                        if v_range >= 0.0 {
-                                            v1 = v_bottom;
-                                            v0 = v_bottom - v_range.abs() * portion;
-                                        } else {
-                                            v1 = v_bottom;
-                                            v0 = v_bottom + v_range.abs() * portion;
-                                        }
-                                    }
-                                    rendered_body_top = Some(match rendered_body_top {
-                                        None => segment_top_rev,
-                                        Some(v) => v.min(segment_top_rev),
-                                    });
-                                    rendered_body_bottom =
-                                        Some(match rendered_body_bottom {
-                                            None => segment_bottom_rev,
-                                            Some(v) => v.max(segment_bottom_rev),
-                                        });
-                                    actors.push(act!(sprite(body_slot.texture_key().to_string()):
-                                        align(0.5, 0.5):
-                                        xy(
-                                            playfield_center_x + col_x_offset as f32,
-                                            segment_center_rev
-                                        ):
-                                        zoomto(body_width, segment_size_rev):
-                                        rotationz(180.0):
-                                        customtexturerect(u0, v0, u1, v1):
-                                        diffuse(
-                                            hold_diffuse[0],
-                                            hold_diffuse[1],
-                                            hold_diffuse[2],
-                                            hold_diffuse[3]
-                                        ):
-                                        z(Z_HOLD_BODY)
-                                    ));
+                                }
+                                rendered_body_top = Some(match rendered_body_top {
+                                    None => segment_top,
+                                    Some(v) => v.min(segment_top),
+                                });
+                                rendered_body_bottom = Some(match rendered_body_bottom {
+                                    None => segment_bottom,
+                                    Some(v) => v.max(segment_bottom),
+                                });
+                                actors.push(act!(sprite(body_slot.texture_key().to_string()):
+                                    align(0.5, 0.5):
+                                    xy(playfield_center_x + col_x_offset as f32, segment_center):
+                                    zoomto(body_width, segment_size):
+                                    customtexturerect(u0, v0, u1, v1):
+                                    diffuse(
+                                        hold_diffuse[0],
+                                        hold_diffuse[1],
+                                        hold_diffuse[2],
+                                        hold_diffuse[3]
+                                    ):
+                                    z(Z_HOLD_BODY)
+                                ));
+                                phase = next_phase;
+                                emitted += 1;
+                            }
+                        } else {
+                            let mut phase = visible_top_distance / segment_height;
+                            let phase_end = visible_bottom_distance / segment_height;
+                            let phase_offset = 0.0_f32; // anchor seam at the tail side
+                            let phase_end_adjusted = phase_end + phase_offset;
+                            while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
+                                && emitted < max_segments
+                            {
+                                let mut next_phase = (phase.floor() + 1.0).min(phase_end_adjusted);
+                                if next_phase - phase < SEGMENT_PHASE_EPS {
+                                    next_phase = phase_end_adjusted;
+                                }
+                                if next_phase - phase < SEGMENT_PHASE_EPS {
+                                    break;
+                                }
+                                let distance_start = (phase - phase_offset) * segment_height;
+                                let distance_end = (next_phase - phase_offset) * segment_height;
+                                let y_start = natural_top + distance_start;
+                                let y_end = natural_top + distance_end;
+                                let segment_top = y_start.max(body_top);
+                                let segment_bottom = y_end.min(body_bottom);
+                                if segment_bottom - segment_top <= std::f32::EPSILON {
                                     phase = next_phase;
-                                    emitted += 1;
+                                    continue;
                                 }
+                                let base_floor = phase.floor();
+                                let start_fraction = (phase - base_floor).clamp(0.0, 1.0);
+                                let end_fraction = (next_phase - base_floor).clamp(0.0, 1.0);
+                                let mut v0 = v_top + v_range * start_fraction;
+                                let mut v1 = v_top + v_range * end_fraction;
+                                let segment_center = (segment_top + segment_bottom) * 0.5;
+                                let segment_size = segment_bottom - segment_top;
+                                let portion = (segment_size / segment_height).clamp(0.0, 1.0);
+                                let is_last_segment = (body_bottom - segment_bottom).abs() <= 0.5
+                                    || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
+                                if is_last_segment {
+                                    if v_range >= 0.0 {
+                                        v1 = v_bottom;
+                                        v0 = v_bottom - v_range.abs() * portion;
+                                    } else {
+                                        v1 = v_bottom;
+                                        v0 = v_bottom + v_range.abs() * portion;
+                                    }
+                                }
+                                rendered_body_top = Some(match rendered_body_top {
+                                    None => segment_top,
+                                    Some(v) => v.min(segment_top),
+                                });
+                                rendered_body_bottom = Some(match rendered_body_bottom {
+                                    None => segment_bottom,
+                                    Some(v) => v.max(segment_bottom),
+                                });
+                                actors.push(act!(sprite(body_slot.texture_key().to_string()):
+                                    align(0.5, 0.5):
+                                    xy(playfield_center_x + col_x_offset as f32, segment_center):
+                                    zoomto(body_width, segment_size):
+                                    customtexturerect(u0, v0, u1, v1):
+                                    diffuse(
+                                        hold_diffuse[0],
+                                        hold_diffuse[1],
+                                        hold_diffuse[2],
+                                        hold_diffuse[3]
+                                    ):
+                                    z(Z_HOLD_BODY)
+                                ));
+                                phase = next_phase;
+                                emitted += 1;
+                            }
+                        }
+                    } else if hold_length > std::f32::EPSILON {
+                        // Reverse-scroll path: mirror the forward-segmentation logic around
+                        // the receptor line so that negative #SCROLLS behave identically.
+                        let receptor = lane_receptor_y;
+                        let head_y_fwd = 2.0 * receptor - head_y;
+                        let tail_y_fwd = 2.0 * receptor - tail_y;
+                        let body_top_fwd = 2.0 * receptor - body_bottom;
+                        let body_bottom_fwd = 2.0 * receptor - body_top;
+
+                        let head_is_top_fwd = head_y_fwd <= tail_y_fwd;
+                        let natural_top_fwd = if head_is_top_fwd {
+                            head_y_fwd
+                        } else {
+                            tail_y_fwd
+                        };
+                        let natural_bottom_fwd = if head_is_top_fwd {
+                            tail_y_fwd
+                        } else {
+                            head_y_fwd
+                        };
+
+                        let visible_top_distance = if head_is_top_fwd {
+                            (body_top_fwd - natural_top_fwd).clamp(0.0, hold_length)
+                        } else {
+                            (natural_bottom_fwd - body_top_fwd).clamp(0.0, hold_length)
+                        };
+                        let visible_bottom_distance = if head_is_top_fwd {
+                            (body_bottom_fwd - natural_top_fwd).clamp(0.0, hold_length)
+                        } else {
+                            (natural_bottom_fwd - body_bottom_fwd).clamp(0.0, hold_length)
+                        };
+
+                        let mut emitted = 0;
+                        if head_is_top_fwd {
+                            let mut phase = visible_top_distance / segment_height;
+                            let phase_end = visible_bottom_distance / segment_height;
+                            // Same tail-side seam anchoring as the forward path.
+                            let mut phase_offset = 0.0_f32;
+                            let total_phase = hold_length / segment_height;
+                            if total_phase >= 1.0 + SEGMENT_PHASE_EPS {
+                                let fractional = total_phase.fract();
+                                if fractional > SEGMENT_PHASE_EPS
+                                    && (1.0 - fractional) > SEGMENT_PHASE_EPS
+                                {
+                                    phase_offset = 1.0 - fractional;
+                                }
+                            }
+                            phase += phase_offset;
+                            let phase_end_adjusted = phase_end + phase_offset;
+                            while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
+                                && emitted < max_segments
+                            {
+                                let mut next_phase = (phase.floor() + 1.0).min(phase_end_adjusted);
+                                if next_phase - phase < SEGMENT_PHASE_EPS {
+                                    next_phase = phase_end_adjusted;
+                                }
+                                if next_phase - phase < SEGMENT_PHASE_EPS {
+                                    break;
+                                }
+                                let distance_start = (phase - phase_offset) * segment_height;
+                                let distance_end = (next_phase - phase_offset) * segment_height;
+                                let y_start_fwd = natural_top_fwd + distance_start;
+                                let y_end_fwd = natural_top_fwd + distance_end;
+                                let segment_top_fwd = y_start_fwd.max(body_top_fwd);
+                                let segment_bottom_fwd = y_end_fwd.min(body_bottom_fwd);
+                                if segment_bottom_fwd - segment_top_fwd <= std::f32::EPSILON {
+                                    phase = next_phase;
+                                    continue;
+                                }
+                                let base_floor = phase.floor();
+                                let start_fraction = (phase - base_floor).clamp(0.0, 1.0);
+                                let end_fraction = (next_phase - base_floor).clamp(0.0, 1.0);
+                                let mut v0 = v_top + v_range * start_fraction;
+                                let mut v1 = v_top + v_range * end_fraction;
+                                let segment_top_rev = 2.0 * receptor - segment_bottom_fwd;
+                                let segment_bottom_rev = 2.0 * receptor - segment_top_fwd;
+                                let segment_center_rev =
+                                    (segment_top_rev + segment_bottom_rev) * 0.5;
+                                let segment_size_rev = segment_bottom_rev - segment_top_rev;
+                                let portion = (segment_size_rev / segment_height).clamp(0.0, 1.0);
+                                let is_last_segment = (body_bottom_fwd - segment_bottom_fwd).abs()
+                                    <= 0.5
+                                    || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
+                                if is_last_segment {
+                                    if v_range >= 0.0 {
+                                        v1 = v_bottom;
+                                        v0 = v_bottom - v_range.abs() * portion;
+                                    } else {
+                                        v1 = v_bottom;
+                                        v0 = v_bottom + v_range.abs() * portion;
+                                    }
+                                }
+                                rendered_body_top = Some(match rendered_body_top {
+                                    None => segment_top_rev,
+                                    Some(v) => v.min(segment_top_rev),
+                                });
+                                rendered_body_bottom = Some(match rendered_body_bottom {
+                                    None => segment_bottom_rev,
+                                    Some(v) => v.max(segment_bottom_rev),
+                                });
+                                actors.push(act!(sprite(body_slot.texture_key().to_string()):
+                                    align(0.5, 0.5):
+                                    xy(
+                                        playfield_center_x + col_x_offset as f32,
+                                        segment_center_rev
+                                    ):
+                                    zoomto(body_width, segment_size_rev):
+                                    rotationz(180.0):
+                                    customtexturerect(u0, v0, u1, v1):
+                                    diffuse(
+                                        hold_diffuse[0],
+                                        hold_diffuse[1],
+                                        hold_diffuse[2],
+                                        hold_diffuse[3]
+                                    ):
+                                    z(Z_HOLD_BODY)
+                                ));
+                                phase = next_phase;
+                                emitted += 1;
+                            }
+                        } else {
+                            let mut phase = visible_top_distance / segment_height;
+                            let phase_end = visible_bottom_distance / segment_height;
+                            let phase_offset = 0.0_f32; // anchor seam at the tail side
+                            let phase_end_adjusted = phase_end + phase_offset;
+                            while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
+                                && emitted < max_segments
+                            {
+                                let mut next_phase = (phase.floor() + 1.0).min(phase_end_adjusted);
+                                if next_phase - phase < SEGMENT_PHASE_EPS {
+                                    next_phase = phase_end_adjusted;
+                                }
+                                if next_phase - phase < SEGMENT_PHASE_EPS {
+                                    break;
+                                }
+                                let distance_start = (phase - phase_offset) * segment_height;
+                                let distance_end = (next_phase - phase_offset) * segment_height;
+                                let y_start_fwd = natural_top_fwd + distance_start;
+                                let y_end_fwd = natural_top_fwd + distance_end;
+                                let segment_top_fwd = y_start_fwd.max(body_top_fwd);
+                                let segment_bottom_fwd = y_end_fwd.min(body_bottom_fwd);
+                                if segment_bottom_fwd - segment_top_fwd <= std::f32::EPSILON {
+                                    phase = next_phase;
+                                    continue;
+                                }
+                                let base_floor = phase.floor();
+                                let start_fraction = (phase - base_floor).clamp(0.0, 1.0);
+                                let end_fraction = (next_phase - base_floor).clamp(0.0, 1.0);
+                                let mut v0 = v_top + v_range * start_fraction;
+                                let mut v1 = v_top + v_range * end_fraction;
+                                let segment_top_rev = 2.0 * receptor - segment_bottom_fwd;
+                                let segment_bottom_rev = 2.0 * receptor - segment_top_fwd;
+                                let segment_center_rev =
+                                    (segment_top_rev + segment_bottom_rev) * 0.5;
+                                let segment_size_rev = segment_bottom_rev - segment_top_rev;
+                                let portion = (segment_size_rev / segment_height).clamp(0.0, 1.0);
+                                let is_last_segment = (body_bottom_fwd - segment_bottom_fwd).abs()
+                                    <= 0.5
+                                    || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
+                                if is_last_segment {
+                                    if v_range >= 0.0 {
+                                        v1 = v_bottom;
+                                        v0 = v_bottom - v_range.abs() * portion;
+                                    } else {
+                                        v1 = v_bottom;
+                                        v0 = v_bottom + v_range.abs() * portion;
+                                    }
+                                }
+                                rendered_body_top = Some(match rendered_body_top {
+                                    None => segment_top_rev,
+                                    Some(v) => v.min(segment_top_rev),
+                                });
+                                rendered_body_bottom = Some(match rendered_body_bottom {
+                                    None => segment_bottom_rev,
+                                    Some(v) => v.max(segment_bottom_rev),
+                                });
+                                actors.push(act!(sprite(body_slot.texture_key().to_string()):
+                                    align(0.5, 0.5):
+                                    xy(
+                                        playfield_center_x + col_x_offset as f32,
+                                        segment_center_rev
+                                    ):
+                                    zoomto(body_width, segment_size_rev):
+                                    rotationz(180.0):
+                                    customtexturerect(u0, v0, u1, v1):
+                                    diffuse(
+                                        hold_diffuse[0],
+                                        hold_diffuse[1],
+                                        hold_diffuse[2],
+                                        hold_diffuse[3]
+                                    ):
+                                    z(Z_HOLD_BODY)
+                                ));
+                                phase = next_phase;
+                                emitted += 1;
                             }
                         }
                     }
                 }
+            }
             if let Some(cap_slot) = tail_slot {
                 let tail_position = tail_y;
                 if tail_position > -400.0 && tail_position < screen_height() + 400.0 {
@@ -1393,7 +1386,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     // were drawn near the tail due to scroll gimmicks.
                     let (rt, rb) = match (rendered_body_top, rendered_body_bottom) {
                         (Some(t), Some(b)) if b > t + 0.5 => (t, b),
-                        _ => { continue; }
+                        _ => {
+                            continue;
+                        }
                     };
                     let cap_adjacent_ok = if head_is_top {
                         // Tail visually below; ensure the drawn body bottom is near the tail.
@@ -1404,7 +1399,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let dist = rt - tail_y;
                         dist >= -2.0 && dist <= cap_height + 2.0
                     };
-                    if !cap_adjacent_ok { continue; }
+                    if !cap_adjacent_ok {
+                        continue;
+                    }
                     if cap_height > std::f32::EPSILON {
                         let mut cap_top = cap_center - cap_height * 0.5;
                         let mut cap_bottom = cap_center + cap_height * 0.5;
@@ -1459,40 +1456,40 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
             if (hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo))
                 && head_y >= lane_receptor_y - state.draw_distance_after_targets
-                    && head_y <= lane_receptor_y + state.draw_distance_before_targets
-                {
-                    let beat_fraction = note.beat.fract();
-                    let quantization = match (beat_fraction * 192.0).round() as u32 {
-                        0 | 192 => Quantization::Q4th,
-                        96 => Quantization::Q8th,
-                        48 | 144 => Quantization::Q16th,
-                        24 | 72 | 120 | 168 => Quantization::Q32nd,
-                        64 | 128 => Quantization::Q12th,
-                        32 | 160 => Quantization::Q24th,
-                        _ => Quantization::Q192nd,
-                    };
-                    let note_idx = (note.column % 4) * NUM_QUANTIZATIONS + quantization as usize;
-                    if let Some(note_slot) = ns.notes.get(note_idx) {
-                        let frame = note_slot
-                            .frame_index(state.total_elapsed_in_screen, state.current_beat);
-                        let uv = note_slot.uv_for_frame(frame);
-                        let size = scale_sprite(note_slot.size());
-                        actors.push(act!(sprite(note_slot.texture_key().to_string()):
-                            align(0.5, 0.5):
-                            xy(playfield_center_x + col_x_offset as f32, head_y):
-                            zoomto(size[0], size[1]):
-                            rotationz(-note_slot.def.rotation_deg as f32):
-                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                            diffuse(
-                                hold_diffuse[0],
-                                hold_diffuse[1],
-                                hold_diffuse[2],
-                                hold_diffuse[3]
-                            ):
-                            z(Z_TAP_NOTE)
-                        ));
-                    }
+                && head_y <= lane_receptor_y + state.draw_distance_before_targets
+            {
+                let beat_fraction = note.beat.fract();
+                let quantization = match (beat_fraction * 192.0).round() as u32 {
+                    0 | 192 => Quantization::Q4th,
+                    96 => Quantization::Q8th,
+                    48 | 144 => Quantization::Q16th,
+                    24 | 72 | 120 | 168 => Quantization::Q32nd,
+                    64 | 128 => Quantization::Q12th,
+                    32 | 160 => Quantization::Q24th,
+                    _ => Quantization::Q192nd,
+                };
+                let note_idx = (note.column % 4) * NUM_QUANTIZATIONS + quantization as usize;
+                if let Some(note_slot) = ns.notes.get(note_idx) {
+                    let frame =
+                        note_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
+                    let uv = note_slot.uv_for_frame(frame);
+                    let size = scale_sprite(note_slot.size());
+                    actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                        align(0.5, 0.5):
+                        xy(playfield_center_x + col_x_offset as f32, head_y):
+                        zoomto(size[0], size[1]):
+                        rotationz(-note_slot.def.rotation_deg as f32):
+                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                        diffuse(
+                            hold_diffuse[0],
+                            hold_diffuse[1],
+                            hold_diffuse[2],
+                            hold_diffuse[3]
+                        ):
+                        z(Z_TAP_NOTE)
+                    ));
                 }
+            }
         }
         // Active arrows
         for (col_idx, column_arrows) in state.arrows.iter().enumerate() {
@@ -1522,8 +1519,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                         let beat_diff_disp = note_disp_beat - curr_disp_beat;
                         receptor_y_lane
-                            + dir * beat_diff_disp
-                                * ScrollSpeedSetting::ARROW_SPACING * field_zoom
+                            + dir
+                                * beat_diff_disp
+                                * ScrollSpeedSetting::ARROW_SPACING
+                                * field_zoom
                                 * beatmod_multiplier
                     }
                 };
@@ -1552,7 +1551,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let circle_reference = frame_slot
                         .map(|slot| scale_sprite(slot.size()))
                         .or_else(|| fill_slot.map(|slot| scale_sprite(slot.size())))
-                        .unwrap_or([TARGET_ARROW_PIXEL_SIZE * field_zoom, TARGET_ARROW_PIXEL_SIZE * field_zoom]);
+                        .unwrap_or([
+                            TARGET_ARROW_PIXEL_SIZE * field_zoom,
+                            TARGET_ARROW_PIXEL_SIZE * field_zoom,
+                        ]);
                     if let Some(slot) = fill_slot {
                         if let Some(fill_state) = mine_fill_state(slot, state.current_beat) {
                             let width = circle_reference[0] * MINE_CORE_SIZE_RATIO;
@@ -1823,7 +1825,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if matches!(profile.judgment_graphic, profile::JudgmentGraphic::None) {
             // Player chose to hide tap judgment graphics.
             // Still keep life/score effects; only suppress the visual sprite.
-            
         } else {
             let judgment = &render_info.judgment;
             let elapsed = render_info.judged_at.elapsed().as_secs_f32();
@@ -1870,47 +1871,41 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 let col_index = if columns > 1 { frame_offset } else { 0 };
                 let linear_index = (frame_row * columns + col_index) as u32;
                 let judgment_texture = match profile.judgment_graphic {
-                    profile::JudgmentGraphic::Bebas =>
-                    "judgements/Bebas 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Censored =>
-                    "judgements/Censored 1x7 (doubleres).png",
-                    profile::JudgmentGraphic::Chromatic =>
-                    "judgements/Chromatic 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Code =>
-                    "judgements/Code 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::ComicSans =>
-                    "judgements/Comic Sans 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Emoticon =>
-                    "judgements/Emoticon 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Focus =>
-                    "judgements/Focus 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Grammar =>
-                    "judgements/Grammar 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::GrooveNights =>
-                    "judgements/GrooveNights 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::ITG2 =>
-                    "judgements/ITG2 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Love =>
-                    "judgements/Love 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::LoveChroma =>
-                    "judgements/Love Chroma 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Miso =>
-                    "judgements/Miso 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Papyrus =>
-                    "judgements/Papyrus 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Rainbowmatic =>
-                    "judgements/Rainbowmatic 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Roboto =>
-                    "judgements/Roboto 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Shift =>
-                    "judgements/Shift 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Tactics =>
-                    "judgements/Tactics 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Wendy =>
-                    "judgements/Wendy 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::WendyChroma =>
-                    "judgements/Wendy Chroma 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::None => unreachable!("JudgmentGraphic::None is filtered above"),
+                    profile::JudgmentGraphic::Bebas => "judgements/Bebas 2x7 (doubleres).png",
+                    profile::JudgmentGraphic::Censored => "judgements/Censored 1x7 (doubleres).png",
+                    profile::JudgmentGraphic::Chromatic => {
+                        "judgements/Chromatic 2x7 (doubleres).png"
+                    }
+                    profile::JudgmentGraphic::Code => "judgements/Code 2x7 (doubleres).png",
+                    profile::JudgmentGraphic::ComicSans => {
+                        "judgements/Comic Sans 2x7 (doubleres).png"
+                    }
+                    profile::JudgmentGraphic::Emoticon => "judgements/Emoticon 2x7 (doubleres).png",
+                    profile::JudgmentGraphic::Focus => "judgements/Focus 2x7 (doubleres).png",
+                    profile::JudgmentGraphic::Grammar => "judgements/Grammar 2x7 (doubleres).png",
+                    profile::JudgmentGraphic::GrooveNights => {
+                        "judgements/GrooveNights 2x7 (doubleres).png"
+                    }
+                    profile::JudgmentGraphic::ITG2 => "judgements/ITG2 2x7 (doubleres).png",
+                    profile::JudgmentGraphic::Love => "judgements/Love 2x7 (doubleres).png",
+                    profile::JudgmentGraphic::LoveChroma => {
+                        "judgements/Love Chroma 2x7 (doubleres).png"
+                    }
+                    profile::JudgmentGraphic::Miso => "judgements/Miso 2x7 (doubleres).png",
+                    profile::JudgmentGraphic::Papyrus => "judgements/Papyrus 2x7 (doubleres).png",
+                    profile::JudgmentGraphic::Rainbowmatic => {
+                        "judgements/Rainbowmatic 2x7 (doubleres).png"
+                    }
+                    profile::JudgmentGraphic::Roboto => "judgements/Roboto 2x7 (doubleres).png",
+                    profile::JudgmentGraphic::Shift => "judgements/Shift 2x7 (doubleres).png",
+                    profile::JudgmentGraphic::Tactics => "judgements/Tactics 2x7 (doubleres).png",
+                    profile::JudgmentGraphic::Wendy => "judgements/Wendy 2x7 (doubleres).png",
+                    profile::JudgmentGraphic::WendyChroma => {
+                        "judgements/Wendy Chroma 2x7 (doubleres).png"
+                    }
+                    profile::JudgmentGraphic::None => {
+                        unreachable!("JudgmentGraphic::None is filtered above")
+                    }
                 };
                 let judgment_y = if is_centered {
                     receptor_y_centered + 95.0
@@ -1940,7 +1935,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let zoom = if elapsed < 0.3 {
             let progress = (elapsed / 0.3).clamp(0.0, 1.0);
             (HOLD_JUDGMENT_INITIAL_ZOOM
-                + progress * (HOLD_JUDGMENT_FINAL_ZOOM - HOLD_JUDGMENT_INITIAL_ZOOM)) * hold_judgment_zoom_mod
+                + progress * (HOLD_JUDGMENT_FINAL_ZOOM - HOLD_JUDGMENT_INITIAL_ZOOM))
+                * hold_judgment_zoom_mod
         } else {
             HOLD_JUDGMENT_FINAL_ZOOM * hold_judgment_zoom_mod
         };
@@ -2058,7 +2054,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     {
         let base_bpm = state.timing.get_bpm_for_beat(state.current_beat);
         let display_bpm = if base_bpm.is_finite() {
-            (base_bpm * if state.music_rate.is_finite() { state.music_rate } else { 1.0 }).round() as i32
+            (base_bpm
+                * if state.music_rate.is_finite() {
+                    state.music_rate
+                } else {
+                    1.0
+                })
+            .round() as i32
         } else {
             0
         };
@@ -2080,7 +2082,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             align(0.5, 0.5): xy(bpm_x, bpm_center_y):
             zoom(bpm_final_zoom): horizalign(center): z(90)
         ));
-        let rate = if state.music_rate.is_finite() { state.music_rate } else { 1.0 };
+        let rate = if state.music_rate.is_finite() {
+            state.music_rate
+        } else {
+            1.0
+        };
         let rate_text = if (rate - 1.0).abs() > 0.001 {
             format!("{rate:.2}x rate")
         } else {

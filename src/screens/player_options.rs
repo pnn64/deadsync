@@ -1,17 +1,17 @@
 use crate::act;
+use crate::assets::AssetManager;
 use crate::core::audio;
+use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::*;
+use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::song::SongData;
 use crate::screens::{Screen, ScreenAction};
-use crate::core::input::{VirtualAction, InputEvent};
 use crate::ui::actors::Actor;
-use crate::assets::AssetManager;
 use crate::ui::color;
 use crate::ui::components::heart_bg;
 use crate::ui::components::screen_bar::{
     self, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::game::parsing::noteskin::{self, Noteskin, Quantization, NUM_QUANTIZATIONS};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -28,7 +28,13 @@ const INLINE_SPACING: f32 = 15.75;
 
 #[inline(always)]
 fn ease_out_cubic(t: f32) -> f32 {
-    let clamped = if t < 0.0 { 0.0 } else if t > 1.0 { 1.0 } else { t };
+    let clamped = if t < 0.0 {
+        0.0
+    } else if t > 1.0 {
+        1.0
+    } else {
+        t
+    };
     let u = 1.0 - clamped;
     1.0 - u * u * u
 }
@@ -128,14 +134,22 @@ fn reference_bpm_for_song(song: &SongData) -> f32 {
         } else {
             s.parse::<f32>().ok()
         }
-    } else { None };
+    } else {
+        None
+    };
     let bpm = from_display.unwrap_or(song.max_bpm as f32);
-    if bpm.is_finite() && bpm > 0.0 { bpm } else { 120.0 }
+    if bpm.is_finite() && bpm > 0.0 {
+        bpm
+    } else {
+        120.0
+    }
 }
 
 #[inline(always)]
 fn round_to_step(x: f32, step: f32) -> f32 {
-    if !x.is_finite() || !step.is_finite() || step <= 0.0 { return x; }
+    if !x.is_finite() || !step.is_finite() || step <= 0.0 {
+        return x;
+    }
     (x / step).round() * step
 }
 
@@ -178,11 +192,10 @@ fn build_main_rows(
     let mut stepchart_choices: Vec<String> = Vec::with_capacity(5);
     let mut stepchart_choice_indices: Vec<usize> = Vec::with_capacity(5);
     for (i, file_name) in crate::ui::color::FILE_DIFFICULTY_NAMES.iter().enumerate() {
-        if let Some(chart) = song
-            .charts
-            .iter()
-            .find(|c| c.chart_type.eq_ignore_ascii_case("dance-single") && c.difficulty.eq_ignore_ascii_case(file_name))
-        {
+        if let Some(chart) = song.charts.iter().find(|c| {
+            c.chart_type.eq_ignore_ascii_case("dance-single")
+                && c.difficulty.eq_ignore_ascii_case(file_name)
+        }) {
             let display_name = crate::ui::color::DISPLAY_DIFFICULTY_NAMES[i];
             stepchart_choices.push(format!("{} {}", display_name, chart.meter));
             stepchart_choice_indices.push(i);
@@ -191,7 +204,8 @@ fn build_main_rows(
     // Fallback if none found (defensive; SelectMusic filters to dance-single songs)
     if stepchart_choices.is_empty() {
         stepchart_choices.push("(Current)".to_string());
-        stepchart_choice_indices.push(selected_difficulty_index.min(crate::ui::color::FILE_DIFFICULTY_NAMES.len() - 1));
+        stepchart_choice_indices
+            .push(selected_difficulty_index.min(crate::ui::color::FILE_DIFFICULTY_NAMES.len() - 1));
     }
     let initial_stepchart_choice_index = stepchart_choice_indices
         .iter()
@@ -561,13 +575,11 @@ fn build_advanced_rows() -> Vec<Row> {
         },
         Row {
             name: "Error Bar Options".to_string(),
-            choices: vec![
-                "Move Up".to_string(),
-                "Multi-Tick".to_string(),
-            ],
+            choices: vec!["Move Up".to_string(), "Multi-Tick".to_string()],
             selected_choice_index: 0,
             help: vec![
-                "Adjust where the error bar appears and whether it shows multiple tick marks.".to_string(),
+                "Adjust where the error bar appears and whether it shows multiple tick marks."
+                    .to_string(),
             ],
             choice_difficulty_indices: None,
         },
@@ -583,7 +595,8 @@ fn build_advanced_rows() -> Vec<Row> {
             ],
             selected_choice_index: 0,
             help: vec![
-                "Display a count of how long you have been streaming a specific type of note.".to_string(),
+                "Display a count of how long you have been streaming a specific type of note."
+                    .to_string(),
             ],
             choice_difficulty_indices: None,
         },
@@ -596,7 +609,8 @@ fn build_advanced_rows() -> Vec<Row> {
             ],
             selected_choice_index: 0,
             help: vec![
-                "Change how the Measure Counter is positioned and whether it hides upcoming notes.".to_string(),
+                "Change how the Measure Counter is positioned and whether it hides upcoming notes."
+                    .to_string(),
             ],
             choice_difficulty_indices: None,
         },
@@ -609,7 +623,9 @@ fn build_advanced_rows() -> Vec<Row> {
                 "Eighth".to_string(),
             ],
             selected_choice_index: 0,
-            help: vec!["Display horizontal lines on the notefield to indicate quantization.".to_string()],
+            help: vec![
+                "Display horizontal lines on the notefield to indicate quantization.".to_string(),
+            ],
             choice_difficulty_indices: None,
         },
         Row {
@@ -619,7 +635,9 @@ fn build_advanced_rows() -> Vec<Row> {
                 "Hide NoteField Flash".to_string(),
             ],
             selected_choice_index: 0,
-            help: vec!["Set how early Decent and Way Off judgments are visually represented.".to_string()],
+            help: vec![
+                "Set how early Decent and Way Off judgments are visually represented.".to_string(),
+            ],
             choice_difficulty_indices: None,
         },
         Row {
@@ -756,11 +774,7 @@ fn build_uncommon_rows() -> Vec<Row> {
         },
         Row {
             name: "Attacks".to_string(),
-            choices: vec![
-                "Off".to_string(),
-                "On".to_string(),
-                "Random".to_string(),
-            ],
+            choices: vec!["Off".to_string(), "On".to_string(), "Random".to_string()],
             selected_choice_index: 0,
             help: vec!["Toggle charts that include attack modifiers.".to_string()],
             choice_difficulty_indices: None,
@@ -816,7 +830,12 @@ fn build_rows(
     pane: OptionsPane,
 ) -> Vec<Row> {
     match pane {
-        OptionsPane::Main => build_main_rows(song, speed_mod, selected_difficulty_index, session_music_rate),
+        OptionsPane::Main => build_main_rows(
+            song,
+            speed_mod,
+            selected_difficulty_index,
+            session_music_rate,
+        ),
         OptionsPane::Advanced => build_advanced_rows(),
         OptionsPane::Uncommon => build_uncommon_rows(),
     }
@@ -937,29 +956,34 @@ fn apply_profile_defaults(rows: &mut [Row]) -> (u8, u8) {
         // Map profile flags onto row choice indices.
         if profile.scroll_option.contains(ScrollOption::Reverse)
             && let Some(idx) = row.choices.iter().position(|c| c == "Reverse")
-                && idx < 8 {
-                    scroll_active_mask |= 1u8 << (idx as u8);
-                }
+            && idx < 8
+        {
+            scroll_active_mask |= 1u8 << (idx as u8);
+        }
         if profile.scroll_option.contains(ScrollOption::Split)
             && let Some(idx) = row.choices.iter().position(|c| c == "Split")
-                && idx < 8 {
-                    scroll_active_mask |= 1u8 << (idx as u8);
-                }
+            && idx < 8
+        {
+            scroll_active_mask |= 1u8 << (idx as u8);
+        }
         if profile.scroll_option.contains(ScrollOption::Alternate)
             && let Some(idx) = row.choices.iter().position(|c| c == "Alternate")
-                && idx < 8 {
-                    scroll_active_mask |= 1u8 << (idx as u8);
-                }
+            && idx < 8
+        {
+            scroll_active_mask |= 1u8 << (idx as u8);
+        }
         if profile.scroll_option.contains(ScrollOption::Cross)
             && let Some(idx) = row.choices.iter().position(|c| c == "Cross")
-                && idx < 8 {
-                    scroll_active_mask |= 1u8 << (idx as u8);
-                }
+            && idx < 8
+        {
+            scroll_active_mask |= 1u8 << (idx as u8);
+        }
         if profile.scroll_option.contains(ScrollOption::Centered)
             && let Some(idx) = row.choices.iter().position(|c| c == "Centered")
-                && idx < 8 {
-                    scroll_active_mask |= 1u8 << (idx as u8);
-                }
+            && idx < 8
+        {
+            scroll_active_mask |= 1u8 << (idx as u8);
+        }
 
         // Cursor starts at the first active choice if any, otherwise at the first option.
         if scroll_active_mask != 0 {
@@ -994,7 +1018,13 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
             value: bpm,
         },
     };
-    let mut rows = build_rows(&song, &speed_mod, chart_difficulty_index, session_music_rate, OptionsPane::Main);
+    let mut rows = build_rows(
+        &song,
+        &speed_mod,
+        chart_difficulty_index,
+        session_music_rate,
+        OptionsPane::Main,
+    );
     let (scroll_active_mask, fa_plus_active_mask) = apply_profile_defaults(&mut rows);
     // Load noteskin for preview based on profile setting
     let style = noteskin::Style {
@@ -1004,8 +1034,12 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
     let noteskin_path = match profile.noteskin {
         crate::game::profile::NoteSkin::Cel => "assets/noteskins/cel/dance-single.txt",
         crate::game::profile::NoteSkin::Metal => "assets/noteskins/metal/dance-single.txt",
-        crate::game::profile::NoteSkin::EnchantmentV2 => "assets/noteskins/enchantment-v2/dance-single.txt",
-        crate::game::profile::NoteSkin::DevCel2024V3 => "assets/noteskins/devcel-2024-v3/dance-single.txt",
+        crate::game::profile::NoteSkin::EnchantmentV2 => {
+            "assets/noteskins/enchantment-v2/dance-single.txt"
+        }
+        crate::game::profile::NoteSkin::DevCel2024V3 => {
+            "assets/noteskins/devcel-2024-v3/dance-single.txt"
+        }
     };
     let noteskin = noteskin::load(Path::new(noteskin_path), &style)
         .ok()
@@ -1094,7 +1128,7 @@ fn change_choice(state: &mut State, delta: isize) {
         state.music_rate = (state.music_rate / increment).round() * increment;
         state.music_rate = state.music_rate.clamp(min_rate, max_rate);
         row.choices[0] = fmt_music_rate(state.music_rate);
-       
+
         // Update the row title to show the new BPM using reference BPM
         let reference_bpm = reference_bpm_for_song(&state.song);
         let effective_bpm = (reference_bpm as f64) * state.music_rate as f64;
@@ -1105,9 +1139,9 @@ fn change_choice(state: &mut State, delta: isize) {
         } else {
             format!("{:.1}", effective_bpm)
         };
-       
+
         row.name = format!("Music Rate\nbpm: {}", bpm_str);
-       
+
         audio::play_sfx("assets/sounds/change_value.ogg");
         // Update session music rate immediately so SelectMusic will match on return
         crate::game::profile::set_session_music_rate(state.music_rate);
@@ -1117,7 +1151,8 @@ fn change_choice(state: &mut State, delta: isize) {
         let num_choices = row.choices.len();
         if num_choices > 0 {
             let current_idx = row.selected_choice_index as isize;
-            let new_index = ((current_idx + delta + num_choices as isize) % num_choices as isize) as usize;
+            let new_index =
+                ((current_idx + delta + num_choices as isize) % num_choices as isize) as usize;
             // Begin cursor animation if this row is inline and the choice actually changes
             let is_inline_row = row.name == "Perspective"
                 || row.name == "Background Filter"
@@ -1158,13 +1193,22 @@ fn change_choice(state: &mut State, delta: isize) {
             }
             // Changing the speed mod type should update the mod and the next row display
             if row.name == "Type of Speed Mod" {
-                let new_type = match row.selected_choice_index { 0 => "X", 1 => "C", 2 => "M", _ => "C" };
+                let new_type = match row.selected_choice_index {
+                    0 => "X",
+                    1 => "C",
+                    2 => "M",
+                    _ => "C",
+                };
                 let old_type = state.speed_mod.mod_type.clone();
                 let old_value = state.speed_mod.value;
 
                 // Determine target effective BPM label we want to preserve when switching types.
                 let reference_bpm = reference_bpm_for_song(&state.song);
-                let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 { state.music_rate } else { 1.0 };
+                let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+                    state.music_rate
+                } else {
+                    1.0
+                };
                 let target_bpm: f32 = match old_type.as_str() {
                     // C/M store a BPM; keep that BPM label when switching types
                     "C" | "M" => old_value,
@@ -1178,7 +1222,11 @@ fn change_choice(state: &mut State, delta: isize) {
                     // For X: pick nearest 0.05 step to hit target bpm label
                     "X" => {
                         let denom = reference_bpm * rate;
-                        let raw = if denom.is_finite() && denom > 0.0 { target_bpm / denom } else { 1.0 };
+                        let raw = if denom.is_finite() && denom > 0.0 {
+                            target_bpm / denom
+                        } else {
+                            1.0
+                        };
                         let stepped = round_to_step(raw, 0.05);
                         stepped.clamp(0.05, 20.0)
                     }
@@ -1195,14 +1243,15 @@ fn change_choice(state: &mut State, delta: isize) {
 
                 // Update the choices vec for the "Speed Mod" row.
                 if let Some(speed_mod_row) = state.rows.get_mut(1)
-                    && speed_mod_row.name == "Speed Mod" {
-                        speed_mod_row.choices[0] = match new_type {
-                            "X" => format!("{:.2}x", new_value),
-                            "C" => format!("C{}", new_value as i32),
-                            "M" => format!("M{}", new_value as i32),
-                            _ => String::new(),
-                        };
-                    }
+                    && speed_mod_row.name == "Speed Mod"
+                {
+                    speed_mod_row.choices[0] = match new_type {
+                        "X" => format!("{:.2}x", new_value),
+                        "C" => format!("C{}", new_value as i32),
+                        "M" => format!("M{}", new_value as i32),
+                        _ => String::new(),
+                    };
+                }
             } else if row.name == "Background Filter" {
                 // Persist the new filter level to the profile
                 let setting = match row.selected_choice_index {
@@ -1223,14 +1272,16 @@ fn change_choice(state: &mut State, delta: isize) {
                 }
             } else if row.name == "NoteField Offset X" {
                 if let Some(choice) = row.choices.get(row.selected_choice_index)
-                    && let Ok(raw) = choice.parse::<i32>() {
-                        crate::game::profile::update_notefield_offset_x(raw);
-                    }
+                    && let Ok(raw) = choice.parse::<i32>()
+                {
+                    crate::game::profile::update_notefield_offset_x(raw);
+                }
             } else if row.name == "NoteField Offset Y" {
                 if let Some(choice) = row.choices.get(row.selected_choice_index)
-                    && let Ok(raw) = choice.parse::<i32>() {
-                        crate::game::profile::update_notefield_offset_y(raw);
-                    }
+                    && let Ok(raw) = choice.parse::<i32>()
+                {
+                    crate::game::profile::update_notefield_offset_y(raw);
+                }
             } else if row.name == "Judgment Font" {
                 // Persist tap judgment font selection to the profile
                 let setting = match row.selected_choice_index {
@@ -1292,23 +1343,38 @@ fn change_choice(state: &mut State, delta: isize) {
                     _ => crate::game::profile::NoteSkin::Cel,
                 };
                 crate::game::profile::update_noteskin(setting);
-                let style = noteskin::Style { num_cols: 4, num_players: 1 };
+                let style = noteskin::Style {
+                    num_cols: 4,
+                    num_players: 1,
+                };
                 let path_str = match setting {
                     crate::game::profile::NoteSkin::Cel => "assets/noteskins/cel/dance-single.txt",
-                    crate::game::profile::NoteSkin::Metal => "assets/noteskins/metal/dance-single.txt",
-                    crate::game::profile::NoteSkin::EnchantmentV2 => "assets/noteskins/enchantment-v2/dance-single.txt",
-                    crate::game::profile::NoteSkin::DevCel2024V3 => "assets/noteskins/devcel-2024-v3/dance-single.txt",
+                    crate::game::profile::NoteSkin::Metal => {
+                        "assets/noteskins/metal/dance-single.txt"
+                    }
+                    crate::game::profile::NoteSkin::EnchantmentV2 => {
+                        "assets/noteskins/enchantment-v2/dance-single.txt"
+                    }
+                    crate::game::profile::NoteSkin::DevCel2024V3 => {
+                        "assets/noteskins/devcel-2024-v3/dance-single.txt"
+                    }
                 };
                 state.noteskin = noteskin::load(Path::new(path_str), &style)
                     .ok()
-                    .or_else(|| noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style).ok())
-                    .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok());
+                    .or_else(|| {
+                        noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style)
+                            .ok()
+                    })
+                    .or_else(|| {
+                        noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok()
+                    });
             } else if row.name == "Stepchart" {
                 // Update the state's difficulty index to match the newly selected choice
                 if let Some(diff_indices) = &row.choice_difficulty_indices
-                    && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index) {
-                        state.chart_difficulty_index = difficulty_idx;
-                    }
+                    && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index)
+                {
+                    state.chart_difficulty_index = difficulty_idx;
+                }
             }
             audio::play_sfx("assets/sounds/change_value.ogg");
         }
@@ -1324,7 +1390,7 @@ pub fn apply_choice_delta(state: &mut State, delta: isize) {
 pub fn update(state: &mut State, dt: f32) {
     // Update preview animation time and beat based on song BPM
     state.preview_time += dt;
-   
+
     // Calculate beat increment based on the song's BPM
     // Use the song's min_bpm (or max_bpm if they're the same)
     let bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
@@ -1334,7 +1400,7 @@ pub fn update(state: &mut State, dt: f32) {
         state.song.min_bpm as f32
     };
     let bpm = if bpm > 0.0 { bpm } else { 120.0 }; // Fallback to 120 BPM
-   
+
     let beats_per_second = bpm / 60.0;
     state.preview_beat += dt * beats_per_second;
     if let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
@@ -1344,24 +1410,27 @@ pub fn update(state: &mut State, dt: f32) {
     ) {
         let now = Instant::now();
         if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
-            && now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL {
-                let total_rows = state.rows.len();
-                if total_rows > 0 {
-                    match direction {
-                        NavDirection::Up => {
-                            state.selected_row = (state.selected_row + total_rows - 1) % total_rows
-                        }
-                        NavDirection::Down => state.selected_row = (state.selected_row + 1) % total_rows,
-                        NavDirection::Left => {
-                            change_choice(state, -1);
-                        }
-                        NavDirection::Right => {
-                            change_choice(state, 1);
-                        }
+            && now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL
+        {
+            let total_rows = state.rows.len();
+            if total_rows > 0 {
+                match direction {
+                    NavDirection::Up => {
+                        state.selected_row = (state.selected_row + total_rows - 1) % total_rows
                     }
-                    state.nav_key_last_scrolled_at = Some(now);
+                    NavDirection::Down => {
+                        state.selected_row = (state.selected_row + 1) % total_rows
+                    }
+                    NavDirection::Left => {
+                        change_choice(state, -1);
+                    }
+                    NavDirection::Right => {
+                        change_choice(state, 1);
+                    }
                 }
+                state.nav_key_last_scrolled_at = Some(now);
             }
+        }
     }
     // Advance the help reveal animation timer
     state.help_anim_time += dt;
@@ -1391,9 +1460,9 @@ pub fn update(state: &mut State, dt: f32) {
         // Duplicate row layout math used in get_actors() to compute Y centers.
         let total_rows = state.rows.len();
         // constants must mirror get_actors()
-        let frame_h = 33.0_f32;                // ROW_HEIGHT
-        let anchor_row = 5_usize;              // ANCHOR_ROW
-        let visible_rows = 10_usize;           // VISIBLE_ROWS
+        let frame_h = 33.0_f32; // ROW_HEIGHT
+        let anchor_row = 5_usize; // ANCHOR_ROW
+        let visible_rows = 10_usize; // VISIBLE_ROWS
         let first_row_center_y = screen_center_y() + (-164.0); // ROW_START_OFFSET
         let help_box_h = 40.0_f32;
         let help_box_bottom_y = screen_height() - 36.0;
@@ -1401,14 +1470,23 @@ pub fn update(state: &mut State, dt: f32) {
         let n_rows_f = visible_rows as f32;
         let mut row_gap = if n_rows_f > 0.0 {
             (help_top_y - first_row_center_y - ((n_rows_f - 0.5) * frame_h)) / n_rows_f
-        } else { 0.0 };
-        if !row_gap.is_finite() { row_gap = 0.0; }
-        if row_gap < 0.0 { row_gap = 0.0; }
+        } else {
+            0.0
+        };
+        if !row_gap.is_finite() {
+            row_gap = 0.0;
+        }
+        if row_gap < 0.0 {
+            row_gap = 0.0;
+        }
         let max_offset = total_rows.saturating_sub(visible_rows);
         let offset_rows = if total_rows <= visible_rows {
             0
         } else {
-            state.selected_row.saturating_sub(anchor_row).min(max_offset)
+            state
+                .selected_row
+                .saturating_sub(anchor_row)
+                .min(max_offset)
         };
         let prev_idx = state.prev_selected_row;
         let i_prev_vis = (prev_idx as isize) - (offset_rows as isize);
@@ -1435,7 +1513,8 @@ pub fn update(state: &mut State, dt: f32) {
     // Advance vertical row tween, if any
     if state.cursor_row_anim_t < 1.0 {
         if CURSOR_TWEEN_SECONDS > 0.0 {
-            state.cursor_row_anim_t = (state.cursor_row_anim_t + dt / CURSOR_TWEEN_SECONDS).min(1.0);
+            state.cursor_row_anim_t =
+                (state.cursor_row_anim_t + dt / CURSOR_TWEEN_SECONDS).min(1.0);
         } else {
             state.cursor_row_anim_t = 1.0;
         }
@@ -1600,12 +1679,20 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
         }
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-            if ev.pressed { apply_choice_delta(state, -1); on_nav_press(state, NavDirection::Left); }
-            else { on_nav_release(state, NavDirection::Left); }
+            if ev.pressed {
+                apply_choice_delta(state, -1);
+                on_nav_press(state, NavDirection::Left);
+            } else {
+                on_nav_release(state, NavDirection::Left);
+            }
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-            if ev.pressed { apply_choice_delta(state, 1); on_nav_press(state, NavDirection::Right); }
-            else { on_nav_release(state, NavDirection::Right); }
+            if ev.pressed {
+                apply_choice_delta(state, 1);
+                on_nav_press(state, NavDirection::Right);
+            } else {
+                on_nav_release(state, NavDirection::Right);
+            }
         }
         VirtualAction::p1_start if ev.pressed => {
             let num_rows = state.rows.len();
@@ -1625,28 +1712,28 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 toggle_fa_plus_row(state);
             } else if state.selected_row == num_rows - 1
                 && let Some(what_comes_next_row) = state.rows.get(num_rows - 2)
-                    && what_comes_next_row.name == "What comes next?"
-                        && let Some(choice) = what_comes_next_row
-                            .choices
-                            .get(what_comes_next_row.selected_choice_index)
-                        {
-                            match choice.as_str() {
-                                "Gameplay" => return ScreenAction::Navigate(Screen::Gameplay),
-                                "Choose a Different Song" => {
-                                    return ScreenAction::Navigate(Screen::SelectMusic)
-                                }
-                                "Advanced Modifiers" => {
-                                    switch_to_pane(state, OptionsPane::Advanced);
-                                }
-                                "Uncommon Modifiers" => {
-                                    switch_to_pane(state, OptionsPane::Uncommon);
-                                }
-                                "Main Modifiers" => {
-                                    switch_to_pane(state, OptionsPane::Main);
-                                }
-                                _ => {}
-                            }
-                        }
+                && what_comes_next_row.name == "What comes next?"
+                && let Some(choice) = what_comes_next_row
+                    .choices
+                    .get(what_comes_next_row.selected_choice_index)
+            {
+                match choice.as_str() {
+                    "Gameplay" => return ScreenAction::Navigate(Screen::Gameplay),
+                    "Choose a Different Song" => {
+                        return ScreenAction::Navigate(Screen::SelectMusic);
+                    }
+                    "Advanced Modifiers" => {
+                        switch_to_pane(state, OptionsPane::Advanced);
+                    }
+                    "Uncommon Modifiers" => {
+                        switch_to_pane(state, OptionsPane::Uncommon);
+                    }
+                    "Main Modifiers" => {
+                        switch_to_pane(state, OptionsPane::Main);
+                    }
+                    _ => {}
+                }
+            }
         }
         _ => {}
     }
@@ -1679,13 +1766,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Tweak these to dial in parity with Simply Love.
     const PREVIEW_CENTER_OFFSET_NORMAL: f32 = 80.75; // 4:3
     const PREVIEW_CENTER_OFFSET_WIDE: f32 = 98.75; // 16:9
-    let preview_center_x = speed_mod_x + widescale(PREVIEW_CENTER_OFFSET_NORMAL, PREVIEW_CENTER_OFFSET_WIDE);
+    let preview_center_x =
+        speed_mod_x + widescale(PREVIEW_CENTER_OFFSET_NORMAL, PREVIEW_CENTER_OFFSET_WIDE);
     let speed_color = color::simply_love_rgba(state.active_color_index);
-   
+
     // Calculate effective BPM for display. For X-mod parity with gameplay, use reference BPM.
     let reference_bpm = reference_bpm_for_song(&state.song);
     let effective_song_bpm = (reference_bpm as f64) * state.music_rate as f64;
-   
+
     let speed_text = match state.speed_mod.mod_type.as_str() {
         "X" => {
             // For X-mod, show the effective BPM accounting for music rate
@@ -1697,7 +1785,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         "M" => format!("M{}", state.speed_mod.value as i32),
         _ => format!("{:.2}x", state.speed_mod.value),
     };
-   
+
     actors.push(act!(text: font("wendy"): settext(speed_text):
         align(0.5, 0.5): xy(speed_mod_x, speed_mod_y): zoom(0.5):
         diffuse(speed_color[0], speed_color[1], speed_color[2], 1.0):
@@ -1720,7 +1808,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let offset_rows = if total_rows <= VISIBLE_ROWS {
         0
     } else {
-        state.selected_row.saturating_sub(ANCHOR_ROW).min(max_offset)
+        state
+            .selected_row
+            .saturating_sub(ANCHOR_ROW)
+            .min(max_offset)
     };
     let frame_h = ROW_HEIGHT;
     // Compute dynamic row gap so the space between the last visible
@@ -1737,8 +1828,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         0.0
     };
-    if !row_gap.is_finite() { row_gap = 0.0; }
-    if row_gap < 0.0 { row_gap = 0.0; }
+    if !row_gap.is_finite() {
+        row_gap = 0.0;
+    }
+    if row_gap < 0.0 {
+        row_gap = 0.0;
+    }
     // Make row frame LEFT and WIDTH exactly match the help box.
     let row_left = help_box_x;
     let row_width = help_box_w;
@@ -1748,7 +1843,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let title_x = row_left + widescale(7.0, 13.0);
     // Helper to compute the cursor center X for a given row index.
     let calc_row_center_x = |row_idx: usize| -> f32 {
-        if row_idx >= state.rows.len() { return speed_mod_x; }
+        if row_idx >= state.rows.len() {
+            return speed_mod_x;
+        }
         let r = &state.rows[row_idx];
         if r.name.is_empty() {
             // Exit row aligns with Speed Mod helper
@@ -1782,13 +1879,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             asset_manager.with_fonts(|all_fonts| {
                 asset_manager.with_font("miso", |metrics_font| {
                     for text in &r.choices {
-                        let mut w = crate::ui::font::measure_line_width_logical(metrics_font, text, all_fonts) as f32;
-                        if !w.is_finite() || w <= 0.0 { w = 1.0; }
+                        let mut w = crate::ui::font::measure_line_width_logical(
+                            metrics_font,
+                            text,
+                            all_fonts,
+                        ) as f32;
+                        if !w.is_finite() || w <= 0.0 {
+                            w = 1.0;
+                        }
                         widths.push(w * value_zoom);
                     }
                 });
             });
-            if widths.is_empty() { return speed_mod_x; }
+            if widths.is_empty() {
+                return speed_mod_x;
+            }
             let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
             let mut x = choice_inner_left;
             for w in &widths {
@@ -1828,8 +1933,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
                 // For inline rows, measure the selected choice; single-value rows do the same
                 let sel = r.selected_choice_index.min(r.choices.len() - 1);
-                let mut w = crate::ui::font::measure_line_width_logical(metrics_font, &r.choices[sel], all_fonts) as f32;
-                if !w.is_finite() || w <= 0.0 { w = 1.0; }
+                let mut w = crate::ui::font::measure_line_width_logical(
+                    metrics_font,
+                    &r.choices[sel],
+                    all_fonts,
+                ) as f32;
+                if !w.is_finite() || w <= 0.0 {
+                    w = 1.0;
+                }
                 out_w = w * value_zoom;
             });
         });
@@ -1849,7 +1960,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let bg_color = if is_active {
             active_bg
         } else {
-            [inactive_bg_base[0], inactive_bg_base[1], inactive_bg_base[2], 0.8]
+            [
+                inactive_bg_base[0],
+                inactive_bg_base[1],
+                inactive_bg_base[2],
+                0.8,
+            ]
         };
         // Row background — matches help box width & left
         actors.push(act!(quad:
@@ -1946,7 +2062,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if row.name.is_empty() {
             // Special case for the last "Exit" row
             let choice_text = &row.choices[row.selected_choice_index];
-            let choice_color = if is_active { [1.0, 1.0, 1.0, 1.0] } else { sl_gray };
+            let choice_color = if is_active {
+                [1.0, 1.0, 1.0, 1.0]
+            } else {
+                sl_gray
+            };
             // Align Exit horizontally with other single-value options (Speed Mod line)
             let choice_center_x = speed_mod_x;
             actors.push(act!(text: font("miso"): settext(choice_text.clone()):
@@ -2026,8 +2146,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             asset_manager.with_fonts(|all_fonts| {
                 asset_manager.with_font("miso", |metrics_font| {
                     for text in &row.choices {
-                        let mut w = crate::ui::font::measure_line_width_logical(metrics_font, text, all_fonts) as f32;
-                        if !w.is_finite() || w <= 0.0 { w = 1.0; }
+                        let mut w = crate::ui::font::measure_line_width_logical(
+                            metrics_font,
+                            text,
+                            all_fonts,
+                        ) as f32;
+                        if !w.is_finite() || w <= 0.0 {
+                            w = 1.0;
+                        }
                         widths.push(w * value_zoom);
                     }
                 });
@@ -2145,14 +2271,22 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let max_pad_x = widescale(22.0, 28.0);
                             let width_ref = widescale(180.0, 220.0);
                             let mut size_t_to = draw_w / width_ref;
-                            if !size_t_to.is_finite() { size_t_to = 0.0; }
-                            if size_t_to < 0.0 { size_t_to = 0.0; }
-                            if size_t_to > 1.0 { size_t_to = 1.0; }
+                            if !size_t_to.is_finite() {
+                                size_t_to = 0.0;
+                            }
+                            if size_t_to < 0.0 {
+                                size_t_to = 0.0;
+                            }
+                            if size_t_to > 1.0 {
+                                size_t_to = 1.0;
+                            }
                             let mut pad_x_to = min_pad_x + (max_pad_x - min_pad_x) * size_t_to;
                             let border_w = widescale(2.0, 2.5);
                             // Cap pad so ring doesn't encroach neighbors
                             let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
-                            if pad_x_to > max_pad_by_spacing { pad_x_to = max_pad_by_spacing; }
+                            if pad_x_to > max_pad_by_spacing {
+                                pad_x_to = max_pad_by_spacing;
+                            }
                             let mut ring_w = draw_w + pad_x_to * 2.0;
                             let mut ring_h = text_h + pad_y * 2.0;
 
@@ -2166,47 +2300,73 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     let from_x = calc_row_center_x(from_row);
                                     center_x = from_x + (center_x - from_x) * t;
                                 }
-                                center_y = state.cursor_row_anim_from_y + (current_row_y - state.cursor_row_anim_from_y) * t;
+                                center_y = state.cursor_row_anim_from_y
+                                    + (current_row_y - state.cursor_row_anim_from_y) * t;
                             }
                             if let Some(anim_row) = state.cursor_anim_row
-                                && anim_row == item_idx && state.cursor_anim_t < 1.0 {
-                                    let from_idx = state.cursor_anim_from_choice.min(widths.len().saturating_sub(1));
-                                    let to_idx = sel_idx.min(widths.len().saturating_sub(1));
-                                    let from_center_x = x_positions[from_idx] + widths[from_idx] * 0.5;
-                                    let to_center_x = x_positions[to_idx] + widths[to_idx] * 0.5;
-                                    let t = ease_out_cubic(state.cursor_anim_t);
-                                    center_x = from_center_x + (to_center_x - from_center_x) * t;
-                                    // Also interpolate ring size from previous choice to current choice
-                                    let from_draw_w = widths[from_idx];
-                                    let mut size_t_from = from_draw_w / width_ref;
-                                    if !size_t_from.is_finite() { size_t_from = 0.0; }
-                                    if size_t_from < 0.0 { size_t_from = 0.0; }
-                                    if size_t_from > 1.0 { size_t_from = 1.0; }
-                                    let mut pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
-                                    let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
-                                    if pad_x_from > max_pad_by_spacing { pad_x_from = max_pad_by_spacing; }
-                                    let ring_w_from = from_draw_w + pad_x_from * 2.0;
-                                    let ring_h_from = text_h + pad_y * 2.0;
-                                    ring_w = ring_w_from + (ring_w - ring_w_from) * t;
-                                    ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                                && anim_row == item_idx
+                                && state.cursor_anim_t < 1.0
+                            {
+                                let from_idx = state
+                                    .cursor_anim_from_choice
+                                    .min(widths.len().saturating_sub(1));
+                                let to_idx = sel_idx.min(widths.len().saturating_sub(1));
+                                let from_center_x = x_positions[from_idx] + widths[from_idx] * 0.5;
+                                let to_center_x = x_positions[to_idx] + widths[to_idx] * 0.5;
+                                let t = ease_out_cubic(state.cursor_anim_t);
+                                center_x = from_center_x + (to_center_x - from_center_x) * t;
+                                // Also interpolate ring size from previous choice to current choice
+                                let from_draw_w = widths[from_idx];
+                                let mut size_t_from = from_draw_w / width_ref;
+                                if !size_t_from.is_finite() {
+                                    size_t_from = 0.0;
                                 }
+                                if size_t_from < 0.0 {
+                                    size_t_from = 0.0;
+                                }
+                                if size_t_from > 1.0 {
+                                    size_t_from = 1.0;
+                                }
+                                let mut pad_x_from =
+                                    min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
+                                if pad_x_from > max_pad_by_spacing {
+                                    pad_x_from = max_pad_by_spacing;
+                                }
+                                let ring_w_from = from_draw_w + pad_x_from * 2.0;
+                                let ring_h_from = text_h + pad_y * 2.0;
+                                ring_w = ring_w_from + (ring_w - ring_w_from) * t;
+                                ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                            }
                             // If not horizontally tweening, but vertically tweening rows, interpolate size
-                            if state.cursor_row_anim_t < 1.0 && (state.cursor_anim_row.is_none() || state.cursor_anim_row != Some(item_idx))
-                                && let Some(from_row) = state.cursor_row_anim_from_row {
-                                    let (from_dw, from_dh) = calc_row_dims(from_row);
-                                    let mut size_t_from = from_dw / width_ref;
-                                    if !size_t_from.is_finite() { size_t_from = 0.0; }
-                                    if size_t_from < 0.0 { size_t_from = 0.0; }
-                                    if size_t_from > 1.0 { size_t_from = 1.0; }
-                                    let mut pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
-                                    let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
-                                    if pad_x_from > max_pad_by_spacing { pad_x_from = max_pad_by_spacing; }
-                                    let ring_w_from = from_dw + pad_x_from * 2.0;
-                                    let ring_h_from = from_dh + pad_y * 2.0;
-                                    let t = ease_out_cubic(state.cursor_row_anim_t);
-                                    ring_w = ring_w_from + (ring_w - ring_w_from) * t;
-                                    ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                            if state.cursor_row_anim_t < 1.0
+                                && (state.cursor_anim_row.is_none()
+                                    || state.cursor_anim_row != Some(item_idx))
+                                && let Some(from_row) = state.cursor_row_anim_from_row
+                            {
+                                let (from_dw, from_dh) = calc_row_dims(from_row);
+                                let mut size_t_from = from_dw / width_ref;
+                                if !size_t_from.is_finite() {
+                                    size_t_from = 0.0;
                                 }
+                                if size_t_from < 0.0 {
+                                    size_t_from = 0.0;
+                                }
+                                if size_t_from > 1.0 {
+                                    size_t_from = 1.0;
+                                }
+                                let mut pad_x_from =
+                                    min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
+                                if pad_x_from > max_pad_by_spacing {
+                                    pad_x_from = max_pad_by_spacing;
+                                }
+                                let ring_w_from = from_dw + pad_x_from * 2.0;
+                                let ring_h_from = from_dh + pad_y * 2.0;
+                                let t = ease_out_cubic(state.cursor_row_anim_t);
+                                ring_w = ring_w_from + (ring_w - ring_w_from) * t;
+                                ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                            }
 
                             let left = center_x - ring_w * 0.5;
                             let right = center_x + ring_w * 0.5;
@@ -2249,7 +2409,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Draw each option's text (active row: all white; inactive: #808080)
             for (idx, text) in row.choices.iter().enumerate() {
                 let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
-                let color_rgba = if is_active { [1.0, 1.0, 1.0, 1.0] } else { sl_gray };
+                let color_rgba = if is_active {
+                    [1.0, 1.0, 1.0, 1.0]
+                } else {
+                    sl_gray
+                };
                 actors.push(act!(text: font("miso"): settext(text.clone()):
                     align(0.0, 0.5): xy(x, current_row_y): zoom(value_zoom):
                     diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3]):
@@ -2274,8 +2438,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
             asset_manager.with_fonts(|all_fonts| {
                 asset_manager.with_font("miso", |metrics_font| {
-                    let mut text_w = crate::ui::font::measure_line_width_logical(metrics_font, choice_text, all_fonts) as f32;
-                    if !text_w.is_finite() || text_w <= 0.0 { text_w = 1.0; }
+                    let mut text_w = crate::ui::font::measure_line_width_logical(
+                        metrics_font,
+                        choice_text,
+                        all_fonts,
+                    ) as f32;
+                    if !text_w.is_finite() || text_w <= 0.0 {
+                        text_w = 1.0;
+                    }
                     let text_h = (metrics_font.height as f32).max(1.0);
                     let value_zoom = 0.835;
                     let draw_w = text_w * value_zoom;
@@ -2311,7 +2481,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let border_w = widescale(2.0, 2.5);
                         // Cap pad for single-value rows too (consistency)
                         let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
-                        if pad_x > max_pad_by_spacing { pad_x = max_pad_by_spacing; }
+                        if pad_x > max_pad_by_spacing {
+                            pad_x = max_pad_by_spacing;
+                        }
                         let mut ring_w = draw_w + pad_x * 2.0;
                         let mut ring_h = draw_h + pad_y * 2.0;
                         let mut center_x = choice_center_x;
@@ -2323,20 +2495,22 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 let from_x = calc_row_center_x(from_row);
                                 center_x = from_x + (center_x - from_x) * t;
                             }
-                            center_y = state.cursor_row_anim_from_y + (current_row_y - state.cursor_row_anim_from_y) * t;
+                            center_y = state.cursor_row_anim_from_y
+                                + (current_row_y - state.cursor_row_anim_from_y) * t;
                         }
                         // Interpolate ring size between previous row and this row when vertically tweening
                         if state.cursor_row_anim_t < 1.0
-                            && let Some(from_row) = state.cursor_row_anim_from_row {
-                                let (from_dw, from_dh) = calc_row_dims(from_row);
-                                let tsize = (from_dw / width_ref).clamp(0.0, 1.0);
-                                let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * tsize;
-                                let ring_w_from = from_dw + pad_x_from * 2.0;
-                                let ring_h_from = from_dh + pad_y * 2.0;
-                                let t = ease_out_cubic(state.cursor_row_anim_t);
-                                ring_w = ring_w_from + (ring_w - ring_w_from) * t;
-                                ring_h = ring_h_from + (ring_h - ring_h_from) * t;
-                            }
+                            && let Some(from_row) = state.cursor_row_anim_from_row
+                        {
+                            let (from_dw, from_dh) = calc_row_dims(from_row);
+                            let tsize = (from_dw / width_ref).clamp(0.0, 1.0);
+                            let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * tsize;
+                            let ring_w_from = from_dw + pad_x_from * 2.0;
+                            let ring_h_from = from_dh + pad_y * 2.0;
+                            let t = ease_out_cubic(state.cursor_row_anim_t);
+                            ring_w = ring_w_from + (ring_w - ring_w_from) * t;
+                            ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                        }
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;
                         let top = center_y - ring_h / 2.0;
@@ -2444,44 +2618,46 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     // Add noteskin preview for "NoteSkin" row showing animated 4th note
                     if row.name == "NoteSkin"
-                        && let Some(ns) = &state.noteskin {
-                            // Render a 4th note (Quantization::Q4th = 0) for column 2 (Up arrow)
-                            // In dance-single: Left=0, Down=1, Up=2, Right=3
-                            let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
-                            if let Some(note_slot) = ns.notes.get(note_idx) {
-                                // Get the current animation frame using preview_time and preview_beat
-                                let frame = note_slot.frame_index(state.preview_time, state.preview_beat);
-                                let uv = note_slot.uv_for_frame(frame);
-                               
-                                // Scale the note to match Simply Love's 0.4x preview zoom
-                                // Note: cel noteskin textures are NOT doubleres, so we use 0.4x directly
-                                let size = note_slot.size();
-                                let width = size[0].max(1) as f32;
-                                let height = size[1].max(1) as f32;
-                               
-                                // Target size: 64px is the gameplay size, so 0.4x of that is 25.6px
-                                const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
-                                const PREVIEW_SCALE: f32 = 0.45;
-                                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
-                               
-                                let scale = if height > 0.0 {
-                                    target_height / height
-                                } else {
-                                    PREVIEW_SCALE
-                                };
-                                let final_width = width * scale;
-                                let final_height = target_height;
-                               
-                                actors.push(act!(sprite(note_slot.texture_key().to_string()):
-                                    align(0.5, 0.5):
-                                    xy(preview_center_x, current_row_y):
-                                    zoomto(final_width, final_height):
-                                    rotationz(-note_slot.def.rotation_deg as f32):
-                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                    z(102)
-                                ));
-                            }
+                        && let Some(ns) = &state.noteskin
+                    {
+                        // Render a 4th note (Quantization::Q4th = 0) for column 2 (Up arrow)
+                        // In dance-single: Left=0, Down=1, Up=2, Right=3
+                        let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+                        if let Some(note_slot) = ns.notes.get(note_idx) {
+                            // Get the current animation frame using preview_time and preview_beat
+                            let frame =
+                                note_slot.frame_index(state.preview_time, state.preview_beat);
+                            let uv = note_slot.uv_for_frame(frame);
+
+                            // Scale the note to match Simply Love's 0.4x preview zoom
+                            // Note: cel noteskin textures are NOT doubleres, so we use 0.4x directly
+                            let size = note_slot.size();
+                            let width = size[0].max(1) as f32;
+                            let height = size[1].max(1) as f32;
+
+                            // Target size: 64px is the gameplay size, so 0.4x of that is 25.6px
+                            const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
+                            const PREVIEW_SCALE: f32 = 0.45;
+                            let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+
+                            let scale = if height > 0.0 {
+                                target_height / height
+                            } else {
+                                PREVIEW_SCALE
+                            };
+                            let final_width = width * scale;
+                            let final_height = target_height;
+
+                            actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                align(0.5, 0.5):
+                                xy(preview_center_x, current_row_y):
+                                zoomto(final_width, final_height):
+                                rotationz(-note_slot.def.rotation_deg as f32):
+                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                z(102)
+                            ));
                         }
+                    }
                     // Add combo preview for "Combo Font" row showing ticking numbers
                     if row.name == "Combo Font" {
                         let combo_text = state.combo_preview_count.to_string();
@@ -2522,19 +2698,27 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let help_text_color = color::simply_love_rgba(state.active_color_index);
         let wrap_width = help_box_w - 30.0; // padding
         let help_x = help_box_x + 12.0;
-       
+
         // Calculate reveal fraction (0.0 to 1.0 over 0.5 seconds)
         const REVEAL_DURATION: f32 = 0.5;
-        let num_help_lines = if row.help.len() > 1 { row.help.len() } else { 1 };
-        let time_per_line = if num_help_lines > 0 { REVEAL_DURATION / num_help_lines as f32 } else { REVEAL_DURATION };
-       
+        let num_help_lines = if row.help.len() > 1 {
+            row.help.len()
+        } else {
+            1
+        };
+        let time_per_line = if num_help_lines > 0 {
+            REVEAL_DURATION / num_help_lines as f32
+        } else {
+            REVEAL_DURATION
+        };
+
         // Handle multi-line help text (similar to multi-line row titles)
         if row.help.len() > 1 {
             // Multiple help lines - render them vertically stacked
             let line_spacing = 12.0; // Spacing between help lines
             let total_height = (row.help.len() as f32 - 1.0) * line_spacing;
             let start_y = help_box_bottom_y - (help_box_h / 2.0) - (total_height / 2.0);
-           
+
             for (i, help_line) in row.help.iter().enumerate() {
                 // Sequential letter-by-letter reveal per line
                 let start_time = i as f32 * time_per_line;
@@ -2550,7 +2734,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     ((char_count as f32 * line_fraction).round() as usize).min(char_count)
                 };
                 let visible_text: String = help_line.chars().take(visible_chars).collect();
-               
+
                 let line_y = start_y + (i as f32 * line_spacing);
                 actors.push(act!(text:
                     font("miso"): settext(visible_text):
@@ -2570,7 +2754,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let fraction = (state.help_anim_time / REVEAL_DURATION).clamp(0.0, 1.0);
             let visible_chars = ((char_count as f32 * fraction).round() as usize).min(char_count);
             let visible_text: String = help_text.chars().take(visible_chars).collect();
-           
+
             actors.push(act!(text:
                 font("miso"): settext(visible_text):
                 align(0.0, 0.5):

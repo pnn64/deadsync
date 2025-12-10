@@ -1,7 +1,7 @@
-use crate::ui::actors::Actor;
 use crate::act;
-use crate::core::space::*;
 use crate::assets;
+use crate::core::space::*;
+use crate::ui::actors::Actor;
 
 /// Parameters to tweak the layout easily.
 #[derive(Clone, Copy, Debug)]
@@ -14,7 +14,11 @@ pub struct LogoParams {
 
 impl Default for LogoParams {
     fn default() -> Self {
-        Self { target_h: 238.0, top_margin: 102.0, banner_y_offset_inside: 0.0 }
+        Self {
+            target_h: 238.0,
+            top_margin: 102.0,
+            banner_y_offset_inside: 0.0,
+        }
     }
 }
 
@@ -23,8 +27,12 @@ impl Default for LogoParams {
 pub fn build_logo(params: LogoParams) -> Vec<Actor> {
     // Get logo's native dimensions from the asset system, with a safe fallback.
     let logo_dims = assets::texture_dims("logo.png").unwrap_or(assets::TexMeta { w: 1, h: 1 });
-    let logo_aspect = if logo_dims.h > 0 { logo_dims.w as f32 / logo_dims.h as f32 } else { 1.0 };
-    
+    let logo_aspect = if logo_dims.h > 0 {
+        logo_dims.w as f32 / logo_dims.h as f32
+    } else {
+        1.0
+    };
+
     // Calculate the final display width of the logo based on the target height and true aspect ratio.
     let logo_h = params.target_h;
     let logo_w = logo_h * logo_aspect;

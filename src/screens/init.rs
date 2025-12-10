@@ -1,10 +1,10 @@
 use crate::act;
+use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::*;
 use crate::screens::{Screen, ScreenAction};
-use crate::core::input::{VirtualAction, InputEvent};
 use crate::ui::actors::Actor;
-use crate::ui::components::heart_bg;
 use crate::ui::color;
+use crate::ui::components::heart_bg;
 
 /* ----------------------- timing & layout ----------------------- */
 
@@ -16,16 +16,16 @@ const ARROW_COUNT: usize = 7;
 const ARROW_SPACING: f32 = 50.0;
 const ARROW_BASE_DELAY: f32 = 0.20;
 const ARROW_STEP_DELAY: f32 = 0.10;
-const ARROW_FADE_IN: f32  = 0.75;
+const ARROW_FADE_IN: f32 = 0.75;
 const ARROW_FADE_OUT: f32 = 0.75;
 
 /* black bar behind arrows */
 const BAR_TARGET_H: f32 = 128.0;
-const ARROW_BG_Z: f32   = 106.0; // above hearts, below arrows
+const ARROW_BG_Z: f32 = 106.0; // above hearts, below arrows
 
 /* “squish” bar timings (center line -> open -> close) */
-const SQUISH_START_DELAY: f32 = 0.50;   // after PRE_ROLL
-const SQUISH_IN_DURATION: f32 = 0.35;   // 1.0 -> 0.0
+const SQUISH_START_DELAY: f32 = 0.50; // after PRE_ROLL
+const SQUISH_IN_DURATION: f32 = 0.35; // 1.0 -> 0.0
 pub const BAR_SQUISH_DURATION: f32 = 0.35;
 
 /* ----------------------- auto-advance ----------------------- */
@@ -38,9 +38,13 @@ fn arrows_finished_at() -> f32 {
 }
 
 #[inline(always)]
-fn maxf(a: f32, b: f32) -> f32 { if a > b { a } else { b } }
+fn maxf(a: f32, b: f32) -> f32 {
+    if a > b { a } else { b }
+}
 #[inline(always)]
-fn remaining(from_time: f32, now: f32) -> f32 { maxf(from_time - now, 0.0) }
+fn remaining(from_time: f32, now: f32) -> f32 {
+    maxf(from_time - now, 0.0)
+}
 
 /* ---------------------------- state ---------------------------- */
 
@@ -71,7 +75,9 @@ pub fn init() -> State {
 pub fn handle_input(_: &mut State, ev: &InputEvent) -> ScreenAction {
     if ev.pressed {
         match ev.action {
-            VirtualAction::p1_start | VirtualAction::p1_back => return ScreenAction::Navigate(Screen::Menu),
+            VirtualAction::p1_start | VirtualAction::p1_back => {
+                return ScreenAction::Navigate(Screen::Menu);
+            }
             _ => {}
         }
     }
@@ -100,7 +106,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
 /* --------------------------- drawing helpers --------------------------- */
 
 pub fn build_squish_bar(progress: f32) -> Actor {
-    let w  = screen_width();
+    let w = screen_width();
     let cy = screen_center_y();
 
     let t = progress.clamp(0.0, 1.0);
@@ -118,7 +124,7 @@ pub fn build_squish_bar(progress: f32) -> Actor {
 
 /* Backdrop that starts its animation immediately WHEN ADDED (no initial sleep). */
 fn build_arrows_backdrop_now() -> Actor {
-    let w  = screen_width();
+    let w = screen_width();
     let cy = screen_center_y();
 
     act!(quad:
@@ -199,7 +205,8 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         let x = (i as f32 - 4.0) * ARROW_SPACING;
 
         // absolute start for arrow i (global time)
-        let arrow_start_time = PRE_ROLL + unsquish_end + ARROW_BASE_DELAY + ARROW_STEP_DELAY * (i as f32);
+        let arrow_start_time =
+            PRE_ROLL + unsquish_end + ARROW_BASE_DELAY + ARROW_STEP_DELAY * (i as f32);
         // convert to remaining time from *current* elapsed so late frames still work perfectly
         let delay_from_now = remaining(arrow_start_time, state.elapsed);
 

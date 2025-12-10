@@ -1,10 +1,10 @@
-mod core;
-mod ui;
-mod screens;
 mod app;
-mod config;
-mod game;
 mod assets;
+mod config;
+mod core;
+mod game;
+mod screens;
+mod ui;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logger as early as possible so startup subsystems (including audio)

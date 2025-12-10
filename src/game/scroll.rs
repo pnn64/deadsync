@@ -97,7 +97,12 @@ impl FromStr for ScrollSpeedSetting {
 impl ScrollSpeedSetting {
     pub const ARROW_SPACING: f32 = 64.0;
 
-    pub fn effective_bpm(self, current_chart_bpm: f32, reference_bpm: f32, _music_rate: f32) -> f32 {
+    pub fn effective_bpm(
+        self,
+        current_chart_bpm: f32,
+        reference_bpm: f32,
+        _music_rate: f32,
+    ) -> f32 {
         // Effective BPM is expressed per chart-second. Music rate scales beats per real second,
         // not this chart-time value. Keep X/M independent of rate here.
         match self {
@@ -121,14 +126,27 @@ impl ScrollSpeedSetting {
         match self {
             ScrollSpeedSetting::XMod(multiplier) => multiplier,
             ScrollSpeedSetting::MMod(target_bpm) => {
-                let r = if music_rate.is_finite() && music_rate > 0.0 { music_rate } else { 1.0 };
-                if reference_bpm > 0.0 { (target_bpm / reference_bpm) / r } else { 1.0 / r }
+                let r = if music_rate.is_finite() && music_rate > 0.0 {
+                    music_rate
+                } else {
+                    1.0
+                };
+                if reference_bpm > 0.0 {
+                    (target_bpm / reference_bpm) / r
+                } else {
+                    1.0 / r
+                }
             }
             _ => 1.0,
         }
     }
 
-    pub fn pixels_per_second(self, current_chart_bpm: f32, reference_bpm: f32, music_rate: f32) -> f32 {
+    pub fn pixels_per_second(
+        self,
+        current_chart_bpm: f32,
+        reference_bpm: f32,
+        music_rate: f32,
+    ) -> f32 {
         let bpm = self.effective_bpm(current_chart_bpm, reference_bpm, music_rate);
         if !bpm.is_finite() || bpm <= 0.0 {
             0.0

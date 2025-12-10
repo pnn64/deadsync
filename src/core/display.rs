@@ -2,10 +2,7 @@ use crate::config::FullscreenType;
 use log::{info, warn};
 use std::collections::HashMap;
 use winit::{
-    dpi::PhysicalPosition,
-    event_loop::ActiveEventLoop,
-    monitor::MonitorHandle,
-    window::Fullscreen,
+    dpi::PhysicalPosition, event_loop::ActiveEventLoop, monitor::MonitorHandle, window::Fullscreen,
 };
 
 #[derive(Clone, Debug)]
@@ -31,7 +28,11 @@ struct DisplaySnapshot {
     friendly_name: String,
 }
 
-#[cfg(not(any(target_os = "windows", target_os = "macos", all(unix, not(target_os = "macos")))))]
+#[cfg(not(any(
+    target_os = "windows",
+    target_os = "macos",
+    all(unix, not(target_os = "macos"))
+)))]
 mod platform {
     use super::DisplaySnapshot;
 
@@ -144,8 +145,7 @@ pub fn monitor_specs(monitors: &[MonitorHandle]) -> Vec<MonitorSpec> {
 /// Deduplicated list of resolutions supported by the provided monitor spec.
 pub fn supported_resolutions(spec: Option<&MonitorSpec>) -> Vec<(u32, u32)> {
     if let Some(spec) = spec {
-        let mut modes: Vec<(u32, u32)> =
-            spec.modes.iter().map(|m| (m.width, m.height)).collect();
+        let mut modes: Vec<(u32, u32)> = spec.modes.iter().map(|m| (m.width, m.height)).collect();
         modes.sort();
         modes.dedup();
         modes
@@ -155,11 +155,7 @@ pub fn supported_resolutions(spec: Option<&MonitorSpec>) -> Vec<(u32, u32)> {
 }
 
 /// Deduplicated list of refresh rates (millihertz) for a given resolution.
-pub fn supported_refresh_rates(
-    spec: Option<&MonitorSpec>,
-    width: u32,
-    height: u32,
-) -> Vec<u32> {
+pub fn supported_refresh_rates(spec: Option<&MonitorSpec>, width: u32, height: u32) -> Vec<u32> {
     if let Some(spec) = spec {
         let mut rates: Vec<u32> = spec
             .modes
@@ -271,18 +267,19 @@ pub fn fullscreen_mode(
 mod platform {
     use super::DisplaySnapshot;
     use std::mem;
-    use windows::core::{BOOL, PCWSTR};
     use windows::Win32::Devices::Display::{
-        DisplayConfigGetDeviceInfo, GetDisplayConfigBufferSizes, QueryDisplayConfig,
         DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME, DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME,
         DISPLAYCONFIG_DEVICE_INFO_HEADER, DISPLAYCONFIG_MODE_INFO, DISPLAYCONFIG_PATH_INFO,
-        DISPLAYCONFIG_SOURCE_DEVICE_NAME, DISPLAYCONFIG_TARGET_DEVICE_NAME, QDC_ONLY_ACTIVE_PATHS,
+        DISPLAYCONFIG_SOURCE_DEVICE_NAME, DISPLAYCONFIG_TARGET_DEVICE_NAME,
+        DisplayConfigGetDeviceInfo, GetDisplayConfigBufferSizes, QDC_ONLY_ACTIVE_PATHS,
+        QueryDisplayConfig,
     };
     use windows::Win32::Foundation::{LPARAM, RECT};
     use windows::Win32::Graphics::Gdi::{
         EnumDisplayDevicesW, EnumDisplayMonitors, EnumDisplaySettingsW, GetMonitorInfoW, HDC,
         HMONITOR, MONITORINFO, MONITORINFOEXW,
     };
+    use windows::core::{BOOL, PCWSTR};
 
     unsafe extern "system" fn monitor_enum_proc(
         h_monitor: HMONITOR,
@@ -392,11 +389,7 @@ mod platform {
                 return None;
             }
             let name = utf16_to_string(&display_device.DeviceString);
-            if name.is_empty() {
-                None
-            } else {
-                Some(name)
-            }
+            if name.is_empty() { None } else { Some(name) }
         }
     }
 
@@ -483,8 +476,12 @@ mod platform {
         let screens = NSScreen::screens(unsafe { MainThreadMarker::new_unchecked() });
         for screen in screens {
             let device_description = screen.deviceDescription();
-            let screen_number = device_description.objectForKey(&NSString::from_str("NSScreenNumber"))?;
-            let screen_id = screen_number.downcast::<NSNumber>().ok()?.unsignedIntValue();
+            let screen_number =
+                device_description.objectForKey(&NSString::from_str("NSScreenNumber"))?;
+            let screen_id = screen_number
+                .downcast::<NSNumber>()
+                .ok()?
+                .unsignedIntValue();
             if screen_id == display_id {
                 unsafe { return Some(screen.localizedName().to_string()) };
             }
@@ -520,8 +517,7 @@ mod platform {
         let mut ids: Vec<CGDirectDisplayID> = vec![0; max_displays as usize];
         let mut count: u32 = 0;
 
-        let err =
-            unsafe { CGGetActiveDisplayList(max_displays, ids.as_mut_ptr(), &mut count) };
+        let err = unsafe { CGGetActiveDisplayList(max_displays, ids.as_mut_ptr(), &mut count) };
         if err != CGError::Success {
             return Err(format!("CGGetActiveDisplayList failed: {:?}", err));
         }
@@ -545,7 +541,8 @@ mod platform {
         let max_displays: u32 = 16;
         let mut ids: Vec<CGDirectDisplayID> = vec![0; max_displays as usize];
         let mut count: u32 = 0;
-        let err = unsafe { CGGetDisplaysWithPoint(point, max_displays, ids.as_mut_ptr(), &mut count) };
+        let err =
+            unsafe { CGGetDisplaysWithPoint(point, max_displays, ids.as_mut_ptr(), &mut count) };
         if err != CGError::Success {
             return Err(format!("CGGetDisplaysWithPoint failed: {:?}", err));
         }
@@ -563,7 +560,12 @@ mod platform {
     fn is_wayland() -> bool {
         var_os("WAYLAND_DISPLAY")
             .or(var_os("XDG_SESSION_TYPE"))
-            .is_some_and(|v| v.to_str().unwrap_or_default().to_lowercase().contains("wayland"))
+            .is_some_and(|v| {
+                v.to_str()
+                    .unwrap_or_default()
+                    .to_lowercase()
+                    .contains("wayland")
+            })
     }
 
     pub fn displays() -> Result<Vec<DisplaySnapshot>, String> {
@@ -586,7 +588,9 @@ mod platform {
 
         fn get_name(conn: &Connection, atom: Atom) -> Result<String, String> {
             let cookie = conn.send_request(&GetAtomName { atom });
-            let reply = conn.wait_for_reply(cookie).map_err(|e| format!("{:?}", e))?;
+            let reply = conn
+                .wait_for_reply(cookie)
+                .map_err(|e| format!("{:?}", e))?;
             Ok(reply.name().to_string())
         }
 
@@ -600,7 +604,9 @@ mod platform {
                 long_offset: 0,
                 long_length: 60,
             });
-            let reply = conn.wait_for_reply(cookie).map_err(|e| format!("{:?}", e))?;
+            let reply = conn
+                .wait_for_reply(cookie)
+                .map_err(|e| format!("{:?}", e))?;
             let resource_manager = str::from_utf8(reply.value()).map_err(|e| e.to_string())?;
             let dpi_str = resource_manager
                 .split('\n')
@@ -611,7 +617,10 @@ mod platform {
             Ok(dpi / 96.0)
         }
 
-        fn get_rotation(conn: &Connection, output: &Output) -> Result<(i32, i32, u32, u32), String> {
+        fn get_rotation(
+            conn: &Connection,
+            output: &Output,
+        ) -> Result<(i32, i32, u32, u32), String> {
             let output_info = conn
                 .wait_for_reply(conn.send_request(&GetOutputInfo {
                     output: *output,
@@ -626,7 +635,12 @@ mod platform {
                 }))
                 .map_err(|e| format!("{:?}", e))?;
 
-            Ok((crtc_info.x(), crtc_info.y(), crtc_info.width(), crtc_info.height()))
+            Ok((
+                crtc_info.x(),
+                crtc_info.y(),
+                crtc_info.width(),
+                crtc_info.height(),
+            ))
         }
 
         pub fn displays() -> Result<Vec<DisplaySnapshot>, String> {
@@ -648,7 +662,11 @@ mod platform {
 
             let mut out = Vec::new();
             for monitor in monitors_reply.monitors() {
-                let output = monitor.outputs().first().cloned().ok_or_else(|| "No output".to_string())?;
+                let output = monitor
+                    .outputs()
+                    .first()
+                    .cloned()
+                    .ok_or_else(|| "No output".to_string())?;
                 let name = get_name(&conn, monitor.name())?;
                 let (x, y, w, h) = get_rotation(&conn, &output)?;
                 out.push(DisplaySnapshot {
@@ -743,7 +761,8 @@ mod platform {
 
         pub fn displays() -> Result<Vec<DisplaySnapshot>, String> {
             let conn = Connection::connect_to_env().map_err(|e| format!("{:?}", e))?;
-            let (globals, mut event_queue) = registry_queue_init(&conn).map_err(|e| format!("{:?}", e))?;
+            let (globals, mut event_queue) =
+                registry_queue_init(&conn).map_err(|e| format!("{:?}", e))?;
             let qh = event_queue.handle();
 
             let registry_state = RegistryState::new(&globals);
@@ -754,7 +773,9 @@ mod platform {
                 output_state: output_delegate,
             };
 
-            event_queue.roundtrip(&mut list_outputs).map_err(|e| format!("{:?}", e))?;
+            event_queue
+                .roundtrip(&mut list_outputs)
+                .map_err(|e| format!("{:?}", e))?;
 
             list_outputs
                 .output_state

@@ -29,7 +29,7 @@ pub enum JudgeGrade {
 #[derive(Clone, Debug)]
 pub struct Judgment {
     pub time_error_ms: f32,
-    pub grade: JudgeGrade,          // The grade of this specific note
+    pub grade: JudgeGrade,            // The grade of this specific note
     pub window: Option<TimingWindow>, // Optional detailed window (W0-W5) for FA+/EX-style features
 }
 
@@ -205,7 +205,7 @@ pub fn calculate_ex_score_from_notes(
         let len = notes.len();
         while idx < len {
             let row_index = notes[idx].row_index;
-            
+
             // Determine if this row happened before failure.
             // Assuming notes are ordered, the time of the first note in the row is sufficient.
             let row_time = note_times.get(idx).copied().unwrap_or(0.0);
@@ -219,10 +219,10 @@ pub fn calculate_ex_score_from_notes(
             while idx < len && notes[idx].row_index == row_index {
                 let note = &notes[idx];
                 // Only include this note in the window count if the row is playable (pre-failure)
-                if row_is_playable 
-                    && !note.is_fake 
-                    && note.can_be_judged 
-                    && !matches!(note.note_type, NoteType::Mine) 
+                if row_is_playable
+                    && !note.is_fake
+                    && note.can_be_judged
+                    && !matches!(note.note_type, NoteType::Mine)
                 {
                     if let Some(j) = note.result.as_ref() {
                         row_judgments.push(j);
@@ -237,12 +237,10 @@ pub fn calculate_ex_score_from_notes(
 
             if let Some(j) = aggregate_row_final_judgment(row_judgments.iter().copied()) {
                 match j.grade {
-                    JudgeGrade::Fantastic => {
-                        match j.window {
-                            Some(TimingWindow::W0) => windows.w0 = windows.w0.saturating_add(1),
-                            _ => windows.w1 = windows.w1.saturating_add(1),
-                        }
-                    }
+                    JudgeGrade::Fantastic => match j.window {
+                        Some(TimingWindow::W0) => windows.w0 = windows.w0.saturating_add(1),
+                        _ => windows.w1 = windows.w1.saturating_add(1),
+                    },
                     JudgeGrade::Excellent => windows.w2 = windows.w2.saturating_add(1),
                     JudgeGrade::Great => windows.w3 = windows.w3.saturating_add(1),
                     JudgeGrade::Decent => windows.w4 = windows.w4.saturating_add(1),
@@ -271,7 +269,7 @@ pub fn calculate_ex_score_from_notes(
                 // For mines, check the note time
                 note_times.get(i).copied().unwrap_or(0.0)
             };
-            
+
             if relevant_time > ft {
                 continue;
             }
@@ -298,7 +296,8 @@ pub fn calculate_ex_score_from_notes(
     let total_holds_f = holds_total as f64;
     let total_rolls_f = rolls_total as f64;
 
-    let total_possible = total_steps_f * EX_WEIGHT_W0 + (total_holds_f + total_rolls_f) * EX_WEIGHT_HELD;
+    let total_possible =
+        total_steps_f * EX_WEIGHT_W0 + (total_holds_f + total_rolls_f) * EX_WEIGHT_HELD;
     if total_possible <= 0.0 {
         return 0.0;
     }

@@ -3,7 +3,9 @@ use crate::core::space::ortho_for_window;
 use cgmath::Matrix4;
 use image::RgbaImage;
 use log::{info, warn};
-use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle};
+use raw_window_handle::{
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
+};
 use std::{borrow::Cow, collections::HashMap, error::Error, mem, sync::Arc};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
@@ -121,25 +123,27 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
     }))
     .map_err(|e| format!("No suitable Vulkan adapter found: {e}"))?;
 
-    let (device, queue) = pollster::block_on(adapter.request_device(
-        &wgpu::DeviceDescriptor {
-            label: Some("deadsync vk device"),
-            required_features: wgpu::Features::PUSH_CONSTANTS,
-            required_limits: wgpu::Limits {
-                max_push_constant_size: mem::size_of::<[[f32; 4]; 4]>() as u32,
-                ..wgpu::Limits::default()
-            },
-            memory_hints: wgpu::MemoryHints::Performance,
-            trace: Default::default(),
-            experimental_features: Default::default(),
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        label: Some("deadsync vk device"),
+        required_features: wgpu::Features::PUSH_CONSTANTS,
+        required_limits: wgpu::Limits {
+            max_push_constant_size: mem::size_of::<[[f32; 4]; 4]>() as u32,
+            ..wgpu::Limits::default()
         },
-    ))?;
+        memory_hints: wgpu::MemoryHints::Performance,
+        trace: Default::default(),
+        experimental_features: Default::default(),
+    }))?;
 
     let size = window.inner_size();
     let caps = surface.get_capabilities(&adapter);
     let format = pick_format(&caps);
     let present_mode = pick_present_mode(&caps.present_modes, vsync_enabled);
-    let alpha_mode = caps.alpha_modes.first().copied().unwrap_or(wgpu::CompositeAlphaMode::Opaque);
+    let alpha_mode = caps
+        .alpha_modes
+        .first()
+        .copied()
+        .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
 
     let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -191,10 +195,22 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
     let (shader, pipeline_layout, pipelines) = build_pipeline_set(&device, &bind_layout, format);
 
     let vertex_data = [
-        Vertex { pos: [-0.5, -0.5], uv: [0.0, 1.0] },
-        Vertex { pos: [ 0.5, -0.5], uv: [1.0, 1.0] },
-        Vertex { pos: [ 0.5,  0.5], uv: [1.0, 0.0] },
-        Vertex { pos: [-0.5,  0.5], uv: [0.0, 0.0] },
+        Vertex {
+            pos: [-0.5, -0.5],
+            uv: [0.0, 1.0],
+        },
+        Vertex {
+            pos: [0.5, -0.5],
+            uv: [1.0, 1.0],
+        },
+        Vertex {
+            pos: [0.5, 0.5],
+            uv: [1.0, 0.0],
+        },
+        Vertex {
+            pos: [-0.5, 0.5],
+            uv: [0.0, 0.0],
+        },
     ];
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("vk quad vertices"),
@@ -298,7 +314,12 @@ pub fn create_texture(state: &mut State, image: &RgbaImage) -> Result<Texture, B
     let id = state.next_texture_id;
     state.next_texture_id = state.next_texture_id.wrapping_add(1);
 
-    Ok(Texture { id, _texture: texture, _view: view, bind_group: Arc::new(bind_group) })
+    Ok(Texture {
+        id,
+        _texture: texture,
+        _view: view,
+        bind_group: Arc::new(bind_group),
+    })
 }
 
 pub fn draw<'a>(
@@ -337,9 +358,13 @@ pub fn draw<'a>(
 
         for obj in &render_list.objects {
             let (texture_id, tint, uv_scale, uv_offset, edge_fade) = match &obj.object_type {
-                ObjectType::Sprite { texture_id, tint, uv_scale, uv_offset, edge_fade } => {
-                    (texture_id, tint, uv_scale, uv_offset, edge_fade)
-                }
+                ObjectType::Sprite {
+                    texture_id,
+                    tint,
+                    uv_scale,
+                    uv_offset,
+                    edge_fade,
+                } => (texture_id, tint, uv_scale, uv_offset, edge_fade),
             };
 
             let tex = match textures.get(texture_id.as_ref()) {
@@ -379,7 +404,11 @@ pub fn draw<'a>(
     let instance_len = state.scratch_instances.len();
     ensure_instance_capacity(state, instance_len);
     if instance_len > 0 {
-        state.queue.write_buffer(&state.instance_buffer, 0, cast_slice(state.scratch_instances.as_slice()));
+        state.queue.write_buffer(
+            &state.instance_buffer,
+            0,
+            cast_slice(state.scratch_instances.as_slice()),
+        );
     }
     let proj_array: [[f32; 4]; 4] = state.projection.into();
 
@@ -393,10 +422,14 @@ pub fn draw<'a>(
         Err(wgpu::SurfaceError::Timeout) => return Ok(0),
         Err(wgpu::SurfaceError::Other) => return Ok(0),
     };
-    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let mut encoder = state.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("vk encoder"),
-    });
+    let view = frame
+        .texture
+        .create_view(&wgpu::TextureViewDescriptor::default());
+    let mut encoder = state
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("vk encoder"),
+        });
 
     {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -484,16 +517,17 @@ fn reconfigure_surface(state: &mut State) {
     let format_changed = new_format != state.config.format;
     state.config.format = new_format;
     state.config.present_mode = pick_present_mode(&caps.present_modes, state.vsync_enabled);
-    state.config.alpha_mode = caps.alpha_modes.first().copied().unwrap_or(wgpu::CompositeAlphaMode::Opaque);
+    state.config.alpha_mode = caps
+        .alpha_modes
+        .first()
+        .copied()
+        .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
     state.config.width = state.window_size.0;
     state.config.height = state.window_size.1;
     state.surface.configure(&state.device, &state.config);
     if format_changed {
-        let (shader, pipeline_layout, pipelines) = build_pipeline_set(
-            &state.device,
-            &state.bind_layout,
-            state.config.format,
-        );
+        let (shader, pipeline_layout, pipelines) =
+            build_pipeline_set(&state.device, &state.bind_layout, state.config.format);
         state.shader = shader;
         state.pipeline_layout = pipeline_layout;
         state.pipelines = pipelines;
@@ -511,9 +545,17 @@ fn pick_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
 
 fn pick_present_mode(modes: &[wgpu::PresentMode], vsync: bool) -> wgpu::PresentMode {
     let preferred = if vsync {
-        [wgpu::PresentMode::AutoVsync, wgpu::PresentMode::Fifo, wgpu::PresentMode::FifoRelaxed]
+        [
+            wgpu::PresentMode::AutoVsync,
+            wgpu::PresentMode::Fifo,
+            wgpu::PresentMode::FifoRelaxed,
+        ]
     } else {
-        [wgpu::PresentMode::AutoNoVsync, wgpu::PresentMode::Immediate, wgpu::PresentMode::Mailbox]
+        [
+            wgpu::PresentMode::AutoNoVsync,
+            wgpu::PresentMode::Immediate,
+            wgpu::PresentMode::Mailbox,
+        ]
     };
 
     preferred
@@ -524,23 +566,59 @@ fn pick_present_mode(modes: &[wgpu::PresentMode], vsync: bool) -> wgpu::PresentM
 }
 
 fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
-    let comp = |src, dst, op| wgpu::BlendComponent { src_factor: src, dst_factor: dst, operation: op };
+    let comp = |src, dst, op| wgpu::BlendComponent {
+        src_factor: src,
+        dst_factor: dst,
+        operation: op,
+    };
     match mode {
         BlendMode::Alpha => Some(wgpu::BlendState {
-            color: comp(wgpu::BlendFactor::SrcAlpha, wgpu::BlendFactor::OneMinusSrcAlpha, wgpu::BlendOperation::Add),
-            alpha: comp(wgpu::BlendFactor::SrcAlpha, wgpu::BlendFactor::OneMinusSrcAlpha, wgpu::BlendOperation::Add),
+            color: comp(
+                wgpu::BlendFactor::SrcAlpha,
+                wgpu::BlendFactor::OneMinusSrcAlpha,
+                wgpu::BlendOperation::Add,
+            ),
+            alpha: comp(
+                wgpu::BlendFactor::SrcAlpha,
+                wgpu::BlendFactor::OneMinusSrcAlpha,
+                wgpu::BlendOperation::Add,
+            ),
         }),
         BlendMode::Add => Some(wgpu::BlendState {
-            color: comp(wgpu::BlendFactor::SrcAlpha, wgpu::BlendFactor::One, wgpu::BlendOperation::Add),
-            alpha: comp(wgpu::BlendFactor::SrcAlpha, wgpu::BlendFactor::One, wgpu::BlendOperation::Add),
+            color: comp(
+                wgpu::BlendFactor::SrcAlpha,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::Add,
+            ),
+            alpha: comp(
+                wgpu::BlendFactor::SrcAlpha,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::Add,
+            ),
         }),
         BlendMode::Multiply => Some(wgpu::BlendState {
-            color: comp(wgpu::BlendFactor::Dst, wgpu::BlendFactor::Zero, wgpu::BlendOperation::Add),
-            alpha: comp(wgpu::BlendFactor::DstAlpha, wgpu::BlendFactor::Zero, wgpu::BlendOperation::Add),
+            color: comp(
+                wgpu::BlendFactor::Dst,
+                wgpu::BlendFactor::Zero,
+                wgpu::BlendOperation::Add,
+            ),
+            alpha: comp(
+                wgpu::BlendFactor::DstAlpha,
+                wgpu::BlendFactor::Zero,
+                wgpu::BlendOperation::Add,
+            ),
         }),
         BlendMode::Subtract => Some(wgpu::BlendState {
-            color: comp(wgpu::BlendFactor::One, wgpu::BlendFactor::One, wgpu::BlendOperation::ReverseSubtract),
-            alpha: comp(wgpu::BlendFactor::One, wgpu::BlendFactor::One, wgpu::BlendOperation::ReverseSubtract),
+            color: comp(
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::ReverseSubtract,
+            ),
+            alpha: comp(
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::ReverseSubtract,
+            ),
         }),
     }
 }
@@ -567,8 +645,20 @@ fn build_pipeline_set(
     let pipelines = PipelineSet {
         alpha: build_pipeline(device, &pipeline_layout, format, BlendMode::Alpha, &shader),
         add: build_pipeline(device, &pipeline_layout, format, BlendMode::Add, &shader),
-        multiply: build_pipeline(device, &pipeline_layout, format, BlendMode::Multiply, &shader),
-        subtract: build_pipeline(device, &pipeline_layout, format, BlendMode::Subtract, &shader),
+        multiply: build_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Multiply,
+            &shader,
+        ),
+        subtract: build_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Subtract,
+            &shader,
+        ),
     };
 
     (shader, pipeline_layout, pipelines)

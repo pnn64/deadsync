@@ -1,17 +1,17 @@
+use crate::assets::AssetManager;
+use crate::config::{self, DisplayMode};
 use crate::core::display;
-use crate::core::gfx::{self as renderer, create_backend, BackendType, RenderList};
+use crate::core::gfx::{self as renderer, BackendType, RenderList, create_backend};
 use crate::core::input::{self, InputEvent};
 use crate::core::space::{self as space, Metrics};
-use crate::game::{profile, scores, scroll::ScrollSpeedSetting};
-use crate::assets::AssetManager;
-use crate::ui::color;
-use crate::screens::{
-    evaluation, gameplay, init, input as input_screen, mappings, menu, options, player_options,
-    sandbox, select_color, select_music, Screen as CurrentScreen, ScreenAction,
-};
-use crate::game::parsing::simfile as song_loading;
 use crate::game::chart::ChartData;
-use crate::config::{self, DisplayMode};
+use crate::game::parsing::simfile as song_loading;
+use crate::game::{profile, scores, scroll::ScrollSpeedSetting};
+use crate::screens::{
+    Screen as CurrentScreen, ScreenAction, evaluation, gameplay, init, input as input_screen,
+    mappings, menu, options, player_options, sandbox, select_color, select_music,
+};
+use crate::ui::color;
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
@@ -21,9 +21,9 @@ use winit::{
     window::Window,
 };
 
-use log::{error, warn, info};
-use std::{error::Error, path::PathBuf, sync::Arc, time::Instant};
+use log::{error, info, warn};
 use std::cmp;
+use std::{error::Error, path::PathBuf, sync::Arc, time::Instant};
 
 use crate::ui::actors::Actor;
 /* -------------------- gamepad -------------------- */
@@ -43,14 +43,21 @@ enum Command {
     SetBanner(Option<PathBuf>),
     SetDensityGraph(Option<ChartData>),
     FetchOnlineGrade(String),
-    PlayMusic { path: PathBuf, looped: bool, volume: f32 },
+    PlayMusic {
+        path: PathBuf,
+        looped: bool,
+        volume: f32,
+    },
     StopMusic,
     SetEvaluationGraphData(Option<(String, rssp::graph::GraphImageData)>),
     SetDynamicBackground(Option<PathBuf>),
     UpdateScrollSpeed(ScrollSpeedSetting),
     UpdateSessionMusicRate(f32),
     UpdatePreferredDifficulty(usize),
-    UpdateLastPlayed { music_path: Option<PathBuf>, difficulty_index: usize },
+    UpdateLastPlayed {
+        music_path: Option<PathBuf>,
+        difficulty_index: usize,
+    },
 }
 
 /* -------------------- transition timing constants -------------------- */
@@ -62,10 +69,23 @@ const MENU_ACTORS_FADE_DURATION: f32 = 0.65;
 #[derive(Debug)]
 enum TransitionState {
     Idle,
-    FadingOut { elapsed: f32, duration: f32, target: CurrentScreen },
-    FadingIn  { elapsed: f32, duration: f32 },
-    ActorsFadeOut { elapsed: f32, duration: f32, target: CurrentScreen },
-    ActorsFadeIn { elapsed: f32 },
+    FadingOut {
+        elapsed: f32,
+        duration: f32,
+        target: CurrentScreen,
+    },
+    FadingIn {
+        elapsed: f32,
+        duration: f32,
+    },
+    ActorsFadeOut {
+        elapsed: f32,
+        duration: f32,
+        target: CurrentScreen,
+    },
+    ActorsFadeIn {
+        elapsed: f32,
+    },
 }
 
 /// Shell-level state: timing, window, renderer flags.
@@ -215,7 +235,12 @@ impl ScreensState {
         }
     }
 
-    fn step_idle(&mut self, delta_time: f32, now: Instant, session: &SessionState) -> Option<ScreenAction> {
+    fn step_idle(
+        &mut self,
+        delta_time: f32,
+        now: Instant,
+        session: &SessionState,
+    ) -> Option<ScreenAction> {
         match self.current_screen {
             CurrentScreen::Gameplay => {
                 if let Some(gs) = &mut self.gameplay_state {
@@ -224,12 +249,8 @@ impl ScreensState {
                     None
                 }
             }
-            CurrentScreen::Init => {
-                Some(init::update(&mut self.init_state, delta_time))
-            }
-            CurrentScreen::Options => {
-                options::update(&mut self.options_state, delta_time)
-            }
+            CurrentScreen::Init => Some(init::update(&mut self.init_state, delta_time)),
+            CurrentScreen::Options => options::update(&mut self.options_state, delta_time),
             CurrentScreen::Mappings => {
                 mappings::update(&mut self.mappings_state, delta_time);
                 None
@@ -261,13 +282,15 @@ impl ScreensState {
             }
             CurrentScreen::SelectMusic => {
                 if let Some(start) = session.session_start_time {
-                    self.select_music_state.session_elapsed = now.duration_since(start).as_secs_f32();
+                    self.select_music_state.session_elapsed =
+                        now.duration_since(start).as_secs_f32();
                 }
-                Some(select_music::update(&mut self.select_music_state, delta_time))
+                Some(select_music::update(
+                    &mut self.select_music_state,
+                    delta_time,
+                ))
             }
-            CurrentScreen::Menu => {
-                None
-            }
+            CurrentScreen::Menu => None,
         }
     }
 }
@@ -292,7 +315,11 @@ impl AppState {
         let session = SessionState::new(preferred);
         let screens = ScreensState::new(color_index, preferred);
 
-        AppState { shell, screens, session }
+        AppState {
+            shell,
+            screens,
+            session,
+        }
     }
 }
 
@@ -304,7 +331,6 @@ pub struct App {
     state: AppState,
     software_renderer_threads: u8,
 }
-
 
 impl App {
     fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
@@ -332,7 +358,11 @@ impl App {
         }
     }
 
-    fn handle_action(&mut self, action: ScreenAction, event_loop: &ActiveEventLoop) -> Result<(), Box<dyn Error>> {
+    fn handle_action(
+        &mut self,
+        action: ScreenAction,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<(), Box<dyn Error>> {
         let commands = match action {
             ScreenAction::Navigate(screen) => {
                 self.handle_navigation_action(screen);
@@ -340,12 +370,19 @@ impl App {
             }
             ScreenAction::Exit => self.handle_exit_action(),
             ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
-            ScreenAction::RequestDensityGraph(chart_opt) => vec![Command::SetDensityGraph(chart_opt)],
+            ScreenAction::RequestDensityGraph(chart_opt) => {
+                vec![Command::SetDensityGraph(chart_opt)]
+            }
             ScreenAction::FetchOnlineGrade(hash) => vec![Command::FetchOnlineGrade(hash)],
-            ScreenAction::ChangeGraphics { renderer, display_mode, resolution, monitor } => {
+            ScreenAction::ChangeGraphics {
+                renderer,
+                display_mode,
+                resolution,
+                monitor,
+            } => {
                 // Ensure options menu reflects current hardware state before processing changes
                 self.update_options_monitor_specs(event_loop);
-                
+
                 let mut pending_resolution = None;
                 if let Some((w, h)) = resolution {
                     self.state.shell.display_width = w;
@@ -354,8 +391,10 @@ impl App {
                     options::sync_display_resolution(&mut self.state.screens.options_state, w, h);
                     pending_resolution = Some((w, h));
                 }
-                let (_, monitor_count, chosen_monitor) =
-                    display::resolve_monitor(event_loop, monitor.unwrap_or(self.state.shell.display_monitor));
+                let (_, monitor_count, chosen_monitor) = display::resolve_monitor(
+                    event_loop,
+                    monitor.unwrap_or(self.state.shell.display_monitor),
+                );
 
                 match (renderer, display_mode) {
                     (Some(new_backend), Some(mode)) => {
@@ -412,13 +451,23 @@ impl App {
                     (None, None) => {
                         if monitor.is_some() {
                             // Move the existing window/fullscreen session to the chosen monitor.
-                            self.apply_display_mode(self.state.shell.display_mode, Some(chosen_monitor), event_loop)?;
+                            self.apply_display_mode(
+                                self.state.shell.display_mode,
+                                Some(chosen_monitor),
+                                event_loop,
+                            )?;
                         }
                         if let Some((w, h)) = pending_resolution {
                             self.apply_resolution(w, h, event_loop)?;
                         }
                     }
                 }
+                Vec::new()
+            }
+            ScreenAction::UpdateShowOverlay(show) => {
+                self.state.shell.show_overlay = show;
+                config::update_show_stats(show);
+                options::sync_show_stats(&mut self.state.screens.options_state, show);
                 Vec::new()
             }
             ScreenAction::None => Vec::new(),
@@ -457,30 +506,39 @@ impl App {
         if let Some(gs) = &self.state.screens.gameplay_state
             && (gs.global_offset_seconds - gs.initial_global_offset_seconds).abs() > f32::EPSILON
         {
-                    config::update_global_offset(gs.global_offset_seconds);
+            config::update_global_offset(gs.global_offset_seconds);
         }
     }
 
     fn is_actor_only_fade(&self, from: CurrentScreen, to: CurrentScreen) -> bool {
-        (from == CurrentScreen::Menu && (to == CurrentScreen::Options || to == CurrentScreen::SelectColor))
-            || ((from == CurrentScreen::Options || from == CurrentScreen::SelectColor) && to == CurrentScreen::Menu)
+        (from == CurrentScreen::Menu
+            && (to == CurrentScreen::Options || to == CurrentScreen::SelectColor))
+            || ((from == CurrentScreen::Options || from == CurrentScreen::SelectColor)
+                && to == CurrentScreen::Menu)
             || (from == CurrentScreen::Options && to == CurrentScreen::Mappings)
             || (from == CurrentScreen::Mappings && to == CurrentScreen::Options)
     }
 
     fn start_actor_fade(&mut self, from: CurrentScreen, target: CurrentScreen) {
         info!("Starting actor-only fade out to screen: {:?}", target);
-        let duration = if from == CurrentScreen::Menu && (target == CurrentScreen::SelectColor || target == CurrentScreen::Options) {
+        let duration = if from == CurrentScreen::Menu
+            && (target == CurrentScreen::SelectColor || target == CurrentScreen::Options)
+        {
             MENU_TO_SELECT_COLOR_OUT_DURATION
         } else {
             FADE_OUT_DURATION
         };
-        self.state.shell.transition = TransitionState::ActorsFadeOut { elapsed: 0.0, duration, target };
+        self.state.shell.transition = TransitionState::ActorsFadeOut {
+            elapsed: 0.0,
+            duration,
+            target,
+        };
     }
 
     fn start_global_fade(&mut self, target: CurrentScreen) {
         info!("Starting global fade out to screen: {:?}", target);
-        let (_, out_duration) = self.get_out_transition_for_screen(self.state.screens.current_screen);
+        let (_, out_duration) =
+            self.get_out_transition_for_screen(self.state.screens.current_screen);
         self.state.shell.transition = TransitionState::FadingOut {
             elapsed: 0.0,
             duration: out_duration,
@@ -493,7 +551,8 @@ impl App {
             && matches!(self.state.shell.transition, TransitionState::Idle)
         {
             info!("Exit requested from Menu; playing menu out-transition before shutdown.");
-            let (_, out_duration) = self.get_out_transition_for_screen(self.state.screens.current_screen);
+            let (_, out_duration) =
+                self.get_out_transition_for_screen(self.state.screens.current_screen);
             self.state.shell.transition = TransitionState::FadingOut {
                 elapsed: 0.0,
                 duration: out_duration,
@@ -507,38 +566,79 @@ impl App {
         }
     }
 
-    fn route_input_event(&mut self, event_loop: &ActiveEventLoop, ev: InputEvent) -> Result<(), Box<dyn Error>> {
+    fn route_input_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        ev: InputEvent,
+    ) -> Result<(), Box<dyn Error>> {
         let action = match self.state.screens.current_screen {
-            CurrentScreen::Menu => crate::screens::menu::handle_input(&mut self.state.screens.menu_state, &ev),
-            CurrentScreen::SelectColor => crate::screens::select_color::handle_input(&mut self.state.screens.select_color_state, &ev),
-            CurrentScreen::Options => crate::screens::options::handle_input(&mut self.state.screens.options_state, &ev),
-            CurrentScreen::Mappings => crate::screens::mappings::handle_input(&mut self.state.screens.mappings_state, &ev),
-            CurrentScreen::Input => crate::screens::input::handle_input(&mut self.state.screens.input_state, &ev),
-            CurrentScreen::SelectMusic => crate::screens::select_music::handle_input(&mut self.state.screens.select_music_state, &ev),
-            CurrentScreen::PlayerOptions => {
-                if let Some(pos) = &mut self.state.screens.player_options_state { crate::screens::player_options::handle_input(pos, &ev) } else { ScreenAction::None }
+            CurrentScreen::Menu => {
+                crate::screens::menu::handle_input(&mut self.state.screens.menu_state, &ev)
             }
-            CurrentScreen::Evaluation => crate::screens::evaluation::handle_input(&mut self.state.screens.evaluation_state, &ev),
-            CurrentScreen::Sandbox => crate::screens::sandbox::handle_input(&mut self.state.screens.sandbox_state, &ev),
-            CurrentScreen::Init => crate::screens::init::handle_input(&mut self.state.screens.init_state, &ev),
+            CurrentScreen::SelectColor => crate::screens::select_color::handle_input(
+                &mut self.state.screens.select_color_state,
+                &ev,
+            ),
+            CurrentScreen::Options => {
+                crate::screens::options::handle_input(&mut self.state.screens.options_state, &ev)
+            }
+            CurrentScreen::Mappings => {
+                crate::screens::mappings::handle_input(&mut self.state.screens.mappings_state, &ev)
+            }
+            CurrentScreen::Input => {
+                crate::screens::input::handle_input(&mut self.state.screens.input_state, &ev)
+            }
+            CurrentScreen::SelectMusic => crate::screens::select_music::handle_input(
+                &mut self.state.screens.select_music_state,
+                &ev,
+            ),
+            CurrentScreen::PlayerOptions => {
+                if let Some(pos) = &mut self.state.screens.player_options_state {
+                    crate::screens::player_options::handle_input(pos, &ev)
+                } else {
+                    ScreenAction::None
+                }
+            }
+            CurrentScreen::Evaluation => crate::screens::evaluation::handle_input(
+                &mut self.state.screens.evaluation_state,
+                &ev,
+            ),
+            CurrentScreen::Sandbox => {
+                crate::screens::sandbox::handle_input(&mut self.state.screens.sandbox_state, &ev)
+            }
+            CurrentScreen::Init => {
+                crate::screens::init::handle_input(&mut self.state.screens.init_state, &ev)
+            }
             CurrentScreen::Gameplay => {
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
                     crate::game::gameplay::handle_input(gs, &ev)
-                } else { ScreenAction::None }
+                } else {
+                    ScreenAction::None
+                }
             }
         };
-        if let ScreenAction::None = action { return Ok(()); }
+        if let ScreenAction::None = action {
+            return Ok(());
+        }
         self.handle_action(action, event_loop)
     }
 
-    fn run_commands(&mut self, commands: Vec<Command>, event_loop: &ActiveEventLoop) -> Result<(), Box<dyn Error>> {
+    fn run_commands(
+        &mut self,
+        commands: Vec<Command>,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<(), Box<dyn Error>> {
         for command in commands {
             self.execute_command(command, event_loop)?;
         }
         Ok(())
     }
 
-    fn execute_command(&mut self, command: Command, event_loop: &ActiveEventLoop) -> Result<(), Box<dyn Error>> {
+    fn execute_command(
+        &mut self,
+        command: Command,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<(), Box<dyn Error>> {
         match command {
             Command::ExitNow => {
                 event_loop.exit();
@@ -546,16 +646,27 @@ impl App {
             Command::SetBanner(path_opt) => self.apply_banner(path_opt),
             Command::SetDensityGraph(chart_opt) => self.apply_density_graph(chart_opt),
             Command::FetchOnlineGrade(hash) => self.spawn_grade_fetch(hash),
-            Command::PlayMusic { path, looped, volume } => self.play_music_command(path, looped, volume),
+            Command::PlayMusic {
+                path,
+                looped,
+                volume,
+            } => self.play_music_command(path, looped, volume),
             Command::StopMusic => self.stop_music_command(),
-            Command::SetEvaluationGraphData(graph_request) => self.apply_evaluation_graph(graph_request),
+            Command::SetEvaluationGraphData(graph_request) => {
+                self.apply_evaluation_graph(graph_request)
+            }
             Command::SetDynamicBackground(path_opt) => self.apply_dynamic_background(path_opt),
             Command::UpdateScrollSpeed(setting) => profile::update_scroll_speed(setting),
-            Command::UpdateSessionMusicRate(rate) => crate::game::profile::set_session_music_rate(rate),
+            Command::UpdateSessionMusicRate(rate) => {
+                crate::game::profile::set_session_music_rate(rate)
+            }
             Command::UpdatePreferredDifficulty(idx) => {
                 self.state.session.preferred_difficulty_index = idx;
             }
-            Command::UpdateLastPlayed { music_path, difficulty_index } => {
+            Command::UpdateLastPlayed {
+                music_path,
+                difficulty_index,
+            } => {
                 profile::update_last_played(music_path.as_deref(), difficulty_index);
             }
         }
@@ -583,8 +694,8 @@ impl App {
                 let graph_width = 1024;
                 let graph_height = 256;
                 let bottom_color = [0, 184, 204];
-                let top_color    = [130, 0, 161];
-                let bg_color     = [30, 40, 47];
+                let top_color = [130, 0, 161];
+                let bg_color = [30, 40, 47];
 
                 rssp::graph::generate_density_graph_rgba_data(
                     &chart.measure_nps_vec,
@@ -615,19 +726,17 @@ impl App {
     }
 
     fn play_music_command(&self, path: PathBuf, looped: bool, volume: f32) {
-        crate::core::audio::play_music(
-            path,
-            crate::core::audio::Cut::default(),
-            looped,
-            volume,
-        );
+        crate::core::audio::play_music(path, crate::core::audio::Cut::default(), looped, volume);
     }
 
     fn stop_music_command(&self) {
         crate::core::audio::stop_music();
     }
 
-    fn apply_evaluation_graph(&mut self, graph_request: Option<(String, rssp::graph::GraphImageData)>) {
+    fn apply_evaluation_graph(
+        &mut self,
+        graph_request: Option<(String, rssp::graph::GraphImageData)>,
+    ) {
         if let Some(backend) = self.backend.as_mut() {
             let key = if let Some((key, data)) = graph_request {
                 self.asset_manager
@@ -635,7 +744,10 @@ impl App {
             } else {
                 self.asset_manager.set_density_graph(backend, None)
             };
-            self.state.screens.evaluation_state.density_graph_texture_key = key;
+            self.state
+                .screens
+                .evaluation_state
+                .density_graph_texture_key = key;
         }
     }
 
@@ -648,9 +760,20 @@ impl App {
         }
     }
 
-    fn build_screen<'a>(&self, actors: &'a [Actor], clear_color: [f32; 4], total_elapsed: f32) -> RenderList<'a> {
+    fn build_screen<'a>(
+        &self,
+        actors: &'a [Actor],
+        clear_color: [f32; 4],
+        total_elapsed: f32,
+    ) -> RenderList<'a> {
         let fonts = self.asset_manager.fonts();
-        crate::ui::compose::build_screen(actors, clear_color, &self.state.shell.metrics, fonts, total_elapsed)
+        crate::ui::compose::build_screen(
+            actors,
+            clear_color,
+            &self.state.shell.metrics,
+            fonts,
+            total_elapsed,
+        )
     }
 
     fn get_current_actors(&self) -> (Vec<Actor>, [f32; 4]) {
@@ -670,38 +793,66 @@ impl App {
             match self.state.shell.transition {
                 TransitionState::ActorsFadeIn { elapsed } => {
                     screen_alpha_multiplier = (elapsed / MENU_ACTORS_FADE_DURATION).clamp(0.0, 1.0);
-                },
-                TransitionState::ActorsFadeOut { elapsed, duration, .. } => {
+                }
+                TransitionState::ActorsFadeOut {
+                    elapsed, duration, ..
+                } => {
                     screen_alpha_multiplier = 1.0 - (elapsed / duration).clamp(0.0, 1.0);
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
 
         let mut actors = match self.state.screens.current_screen {
-            CurrentScreen::Menu     => menu::get_actors(&self.state.screens.menu_state, screen_alpha_multiplier),
+            CurrentScreen::Menu => {
+                menu::get_actors(&self.state.screens.menu_state, screen_alpha_multiplier)
+            }
             CurrentScreen::Gameplay => {
                 if let Some(gs) = &self.state.screens.gameplay_state {
                     gameplay::get_actors(gs, &self.asset_manager)
-                } else { vec![] }
-            },
-            CurrentScreen::Options  => options::get_actors(&self.state.screens.options_state, &self.asset_manager, screen_alpha_multiplier),
-            CurrentScreen::Mappings => mappings::get_actors(&self.state.screens.mappings_state, &self.asset_manager, screen_alpha_multiplier),
+                } else {
+                    vec![]
+                }
+            }
+            CurrentScreen::Options => options::get_actors(
+                &self.state.screens.options_state,
+                &self.asset_manager,
+                screen_alpha_multiplier,
+            ),
+            CurrentScreen::Mappings => mappings::get_actors(
+                &self.state.screens.mappings_state,
+                &self.asset_manager,
+                screen_alpha_multiplier,
+            ),
             CurrentScreen::Input => input_screen::get_actors(&self.state.screens.input_state),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &self.state.screens.player_options_state {
                     player_options::get_actors(pos, &self.asset_manager)
-                } else { vec![] }
-            },
-            CurrentScreen::SelectColor => select_color::get_actors(&self.state.screens.select_color_state, screen_alpha_multiplier),
-            CurrentScreen::SelectMusic => select_music::get_actors(&self.state.screens.select_music_state, &self.asset_manager),
-            CurrentScreen::Sandbox  => sandbox::get_actors(&self.state.screens.sandbox_state),
-            CurrentScreen::Init     => init::get_actors(&self.state.screens.init_state),
-            CurrentScreen::Evaluation => evaluation::get_actors(&self.state.screens.evaluation_state, &self.asset_manager),
+                } else {
+                    vec![]
+                }
+            }
+            CurrentScreen::SelectColor => select_color::get_actors(
+                &self.state.screens.select_color_state,
+                screen_alpha_multiplier,
+            ),
+            CurrentScreen::SelectMusic => select_music::get_actors(
+                &self.state.screens.select_music_state,
+                &self.asset_manager,
+            ),
+            CurrentScreen::Sandbox => sandbox::get_actors(&self.state.screens.sandbox_state),
+            CurrentScreen::Init => init::get_actors(&self.state.screens.init_state),
+            CurrentScreen::Evaluation => {
+                evaluation::get_actors(&self.state.screens.evaluation_state, &self.asset_manager)
+            }
         };
 
         if self.state.shell.show_overlay {
-            let overlay = crate::ui::components::stats_overlay::build(self.backend_type, self.state.shell.last_fps, self.state.shell.last_vpf);
+            let overlay = crate::ui::components::stats_overlay::build(
+                self.backend_type,
+                self.state.shell.last_fps,
+                self.state.shell.last_vpf,
+            );
             actors.extend(overlay);
         }
 
@@ -713,7 +864,8 @@ impl App {
 
         match &self.state.shell.transition {
             TransitionState::FadingOut { .. } => {
-                let (out_actors, _) = self.get_out_transition_for_screen(self.state.screens.current_screen);
+                let (out_actors, _) =
+                    self.get_out_transition_for_screen(self.state.screens.current_screen);
                 actors.extend(out_actors);
             }
             TransitionState::ActorsFadeOut { target, .. } => {
@@ -722,12 +874,15 @@ impl App {
                 if self.state.screens.current_screen == CurrentScreen::Menu
                     && (*target == CurrentScreen::SelectColor || *target == CurrentScreen::Options)
                 {
-                    let splash = crate::ui::components::menu_splash::build(self.state.screens.menu_state.active_color_index);
+                    let splash = crate::ui::components::menu_splash::build(
+                        self.state.screens.menu_state.active_color_index,
+                    );
                     actors.extend(splash);
                 }
             }
             TransitionState::FadingIn { .. } => {
-                let (in_actors, _) = self.get_in_transition_for_screen(self.state.screens.current_screen);
+                let (in_actors, _) =
+                    self.get_in_transition_for_screen(self.state.screens.current_screen);
                 actors.extend(in_actors);
             }
             _ => {}
@@ -735,10 +890,12 @@ impl App {
 
         (actors, CLEAR)
     }
-    
+
     fn get_out_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
         match screen {
-            CurrentScreen::Menu => menu::out_transition(self.state.screens.menu_state.active_color_index),
+            CurrentScreen::Menu => {
+                menu::out_transition(self.state.screens.menu_state.active_color_index)
+            }
             CurrentScreen::Gameplay => gameplay::out_transition(),
             CurrentScreen::Options => options::out_transition(),
             CurrentScreen::Mappings => mappings::out_transition(),
@@ -777,7 +934,10 @@ impl App {
             self.state.shell.last_fps = fps;
             self.state.shell.last_vpf = self.state.shell.current_frame_vpf;
             let screen_name = format!("{:?}", self.state.screens.current_screen);
-            window.set_title(&format!("DeadSync - {:?} | {} | {:.2} FPS", self.backend_type, screen_name, fps));
+            window.set_title(&format!(
+                "DeadSync - {:?} | {} | {:.2} FPS",
+                self.backend_type, screen_name, fps
+            ));
             self.state.shell.frame_count = 0;
             self.state.shell.last_title_update = now;
         }
@@ -821,13 +981,15 @@ impl App {
                 window_attributes = window_attributes.with_fullscreen(fullscreen);
             }
             DisplayMode::Windowed => {
-                window_attributes =
-                    window_attributes.with_inner_size(PhysicalSize::new(window_width, window_height));
+                window_attributes = window_attributes
+                    .with_inner_size(PhysicalSize::new(window_width, window_height));
                 if let Some(pos) = self.state.shell.pending_window_position.take() {
                     window_attributes = window_attributes.with_position(pos);
-                } else if let Some(pos) =
-                    display::default_window_position(window_width, window_height, monitor_handle.clone())
-                {
+                } else if let Some(pos) = display::default_window_position(
+                    window_width,
+                    window_height,
+                    monitor_handle.clone(),
+                ) {
                     window_attributes = window_attributes.with_position(pos);
                 }
             }
@@ -839,7 +1001,11 @@ impl App {
         let sz = window.inner_size();
         self.state.shell.metrics = crate::core::space::metrics_for_window(sz.width, sz.height);
         crate::core::space::set_current_metrics(self.state.shell.metrics);
-        let mut backend = create_backend(self.backend_type, window.clone(), self.state.shell.vsync_enabled)?;
+        let mut backend = create_backend(
+            self.backend_type,
+            window.clone(),
+            self.state.shell.vsync_enabled,
+        )?;
 
         if self.backend_type == BackendType::Software {
             let threads = match self.software_renderer_threads {
@@ -956,8 +1122,10 @@ impl App {
         monitor_override: Option<usize>,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
-        let (monitor_handle, monitor_count, resolved_monitor) =
-            display::resolve_monitor(event_loop, monitor_override.unwrap_or(self.state.shell.display_monitor));
+        let (monitor_handle, monitor_count, resolved_monitor) = display::resolve_monitor(
+            event_loop,
+            monitor_override.unwrap_or(self.state.shell.display_monitor),
+        );
         self.state.shell.display_monitor = resolved_monitor;
         let previous_mode = self.state.shell.display_mode;
 
@@ -1102,7 +1270,10 @@ impl App {
         }
 
         if self.state.screens.current_screen == CurrentScreen::Sandbox {
-            let action = crate::screens::sandbox::handle_raw_key_event(&mut self.state.screens.sandbox_state, &key_event);
+            let action = crate::screens::sandbox::handle_raw_key_event(
+                &mut self.state.screens.sandbox_state,
+                &key_event,
+            );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle Sandbox raw key action: {}", e);
@@ -1110,7 +1281,10 @@ impl App {
                 return;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Menu {
-            let action = crate::screens::menu::handle_raw_key_event(&mut self.state.screens.menu_state, &key_event);
+            let action = crate::screens::menu::handle_raw_key_event(
+                &mut self.state.screens.menu_state,
+                &key_event,
+            );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle Menu raw key action: {}", e);
@@ -1132,7 +1306,10 @@ impl App {
             return;
         } else if self.state.screens.current_screen == CurrentScreen::SelectMusic {
             // Route screen-specific raw key handling (e.g., F7 fetch) to the screen
-            let action = crate::screens::select_music::handle_raw_key_event(&mut self.state.screens.select_music_state, &key_event);
+            let action = crate::screens::select_music::handle_raw_key_event(
+                &mut self.state.screens.select_music_state,
+                &key_event,
+            );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle SelectMusic raw key action: {}", e);
@@ -1140,26 +1317,38 @@ impl App {
                 return;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Gameplay
-            && let Some(gs) = &mut self.state.screens.gameplay_state {
-                let action = crate::game::gameplay::handle_raw_key_event(gs, &key_event, self.state.shell.shift_held);
-                if !matches!(action, ScreenAction::None) {
-                    if let Err(e) = self.handle_action(action, event_loop) {
-                        log::error!("Failed to handle Gameplay raw key action: {}", e);
-                    }
-                    return;
+            && let Some(gs) = &mut self.state.screens.gameplay_state
+        {
+            let action = crate::game::gameplay::handle_raw_key_event(
+                gs,
+                &key_event,
+                self.state.shell.shift_held,
+            );
+            if !matches!(action, ScreenAction::None) {
+                if let Err(e) = self.handle_action(action, event_loop) {
+                    log::error!("Failed to handle Gameplay raw key action: {}", e);
                 }
+                return;
             }
+        }
         let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
         let _event_timestamp = Instant::now();
 
         if key_event.state == winit::event::ElementState::Pressed
-            && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F3) = key_event.physical_key {
-                self.state.shell.show_overlay = !self.state.shell.show_overlay;
-                log::info!("Overlay {}", if self.state.shell.show_overlay { "ON" } else { "OFF" });
-            }
-            // Screen-specific Escape handling resides in per-screen raw handlers now
+            && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F3) =
+                key_event.physical_key
+        {
+            self.state.shell.show_overlay = !self.state.shell.show_overlay;
+            let show = self.state.shell.show_overlay;
+            log::info!("Overlay {}", if show { "ON" } else { "OFF" });
+            config::update_show_stats(show);
+            options::sync_show_stats(&mut self.state.screens.options_state, show);
+        }
+        // Screen-specific Escape handling resides in per-screen raw handlers now
 
-        if is_transitioning { return; }
+        if is_transitioning {
+            return;
+        }
 
         for ev in input::map_key_event(&key_event) {
             if let Err(e) = self.route_input_event(event_loop, ev) {
@@ -1223,7 +1412,11 @@ impl App {
         let _ = self.run_commands(commands, event_loop);
     }
 
-    fn handle_audio_and_profile_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) -> Vec<Command> {
+    fn handle_audio_and_profile_on_fade(
+        &mut self,
+        prev: CurrentScreen,
+        target: CurrentScreen,
+    ) -> Vec<Command> {
         let mut commands = Vec::new();
         if target == CurrentScreen::SelectColor {
             commands.push(Command::PlayMusic {
@@ -1231,8 +1424,9 @@ impl App {
                 looped: true,
                 volume: 1.0,
             });
-        } else if !((prev == CurrentScreen::SelectMusic && target == CurrentScreen::PlayerOptions)
-            || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic))
+        } else if target != CurrentScreen::Gameplay
+            && !((prev == CurrentScreen::SelectMusic && target == CurrentScreen::PlayerOptions)
+                || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic))
         {
             commands.push(Command::StopMusic);
         }
@@ -1269,21 +1463,29 @@ impl App {
                 info!("Session music rate set to {:.2}x", po_state.music_rate);
 
                 self.state.session.preferred_difficulty_index = po_state.chart_difficulty_index;
-                commands.push(Command::UpdatePreferredDifficulty(po_state.chart_difficulty_index));
+                commands.push(Command::UpdatePreferredDifficulty(
+                    po_state.chart_difficulty_index,
+                ));
                 info!(
                     "Updated preferred difficulty index to {} from PlayerOptions",
                     self.state.session.preferred_difficulty_index
                 );
             }
 
-            if !(target == CurrentScreen::SelectMusic || target == CurrentScreen::PlayerOptions) {
+            if !(target == CurrentScreen::SelectMusic
+                || target == CurrentScreen::PlayerOptions
+                || target == CurrentScreen::Gameplay)
+            {
                 commands.push(Command::StopMusic);
             }
         }
 
         if prev == CurrentScreen::SelectMusic {
-            self.state.session.preferred_difficulty_index =
-                self.state.screens.select_music_state.preferred_difficulty_index;
+            self.state.session.preferred_difficulty_index = self
+                .state
+                .screens
+                .select_music_state
+                .preferred_difficulty_index;
         }
         commands
     }
@@ -1325,12 +1527,19 @@ impl App {
             };
 
             let color_index = self.state.screens.select_music_state.active_color_index;
-            self.state.screens.player_options_state =
-                Some(player_options::init(song_arc, chart_difficulty_index, color_index));
+            self.state.screens.player_options_state = Some(player_options::init(
+                song_arc,
+                chart_difficulty_index,
+                color_index,
+            ));
         }
     }
 
-    fn handle_screen_entry_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) -> Vec<Command> {
+    fn handle_screen_entry_on_fade(
+        &mut self,
+        prev: CurrentScreen,
+        target: CurrentScreen,
+    ) -> Vec<Command> {
         let mut commands = Vec::new();
         if target == CurrentScreen::Gameplay {
             if let Some(po_state) = self.state.screens.player_options_state.take() {
@@ -1361,7 +1570,9 @@ impl App {
                 let color_index = po_state.active_color_index;
                 let gs = gameplay::init(song_arc, chart, color_index, po_state.music_rate);
 
-                commands.push(Command::SetDynamicBackground(gs.song.background_path.clone()));
+                commands.push(Command::SetDynamicBackground(
+                    gs.song.background_path.clone(),
+                ));
                 self.state.screens.gameplay_state = Some(gs);
             } else {
                 panic!("Navigating to Gameplay without PlayerOptions state!");
@@ -1370,38 +1581,37 @@ impl App {
 
         if target == CurrentScreen::Evaluation {
             let gameplay_results = self.state.screens.gameplay_state.take();
-            let color_idx = gameplay_results
-                .as_ref()
-                .map_or(self.state.screens.evaluation_state.active_color_index, |gs| {
-                    gs.active_color_index
-                });
+            let color_idx = gameplay_results.as_ref().map_or(
+                self.state.screens.evaluation_state.active_color_index,
+                |gs| gs.active_color_index,
+            );
             self.state.screens.evaluation_state = evaluation::init(gameplay_results);
             self.state.screens.evaluation_state.active_color_index = color_idx;
 
-            let graph_request = if let Some(score_info) = &self.state.screens.evaluation_state.score_info
-            {
-                let graph_width = 1024;
-                let graph_height = 256;
-                let bg_color = [16, 21, 25];
-                let top_color = [54, 25, 67];
-                let bottom_color = [38, 84, 91];
+            let graph_request =
+                if let Some(score_info) = &self.state.screens.evaluation_state.score_info {
+                    let graph_width = 1024;
+                    let graph_height = 256;
+                    let bg_color = [16, 21, 25];
+                    let top_color = [54, 25, 67];
+                    let bottom_color = [38, 84, 91];
 
-                let graph_data = rssp::graph::generate_density_graph_rgba_data(
-                    &score_info.chart.measure_nps_vec,
-                    score_info.chart.max_nps,
-                    graph_width,
-                    graph_height,
-                    bottom_color,
-                    top_color,
-                    bg_color,
-                )
-                .ok();
+                    let graph_data = rssp::graph::generate_density_graph_rgba_data(
+                        &score_info.chart.measure_nps_vec,
+                        score_info.chart.max_nps,
+                        graph_width,
+                        graph_height,
+                        bottom_color,
+                        top_color,
+                        bg_color,
+                    )
+                    .ok();
 
-                let key = format!("{}_eval", score_info.chart.short_hash);
-                graph_data.map(|data| (key, data))
-            } else {
-                None
-            };
+                    let key = format!("{}_eval", score_info.chart.short_hash);
+                    graph_data.map(|data| (key, data))
+                } else {
+                    None
+                };
 
             commands.push(Command::SetEvaluationGraphData(graph_request));
         }
@@ -1415,8 +1625,14 @@ impl App {
             match prev {
                 CurrentScreen::PlayerOptions => {
                     let preferred = self.state.session.preferred_difficulty_index;
-                    self.state.screens.select_music_state.preferred_difficulty_index = preferred;
-                    self.state.screens.select_music_state.selected_difficulty_index = preferred;
+                    self.state
+                        .screens
+                        .select_music_state
+                        .preferred_difficulty_index = preferred;
+                    self.state
+                        .screens
+                        .select_music_state
+                        .selected_difficulty_index = preferred;
 
                     if let Some(select_music::MusicWheelEntry::Song(song)) = self
                         .state
@@ -1437,11 +1653,16 @@ impl App {
                             }
                         }
                         if let Some(idx) = best_match_index {
-                            self.state.screens.select_music_state.selected_difficulty_index = idx;
+                            self.state
+                                .screens
+                                .select_music_state
+                                .selected_difficulty_index = idx;
                         }
                     }
 
-                    select_music::trigger_immediate_refresh(&mut self.state.screens.select_music_state);
+                    select_music::trigger_immediate_refresh(
+                        &mut self.state.screens.select_music_state,
+                    );
                 }
                 CurrentScreen::Gameplay | CurrentScreen::Evaluation => {
                     select_music::reset_preview_after_gameplay(
@@ -1449,19 +1670,23 @@ impl App {
                     );
                 }
                 _ => {
-                    let current_color_index = self.state.screens.select_music_state.active_color_index;
+                    let current_color_index =
+                        self.state.screens.select_music_state.active_color_index;
                     self.state.screens.select_music_state = select_music::init();
                     self.state.screens.select_music_state.active_color_index = current_color_index;
-                    self.state.screens.select_music_state.selected_difficulty_index =
-                        self.state.session.preferred_difficulty_index;
-                    self.state.screens.select_music_state.preferred_difficulty_index =
-                        self.state.session.preferred_difficulty_index;
+                    self.state
+                        .screens
+                        .select_music_state
+                        .selected_difficulty_index = self.state.session.preferred_difficulty_index;
+                    self.state
+                        .screens
+                        .select_music_state
+                        .preferred_difficulty_index = self.state.session.preferred_difficulty_index;
                 }
             }
         }
         commands
     }
-
 }
 
 impl ApplicationHandler<UserEvent> for App {
@@ -1469,7 +1694,10 @@ impl ApplicationHandler<UserEvent> for App {
         match event {
             UserEvent::GamepadSystem(ev) => {
                 if self.state.screens.current_screen == CurrentScreen::Sandbox {
-                    crate::screens::sandbox::handle_gamepad_system_event(&mut self.state.screens.sandbox_state, &ev);
+                    crate::screens::sandbox::handle_gamepad_system_event(
+                        &mut self.state.screens.sandbox_state,
+                        &ev,
+                    );
                 }
                 let msg = match &ev {
                     GpSystemEvent::Connected { name, id, .. } => {
@@ -1521,8 +1749,12 @@ impl ApplicationHandler<UserEvent> for App {
         window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        let Some(window) = self.window.as_ref().cloned() else { return; };
-        if window_id != window.id() { return; }
+        let Some(window) = self.window.as_ref().cloned() else {
+            return;
+        };
+        if window_id != window.id() {
+            return;
+        }
 
         match event {
             WindowEvent::CloseRequested => {
@@ -1531,21 +1763,28 @@ impl ApplicationHandler<UserEvent> for App {
             }
             WindowEvent::Resized(new_size) => {
                 if new_size.width > 0 && new_size.height > 0 {
-                    self.state.shell.metrics = space::metrics_for_window(new_size.width, new_size.height);
+                    self.state.shell.metrics =
+                        space::metrics_for_window(new_size.width, new_size.height);
                     space::set_current_metrics(self.state.shell.metrics);
                     if let Some(backend) = &mut self.backend {
                         backend.resize(new_size.width, new_size.height);
                     }
                 }
             }
-            WindowEvent::KeyboardInput { event: key_event, .. } => {
+            WindowEvent::KeyboardInput {
+                event: key_event, ..
+            } => {
                 self.handle_key_event(event_loop, key_event);
             }
             WindowEvent::RedrawRequested => {
                 let now = Instant::now();
-                let delta_time = now.duration_since(self.state.shell.last_frame_time).as_secs_f32();
+                let delta_time = now
+                    .duration_since(self.state.shell.last_frame_time)
+                    .as_secs_f32();
                 self.state.shell.last_frame_time = now;
-                let total_elapsed = now.duration_since(self.state.shell.start_time).as_secs_f32();
+                let total_elapsed = now
+                    .duration_since(self.state.shell.start_time)
+                    .as_secs_f32();
                 crate::ui::runtime::tick(delta_time);
 
                 // --- Manage gamepad overlay lifetime ---
@@ -1554,13 +1793,21 @@ impl ApplicationHandler<UserEvent> for App {
                 let mut finished_fading_out_to: Option<CurrentScreen> = None;
 
                 match &mut self.state.shell.transition {
-                    TransitionState::FadingOut { elapsed, duration, target } => {
+                    TransitionState::FadingOut {
+                        elapsed,
+                        duration,
+                        target,
+                    } => {
                         *elapsed += delta_time;
                         if *elapsed >= *duration {
                             finished_fading_out_to = Some(*target);
                         }
                     }
-                    TransitionState::ActorsFadeOut { elapsed, duration, target } => {
+                    TransitionState::ActorsFadeOut {
+                        elapsed,
+                        duration,
+                        target,
+                    } => {
                         *elapsed += delta_time;
                         if *elapsed >= *duration {
                             let prev = self.state.screens.current_screen;
@@ -1574,21 +1821,29 @@ impl ApplicationHandler<UserEvent> for App {
                                     true,
                                     1.0,
                                 );
-                            } else if !((prev == CurrentScreen::SelectMusic && *target == CurrentScreen::PlayerOptions)
-                                || (prev == CurrentScreen::PlayerOptions && *target == CurrentScreen::SelectMusic)) {
+                            } else if !((prev == CurrentScreen::SelectMusic
+                                && *target == CurrentScreen::PlayerOptions)
+                                || (prev == CurrentScreen::PlayerOptions
+                                    && *target == CurrentScreen::SelectMusic))
+                            {
                                 crate::core::audio::stop_music();
                             }
 
                             if *target == CurrentScreen::Menu {
-                                let current_color_index = self.state.screens.menu_state.active_color_index;
+                                let current_color_index =
+                                    self.state.screens.menu_state.active_color_index;
                                 self.state.screens.menu_state = menu::init();
-                                self.state.screens.menu_state.active_color_index = current_color_index;
+                                self.state.screens.menu_state.active_color_index =
+                                    current_color_index;
                             } else if *target == CurrentScreen::Options {
-                                let current_color_index = self.state.screens.options_state.active_color_index;
+                                let current_color_index =
+                                    self.state.screens.options_state.active_color_index;
                                 self.state.screens.options_state = options::init();
-                                self.state.screens.options_state.active_color_index = current_color_index;
+                                self.state.screens.options_state.active_color_index =
+                                    current_color_index;
                             } else if *target == CurrentScreen::Mappings {
-                                let color_index = self.state.screens.options_state.active_color_index;
+                                let color_index =
+                                    self.state.screens.options_state.active_color_index;
                                 self.state.screens.mappings_state = mappings::init();
                                 self.state.screens.mappings_state.active_color_index = color_index;
                             }
@@ -1608,7 +1863,8 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.update_options_monitor_specs(event_loop);
                             }
 
-                            self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
+                            self.state.shell.transition =
+                                TransitionState::ActorsFadeIn { elapsed: 0.0 };
                             crate::ui::runtime::clear_all();
                         }
                     }
@@ -1625,7 +1881,11 @@ impl ApplicationHandler<UserEvent> for App {
                         }
                     }
                     TransitionState::Idle => {
-                        if let Some(action) = self.state.screens.step_idle(delta_time, now, &self.state.session) {
+                        if let Some(action) =
+                            self.state
+                                .screens
+                                .step_idle(delta_time, now, &self.state.session)
+                        {
                             if !matches!(action, ScreenAction::None) {
                                 let _ = self.handle_action(action, event_loop);
                             }
@@ -1692,11 +1952,16 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             let mut active_id = None;
             let mut gp_state = gamepad::GamepadState::default();
             loop {
-                let (pad_events, sys_events) = gamepad::poll_and_collect(&mut g, &mut active_id, &mut gp_state);
+                let (pad_events, sys_events) =
+                    gamepad::poll_and_collect(&mut g, &mut active_id, &mut gp_state);
                 let pad_empty = pad_events.is_empty();
                 let sys_empty = sys_events.is_empty();
-                for se in sys_events { let _ = proxy.send_event(UserEvent::GamepadSystem(se)); }
-                for pe in pad_events { let _ = proxy.send_event(UserEvent::Pad(pe)); }
+                for se in sys_events {
+                    let _ = proxy.send_event(UserEvent::GamepadSystem(se));
+                }
+                for pe in pad_events {
+                    let _ = proxy.send_event(UserEvent::Pad(pe));
+                }
                 if pad_empty && sys_empty {
                     std::thread::sleep(std::time::Duration::from_millis(1));
                 }

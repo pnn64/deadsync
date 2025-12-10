@@ -1,7 +1,7 @@
-use crate::ui::actors::{self, Actor, SizeSpec, Background};
 use crate::act;
-use crate::core::space::*;
 use crate::core::space;
+use crate::core::space::*;
+use crate::ui::actors::{self, Actor, Background, SizeSpec};
 use crate::ui::color;
 
 // --- Constants ---
@@ -53,7 +53,7 @@ fn wide_scale(normal: f32, wide: f32) -> f32 {
 pub fn build(params: ScreenBarParams) -> Actor {
     // Base placement per bar (height & anchor)
     let (align, offset) = match params.position {
-        ScreenBarPosition::Top    => ([0.0, 0.0], [0.0, 0.0]),
+        ScreenBarPosition::Top => ([0.0, 0.0], [0.0, 0.0]),
         ScreenBarPosition::Bottom => ([0.0, 1.0], [0.0, screen_height()]),
     };
 
@@ -76,11 +76,19 @@ pub fn build(params: ScreenBarParams) -> Actor {
                 ScreenBarTitlePlacement::Left => {
                     // Positioned relative to the bar's top-left corner.
                     // The pivot is at the text's vertical center (0.5), matching SM behavior.
-                    ([0.0, 0.5], [TOP_TITLE_OFFSET_X, TOP_TITLE_OFFSET_Y], actors::TextAlign::Left)
+                    (
+                        [0.0, 0.5],
+                        [TOP_TITLE_OFFSET_X, TOP_TITLE_OFFSET_Y],
+                        actors::TextAlign::Left,
+                    )
                 }
                 ScreenBarTitlePlacement::Center => {
                     // Centered perfectly within the bar.
-                    ([0.5, 0.5], [screen_center_x(), 0.5 * BAR_H], actors::TextAlign::Center)
+                    (
+                        [0.5, 0.5],
+                        [screen_center_x(), 0.5 * BAR_H],
+                        actors::TextAlign::Center,
+                    )
                 }
             };
 
@@ -164,7 +172,7 @@ pub fn build(params: ScreenBarParams) -> Actor {
     Actor::Frame {
         align,
         offset,
-        size:   [SizeSpec::Fill, SizeSpec::Px(BAR_H)],
+        size: [SizeSpec::Fill, SizeSpec::Px(BAR_H)],
         children,
         background,
         z: 120i16,

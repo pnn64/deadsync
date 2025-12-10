@@ -108,14 +108,17 @@ pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
                 right += 1;
             }
 
-            if left < i && i + 1 < right
+            if left < i
+                && i + 1 < right
                 && let (Some(w), Some(h)) = (
                     parse_ascii_digits(&bytes[left..i]),
                     parse_ascii_digits(&bytes[i + 1..right]),
                 )
-                    && w > 0 && h > 0 {
-                        dims = Some((w, h));
-                    }
+                && w > 0
+                && h > 0
+            {
+                dims = Some((w, h));
+            }
 
             i = right;
             continue;
@@ -126,7 +129,6 @@ pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
 
     dims.unwrap_or((1, 1))
 }
-
 
 // --- Asset Manager ---
 
@@ -206,18 +208,42 @@ impl AssetManager {
             ("init_arrow.png".to_string(), "init_arrow.png".to_string()),
             ("dance.png".to_string(), "dance.png".to_string()),
             // Test Input pad assets (Simply Love-style)
-            ("test_input/dance.png".to_string(), "test_input/dance.png".to_string()),
-            ("test_input/buttons.png".to_string(), "test_input/buttons.png".to_string()),
-            ("test_input/highlight.png".to_string(), "test_input/highlight.png".to_string()),
-            ("test_input/highlightgreen.png".to_string(), "test_input/highlightgreen.png".to_string()),
-            ("test_input/highlightred.png".to_string(), "test_input/highlightred.png".to_string()),
-            ("test_input/highlightarrow.png".to_string(), "test_input/highlightarrow.png".to_string()),
+            (
+                "test_input/dance.png".to_string(),
+                "test_input/dance.png".to_string(),
+            ),
+            (
+                "test_input/buttons.png".to_string(),
+                "test_input/buttons.png".to_string(),
+            ),
+            (
+                "test_input/highlight.png".to_string(),
+                "test_input/highlight.png".to_string(),
+            ),
+            (
+                "test_input/highlightgreen.png".to_string(),
+                "test_input/highlightgreen.png".to_string(),
+            ),
+            (
+                "test_input/highlightred.png".to_string(),
+                "test_input/highlightred.png".to_string(),
+            ),
+            (
+                "test_input/highlightarrow.png".to_string(),
+                "test_input/highlightarrow.png".to_string(),
+            ),
             ("meter_arrow.png".to_string(), "meter_arrow.png".to_string()),
-            ("rounded-square.png".to_string(), "rounded-square.png".to_string()),
+            (
+                "rounded-square.png".to_string(),
+                "rounded-square.png".to_string(),
+            ),
             ("circle.png".to_string(), "circle.png".to_string()),
             ("swoosh.png".to_string(), "swoosh.png".to_string()),
             ("heart.png".to_string(), "heart.png".to_string()),
-            ("combo_explosion.png".to_string(), "combo_explosion.png".to_string()),
+            (
+                "combo_explosion.png".to_string(),
+                "combo_explosion.png".to_string(),
+            ),
             (
                 "combo_100milestone_splode.png".to_string(),
                 "combo_100milestone_splode.png".to_string(),
@@ -246,21 +272,66 @@ impl AssetManager {
                 "titlemenu_flybottom.png".to_string(),
                 "titlemenu_flybottom.png".to_string(),
             ),
-            ("banner1.png".to_string(), "_fallback/banner1.png".to_string()),
-            ("banner2.png".to_string(), "_fallback/banner2.png".to_string()),
-            ("banner3.png".to_string(), "_fallback/banner3.png".to_string()),
-            ("banner4.png".to_string(), "_fallback/banner4.png".to_string()),
-            ("banner5.png".to_string(), "_fallback/banner5.png".to_string()),
-            ("banner6.png".to_string(), "_fallback/banner6.png".to_string()),
-            ("banner7.png".to_string(), "_fallback/banner7.png".to_string()),
-            ("banner8.png".to_string(), "_fallback/banner8.png".to_string()),
-            ("banner9.png".to_string(), "_fallback/banner9.png".to_string()),
-            ("banner10.png".to_string(), "_fallback/banner10.png".to_string()),
-            ("banner11.png".to_string(), "_fallback/banner11.png".to_string()),
-            ("banner12.png".to_string(), "_fallback/banner12.png".to_string()),
-            ("noteskins/bar/tex notes.png".to_string(), "noteskins/bar/tex notes.png".to_string()),
-            ("noteskins/bar/tex receptors.png".to_string(), "noteskins/bar/tex receptors.png".to_string()),
-            ("noteskins/bar/tex glow.png".to_string(), "noteskins/bar/tex glow.png".to_string()),
+            (
+                "banner1.png".to_string(),
+                "_fallback/banner1.png".to_string(),
+            ),
+            (
+                "banner2.png".to_string(),
+                "_fallback/banner2.png".to_string(),
+            ),
+            (
+                "banner3.png".to_string(),
+                "_fallback/banner3.png".to_string(),
+            ),
+            (
+                "banner4.png".to_string(),
+                "_fallback/banner4.png".to_string(),
+            ),
+            (
+                "banner5.png".to_string(),
+                "_fallback/banner5.png".to_string(),
+            ),
+            (
+                "banner6.png".to_string(),
+                "_fallback/banner6.png".to_string(),
+            ),
+            (
+                "banner7.png".to_string(),
+                "_fallback/banner7.png".to_string(),
+            ),
+            (
+                "banner8.png".to_string(),
+                "_fallback/banner8.png".to_string(),
+            ),
+            (
+                "banner9.png".to_string(),
+                "_fallback/banner9.png".to_string(),
+            ),
+            (
+                "banner10.png".to_string(),
+                "_fallback/banner10.png".to_string(),
+            ),
+            (
+                "banner11.png".to_string(),
+                "_fallback/banner11.png".to_string(),
+            ),
+            (
+                "banner12.png".to_string(),
+                "_fallback/banner12.png".to_string(),
+            ),
+            (
+                "noteskins/bar/tex notes.png".to_string(),
+                "noteskins/bar/tex notes.png".to_string(),
+            ),
+            (
+                "noteskins/bar/tex receptors.png".to_string(),
+                "noteskins/bar/tex receptors.png".to_string(),
+            ),
+            (
+                "noteskins/bar/tex glow.png".to_string(),
+                "noteskins/bar/tex glow.png".to_string(),
+            ),
             (
                 "judgements/Love 2x7 (doubleres).png".to_string(),
                 "judgements/Love 2x7 (doubleres).png".to_string(),
@@ -363,10 +434,11 @@ impl AssetManager {
             for entry in entries.flatten() {
                 if let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
                     && ext.eq_ignore_ascii_case("png")
-                        && let Ok(name) = entry.file_name().into_string() {
-                            let key = format!("noteskins/cel/{}", name);
-                            textures_to_load.push((key.clone(), key));
-                        }
+                    && let Ok(name) = entry.file_name().into_string()
+                {
+                    let key = format!("noteskins/cel/{}", name);
+                    textures_to_load.push((key.clone(), key));
+                }
             }
         }
 
@@ -374,10 +446,11 @@ impl AssetManager {
             for entry in entries.flatten() {
                 if let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
                     && ext.eq_ignore_ascii_case("png")
-                        && let Ok(name) = entry.file_name().into_string() {
-                            let key = format!("noteskins/metal/{}", name);
-                            textures_to_load.push((key.clone(), key));
-                        }
+                    && let Ok(name) = entry.file_name().into_string()
+                {
+                    let key = format!("noteskins/metal/{}", name);
+                    textures_to_load.push((key.clone(), key));
+                }
             }
         }
 
@@ -385,10 +458,11 @@ impl AssetManager {
             for entry in entries.flatten() {
                 if let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
                     && ext.eq_ignore_ascii_case("png")
-                        && let Ok(name) = entry.file_name().into_string() {
-                            let key = format!("noteskins/enchantment-v2/{}", name);
-                            textures_to_load.push((key.clone(), key));
-                        }
+                    && let Ok(name) = entry.file_name().into_string()
+                {
+                    let key = format!("noteskins/enchantment-v2/{}", name);
+                    textures_to_load.push((key.clone(), key));
+                }
             }
         }
 
@@ -396,10 +470,11 @@ impl AssetManager {
             for entry in entries.flatten() {
                 if let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
                     && ext.eq_ignore_ascii_case("png")
-                        && let Ok(name) = entry.file_name().into_string() {
-                            let key = format!("noteskins/devcel-2024-v3/{}", name);
-                            textures_to_load.push((key.clone(), key));
-                        }
+                    && let Ok(name) = entry.file_name().into_string()
+                {
+                    let key = format!("noteskins/devcel-2024-v3/{}", name);
+                    textures_to_load.push((key.clone(), key));
+                }
             }
         }
 
@@ -428,7 +503,10 @@ impl AssetManager {
                     self.textures.insert(key, texture);
                 }
                 Err((key, msg)) => {
-                    warn!("Failed to load texture for key '{}': {}. Using fallback.", key, msg);
+                    warn!(
+                        "Failed to load texture for key '{}': {}. Using fallback.",
+                        key, msg
+                    );
                     let texture = backend.create_texture(&fallback_image)?;
                     register_texture_dims(&key, fallback_image.width(), fallback_image.height());
                     self.textures.insert(key, texture);
@@ -462,7 +540,7 @@ impl AssetManager {
         ] {
             let ini_path_str = match name {
                 "wendy" => "assets/fonts/wendy/_wendy small.ini",
-                "miso"  => "assets/fonts/miso/_miso light.ini",
+                "miso" => "assets/fonts/miso/_miso light.ini",
                 "cjk" => "assets/fonts/cjk/_jfonts 16px.ini",
                 "emoji" => "assets/fonts/emoji/_emoji 16px.ini",
                 "game" => "assets/fonts/game/_game chars 16px.ini",
@@ -479,7 +557,10 @@ impl AssetManager {
                 _ => return Err(format!("Unknown font name: {}", name).into()),
             };
 
-            let FontLoadData { mut font, required_textures } = font::parse(ini_path_str)?;
+            let FontLoadData {
+                mut font,
+                required_textures,
+            } = font::parse(ini_path_str)?;
 
             if name == "miso" {
                 font.fallback_font_name = Some("cjk");
@@ -510,18 +591,35 @@ impl AssetManager {
     // --- Dynamic Asset Management ---
 
     pub fn destroy_dynamic_assets(&mut self, backend: &mut Backend) {
-        if self.current_dynamic_banner.is_some() || self.current_density_graph.is_some() || self.current_dynamic_background.is_some() {
+        if self.current_dynamic_banner.is_some()
+            || self.current_density_graph.is_some()
+            || self.current_dynamic_background.is_some()
+        {
             backend.wait_for_idle(); // Wait for GPU to finish using old textures
-            if let Some((key, _)) = self.current_dynamic_banner.take() { self.textures.remove(&key); }
-            if let Some((key, _)) = self.current_density_graph.take() { self.textures.remove(&key); }
-            if let Some((key, _)) = self.current_dynamic_background.take() { self.textures.remove(&key); }
+            if let Some((key, _)) = self.current_dynamic_banner.take() {
+                self.textures.remove(&key);
+            }
+            if let Some((key, _)) = self.current_density_graph.take() {
+                self.textures.remove(&key);
+            }
+            if let Some((key, _)) = self.current_dynamic_background.take() {
+                self.textures.remove(&key);
+            }
         }
         self.destroy_current_profile_avatar(backend);
     }
 
-    pub fn set_dynamic_banner(&mut self, backend: &mut Backend, path_opt: Option<PathBuf>) -> String {
+    pub fn set_dynamic_banner(
+        &mut self,
+        backend: &mut Backend,
+        path_opt: Option<PathBuf>,
+    ) -> String {
         if let Some(path) = path_opt {
-            if self.current_dynamic_banner.as_ref().is_some_and(|(_, p)| p == &path) {
+            if self
+                .current_dynamic_banner
+                .as_ref()
+                .is_some_and(|(_, p)| p == &path)
+            {
                 return self.current_dynamic_banner.as_ref().unwrap().0.clone();
             }
 
@@ -539,13 +637,19 @@ impl AssetManager {
                             key
                         }
                         Err(e) => {
-                            warn!("Failed to create GPU texture for {:?}: {}. Using fallback.", path, e);
+                            warn!(
+                                "Failed to create GPU texture for {:?}: {}. Using fallback.",
+                                path, e
+                            );
                             "banner1.png".to_string()
                         }
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to open banner image {:?}: {}. Using fallback.", path, e);
+                    warn!(
+                        "Failed to open banner image {:?}: {}. Using fallback.",
+                        path, e
+                    );
                     "banner1.png".to_string()
                 }
             }
@@ -563,19 +667,27 @@ impl AssetManager {
         const FALLBACK_KEY: &str = "__white";
 
         if let Some((key, graph_data)) = data {
-            if self.current_density_graph.as_ref().is_some_and(|(_, cache_key)| cache_key == &key) {
+            if self
+                .current_density_graph
+                .as_ref()
+                .is_some_and(|(_, cache_key)| cache_key == &key)
+            {
                 return self.current_density_graph.as_ref().unwrap().0.clone();
             }
 
             self.destroy_current_density_graph(backend);
 
-            let rgba_image = match RgbaImage::from_raw(graph_data.width, graph_data.height, graph_data.data) {
-                Some(img) => img,
-                None => {
-                    warn!("Failed to create RgbaImage from raw graph data for key '{}'.", key);
-                    return FALLBACK_KEY.to_string();
-                }
-            };
+            let rgba_image =
+                match RgbaImage::from_raw(graph_data.width, graph_data.height, graph_data.data) {
+                    Some(img) => img,
+                    None => {
+                        warn!(
+                            "Failed to create RgbaImage from raw graph data for key '{}'.",
+                            key
+                        );
+                        return FALLBACK_KEY.to_string();
+                    }
+                };
 
             match backend.create_texture(&rgba_image) {
                 Ok(texture) => {
@@ -585,7 +697,10 @@ impl AssetManager {
                     key
                 }
                 Err(e) => {
-                    warn!("Failed to create GPU texture for density graph ('{}'): {}.", key, e);
+                    warn!(
+                        "Failed to create GPU texture for density graph ('{}'): {}.",
+                        key, e
+                    );
                     FALLBACK_KEY.to_string()
                 }
             }
@@ -595,11 +710,19 @@ impl AssetManager {
         }
     }
 
-    pub fn set_dynamic_background(&mut self, backend: &mut Backend, path_opt: Option<PathBuf>) -> String {
+    pub fn set_dynamic_background(
+        &mut self,
+        backend: &mut Backend,
+        path_opt: Option<PathBuf>,
+    ) -> String {
         const FALLBACK_KEY: &str = "__white";
 
         if let Some(path) = path_opt {
-            if self.current_dynamic_background.as_ref().is_some_and(|(_, p)| p == &path) {
+            if self
+                .current_dynamic_background
+                .as_ref()
+                .is_some_and(|(_, p)| p == &path)
+            {
                 return self.current_dynamic_background.as_ref().unwrap().0.clone();
             }
 
@@ -617,13 +740,19 @@ impl AssetManager {
                             key
                         }
                         Err(e) => {
-                            warn!("Failed to create GPU texture for background {:?}: {}. Using fallback.", path, e);
+                            warn!(
+                                "Failed to create GPU texture for background {:?}: {}. Using fallback.",
+                                path, e
+                            );
                             FALLBACK_KEY.to_string()
                         }
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to open background image {:?}: {}. Using fallback.", path, e);
+                    warn!(
+                        "Failed to open background image {:?}: {}. Using fallback.",
+                        path, e
+                    );
                     FALLBACK_KEY.to_string()
                 }
             }
@@ -635,7 +764,11 @@ impl AssetManager {
 
     pub fn set_profile_avatar(&mut self, backend: &mut Backend, path_opt: Option<PathBuf>) {
         if let Some(path) = path_opt {
-            if self.current_profile_avatar.as_ref().is_some_and(|(_, p)| p == &path) {
+            if self
+                .current_profile_avatar
+                .as_ref()
+                .is_some_and(|(_, p)| p == &path)
+            {
                 if let Some((key, _)) = &self.current_profile_avatar {
                     profile::set_avatar_texture_key(Some(key.clone()));
                 }
@@ -656,7 +789,10 @@ impl AssetManager {
                             profile::set_avatar_texture_key(Some(key));
                         }
                         Err(e) => {
-                            warn!("Failed to create GPU texture for profile avatar {:?}: {}.", path, e);
+                            warn!(
+                                "Failed to create GPU texture for profile avatar {:?}: {}.",
+                                path, e
+                            );
                             profile::set_avatar_texture_key(None);
                         }
                     }

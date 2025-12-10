@@ -3,13 +3,15 @@ use cpal::{Sample, SampleFormat, StreamConfig};
 use lewton::inside_ogg::OggStreamReader;
 use log::{error, info, warn};
 use once_cell::sync::Lazy;
-use rubato::{Resampler, SincFixedOut, SincInterpolationParameters, SincInterpolationType, WindowFunction};
+use rubato::{
+    Resampler, SincFixedOut, SincInterpolationParameters, SincInterpolationType, WindowFunction,
+};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
@@ -71,8 +73,7 @@ static MUSIC_TRACK_ACTIVE: AtomicBool = AtomicBool::new(false);
 // Last audio callback timing, used to interpolate the playback position
 // between callback invocations so that the reported stream time is
 // continuous instead of jumping in whole buffer increments.
-static LAST_CALLBACK_INSTANT: Lazy<Mutex<Option<Instant>>> =
-    Lazy::new(|| Mutex::new(None));
+static LAST_CALLBACK_INSTANT: Lazy<Mutex<Option<Instant>>> = Lazy::new(|| Mutex::new(None));
 static LAST_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 
@@ -104,13 +105,21 @@ pub fn play_sfx(path: &str) {
             }
         }
     };
-    let _ = ENGINE.command_sender.send(AudioCommand::PlaySfx(sound_data));
+    let _ = ENGINE
+        .command_sender
+        .send(AudioCommand::PlaySfx(sound_data));
 }
 
 /// Plays a music track from a file path.
 pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
-    let rate = if rate.is_finite() && rate > 0.0 { rate } else { 1.0 };
-    let _ = ENGINE.command_sender.send(AudioCommand::PlayMusic(path, cut, looping, rate));
+    let rate = if rate.is_finite() && rate > 0.0 {
+        rate
+    } else {
+        1.0
+    };
+    let _ = ENGINE
+        .command_sender
+        .send(AudioCommand::PlayMusic(path, cut, looping, rate));
 }
 
 /// Stops the currently playing music track.
@@ -120,7 +129,11 @@ pub fn stop_music() {
 
 /// Adjusts the playback rate for the current music stream, if any.
 pub fn set_music_rate(rate: f32) {
-    let rate = if rate.is_finite() && rate > 0.0 { rate } else { 1.0 };
+    let rate = if rate.is_finite() && rate > 0.0 {
+        rate
+    } else {
+        1.0
+    };
     let _ = ENGINE.command_sender.send(AudioCommand::SetMusicRate(rate));
 }
 
@@ -153,8 +166,7 @@ pub fn get_music_stream_position_seconds() -> f32 {
     if let Some(cb_instant) = cb_instant_opt {
         let now = Instant::now();
         let dt = now.saturating_duration_since(cb_instant).as_secs_f32();
-        let frames_since_cb = (dt * sample_rate as f32)
-            .clamp(0.0, buf_frames as f32);
+        let frames_since_cb = (dt * sample_rate as f32).clamp(0.0, buf_frames as f32);
         let frames_now = base_frames as f32 + frames_since_cb;
         let frames_from_start = frames_now.max(start as f32) - start as f32;
         frames_from_start / sample_rate as f32
@@ -176,9 +188,13 @@ fn init_engine_and_thread() -> AudioEngine {
     let (command_sender, command_receiver) = channel();
 
     let host = cpal::default_host();
-    let device = host.default_output_device().expect("no audio output device");
+    let device = host
+        .default_output_device()
+        .expect("no audio output device");
     let device_name = device.name().unwrap_or_else(|_| "<unknown>".to_string());
-    let default_config = device.default_output_config().expect("no default audio config");
+    let default_config = device
+        .default_output_config()
+        .expect("no default audio config");
     let mut stream_config: StreamConfig = default_config.clone().into();
 
     // Log all available output devices and their supported configurations for debugging.
@@ -197,10 +213,7 @@ fn init_engine_and_thread() -> AudioEngine {
                             let max = cfg_range.max_sample_rate().0;
                             let channels = cfg_range.channels();
                             let fmt = cfg_range.sample_format();
-                            info!(
-                                "    - {:?}, {} ch, {}..{} Hz",
-                                fmt, channels, min, max
-                            );
+                            info!("    - {:?}, {} ch, {}..{} Hz", fmt, channels, min, max);
                         }
                     }
                     Err(e) => {
@@ -219,8 +232,7 @@ fn init_engine_and_thread() -> AudioEngine {
     if let Some(target_hz) = requested_rate {
         info!(
             "Audio sample rate override requested: {} Hz (device default {} Hz).",
-            target_hz,
-            stream_config.sample_rate.0
+            target_hz, stream_config.sample_rate.0
         );
         stream_config.sample_rate = cpal::SampleRate(target_hz);
     } else {
@@ -239,8 +251,7 @@ fn init_engine_and_thread() -> AudioEngine {
     );
     info!(
         "Audio output stream config: {} Hz, {} ch (may be resampled by OS/driver).",
-        stream_config.sample_rate.0,
-        stream_config.channels
+        stream_config.sample_rate.0, stream_config.channels
     );
 
     let device_sample_rate = stream_config.sample_rate.0;
@@ -248,10 +259,18 @@ fn init_engine_and_thread() -> AudioEngine {
 
     // Spawn the audio manager thread (owns the CPAL stream and command loop)
     thread::spawn(move || {
-        audio_manager_thread(command_receiver, device, default_config.sample_format(), stream_config);
+        audio_manager_thread(
+            command_receiver,
+            device,
+            default_config.sample_format(),
+            stream_config,
+        );
     });
 
-    info!("Audio engine initialized ({} Hz, {} ch).", device_sample_rate, device_channels);
+    info!(
+        "Audio engine initialized ({} Hz, {} ch).",
+        device_sample_rate, device_channels
+    );
     AudioEngine {
         command_sender,
         sfx_cache: Mutex::new(HashMap::new()),
@@ -301,11 +320,18 @@ fn audio_manager_thread(
                 let final_music_vol = master_vol * music_vol;
                 let final_sfx_vol = master_vol * sfx_vol;
 
-                if mix_i16.len() != out.len() { mix_i16.resize(out.len(), 0); }
-                if mix_f32.len() != out.len() { mix_f32.resize(out.len(), 0.0); }
+                if mix_i16.len() != out.len() {
+                    mix_i16.resize(out.len(), 0);
+                }
+                if mix_f32.len() != out.len() {
+                    mix_f32.resize(out.len(), 0.0);
+                }
 
                 // Pull music samples
-                let popped = internal::callback_fill_from_ring_i16(&music_ring_for_callback, &mut mix_i16[..]);
+                let popped = internal::callback_fill_from_ring_i16(
+                    &music_ring_for_callback,
+                    &mut mix_i16[..],
+                );
 
                 // Detect the first callback that actually consumed music data
                 // for the currently active track and record its starting frame.
@@ -341,7 +367,11 @@ fn audio_manager_thread(
                 }
 
                 // Advance the global frame counter after emitting this buffer.
-                let frames = if device_channels == 0 { 0 } else { out.len() / device_channels };
+                let frames = if device_channels == 0 {
+                    0
+                } else {
+                    out.len() / device_channels
+                };
                 if frames > 0 {
                     LAST_CALLBACK_FRAMES.store(frames as u64, Ordering::Relaxed);
                     MUSIC_TOTAL_FRAMES.store(
@@ -371,10 +401,17 @@ fn audio_manager_thread(
                 let final_music_vol = master_vol * music_vol;
                 let final_sfx_vol = master_vol * sfx_vol;
 
-                if mix_i16.len() != out.len() { mix_i16.resize(out.len(), 0); }
-                if mix_f32.len() != out.len() { mix_f32.resize(out.len(), 0.0); }
+                if mix_i16.len() != out.len() {
+                    mix_i16.resize(out.len(), 0);
+                }
+                if mix_f32.len() != out.len() {
+                    mix_f32.resize(out.len(), 0.0);
+                }
 
-                let popped = internal::callback_fill_from_ring_i16(&music_ring_for_callback, &mut mix_i16[..]);
+                let popped = internal::callback_fill_from_ring_i16(
+                    &music_ring_for_callback,
+                    &mut mix_i16[..],
+                );
 
                 if MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed)
                     && !MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire)
@@ -406,7 +443,11 @@ fn audio_manager_thread(
                     *o = u16::from_sample(*f);
                 }
 
-                let frames = if device_channels == 0 { 0 } else { out.len() / device_channels };
+                let frames = if device_channels == 0 {
+                    0
+                } else {
+                    out.len() / device_channels
+                };
                 if frames > 0 {
                     LAST_CALLBACK_FRAMES.store(frames as u64, Ordering::Relaxed);
                     MUSIC_TOTAL_FRAMES.store(
@@ -436,9 +477,14 @@ fn audio_manager_thread(
                 let final_music_vol = master_vol * music_vol;
                 let final_sfx_vol = master_vol * sfx_vol;
 
-                if mix_i16.len() != out.len() { mix_i16.resize(out.len(), 0); }
+                if mix_i16.len() != out.len() {
+                    mix_i16.resize(out.len(), 0);
+                }
 
-                let popped = internal::callback_fill_from_ring_i16(&music_ring_for_callback, &mut mix_i16[..]);
+                let popped = internal::callback_fill_from_ring_i16(
+                    &music_ring_for_callback,
+                    &mut mix_i16[..],
+                );
 
                 if MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed)
                     && !MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire)
@@ -466,7 +512,11 @@ fn audio_manager_thread(
                     *cursor < data.len()
                 });
 
-                let frames = if device_channels == 0 { 0 } else { out.len() / device_channels };
+                let frames = if device_channels == 0 {
+                    0
+                } else {
+                    out.len() / device_channels
+                };
                 if frames > 0 {
                     LAST_CALLBACK_FRAMES.store(frames as u64, Ordering::Relaxed);
                     MUSIC_TOTAL_FRAMES.store(
@@ -479,28 +529,39 @@ fn audio_manager_thread(
             None,
         ),
         _ => unreachable!(),
-    }.expect("Failed to build audio stream");
+    }
+    .expect("Failed to build audio stream");
 
     stream.play().expect("Failed to play audio stream");
 
     // Command loop: manage music decoder thread and pass SFX to the callback
     loop {
         match command_receiver.recv() {
-            Ok(AudioCommand::PlaySfx(data)) => { let _ = sfx_sender.send(data); },
+            Ok(AudioCommand::PlaySfx(data)) => {
+                let _ = sfx_sender.send(data);
+            }
             Ok(AudioCommand::PlayMusic(path, cut, looping, rate)) => {
                 if let Some(old) = music_stream.take() {
-                    old.stop_signal.store(true, std::sync::atomic::Ordering::Relaxed);
+                    old.stop_signal
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
                     let _ = old.thread.join();
                 }
                 internal::ring_clear(&music_ring);
                 MUSIC_TRACK_ACTIVE.store(true, Ordering::Relaxed);
                 MUSIC_TRACK_HAS_STARTED.store(false, Ordering::Relaxed);
                 let rate_bits = Arc::new(AtomicU32::new(rate.to_bits()));
-                music_stream = Some(spawn_music_decoder_thread(path, cut, looping, rate_bits, music_ring.clone()));
+                music_stream = Some(spawn_music_decoder_thread(
+                    path,
+                    cut,
+                    looping,
+                    rate_bits,
+                    music_ring.clone(),
+                ));
             }
             Ok(AudioCommand::StopMusic) => {
                 if let Some(old) = music_stream.take() {
-                    old.stop_signal.store(true, std::sync::atomic::Ordering::Relaxed);
+                    old.stop_signal
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
                     let _ = old.thread.join();
                 }
                 internal::ring_clear(&music_ring);
@@ -534,12 +595,18 @@ fn spawn_music_decoder_thread(
     let rate_bits_clone = rate_bits.clone();
 
     let thread = thread::spawn(move || {
-        if let Err(e) = music_decoder_thread_loop(path, cut, looping, rate_bits_clone, ring, stop_signal_clone) {
+        if let Err(e) =
+            music_decoder_thread_loop(path, cut, looping, rate_bits_clone, ring, stop_signal_clone)
+        {
             error!("Music decoder thread failed: {}", e);
         }
     });
 
-    MusicStream { thread, stop_signal, rate_bits }
+    MusicStream {
+        thread,
+        stop_signal,
+        rate_bits,
+    }
 }
 
 #[inline]
@@ -569,8 +636,15 @@ fn volume_for_frame(position: u64, full_volume_frame: u64, silence_frame: u64) -
     volume.clamp(0.0, 1.0) as f32
 }
 
-fn apply_fade_envelope(samples: &mut [i16], channels: usize, start_frame: u64, fade: Option<(u64, u64)>) {
-    let Some((full_volume_frame, silence_frame)) = fade else { return; };
+fn apply_fade_envelope(
+    samples: &mut [i16],
+    channels: usize,
+    start_frame: u64,
+    fade: Option<(u64, u64)>,
+) {
+    let Some((full_volume_frame, silence_frame)) = fade else {
+        return;
+    };
     if samples.is_empty() || channels == 0 {
         return;
     }
@@ -584,7 +658,11 @@ fn apply_fade_envelope(samples: &mut [i16], channels: usize, start_frame: u64, f
     }
 
     let start_volume = volume_for_frame(start_frame, full_volume_frame, silence_frame);
-    let end_volume = volume_for_frame(start_frame + frames as u64, full_volume_frame, silence_frame);
+    let end_volume = volume_for_frame(
+        start_frame + frames as u64,
+        full_volume_frame,
+        silence_frame,
+    );
     if start_volume > 0.9999 && end_volume > 0.9999 {
         return;
     }
@@ -636,14 +714,21 @@ fn music_decoder_thread_loop(
     // --- Handle negative start time as preroll silence ---
     if cut.start_sec < 0.0 {
         let silence_duration_sec = -cut.start_sec;
-        let silence_samples = (silence_duration_sec * out_hz as f64 * out_ch as f64).round() as usize;
+        let silence_samples =
+            (silence_duration_sec * out_hz as f64 * out_ch as f64).round() as usize;
         if silence_samples > 0 {
             let silence_buf = vec![0i16; silence_samples];
             let mut off = 0;
             while off < silence_buf.len() {
-                if stop.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
+                if stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    return Ok(());
+                }
                 let pushed = internal::ring_push(&ring, &silence_buf[off..]);
-                if pushed == 0 { thread::sleep(std::time::Duration::from_micros(300)); } else { off += pushed; }
+                if pushed == 0 {
+                    thread::sleep(std::time::Duration::from_micros(300));
+                } else {
+                    off += pushed;
+                }
             }
         }
     }
@@ -653,7 +738,9 @@ fn music_decoder_thread_loop(
         const OUT_FRAMES_PER_CALL: usize = 256;
         // Adjust ratio by 1/rate to speed up (rate>1) or slow down (rate<1)
         let mut current_rate_f32 = f32::from_bits(rate_bits.load(Ordering::Relaxed));
-        if !current_rate_f32.is_finite() || current_rate_f32 <= 0.0 { current_rate_f32 = 1.0; }
+        if !current_rate_f32.is_finite() || current_rate_f32 <= 0.0 {
+            current_rate_f32 = 1.0;
+        }
         let mut ratio = (out_hz as f64 / in_hz as f64) / (current_rate_f32 as f64);
         let mut resampler = SincFixedOut::<f32>::new(
             ratio,
@@ -671,7 +758,7 @@ fn music_decoder_thread_loop(
 
         // --- v1-style start & pre-roll ---
         let start_frame_f = (cut.start_sec * in_hz as f64).max(0.0);
-        let start_floor   = start_frame_f.floor() as u64;
+        let start_floor = start_frame_f.floor() as u64;
 
         // Try to seek a little before start to fill FIR, else fall back to decode+drop
         let mut seek_ok = true;
@@ -683,10 +770,11 @@ fn music_decoder_thread_loop(
         }
 
         // How many output frames to throw away to finish pre-roll?
-        let mut preroll_out_frames: u64 =
-            if seek_ok && start_floor > 0 {
-                (internal::PREROLL_IN_FRAMES as f64 * ratio).ceil() as u64
-            } else { 0 };
+        let mut preroll_out_frames: u64 = if seek_ok && start_floor > 0 {
+            (internal::PREROLL_IN_FRAMES as f64 * ratio).ceil() as u64
+        } else {
+            0
+        };
 
         // If seek failed, decode and drop input frames until we hit start
         let mut to_drop_in: u64 = if seek_ok { 0 } else { start_floor };
@@ -697,7 +785,9 @@ fn music_decoder_thread_loop(
         // Optional cut length in output frames
         let mut frames_left_out: Option<u64> = if cut.length_sec.is_finite() {
             Some((cut.length_sec * out_hz as f64).round().max(0.0) as u64)
-        } else { None };
+        } else {
+            None
+        };
         let total_frames_target = frames_left_out;
 
         let fade_spec = if let Some(total) = total_frames_target {
@@ -718,10 +808,17 @@ fn music_decoder_thread_loop(
         let mut frames_emitted_total: u64 = 0;
 
         #[inline(always)]
-        fn cap_out_frames(out_tmp: &mut Vec<i16>, out_ch: usize, frames_left_out: &mut Option<u64>) -> bool {
+        fn cap_out_frames(
+            out_tmp: &mut Vec<i16>,
+            out_ch: usize,
+            frames_left_out: &mut Option<u64>,
+        ) -> bool {
             if let Some(left) = frames_left_out {
                 let frames = out_tmp.len() / out_ch;
-                if *left == 0 { out_tmp.clear(); return true; }
+                if *left == 0 {
+                    out_tmp.clear();
+                    return true;
+                }
                 if (frames as u64) > *left {
                     out_tmp.truncate((*left as usize) * out_ch);
                     *left = 0;
@@ -761,7 +858,10 @@ fn music_decoder_thread_loop(
             frames_emitted_total: &mut u64,
             fade_spec: Option<(u64, u64)>,
             frames_left_out: &mut Option<u64>,
-            push_block: &mut dyn FnMut(&[i16]) -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
+            push_block: &mut dyn FnMut(
+                &[i16],
+            )
+                -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
         ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
             let mut produced_any = false;
             loop {
@@ -799,7 +899,8 @@ fn music_decoder_thread_loop(
                     let drop_samples = drop_frames * out_ch;
                     if drop_samples > 0 {
                         out_tmp.drain(0..drop_samples);
-                        *preroll_out_frames = (*preroll_out_frames).saturating_sub(drop_frames as u64);
+                        *preroll_out_frames =
+                            (*preroll_out_frames).saturating_sub(drop_frames as u64);
                     }
                 }
                 // Cut length cap
@@ -819,20 +920,29 @@ fn music_decoder_thread_loop(
                 }
                 if !out_tmp.is_empty() {
                     apply_fade_envelope(out_tmp, out_ch, *frames_emitted_total, fade_spec);
-                    *frames_emitted_total = (*frames_emitted_total).saturating_add((out_tmp.len() / out_ch) as u64);
+                    *frames_emitted_total =
+                        (*frames_emitted_total).saturating_add((out_tmp.len() / out_ch) as u64);
                     push_block(out_tmp)?;
                     produced_any = true;
                 }
-                if finished { break; }
+                if finished {
+                    break;
+                }
             }
             Ok(produced_any)
         }
 
         // --- Main decode loop ---
         while let Ok(pkt_opt) = ogg.read_dec_packet_itl() {
-            if stop.load(std::sync::atomic::Ordering::Relaxed) { break 'main_loop; }
+            if stop.load(std::sync::atomic::Ordering::Relaxed) {
+                break 'main_loop;
+            }
 
-            let p = match pkt_opt { Some(p) if !p.is_empty() => p, Some(_) => continue, None => break };
+            let p = match pkt_opt {
+                Some(p) if !p.is_empty() => p,
+                Some(_) => continue,
+                None => break,
+            };
 
             // If seek failed, drop whole input frames until we reach start
             let mut slice = &p[..];
@@ -853,12 +963,20 @@ fn music_decoder_thread_loop(
 
             // Check for dynamic rate changes and rebuild resampler if needed
             let desired_rate = f32::from_bits(rate_bits.load(Ordering::Relaxed));
-            let mut desired_rate = if desired_rate.is_finite() && desired_rate > 0.0 { desired_rate } else { 1.0 };
+            let mut desired_rate = if desired_rate.is_finite() && desired_rate > 0.0 {
+                desired_rate
+            } else {
+                1.0
+            };
             // Avoid very tiny thrash around last digit
             if (desired_rate - current_rate_f32).abs() > 0.0005 {
                 // Clamp to sane bounds
-                if desired_rate < 0.05 { desired_rate = 0.05; }
-                if desired_rate > 8.0 { desired_rate = 8.0; }
+                if desired_rate < 0.05 {
+                    desired_rate = 0.05;
+                }
+                if desired_rate > 8.0 {
+                    desired_rate = 8.0;
+                }
                 current_rate_f32 = desired_rate;
                 ratio = (out_hz as f64 / in_hz as f64) / (current_rate_f32 as f64);
                 resampler = SincFixedOut::<f32>::new(
@@ -888,15 +1006,23 @@ fn music_decoder_thread_loop(
                 &mut |block: &[i16]| {
                     let mut off = 0;
                     while off < block.len() {
-                        if stop.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
+                        if stop.load(std::sync::atomic::Ordering::Relaxed) {
+                            return Ok(());
+                        }
                         let pushed = internal::ring_push(&ring, &block[off..]);
-                        if pushed == 0 { thread::sleep(std::time::Duration::from_micros(300)); } else { off += pushed; }
+                        if pushed == 0 {
+                            thread::sleep(std::time::Duration::from_micros(300));
+                        } else {
+                            off += pushed;
+                        }
                     }
                     Ok(())
                 },
             )?;
             let finished = matches!(frames_left_out, Some(0));
-            if finished { break; }
+            if finished {
+                break;
+            }
         }
 
         // --- Flush remainder ---
@@ -908,7 +1034,9 @@ fn music_decoder_thread_loop(
                 input_slices.push(&ch[..remain]);
             }
             let out = resampler.process_partial(Some(&input_slices), None)?;
-            for ch in in_planar.iter_mut() { ch.clear(); }
+            for ch in in_planar.iter_mut() {
+                ch.clear();
+            }
             if !out.is_empty() {
                 let produced_frames = out[0].len();
                 out_tmp.clear();
@@ -934,9 +1062,15 @@ fn music_decoder_thread_loop(
                     // No need to update frames_emitted_total after flush
                     let mut off = 0;
                     while off < out_tmp.len() {
-                        if stop.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
+                        if stop.load(std::sync::atomic::Ordering::Relaxed) {
+                            return Ok(());
+                        }
                         let pushed = internal::ring_push(&ring, &out_tmp[off..]);
-                        if pushed == 0 { thread::sleep(std::time::Duration::from_micros(300)); } else { off += pushed; }
+                        if pushed == 0 {
+                            thread::sleep(std::time::Duration::from_micros(300));
+                        } else {
+                            off += pushed;
+                        }
                     }
                 }
             }
@@ -959,9 +1093,15 @@ fn music_decoder_thread_loop(
             if !out_tmp.is_empty() {
                 let mut off = 0;
                 while off < out_tmp.len() {
-                    if stop.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
+                    if stop.load(std::sync::atomic::Ordering::Relaxed) {
+                        return Ok(());
+                    }
                     let pushed = internal::ring_push(&ring, &out_tmp[off..]);
-                    if pushed == 0 { thread::sleep(std::time::Duration::from_micros(300)); } else { off += pushed; }
+                    if pushed == 0 {
+                        thread::sleep(std::time::Duration::from_micros(300));
+                    } else {
+                        off += pushed;
+                    }
                 }
             }
         }
@@ -975,7 +1115,10 @@ fn music_decoder_thread_loop(
         }
 
         // Re-open the file for the next loop iteration (gapless enough; continue with fresh resampler)
-        match File::open(&path).ok().and_then(|f| OggStreamReader::new(BufReader::new(f)).ok()) {
+        match File::open(&path)
+            .ok()
+            .and_then(|f| OggStreamReader::new(BufReader::new(f)).ok())
+        {
             Some(new_reader) => {
                 info!("Looping music: restarted {:?}", path);
                 ogg = new_reader;
@@ -1009,22 +1152,11 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
         oversampling_factor: 128,
         window: WindowFunction::BlackmanHarris2,
     };
-    let mut resampler = SincFixedOut::<f32>::new(
-        ratio,
-        1.0,
-        iparams,
-        OUT_FRAMES_PER_CALL,
-        in_ch,
-    )?;
+    let mut resampler = SincFixedOut::<f32>::new(ratio, 1.0, iparams, OUT_FRAMES_PER_CALL, in_ch)?;
 
     info!(
         "SFX decode: '{}' ({} ch @ {} Hz) -> output {} ch @ {} Hz (ratio {:.6}).",
-        path,
-        in_ch,
-        in_hz,
-        out_ch,
-        out_hz,
-        ratio
+        path, in_ch, in_hz, out_ch, out_hz, ratio
     );
 
     let mut resampled_data: Vec<i16> = Vec::new();
@@ -1032,7 +1164,9 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
 
     while let Some(pkt) = ogg.read_dec_packet_itl()? {
         let frames = pkt.len() / in_ch;
-        if frames == 0 { continue; }
+        if frames == 0 {
+            continue;
+        }
         // Push into planar
         for f in 0..frames {
             let base = f * in_ch;
@@ -1043,12 +1177,20 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
         // Produce as many blocks as possible based on required input
         loop {
             let need = resampler.input_frames_next();
-            if in_planar.iter().any(|ch| ch.len() < need) { break; }
+            if in_planar.iter().any(|ch| ch.len() < need) {
+                break;
+            }
             let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
-            for ch in in_planar.iter() { input_slices.push(&ch[..need]); }
+            for ch in in_planar.iter() {
+                input_slices.push(&ch[..need]);
+            }
             let out = resampler.process(&input_slices, None)?;
-            for ch in in_planar.iter_mut() { ch.drain(0..need); }
-            if out.is_empty() { break; }
+            for ch in in_planar.iter_mut() {
+                ch.drain(0..need);
+            }
+            if out.is_empty() {
+                break;
+            }
             let produced_frames = out[0].len();
             resampled_data.reserve(produced_frames * out_ch);
             for f in 0..produced_frames {
@@ -1065,7 +1207,9 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
     if !in_planar.iter().all(|v| v.is_empty()) {
         let remain = in_planar.iter().map(|v| v.len()).min().unwrap_or(0);
         let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
-        for ch in in_planar.iter() { input_slices.push(&ch[..remain]); }
+        for ch in in_planar.iter() {
+            input_slices.push(&ch[..remain]);
+        }
         let out = resampler.process_partial(Some(&input_slices), None)?;
         if !out.is_empty() {
             let produced_frames = out[0].len();
@@ -1078,7 +1222,9 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
                 }
             }
         }
-        for ch in in_planar.iter_mut() { ch.clear(); }
+        for ch in in_planar.iter_mut() {
+            ch.clear();
+        }
     }
     // Tail flush
     let out_tail = resampler.process_partial::<&[f32]>(None, None)?;
@@ -1130,36 +1276,54 @@ mod internal {
     }
 
     #[inline(always)]
-    fn ring_cap(r: &SpscRingI16) -> usize { unsafe { (&*r.buf.get()).len() } }
+    fn ring_cap(r: &SpscRingI16) -> usize {
+        unsafe { (&*r.buf.get()).len() }
+    }
 
     pub fn ring_push(r: &SpscRingI16, data: &[i16]) -> usize {
-        let cap = ring_cap(r); let mask = r.mask;
-        let h = r.head.load(Ordering::Relaxed); let t = r.tail.load(Ordering::Acquire);
+        let cap = ring_cap(r);
+        let mask = r.mask;
+        let h = r.head.load(Ordering::Relaxed);
+        let t = r.tail.load(Ordering::Acquire);
         let free = cap - h.wrapping_sub(t);
-        let n = data.len().min(free); if n == 0 { return 0; }
+        let n = data.len().min(free);
+        if n == 0 {
+            return 0;
+        }
         let idx = h & mask;
         unsafe {
             let buf = &mut *r.buf.get();
             let first = (cap - idx).min(n);
             buf[idx..idx + first].copy_from_slice(&data[..first]);
-            if n > first { buf[0..(n - first)].copy_from_slice(&data[first..n]); }
+            if n > first {
+                buf[0..(n - first)].copy_from_slice(&data[first..n]);
+            }
         }
-        r.head.store(h.wrapping_add(n), Ordering::Release); n
+        r.head.store(h.wrapping_add(n), Ordering::Release);
+        n
     }
 
     pub fn ring_pop(r: &SpscRingI16, out: &mut [i16]) -> usize {
-        let cap = ring_cap(r); let mask = r.mask;
-        let h = r.head.load(Ordering::Acquire); let t = r.tail.load(Ordering::Relaxed);
+        let cap = ring_cap(r);
+        let mask = r.mask;
+        let h = r.head.load(Ordering::Acquire);
+        let t = r.tail.load(Ordering::Relaxed);
         let avail = h.wrapping_sub(t);
-        let n = out.len().min(avail); if n == 0 { return 0; }
+        let n = out.len().min(avail);
+        if n == 0 {
+            return 0;
+        }
         let idx = t & mask;
         unsafe {
             let buf = &*r.buf.get();
             let first = (cap - idx).min(n);
             out[..first].copy_from_slice(&buf[idx..idx + first]);
-            if n > first { out[first..n].copy_from_slice(&buf[0..(n - first)]); }
+            if n > first {
+                out[first..n].copy_from_slice(&buf[0..(n - first)]);
+            }
         }
-        r.tail.store(t.wrapping_add(n), Ordering::Release); n
+        r.tail.store(t.wrapping_add(n), Ordering::Release);
+        n
     }
 
     pub fn ring_clear(r: &SpscRingI16) {
@@ -1177,7 +1341,9 @@ mod internal {
             let got = ring_pop(ring, &mut dst[filled..]);
             if got == 0 {
                 // underrun: zero the rest
-                for d in &mut dst[filled..] { *d = 0; }
+                for d in &mut dst[filled..] {
+                    *d = 0;
+                }
                 break;
             }
             filled += got;

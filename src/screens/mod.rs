@@ -1,18 +1,18 @@
+pub mod evaluation;
 pub mod gameplay;
+pub mod init;
+pub mod input;
+pub mod mappings;
 pub mod menu;
 pub mod options;
-pub mod init;
-pub mod select_color;
-pub mod mappings;
-pub mod input;
-pub mod select_music;
-pub mod sandbox;
-pub mod evaluation;
 pub mod player_options;
+pub mod sandbox;
+pub mod select_color;
+pub mod select_music;
 use std::path::PathBuf;
 
-use crate::core::gfx::BackendType;
 use crate::config::DisplayMode;
+use crate::core::gfx::BackendType;
 use crate::game::chart::ChartData;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ScreenAction {
@@ -28,6 +28,7 @@ pub enum ScreenAction {
         monitor: Option<usize>,
         resolution: Option<(u32, u32)>,
     },
+    UpdateShowOverlay(bool),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

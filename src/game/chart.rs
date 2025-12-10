@@ -1,5 +1,5 @@
-use rssp::stats::ArrowStats;
 use rssp::TechCounts;
+use rssp::stats::ArrowStats;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChartData {

@@ -1,9 +1,9 @@
+use crate::assets;
 use crate::core::gfx as renderer;
 use crate::core::gfx::{BlendMode, RenderList, RenderObject};
 use crate::core::space::Metrics;
-use crate::assets;
-use crate::ui::font;
 use crate::ui::actors::{self, Actor, SizeSpec};
+use crate::ui::font;
 use cgmath::{Deg, Matrix4, Vector2, Vector3};
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
@@ -42,7 +42,10 @@ pub fn build_screen<'a>(
 
     objects.sort_by_key(|o| (o.z, o.order));
 
-    RenderList { clear_color, objects }
+    RenderList {
+        clear_color,
+        objects,
+    }
 }
 
 #[inline(always)]
@@ -80,7 +83,9 @@ fn estimate_object_count(
                 }
             }
             Actor::Frame {
-                children, background, ..
+                children,
+                background,
+                ..
             } => {
                 if background.is_some() {
                     total += 1;
@@ -160,7 +165,8 @@ fn build_actor_recursive<'a>(
             let mut chosen_grid = *grid;
 
             if !is_solid && uv_rect.is_none() {
-                let (cols, rows) = grid.unwrap_or_else(|| assets::parse_sprite_sheet_dims(texture_name));
+                let (cols, rows) =
+                    grid.unwrap_or_else(|| assets::parse_sprite_sheet_dims(texture_name));
                 let total = cols.saturating_mul(rows).max(1);
 
                 let start_linear: u32 = match *cell {
@@ -197,8 +203,8 @@ fn build_actor_recursive<'a>(
             let rect = place_rect(parent, *align, *offset, resolved_size);
 
             let before = out.len();
-                push_sprite(
-                    out,
+            push_sprite(
+                out,
                 rect,
                 m,
                 is_solid,
@@ -304,7 +310,7 @@ fn build_actor_recursive<'a>(
                     fm,
                     fonts,
                     content,
-                    0.0,                 // _px_size unused
+                    0.0, // _px_size unused
                     *scale,
                     *fit_width,
                     *fit_height,
@@ -542,10 +548,7 @@ fn calculate_uvs(
         let rows = gr.max(1);
         let (col, row) = if cy == u32::MAX {
             let idx = cx;
-            (
-                idx % cols,
-                (idx / cols).min(rows.saturating_sub(1)),
-            )
+            (idx % cols, (idx / cols).min(rows.saturating_sub(1)))
         } else {
             (
                 cx.min(cols.saturating_sub(1)),
@@ -767,13 +770,19 @@ fn layout_text<'a>(
     }
 
     // 1) Logical (integer) widths like SM: sum integer advances (default glyph if unmapped).
-    let logical_line_widths: Vec<i32> =
-        lines.iter().map(|l| font::measure_line_width_logical(font, l, fonts)).collect();
+    let logical_line_widths: Vec<i32> = lines
+        .iter()
+        .map(|l| font::measure_line_width_logical(font, l, fonts))
+        .collect();
     let max_logical_width_i = logical_line_widths.iter().copied().max().unwrap_or(0);
     let block_w_logical_even = quantize_up_even_i32(max_logical_width_i) as f32;
 
     // 2) Unscaled block cap height + line spacing in logical units
-    let cap_height = if font.height > 0 { font.height as f32 } else { font.line_spacing as f32 };
+    let cap_height = if font.height > 0 {
+        font.height as f32
+    } else {
+        font.line_spacing as f32
+    };
     let num_lines = lines.len();
     let block_h_logical_i = if num_lines > 1 {
         font.height + ((num_lines - 1) as i32 * font.line_spacing)
@@ -802,27 +811,47 @@ fn layout_text<'a>(
             1.0
         }
     });
-    let fit_s = if s_w_fit.is_infinite() && s_h_fit.is_infinite() { 1.0 } else { s_w_fit.min(s_h_fit).max(0.0) };
+    let fit_s = if s_w_fit.is_infinite() && s_h_fit.is_infinite() {
+        1.0
+    } else {
+        s_w_fit.min(s_h_fit).max(0.0)
+    };
 
     // 4) Reference sizes before/after zoom (but before max clamp)
-    let width_before_zoom  = block_w_logical_even * fit_s;
+    let width_before_zoom = block_w_logical_even * fit_s;
     let height_before_zoom = block_h_logical * fit_s;
 
-    let width_after_zoom   = width_before_zoom  * scale[0];
-    let height_after_zoom  = height_before_zoom * scale[1];
+    let width_after_zoom = width_before_zoom * scale[0];
+    let height_after_zoom = height_before_zoom * scale[1];
 
     // 5) Decide the clamp denominators per axis based on order flags
     // If a zoom occurred AFTER the last max for that axis, SM semantics = clamp BEFORE that zoom.
     // Otherwise clamp AFTER zoom.
-    let denom_w_for_max = if max_w_pre_zoom { width_before_zoom } else { width_after_zoom };
-    let denom_h_for_max = if max_h_pre_zoom { height_before_zoom } else { height_after_zoom };
+    let denom_w_for_max = if max_w_pre_zoom {
+        width_before_zoom
+    } else {
+        width_after_zoom
+    };
+    let denom_h_for_max = if max_h_pre_zoom {
+        height_before_zoom
+    } else {
+        height_after_zoom
+    };
 
     // 6) Compute per-axis extra downscale from max constraints
     let max_s_w = max_width.map_or(1.0, |mw| {
-        if denom_w_for_max > mw { (mw / denom_w_for_max).max(0.0) } else { 1.0 }
+        if denom_w_for_max > mw {
+            (mw / denom_w_for_max).max(0.0)
+        } else {
+            1.0
+        }
     });
     let max_s_h = max_height.map_or(1.0, |mh| {
-        if denom_h_for_max > mh { (mh / denom_h_for_max).max(0.0) } else { 1.0 }
+        if denom_h_for_max > mh {
+            (mh / denom_h_for_max).max(0.0)
+        } else {
+            1.0
+        }
     });
 
     // 7) Final per-axis scales: fit * zoom * (potential extra downscale)
@@ -838,19 +867,15 @@ fn layout_text<'a>(
 
     // 9) Place the block, compute baseline (unchanged)
     let block_left_sm = parent.x + offset[0] - align[0] * block_w_px;
-    let block_top_sm  = parent.y + offset[1] - align[1] * block_h_px;
+    let block_top_sm = parent.y + offset[1] - align[1] * block_h_px;
     let block_center_x = block_left_sm + 0.5 * block_w_px;
-    let block_center_y = block_top_sm  + 0.5 * block_h_px;
+    let block_center_y = block_top_sm + 0.5 * block_h_px;
 
     let mut pen_y_logical = lrint_ties_even(-(block_h_logical_i as f32) * 0.5) as i32;
     let line_padding = font.line_spacing - font.height;
 
     #[inline(always)]
-    fn start_x_logical(
-        align: actors::TextAlign,
-        block_w_logical: f32,
-        line_w_logical: f32,
-    ) -> i32 {
+    fn start_x_logical(align: actors::TextAlign, block_w_logical: f32, line_w_logical: f32) -> i32 {
         let align_value = match align {
             actors::TextAlign::Left => 0.0,
             actors::TextAlign::Center => 0.5,
@@ -914,7 +939,7 @@ fn layout_text<'a>(
                 let quad_y_sm = logical_to_world(block_center_y, quad_y_logical, sy);
 
                 let center_x = m.left + quad_x_sm + quad_w * 0.5;
-                let center_y = m.top  - (quad_y_sm + quad_h * 0.5);
+                let center_y = m.top - (quad_y_sm + quad_h * 0.5);
 
                 let transform = Matrix4::from_translation(Vector3::new(center_x, center_y, 0.0))
                     * Matrix4::from_nonuniform_scale(quad_w, quad_h, 1.0);
@@ -952,7 +977,10 @@ fn layout_text<'a>(
 #[inline(always)]
 fn sm_rect_to_world_center_size(rect: SmRect, m: &Metrics) -> (Vector2<f32>, Vector2<f32>) {
     (
-        Vector2::new(m.left + rect.x + 0.5 * rect.w, m.top - (rect.y + 0.5 * rect.h)),
+        Vector2::new(
+            m.left + rect.x + 0.5 * rect.w,
+            m.top - (rect.y + 0.5 * rect.h),
+        ),
         Vector2::new(rect.w, rect.h),
     )
 }

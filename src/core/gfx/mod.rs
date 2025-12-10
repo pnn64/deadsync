@@ -1,8 +1,8 @@
 mod backends;
 
-use crate::core::gfx::backends::{opengl, software, vulkan, wgpu_gl, wgpu_vk};
 #[cfg(target_os = "windows")]
 use crate::core::gfx::backends::wgpu_dx;
+use crate::core::gfx::backends::{opengl, software, vulkan, wgpu_gl, wgpu_vk};
 use cgmath::Matrix4;
 use glow::HasContext;
 use image::RgbaImage;
@@ -201,20 +201,29 @@ impl Backend {
                 }
             }
             BackendImpl::VulkanWgpu(state) => {
-                let _ = state.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: None });
+                let _ = state.device.poll(wgpu::PollType::Wait {
+                    submission_index: None,
+                    timeout: None,
+                });
             }
             BackendImpl::OpenGL(_) => {
                 // This is a no-op for OpenGL.
             }
             BackendImpl::OpenGLWgpu(state) => {
-                let _ = state.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: None });
+                let _ = state.device.poll(wgpu::PollType::Wait {
+                    submission_index: None,
+                    timeout: None,
+                });
             }
             BackendImpl::Software(_) => {
                 // CPU renderer is synchronous; nothing to wait for.
             }
             #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => {
-                let _ = state.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: None });
+                let _ = state.device.poll(wgpu::PollType::Wait {
+                    submission_index: None,
+                    timeout: None,
+                });
             }
         }
     }
@@ -261,7 +270,7 @@ impl FromStr for BackendType {
                 Ok(BackendType::VulkanWgpu)
             }
             "opengl" => Ok(BackendType::OpenGL),
-             "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => {
+            "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => {
                 Ok(BackendType::OpenGLWgpu)
             }
             "software" | "cpu" => Ok(BackendType::Software),

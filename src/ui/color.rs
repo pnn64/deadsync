@@ -1,7 +1,8 @@
 /// Accepts "#rgb", "#rgba", "#rrggbb", "#rrggbbaa" (or without '#').
 /// Panics on invalid input; use only with trusted literals.
 pub fn rgba_hex(s: &str) -> [f32; 4] {
-    #[inline(always)] fn nib(b: u8) -> u8 {
+    #[inline(always)]
+    fn nib(b: u8) -> u8 {
         match b {
             b'0'..=b'9' => b - b'0',
             b'a'..=b'f' => 10 + (b - b'a'),
@@ -9,8 +10,14 @@ pub fn rgba_hex(s: &str) -> [f32; 4] {
             _ => panic!("invalid hex digit"),
         }
     }
-    #[inline(always)] fn byte2(h: u8, l: u8) -> u8 { (nib(h) << 4) | nib(l) }
-    #[inline(always)] fn rep(n: u8) -> u8 { (n << 4) | n }
+    #[inline(always)]
+    fn byte2(h: u8, l: u8) -> u8 {
+        (nib(h) << 4) | nib(l)
+    }
+    #[inline(always)]
+    fn rep(n: u8) -> u8 {
+        (n << 4) | n
+    }
 
     let bytes = s.as_bytes();
     let off = (bytes.first() == Some(&b'#')) as usize;
@@ -20,8 +27,18 @@ pub fn rgba_hex(s: &str) -> [f32; 4] {
     let (r, g, bl, a) = match n {
         3 => (rep(b[0]), rep(b[1]), rep(b[2]), 0xFF),
         4 => (rep(b[0]), rep(b[1]), rep(b[2]), rep(b[3])),
-        6 => (byte2(b[0], b[1]), byte2(b[2], b[3]), byte2(b[4], b[5]), 0xFF),
-        8 => (byte2(b[0], b[1]), byte2(b[2], b[3]), byte2(b[4], b[5]), byte2(b[6], b[7])),
+        6 => (
+            byte2(b[0], b[1]),
+            byte2(b[2], b[3]),
+            byte2(b[4], b[5]),
+            0xFF,
+        ),
+        8 => (
+            byte2(b[0], b[1]),
+            byte2(b[2], b[3]),
+            byte2(b[4], b[5]),
+            byte2(b[6], b[7]),
+        ),
         _ => panic!("hex must be 3/4/6/8 digits"),
     };
 
@@ -40,34 +57,14 @@ pub const DEFAULT_COLOR_INDEX: i32 = 2;
 
 /// Decorative / sprite tint palette (hearts, backgrounds, sprites)
 pub const DECORATIVE_HEX: [&str; 12] = [
-    "#FF3C23",
-    "#FF003C",
-    "#C1006F",
-    "#8200A1",
-    "#413AD0",
-    "#0073FF",
-    "#00ADC0",
-    "#5CE087",
-    "#AEFA44",
-    "#FFFF00",
-    "#FFBE00",
-    "#FF7D00",
+    "#FF3C23", "#FF003C", "#C1006F", "#8200A1", "#413AD0", "#0073FF", "#00ADC0", "#5CE087",
+    "#AEFA44", "#FFFF00", "#FFBE00", "#FF7D00",
 ];
 
 /// Simply Love-ish UI accent palette (text highlights, etc.)
 pub const SIMPLY_LOVE_HEX: [&str; 12] = [
-    "#FF5D47",
-    "#FF577E",
-    "#FF47B3",
-    "#DD57FF",
-    "#8885ff",
-    "#3D94FF",
-    "#00B8CC",
-    "#5CE087",
-    "#AEFA44",
-    "#FFFF00",
-    "#FFBE00",
-    "#FF7D00",
+    "#FF5D47", "#FF577E", "#FF47B3", "#DD57FF", "#8885ff", "#3D94FF", "#00B8CC", "#5CE087",
+    "#AEFA44", "#FFFF00", "#FFBE00", "#FF7D00",
 ];
 
 /// Judgment colors for the statistics display, ordered from best to worst.
@@ -82,22 +79,12 @@ pub const JUDGMENT_HEX: [&str; 6] = [
 
 /// Dimmed judgment colors for leading zeros in stats displays.
 pub const JUDGMENT_DIM_HEX: [&str; 6] = [
-    "#0C4E59",
-    "#593D09",
-    "#2D5925",
-    "#3F2059",
-    "#593B29",
-    "#591010",
+    "#0C4E59", "#593D09", "#2D5925", "#3F2059", "#593B29", "#591010",
 ];
 
 /// Dimmed judgment colors for the evaluation screen stats.
 pub const JUDGMENT_DIM_EVAL_HEX: [&str; 6] = [
-    "#08363E",
-    "#3C2906",
-    "#1B3516",
-    "#301844",
-    "#352319",
-    "#440C0C",
+    "#08363E", "#3C2906", "#1B3516", "#301844", "#352319", "#440C0C",
 ];
 
 /// Undimmed white Fantastic color for FA+ (outer window).

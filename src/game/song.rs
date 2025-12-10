@@ -60,7 +60,9 @@ impl SongData {
             // Handle range "min:max" or "min - max"
             let parts: Vec<&str> = s.split([':', '-']).map(str::trim).collect();
             if parts.len() == 2 {
-                if let (Some(min), Some(max)) = (parts[0].parse::<f32>().ok(), parts[1].parse::<f32>().ok()) {
+                if let (Some(min), Some(max)) =
+                    (parts[0].parse::<f32>().ok(), parts[1].parse::<f32>().ok())
+                {
                     let min_i = min.round() as i32;
                     let max_i = max.round() as i32;
                     if min_i == max_i {

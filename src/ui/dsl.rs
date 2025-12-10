@@ -132,30 +132,72 @@ fn build_sprite_like<'a>(
     // fold mods in order
     for m in mods {
         match m {
-            Mod::Xy(a, b) => { x = *a; y = *b; }
-            Mod::SetX(a) => { x = *a; }
-            Mod::SetY(b) => { y = *b; }
-            Mod::AddX(a) => { x += *a; }
-            Mod::AddY(b) => { y += *b; }
+            Mod::Xy(a, b) => {
+                x = *a;
+                y = *b;
+            }
+            Mod::SetX(a) => {
+                x = *a;
+            }
+            Mod::SetY(b) => {
+                y = *b;
+            }
+            Mod::AddX(a) => {
+                x += *a;
+            }
+            Mod::AddY(b) => {
+                y += *b;
+            }
 
-            Mod::HAlign(a)   => { hx = *a; }
-            Mod::VAlign(b)   => { vy = *b; }
-            Mod::Align(a, b) => { hx = *a; vy = *b; }
+            Mod::HAlign(a) => {
+                hx = *a;
+            }
+            Mod::VAlign(b) => {
+                vy = *b;
+            }
+            Mod::Align(a, b) => {
+                hx = *a;
+                vy = *b;
+            }
 
-            Mod::Z(v) => { z = *v; }
-            Mod::Tint(rgba) => { tint = *rgba; }
-            Mod::Alpha(a) => { tint[3] = *a; }
-            Mod::Glow(rgba) => { glow = *rgba; }
-            Mod::Blend(bm) => { blend = *bm; }
+            Mod::Z(v) => {
+                z = *v;
+            }
+            Mod::Tint(rgba) => {
+                tint = *rgba;
+            }
+            Mod::Alpha(a) => {
+                tint[3] = *a;
+            }
+            Mod::Glow(rgba) => {
+                glow = *rgba;
+            }
+            Mod::Blend(bm) => {
+                blend = *bm;
+            }
 
-            Mod::SizePx(a, b) => { w = *a; h = *b; }
+            Mod::SizePx(a, b) => {
+                w = *a;
+                h = *b;
+            }
 
             // StepMania zoom semantics (scale factors)
-            Mod::Zoom(f)     => { sx = *f; sy = *f; }
-            Mod::ZoomX(a)    => { sx = *a; }
-            Mod::ZoomY(b)    => { sy = *b; }
-            Mod::AddZoomX(a) => { sx += *a; }
-            Mod::AddZoomY(b) => { sy += *b; }
+            Mod::Zoom(f) => {
+                sx = *f;
+                sy = *f;
+            }
+            Mod::ZoomX(a) => {
+                sx = *a;
+            }
+            Mod::ZoomY(b) => {
+                sy = *b;
+            }
+            Mod::AddZoomX(a) => {
+                sx += *a;
+            }
+            Mod::AddZoomY(b) => {
+                sy += *b;
+            }
 
             // aspect-preserving absolute sizes
             Mod::ZoomToWidth(new_w) => {
@@ -177,108 +219,214 @@ fn build_sprite_like<'a>(
                 }
             }
 
-            Mod::CropLeft(v)   => { cl = *v; }
-            Mod::CropRight(v)  => { cr = *v; }
-            Mod::CropTop(v)    => { ct = *v; }
-            Mod::CropBottom(v) => { cb = *v; }
+            Mod::CropLeft(v) => {
+                cl = *v;
+            }
+            Mod::CropRight(v) => {
+                cr = *v;
+            }
+            Mod::CropTop(v) => {
+                ct = *v;
+            }
+            Mod::CropBottom(v) => {
+                cb = *v;
+            }
 
-            Mod::FadeLeft(v)    => { fl = *v; }
-            Mod::FadeRight(v)   => { fr = *v; }
-            Mod::FadeTop(v)     => { ft = *v; }
-            Mod::FadeBottom(v)  => { fb = *v; }
+            Mod::FadeLeft(v) => {
+                fl = *v;
+            }
+            Mod::FadeRight(v) => {
+                fr = *v;
+            }
+            Mod::FadeTop(v) => {
+                ft = *v;
+            }
+            Mod::FadeBottom(v) => {
+                fb = *v;
+            }
 
-            Mod::TexVel(v)     => { texv = Some(*v); }
+            Mod::TexVel(v) => {
+                texv = Some(*v);
+            }
 
-            Mod::Visible(v) => { vis = *v; }
-            Mod::RotZ(d)    => { rot = *d; }
-            Mod::AddRotZ(dd)=> { rot += *dd; }
+            Mod::Visible(v) => {
+                vis = *v;
+            }
+            Mod::RotZ(d) => {
+                rot = *d;
+            }
+            Mod::AddRotZ(dd) => {
+                rot += *dd;
+            }
 
             // text-only mods ignored here
-            Mod::Font(_) | Mod::Content(_) | Mod::TAlign(_) | Mod::MaxWidth(_) | Mod::MaxHeight(_) => {}
-            Mod::Tween(steps) => { tw = Some(steps); }
+            Mod::Font(_)
+            | Mod::Content(_)
+            | Mod::TAlign(_)
+            | Mod::MaxWidth(_)
+            | Mod::MaxHeight(_) => {}
+            Mod::Tween(steps) => {
+                tw = Some(steps);
+            }
             Mod::State(i) => {
                 cell = Some((*i, u32::MAX));
                 grid = None;
-                uv   = None;
+                uv = None;
             }
             Mod::UvRect(r) => {
-                uv   = Some(*r);
+                uv = Some(*r);
                 cell = None;
                 grid = None;
             }
-            Mod::Animate(v) => { anim_enable = *v; }
-            Mod::StateDelay(s) => { state_delay = (*s).max(0.0); }
+            Mod::Animate(v) => {
+                anim_enable = *v;
+            }
+            Mod::StateDelay(s) => {
+                state_delay = (*s).max(0.0);
+            }
 
             // shadow
             // StepMania coordinates have +Y downward. Our world has +Y upward.
             // Flip Y to keep the shadow visually down-right for positive inputs.
-            Mod::ShadowLenBoth(v) => { shx = *v; shy = -*v; }
-            Mod::ShadowLenX(v)    => { shx = *v; }
-            Mod::ShadowLenY(v)    => { shy = -*v; }
-            Mod::ShadowColor(c)   => { shc = *c; }
+            Mod::ShadowLenBoth(v) => {
+                shx = *v;
+                shy = -*v;
+            }
+            Mod::ShadowLenX(v) => {
+                shx = *v;
+            }
+            Mod::ShadowLenY(v) => {
+                shy = -*v;
+            }
+            Mod::ShadowColor(c) => {
+                shc = *c;
+            }
         }
     }
 
     if let Some(steps) = tw {
         let mut init = anim::TweenState::default();
-        init.x = x; init.y = y; init.w = w; init.h = h;
-        init.hx = hx; init.vy = vy;
+        init.x = x;
+        init.y = y;
+        init.w = w;
+        init.h = h;
+        init.hx = hx;
+        init.vy = vy;
         init.tint = tint;
         init.glow = glow;
-        init.visible = vis; init.flip_x = fx; init.flip_y = fy;
+        init.visible = vis;
+        init.flip_x = fx;
+        init.flip_y = fy;
         init.rot_z = rot;
-        init.fade_l = fl; init.fade_r = fr; init.fade_t = ft; init.fade_b = fb;
-        init.crop_l = cl; init.crop_r = cr; init.crop_t = ct; init.crop_b = cb;
+        init.fade_l = fl;
+        init.fade_r = fr;
+        init.fade_t = ft;
+        init.fade_b = fb;
+        init.crop_l = cl;
+        init.crop_r = cr;
+        init.crop_t = ct;
+        init.crop_b = cb;
         init.scale = [sx, sy];
 
         #[inline(always)]
         fn auto_salt(src: &SpriteSource, init: &anim::TweenState, steps: &[anim::Step]) -> u64 {
             let mut h = 0xcbf29ce484222325u64;
-            #[inline(always)] fn mix(h:&mut u64, v:u64){ *h ^= v.wrapping_mul(0x9E3779B97F4A7C15); *h = h.rotate_left(27) ^ (*h >> 33); }
-            #[inline(always)] fn f32b(f:f32)->u64{ f.to_bits() as u64 }
-            #[inline(always)] fn hash_bytes64(bs: &[u8]) -> u64 {
+            #[inline(always)]
+            fn mix(h: &mut u64, v: u64) {
+                *h ^= v.wrapping_mul(0x9E3779B97F4A7C15);
+                *h = h.rotate_left(27) ^ (*h >> 33);
+            }
+            #[inline(always)]
+            fn f32b(f: f32) -> u64 {
+                f.to_bits() as u64
+            }
+            #[inline(always)]
+            fn hash_bytes64(bs: &[u8]) -> u64 {
                 let mut x = 0xcbf29ce484222325u64;
-                for &b in bs { x ^= b as u64; x = x.wrapping_mul(0x100000001b3); }
+                for &b in bs {
+                    x ^= b as u64;
+                    x = x.wrapping_mul(0x100000001b3);
+                }
                 x
             }
             match src {
-                SpriteSource::Texture(key) => { mix(&mut h, 0x54455854); mix(&mut h, hash_bytes64(key.as_bytes())); }
-                SpriteSource::Solid       => { mix(&mut h, 0x534F4C49); }
+                SpriteSource::Texture(key) => {
+                    mix(&mut h, 0x54455854);
+                    mix(&mut h, hash_bytes64(key.as_bytes()));
+                }
+                SpriteSource::Solid => {
+                    mix(&mut h, 0x534F4C49);
+                }
             }
-            mix(&mut h, f32b(init.x)); mix(&mut h, f32b(init.y));
-            mix(&mut h, f32b(init.w)); mix(&mut h, f32b(init.h));
-            mix(&mut h, f32b(init.hx)); mix(&mut h, f32b(init.vy));
+            mix(&mut h, f32b(init.x));
+            mix(&mut h, f32b(init.y));
+            mix(&mut h, f32b(init.w));
+            mix(&mut h, f32b(init.h));
+            mix(&mut h, f32b(init.hx));
+            mix(&mut h, f32b(init.vy));
             mix(&mut h, f32b(init.rot_z));
-            for c in init.tint { mix(&mut h, f32b(c)); }
-            for c in init.glow { mix(&mut h, f32b(c)); }
+            for c in init.tint {
+                mix(&mut h, f32b(c));
+            }
+            for c in init.glow {
+                mix(&mut h, f32b(c));
+            }
             mix(&mut h, u64::from(init.visible));
             mix(&mut h, u64::from(init.flip_x));
             mix(&mut h, u64::from(init.flip_y));
-            mix(&mut h, f32b(init.fade_l)); mix(&mut h, f32b(init.fade_r));
-            mix(&mut h, f32b(init.fade_t)); mix(&mut h, f32b(init.fade_b));
-            mix(&mut h, f32b(init.crop_l)); mix(&mut h, f32b(init.crop_r));
-            mix(&mut h, f32b(init.crop_t)); mix(&mut h, f32b(init.crop_b));
-            mix(&mut h, f32b(init.scale[0])); mix(&mut h, f32b(init.scale[1]));
-            for s in steps { mix(&mut h, s.fingerprint64()); }
+            mix(&mut h, f32b(init.fade_l));
+            mix(&mut h, f32b(init.fade_r));
+            mix(&mut h, f32b(init.fade_t));
+            mix(&mut h, f32b(init.fade_b));
+            mix(&mut h, f32b(init.crop_l));
+            mix(&mut h, f32b(init.crop_r));
+            mix(&mut h, f32b(init.crop_t));
+            mix(&mut h, f32b(init.crop_b));
+            mix(&mut h, f32b(init.scale[0]));
+            mix(&mut h, f32b(init.scale[1]));
+            for s in steps {
+                mix(&mut h, s.fingerprint64());
+            }
             h
         }
 
         let salt = auto_salt(&source, &init, steps);
-        let sid  = runtime::site_id(file, line, col, salt);
-        let s    = runtime::materialize(sid, init, steps);
+        let sid = runtime::site_id(file, line, col, salt);
+        let s = runtime::materialize(sid, init, steps);
 
-        x = s.x; y = s.y; w = s.w; h = s.h;
-        hx = s.hx; vy = s.vy;
-        tint = s.tint; glow = s.glow; vis = s.visible; fx = s.flip_x; fy = s.flip_y;
+        x = s.x;
+        y = s.y;
+        w = s.w;
+        h = s.h;
+        hx = s.hx;
+        vy = s.vy;
+        tint = s.tint;
+        glow = s.glow;
+        vis = s.visible;
+        fx = s.flip_x;
+        fy = s.flip_y;
         rot = s.rot_z;
-        fl = s.fade_l; fr = s.fade_r; ft = s.fade_t; fb = s.fade_b;
-        cl = s.crop_l; cr = s.crop_r; ct = s.crop_t; cb = s.crop_b;
-        sx = s.scale[0]; sy = s.scale[1];
+        fl = s.fade_l;
+        fr = s.fade_r;
+        ft = s.fade_t;
+        fb = s.fade_b;
+        cl = s.crop_l;
+        cr = s.crop_r;
+        ct = s.crop_t;
+        cb = s.crop_b;
+        sx = s.scale[0];
+        sy = s.scale[1];
     }
 
     // SM semantics: negative zoom => flips, keep positive magnitudes
-    if sx < 0.0 { fx = !fx; sx = -sx; }
-    if sy < 0.0 { fy = !fy; sy = -sy; }
+    if sx < 0.0 {
+        fx = !fx;
+        sx = -sx;
+    }
+    if sy < 0.0 {
+        fy = !fy;
+        sy = -sy;
+    }
 
     // If size is already known, apply zoom now. Else, carry to compose.
     let scale_carry = if w != 0.0 || h != 0.0 {
@@ -320,7 +468,11 @@ fn build_sprite_like<'a>(
     };
 
     if shx != 0.0 || shy != 0.0 {
-        Actor::Shadow { len: [shx, shy], color: shc, child: Box::new(base) }
+        Actor::Shadow {
+            len: [shx, shy],
+            color: shc,
+            child: Box::new(base),
+        }
     } else {
         base
     }
@@ -369,51 +521,100 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
     for m in mods {
         match m {
             // position & alignment
-            Mod::Xy(a, b)    => { x = *a; y = *b; }
-            Mod::SetX(a)     => { x = *a; }
-            Mod::SetY(b)     => { y = *b; }
-            Mod::AddX(a)     => { x += *a; }
-            Mod::AddY(b)     => { y += *b; }
+            Mod::Xy(a, b) => {
+                x = *a;
+                y = *b;
+            }
+            Mod::SetX(a) => {
+                x = *a;
+            }
+            Mod::SetY(b) => {
+                y = *b;
+            }
+            Mod::AddX(a) => {
+                x += *a;
+            }
+            Mod::AddY(b) => {
+                y += *b;
+            }
 
-            Mod::HAlign(a)   => { hx = *a; }
-            Mod::VAlign(b)   => { vy = *b; }
-            Mod::Align(a, b) => { hx = *a; vy = *b; }
+            Mod::HAlign(a) => {
+                hx = *a;
+            }
+            Mod::VAlign(b) => {
+                vy = *b;
+            }
+            Mod::Align(a, b) => {
+                hx = *a;
+                vy = *b;
+            }
 
             // color/font/text/align
-            Mod::Tint(r)     => { color = *r; }
-            Mod::Alpha(a)    => { color[3] = *a; }
-            Mod::Glow(r)     => { glow = *r; }
-            Mod::Font(f)     => { font = *f; }
-            Mod::Content(s)  => { content = s.clone(); }
-            Mod::TAlign(a)   => { talign = *a; }
-            Mod::Z(v)        => { z = *v; }
+            Mod::Tint(r) => {
+                color = *r;
+            }
+            Mod::Alpha(a) => {
+                color[3] = *a;
+            }
+            Mod::Glow(r) => {
+                glow = *r;
+            }
+            Mod::Font(f) => {
+                font = *f;
+            }
+            Mod::Content(s) => {
+                content = s.clone();
+            }
+            Mod::TAlign(a) => {
+                talign = *a;
+            }
+            Mod::Z(v) => {
+                z = *v;
+            }
 
             // zooms — if they occur after a max* for that axis, mark pre-zoom clamp
             Mod::Zoom(f) => {
-                sx = *f; sy = *f;
-                if saw_max_w { max_w_pre_zoom = true; }
-                if saw_max_h { max_h_pre_zoom = true; }
+                sx = *f;
+                sy = *f;
+                if saw_max_w {
+                    max_w_pre_zoom = true;
+                }
+                if saw_max_h {
+                    max_h_pre_zoom = true;
+                }
             }
             Mod::ZoomX(a) => {
                 sx = *a;
-                if saw_max_w { max_w_pre_zoom = true; }
+                if saw_max_w {
+                    max_w_pre_zoom = true;
+                }
             }
             Mod::ZoomY(b) => {
                 sy = *b;
-                if saw_max_h { max_h_pre_zoom = true; }
+                if saw_max_h {
+                    max_h_pre_zoom = true;
+                }
             }
             Mod::AddZoomX(a) => {
                 sx += *a;
-                if saw_max_w { max_w_pre_zoom = true; }
+                if saw_max_w {
+                    max_w_pre_zoom = true;
+                }
             }
             Mod::AddZoomY(b) => {
                 sy += *b;
-                if saw_max_h { max_h_pre_zoom = true; }
+                if saw_max_h {
+                    max_h_pre_zoom = true;
+                }
             }
 
             // fit targets (applied later with metrics)
-            Mod::ZoomToWidth(w)  => { fit_w = Some(*w); }
-            Mod::ZoomToHeight(h) => { fit_h = Some(*h); }
+            Mod::ZoomToWidth(w) => {
+                fit_w = Some(*w);
+            }
+            Mod::ZoomToHeight(h) => {
+                fit_h = Some(*h);
+            }
 
             // max constraints — reset the pre/post decision window
             Mod::MaxWidth(w) => {
@@ -428,15 +629,28 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
             }
 
             // blend mode
-            Mod::Blend(bm) => { blend = *bm; }
-            Mod::Tween(steps) => { tw = Some(steps); }
+            Mod::Blend(bm) => {
+                blend = *bm;
+            }
+            Mod::Tween(steps) => {
+                tw = Some(steps);
+            }
 
             // shadow
             // Match StepMania (+Y down) by flipping sign on Y in our (+Y up) world.
-            Mod::ShadowLenBoth(v) => { shx = *v; shy = -*v; }
-            Mod::ShadowLenX(v)    => { shx = *v; }
-            Mod::ShadowLenY(v)    => { shy = -*v; }
-            Mod::ShadowColor(c)   => { shc = *c; }
+            Mod::ShadowLenBoth(v) => {
+                shx = *v;
+                shy = -*v;
+            }
+            Mod::ShadowLenX(v) => {
+                shx = *v;
+            }
+            Mod::ShadowLenY(v) => {
+                shy = -*v;
+            }
+            Mod::ShadowColor(c) => {
+                shc = *c;
+            }
 
             // ignore sprite-only/text-irrelevant
             _ => {}
@@ -494,7 +708,11 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
     };
 
     if shx != 0.0 || shy != 0.0 {
-        Actor::Shadow { len: [shx, shy], color: shc, child: Box::new(base) }
+        Actor::Shadow {
+            len: [shx, shy],
+            color: shc,
+            child: Box::new(base),
+        }
     } else {
         base
     }
@@ -522,22 +740,42 @@ macro_rules! __ui_textalign_from_ident {
 
 #[macro_export]
 macro_rules! __ui_halign_from_ident {
-    (left) => { 0.0f32 };
-    (center) => { 0.5f32 };
-    (right) => { 1.0f32 };
+    (left) => {
+        0.0f32
+    };
+    (center) => {
+        0.5f32
+    };
+    (right) => {
+        1.0f32
+    };
     ($other:ident) => {
-        compile_error!(concat!("halign expects left|center|right, got: ", stringify!($other)));
+        compile_error!(concat!(
+            "halign expects left|center|right, got: ",
+            stringify!($other)
+        ));
     };
 }
 
 #[macro_export]
 macro_rules! __ui_valign_from_ident {
-    (top) => { 0.0f32 };
-    (middle) => { 0.5f32 };
-    (center) => { 0.5f32 };
-    (bottom) => { 1.0f32 };
+    (top) => {
+        0.0f32
+    };
+    (middle) => {
+        0.5f32
+    };
+    (center) => {
+        0.5f32
+    };
+    (bottom) => {
+        1.0f32
+    };
     ($other:ident) => {
-        compile_error!(concat!("valign expects top|middle|center|bottom, got: ", stringify!($other)));
+        compile_error!(concat!(
+            "valign expects top|middle|center|bottom, got: ",
+            stringify!($other)
+        ));
     };
 }
 

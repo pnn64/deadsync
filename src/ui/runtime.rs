@@ -42,8 +42,13 @@ pub fn materialize(id: u64, initial: TweenState, steps: &[Step]) -> TweenState {
 
         let ent = r.map.entry(id).or_insert_with(|| {
             let mut tw = TweenSeq::new(initial);
-            for s in steps { tw.push_step(s.clone()); }
-            Entry { seq: tw, last_seen_frame: frame }
+            for s in steps {
+                tw.push_step(s.clone());
+            }
+            Entry {
+                seq: tw,
+                last_seen_frame: frame,
+            }
         });
 
         ent.last_seen_frame = frame;
@@ -55,7 +60,10 @@ pub fn materialize(id: u64, initial: TweenState, steps: &[Step]) -> TweenState {
 pub fn site_id(file: &'static str, line: u32, col: u32, extra: u64) -> u64 {
     // FNV-1a 64
     let mut h = 0xcbf29ce484222325u64;
-    for &b in file.as_bytes() { h ^= b as u64; h = h.wrapping_mul(0x100000001b3); }
+    for &b in file.as_bytes() {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
     h ^= ((line as u64) << 32) ^ (col as u64);
     h = h.wrapping_mul(0x100000001b3);
     h ^= extra;

@@ -1,5 +1,5 @@
-use std::time::Instant;
 use std::collections::HashMap;
+use std::time::Instant;
 
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
@@ -8,25 +8,50 @@ use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 // Gamepad (gilrs)
-use gilrs::{Axis, Button, Event, EventType, GamepadId, Gilrs, MappingSource};
 use gilrs::ev::Code as GpCode;
+use gilrs::{Axis, Button, Event, EventType, GamepadId, Gilrs, MappingSource};
 
 /* ------------------------ Gamepad types + poll ------------------------ */
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum PadDir { Up, Down, Left, Right }
+pub enum PadDir {
+    Up,
+    Down,
+    Left,
+    Right,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum PadButton { Confirm, Back }
+pub enum PadButton {
+    Confirm,
+    Back,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum FaceBtn { SouthA, EastB, WestX, NorthY }
+pub enum FaceBtn {
+    SouthA,
+    EastB,
+    WestX,
+    NorthY,
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum PadEvent {
-    Dir { id: GamepadId, dir: PadDir, pressed: bool },
-    Button { id: GamepadId, btn: PadButton, pressed: bool },
-    Face { id: GamepadId, btn: FaceBtn, pressed: bool },
+    Dir {
+        id: GamepadId,
+        dir: PadDir,
+        pressed: bool,
+    },
+    Button {
+        id: GamepadId,
+        btn: PadButton,
+        pressed: bool,
+    },
+    Face {
+        id: GamepadId,
+        btn: FaceBtn,
+        pressed: bool,
+    },
     /// Raw low-level button event with platform-specific code and device UUID.
     RawButton {
         id: GamepadId,
@@ -83,15 +108,17 @@ pub struct GamepadState {
 }
 
 #[inline(always)]
-const fn deadzone() -> f32 { 0.35 }
+const fn deadzone() -> f32 {
+    0.35
+}
 
 #[inline(always)]
 fn stick_to_dirs(x: f32, y: f32) -> (bool, bool, bool, bool) {
     let dz = deadzone();
-    let left  = x <= -dz;
-    let right = x >=  dz;
-    let up    = y <= -dz;
-    let down  = y >=  dz;
+    let left = x <= -dz;
+    let right = x >= dz;
+    let up = y <= -dz;
+    let down = y >= dz;
     (up, down, left, right)
 }
 
@@ -123,7 +150,9 @@ pub fn poll_and_collect(
                     product_id,
                     mapping,
                 });
-                if active_id.is_none() { *active_id = Some(id); }
+                if active_id.is_none() {
+                    *active_id = Some(id);
+                }
                 continue; // Don't process this event as an input.
             }
             EventType::Disconnected => {
@@ -132,12 +161,38 @@ pub fn poll_and_collect(
                 sys_out.push(GpSystemEvent::Disconnected { name, id });
                 // Release any buttons/dirs for this device and drop its state.
                 if let Some(ps) = state.states.remove(&id) {
-                    if ps.up    { out.push(PadEvent::Dir { id, dir: PadDir::Up,    pressed: false }); }
-                    if ps.down  { out.push(PadEvent::Dir { id, dir: PadDir::Down,  pressed: false }); }
-                    if ps.left  { out.push(PadEvent::Dir { id, dir: PadDir::Left,  pressed: false }); }
-                    if ps.right { out.push(PadEvent::Dir { id, dir: PadDir::Right, pressed: false }); }
+                    if ps.up {
+                        out.push(PadEvent::Dir {
+                            id,
+                            dir: PadDir::Up,
+                            pressed: false,
+                        });
+                    }
+                    if ps.down {
+                        out.push(PadEvent::Dir {
+                            id,
+                            dir: PadDir::Down,
+                            pressed: false,
+                        });
+                    }
+                    if ps.left {
+                        out.push(PadEvent::Dir {
+                            id,
+                            dir: PadDir::Left,
+                            pressed: false,
+                        });
+                    }
+                    if ps.right {
+                        out.push(PadEvent::Dir {
+                            id,
+                            dir: PadDir::Right,
+                            pressed: false,
+                        });
+                    }
                 }
-                if Some(id) == *active_id { *active_id = None; }
+                if Some(id) == *active_id {
+                    *active_id = None;
+                }
                 continue; // Don't process this event as an input.
             }
             _ => {}
@@ -145,7 +200,9 @@ pub fn poll_and_collect(
 
         // --- Input Events (Buttons/Axes) ---
         // Multi-device: do not filter by active_id. Maintain per-device state.
-        if active_id.is_none() { *active_id = Some(id); }
+        if active_id.is_none() {
+            *active_id = Some(id);
+        }
 
         let ps = state.states.entry(id).or_default();
         // Cache per-event device metadata for raw reporting.
@@ -166,24 +223,56 @@ pub fn poll_and_collect(
 
                 match btn {
                     // Face buttons → Face events
-                    Button::South => out.push(PadEvent::Face { id, btn: FaceBtn::SouthA, pressed: true }),
-                    Button::East  => out.push(PadEvent::Face { id, btn: FaceBtn::EastB,  pressed: true }),
-                    Button::West  => out.push(PadEvent::Face { id, btn: FaceBtn::WestX,  pressed: true }),
+                    Button::South => out.push(PadEvent::Face {
+                        id,
+                        btn: FaceBtn::SouthA,
+                        pressed: true,
+                    }),
+                    Button::East => out.push(PadEvent::Face {
+                        id,
+                        btn: FaceBtn::EastB,
+                        pressed: true,
+                    }),
+                    Button::West => out.push(PadEvent::Face {
+                        id,
+                        btn: FaceBtn::WestX,
+                        pressed: true,
+                    }),
                     Button::North => {
-                        out.push(PadEvent::Face { id, btn: FaceBtn::NorthY, pressed: true });
+                        out.push(PadEvent::Face {
+                            id,
+                            btn: FaceBtn::NorthY,
+                            pressed: true,
+                        });
                     }
 
                     // Confirm = Start ONLY (so A can be used as Down lane)
-                    Button::Start => out.push(PadEvent::Button { id, btn: PadButton::Confirm, pressed: true }),
+                    Button::Start => out.push(PadEvent::Button {
+                        id,
+                        btn: PadButton::Confirm,
+                        pressed: true,
+                    }),
 
                     // Back = View/Select (NOT B)
-                    Button::Select => out.push(PadEvent::Button { id, btn: PadButton::Back, pressed: true }),
+                    Button::Select => out.push(PadEvent::Button {
+                        id,
+                        btn: PadButton::Back,
+                        pressed: true,
+                    }),
 
                     // D-Pad raw state (edges emitted below)
-                    Button::DPadUp    => { ps.dpad_up    = true; }
-                    Button::DPadDown  => { ps.dpad_down  = true; }
-                    Button::DPadLeft  => { ps.dpad_left  = true; }
-                    Button::DPadRight => { ps.dpad_right = true; }
+                    Button::DPadUp => {
+                        ps.dpad_up = true;
+                    }
+                    Button::DPadDown => {
+                        ps.dpad_down = true;
+                    }
+                    Button::DPadLeft => {
+                        ps.dpad_left = true;
+                    }
+                    Button::DPadRight => {
+                        ps.dpad_right = true;
+                    }
                     _ => {}
                 }
             }
@@ -199,22 +288,54 @@ pub fn poll_and_collect(
                 });
 
                 match btn {
-                    Button::South => out.push(PadEvent::Face { id, btn: FaceBtn::SouthA, pressed: false }),
-                    Button::East  => out.push(PadEvent::Face { id, btn: FaceBtn::EastB,  pressed: false }),
-                    Button::West  => out.push(PadEvent::Face { id, btn: FaceBtn::WestX,  pressed: false }),
+                    Button::South => out.push(PadEvent::Face {
+                        id,
+                        btn: FaceBtn::SouthA,
+                        pressed: false,
+                    }),
+                    Button::East => out.push(PadEvent::Face {
+                        id,
+                        btn: FaceBtn::EastB,
+                        pressed: false,
+                    }),
+                    Button::West => out.push(PadEvent::Face {
+                        id,
+                        btn: FaceBtn::WestX,
+                        pressed: false,
+                    }),
                     Button::North => {
-                        out.push(PadEvent::Face { id, btn: FaceBtn::NorthY, pressed: false });
+                        out.push(PadEvent::Face {
+                            id,
+                            btn: FaceBtn::NorthY,
+                            pressed: false,
+                        });
                     }
 
                     // Confirm = Start ONLY
-                    Button::Start => out.push(PadEvent::Button { id, btn: PadButton::Confirm, pressed: false }),
+                    Button::Start => out.push(PadEvent::Button {
+                        id,
+                        btn: PadButton::Confirm,
+                        pressed: false,
+                    }),
                     // Back = View/Select
-                    Button::Select => out.push(PadEvent::Button { id, btn: PadButton::Back, pressed: false }),
+                    Button::Select => out.push(PadEvent::Button {
+                        id,
+                        btn: PadButton::Back,
+                        pressed: false,
+                    }),
 
-                    Button::DPadUp    => { ps.dpad_up    = false; }
-                    Button::DPadDown  => { ps.dpad_down  = false; }
-                    Button::DPadLeft  => { ps.dpad_left  = false; }
-                    Button::DPadRight => { ps.dpad_right = false; }
+                    Button::DPadUp => {
+                        ps.dpad_up = false;
+                    }
+                    Button::DPadDown => {
+                        ps.dpad_down = false;
+                    }
+                    Button::DPadLeft => {
+                        ps.dpad_left = false;
+                    }
+                    Button::DPadRight => {
+                        ps.dpad_right = false;
+                    }
                     _ => {}
                 }
             }
@@ -240,25 +361,41 @@ pub fn poll_and_collect(
 
         // Emit edge transitions for combined D-Pad OR left stick (per-device).
         let (su, sd, sl, sr) = stick_to_dirs(ps.lx, ps.ly);
-        let want_up    = ps.dpad_up    || su;
-        let want_down  = ps.dpad_down  || sd;
-        let want_left  = ps.dpad_left  || sl;
+        let want_up = ps.dpad_up || su;
+        let want_down = ps.dpad_down || sd;
+        let want_left = ps.dpad_left || sl;
         let want_right = ps.dpad_right || sr;
 
         if want_up != ps.up {
-            out.push(PadEvent::Dir { id, dir: PadDir::Up, pressed: want_up });
+            out.push(PadEvent::Dir {
+                id,
+                dir: PadDir::Up,
+                pressed: want_up,
+            });
             ps.up = want_up;
         }
         if want_down != ps.down {
-            out.push(PadEvent::Dir { id, dir: PadDir::Down, pressed: want_down });
+            out.push(PadEvent::Dir {
+                id,
+                dir: PadDir::Down,
+                pressed: want_down,
+            });
             ps.down = want_down;
         }
         if want_left != ps.left {
-            out.push(PadEvent::Dir { id, dir: PadDir::Left, pressed: want_left });
+            out.push(PadEvent::Dir {
+                id,
+                dir: PadDir::Left,
+                pressed: want_left,
+            });
             ps.left = want_left;
         }
         if want_right != ps.right {
-            out.push(PadEvent::Dir { id, dir: PadDir::Right, pressed: want_right });
+            out.push(PadEvent::Dir {
+                id,
+                dir: PadDir::Right,
+                pressed: want_right,
+            });
             ps.right = want_right;
         }
     }
@@ -267,7 +404,9 @@ pub fn poll_and_collect(
 }
 
 #[inline(always)]
-pub fn try_init() -> Option<Gilrs> { Gilrs::new().ok() }
+pub fn try_init() -> Option<Gilrs> {
+    Gilrs::new().ok()
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -363,15 +502,21 @@ pub enum InputBinding {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Keymap { map: HashMap<VirtualAction, Vec<InputBinding>> }
+pub struct Keymap {
+    map: HashMap<VirtualAction, Vec<InputBinding>>,
+}
 
 static KEYMAP: Lazy<Mutex<Keymap>> = Lazy::new(|| Mutex::new(Keymap::default()));
 
 #[inline(always)]
-pub fn get_keymap() -> Keymap { KEYMAP.lock().unwrap().clone() }
+pub fn get_keymap() -> Keymap {
+    KEYMAP.lock().unwrap().clone()
+}
 
 #[inline(always)]
-pub fn set_keymap(new_map: Keymap) { *KEYMAP.lock().unwrap() = new_map; }
+pub fn set_keymap(new_map: Keymap) {
+    *KEYMAP.lock().unwrap() = new_map;
+}
 
 // Defaults are provided by config.rs; keep this module free of config.
 
@@ -386,29 +531,41 @@ impl Keymap {
     /// in `deadsync.ini` (or the hardcoded default keymap).
     #[inline(always)]
     pub fn first_key_binding(&self, action: VirtualAction) -> Option<KeyCode> {
-        self.map
-            .get(&action)
-            .and_then(|bindings| {
-                bindings.iter().find_map(|b| {
-                    if let InputBinding::Key(code) = b { Some(*code) } else { None }
-                })
+        self.map.get(&action).and_then(|bindings| {
+            bindings.iter().find_map(|b| {
+                if let InputBinding::Key(code) = b {
+                    Some(*code)
+                } else {
+                    None
+                }
             })
+        })
     }
 
     /// Returns the raw binding at the given index for this virtual action,
     /// preserving the order parsed from deadsync.ini.
     #[inline(always)]
     pub fn binding_at(&self, action: VirtualAction, index: usize) -> Option<InputBinding> {
-        self.map.get(&action).and_then(|bindings| bindings.get(index)).copied()
+        self.map
+            .get(&action)
+            .and_then(|bindings| bindings.get(index))
+            .copied()
     }
 
     #[inline(always)]
     pub fn actions_for_key_event(&self, ev: &KeyEvent) -> Vec<(VirtualAction, bool)> {
         let mut out = Vec::with_capacity(2);
         let pressed = ev.state == ElementState::Pressed;
-        let PhysicalKey::Code(code) = ev.physical_key else { return out; };
+        let PhysicalKey::Code(code) = ev.physical_key else {
+            return out;
+        };
         for (act, binds) in &self.map {
-            for b in binds { if *b == InputBinding::Key(code) { out.push((*act, pressed)); break; } }
+            for b in binds {
+                if *b == InputBinding::Key(code) {
+                    out.push((*act, pressed));
+                    break;
+                }
+            }
         }
         out
     }
@@ -422,8 +579,16 @@ impl Keymap {
                 for (act, binds) in &self.map {
                     for b in binds {
                         match *b {
-                            InputBinding::PadDir(d) if d == dir => { out.push((*act, pressed)); break; }
-                            InputBinding::PadDirOn { device, dir: d } if d == dir && device == dev => { out.push((*act, pressed)); break; }
+                            InputBinding::PadDir(d) if d == dir => {
+                                out.push((*act, pressed));
+                                break;
+                            }
+                            InputBinding::PadDirOn { device, dir: d }
+                                if d == dir && device == dev =>
+                            {
+                                out.push((*act, pressed));
+                                break;
+                            }
                             _ => {}
                         }
                     }
@@ -434,8 +599,16 @@ impl Keymap {
                 for (act, binds) in &self.map {
                     for b in binds {
                         match *b {
-                            InputBinding::PadButton(b0) if b0 == btn => { out.push((*act, pressed)); break; }
-                            InputBinding::PadButtonOn { device, btn: b0 } if b0 == btn && device == dev => { out.push((*act, pressed)); break; }
+                            InputBinding::PadButton(b0) if b0 == btn => {
+                                out.push((*act, pressed));
+                                break;
+                            }
+                            InputBinding::PadButtonOn { device, btn: b0 }
+                                if b0 == btn && device == dev =>
+                            {
+                                out.push((*act, pressed));
+                                break;
+                            }
                             _ => {}
                         }
                     }
@@ -446,14 +619,28 @@ impl Keymap {
                 for (act, binds) in &self.map {
                     for b in binds {
                         match *b {
-                            InputBinding::Face(b0) if b0 == btn => { out.push((*act, pressed)); break; }
-                            InputBinding::FaceOn { device, btn: b0 } if b0 == btn && device == dev => { out.push((*act, pressed)); break; }
+                            InputBinding::Face(b0) if b0 == btn => {
+                                out.push((*act, pressed));
+                                break;
+                            }
+                            InputBinding::FaceOn { device, btn: b0 }
+                                if b0 == btn && device == dev =>
+                            {
+                                out.push((*act, pressed));
+                                break;
+                            }
                             _ => {}
                         }
                     }
                 }
             }
-            PadEvent::RawButton { id, code, uuid, pressed, .. } => {
+            PadEvent::RawButton {
+                id,
+                code,
+                uuid,
+                pressed,
+                ..
+            } => {
                 let dev = usize::from(id);
                 let code_u32 = code.into_u32();
                 for (act, binds) in &self.map {
@@ -512,10 +699,17 @@ pub fn map_key_event(ev: &KeyEvent) -> Vec<InputEvent> {
     let km = get_keymap();
     let mut actions = km.actions_for_key_event(ev);
     dedup_menu_variants(&mut actions);
-    if actions.is_empty() { return out; }
+    if actions.is_empty() {
+        return out;
+    }
     let timestamp = Instant::now();
     for (act, pressed) in actions {
-        out.push(InputEvent { action: act, pressed, source: InputSource::Keyboard, timestamp });
+        out.push(InputEvent {
+            action: act,
+            pressed,
+            source: InputSource::Keyboard,
+            timestamp,
+        });
     }
     out
 }
@@ -526,10 +720,17 @@ pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
     let km = get_keymap();
     let mut actions = km.actions_for_pad_event(ev);
     dedup_menu_variants(&mut actions);
-    if actions.is_empty() { return out; }
+    if actions.is_empty() {
+        return out;
+    }
     let timestamp = Instant::now();
     for (act, pressed) in actions {
-        out.push(InputEvent { action: act, pressed, source: InputSource::Gamepad, timestamp });
+        out.push(InputEvent {
+            action: act,
+            pressed,
+            source: InputSource::Gamepad,
+            timestamp,
+        });
     }
     out
 }
@@ -537,9 +738,9 @@ pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
 #[inline(always)]
 pub fn lane_from_action(act: VirtualAction) -> Option<Lane> {
     match act {
-        VirtualAction::p1_left  => Some(Lane::Left),
-        VirtualAction::p1_down  => Some(Lane::Down),
-        VirtualAction::p1_up    => Some(Lane::Up),
+        VirtualAction::p1_left => Some(Lane::Left),
+        VirtualAction::p1_down => Some(Lane::Down),
+        VirtualAction::p1_up => Some(Lane::Up),
         VirtualAction::p1_right => Some(Lane::Right),
         _ => None,
     }
@@ -553,13 +754,13 @@ fn dedup_menu_variants(actions: &mut Vec<(VirtualAction, bool)>) {
     let snapshot = actions.clone();
     let has = |a: A, p: bool| snapshot.iter().any(|(act, pr)| *act == a && *pr == p);
     actions.retain(|(act, pr)| match *act {
-        A::p1_menu_up    => !(has(A::p1_up,    *pr)),
-        A::p1_menu_down  => !(has(A::p1_down,  *pr)),
-        A::p1_menu_left  => !(has(A::p1_left,  *pr)),
+        A::p1_menu_up => !(has(A::p1_up, *pr)),
+        A::p1_menu_down => !(has(A::p1_down, *pr)),
+        A::p1_menu_left => !(has(A::p1_left, *pr)),
         A::p1_menu_right => !(has(A::p1_right, *pr)),
-        A::p2_menu_up    => !(has(A::p2_up,    *pr)),
-        A::p2_menu_down  => !(has(A::p2_down,  *pr)),
-        A::p2_menu_left  => !(has(A::p2_left,  *pr)),
+        A::p2_menu_up => !(has(A::p2_up, *pr)),
+        A::p2_menu_down => !(has(A::p2_down, *pr)),
+        A::p2_menu_left => !(has(A::p2_left, *pr)),
         A::p2_menu_right => !(has(A::p2_right, *pr)),
         _ => true,
     });

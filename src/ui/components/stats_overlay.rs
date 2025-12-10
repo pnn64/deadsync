@@ -1,7 +1,7 @@
-use crate::core::gfx::BackendType;
-use crate::ui::actors::Actor;
 use crate::act;
+use crate::core::gfx::BackendType;
 use crate::core::space::*;
+use crate::ui::actors::Actor;
 
 /// Three-line stats: FPS, VPF, Backend — top-right, miso, white.
 pub fn build(backend: BackendType, fps: f32, vpf: u32) -> Vec<Actor> {
@@ -11,12 +11,7 @@ pub fn build(backend: BackendType, fps: f32, vpf: u32) -> Vec<Actor> {
     let w = screen_width();
 
     // 1. Combine all stat lines into a single string with newlines.
-    let stats_text = format!(
-        "{:.0} FPS\n{} VPF\n{}",
-        fps.max(0.0),
-        vpf,
-        backend
-    );
+    let stats_text = format!("{:.0} FPS\n{} VPF\n{}", fps.max(0.0), vpf, backend);
 
     // 2. Create a single text actor for the entire block.
     // The layout engine will handle the line breaks automatically.

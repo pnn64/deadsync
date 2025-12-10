@@ -4,18 +4,18 @@ use crate::core::display::{self, MonitorSpec};
 use crate::core::gfx::BackendType;
 use crate::core::space::*;
 // Screen navigation is handled in app.rs via the dispatcher
-use crate::core::audio;
 use crate::config::{self, DisplayMode, FullscreenType};
+use crate::core::audio;
+use crate::core::input::{InputEvent, VirtualAction};
 use crate::screens::{Screen, ScreenAction};
-use crate::core::input::{VirtualAction, InputEvent};
-use std::time::{Duration, Instant};
 use std::borrow::Cow;
+use std::time::{Duration, Instant};
 
+use crate::ui::actors;
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use crate::ui::components::{heart_bg, screen_bar};
 use crate::ui::components::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
-use crate::ui::actors;
+use crate::ui::components::{heart_bg, screen_bar};
 use crate::ui::font;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -42,7 +42,13 @@ const VISUAL_DELAY_MAX_MS: i32 = 1000;
 
 #[inline(always)]
 fn ease_out_cubic(t: f32) -> f32 {
-    let clamped = if t < 0.0 { 0.0 } else if t > 1.0 { 1.0 } else { t };
+    let clamped = if t < 0.0 {
+        0.0
+    } else if t > 1.0 {
+        1.0
+    } else {
+        t
+    };
     let u = 1.0 - clamped;
     1.0 - u * u * u
 }
@@ -82,8 +88,8 @@ const ROW_H: f32 = 33.0;
 const ROW_GAP: f32 = 2.5;
 const LIST_W: f32 = 509.0;
 
-const SEP_W: f32 = 2.5;     // gap/stripe between rows and description
-const DESC_W: f32 = 292.0;  // description panel width (WideScale(287,292) in SL)
+const SEP_W: f32 = 2.5; // gap/stripe between rows and description
+const DESC_W: f32 = 292.0; // description panel width (WideScale(287,292) in SL)
 // derive description height from visible rows so it never includes a trailing gap
 const DESC_H: f32 = (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
 
@@ -115,13 +121,13 @@ pub struct Item<'a> {
 
 /// Description pane layout (mirrors Simply Love's ScreenOptionsService overlay).
 /// Title and bullet list use separate top/side padding so they can be tuned independently.
-const DESC_TITLE_TOP_PAD_PX: f32 = 9.75;      // padding from box top to title
-const DESC_TITLE_SIDE_PAD_PX: f32 = 7.5;     // left/right padding for title text
-const DESC_BULLET_TOP_PAD_PX: f32 = 23.25;     // vertical gap between title and bullet list
-const DESC_BULLET_SIDE_PAD_PX: f32 = 7.5;    // left/right padding for bullet text
-const DESC_BULLET_INDENT_PX: f32 = 10.0;      // extra indent for bullet marker + text
-const DESC_TITLE_ZOOM: f32 = 1.0;            // title text zoom (roughly header-sized)
-const DESC_BODY_ZOOM: f32 = 1.0;             // body/bullet text zoom (similar to help text)
+const DESC_TITLE_TOP_PAD_PX: f32 = 9.75; // padding from box top to title
+const DESC_TITLE_SIDE_PAD_PX: f32 = 7.5; // left/right padding for title text
+const DESC_BULLET_TOP_PAD_PX: f32 = 23.25; // vertical gap between title and bullet list
+const DESC_BULLET_SIDE_PAD_PX: f32 = 7.5; // left/right padding for bullet text
+const DESC_BULLET_INDENT_PX: f32 = 10.0; // extra indent for bullet marker + text
+const DESC_TITLE_ZOOM: f32 = 1.0; // title text zoom (roughly header-sized)
+const DESC_BODY_ZOOM: f32 = 1.0; // body/bullet text zoom (similar to help text)
 
 pub const ITEMS: &[Item] = &[
     // Top-level ScreenOptionsService rows, ordered to match Simply Love's LineNames.
@@ -142,7 +148,9 @@ pub const ITEMS: &[Item] = &[
     },
     Item {
         name: "Test Input",
-        help: &["Test your dance pad/controller and menu buttons.\n\nIf one of your buttons is not mapped to a game function, it will appear here as \"not mapped\"."],
+        help: &[
+            "Test your dance pad/controller and menu buttons.\n\nIf one of your buttons is not mapped to a game function, it will appear here as \"not mapped\".",
+        ],
     },
     Item {
         name: "Input Options",
@@ -157,16 +165,28 @@ pub const ITEMS: &[Item] = &[
         ],
     },
     Item {
-        name: "Graphics/Sound Options",
+        name: "Graphics Options",
         help: &[
-            "Change screen aspect ratio, resolution, graphics quality, and miscellaneous sound options.",
+            "Change screen aspect ratio, resolution, graphics quality, and timing visuals.",
             "Video Renderer",
             "DisplayMode",
             "DisplayAspectRatio",
             "DisplayResolution",
             "RefreshRate",
             "FullscreenType",
-            "...",
+            "Wait for VSync",
+            "Show Stats",
+            "Timing Offsets",
+        ],
+    },
+    Item {
+        name: "Sound Options",
+        help: &[
+            "Adjust audio output settings and feedback sounds.",
+            "Sound Volume",
+            "Audio Sample Rate",
+            "Mine Sounds",
+            "Rate Mod Preserves Pitch",
         ],
     },
     Item {
@@ -236,7 +256,9 @@ pub const ITEMS: &[Item] = &[
     },
     Item {
         name: "Manage Local Profiles",
-        help: &["Create, edit, and manage player profiles that are stored on this computer.\n\nYou'll need a keyboard to use this screen."],
+        help: &[
+            "Create, edit, and manage player profiles that are stored on this computer.\n\nYou'll need a keyboard to use this screen.",
+        ],
     },
     Item {
         name: "Simply Love Options",
@@ -298,7 +320,8 @@ pub enum NavDirection {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SubmenuKind {
     System,
-    GraphicsSound,
+    Graphics,
+    Sound,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -466,7 +489,9 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         label: "Refresh Rate",
-        choices: &["Default", "60 Hz", "75 Hz", "120 Hz", "144 Hz", "165 Hz", "240 Hz", "360 Hz"], // Replaced dynamically
+        choices: &[
+            "Default", "60 Hz", "75 Hz", "120 Hz", "144 Hz", "165 Hz", "240 Hz", "360 Hz",
+        ], // Replaced dynamically
         inline: false,
     },
     SubRow {
@@ -475,67 +500,12 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        label: "High Resolution Textures",
-        choices: &["Auto", "Force Off", "Force On"],
-        inline: true,
-    },
-    SubRow {
-        label: "Max Texture Resolution",
-        choices: &["256", "512", "1024", "2048"],
-        inline: true,
-    },
-    SubRow {
-        label: "Smooth Lines",
-        choices: &["Off", "On"],
-        inline: true,
-    },
-    SubRow {
-        label: "CelShade Models",
-        choices: &["Off", "On"],
-        inline: true,
-    },
-    SubRow {
-        label: "Delayed Texture Delete",
-        choices: &["Off", "On"],
-        inline: true,
-    },
-    SubRow {
-        label: "Vsync",
-        choices: &["Off", "On"],
-        inline: true,
-    },
-    SubRow {
-        label: "Fast Note Rendering",
-        choices: &["Off", "On"],
+        label: "Wait for VSync",
+        choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
         label: "Show Stats",
-        choices: &["Off", "On"],
-        inline: true,
-    },
-    SubRow {
-        label: "Attract Sound Frequency",
-        choices: &["Never", "Always", "2 Times", "3 Times", "4 Times", "5 Times"],
-        inline: true,
-    },
-    SubRow {
-        label: "Sound Volume",
-        choices: &["Silent", "10%", "25%", "50%", "75%", "100%"],
-        inline: true,
-    },
-    SubRow {
-        label: "Preferred Sample Rate",
-        choices: &["Default", "44100 Hz", "48000 Hz"],
-        inline: true,
-    },
-    SubRow {
-        label: "Enable Attack Sounds",
-        choices: &["Off", "On"],
-        inline: true,
-    },
-    SubRow {
-        label: "Enable Mine Hit Sound",
         choices: &["Off", "On"],
         inline: true,
     },
@@ -548,16 +518,6 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         label: "Visual Delay (ms)",
         choices: &["0 ms"],
         inline: false,
-    },
-    SubRow {
-        label: "Default Sync Offset",
-        choices: &["NULL", "ITG"],
-        inline: true,
-    },
-    SubRow {
-        label: "RateMod Preserves Pitch",
-        choices: &["Off", "On"],
-        inline: true,
     },
 ];
 
@@ -587,56 +547,12 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
         help: &["Choose between exclusive or borderless fullscreen."],
     },
     Item {
-        name: "High Resolution Textures",
-        help: &["Control use of high resolution textures."],
-    },
-    Item {
-        name: "Max Texture Resolution",
-        help: &["Cap the maximum texture resolution."],
-    },
-    Item {
-        name: "Smooth Lines",
-        help: &["Toggle antialiasing for vector lines."],
-    },
-    Item {
-        name: "CelShade Models",
-        help: &["Toggle cel shading for 3D models."],
-    },
-    Item {
-        name: "Delayed Texture Delete",
-        help: &["Delay texture deletion to reduce hitches."],
-    },
-    Item {
-        name: "Vsync",
+        name: "Wait for VSync",
         help: &["Enable vertical sync."],
-    },
-    Item {
-        name: "Fast Note Rendering",
-        help: &["Use fast note rendering optimizations."],
     },
     Item {
         name: "Show Stats",
         help: &["Display rendering statistics overlay."],
-    },
-    Item {
-        name: "Attract Sound Frequency",
-        help: &["Control how often attract-mode sounds play."],
-    },
-    Item {
-        name: "Sound Volume",
-        help: &["Set the master sound volume for gameplay."],
-    },
-    Item {
-        name: "Preferred Sample Rate",
-        help: &["Select an audio output sample rate."],
-    },
-    Item {
-        name: "Enable Attack Sounds",
-        help: &["Play sounds for attacks."],
-    },
-    Item {
-        name: "Enable Mine Hit Sound",
-        help: &["Play a sound when mines are hit."],
     },
     Item {
         name: "Global Offset (ms)",
@@ -647,8 +563,46 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
         help: &["Apply a visual timing offset in 1 ms steps."],
     },
     Item {
-        name: "Default Sync Offset",
-        help: &["Choose the sync profile used for judgments."],
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
+
+pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: "Sound Volume",
+        choices: &["Silent", "10%", "25%", "50%", "75%", "100%"],
+        inline: true,
+    },
+    SubRow {
+        label: "Audio Sample Rate",
+        choices: &["Auto", "44100 Hz", "48000 Hz"],
+        inline: true,
+    },
+    SubRow {
+        label: "Mine Sounds",
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: "RateMod Preserves Pitch",
+        choices: &["Off", "On"],
+        inline: true,
+    },
+];
+
+pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: "Sound Volume",
+        help: &["Set the master sound volume for gameplay."],
+    },
+    Item {
+        name: "Audio Sample Rate",
+        help: &["Select an audio output sample rate."],
+    },
+    Item {
+        name: "Mine Sounds",
+        help: &["Play a sound when mines are hit."],
     },
     Item {
         name: "RateMod Preserves Pitch",
@@ -663,21 +617,24 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
 fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
     match kind {
         SubmenuKind::System => SYSTEM_OPTIONS_ROWS,
-        SubmenuKind::GraphicsSound => GRAPHICS_OPTIONS_ROWS,
+        SubmenuKind::Graphics => GRAPHICS_OPTIONS_ROWS,
+        SubmenuKind::Sound => SOUND_OPTIONS_ROWS,
     }
 }
 
 fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
     match kind {
         SubmenuKind::System => SYSTEM_OPTIONS_ITEMS,
-        SubmenuKind::GraphicsSound => GRAPHICS_OPTIONS_ITEMS,
+        SubmenuKind::Graphics => GRAPHICS_OPTIONS_ITEMS,
+        SubmenuKind::Sound => SOUND_OPTIONS_ITEMS,
     }
 }
 
 fn submenu_title(kind: SubmenuKind) -> &'static str {
     match kind {
         SubmenuKind::System => "SYSTEM OPTIONS",
-        SubmenuKind::GraphicsSound => "GRAPHICS/SOUND OPTIONS",
+        SubmenuKind::Graphics => "GRAPHICS OPTIONS",
+        SubmenuKind::Sound => "SOUND OPTIONS",
     }
 }
 
@@ -747,10 +704,7 @@ fn selected_display_monitor(state: &State) -> usize {
         .get(DISPLAY_MODE_ROW_INDEX)
         .copied()
         .unwrap_or(0);
-    let windowed_idx = state
-        .display_mode_choices
-        .len()
-        .saturating_sub(1);
+    let windowed_idx = state.display_mode_choices.len().saturating_sub(1);
     if windowed_idx == 0 || display_choice >= windowed_idx {
         0
     } else {
@@ -761,7 +715,10 @@ fn selected_display_monitor(state: &State) -> usize {
 fn ensure_display_mode_choices(state: &mut State) {
     state.display_mode_choices = build_display_mode_choices(&state.monitor_specs);
     // If current selection is out of bounds, reset it.
-    if let Some(idx) = state.sub_choice_indices_graphics.get_mut(DISPLAY_MODE_ROW_INDEX) {
+    if let Some(idx) = state
+        .sub_choice_indices_graphics
+        .get_mut(DISPLAY_MODE_ROW_INDEX)
+    {
         if *idx >= state.display_mode_choices.len() {
             *idx = 0;
         }
@@ -837,7 +794,13 @@ fn preset_resolutions_for_aspect(label: &str) -> Vec<(u32, u32)> {
     match label.to_ascii_lowercase().as_str() {
         "16:9" => vec![(1280, 720), (1600, 900), (1920, 1080)],
         "16:10" => vec![(1280, 800), (1440, 900), (1680, 1050), (1920, 1200)],
-        "4:3" => vec![(640, 480), (800, 600), (1024, 768), (1280, 960), (1600, 1200)],
+        "4:3" => vec![
+            (640, 480),
+            (800, 600),
+            (1024, 768),
+            (1280, 960),
+            (1600, 1200),
+        ],
         "1:1" => vec![(342, 342), (456, 456), (608, 608), (810, 810), (1080, 1080)],
         _ => DEFAULT_RESOLUTION_CHOICES.to_vec(),
     }
@@ -871,7 +834,10 @@ fn selected_resolution(state: &State) -> (u32, u32) {
 fn rebuild_refresh_rate_choices(state: &mut State) {
     if matches!(selected_display_mode(state), DisplayMode::Windowed) {
         state.refresh_rate_choices = vec![0];
-        if let Some(slot) = state.sub_choice_indices_graphics.get_mut(REFRESH_RATE_ROW_INDEX) {
+        if let Some(slot) = state
+            .sub_choice_indices_graphics
+            .get_mut(REFRESH_RATE_ROW_INDEX)
+        {
             *slot = 0;
         }
         return;
@@ -880,55 +846,66 @@ fn rebuild_refresh_rate_choices(state: &mut State) {
     let (width, height) = selected_resolution(state);
     let mon_idx = selected_display_monitor(state);
     let mut rates = Vec::new();
-    
+
     // Default choice is always available (0).
     rates.push(0);
 
     let supported_rates =
         display::supported_refresh_rates(state.monitor_specs.get(mon_idx), width, height);
     rates.extend(supported_rates);
-    
+
     // Add common fallback rates if list is empty (besides Default)
     if rates.len() == 1 {
         rates.extend_from_slice(&[60000, 75000, 120000, 144000, 165000, 240000]);
     }
-    
+
     // Preserve current selection if possible, else default to "Default".
-    let current_rate = if let Some(idx) = state.sub_choice_indices_graphics.get(REFRESH_RATE_ROW_INDEX) {
+    let current_rate = if let Some(idx) = state
+        .sub_choice_indices_graphics
+        .get(REFRESH_RATE_ROW_INDEX)
+    {
         state.refresh_rate_choices.get(*idx).copied().unwrap_or(0)
     } else {
         0
     };
-    
+
     state.refresh_rate_choices = rates;
-    
-    if let Some(slot) = state.sub_choice_indices_graphics.get_mut(REFRESH_RATE_ROW_INDEX) {
-        *slot = state.refresh_rate_choices.iter().position(|&r| r == current_rate).unwrap_or(0);
+
+    if let Some(slot) = state
+        .sub_choice_indices_graphics
+        .get_mut(REFRESH_RATE_ROW_INDEX)
+    {
+        *slot = state
+            .refresh_rate_choices
+            .iter()
+            .position(|&r| r == current_rate)
+            .unwrap_or(0);
     }
 }
 
 fn rebuild_resolution_choices(state: &mut State, width: u32, height: u32) {
     let aspect_label = selected_aspect_label(state);
     let mon_idx = selected_display_monitor(state);
-    
-    let mut list: Vec<(u32, u32)> = display::supported_resolutions(state.monitor_specs.get(mon_idx))
-        .into_iter()
-        .filter(|(w, h)| aspect_matches(*w, *h, aspect_label))
-        .collect();
-    
+
+    let mut list: Vec<(u32, u32)> =
+        display::supported_resolutions(state.monitor_specs.get(mon_idx))
+            .into_iter()
+            .filter(|(w, h)| aspect_matches(*w, *h, aspect_label))
+            .collect();
+
     // 2. If list is empty (e.g. no monitor data or Aspect filter too strict), use presets.
     if list.is_empty() {
         list = preset_resolutions_for_aspect(aspect_label);
     }
-    
+
     // 3. Keep the current resolution only if it matches the selected aspect.
     if aspect_matches(width, height, aspect_label) {
         push_unique_resolution(&mut list, width, height);
     }
-    
+
     // Sort descending by width then height (typical UI preference).
     list.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
-    
+
     state.resolution_choices = list;
     if let Some(slot) = state
         .sub_choice_indices_graphics
@@ -940,7 +917,7 @@ fn rebuild_resolution_choices(state: &mut State, width: u32, height: u32) {
             .position(|&(w, h)| w == width && h == height)
             .unwrap_or(0);
     }
-    
+
     // Rebuild refresh rates since available rates depend on resolution.
     rebuild_refresh_rate_choices(state);
 }
@@ -952,7 +929,7 @@ fn row_choices<'a>(
     row_idx: usize,
 ) -> Vec<Cow<'a, str>> {
     if let Some(row) = rows.get(row_idx) {
-        if matches!(kind, SubmenuKind::GraphicsSound) {
+        if matches!(kind, SubmenuKind::Graphics) {
             if row.label == "Display Mode" {
                 return state
                     .display_mode_choices
@@ -969,25 +946,72 @@ fn row_choices<'a>(
                     .collect();
             }
             if row.label == "Refresh Rate" {
-                return state.refresh_rate_choices.iter().map(|&mhz| {
-                    if mhz == 0 {
-                        Cow::Borrowed("Default")
-                    } else {
-                        // Format nicely: 60000 -> "60 Hz", 59940 -> "59.94 Hz"
-                        let hz = mhz as f32 / 1000.0;
-                        if (hz.fract()).abs() < 0.01 {
-                            Cow::Owned(format!("{:.0}Hz", hz))
+                return state
+                    .refresh_rate_choices
+                    .iter()
+                    .map(|&mhz| {
+                        if mhz == 0 {
+                            Cow::Borrowed("Default")
                         } else {
-                            Cow::Owned(format!("{:.2}Hz", hz))
+                            // Format nicely: 60000 -> "60 Hz", 59940 -> "59.94 Hz"
+                            let hz = mhz as f32 / 1000.0;
+                            if (hz.fract()).abs() < 0.01 {
+                                Cow::Owned(format!("{:.0}Hz", hz))
+                            } else {
+                                Cow::Owned(format!("{:.2}Hz", hz))
+                            }
                         }
-                    }
-                }).collect();
+                    })
+                    .collect();
             }
         }
     }
     rows.get(row_idx)
         .map(|row| row.choices.iter().map(|c| Cow::Borrowed(*c)).collect())
         .unwrap_or_default()
+}
+
+const SOUND_VOLUME_LEVELS: [u8; 6] = [0, 10, 25, 50, 75, 100];
+const SAMPLE_RATE_OPTIONS: [Option<u32>; 3] = [None, Some(44100), Some(48000)];
+
+fn set_choice_by_label(choice_indices: &mut Vec<usize>, rows: &[SubRow], label: &str, idx: usize) {
+    if let Some(pos) = rows.iter().position(|r| r.label == label) {
+        if let Some(slot) = choice_indices.get_mut(pos) {
+            let max_idx = rows[pos].choices.len().saturating_sub(1);
+            *slot = idx.min(max_idx);
+        }
+    }
+}
+
+fn master_volume_choice_index(volume: u8) -> usize {
+    let mut best_idx = 0usize;
+    let mut best_diff = u8::MAX;
+    for (idx, level) in SOUND_VOLUME_LEVELS.iter().enumerate() {
+        let diff = volume.abs_diff(*level);
+        if diff < best_diff {
+            best_diff = diff;
+            best_idx = idx;
+        }
+    }
+    best_idx
+}
+
+fn master_volume_from_choice(idx: usize) -> u8 {
+    SOUND_VOLUME_LEVELS
+        .get(idx)
+        .copied()
+        .unwrap_or_else(|| *SOUND_VOLUME_LEVELS.last().unwrap_or(&100))
+}
+
+fn sample_rate_choice_index(rate: Option<u32>) -> usize {
+    SAMPLE_RATE_OPTIONS
+        .iter()
+        .position(|&r| r == rate)
+        .unwrap_or(0)
+}
+
+fn sample_rate_from_choice(idx: usize) -> Option<u32> {
+    SAMPLE_RATE_OPTIONS.get(idx).copied().flatten()
 }
 
 pub struct State {
@@ -1011,6 +1035,7 @@ pub struct State {
     sub_prev_selected: usize,
     sub_choice_indices_system: Vec<usize>,
     sub_choice_indices_graphics: Vec<usize>,
+    sub_choice_indices_sound: Vec<usize>,
     global_offset_ms: i32,
     visual_delay_ms: i32,
     video_renderer_at_load: BackendType,
@@ -1057,6 +1082,7 @@ pub fn init() -> State {
         sub_prev_selected: 0,
         sub_choice_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_choice_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
+        sub_choice_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         global_offset_ms: {
             let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
             ms.clamp(GLOBAL_OFFSET_MIN_MS, GLOBAL_OFFSET_MAX_MS)
@@ -1089,20 +1115,60 @@ pub fn init() -> State {
         1,
     );
     sync_display_resolution(&mut state, cfg.display_width, cfg.display_height);
+
+    set_choice_by_label(
+        &mut state.sub_choice_indices_graphics,
+        GRAPHICS_OPTIONS_ROWS,
+        "Wait for VSync",
+        if cfg.vsync { 1 } else { 0 },
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_graphics,
+        GRAPHICS_OPTIONS_ROWS,
+        "Show Stats",
+        if cfg.show_stats { 1 } else { 0 },
+    );
+
+    set_choice_by_label(
+        &mut state.sub_choice_indices_sound,
+        SOUND_OPTIONS_ROWS,
+        "Sound Volume",
+        master_volume_choice_index(cfg.master_volume),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_sound,
+        SOUND_OPTIONS_ROWS,
+        "Audio Sample Rate",
+        sample_rate_choice_index(cfg.audio_sample_rate_hz),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_sound,
+        SOUND_OPTIONS_ROWS,
+        "Mine Sounds",
+        if cfg.mine_hit_sound { 1 } else { 0 },
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_sound,
+        SOUND_OPTIONS_ROWS,
+        "RateMod Preserves Pitch",
+        if cfg.rate_mod_preserves_pitch { 1 } else { 0 },
+    );
     state
 }
 
 fn submenu_choice_indices<'a>(state: &'a State, kind: SubmenuKind) -> &'a [usize] {
     match kind {
         SubmenuKind::System => &state.sub_choice_indices_system,
-        SubmenuKind::GraphicsSound => &state.sub_choice_indices_graphics,
+        SubmenuKind::Graphics => &state.sub_choice_indices_graphics,
+        SubmenuKind::Sound => &state.sub_choice_indices_sound,
     }
 }
 
 fn submenu_choice_indices_mut<'a>(state: &'a mut State, kind: SubmenuKind) -> &'a mut Vec<usize> {
     match kind {
         SubmenuKind::System => &mut state.sub_choice_indices_system,
-        SubmenuKind::GraphicsSound => &mut state.sub_choice_indices_graphics,
+        SubmenuKind::Graphics => &mut state.sub_choice_indices_graphics,
+        SubmenuKind::Sound => &mut state.sub_choice_indices_sound,
     }
 }
 
@@ -1142,6 +1208,15 @@ pub fn sync_display_resolution(state: &mut State, width: u32, height: u32) {
     rebuild_resolution_choices(state, width, height);
     state.display_width_at_load = width;
     state.display_height_at_load = height;
+}
+
+pub fn sync_show_stats(state: &mut State, show: bool) {
+    set_choice_by_label(
+        &mut state.sub_choice_indices_graphics,
+        GRAPHICS_OPTIONS_ROWS,
+        "Show Stats",
+        if show { 1 } else { 0 },
+    );
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -1224,7 +1299,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
         }
         SubmenuTransition::FadeOutToMain => {
             let leaving_graphics =
-                matches!(state.view, OptionsView::Submenu(SubmenuKind::GraphicsSound));
+                matches!(state.view, OptionsView::Submenu(SubmenuKind::Graphics));
             let (desired_renderer, desired_display_mode, desired_resolution, desired_monitor) =
                 if leaving_graphics {
                     (
@@ -1322,54 +1397,71 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
         return pending_action;
     }
 
-    if let (Some(direction), Some(held_since), Some(last_scrolled_at)) =
-        (state.nav_key_held_direction, state.nav_key_held_since, state.nav_key_last_scrolled_at)
-    {
+    if let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
+        state.nav_key_held_direction,
+        state.nav_key_held_since,
+        state.nav_key_last_scrolled_at,
+    ) {
         let now = Instant::now();
         if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
-            && now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL {
-                match state.view {
-                    OptionsView::Main => {
-                        let total = ITEMS.len();
-                        if total > 0 {
-                            match direction {
-                                NavDirection::Up => {
-                                    state.selected = if state.selected == 0 { total - 1 } else { state.selected - 1 };
-                                }
-                                NavDirection::Down => {
-                                    state.selected = (state.selected + 1) % total;
-                                }
+            && now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL
+        {
+            match state.view {
+                OptionsView::Main => {
+                    let total = ITEMS.len();
+                    if total > 0 {
+                        match direction {
+                            NavDirection::Up => {
+                                state.selected = if state.selected == 0 {
+                                    total - 1
+                                } else {
+                                    state.selected - 1
+                                };
                             }
-                            state.nav_key_last_scrolled_at = Some(now);
+                            NavDirection::Down => {
+                                state.selected = (state.selected + 1) % total;
+                            }
                         }
+                        state.nav_key_last_scrolled_at = Some(now);
                     }
-                    OptionsView::Submenu(kind) => {
-                        let total = submenu_rows(kind).len() + 1; // + Exit row
-                        if total > 0 {
-                            match direction {
-                                NavDirection::Up => {
-                                    state.sub_selected = if state.sub_selected == 0 { total - 1 } else { state.sub_selected - 1 };
-                                }
-                                NavDirection::Down => {
-                                    state.sub_selected = (state.sub_selected + 1) % total;
-                                }
+                }
+                OptionsView::Submenu(kind) => {
+                    let total = submenu_rows(kind).len() + 1; // + Exit row
+                    if total > 0 {
+                        match direction {
+                            NavDirection::Up => {
+                                state.sub_selected = if state.sub_selected == 0 {
+                                    total - 1
+                                } else {
+                                    state.sub_selected - 1
+                                };
                             }
-                            state.nav_key_last_scrolled_at = Some(now);
+                            NavDirection::Down => {
+                                state.sub_selected = (state.sub_selected + 1) % total;
+                            }
                         }
+                        state.nav_key_last_scrolled_at = Some(now);
                     }
                 }
             }
+        }
     }
 
-    if let (Some(delta_lr), Some(held_since), Some(last_adjusted)) =
-        (state.nav_lr_held_direction, state.nav_lr_held_since, state.nav_lr_last_adjusted_at)
-    {
+    if let (Some(delta_lr), Some(held_since), Some(last_adjusted)) = (
+        state.nav_lr_held_direction,
+        state.nav_lr_held_since,
+        state.nav_lr_last_adjusted_at,
+    ) {
         let now = Instant::now();
         if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
             && now.duration_since(last_adjusted) >= NAV_REPEAT_SCROLL_INTERVAL
         {
             if matches!(state.view, OptionsView::Submenu(_)) {
-                apply_submenu_choice_delta(state, delta_lr);
+                if pending_action.is_none() {
+                    pending_action = apply_submenu_choice_delta(state, delta_lr);
+                } else {
+                    apply_submenu_choice_delta(state, delta_lr);
+                }
                 state.nav_lr_last_adjusted_at = Some(now);
             }
         }
@@ -1415,7 +1507,8 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     }
     if state.cursor_row_anim_t < 1.0 {
         if CURSOR_TWEEN_SECONDS > 0.0 {
-            state.cursor_row_anim_t = (state.cursor_row_anim_t + dt / CURSOR_TWEEN_SECONDS).min(1.0);
+            state.cursor_row_anim_t =
+                (state.cursor_row_anim_t + dt / CURSOR_TWEEN_SECONDS).min(1.0);
         } else {
             state.cursor_row_anim_t = 1.0;
         }
@@ -1457,27 +1550,27 @@ fn on_lr_release(state: &mut State, delta: isize) {
     }
 }
 
-fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
+fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenAction> {
     if !matches!(state.submenu_transition, SubmenuTransition::None) {
-        return;
+        return None;
     }
     let kind = match state.view {
         OptionsView::Submenu(k) => k,
-        _ => return,
+        _ => return None,
     };
     let rows = submenu_rows(kind);
     let rows_len = rows.len();
     if rows_len == 0 {
-        return;
+        return None;
     }
     let row_index = state.sub_selected;
     if row_index >= rows_len {
         // Exit row – no choices to change.
-        return;
+        return None;
     }
 
     if let Some(row) = rows.get(row_index) {
-        if matches!(kind, SubmenuKind::GraphicsSound) {
+        if matches!(kind, SubmenuKind::Graphics) {
             match row.label {
                 "Global Offset (ms)" => {
                     if adjust_ms_value(
@@ -1489,7 +1582,7 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
                         config::update_global_offset(state.global_offset_ms as f32 / 1000.0);
                         audio::play_sfx("assets/sounds/change_value.ogg");
                     }
-                    return;
+                    return None;
                 }
                 "Visual Delay (ms)" => {
                     if adjust_ms_value(
@@ -1500,7 +1593,7 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
                     ) {
                         audio::play_sfx("assets/sounds/change_value.ogg");
                     }
-                    return;
+                    return None;
                 }
                 _ => {}
             }
@@ -1510,12 +1603,13 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
     let choices = row_choices(state, kind, rows, row_index);
     let num_choices = choices.len();
     if num_choices == 0 {
-        return;
+        return None;
     }
+    let mut action: Option<ScreenAction> = None;
     let changed_choice = {
         let choice_indices = submenu_choice_indices_mut(state, kind);
         if row_index >= choice_indices.len() {
-            return;
+            return None;
         }
         let choice_index = choice_indices[row_index].min(num_choices.saturating_sub(1));
         let cur = choice_index as isize;
@@ -1525,31 +1619,50 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
             new_index = num_choices.saturating_sub(1);
         }
         if new_index == choice_index {
-            return;
+            return None;
         }
 
         choice_indices[row_index] = new_index;
         audio::play_sfx("assets/sounds/change_value.ogg");
 
-        if matches!(kind, SubmenuKind::GraphicsSound) {
+        if matches!(kind, SubmenuKind::Graphics) {
             let row = &rows[row_index];
             if row.label == "Display Aspect Ratio" {
-                // If Aspect Ratio changed, rebuild resolutions
                 let (cur_w, cur_h) = selected_resolution(state);
-                // We'll queue a rebuild
                 rebuild_resolution_choices(state, cur_w, cur_h);
-                // Also reset resolution selection to best match? 
-                // rebuild_resolution_choices already tries to keep current.
             }
             if row.label == "Display Resolution" {
-                // If resolution changed, update refresh rates
                 rebuild_refresh_rate_choices(state);
             }
             if row.label == "Display Mode" {
-                // If display mode changed (e.g. Screen 1 -> Screen 2), update refresh/resolution lists
-                // We treat this as a monitor change if it's not "Windowed"
                 let (cur_w, cur_h) = selected_resolution(state);
                 rebuild_resolution_choices(state, cur_w, cur_h);
+            }
+            if row.label == "Wait for VSync" {
+                config::update_vsync(new_index == 1);
+            }
+            if row.label == "Show Stats" {
+                let show = new_index == 1;
+                action = Some(ScreenAction::UpdateShowOverlay(show));
+            }
+        } else if matches!(kind, SubmenuKind::Sound) {
+            let row = &rows[row_index];
+            match row.label {
+                "Sound Volume" => {
+                    let vol = master_volume_from_choice(new_index);
+                    config::update_master_volume(vol);
+                }
+                "Audio Sample Rate" => {
+                    let rate = sample_rate_from_choice(new_index);
+                    config::update_audio_sample_rate(rate);
+                }
+                "Mine Sounds" => {
+                    config::update_mine_hit_sound(new_index == 1);
+                }
+                "RateMod Preserves Pitch" => {
+                    config::update_rate_mod_preserves_pitch(new_index == 1);
+                }
+                _ => {}
             }
         }
         Some((choice_index, new_index))
@@ -1562,10 +1675,7 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
             .get(row_index)
             .map(|r| r.label == "Language")
             .unwrap_or(false);
-        let is_inline_row = rows
-            .get(row_index)
-            .map(|r| r.inline)
-            .unwrap_or(true);
+        let is_inline_row = rows.get(row_index).map(|r| r.inline).unwrap_or(true);
         if is_inline_row && !is_language_row {
             state.cursor_anim_row = Some(row_index);
             state.cursor_anim_from_choice = choice_index;
@@ -1576,6 +1686,7 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
             state.cursor_anim_t = 1.0;
         }
     }
+    action
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -1601,13 +1712,21 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     OptionsView::Main => {
                         let total = ITEMS.len();
                         if total > 0 {
-                            state.selected = if state.selected == 0 { total - 1 } else { state.selected - 1 };
+                            state.selected = if state.selected == 0 {
+                                total - 1
+                            } else {
+                                state.selected - 1
+                            };
                         }
                     }
                     OptionsView::Submenu(kind) => {
                         let total = submenu_rows(kind).len() + 1;
                         if total > 0 {
-                            state.sub_selected = if state.sub_selected == 0 { total - 1 } else { state.sub_selected - 1 };
+                            state.sub_selected = if state.sub_selected == 0 {
+                                total - 1
+                            } else {
+                                state.sub_selected - 1
+                            };
                         }
                     }
                 }
@@ -1639,7 +1758,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             if ev.pressed {
-                apply_submenu_choice_delta(state, -1);
+                if let Some(action) = apply_submenu_choice_delta(state, -1) {
+                    on_lr_press(state, -1);
+                    return action;
+                }
                 on_lr_press(state, -1);
             } else {
                 on_lr_release(state, -1);
@@ -1647,7 +1769,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             if ev.pressed {
-                apply_submenu_choice_delta(state, 1);
+                if let Some(action) = apply_submenu_choice_delta(state, 1) {
+                    on_lr_press(state, 1);
+                    return action;
+                }
                 on_lr_press(state, 1);
             } else {
                 on_lr_release(state, 1);
@@ -1672,10 +1797,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }
-                        // Enter Graphics/Sound Options submenu.
-                        "Graphics/Sound Options" => {
+                        // Enter Graphics Options submenu.
+                        "Graphics Options" => {
                             audio::play_sfx("assets/sounds/start.ogg");
-                            state.pending_submenu_kind = Some(SubmenuKind::GraphicsSound);
+                            state.pending_submenu_kind = Some(SubmenuKind::Graphics);
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                            state.submenu_fade_t = 0.0;
+                        }
+                        // Enter Sound Options submenu.
+                        "Sound Options" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            state.pending_submenu_kind = Some(SubmenuKind::Sound);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }
@@ -1741,8 +1873,16 @@ fn scaled_block_origin_with_margins() -> (f32, f32, f32) {
     let avail_h = (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
 
     // candidate scales
-    let s_w = if total_w > 0.0 { avail_w / total_w } else { 1.0 };
-    let s_h = if total_h > 0.0 { avail_h / total_h } else { 1.0 };
+    let s_w = if total_w > 0.0 {
+        avail_w / total_w
+    } else {
+        1.0
+    };
+    let s_h = if total_h > 0.0 {
+        avail_h / total_h
+    } else {
+        1.0
+    };
     let s = s_w.min(s_h).max(0.0);
 
     // X origin:
@@ -1773,7 +1913,11 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
     match actor {
         Actor::Sprite { tint, .. } => tint[3] *= alpha,
         Actor::Text { color, .. } => color[3] *= alpha,
-        Actor::Frame { background, children, .. } => {
+        Actor::Frame {
+            background,
+            children,
+            ..
+        } => {
             if let Some(actors::Background::Color(c)) = background {
                 c[3] *= alpha;
             }
@@ -1833,24 +1977,24 @@ pub fn get_actors(
     /* --------------------------- MAIN CONTENT UI -------------------------- */
 
     // --- global colors ---
-    let col_active_bg  = color::rgba_hex("#333333"); // active bg for normal rows
+    let col_active_bg = color::rgba_hex("#333333"); // active bg for normal rows
 
     // inactive bg = #071016 @ 0.8 alpha
-    let base_inactive  = color::rgba_hex("#071016");
+    let base_inactive = color::rgba_hex("#071016");
     let col_inactive_bg: [f32; 4] = [base_inactive[0], base_inactive[1], base_inactive[2], 0.8];
 
-    let col_white      = [1.0, 1.0, 1.0, 1.0];
-    let col_black      = [0.0, 0.0, 0.0, 1.0];
+    let col_white = [1.0, 1.0, 1.0, 1.0];
+    let col_black = [0.0, 0.0, 0.0, 1.0];
 
     // Simply Love brand color (now uses the active theme color).
-    let col_brand_bg   = color::simply_love_rgba(state.active_color_index); // <-- CHANGED
+    let col_brand_bg = color::simply_love_rgba(state.active_color_index); // <-- CHANGED
 
     // --- scale & origin honoring fixed screen-space margins ---
     let (s, list_x, list_y) = scaled_block_origin_with_margins();
 
     // Geometry (scaled)
     let list_w = LIST_W * s;
-    let sep_w  = SEP_W * s;
+    let sep_w = SEP_W * s;
     let desc_w = DESC_W * s;
     let desc_h = DESC_H * s;
 
@@ -1877,7 +2021,8 @@ pub fn get_actors(
     match state.view {
         OptionsView::Main => {
             // Active text color (for normal rows) – Simply Love uses row index + global color index.
-            let col_active_text = color::simply_love_rgba(state.active_color_index + state.selected as i32);
+            let col_active_text =
+                color::simply_love_rgba(state.active_color_index + state.selected as i32);
 
             // ---------------------------- Scrolling math ---------------------------
             let total_items = ITEMS.len();
@@ -1886,12 +2031,14 @@ pub fn get_actors(
             // Row loop (backgrounds + content). We render the visible window.
             for i_vis in 0..VISIBLE_ROWS {
                 let item_idx = offset_rows + i_vis;
-                if item_idx >= total_items { break; }
+                if item_idx >= total_items {
+                    break;
+                }
 
                 let row_y = list_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s;
 
                 let is_active = item_idx == state.selected;
-                let is_exit   = item_idx == total_items - 1;
+                let is_exit = item_idx == total_items - 1;
 
                 // Row background width:
                 // - Exit: always keep the 3px gap (even when active)
@@ -1919,13 +2066,17 @@ pub fn get_actors(
                 ));
 
                 // Content placement inside row
-                let row_mid_y   = row_y + 0.5 * ROW_H * s;
-                let heart_x     = list_x + HEART_LEFT_PAD * s;
+                let row_mid_y = row_y + 0.5 * ROW_H * s;
+                let heart_x = list_x + HEART_LEFT_PAD * s;
                 let text_x_base = list_x + TEXT_LEFT_PAD * s;
 
                 // Heart sprite (skip for Exit)
                 if !is_exit {
-                    let heart_tint = if is_active { col_active_text } else { col_white };
+                    let heart_tint = if is_active {
+                        col_active_text
+                    } else {
+                        col_white
+                    };
                     ui_actors.push(act!(sprite("heart.png"):
                         align(0.0, 0.5):
                         xy(heart_x, row_mid_y):
@@ -2012,9 +2163,11 @@ pub fn get_actors(
                 asset_manager.with_fonts(|all_fonts| {
                     asset_manager.with_font("miso", |metrics_font| {
                         for text in choices {
-                            let mut w =
-                                font::measure_line_width_logical(metrics_font, text.as_ref(), all_fonts)
-                                    as f32;
+                            let mut w = font::measure_line_width_logical(
+                                metrics_font,
+                                text.as_ref(),
+                                all_fonts,
+                            ) as f32;
                             if !w.is_finite() || w <= 0.0 {
                                 w = 1.0;
                             }
@@ -2074,9 +2227,11 @@ pub fn get_actors(
                             } else {
                                 choices[sel_idx].to_string()
                             };
-                            let mut w =
-                                font::measure_line_width_logical(metrics_font, &choice_text, all_fonts)
-                                    as f32;
+                            let mut w = font::measure_line_width_logical(
+                                metrics_font,
+                                &choice_text,
+                                all_fonts,
+                            ) as f32;
                             if !w.is_finite() || w <= 0.0 {
                                 w = 1.0;
                             }
@@ -2107,7 +2262,11 @@ pub fn get_actors(
                     list_w - sep_w
                 };
 
-                let bg = if is_active { col_active_bg } else { col_inactive_bg };
+                let bg = if is_active {
+                    col_active_bg
+                } else {
+                    col_inactive_bg
+                };
 
                 ui_actors.push(act!(quad:
                     align(0.0, 0.0):
@@ -2147,7 +2306,8 @@ pub fn get_actors(
                     ));
 
                     // Inline Off/On options in the items column (or a single centered value if inline == false).
-                    let mut choice_texts: Vec<Cow<'_, str>> = row_choices(state, kind, rows, row_idx);
+                    let mut choice_texts: Vec<Cow<'_, str>> =
+                        row_choices(state, kind, rows, row_idx);
                     if !choice_texts.is_empty() {
                         let value_zoom = 0.835_f32;
                         if row.label == "Global Offset (ms)" {
@@ -2162,7 +2322,11 @@ pub fn get_actors(
                         asset_manager.with_fonts(|all_fonts| {
                             asset_manager.with_font("miso", |metrics_font| {
                                 for text in &choice_texts {
-                                    let mut w = font::measure_line_width_logical(metrics_font, text.as_ref(), all_fonts) as f32;
+                                    let mut w = font::measure_line_width_logical(
+                                        metrics_font,
+                                        text.as_ref(),
+                                        all_fonts,
+                                    ) as f32;
                                     if !w.is_finite() || w <= 0.0 {
                                         w = 1.0;
                                     }
@@ -2545,12 +2709,11 @@ pub fn get_actors(
         //   with remaining lines rendered as the bullet list (if any).
         // - Fallback to the item name if there is no help text.
         let help = item.help;
-        let (raw_title_text, bullet_lines): (&str, &[&str]) =
-            if help.is_empty() {
-                (item.name, &[][..])
-            } else {
-                (help[0], &help[1..])
-            };
+        let (raw_title_text, bullet_lines): (&str, &[&str]) = if help.is_empty() {
+            (item.name, &[][..])
+        } else {
+            (help[0], &help[1..])
+        };
 
         // Word-wrapping using actual font metrics so the title respects the
         // description box's inner width and padding exactly.
@@ -2584,7 +2747,8 @@ pub fn get_actors(
                             };
 
                             let logical_w =
-                                font::measure_line_width_logical(miso_font, &candidate, all_fonts) as f32;
+                                font::measure_line_width_logical(miso_font, &candidate, all_fonts)
+                                    as f32;
                             let pixel_w = logical_w * DESC_TITLE_ZOOM * s;
 
                             if !current_line.is_empty() && pixel_w > max_width_px {

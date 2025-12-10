@@ -4,16 +4,10 @@ use crate::ui::actors::{Actor, SizeSpec};
 // This should match the native resolution of "rounded-square.png" from the theme (64x64).
 const PANEL_NATIVE_SIZE: f32 = 64.0;
 // Defines which panels are "active" for the dance-single layout.
-const DANCE_LAYOUT: [bool; 9] = [
-    false, true,  false,
-    true,  false, true,
-    false, true,  false,
-];
+const DANCE_LAYOUT: [bool; 9] = [false, true, false, true, false, true, false, true, false];
 // Defines the layout for an inactive player.
 const INACTIVE_LAYOUT: [bool; 9] = [
-    false, false, false,
-    false, false, false,
-    false, false, false,
+    false, false, false, false, false, false, false, false, false,
 ];
 
 // Colors for active and inactive panels, matching the default (non-dark) theme.
@@ -33,7 +27,11 @@ pub fn build(params: PadDisplayParams) -> Actor {
     let mut children = Vec::with_capacity(9);
 
     // Choose which layout to use based on whether the player is active.
-    let layout = if params.is_active { DANCE_LAYOUT } else { INACTIVE_LAYOUT };
+    let layout = if params.is_active {
+        DANCE_LAYOUT
+    } else {
+        INACTIVE_LAYOUT
+    };
 
     // This is the final size of one panel after zoom.
     let zoomed_panel_size = PANEL_NATIVE_SIZE * params.zoom;
@@ -52,20 +50,22 @@ pub fn build(params: PadDisplayParams) -> Actor {
             let x = zoomed_panel_size * (col as f32 - 1.0);
             let y = zoomed_panel_size * (row as f32 - 2.0);
 
-            children.push(act!(sprite("rounded-square.png"): // Use sprite instead of quad
-                align(0.5, 0.5): // The panel's center is its pivot point.
-                xy(x, y):
-                // The base size is set, then scaled by the zoom factor.
-                setsize(PANEL_NATIVE_SIZE, PANEL_NATIVE_SIZE):
-                zoom(params.zoom):
-                diffuse(color[0], color[1], color[2], color[3])
-            ));
+            children.push(
+                act!(sprite("rounded-square.png"): // Use sprite instead of quad
+                    align(0.5, 0.5): // The panel's center is its pivot point.
+                    xy(x, y):
+                    // The base size is set, then scaled by the zoom factor.
+                    setsize(PANEL_NATIVE_SIZE, PANEL_NATIVE_SIZE):
+                    zoom(params.zoom):
+                    diffuse(color[0], color[1], color[2], color[3])
+                ),
+            );
         }
     }
 
     // The parent Frame groups all panels. Its origin is its center.
     Actor::Frame {
-        align: [0.5, 0.5], // The frame's pivot is its center.
+        align: [0.5, 0.5],                            // The frame's pivot is its center.
         offset: [params.center_x, params.center_y], // Position the center at this world coordinate.
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)], // Frame itself has no intrinsic size.
         children,

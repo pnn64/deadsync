@@ -249,9 +249,10 @@ fn harvest_raw_line_entries_from_text(text: &str) -> HashMap<(String, u32), Stri
 fn get_page_name_from_path(path: &Path) -> String {
     let filename = path.file_stem().unwrap_or_default().to_string_lossy();
     if let (Some(s), Some(e)) = (filename.find('['), filename.find(']'))
-        && s < e {
-            return filename[s + 1..e].to_string();
-        }
+        && s < e
+    {
+        return filename[s + 1..e].to_string();
+    }
     "main".to_string()
 }
 
@@ -405,11 +406,7 @@ fn round_half_to_even_i32(v: f32) -> i32 {
         (floor + 1.0) as i32
     } else {
         let f = floor as i32;
-        if (f & 1) == 0 {
-            f
-        } else {
-            f + 1
-        }
+        if (f & 1) == 0 { f } else { f + 1 }
     }
 }
 
@@ -704,9 +701,10 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
 
                 for (key, val) in map {
                     if let Ok(frame_idx) = key.parse::<usize>()
-                        && let Ok(w) = val.parse::<i32>() {
-                            settings.glyph_widths.insert(frame_idx, w);
-                        }
+                        && let Ok(w) = val.parse::<i32>()
+                    {
+                        settings.glyph_widths.insert(frame_idx, w);
+                    }
                 }
             }
         }
@@ -727,12 +725,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
         );
         trace!(
             " [{}] frames: {}x{} (frame_w={} frame_h={}), total_frames={}",
-            page_name,
-            num_frames_wide,
-            num_frames_high,
-            frame_w_i,
-            frame_h_i,
-            total_frames
+            page_name, num_frames_wide, num_frames_high, frame_w_i, frame_h_i, total_frames
         );
 
         // vertical metrics (authored)
@@ -802,9 +795,10 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                             {
                                 if let Ok(cp) = u32::from_str_radix(hex, 16)
                                     && let Some(ch) = char::from_u32(cp)
-                                        && frame_index < total_frames {
-                                            char_to_frame.insert(ch, frame_index);
-                                        }
+                                    && frame_index < total_frames
+                                {
+                                    char_to_frame.insert(ch, frame_index);
+                                }
                             } else if spec.starts_with('"')
                                 && spec.ends_with('"')
                                 && spec.len() >= 2
@@ -818,9 +812,10 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                         }
                     } else if key_lc.starts_with("range ")
                         && let Ok(first_frame) = val_str.parse::<usize>()
-                            && let Some((codeset, hex)) = parse_range_key(raw_key_lc) {
-                                apply_range_mapping(&mut char_to_frame, &codeset, hex, first_frame);
-                            }
+                        && let Some((codeset, hex)) = parse_range_key(raw_key_lc)
+                    {
+                        apply_range_mapping(&mut char_to_frame, &codeset, hex, first_frame);
+                    }
                 }
             }
         }
@@ -985,11 +980,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
     } else if let Some(g) = font.glyph_map.get(&' ') {
         trace!(
             "SPACE metrics (draw): advance={:.3} size=[{:.3}x{:.3}] offset=[{:.3},{:.3}]",
-            g.advance,
-            g.size[0],
-            g.size[1],
-            g.offset[0],
-            g.offset[1]
+            g.advance, g.size[0], g.size[1], g.offset[0], g.offset[1]
         );
         debug!(
             "SPACE mapped: draw advance {:.3} (texture='{}')",
@@ -1064,8 +1055,9 @@ fn apply_space_nbsp_symmetry(char_to_frame: &mut std::collections::HashMap<char,
 #[inline(always)]
 fn synthesize_space_from_nbsp(all_glyphs: &mut std::collections::HashMap<char, Glyph>) {
     if !all_glyphs.contains_key(&' ')
-        && let Some(nbsp) = all_glyphs.get(&'\u{00A0}').cloned() {
-            all_glyphs.insert(' ', nbsp);
-            debug!("SPACE synthesized from NBSP glyph at font level (SM parity).");
-        }
+        && let Some(nbsp) = all_glyphs.get(&'\u{00A0}').cloned()
+    {
+        all_glyphs.insert(' ', nbsp);
+        debug!("SPACE synthesized from NBSP glyph at font level (SM parity).");
+    }
 }

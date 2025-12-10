@@ -67,14 +67,14 @@ pub enum Actor {
 
     /// Text actor (BitmapText-like)
     Text {
-        align: [f32; 2],         // halign/valign pivot inside line box
-        offset: [f32; 2],        // parent top-left space
+        align: [f32; 2],  // halign/valign pivot inside line box
+        offset: [f32; 2], // parent top-left space
         color: [f32; 4],
         #[allow(dead_code)]
         glow: [f32; 4],
         font: &'static str,
         content: String,
-        align_text: TextAlign,   // talign: left/center/right
+        align_text: TextAlign, // talign: left/center/right
         z: i16,
         scale: [f32; 2],
         fit_width: Option<f32>,
@@ -99,8 +99,8 @@ pub enum Actor {
     /// Shadow wrapper: draws child's objects once more with an offset and tint,
     /// matching StepMania's `shadowlength*` and `shadowcolor` behavior.
     Shadow {
-        len: [f32; 2],        // (x, y) shadow length in screen units
-        color: [f32; 4],      // shadow color; alpha multiplies the child's alpha
-        child: Box<Actor>,    // wrapped actor
+        len: [f32; 2],     // (x, y) shadow length in screen units
+        color: [f32; 4],   // shadow color; alpha multiplies the child's alpha
+        child: Box<Actor>, // wrapped actor
     },
 }

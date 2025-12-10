@@ -1,17 +1,17 @@
 use crate::act;
 // Screen navigation is handled in app.rs
-use crate::core::input::{VirtualAction, InputEvent};
+use crate::core::input::{InputEvent, VirtualAction};
+use crate::core::network::{self, ConnectionStatus};
+use crate::game::song::get_song_cache;
 use crate::screens::{Screen, ScreenAction};
-use winit::event::{KeyEvent, ElementState};
-use winit::keyboard::KeyCode;
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use crate::ui::components::menu_splash;
 use crate::ui::components::logo::{self, LogoParams};
 use crate::ui::components::menu_list::{self};
+use crate::ui::components::menu_splash;
 use crate::ui::components::{heart_bg, screen_bar};
-use crate::game::song::get_song_cache;
-use crate::core::network::{self, ConnectionStatus};
+use winit::event::{ElementState, KeyEvent};
+use winit::keyboard::KeyCode;
 
 use crate::core::space::*;
 
@@ -54,7 +54,9 @@ pub fn init() -> State {
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 // Screen-specific raw keyboard handling for Menu (e.g., F4 to Sandbox)
 pub fn handle_raw_key_event(_state: &mut State, key: &KeyEvent) -> ScreenAction {
-    if key.state != ElementState::Pressed { return ScreenAction::None; }
+    if key.state != ElementState::Pressed {
+        return ScreenAction::None;
+    }
     match key.physical_key {
         winit::keyboard::PhysicalKey::Code(KeyCode::F4) => {
             return ScreenAction::Navigate(Screen::Sandbox);
@@ -104,7 +106,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(96);
 
     // 1) background component (never fades)
-    let backdrop = if state.rainbow_mode { [1.0, 1.0, 1.0, 1.0] } else { [0.0, 0.0, 0.0, 1.0] };
+    let backdrop = if state.rainbow_mode {
+        [1.0, 1.0, 1.0, 1.0]
+    } else {
+        [0.0, 0.0, 0.0, 1.0]
+    };
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: backdrop,
@@ -140,7 +146,6 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let num_songs: usize = song_cache.iter().map(|pack| pack.songs.len()).sum();
     let song_info_text = format!("{} songs in {} groups, X courses", num_songs, num_packs);
 
-
     // --- Create a single multi-line string and pass it to one text actor ---
     let combined_text = format!("DeadSync {}\n{}", version, song_info_text);
 
@@ -153,7 +158,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     // 3) menu list
     let base_y = lp.top_margin + lp.target_h + MENU_BELOW_LOGO;
     let mut selected = color::menu_selected_rgba(state.active_color_index);
-    let mut normal   = color::rgba_hex(NORMAL_COLOR_HEX);
+    let mut normal = color::rgba_hex(NORMAL_COLOR_HEX);
     selected[3] *= alpha_multiplier;
     normal[3] *= alpha_multiplier;
 
@@ -188,7 +193,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     // --- GrooveStats Info Pane (top-left) ---
     let mut groovestats_actors = Vec::new();
     let status = network::get_status();
-    
+
     // Mimic the ActorFrame's zoom(0.8) which affects both size and position offsets.
     let frame_zoom = 0.8;
     let base_x = 10.0;
@@ -204,8 +209,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
                 _ => "Failed to Load 😞".to_string(),
             };
             // When there is a connection error, SL shows the error message in Service1 and "❌ GrooveStats" as main text.
-            ("GrooveStats not connected".to_string(), vec![simplified_msg])
-        },
+            (
+                "GrooveStats not connected".to_string(),
+                vec![simplified_msg],
+            )
+        }
         ConnectionStatus::Connected(services) => {
             let mut disabled_services = Vec::new();
             if !services.get_scores {
@@ -217,7 +225,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             if !services.auto_submit {
                 disabled_services.push("❌ Auto-Submit".to_string());
             }
-            
+
             let text = if disabled_services.is_empty() {
                 "✔ GrooveStats".to_string()
             } else if disabled_services.len() == 3 {
@@ -226,12 +234,16 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
                 "⚠ GrooveStats".to_string()
             };
 
-            let services_to_show = if disabled_services.len() == 3 { Vec::new() } else { disabled_services };
+            let services_to_show = if disabled_services.len() == 3 {
+                Vec::new()
+            } else {
+                disabled_services
+            };
 
             (text, services_to_show)
         }
     };
-    
+
     // Main status text
     groovestats_actors.push(act!(text: font("miso"): settext(main_text): align(0.0, 0.0): xy(base_x, base_y): zoom(frame_zoom): horizalign(left): z(200) ));
 
@@ -240,9 +252,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     for (i, service_text) in services_to_list.iter().enumerate() {
         groovestats_actors.push(act!(text: font("miso"): settext(service_text.clone()): align(0.0, 0.0): xy(base_x, base_y + (line_height_offset * (i as f32 + 1.0) * frame_zoom)): zoom(frame_zoom): horizalign(left): z(200)));
     }
-    
+
     for actor in &mut groovestats_actors {
-        if let Actor::Text { color, .. } = actor { color[3] *= alpha_multiplier; }
+        if let Actor::Text { color, .. } = actor {
+            color[3] *= alpha_multiplier;
+        }
     }
     actors.extend(groovestats_actors);
 
@@ -251,7 +265,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
 // Event-driven virtual input handler
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed { return ScreenAction::None; }
+    if !ev.pressed {
+        return ScreenAction::None;
+    }
     match ev.action {
         VirtualAction::p1_start => {
             crate::core::audio::play_sfx("assets/sounds/start.ogg");

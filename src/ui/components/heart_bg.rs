@@ -10,15 +10,24 @@ use std::time::Instant;
 static GLOBAL_T0: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 
 // ---- tint/placement (from theme) ----
-const COLOR_ADD: [i32; 10]     = [-1, 0, 0, -1, -1, -1, 0, 0, 0, 0];
+const COLOR_ADD: [i32; 10] = [-1, 0, 0, -1, -1, -1, 0, 0, 0, 0];
 const DIFFUSE_ALPHA: [f32; 10] = [0.05, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1];
-const XY: [f32; 10]            = [0.0, 40.0, 80.0, 120.0, 200.0, 280.0, 360.0, 400.0, 480.0, 560.0];
+const XY: [f32; 10] = [
+    0.0, 40.0, 80.0, 120.0, 200.0, 280.0, 360.0, 400.0, 480.0, 560.0,
+];
 
 // reinterpret “UV velocities” as screen px/sec scale
 const UV_VEL: [[f32; 2]; 10] = [
-    [ 0.03, 0.01], [ 0.03, 0.02], [ 0.03, 0.01], [ 0.02, 0.02],
-    [ 0.03, 0.03], [ 0.02, 0.02], [ 0.03, 0.01], [-0.03, 0.01],
-    [ 0.05, 0.03], [ 0.03, 0.04],
+    [0.03, 0.01],
+    [0.03, 0.02],
+    [0.03, 0.01],
+    [0.02, 0.02],
+    [0.03, 0.03],
+    [0.02, 0.02],
+    [0.03, 0.01],
+    [-0.03, 0.01],
+    [0.05, 0.03],
+    [0.03, 0.04],
 ];
 
 pub struct State {
@@ -26,7 +35,7 @@ pub struct State {
     base_w: f32,
     base_h: f32,
     variants: [usize; 10],
-    tex_key: &'static str,  // <-- sprite key (must match texture manager)
+    tex_key: &'static str, // <-- sprite key (must match texture manager)
 }
 
 pub struct Params {
@@ -37,16 +46,21 @@ pub struct Params {
 }
 
 impl State {
-    pub fn new() -> Self { Self::with_texture("heart.png") }
+    pub fn new() -> Self {
+        Self::with_texture("heart.png")
+    }
 
     pub fn with_texture(tex_key: &'static str) -> Self {
         // Cache: tex_key -> (w,h). Keeps everything local; no new top-level imports.
-        static CACHE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<&'static str, (u32, u32)>>> =
-            std::sync::OnceLock::new();
+        static CACHE: std::sync::OnceLock<
+            std::sync::Mutex<std::collections::HashMap<&'static str, (u32, u32)>>,
+        > = std::sync::OnceLock::new();
         let map = CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
         #[inline(always)]
-        fn fallback_dims() -> (u32, u32) { (668, 566) }
+        fn fallback_dims() -> (u32, u32) {
+            (668, 566)
+        }
 
         let (w_px, h_px) = {
             // Hit cache
@@ -130,10 +144,22 @@ impl State {
             let mut nx = 1usize;
             let mut ny = 1usize;
 
-            if x0 < half_w { x_offsets[nx] =  w; nx += 1; }
-            if x0 > w - half_w { x_offsets[nx] = -w; nx += 1; }
-            if y0 < half_h { y_offsets[ny] =  h; ny += 1; }
-            if y0 > h - half_h { y_offsets[ny] = -h; ny += 1; }
+            if x0 < half_w {
+                x_offsets[nx] = w;
+                nx += 1;
+            }
+            if x0 > w - half_w {
+                x_offsets[nx] = -w;
+                nx += 1;
+            }
+            if y0 < half_h {
+                y_offsets[ny] = h;
+                ny += 1;
+            }
+            if y0 > h - half_h {
+                y_offsets[ny] = -h;
+                ny += 1;
+            }
 
             for xi in 0..nx {
                 for yi in 0..ny {

@@ -21,8 +21,25 @@ const GS_SCORES_DIR: &str = "save/profiles/00000000/scores/gs";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(dead_code)] // Quint will be used eventually for W0 tracking
 pub enum Grade {
-    Quint, Tier01, Tier02, Tier03, Tier04, Tier05, Tier06, Tier07, Tier08,
-    Tier09, Tier10, Tier11, Tier12, Tier13, Tier14, Tier15, Tier16, Tier17, Failed,
+    Quint,
+    Tier01,
+    Tier02,
+    Tier03,
+    Tier04,
+    Tier05,
+    Tier06,
+    Tier07,
+    Tier08,
+    Tier09,
+    Tier10,
+    Tier11,
+    Tier12,
+    Tier13,
+    Tier14,
+    Tier15,
+    Tier16,
+    Tier17,
+    Failed,
 }
 
 impl Grade {
@@ -30,11 +47,24 @@ impl Grade {
     pub fn to_sprite_state(&self) -> u32 {
         match self {
             Grade::Quint => 0,
-            Grade::Tier01 => 1, Grade::Tier02 => 2, Grade::Tier03 => 3, Grade::Tier04 => 4,
-            Grade::Tier05 => 5, Grade::Tier06 => 6, Grade::Tier07 => 7, Grade::Tier08 => 8,
-            Grade::Tier09 => 9, Grade::Tier10 => 10, Grade::Tier11 => 11, Grade::Tier12 => 12,
-            Grade::Tier13 => 13, Grade::Tier14 => 14, Grade::Tier15 => 15, Grade::Tier16 => 16,
-            Grade::Tier17 => 17, Grade::Failed => 18,
+            Grade::Tier01 => 1,
+            Grade::Tier02 => 2,
+            Grade::Tier03 => 3,
+            Grade::Tier04 => 4,
+            Grade::Tier05 => 5,
+            Grade::Tier06 => 6,
+            Grade::Tier07 => 7,
+            Grade::Tier08 => 8,
+            Grade::Tier09 => 9,
+            Grade::Tier10 => 10,
+            Grade::Tier11 => 11,
+            Grade::Tier12 => 12,
+            Grade::Tier13 => 13,
+            Grade::Tier14 => 14,
+            Grade::Tier15 => 15,
+            Grade::Tier16 => 16,
+            Grade::Tier17 => 17,
+            Grade::Failed => 18,
         }
     }
 }
@@ -155,7 +185,9 @@ fn preload_scores_from_disk() {
     if !dir.is_dir() {
         return;
     }
-    let Ok(read_dir) = fs::read_dir(&dir) else { return; };
+    let Ok(read_dir) = fs::read_dir(&dir) else {
+        return;
+    };
 
     let mut best_by_chart: HashMap<String, CachedScore> = HashMap::new();
 
@@ -171,13 +203,17 @@ fn preload_scores_from_disk() {
             continue;
         }
         let base = &name[..name.len().saturating_sub(4)];
-        let Some(idx) = base.rfind('-') else { continue; };
+        let Some(idx) = base.rfind('-') else {
+            continue;
+        };
         if idx == 0 {
             continue;
         }
         let chart_hash = &base[..idx];
 
-        let Ok(bytes) = fs::read(&path) else { continue; };
+        let Ok(bytes) = fs::read(&path) else {
+            continue;
+        };
         let Ok((entry, _)) =
             bincode::decode_from_slice::<GsScoreEntry, _>(&bytes, bincode::config::standard())
         else {
@@ -218,7 +254,9 @@ fn load_all_entries_for_chart(chart_hash: &str) -> Vec<GsScoreEntry> {
         return Vec::new();
     }
     let prefix = format!("{}-", chart_hash);
-    let Ok(read_dir) = fs::read_dir(&dir) else { return Vec::new(); };
+    let Ok(read_dir) = fs::read_dir(&dir) else {
+        return Vec::new();
+    };
     let mut entries = Vec::new();
     for item in read_dir.flatten() {
         let path = item.path();
@@ -231,8 +269,12 @@ fn load_all_entries_for_chart(chart_hash: &str) -> Vec<GsScoreEntry> {
         if !name.starts_with(&prefix) || !name.ends_with(".bin") {
             continue;
         }
-        let Ok(bytes) = fs::read(&path) else { continue; };
-        if let Ok((entry, _)) = bincode::decode_from_slice::<GsScoreEntry, _>(&bytes, bincode::config::standard()) {
+        let Ok(bytes) = fs::read(&path) else {
+            continue;
+        };
+        if let Ok((entry, _)) =
+            bincode::decode_from_slice::<GsScoreEntry, _>(&bytes, bincode::config::standard())
+        {
             entries.push(entry);
         }
     }
@@ -340,7 +382,9 @@ fn parse_comment_counts(comment: &str) -> ParsedCommentCounts {
     let mut counts = ParsedCommentCounts::default();
     for part in comment.split(',') {
         let s = part.trim();
-        if s.is_empty() { continue; }
+        if s.is_empty() {
+            continue;
+        }
 
         let mut value: u32 = 0;
         let mut idx = 0usize;
@@ -352,16 +396,18 @@ fn parse_comment_counts(comment: &str) -> ParsedCommentCounts {
                 break;
             }
         }
-        if value == 0 { continue; }
+        if value == 0 {
+            continue;
+        }
 
         let suffix = s[idx..].trim().to_ascii_lowercase();
         match suffix.as_str() {
-            "w"  => counts.w  = value,
-            "e"  => counts.e  = value,
-            "g"  => counts.g  = value,
-            "d"  => counts.d  = value,
+            "w" => counts.w = value,
+            "e" => counts.e = value,
+            "g" => counts.g = value,
+            "d" => counts.d = value,
             "wo" => counts.wo = value,
-            "m"  => counts.m  = value,
+            "m" => counts.m = value,
             _ => {}
         }
     }
@@ -443,25 +489,21 @@ fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Op
     }
 
     // Reconstruct W1 count as "everything not explicitly listed".
-    let non_w1_from_suffixes =
-        counts.e + counts.g + counts.d + counts.wo + counts.m + counts.w;
+    let non_w1_from_suffixes = counts.e + counts.g + counts.d + counts.wo + counts.m + counts.w;
     let inferred_w1 = if (non_w1_from_suffixes as i32) > taps_rows {
         0
     } else {
-        (taps_rows as u32).saturating_sub(
-            counts.e + counts.g + counts.d + counts.wo + counts.m,
-        )
+        (taps_rows as u32).saturating_sub(counts.e + counts.g + counts.d + counts.wo + counts.m)
     };
     let w1_total = counts.w.max(inferred_w1);
 
     // Dance Points from tap judgments (rows) only, per ITG PercentScoreWeight.
-    let dp_taps: i32 =
-        (w1_total as i32) * DP_W1 +
-        (counts.e as i32) * DP_W2 +
-        (counts.g as i32) * DP_W3 +
-        (counts.d as i32) * DP_W4 +
-        (counts.wo as i32) * DP_W5 +
-        (counts.m as i32) * DP_MISS;
+    let dp_taps: i32 = (w1_total as i32) * DP_W1
+        + (counts.e as i32) * DP_W2
+        + (counts.g as i32) * DP_W3
+        + (counts.d as i32) * DP_W4
+        + (counts.wo as i32) * DP_W5
+        + (counts.m as i32) * DP_MISS;
 
     // Holds + rolls assumed fully held for the "no hidden errors" hypothesis.
     let dp_hold_roll: i32 = (holds + rolls) * DP_HELD;
@@ -574,30 +616,83 @@ taps_rows={} holds={} rolls={} counts[w={}, e={}, g={}, d={}, wo={}, m={}] -> la
 
 pub fn score_to_grade(score: f64) -> Grade {
     let percent = score / 10000.0;
-    if percent >= 1.00 { Grade::Tier01 }    // Note: We don't have enough info to detect Quints (W0) yet.
-    else if percent >= 0.99 { Grade::Tier02 } // three-stars
-    else if percent >= 0.98 { Grade::Tier03 } // two-stars
-    else if percent >= 0.96 { Grade::Tier04 } // one-star
-    else if percent >= 0.94 { Grade::Tier05 } // s-plus
-    else if percent >= 0.92 { Grade::Tier06 } // s
-    else if percent >= 0.89 { Grade::Tier07 } // s-minus
-    else if percent >= 0.86 { Grade::Tier08 } // a-plus
-    else if percent >= 0.83 { Grade::Tier09 } // a
-    else if percent >= 0.80 { Grade::Tier10 } // a-minus
-    else if percent >= 0.76 { Grade::Tier11 } // b-plus
-    else if percent >= 0.72 { Grade::Tier12 } // b
-    else if percent >= 0.68 { Grade::Tier13 } // b-minus
-    else if percent >= 0.64 { Grade::Tier14 } // c-plus
-    else if percent >= 0.60 { Grade::Tier15 } // c
-    else if percent >= 0.55 { Grade::Tier16 } // c-minus
-    else { Grade::Tier17 } // d
+    if percent >= 1.00 {
+        Grade::Tier01
+    }
+    // Note: We don't have enough info to detect Quints (W0) yet.
+    else if percent >= 0.99 {
+        Grade::Tier02
+    }
+    // three-stars
+    else if percent >= 0.98 {
+        Grade::Tier03
+    }
+    // two-stars
+    else if percent >= 0.96 {
+        Grade::Tier04
+    }
+    // one-star
+    else if percent >= 0.94 {
+        Grade::Tier05
+    }
+    // s-plus
+    else if percent >= 0.92 {
+        Grade::Tier06
+    }
+    // s
+    else if percent >= 0.89 {
+        Grade::Tier07
+    }
+    // s-minus
+    else if percent >= 0.86 {
+        Grade::Tier08
+    }
+    // a-plus
+    else if percent >= 0.83 {
+        Grade::Tier09
+    }
+    // a
+    else if percent >= 0.80 {
+        Grade::Tier10
+    }
+    // a-minus
+    else if percent >= 0.76 {
+        Grade::Tier11
+    }
+    // b-plus
+    else if percent >= 0.72 {
+        Grade::Tier12
+    }
+    // b
+    else if percent >= 0.68 {
+        Grade::Tier13
+    }
+    // b-minus
+    else if percent >= 0.64 {
+        Grade::Tier14
+    }
+    // c-plus
+    else if percent >= 0.60 {
+        Grade::Tier15
+    }
+    // c
+    else if percent >= 0.55 {
+        Grade::Tier16
+    }
+    // c-minus
+    else {
+        Grade::Tier17
+    } // d
     // Grade::Failed is not score-based; it's determined by gameplay failure (e.g., lifebar empty),
     // which is not yet implemented. This function will never return Grade::Failed.
 }
 
 // --- Public Fetch Function ---
 
-pub fn fetch_and_store_grade(profile: Profile, chart_hash: String) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub fn fetch_and_store_grade(
+    profile: Profile,
+    chart_hash: String,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     if profile.groovestats_api_key.is_empty() || profile.groovestats_username.is_empty() {
         return Err("GrooveStats API key or username is not set in profile.ini.".into());
     }
@@ -624,7 +719,9 @@ pub fn fetch_and_store_grade(profile: Profile, chart_hash: String) -> Result<(),
         .player1
         .and_then(|p1| p1.gs_leaderboard)
         .and_then(|scores| {
-            scores.into_iter().find(|s| s.name.eq_ignore_ascii_case(&profile.groovestats_username))
+            scores
+                .into_iter()
+                .find(|s| s.name.eq_ignore_ascii_case(&profile.groovestats_username))
         });
 
     if let Some(score_data) = player_score {
