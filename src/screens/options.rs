@@ -37,6 +37,21 @@ const GLOBAL_OFFSET_MAX_MS: i32 = 1000;
 const VISUAL_DELAY_MIN_MS: i32 = -1000;
 const VISUAL_DELAY_MAX_MS: i32 = 1000;
 
+// --- Monitor & Video Mode Data Structures ---
+
+#[derive(Clone, Debug)]
+pub struct VideoModeSpec {
+    pub width: u32,
+    pub height: u32,
+    pub refresh_rate_millihertz: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct MonitorSpec {
+    pub name: String,
+    pub modes: Vec<VideoModeSpec>,
+}
+
 #[inline(always)]
 fn ease_out_cubic(t: f32) -> f32 {
     let clamped = if t < 0.0 { 0.0 } else if t > 1.0 { 1.0 } else { t };
@@ -417,6 +432,7 @@ const VIDEO_RENDERER_ROW_INDEX: usize = 0;
 const DISPLAY_MODE_ROW_INDEX: usize = 1;
 const DISPLAY_ASPECT_RATIO_ROW_INDEX: usize = 2;
 const DISPLAY_RESOLUTION_ROW_INDEX: usize = 3;
+const REFRESH_RATE_ROW_INDEX: usize = 4;
 const FULLSCREEN_TYPE_ROW_INDEX: usize = 5;
 
 const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
@@ -427,11 +443,13 @@ const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
     (800, 600),
 ];
 
-fn build_display_mode_choices(monitor_count: usize) -> Vec<String> {
-    let count = monitor_count.max(1);
-    let mut out = Vec::with_capacity(count + 1);
-    for idx in 0..count {
-        out.push(format!("Screen {}", idx + 1));
+fn build_display_mode_choices(monitor_specs: &[MonitorSpec]) -> Vec<String> {
+    if monitor_specs.is_empty() {
+        return vec!["Screen 1".to_string(), "Windowed".to_string()];
+    }
+    let mut out = Vec::with_capacity(monitor_specs.len() + 1);
+    for spec in monitor_specs {
+        out.push(spec.name.clone());
     }
     out.push("Windowed".to_string());
     out
@@ -445,7 +463,7 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         label: "Display Mode",
-        choices: &["Windowed", "Fullscreen", "Borderless"],
+        choices: &["Windowed", "Fullscreen", "Borderless"], // Replaced dynamically
         inline: true,
     },
     SubRow {
@@ -455,12 +473,12 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         label: "Display Resolution",
-        choices: &["1920x1080", "1600x900", "1280x720", "1024x768", "800x600"],
+        choices: &["1920x1080", "1600x900", "1280x720", "1024x768", "800x600"], // Replaced dynamically
         inline: true,
     },
     SubRow {
         label: "Refresh Rate",
-        choices: &["Default", "60 Hz", "75 Hz", "120 Hz", "144 Hz", "165 Hz", "240 Hz", "360 Hz"],
+        choices: &["Default", "60 Hz", "75 Hz", "120 Hz", "144 Hz", "165 Hz", "240 Hz", "360 Hz"], // Replaced dynamically
         inline: true,
     },
     SubRow {
@@ -752,19 +770,33 @@ fn selected_display_monitor(state: &State) -> usize {
     }
 }
 
-fn ensure_display_mode_choices(state: &mut State, monitor_count: usize) {
-    if state.display_mode_choices.len() != monitor_count.max(1) + 1 {
-        state.display_mode_choices = build_display_mode_choices(monitor_count);
+fn ensure_display_mode_choices(state: &mut State) {
+    let monitor_count = state.monitor_specs.len();
+    state.display_mode_choices = build_display_mode_choices(&state.monitor_specs);
+    // If current selection is out of bounds, reset it.
+    if let Some(idx) = state.sub_choice_indices_graphics.get_mut(DISPLAY_MODE_ROW_INDEX) {
+        if *idx >= state.display_mode_choices.len() {
+            *idx = 0;
+        }
     }
+    // Also re-run logic that depends on the selected monitor.
+    let current_res = selected_resolution(state);
+    rebuild_resolution_choices(state, current_res.0, current_res.1);
+}
+
+pub fn update_monitor_specs(state: &mut State, specs: Vec<MonitorSpec>) {
+    state.monitor_specs = specs;
+    ensure_display_mode_choices(state);
 }
 
 fn set_display_mode_row_selection(
     state: &mut State,
-    monitor_count: usize,
+    _monitor_count: usize, // Ignored, we use stored monitor_specs now
     mode: DisplayMode,
     monitor: usize,
 ) {
-    ensure_display_mode_choices(state, monitor_count);
+    // Ensure choices are up to date.
+    ensure_display_mode_choices(state);
     let windowed_idx = state.display_mode_choices.len().saturating_sub(1);
     let idx = match mode {
         DisplayMode::Windowed => windowed_idx,
@@ -783,6 +815,9 @@ fn set_display_mode_row_selection(
     {
         *slot = idx;
     }
+    // Re-trigger resolution rebuild based on the potentially new monitor selection.
+    let current_res = selected_resolution(state);
+    rebuild_resolution_choices(state, current_res.0, current_res.1);
 }
 
 fn selected_aspect_label(state: &State) -> &'static str {
@@ -814,6 +849,17 @@ fn preset_resolutions_for_aspect(label: &str) -> Vec<(u32, u32)> {
     }
 }
 
+fn aspect_matches(width: u32, height: u32, label: &str) -> bool {
+    let ratio = width as f32 / height as f32;
+    match label {
+        "16:9" => (ratio - 1.7777).abs() < 0.05,
+        "16:10" => (ratio - 1.6).abs() < 0.05,
+        "4:3" => (ratio - 1.3333).abs() < 0.05,
+        "1:1" => (ratio - 1.0).abs() < 0.05,
+        _ => true,
+    }
+}
+
 fn selected_resolution(state: &State) -> (u32, u32) {
     let idx = state
         .sub_choice_indices_graphics
@@ -828,10 +874,75 @@ fn selected_resolution(state: &State) -> (u32, u32) {
         .unwrap_or((state.display_width_at_load, state.display_height_at_load))
 }
 
+fn rebuild_refresh_rate_choices(state: &mut State) {
+    let (width, height) = selected_resolution(state);
+    let mon_idx = selected_display_monitor(state);
+    let mut rates = Vec::new();
+    
+    // Default choice is always available (0).
+    rates.push(0);
+
+    if let Some(spec) = state.monitor_specs.get(mon_idx) {
+        let mut supported_rates: Vec<u32> = spec.modes.iter()
+            .filter(|m| m.width == width && m.height == height)
+            .map(|m| m.refresh_rate_millihertz)
+            .collect();
+        supported_rates.sort();
+        supported_rates.dedup();
+        rates.extend(supported_rates);
+    }
+    
+    // Add common fallback rates if list is empty (besides Default)
+    if rates.len() == 1 {
+        rates.extend_from_slice(&[60000, 75000, 120000, 144000, 165000, 240000]);
+    }
+    
+    // Preserve current selection if possible, else default to "Default".
+    let current_rate = if let Some(idx) = state.sub_choice_indices_graphics.get(REFRESH_RATE_ROW_INDEX) {
+        state.refresh_rate_choices.get(*idx).copied().unwrap_or(0)
+    } else {
+        0
+    };
+    
+    state.refresh_rate_choices = rates;
+    
+    if let Some(slot) = state.sub_choice_indices_graphics.get_mut(REFRESH_RATE_ROW_INDEX) {
+        *slot = state.refresh_rate_choices.iter().position(|&r| r == current_rate).unwrap_or(0);
+    }
+}
+
 fn rebuild_resolution_choices(state: &mut State, width: u32, height: u32) {
     let aspect_label = selected_aspect_label(state);
-    let mut list = preset_resolutions_for_aspect(aspect_label);
+    let mon_idx = selected_display_monitor(state);
+    
+    let mut list = Vec::new();
+    
+    // 1. Gather resolutions from the selected monitor spec.
+    if let Some(spec) = state.monitor_specs.get(mon_idx) {
+        let mut modes: Vec<(u32, u32)> = spec.modes.iter()
+            .map(|m| (m.width, m.height))
+            .collect();
+        modes.sort();
+        modes.dedup();
+        
+        for (w, h) in modes {
+            if aspect_matches(w, h, aspect_label) {
+                list.push((w, h));
+            }
+        }
+    }
+    
+    // 2. If list is empty (e.g. no monitor data or Aspect filter too strict), use presets.
+    if list.is_empty() {
+        list = preset_resolutions_for_aspect(aspect_label);
+    }
+    
+    // 3. Ensure the currently requested/active resolution is in the list so we don't lose it.
     push_unique_resolution(&mut list, width, height);
+    
+    // Sort descending by width then height (typical UI preference).
+    list.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)));
+    
     state.resolution_choices = list;
     if let Some(slot) = state
         .sub_choice_indices_graphics
@@ -843,6 +954,9 @@ fn rebuild_resolution_choices(state: &mut State, width: u32, height: u32) {
             .position(|&(w, h)| w == width && h == height)
             .unwrap_or(0);
     }
+    
+    // Rebuild refresh rates since available rates depend on resolution.
+    rebuild_refresh_rate_choices(state);
 }
 
 fn row_choices<'a>(
@@ -867,6 +981,21 @@ fn row_choices<'a>(
                     .iter()
                     .map(|&(w, h)| Cow::Owned(format!("{w}x{h}")))
                     .collect();
+            }
+            if row.label == "Refresh Rate" {
+                return state.refresh_rate_choices.iter().map(|&mhz| {
+                    if mhz == 0 {
+                        Cow::Borrowed("Default")
+                    } else {
+                        // Format nicely: 60000 -> "60 Hz", 59940 -> "59.94 Hz"
+                        let hz = mhz as f32 / 1000.0;
+                        if (hz.fract()).abs() < 0.01 {
+                            Cow::Owned(format!("{:.0} Hz", hz))
+                        } else {
+                            Cow::Owned(format!("{:.2} Hz", hz))
+                        }
+                    }
+                }).collect();
             }
         }
     }
@@ -905,6 +1034,9 @@ pub struct State {
     display_height_at_load: u32,
     display_mode_choices: Vec<String>,
     resolution_choices: Vec<(u32, u32)>,
+    refresh_rate_choices: Vec<u32>, // New: stored in millihertz
+    // Hardware info
+    pub monitor_specs: Vec<MonitorSpec>,
     // Inline option cursor tween (left/right between items)
     cursor_anim_row: Option<usize>,
     cursor_anim_from_choice: usize,
@@ -943,18 +1075,20 @@ pub fn init() -> State {
             let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
             ms.clamp(GLOBAL_OFFSET_MIN_MS, GLOBAL_OFFSET_MAX_MS)
         },
-    visual_delay_ms: 0,
-    video_renderer_at_load: cfg.video_renderer,
-    display_mode_at_load: cfg.display_mode(),
-    display_monitor_at_load: cfg.display_monitor,
-    display_width_at_load: cfg.display_width,
-    display_height_at_load: cfg.display_height,
-    display_mode_choices: build_display_mode_choices(1),
-    resolution_choices: Vec::new(),
-    cursor_anim_row: None,
-    cursor_anim_from_choice: 0,
-    cursor_anim_to_choice: 0,
-    cursor_anim_t: 1.0,
+        visual_delay_ms: 0,
+        video_renderer_at_load: cfg.video_renderer,
+        display_mode_at_load: cfg.display_mode(),
+        display_monitor_at_load: cfg.display_monitor,
+        display_width_at_load: cfg.display_width,
+        display_height_at_load: cfg.display_height,
+        display_mode_choices: build_display_mode_choices(&[]),
+        resolution_choices: Vec::new(),
+        refresh_rate_choices: Vec::new(),
+        monitor_specs: Vec::new(),
+        cursor_anim_row: None,
+        cursor_anim_from_choice: 0,
+        cursor_anim_to_choice: 0,
+        cursor_anim_t: 1.0,
         cursor_row_anim_from_y: 0.0,
         cursor_row_anim_t: 1.0,
         cursor_row_anim_from_row: None,
@@ -1387,7 +1521,6 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
         }
     }
 
-    let load_size = (state.display_width_at_load, state.display_height_at_load);
     let mut pending_resolution_list: Option<Vec<(u32, u32)>> = None;
     let mut prev_choice_index: Option<usize> = None;
     let mut new_choice_index: Option<usize> = None;
@@ -1417,21 +1550,26 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
         new_choice_index = Some(new_index);
         audio::play_sfx("assets/sounds/change_value.ogg");
 
-        if matches!(kind, SubmenuKind::GraphicsSound)
-            && row_index == DISPLAY_ASPECT_RATIO_ROW_INDEX
-        {
-            let aspect_label = GRAPHICS_OPTIONS_ROWS
-                .get(DISPLAY_ASPECT_RATIO_ROW_INDEX)
-                .and_then(|row| row.choices.get(new_index))
-                .copied()
-                .unwrap_or("16:9");
-            let mut list = preset_resolutions_for_aspect(aspect_label);
-            if list.is_empty() {
-                list.push(load_size);
+        if matches!(kind, SubmenuKind::GraphicsSound) {
+            let row = &rows[row_index];
+            if row.label == "Display Aspect Ratio" {
+                // If Aspect Ratio changed, rebuild resolutions
+                let aspect_label = row.choices.get(new_index).copied().unwrap_or("16:9");
+                let (cur_w, cur_h) = selected_resolution(state);
+                // We'll queue a rebuild
+                rebuild_resolution_choices(state, cur_w, cur_h);
+                // Also reset resolution selection to best match? 
+                // rebuild_resolution_choices already tries to keep current.
             }
-            pending_resolution_list = Some(list);
-            if let Some(slot) = choice_indices.get_mut(DISPLAY_RESOLUTION_ROW_INDEX) {
-                *slot = 0;
+            if row.label == "Display Resolution" {
+                // If resolution changed, update refresh rates
+                rebuild_refresh_rate_choices(state);
+            }
+            if row.label == "Display Mode" {
+                // If display mode changed (e.g. Screen 1 -> Screen 2), update refresh/resolution lists
+                // We treat this as a monitor change if it's not "Windowed"
+                let (cur_w, cur_h) = selected_resolution(state);
+                rebuild_resolution_choices(state, cur_w, cur_h);
             }
         }
     }
@@ -1674,7 +1812,11 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
     }
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier: f32) -> Vec<Actor> {
+pub fn get_actors(
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(320);
     let is_fading_submenu = !matches!(state.submenu_transition, SubmenuTransition::None);
 
@@ -2156,7 +2298,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier:
                                         if size_t_to > 1.0 { size_t_to = 1.0; }
                                         let mut pad_x_to = min_pad_x + (max_pad_x - min_pad_x) * size_t_to;
                                         let border_w = widescale(2.0, 2.5);
-                                        // Cap pad so ring doesn't encroach neighbours.
+                                        // Cap pad so ring doesn't encroach neighbors.
                                         let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
                                         if pad_x_to > max_pad_by_spacing { pad_x_to = max_pad_by_spacing; }
                                         let mut ring_w = draw_w + pad_x_to * 2.0;

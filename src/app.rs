@@ -306,6 +306,22 @@ pub struct App {
 
 
 impl App {
+    fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
+        let monitors = event_loop.available_monitors();
+        let specs = monitors.enumerate().map(|(i, m)| {
+            let modes = m.video_modes().map(|vm| options::VideoModeSpec {
+                width: vm.size().width,
+                height: vm.size().height,
+                refresh_rate_millihertz: vm.refresh_rate_millihertz(),
+            }).collect();
+            options::MonitorSpec {
+                name: format!("Screen {}", i + 1),
+                modes,
+            }
+        }).collect();
+        options::update_monitor_specs(&mut self.state.screens.options_state, specs);
+    }
+
     fn resolve_monitor(
         &self,
         event_loop: &ActiveEventLoop,
@@ -430,6 +446,9 @@ impl App {
             ScreenAction::RequestDensityGraph(chart_opt) => vec![Command::SetDensityGraph(chart_opt)],
             ScreenAction::FetchOnlineGrade(hash) => vec![Command::FetchOnlineGrade(hash)],
             ScreenAction::ChangeGraphics { renderer, display_mode, resolution, monitor } => {
+                // Ensure options menu reflects current hardware state before processing changes
+                self.update_options_monitor_specs(event_loop);
+                
                 let mut pending_resolution = None;
                 if let Some((w, h)) = resolution {
                     self.state.shell.display_width = w;
@@ -874,6 +893,9 @@ impl App {
     }
 
     fn init_graphics(&mut self, event_loop: &ActiveEventLoop) -> Result<(), Box<dyn Error>> {
+        // Collect monitors and update options immediately so the initial menu state is correct.
+        self.update_options_monitor_specs(event_loop);
+
         let mut window_attributes = Window::default_attributes()
             .with_title(format!("DeadSync - {:?}", self.backend_type))
             .with_resizable(true)
@@ -1290,6 +1312,11 @@ impl App {
         commands.extend(self.handle_audio_and_profile_on_fade(prev, target));
         self.handle_screen_state_on_fade(prev, target);
         commands.extend(self.handle_screen_entry_on_fade(prev, target));
+
+        // Ensure monitor specs are fresh when entering the options screen
+        if target == CurrentScreen::Options {
+            self.update_options_monitor_specs(event_loop);
+        }
 
         let (_, in_duration) = self.get_in_transition_for_screen(target);
         self.state.shell.transition = TransitionState::FadingIn {
