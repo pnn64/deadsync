@@ -42,16 +42,6 @@ pub enum DisplayMode {
     Fullscreen(FullscreenType),
 }
 
-impl DisplayMode {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            DisplayMode::Windowed => "Windowed",
-            DisplayMode::Fullscreen(FullscreenType::Exclusive) => "Fullscreen",
-            DisplayMode::Fullscreen(FullscreenType::Borderless) => "Borderless",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub vsync: bool,

@@ -22,7 +22,6 @@ pub enum ScreenAction {
     RequestBanner(Option<PathBuf>),
     RequestDensityGraph(Option<ChartData>),
     FetchOnlineGrade(String),
-    ChangeRenderer(BackendType),
     ChangeGraphics {
         renderer: Option<BackendType>,
         display_mode: Option<DisplayMode>,

@@ -532,10 +532,6 @@ impl App {
                 }
                 Vec::new()
             }
-            ScreenAction::ChangeRenderer(new_backend) => {
-                self.switch_renderer(new_backend, None, event_loop)?;
-                Vec::new()
-            }
             ScreenAction::None => Vec::new(),
         };
         self.run_commands(commands, event_loop)
@@ -1088,7 +1084,7 @@ impl App {
                         self.state.shell.display_width,
                         self.state.shell.display_height,
                     );
-                    window.request_inner_size(size);
+                    let _ = window.request_inner_size(size);
                     if let Some(pos) = self.state.shell.pending_window_position.take() {
                         window.set_outer_position(pos);
                     } else if let Some(pos) = self.default_window_position(
@@ -1156,7 +1152,7 @@ impl App {
             match self.state.shell.display_mode {
                 DisplayMode::Windowed => {
                     let size = PhysicalSize::new(width, height);
-                    window.request_inner_size(size);
+                    let _ = window.request_inner_size(size);
                 }
                 DisplayMode::Fullscreen(fullscreen_type) => {
                     let fullscreen = self.fullscreen_mode(

@@ -771,7 +771,6 @@ fn selected_display_monitor(state: &State) -> usize {
 }
 
 fn ensure_display_mode_choices(state: &mut State) {
-    let monitor_count = state.monitor_specs.len();
     state.display_mode_choices = build_display_mode_choices(&state.monitor_specs);
     // If current selection is out of bounds, reset it.
     if let Some(idx) = state.sub_choice_indices_graphics.get_mut(DISPLAY_MODE_ROW_INDEX) {
@@ -1536,15 +1535,12 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
         }
     }
 
-    let mut pending_resolution_list: Option<Vec<(u32, u32)>> = None;
-    let mut prev_choice_index: Option<usize> = None;
-    let mut new_choice_index: Option<usize> = None;
     let choices = row_choices(state, kind, rows, row_index);
     let num_choices = choices.len();
     if num_choices == 0 {
         return;
     }
-    {
+    let changed_choice = {
         let choice_indices = submenu_choice_indices_mut(state, kind);
         if row_index >= choice_indices.len() {
             return;
@@ -1561,15 +1557,12 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
         }
 
         choice_indices[row_index] = new_index;
-        prev_choice_index = Some(choice_index);
-        new_choice_index = Some(new_index);
         audio::play_sfx("assets/sounds/change_value.ogg");
 
         if matches!(kind, SubmenuKind::GraphicsSound) {
             let row = &rows[row_index];
             if row.label == "Display Aspect Ratio" {
                 // If Aspect Ratio changed, rebuild resolutions
-                let aspect_label = row.choices.get(new_index).copied().unwrap_or("16:9");
                 let (cur_w, cur_h) = selected_resolution(state);
                 // We'll queue a rebuild
                 rebuild_resolution_choices(state, cur_w, cur_h);
@@ -1587,15 +1580,12 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
                 rebuild_resolution_choices(state, cur_w, cur_h);
             }
         }
-    }
-
-    if let Some(list) = pending_resolution_list {
-        state.resolution_choices = list;
-    }
+        Some((choice_index, new_index))
+    };
 
     // Begin cursor animation when changing inline options, but treat the Language row
     // as a single-value row (no horizontal tween; value changes in-place).
-    if let (Some(choice_index), Some(new_index)) = (prev_choice_index, new_choice_index) {
+    if let Some((choice_index, new_index)) = changed_choice {
         let is_language_row = rows
             .get(row_index)
             .map(|r| r.label == "Language")
