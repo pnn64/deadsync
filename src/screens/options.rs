@@ -875,6 +875,14 @@ fn selected_resolution(state: &State) -> (u32, u32) {
 }
 
 fn rebuild_refresh_rate_choices(state: &mut State) {
+    if matches!(selected_display_mode(state), DisplayMode::Windowed) {
+        state.refresh_rate_choices = vec![0];
+        if let Some(slot) = state.sub_choice_indices_graphics.get_mut(REFRESH_RATE_ROW_INDEX) {
+            *slot = 0;
+        }
+        return;
+    }
+
     let (width, height) = selected_resolution(state);
     let mon_idx = selected_display_monitor(state);
     let mut rates = Vec::new();
@@ -941,7 +949,7 @@ fn rebuild_resolution_choices(state: &mut State, width: u32, height: u32) {
     push_unique_resolution(&mut list, width, height);
     
     // Sort descending by width then height (typical UI preference).
-    list.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)));
+    list.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
     
     state.resolution_choices = list;
     if let Some(slot) = state
