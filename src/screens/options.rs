@@ -394,19 +394,19 @@ pub const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
 
 #[cfg(target_os = "windows")]
 const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
-    (BackendType::Vulkan, "Vulkan"),
-    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
     (BackendType::OpenGL, "OpenGL"),
+    (BackendType::Vulkan, "Vulkan"),
+    (BackendType::DirectX, "DirectX"),
     (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
-    (BackendType::DirectX, "DirectX (wgpu)"),
+    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
     (BackendType::Software, "Software"),
 ];
 #[cfg(not(target_os = "windows"))]
 const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
-    (BackendType::Vulkan, "Vulkan"),
-    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
     (BackendType::OpenGL, "OpenGL"),
+    (BackendType::Vulkan, "Vulkan"),
     (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
+    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
     (BackendType::Software, "Software"),
 ];
 
@@ -459,7 +459,7 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: "Video Renderer",
         choices: VIDEO_RENDERER_LABELS,
-        inline: true,
+        inline: false,
     },
     SubRow {
         label: "Display Mode",
@@ -474,12 +474,12 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: "Display Resolution",
         choices: &["1920x1080", "1600x900", "1280x720", "1024x768", "800x600"], // Replaced dynamically
-        inline: true,
+        inline: false,
     },
     SubRow {
         label: "Refresh Rate",
         choices: &["Default", "60 Hz", "75 Hz", "120 Hz", "144 Hz", "165 Hz", "240 Hz", "360 Hz"], // Replaced dynamically
-        inline: true,
+        inline: false,
     },
     SubRow {
         label: "Fullscreen Type",

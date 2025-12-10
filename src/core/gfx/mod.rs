@@ -248,7 +248,7 @@ impl core::fmt::Display for BackendType {
             Self::OpenGLWgpu => write!(f, "OpenGL (wgpu)"),
             Self::Software => write!(f, "Software"),
             #[cfg(target_os = "windows")]
-            Self::DirectX => write!(f, "DirectX (wgpu)"),
+            Self::DirectX => write!(f, "DirectX"),
         }
     }
 }
