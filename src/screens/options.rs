@@ -787,6 +787,13 @@ fn ensure_display_mode_choices(state: &mut State) {
 pub fn update_monitor_specs(state: &mut State, specs: Vec<MonitorSpec>) {
     state.monitor_specs = specs;
     ensure_display_mode_choices(state);
+    // Keep the Display Mode row aligned with the actual current mode after monitors refresh.
+    set_display_mode_row_selection(
+        state,
+        state.monitor_specs.len(),
+        state.display_mode_at_load,
+        state.display_monitor_at_load,
+    );
 }
 
 fn set_display_mode_row_selection(
