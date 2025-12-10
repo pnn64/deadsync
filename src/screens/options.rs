@@ -1005,9 +1005,9 @@ fn row_choices<'a>(
                         // Format nicely: 60000 -> "60 Hz", 59940 -> "59.94 Hz"
                         let hz = mhz as f32 / 1000.0;
                         if (hz.fract()).abs() < 0.01 {
-                            Cow::Owned(format!("{:.0} Hz", hz))
+                            Cow::Owned(format!("{:.0}Hz", hz))
                         } else {
-                            Cow::Owned(format!("{:.2} Hz", hz))
+                            Cow::Owned(format!("{:.2}Hz", hz))
                         }
                     }
                 }).collect();

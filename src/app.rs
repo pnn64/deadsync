@@ -1,3 +1,4 @@
+use crate::core::display;
 use crate::core::gfx::{self as renderer, create_backend, BackendType, RenderList};
 use crate::core::input::{self, InputEvent};
 use crate::core::space::{self as space, Metrics};
@@ -307,15 +308,16 @@ pub struct App {
 
 impl App {
     fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
-        let monitors = event_loop.available_monitors();
-        let specs = monitors.enumerate().map(|(i, m)| {
-            let modes = m.video_modes().map(|vm| options::VideoModeSpec {
+        let monitors: Vec<MonitorHandle> = event_loop.available_monitors().collect();
+        let friendly_names = display::friendly_monitor_names(&monitors);
+        let specs = monitors.into_iter().zip(friendly_names.into_iter()).map(|(monitor, name)| {
+            let modes = monitor.video_modes().map(|vm| options::VideoModeSpec {
                 width: vm.size().width,
                 height: vm.size().height,
                 refresh_rate_millihertz: vm.refresh_rate_millihertz(),
             }).collect();
             options::MonitorSpec {
-                name: format!("Screen {}", i + 1),
+                name,
                 modes,
             }
         }).collect();
