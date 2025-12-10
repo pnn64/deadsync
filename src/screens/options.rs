@@ -427,6 +427,16 @@ const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
     (800, 600),
 ];
 
+fn build_display_mode_choices(monitor_count: usize) -> Vec<String> {
+    let count = monitor_count.max(1);
+    let mut out = Vec::with_capacity(count + 1);
+    for idx in 0..count {
+        out.push(format!("Screen {}", idx + 1));
+    }
+    out.push("Windowed".to_string());
+    out
+}
+
 pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: "Video Renderer",
@@ -711,25 +721,67 @@ fn selected_fullscreen_type(state: &State) -> FullscreenType {
         .unwrap_or(FullscreenType::Exclusive)
 }
 
-fn display_mode_choice_index(mode: DisplayMode) -> usize {
-    match mode {
-        DisplayMode::Windowed => 0,
-        DisplayMode::Fullscreen(FullscreenType::Exclusive) => 1,
-        DisplayMode::Fullscreen(FullscreenType::Borderless) => 2,
-    }
-}
-
 fn selected_display_mode(state: &State) -> DisplayMode {
     let display_choice = state
         .sub_choice_indices_graphics
         .get(DISPLAY_MODE_ROW_INDEX)
         .copied()
         .unwrap_or(0);
-    match display_choice {
-        0 => DisplayMode::Windowed,
-        1 => DisplayMode::Fullscreen(selected_fullscreen_type(state)),
-        2 => DisplayMode::Fullscreen(FullscreenType::Borderless),
-        _ => DisplayMode::Windowed,
+    let windowed_idx = state.display_mode_choices.len().saturating_sub(1);
+    if windowed_idx == 0 || display_choice >= windowed_idx {
+        DisplayMode::Windowed
+    } else {
+        DisplayMode::Fullscreen(selected_fullscreen_type(state))
+    }
+}
+
+fn selected_display_monitor(state: &State) -> usize {
+    let display_choice = state
+        .sub_choice_indices_graphics
+        .get(DISPLAY_MODE_ROW_INDEX)
+        .copied()
+        .unwrap_or(0);
+    let windowed_idx = state
+        .display_mode_choices
+        .len()
+        .saturating_sub(1);
+    if windowed_idx == 0 || display_choice >= windowed_idx {
+        0
+    } else {
+        display_choice.min(windowed_idx.saturating_sub(1))
+    }
+}
+
+fn ensure_display_mode_choices(state: &mut State, monitor_count: usize) {
+    if state.display_mode_choices.len() != monitor_count.max(1) + 1 {
+        state.display_mode_choices = build_display_mode_choices(monitor_count);
+    }
+}
+
+fn set_display_mode_row_selection(
+    state: &mut State,
+    monitor_count: usize,
+    mode: DisplayMode,
+    monitor: usize,
+) {
+    ensure_display_mode_choices(state, monitor_count);
+    let windowed_idx = state.display_mode_choices.len().saturating_sub(1);
+    let idx = match mode {
+        DisplayMode::Windowed => windowed_idx,
+        DisplayMode::Fullscreen(_) => {
+            let max_idx = windowed_idx.saturating_sub(1);
+            if max_idx == 0 {
+                0
+            } else {
+                monitor.min(max_idx)
+            }
+        }
+    };
+    if let Some(slot) = state
+        .sub_choice_indices_graphics
+        .get_mut(DISPLAY_MODE_ROW_INDEX)
+    {
+        *slot = idx;
     }
 }
 
@@ -800,12 +852,22 @@ fn row_choices<'a>(
     row_idx: usize,
 ) -> Vec<Cow<'a, str>> {
     if let Some(row) = rows.get(row_idx) {
-        if matches!(kind, SubmenuKind::GraphicsSound) && row.label == "Display Resolution" {
-            return state
-                .resolution_choices
-                .iter()
-                .map(|&(w, h)| Cow::Owned(format!("{w}x{h}")))
-                .collect();
+        if matches!(kind, SubmenuKind::GraphicsSound) {
+            if row.label == "Display Mode" {
+                return state
+                    .display_mode_choices
+                    .iter()
+                    .cloned()
+                    .map(Cow::Owned)
+                    .collect();
+            }
+            if row.label == "Display Resolution" {
+                return state
+                    .resolution_choices
+                    .iter()
+                    .map(|&(w, h)| Cow::Owned(format!("{w}x{h}")))
+                    .collect();
+            }
         }
     }
     rows.get(row_idx)
@@ -838,8 +900,10 @@ pub struct State {
     visual_delay_ms: i32,
     video_renderer_at_load: BackendType,
     display_mode_at_load: DisplayMode,
+    display_monitor_at_load: usize,
     display_width_at_load: u32,
     display_height_at_load: u32,
+    display_mode_choices: Vec<String>,
     resolution_choices: Vec<(u32, u32)>,
     // Inline option cursor tween (left/right between items)
     cursor_anim_row: Option<usize>,
@@ -879,23 +943,31 @@ pub fn init() -> State {
             let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
             ms.clamp(GLOBAL_OFFSET_MIN_MS, GLOBAL_OFFSET_MAX_MS)
         },
-        visual_delay_ms: 0,
-        video_renderer_at_load: cfg.video_renderer,
-        display_mode_at_load: cfg.display_mode(),
-        display_width_at_load: cfg.display_width,
-        display_height_at_load: cfg.display_height,
-        resolution_choices: Vec::new(),
-        cursor_anim_row: None,
-        cursor_anim_from_choice: 0,
-        cursor_anim_to_choice: 0,
-        cursor_anim_t: 1.0,
+    visual_delay_ms: 0,
+    video_renderer_at_load: cfg.video_renderer,
+    display_mode_at_load: cfg.display_mode(),
+    display_monitor_at_load: cfg.display_monitor,
+    display_width_at_load: cfg.display_width,
+    display_height_at_load: cfg.display_height,
+    display_mode_choices: build_display_mode_choices(1),
+    resolution_choices: Vec::new(),
+    cursor_anim_row: None,
+    cursor_anim_from_choice: 0,
+    cursor_anim_to_choice: 0,
+    cursor_anim_t: 1.0,
         cursor_row_anim_from_y: 0.0,
         cursor_row_anim_t: 1.0,
         cursor_row_anim_from_row: None,
     };
 
     sync_video_renderer(&mut state, cfg.video_renderer);
-    sync_display_mode(&mut state, cfg.display_mode(), cfg.fullscreen_type);
+    sync_display_mode(
+        &mut state,
+        cfg.display_mode(),
+        cfg.fullscreen_type,
+        cfg.display_monitor,
+        1,
+    );
     sync_display_resolution(&mut state, cfg.display_width, cfg.display_height);
     state
 }
@@ -928,14 +1000,12 @@ pub fn sync_display_mode(
     state: &mut State,
     mode: DisplayMode,
     fullscreen_type: FullscreenType,
+    monitor: usize,
+    monitor_count: usize,
 ) {
     state.display_mode_at_load = mode;
-    if let Some(slot) = state
-        .sub_choice_indices_graphics
-        .get_mut(DISPLAY_MODE_ROW_INDEX)
-    {
-        *slot = display_mode_choice_index(mode);
-    }
+    state.display_monitor_at_load = monitor;
+    set_display_mode_row_selection(state, monitor_count, mode, monitor);
     let target_type = match mode {
         DisplayMode::Fullscreen(ft) => ft,
         DisplayMode::Windowed => fullscreen_type,
@@ -1035,15 +1105,16 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
         SubmenuTransition::FadeOutToMain => {
             let leaving_graphics =
                 matches!(state.view, OptionsView::Submenu(SubmenuKind::GraphicsSound));
-            let (desired_renderer, desired_display_mode, desired_resolution) =
+            let (desired_renderer, desired_display_mode, desired_resolution, desired_monitor) =
                 if leaving_graphics {
                     (
                         Some(selected_video_renderer(state)),
                         Some(selected_display_mode(state)),
                         Some(selected_resolution(state)),
+                        Some(selected_display_monitor(state)),
                     )
                 } else {
-                    (None, None, None)
+                    (None, None, None, None)
                 };
             let step = if SUBMENU_FADE_DURATION > 0.0 {
                 dt / SUBMENU_FADE_DURATION
@@ -1073,6 +1144,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
                 let mut renderer_change: Option<BackendType> = None;
                 let mut display_mode_change: Option<DisplayMode> = None;
                 let mut resolution_change: Option<(u32, u32)> = None;
+                let mut monitor_change: Option<usize> = None;
 
                 if let Some(renderer) = desired_renderer {
                     if renderer != state.video_renderer_at_load {
@@ -1084,6 +1156,11 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
                         display_mode_change = Some(display_mode);
                     }
                 }
+                if let Some(monitor) = desired_monitor {
+                    if monitor != state.display_monitor_at_load {
+                        monitor_change = Some(monitor);
+                    }
+                }
                 if let Some((w, h)) = desired_resolution {
                     if w != state.display_width_at_load || h != state.display_height_at_load {
                         resolution_change = Some((w, h));
@@ -1092,11 +1169,13 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
 
                 if renderer_change.is_some()
                     || display_mode_change.is_some()
+                    || monitor_change.is_some()
                     || resolution_change.is_some()
                 {
                     pending_action = Some(ScreenAction::ChangeGraphics {
                         renderer: renderer_change,
                         display_mode: display_mode_change,
+                        monitor: monitor_change,
                         resolution: resolution_change,
                     });
                 }
@@ -1338,13 +1417,7 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) {
         new_choice_index = Some(new_index);
         audio::play_sfx("assets/sounds/change_value.ogg");
 
-        if matches!(kind, SubmenuKind::GraphicsSound) && row_index == DISPLAY_MODE_ROW_INDEX {
-            if new_index == display_mode_choice_index(DisplayMode::Fullscreen(FullscreenType::Borderless)) {
-                if let Some(slot) = choice_indices.get_mut(FULLSCREEN_TYPE_ROW_INDEX) {
-                    *slot = fullscreen_type_to_choice_index(FullscreenType::Borderless);
-                }
-            }
-        } else if matches!(kind, SubmenuKind::GraphicsSound)
+        if matches!(kind, SubmenuKind::GraphicsSound)
             && row_index == DISPLAY_ASPECT_RATIO_ROW_INDEX
         {
             let aspect_label = GRAPHICS_OPTIONS_ROWS

@@ -57,6 +57,7 @@ pub struct Config {
     pub vsync: bool,
     pub windowed: bool,
     pub fullscreen_type: FullscreenType,
+    pub display_monitor: usize,
     pub show_stats: bool,
     pub display_width: u32,
     pub display_height: u32,
@@ -85,6 +86,7 @@ impl Default for Config {
             vsync: false,
             windowed: true,
             fullscreen_type: FullscreenType::Exclusive,
+            display_monitor: 0,
             show_stats: false,
             display_width: 1600,
             display_height: 900,
@@ -131,6 +133,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!("CacheSongs={}\n", if default.cachesongs { "1" } else { "0" }));
     content.push_str(&format!("DisplayHeight={}\n", default.display_height));
     content.push_str(&format!("DisplayWidth={}\n", default.display_width));
+    content.push_str(&format!("DisplayMonitor={}\n", default.display_monitor));
     content.push_str(&format!("FastLoad={}\n", if default.fastload { "1" } else { "0" }));
     content.push_str(&format!("FullscreenType={}\n", default.fullscreen_type.as_str()));
     content.push_str(&format!("GlobalOffsetSeconds={}\n", default.global_offset_seconds));
@@ -206,6 +209,10 @@ pub fn load() {
                     .get("Options", "FullscreenType")
                     .and_then(|v| FullscreenType::from_str(&v).ok())
                     .unwrap_or(default.fullscreen_type);
+                cfg.display_monitor = conf
+                    .get("Options", "DisplayMonitor")
+                    .and_then(|v| v.parse::<usize>().ok())
+                    .unwrap_or(default.display_monitor);
                 cfg.show_stats = conf.get("Options", "ShowStats").and_then(|v| v.parse::<u8>().ok()).map_or(default.show_stats, |v| v != 0);
                 cfg.display_width = conf.get("Options", "DisplayWidth").and_then(|v| v.parse().ok()).unwrap_or(default.display_width);
                 cfg.display_height = conf.get("Options", "DisplayHeight").and_then(|v| v.parse().ok()).unwrap_or(default.display_height);
@@ -854,6 +861,7 @@ fn save_without_keymaps() {
     content.push_str(&format!("MusicVolume={}\n", cfg.music_volume));
     content.push_str(&format!("ShowStats={}\n", if cfg.show_stats { "1" } else { "0" }));
     content.push_str(&format!("SmoothHistogram={}\n", if cfg.smooth_histogram { "1" } else { "0" }));
+    content.push_str(&format!("DisplayMonitor={}\n", cfg.display_monitor));
     content.push_str(&format!("SoftwareRendererThreads={}\n", cfg.software_renderer_threads));
     content.push_str(&format!("SFXVolume={}\n", cfg.sfx_volume));
     content.push_str(&format!("VideoRenderer={}\n", cfg.video_renderer));
@@ -937,6 +945,15 @@ pub fn update_display_resolution(width: u32, height: u32) {
     if dirty {
         save_without_keymaps();
     }
+}
+
+pub fn update_display_monitor(monitor: usize) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.display_monitor == monitor { return; }
+        cfg.display_monitor = monitor;
+    }
+    save_without_keymaps();
 }
 
 pub fn update_video_renderer(renderer: BackendType) {
