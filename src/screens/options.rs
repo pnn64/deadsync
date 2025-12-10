@@ -2132,6 +2132,7 @@ pub fn get_actors(
 
             let label_bg_w = SUB_LABEL_COL_W * s;
             let label_text_x = list_x + SUB_LABEL_TEXT_LEFT_PAD * s;
+            let label_text_max_w = (label_bg_w - SUB_LABEL_TEXT_LEFT_PAD * s).max(0.0);
 
             // Helper to compute the cursor center X for a given submenu row index.
             let calc_row_center_x = |row_idx: usize| -> f32 {
@@ -2302,6 +2303,7 @@ pub fn get_actors(
                         diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                         font("miso"):
                         settext(label):
+                        maxwidth(label_text_max_w - 2.0):
                         horizalign(left)
                     ));
 
