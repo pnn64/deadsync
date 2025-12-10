@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
+use crate::core::display::{self, MonitorSpec};
 use crate::core::gfx::BackendType;
 use crate::core::space::*;
 // Screen navigation is handled in app.rs via the dispatcher
@@ -38,19 +39,6 @@ const VISUAL_DELAY_MIN_MS: i32 = -1000;
 const VISUAL_DELAY_MAX_MS: i32 = 1000;
 
 // --- Monitor & Video Mode Data Structures ---
-
-#[derive(Clone, Debug)]
-pub struct VideoModeSpec {
-    pub width: u32,
-    pub height: u32,
-    pub refresh_rate_millihertz: u32,
-}
-
-#[derive(Clone, Debug)]
-pub struct MonitorSpec {
-    pub name: String,
-    pub modes: Vec<VideoModeSpec>,
-}
 
 #[inline(always)]
 fn ease_out_cubic(t: f32) -> f32 {
@@ -896,15 +884,9 @@ fn rebuild_refresh_rate_choices(state: &mut State) {
     // Default choice is always available (0).
     rates.push(0);
 
-    if let Some(spec) = state.monitor_specs.get(mon_idx) {
-        let mut supported_rates: Vec<u32> = spec.modes.iter()
-            .filter(|m| m.width == width && m.height == height)
-            .map(|m| m.refresh_rate_millihertz)
-            .collect();
-        supported_rates.sort();
-        supported_rates.dedup();
-        rates.extend(supported_rates);
-    }
+    let supported_rates =
+        display::supported_refresh_rates(state.monitor_specs.get(mon_idx), width, height);
+    rates.extend(supported_rates);
     
     // Add common fallback rates if list is empty (besides Default)
     if rates.len() == 1 {
@@ -929,22 +911,10 @@ fn rebuild_resolution_choices(state: &mut State, width: u32, height: u32) {
     let aspect_label = selected_aspect_label(state);
     let mon_idx = selected_display_monitor(state);
     
-    let mut list = Vec::new();
-    
-    // 1. Gather resolutions from the selected monitor spec.
-    if let Some(spec) = state.monitor_specs.get(mon_idx) {
-        let mut modes: Vec<(u32, u32)> = spec.modes.iter()
-            .map(|m| (m.width, m.height))
-            .collect();
-        modes.sort();
-        modes.dedup();
-        
-        for (w, h) in modes {
-            if aspect_matches(w, h, aspect_label) {
-                list.push((w, h));
-            }
-        }
-    }
+    let mut list: Vec<(u32, u32)> = display::supported_resolutions(state.monitor_specs.get(mon_idx))
+        .into_iter()
+        .filter(|(w, h)| aspect_matches(*w, *h, aspect_label))
+        .collect();
     
     // 2. If list is empty (e.g. no monitor data or Aspect filter too strict), use presets.
     if list.is_empty() {

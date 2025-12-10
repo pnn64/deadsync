@@ -1,6 +1,25 @@
-use log::warn;
+use crate::config::FullscreenType;
+use log::{info, warn};
 use std::collections::HashMap;
-use winit::monitor::MonitorHandle;
+use winit::{
+    dpi::PhysicalPosition,
+    event_loop::ActiveEventLoop,
+    monitor::MonitorHandle,
+    window::Fullscreen,
+};
+
+#[derive(Clone, Debug)]
+pub struct VideoModeSpec {
+    pub width: u32,
+    pub height: u32,
+    pub refresh_rate_millihertz: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct MonitorSpec {
+    pub name: String,
+    pub modes: Vec<VideoModeSpec>,
+}
 
 #[derive(Clone, Debug)]
 struct DisplaySnapshot {
@@ -99,6 +118,153 @@ pub fn friendly_monitor_names(monitors: &[MonitorHandle]) -> Vec<String> {
             }
         })
         .collect()
+}
+
+/// Return monitor specs with friendly names and all advertised video modes.
+pub fn monitor_specs(monitors: &[MonitorHandle]) -> Vec<MonitorSpec> {
+    let friendly_names = friendly_monitor_names(monitors);
+    monitors
+        .iter()
+        .cloned()
+        .zip(friendly_names.into_iter())
+        .map(|(monitor, name)| {
+            let modes = monitor
+                .video_modes()
+                .map(|vm| VideoModeSpec {
+                    width: vm.size().width,
+                    height: vm.size().height,
+                    refresh_rate_millihertz: vm.refresh_rate_millihertz(),
+                })
+                .collect();
+            MonitorSpec { name, modes }
+        })
+        .collect()
+}
+
+/// Deduplicated list of resolutions supported by the provided monitor spec.
+pub fn supported_resolutions(spec: Option<&MonitorSpec>) -> Vec<(u32, u32)> {
+    if let Some(spec) = spec {
+        let mut modes: Vec<(u32, u32)> =
+            spec.modes.iter().map(|m| (m.width, m.height)).collect();
+        modes.sort();
+        modes.dedup();
+        modes
+    } else {
+        Vec::new()
+    }
+}
+
+/// Deduplicated list of refresh rates (millihertz) for a given resolution.
+pub fn supported_refresh_rates(
+    spec: Option<&MonitorSpec>,
+    width: u32,
+    height: u32,
+) -> Vec<u32> {
+    if let Some(spec) = spec {
+        let mut rates: Vec<u32> = spec
+            .modes
+            .iter()
+            .filter(|m| m.width == width && m.height == height)
+            .map(|m| m.refresh_rate_millihertz)
+            .collect();
+        rates.sort();
+        rates.dedup();
+        rates
+    } else {
+        Vec::new()
+    }
+}
+
+/// Resolve a monitor handle from the requested index, returning (handle, count, clamped_index).
+pub fn resolve_monitor(
+    event_loop: &ActiveEventLoop,
+    monitor_index: usize,
+) -> (Option<MonitorHandle>, usize, usize) {
+    let monitors: Vec<MonitorHandle> = event_loop.available_monitors().collect();
+    let count = monitors.len();
+    if monitors.is_empty() {
+        return (event_loop.primary_monitor(), 0, 0);
+    }
+    let clamped = monitor_index.min(count.saturating_sub(1));
+    let handle = monitors
+        .get(clamped)
+        .cloned()
+        .or_else(|| monitors.first().cloned())
+        .or_else(|| event_loop.primary_monitor());
+    (handle, count, clamped)
+}
+
+/// Center the window on the given monitor, clamped to the monitor's bounds.
+pub fn default_window_position(
+    width: u32,
+    height: u32,
+    monitor: Option<MonitorHandle>,
+) -> Option<PhysicalPosition<i32>> {
+    let mon = monitor?;
+    let mon_pos = mon.position();
+    let mon_size = mon.size();
+    let mon_w = mon_size.width as i32;
+    let mon_h = mon_size.height as i32;
+    let win_w = width as i32;
+    let win_h = height as i32;
+    if mon_w <= 0 || mon_h <= 0 || win_w <= 0 || win_h <= 0 {
+        return None;
+    }
+
+    let center_x = mon_pos.x + (mon_w.saturating_sub(win_w)) / 2;
+    let center_y = mon_pos.y + (mon_h.saturating_sub(win_h)) / 2;
+    let min_x = mon_pos.x;
+    let min_y = mon_pos.y;
+    let max_x = mon_pos.x + mon_w.saturating_sub(win_w).max(0);
+    let max_y = mon_pos.y + mon_h.saturating_sub(win_h).max(0);
+
+    let x = center_x.clamp(min_x, max_x);
+    let y = center_y.clamp(min_y, max_y);
+    Some(PhysicalPosition::new(x, y))
+}
+
+/// Pick a fullscreen mode (exclusive if available) for the given monitor and resolution.
+pub fn fullscreen_mode(
+    fullscreen_type: FullscreenType,
+    width: u32,
+    height: u32,
+    monitor: Option<MonitorHandle>,
+    event_loop: &ActiveEventLoop,
+) -> Option<Fullscreen> {
+    let primary = event_loop.primary_monitor();
+    let mon = monitor.or(primary);
+    match fullscreen_type {
+        FullscreenType::Exclusive => {
+            if let Some(mon) = mon {
+                let best_mode = mon
+                    .video_modes()
+                    .filter(|m| {
+                        let sz = m.size();
+                        sz.width == width && sz.height == height
+                    })
+                    .max_by_key(|m| m.refresh_rate_millihertz());
+                if let Some(mode) = best_mode {
+                    info!(
+                        "Fullscreen: using EXCLUSIVE {}x{} @ {} mHz",
+                        width,
+                        height,
+                        mode.refresh_rate_millihertz()
+                    );
+                    Some(Fullscreen::Exclusive(mode))
+                } else {
+                    warn!(
+                        "No exact EXCLUSIVE mode {}x{}; using BORDERLESS.",
+                        width, height
+                    );
+                    Some(Fullscreen::Borderless(Some(mon)))
+                }
+            } else {
+                warn!("No primary monitor reported; using BORDERLESS fullscreen.");
+                Some(Fullscreen::Borderless(None))
+            }
+        }
+        FullscreenType::Borderless => Some(Fullscreen::Borderless(mon)),
+    }
 }
 
 #[cfg(target_os = "windows")]

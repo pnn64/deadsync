@@ -11,7 +11,7 @@ use crate::screens::{
 };
 use crate::game::parsing::simfile as song_loading;
 use crate::game::chart::ChartData;
-use crate::config::{self, DisplayMode, FullscreenType};
+use crate::config::{self, DisplayMode};
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
@@ -309,113 +309,8 @@ pub struct App {
 impl App {
     fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
         let monitors: Vec<MonitorHandle> = event_loop.available_monitors().collect();
-        let friendly_names = display::friendly_monitor_names(&monitors);
-        let specs = monitors.into_iter().zip(friendly_names.into_iter()).map(|(monitor, name)| {
-            let modes = monitor.video_modes().map(|vm| options::VideoModeSpec {
-                width: vm.size().width,
-                height: vm.size().height,
-                refresh_rate_millihertz: vm.refresh_rate_millihertz(),
-            }).collect();
-            options::MonitorSpec {
-                name,
-                modes,
-            }
-        }).collect();
+        let specs = display::monitor_specs(&monitors);
         options::update_monitor_specs(&mut self.state.screens.options_state, specs);
-    }
-
-    fn resolve_monitor(
-        &self,
-        event_loop: &ActiveEventLoop,
-        monitor_index: usize,
-    ) -> (Option<MonitorHandle>, usize, usize) {
-        let monitors: Vec<MonitorHandle> = event_loop.available_monitors().collect();
-        let count = monitors.len();
-        if monitors.is_empty() {
-            return (event_loop.primary_monitor(), 0, 0);
-        }
-        let clamped = monitor_index.min(count.saturating_sub(1));
-        let handle = monitors
-            .get(clamped)
-            .cloned()
-            .or_else(|| monitors.first().cloned())
-            .or_else(|| event_loop.primary_monitor());
-        (handle, count, clamped)
-    }
-
-    fn default_window_position(
-        &self,
-        width: u32,
-        height: u32,
-        monitor: Option<MonitorHandle>,
-    ) -> Option<PhysicalPosition<i32>> {
-        let mon = monitor?;
-        let mon_pos = mon.position();
-        let mon_size = mon.size();
-        let mon_w = mon_size.width as i32;
-        let mon_h = mon_size.height as i32;
-        let win_w = width as i32;
-        let win_h = height as i32;
-        if mon_w <= 0 || mon_h <= 0 || win_w <= 0 || win_h <= 0 {
-            return None;
-        }
-
-        let center_x = mon_pos.x + (mon_w.saturating_sub(win_w)) / 2;
-        let center_y = mon_pos.y + (mon_h.saturating_sub(win_h)) / 2;
-        let min_x = mon_pos.x;
-        let min_y = mon_pos.y;
-        let max_x = mon_pos.x + mon_w.saturating_sub(win_w).max(0);
-        let max_y = mon_pos.y + mon_h.saturating_sub(win_h).max(0);
-
-        let x = center_x.clamp(min_x, max_x);
-        let y = center_y.clamp(min_y, max_y);
-        Some(PhysicalPosition::new(x, y))
-    }
-
-    fn fullscreen_mode(
-        &self,
-        fullscreen_type: FullscreenType,
-        width: u32,
-        height: u32,
-        monitor: Option<MonitorHandle>,
-        event_loop: &ActiveEventLoop,
-    ) -> Option<winit::window::Fullscreen> {
-        let primary = event_loop.primary_monitor();
-        let mon = monitor.or(primary);
-        match fullscreen_type {
-            FullscreenType::Exclusive => {
-                if let Some(mon) = mon {
-                    let best_mode = mon
-                        .video_modes()
-                        .filter(|m| {
-                            let sz = m.size();
-                            sz.width == width && sz.height == height
-                        })
-                        .max_by_key(|m| m.refresh_rate_millihertz());
-                    if let Some(mode) = best_mode {
-                        info!(
-                            "Fullscreen: using EXCLUSIVE {}x{} @ {} mHz",
-                            width,
-                            height,
-                            mode.refresh_rate_millihertz()
-                        );
-                        Some(winit::window::Fullscreen::Exclusive(mode))
-                    } else {
-                        warn!(
-                            "No exact EXCLUSIVE mode {}x{}; using BORDERLESS.",
-                            width, height
-                        );
-                        Some(winit::window::Fullscreen::Borderless(Some(mon)))
-                    }
-                } else {
-                    warn!("No primary monitor reported; using BORDERLESS fullscreen.");
-                    Some(winit::window::Fullscreen::Borderless(None))
-                }
-            }
-            FullscreenType::Borderless => {
-                Some(winit::window::Fullscreen::Borderless(mon))
-            }
-        }
     }
 
     fn new(
@@ -459,14 +354,8 @@ impl App {
                     options::sync_display_resolution(&mut self.state.screens.options_state, w, h);
                     pending_resolution = Some((w, h));
                 }
-                let monitors: Vec<_> = event_loop.available_monitors().collect();
-                let monitor_count = monitors.len();
-                let chosen_monitor = if monitor_count == 0 {
-                    0
-                } else {
-                    monitor.unwrap_or(self.state.shell.display_monitor)
-                        .min(monitor_count.saturating_sub(1))
-                };
+                let (_, monitor_count, chosen_monitor) =
+                    display::resolve_monitor(event_loop, monitor.unwrap_or(self.state.shell.display_monitor));
 
                 match (renderer, display_mode) {
                     (Some(new_backend), Some(mode)) => {
@@ -906,7 +795,7 @@ impl App {
         let window_width = self.state.shell.display_width;
         let window_height = self.state.shell.display_height;
         let (monitor_handle, monitor_count, monitor_idx) =
-            self.resolve_monitor(event_loop, self.state.shell.display_monitor);
+            display::resolve_monitor(event_loop, self.state.shell.display_monitor);
         self.state.shell.display_monitor = monitor_idx;
         let fullscreen_type = match self.state.shell.display_mode {
             DisplayMode::Fullscreen(ft) => ft,
@@ -922,8 +811,13 @@ impl App {
 
         match self.state.shell.display_mode {
             DisplayMode::Fullscreen(fullscreen_type) => {
-                let fullscreen =
-                    self.fullscreen_mode(fullscreen_type, window_width, window_height, monitor_handle.clone(), event_loop);
+                let fullscreen = display::fullscreen_mode(
+                    fullscreen_type,
+                    window_width,
+                    window_height,
+                    monitor_handle.clone(),
+                    event_loop,
+                );
                 window_attributes = window_attributes.with_fullscreen(fullscreen);
             }
             DisplayMode::Windowed => {
@@ -932,7 +826,7 @@ impl App {
                 if let Some(pos) = self.state.shell.pending_window_position.take() {
                     window_attributes = window_attributes.with_position(pos);
                 } else if let Some(pos) =
-                    self.default_window_position(window_width, window_height, monitor_handle.clone())
+                    display::default_window_position(window_width, window_height, monitor_handle.clone())
                 {
                     window_attributes = window_attributes.with_position(pos);
                 }
@@ -1036,7 +930,7 @@ impl App {
                     previous_backend,
                 );
                 let (_, monitor_count, monitor_idx) =
-                    self.resolve_monitor(event_loop, self.state.shell.display_monitor);
+                    display::resolve_monitor(event_loop, self.state.shell.display_monitor);
                 self.state.shell.display_monitor = monitor_idx;
                 let fullscreen_type = match self.state.shell.display_mode {
                     DisplayMode::Fullscreen(ft) => ft,
@@ -1063,7 +957,7 @@ impl App {
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
         let (monitor_handle, monitor_count, resolved_monitor) =
-            self.resolve_monitor(event_loop, monitor_override.unwrap_or(self.state.shell.display_monitor));
+            display::resolve_monitor(event_loop, monitor_override.unwrap_or(self.state.shell.display_monitor));
         self.state.shell.display_monitor = resolved_monitor;
         let previous_mode = self.state.shell.display_mode;
 
@@ -1087,7 +981,7 @@ impl App {
                     let _ = window.request_inner_size(size);
                     if let Some(pos) = self.state.shell.pending_window_position.take() {
                         window.set_outer_position(pos);
-                    } else if let Some(pos) = self.default_window_position(
+                    } else if let Some(pos) = display::default_window_position(
                         self.state.shell.display_width,
                         self.state.shell.display_height,
                         monitor_handle.clone(),
@@ -1096,7 +990,7 @@ impl App {
                     }
                 }
                 DisplayMode::Fullscreen(fullscreen_type) => {
-                    let fullscreen = self.fullscreen_mode(
+                    let fullscreen = display::fullscreen_mode(
                         fullscreen_type,
                         self.state.shell.display_width,
                         self.state.shell.display_height,
@@ -1145,7 +1039,7 @@ impl App {
         self.state.shell.display_width = width;
         self.state.shell.display_height = height;
         let (monitor_handle, _, resolved_monitor) =
-            self.resolve_monitor(event_loop, self.state.shell.display_monitor);
+            display::resolve_monitor(event_loop, self.state.shell.display_monitor);
         self.state.shell.display_monitor = resolved_monitor;
 
         if let Some(window) = &self.window {
@@ -1155,7 +1049,7 @@ impl App {
                     let _ = window.request_inner_size(size);
                 }
                 DisplayMode::Fullscreen(fullscreen_type) => {
-                    let fullscreen = self.fullscreen_mode(
+                    let fullscreen = display::fullscreen_mode(
                         fullscreen_type,
                         width,
                         height,
