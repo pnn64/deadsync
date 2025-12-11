@@ -751,17 +751,36 @@ fn dedup_menu_variants(actions: &mut Vec<(VirtualAction, bool)>) {
     use VirtualAction as A;
     // If both menu and non-menu variants for the same direction are present with the same
     // pressed state, drop the menu variant to avoid double-triggering navigation.
-    let snapshot = actions.clone();
-    let has = |a: A, p: bool| snapshot.iter().any(|(act, pr)| *act == a && *pr == p);
-    actions.retain(|(act, pr)| match *act {
-        A::p1_menu_up => !(has(A::p1_up, *pr)),
-        A::p1_menu_down => !(has(A::p1_down, *pr)),
-        A::p1_menu_left => !(has(A::p1_left, *pr)),
-        A::p1_menu_right => !(has(A::p1_right, *pr)),
-        A::p2_menu_up => !(has(A::p2_up, *pr)),
-        A::p2_menu_down => !(has(A::p2_down, *pr)),
-        A::p2_menu_left => !(has(A::p2_left, *pr)),
-        A::p2_menu_right => !(has(A::p2_right, *pr)),
-        _ => true,
+    let mut p1 = [[false; 2]; 4];
+    let mut p2 = [[false; 2]; 4];
+
+    for (act, pressed) in actions.iter() {
+        let idx = usize::from(*pressed);
+        match *act {
+            A::p1_up => p1[0][idx] = true,
+            A::p1_down => p1[1][idx] = true,
+            A::p1_left => p1[2][idx] = true,
+            A::p1_right => p1[3][idx] = true,
+            A::p2_up => p2[0][idx] = true,
+            A::p2_down => p2[1][idx] = true,
+            A::p2_left => p2[2][idx] = true,
+            A::p2_right => p2[3][idx] = true,
+            _ => {}
+        }
+    }
+
+    actions.retain(|(act, pressed)| {
+        let idx = usize::from(*pressed);
+        match *act {
+            A::p1_menu_up => !p1[0][idx],
+            A::p1_menu_down => !p1[1][idx],
+            A::p1_menu_left => !p1[2][idx],
+            A::p1_menu_right => !p1[3][idx],
+            A::p2_menu_up => !p2[0][idx],
+            A::p2_menu_down => !p2[1][idx],
+            A::p2_menu_left => !p2[2][idx],
+            A::p2_menu_right => !p2[3][idx],
+            _ => true,
+        }
     });
 }
