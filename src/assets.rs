@@ -37,6 +37,27 @@ pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
     rel.to_string_lossy().replace('\\', "/")
 }
 
+#[inline(always)]
+fn append_noteskins_pngs(list: &mut Vec<(String, String)>, folder: &str) {
+    let dir = Path::new("assets").join(folder);
+    if let Ok(entries) = fs::read_dir(dir) {
+        let prefix = format!("{}/", folder);
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
+                && let Ok(name) = entry.file_name().into_string()
+            {
+                let mut key = String::with_capacity(prefix.len() + name.len());
+                key.push_str(&prefix);
+                key.push_str(&name);
+                list.push((key.clone(), key));
+            }
+        }
+    }
+}
+
 pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
     #[inline(always)]
     fn parse_ascii_digits(bytes: &[u8]) -> Option<u32> {
@@ -430,53 +451,10 @@ impl AssetManager {
             ),
         ];
 
-        if let Ok(entries) = fs::read_dir("assets/noteskins/cel") {
-            for entry in entries.flatten() {
-                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
-                    && ext.eq_ignore_ascii_case("png")
-                    && let Ok(name) = entry.file_name().into_string()
-                {
-                    let key = format!("noteskins/cel/{}", name);
-                    textures_to_load.push((key.clone(), key));
-                }
-            }
-        }
-
-        if let Ok(entries) = fs::read_dir("assets/noteskins/metal") {
-            for entry in entries.flatten() {
-                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
-                    && ext.eq_ignore_ascii_case("png")
-                    && let Ok(name) = entry.file_name().into_string()
-                {
-                    let key = format!("noteskins/metal/{}", name);
-                    textures_to_load.push((key.clone(), key));
-                }
-            }
-        }
-
-        if let Ok(entries) = fs::read_dir("assets/noteskins/enchantment-v2") {
-            for entry in entries.flatten() {
-                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
-                    && ext.eq_ignore_ascii_case("png")
-                    && let Ok(name) = entry.file_name().into_string()
-                {
-                    let key = format!("noteskins/enchantment-v2/{}", name);
-                    textures_to_load.push((key.clone(), key));
-                }
-            }
-        }
-
-        if let Ok(entries) = fs::read_dir("assets/noteskins/devcel-2024-v3") {
-            for entry in entries.flatten() {
-                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
-                    && ext.eq_ignore_ascii_case("png")
-                    && let Ok(name) = entry.file_name().into_string()
-                {
-                    let key = format!("noteskins/devcel-2024-v3/{}", name);
-                    textures_to_load.push((key.clone(), key));
-                }
-            }
-        }
+        append_noteskins_pngs(&mut textures_to_load, "noteskins/cel");
+        append_noteskins_pngs(&mut textures_to_load, "noteskins/metal");
+        append_noteskins_pngs(&mut textures_to_load, "noteskins/enchantment-v2");
+        append_noteskins_pngs(&mut textures_to_load, "noteskins/devcel-2024-v3");
 
         let mut handles = Vec::with_capacity(textures_to_load.len());
         for (key, relative_path) in textures_to_load {
