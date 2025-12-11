@@ -142,33 +142,32 @@ pub fn monitor_specs(monitors: &[MonitorHandle]) -> Vec<MonitorSpec> {
         .collect()
 }
 
+#[inline(always)]
+fn sorted_dedup<T: Ord>(mut values: Vec<T>) -> Vec<T> {
+    values.sort_unstable();
+    values.dedup();
+    values
+}
+
 /// Deduplicated list of resolutions supported by the provided monitor spec.
 pub fn supported_resolutions(spec: Option<&MonitorSpec>) -> Vec<(u32, u32)> {
-    if let Some(spec) = spec {
-        let mut modes: Vec<(u32, u32)> = spec.modes.iter().map(|m| (m.width, m.height)).collect();
-        modes.sort();
-        modes.dedup();
-        modes
-    } else {
-        Vec::new()
-    }
+    spec.map_or_else(Vec::new, |spec| {
+        let modes: Vec<(u32, u32)> = spec.modes.iter().map(|m| (m.width, m.height)).collect();
+        sorted_dedup(modes)
+    })
 }
 
 /// Deduplicated list of refresh rates (millihertz) for a given resolution.
 pub fn supported_refresh_rates(spec: Option<&MonitorSpec>, width: u32, height: u32) -> Vec<u32> {
-    if let Some(spec) = spec {
-        let mut rates: Vec<u32> = spec
+    spec.map_or_else(Vec::new, |spec| {
+        let rates: Vec<u32> = spec
             .modes
             .iter()
             .filter(|m| m.width == width && m.height == height)
             .map(|m| m.refresh_rate_millihertz)
             .collect();
-        rates.sort();
-        rates.dedup();
-        rates
-    } else {
-        Vec::new()
-    }
+        sorted_dedup(rates)
+    })
 }
 
 /// Resolve a monitor handle from the requested index, returning (handle, count, clamped_index).
