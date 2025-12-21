@@ -1,6 +1,6 @@
 use rssp::TechCounts;
 use rssp::stats::ArrowStats;
-use crate::game::timing::TimingData;
+use crate::game::timing::{TimingData, TimingSegments};
 use crate::game::parsing::notes::ParsedNote;
 
 #[derive(Clone, Debug)]
@@ -12,6 +12,7 @@ pub struct ChartData {
     pub notes: Vec<u8>, // This is the minimized raw data we will parse
     pub parsed_notes: Vec<ParsedNote>,
     pub row_to_beat: Vec<f32>,
+    pub timing_segments: TimingSegments,
     pub timing: TimingData,
     pub short_hash: String,
     pub stats: ArrowStats,

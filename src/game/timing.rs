@@ -2,6 +2,7 @@ use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{Note, NoteType};
 use log::info;
 use rssp::bpm::{normalize_float_digits, parse_bpm_map};
+use rssp::timing as rssp_timing;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -151,6 +152,82 @@ pub struct ScrollSegment {
     pub ratio: f32,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct TimingSegments {
+    pub beat0_offset_adjust: f32,
+    pub bpms: Vec<(f32, f32)>,
+    pub stops: Vec<StopSegment>,
+    pub delays: Vec<DelaySegment>,
+    pub warps: Vec<WarpSegment>,
+    pub speeds: Vec<SpeedSegment>,
+    pub scrolls: Vec<ScrollSegment>,
+    pub fakes: Vec<FakeSegment>,
+}
+
+impl From<&rssp_timing::TimingSegments> for TimingSegments {
+    fn from(segments: &rssp_timing::TimingSegments) -> Self {
+        let speeds = segments
+            .speeds
+            .iter()
+            .map(|(beat, ratio, delay, unit)| SpeedSegment {
+                beat: *beat,
+                ratio: *ratio,
+                delay: *delay,
+                unit: match unit {
+                    rssp_timing::SpeedUnit::Beats => SpeedUnit::Beats,
+                    rssp_timing::SpeedUnit::Seconds => SpeedUnit::Seconds,
+                },
+            })
+            .collect();
+
+        Self {
+            beat0_offset_adjust: segments.beat0_offset_adjust,
+            bpms: segments.bpms.clone(),
+            stops: segments
+                .stops
+                .iter()
+                .map(|(beat, duration)| StopSegment {
+                    beat: *beat,
+                    duration: *duration,
+                })
+                .collect(),
+            delays: segments
+                .delays
+                .iter()
+                .map(|(beat, duration)| DelaySegment {
+                    beat: *beat,
+                    duration: *duration,
+                })
+                .collect(),
+            warps: segments
+                .warps
+                .iter()
+                .map(|(beat, length)| WarpSegment {
+                    beat: *beat,
+                    length: *length,
+                })
+                .collect(),
+            speeds,
+            scrolls: segments
+                .scrolls
+                .iter()
+                .map(|(beat, ratio)| ScrollSegment {
+                    beat: *beat,
+                    ratio: *ratio,
+                })
+                .collect(),
+            fakes: segments
+                .fakes
+                .iter()
+                .map(|(beat, length)| FakeSegment {
+                    beat: *beat,
+                    length: *length,
+                })
+                .collect(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 struct SpeedRuntime {
     start_time: f32,
@@ -254,6 +331,129 @@ pub struct FakeSegment {
 }
 
 impl TimingData {
+    pub fn from_segments(
+        song_offset_sec: f32,
+        global_offset_sec: f32,
+        segments: &TimingSegments,
+        row_to_beat: &[f32],
+    ) -> Self {
+        let mut parsed_bpms = segments.bpms.clone();
+        if parsed_bpms.is_empty() {
+            parsed_bpms.push((0.0, 120.0));
+        }
+        parsed_bpms.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Less));
+
+        let mut stops = segments.stops.clone();
+        let mut delays = segments.delays.clone();
+        let mut warps = segments.warps.clone();
+        let mut speeds = segments.speeds.clone();
+        let mut scrolls = segments.scrolls.clone();
+        let mut fakes = segments.fakes.clone();
+
+        stops.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
+        delays.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
+        warps.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
+        speeds.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
+        scrolls.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
+        fakes.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
+
+        let song_offset_sec = song_offset_sec + segments.beat0_offset_adjust;
+
+        let mut beat_to_time = Vec::with_capacity(parsed_bpms.len());
+        let mut current_time = 0.0;
+        let mut last_beat = 0.0;
+        let mut last_bpm = parsed_bpms[0].1;
+        let mut max_bpm = 0.0;
+
+        for &(beat, bpm) in &parsed_bpms {
+            if beat > last_beat && last_bpm > 0.0 {
+                current_time += (beat - last_beat) * (60.0 / last_bpm);
+            }
+            beat_to_time.push(BeatTimePoint {
+                beat,
+                time_sec: song_offset_sec + current_time,
+                bpm,
+            });
+            if bpm.is_finite() && bpm > max_bpm {
+                max_bpm = bpm;
+            }
+            last_beat = beat;
+            last_bpm = bpm;
+        }
+
+        let mut timing_with_stops = Self {
+            row_to_beat: Arc::new(vec![]),
+            beat_to_time: Arc::new(beat_to_time),
+            stops,
+            delays,
+            warps,
+            speeds,
+            scrolls,
+            fakes,
+            speed_runtime: Vec::new(),
+            scroll_prefix: Vec::new(),
+            global_offset_sec,
+            max_bpm,
+        };
+
+        let re_beat_to_time: Vec<_> = timing_with_stops
+            .beat_to_time
+            .iter()
+            .map(|point| {
+                let mut new_point = *point;
+                new_point.time_sec = timing_with_stops.get_time_for_beat_internal(point.beat);
+                new_point
+            })
+            .collect();
+        timing_with_stops.beat_to_time = Arc::new(re_beat_to_time);
+
+        if !timing_with_stops.speeds.is_empty() {
+            let mut runtime = Vec::with_capacity(timing_with_stops.speeds.len());
+            let mut prev_ratio = 1.0_f32;
+            for seg in &timing_with_stops.speeds {
+                let start_time = timing_with_stops.get_time_for_beat(seg.beat);
+                let end_time = if seg.delay <= 0.0 {
+                    start_time
+                } else if seg.unit == SpeedUnit::Seconds {
+                    start_time + seg.delay
+                } else {
+                    timing_with_stops.get_time_for_beat(seg.beat + seg.delay)
+                };
+                runtime.push(SpeedRuntime {
+                    start_time,
+                    end_time,
+                    prev_ratio,
+                });
+                prev_ratio = seg.ratio;
+            }
+            timing_with_stops.speed_runtime = runtime;
+        }
+
+        if !timing_with_stops.scrolls.is_empty() {
+            let mut prefixes = Vec::with_capacity(timing_with_stops.scrolls.len());
+            let mut cum_displayed = 0.0_f32;
+            let mut last_real_beat = 0.0_f32;
+            let mut last_ratio = 1.0_f32;
+            for seg in &timing_with_stops.scrolls {
+                cum_displayed += (seg.beat - last_real_beat) * last_ratio;
+                prefixes.push(ScrollPrefix {
+                    beat: seg.beat,
+                    cum_displayed,
+                    ratio: seg.ratio,
+                });
+                last_real_beat = seg.beat;
+                last_ratio = seg.ratio;
+            }
+            timing_with_stops.scroll_prefix = prefixes;
+        }
+
+        let row_to_beat = row_to_beat.to_vec();
+        info!("TimingData processed {} note rows.", row_to_beat.len());
+        timing_with_stops.row_to_beat = Arc::new(row_to_beat);
+
+        timing_with_stops
+    }
+
     pub fn from_chart_data(
         song_offset_sec: f32,
         global_offset_sec: f32,

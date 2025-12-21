@@ -3,7 +3,10 @@ use crate::game::{
     note::NoteType,
     parsing::notes::ParsedNote,
     song::{SongData, SongPack, set_song_cache},
-    timing::TimingData,
+    timing::{
+        DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
+        TimingData, TimingSegments, WarpSegment,
+    },
 };
 use log::{info, warn};
 use rssp::{AnalysisOptions, analyze};
@@ -130,6 +133,142 @@ impl From<CachedTechCounts> for rssp::TechCounts {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Encode, Decode)]
+enum CachedSpeedUnit {
+    Beats,
+    Seconds,
+}
+
+impl From<SpeedUnit> for CachedSpeedUnit {
+    fn from(unit: SpeedUnit) -> Self {
+        match unit {
+            SpeedUnit::Beats => CachedSpeedUnit::Beats,
+            SpeedUnit::Seconds => CachedSpeedUnit::Seconds,
+        }
+    }
+}
+
+impl From<CachedSpeedUnit> for SpeedUnit {
+    fn from(unit: CachedSpeedUnit) -> Self {
+        match unit {
+            CachedSpeedUnit::Beats => SpeedUnit::Beats,
+            CachedSpeedUnit::Seconds => SpeedUnit::Seconds,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Encode, Decode)]
+struct CachedSpeedSegment {
+    beat: f32,
+    ratio: f32,
+    delay: f32,
+    unit: CachedSpeedUnit,
+}
+
+impl From<&SpeedSegment> for CachedSpeedSegment {
+    fn from(segment: &SpeedSegment) -> Self {
+        Self {
+            beat: segment.beat,
+            ratio: segment.ratio,
+            delay: segment.delay,
+            unit: segment.unit.into(),
+        }
+    }
+}
+
+impl From<CachedSpeedSegment> for SpeedSegment {
+    fn from(segment: CachedSpeedSegment) -> Self {
+        Self {
+            beat: segment.beat,
+            ratio: segment.ratio,
+            delay: segment.delay,
+            unit: segment.unit.into(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+struct CachedTimingSegments {
+    beat0_offset_adjust: f32,
+    bpms: Vec<(f32, f32)>,
+    stops: Vec<(f32, f32)>,
+    delays: Vec<(f32, f32)>,
+    warps: Vec<(f32, f32)>,
+    speeds: Vec<CachedSpeedSegment>,
+    scrolls: Vec<(f32, f32)>,
+    fakes: Vec<(f32, f32)>,
+}
+
+impl From<&TimingSegments> for CachedTimingSegments {
+    fn from(segments: &TimingSegments) -> Self {
+        Self {
+            beat0_offset_adjust: segments.beat0_offset_adjust,
+            bpms: segments.bpms.clone(),
+            stops: segments
+                .stops
+                .iter()
+                .map(|seg| (seg.beat, seg.duration))
+                .collect(),
+            delays: segments
+                .delays
+                .iter()
+                .map(|seg| (seg.beat, seg.duration))
+                .collect(),
+            warps: segments
+                .warps
+                .iter()
+                .map(|seg| (seg.beat, seg.length))
+                .collect(),
+            speeds: segments.speeds.iter().map(CachedSpeedSegment::from).collect(),
+            scrolls: segments
+                .scrolls
+                .iter()
+                .map(|seg| (seg.beat, seg.ratio))
+                .collect(),
+            fakes: segments
+                .fakes
+                .iter()
+                .map(|seg| (seg.beat, seg.length))
+                .collect(),
+        }
+    }
+}
+
+impl From<CachedTimingSegments> for TimingSegments {
+    fn from(segments: CachedTimingSegments) -> Self {
+        Self {
+            beat0_offset_adjust: segments.beat0_offset_adjust,
+            bpms: segments.bpms,
+            stops: segments
+                .stops
+                .into_iter()
+                .map(|(beat, duration)| StopSegment { beat, duration })
+                .collect(),
+            delays: segments
+                .delays
+                .into_iter()
+                .map(|(beat, duration)| DelaySegment { beat, duration })
+                .collect(),
+            warps: segments
+                .warps
+                .into_iter()
+                .map(|(beat, length)| WarpSegment { beat, length })
+                .collect(),
+            speeds: segments.speeds.into_iter().map(SpeedSegment::from).collect(),
+            scrolls: segments
+                .scrolls
+                .into_iter()
+                .map(|(beat, ratio)| ScrollSegment { beat, ratio })
+                .collect(),
+            fakes: segments
+                .fakes
+                .into_iter()
+                .map(|(beat, length)| FakeSegment { beat, length })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Encode, Decode)]
 enum CachedNoteType {
     Tap,
     Hold,
@@ -201,6 +340,7 @@ struct SerializableChartData {
     notes: Vec<u8>,
     parsed_notes: Vec<CachedParsedNote>,
     row_to_beat: Vec<f32>,
+    timing_segments: CachedTimingSegments,
     short_hash: String,
     stats: CachedArrowStats,
     tech_counts: CachedTechCounts,
@@ -231,6 +371,7 @@ impl From<&ChartData> for SerializableChartData {
             notes: chart.notes.clone(),
             parsed_notes: chart.parsed_notes.iter().map(CachedParsedNote::from).collect(),
             row_to_beat: chart.row_to_beat.clone(),
+            timing_segments: (&chart.timing_segments).into(),
             short_hash: chart.short_hash.clone(),
             stats: (&chart.stats).into(),
             tech_counts: (&chart.tech_counts).into(),
@@ -267,6 +408,7 @@ impl From<SerializableChartData> for ChartData {
                 .map(ParsedNote::from)
                 .collect(),
             row_to_beat: chart.row_to_beat,
+            timing_segments: chart.timing_segments.into(),
             timing: TimingData::default(),
             short_hash: chart.short_hash,
             stats: chart.stats.into(),
@@ -429,32 +571,12 @@ fn step_type_lanes(step_type: &str) -> usize {
 
 fn hydrate_chart_timings(song: &mut SongData, global_offset_seconds: f32) {
     let song_offset = song.offset;
-    let normalized_bpms = song.normalized_bpms.clone();
-    let normalized_stops = song.normalized_stops.clone();
-    let normalized_delays = song.normalized_delays.clone();
-    let normalized_warps = song.normalized_warps.clone();
-    let normalized_speeds = song.normalized_speeds.clone();
-    let normalized_scrolls = song.normalized_scrolls.clone();
-    let normalized_fakes = song.normalized_fakes.clone();
 
     for chart in &mut song.charts {
-        chart.timing = TimingData::from_chart_data(
+        chart.timing = TimingData::from_segments(
             -song_offset,
             global_offset_seconds,
-            chart.chart_bpms.as_deref(),
-            &normalized_bpms,
-            chart.chart_stops.as_deref(),
-            &normalized_stops,
-            chart.chart_delays.as_deref(),
-            &normalized_delays,
-            chart.chart_warps.as_deref(),
-            &normalized_warps,
-            chart.chart_speeds.as_deref(),
-            &normalized_speeds,
-            chart.chart_scrolls.as_deref(),
-            &normalized_scrolls,
-            chart.chart_fakes.as_deref(),
-            &normalized_fakes,
+            &chart.timing_segments,
             &chart.row_to_beat,
         );
     }
@@ -689,6 +811,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
                 notes: c.minimized_note_data,
                 parsed_notes,
                 row_to_beat: c.row_to_beat,
+                timing_segments: TimingSegments::from(&c.timing_segments),
                 timing: TimingData::default(),
                 short_hash: c.short_hash,
                 stats: c.stats,
