@@ -1,13 +1,17 @@
 use rssp::TechCounts;
 use rssp::stats::ArrowStats;
+use crate::game::timing::TimingData;
+use crate::game::parsing::notes::ParsedNote;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct ChartData {
     pub chart_type: String,
     pub difficulty: String,
     pub meter: u32,
     pub step_artist: String,
     pub notes: Vec<u8>, // This is the minimized raw data we will parse
+    pub parsed_notes: Vec<ParsedNote>,
+    pub timing: TimingData,
     pub short_hash: String,
     pub stats: ArrowStats,
     pub tech_counts: TechCounts,

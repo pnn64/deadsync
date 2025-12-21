@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use crate::config::DisplayMode;
 use crate::core::gfx::BackendType;
 use crate::game::chart::ChartData;
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum ScreenAction {
     None,
     Navigate(Screen),

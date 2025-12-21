@@ -1,6 +1,9 @@
 use crate::game::{
     chart::ChartData,
+    note::NoteType,
+    parsing::notes::ParsedNote,
     song::{SongData, SongPack, set_song_cache},
+    timing::TimingData,
 };
 use log::{info, warn};
 use rssp::{AnalysisOptions, analyze};
@@ -126,6 +129,69 @@ impl From<CachedTechCounts> for rssp::TechCounts {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Encode, Decode)]
+enum CachedNoteType {
+    Tap,
+    Hold,
+    Roll,
+    Mine,
+    Fake,
+}
+
+impl From<NoteType> for CachedNoteType {
+    fn from(note_type: NoteType) -> Self {
+        match note_type {
+            NoteType::Tap => CachedNoteType::Tap,
+            NoteType::Hold => CachedNoteType::Hold,
+            NoteType::Roll => CachedNoteType::Roll,
+            NoteType::Mine => CachedNoteType::Mine,
+            NoteType::Fake => CachedNoteType::Fake,
+        }
+    }
+}
+
+impl From<CachedNoteType> for NoteType {
+    fn from(note_type: CachedNoteType) -> Self {
+        match note_type {
+            CachedNoteType::Tap => NoteType::Tap,
+            CachedNoteType::Hold => NoteType::Hold,
+            CachedNoteType::Roll => NoteType::Roll,
+            CachedNoteType::Mine => NoteType::Mine,
+            CachedNoteType::Fake => NoteType::Fake,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+struct CachedParsedNote {
+    row_index: u32,
+    column: u8,
+    note_type: CachedNoteType,
+    tail_row_index: Option<u32>,
+}
+
+impl From<&ParsedNote> for CachedParsedNote {
+    fn from(note: &ParsedNote) -> Self {
+        Self {
+            row_index: note.row_index as u32,
+            column: note.column as u8,
+            note_type: note.note_type.into(),
+            tail_row_index: note.tail_row_index.map(|v| v as u32),
+        }
+    }
+}
+
+impl From<CachedParsedNote> for ParsedNote {
+    fn from(note: CachedParsedNote) -> Self {
+        Self {
+            row_index: note.row_index as usize,
+            column: note.column as usize,
+            note_type: note.note_type.into(),
+            tail_row_index: note.tail_row_index.map(|v| v as usize),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 struct SerializableChartData {
     chart_type: String,
@@ -133,6 +199,7 @@ struct SerializableChartData {
     meter: u32,
     step_artist: String,
     notes: Vec<u8>,
+    parsed_notes: Vec<CachedParsedNote>,
     short_hash: String,
     stats: CachedArrowStats,
     tech_counts: CachedTechCounts,
@@ -161,6 +228,7 @@ impl From<&ChartData> for SerializableChartData {
             meter: chart.meter,
             step_artist: chart.step_artist.clone(),
             notes: chart.notes.clone(),
+            parsed_notes: chart.parsed_notes.iter().map(CachedParsedNote::from).collect(),
             short_hash: chart.short_hash.clone(),
             stats: (&chart.stats).into(),
             tech_counts: (&chart.tech_counts).into(),
@@ -191,6 +259,12 @@ impl From<SerializableChartData> for ChartData {
             meter: chart.meter,
             step_artist: chart.step_artist,
             notes: chart.notes,
+            parsed_notes: chart
+                .parsed_notes
+                .into_iter()
+                .map(ParsedNote::from)
+                .collect(),
+            timing: TimingData::default(),
             short_hash: chart.short_hash,
             stats: chart.stats.into(),
             tech_counts: chart.tech_counts.into(),
@@ -345,6 +419,44 @@ fn get_cache_path(simfile_path: &Path) -> Result<PathBuf, std::io::Error> {
     Ok(cache_dir.join(file_name))
 }
 
+fn step_type_lanes(step_type: &str) -> usize {
+    let normalized = step_type.trim().to_ascii_lowercase().replace('_', "-");
+    if normalized == "dance-double" { 8 } else { 4 }
+}
+
+fn hydrate_chart_timings(song: &mut SongData, global_offset_seconds: f32) {
+    let song_offset = song.offset;
+    let normalized_bpms = song.normalized_bpms.clone();
+    let normalized_stops = song.normalized_stops.clone();
+    let normalized_delays = song.normalized_delays.clone();
+    let normalized_warps = song.normalized_warps.clone();
+    let normalized_speeds = song.normalized_speeds.clone();
+    let normalized_scrolls = song.normalized_scrolls.clone();
+    let normalized_fakes = song.normalized_fakes.clone();
+
+    for chart in &mut song.charts {
+        chart.timing = TimingData::from_chart_data(
+            -song_offset,
+            global_offset_seconds,
+            chart.chart_bpms.as_deref(),
+            &normalized_bpms,
+            chart.chart_stops.as_deref(),
+            &normalized_stops,
+            chart.chart_delays.as_deref(),
+            &normalized_delays,
+            chart.chart_warps.as_deref(),
+            &normalized_warps,
+            chart.chart_speeds.as_deref(),
+            &normalized_speeds,
+            chart.chart_scrolls.as_deref(),
+            &normalized_scrolls,
+            chart.chart_fakes.as_deref(),
+            &normalized_fakes,
+            &chart.notes,
+        );
+    }
+}
+
 /// Scans the provided root directory (e.g., "songs/") for simfiles,
 /// parses them, and populates the global cache. This should be run once at startup.
 pub fn scan_and_load_songs(root_path_str: &'static str) {
@@ -456,6 +568,7 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
 
 /// Helper function to parse a single simfile, using a cache if available and valid.
 fn load_song_from_file(path: &Path, fastload: bool, cachesongs: bool) -> Result<SongData, String> {
+    let config = crate::config::get();
     let cache_path = match get_cache_path(path) {
         Ok(p) => Some(p),
         Err(e) => {
@@ -491,7 +604,9 @@ fn load_song_from_file(path: &Path, fastload: bool, cachesongs: bool) -> Result<
         {
             if cached_song.source_hash == ch && cached_song.rssp_version == rssp::RSSP_VERSION {
                 info!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
-                return Ok(cached_song.data.into());
+                let mut song_data: SongData = cached_song.data.into();
+                hydrate_chart_timings(&mut song_data, config.global_offset_seconds);
+                return Ok(song_data);
             } else if cached_song.source_hash != ch {
                 info!(
                     "Cache stale (content hash mismatch) for: {:?}",
@@ -536,6 +651,8 @@ fn load_song_from_file(path: &Path, fastload: bool, cachesongs: bool) -> Result<
         }
     }
 
+    let mut song_data = song_data;
+    hydrate_chart_timings(&mut song_data, config.global_offset_seconds);
     Ok(song_data)
 }
 
@@ -550,6 +667,11 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
         .charts
         .into_iter()
         .map(|c| {
+            let lanes = step_type_lanes(&c.step_type_str);
+            let parsed_notes = rssp::notes::parse_chart_notes(&c.minimized_note_data, lanes)
+                .into_iter()
+                .map(ParsedNote::from)
+                .collect();
             info!(
                 "  Chart '{}' [{}] loaded with {} bytes of note data.",
                 c.difficulty_str,
@@ -562,6 +684,8 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
                 meter: c.rating_str.parse().unwrap_or(0),
                 step_artist: c.step_artist_str.join(", "),
                 notes: c.minimized_note_data,
+                parsed_notes,
+                timing: TimingData::default(),
                 short_hash: c.short_hash,
                 stats: c.stats,
                 tech_counts: c.tech_counts,

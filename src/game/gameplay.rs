@@ -6,7 +6,6 @@ use crate::core::space::*;
 use crate::game::chart::ChartData;
 use crate::game::judgment::{self, JudgeGrade, Judgment};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
-use crate::game::parsing::notes as note_parser;
 use crate::game::parsing::noteskin::{self, Noteskin, Style};
 use crate::game::song::SongData;
 use crate::game::timing::{TimingData, TimingProfile, classify_offset_s};
@@ -390,27 +389,11 @@ pub fn init(
     }
 
     let config = crate::config::get();
-    let timing = Arc::new(TimingData::from_chart_data(
-        -song.offset,
-        config.global_offset_seconds,
-        chart.chart_bpms.as_deref(),
-        &song.normalized_bpms,
-        chart.chart_stops.as_deref(),
-        &song.normalized_stops,
-        chart.chart_delays.as_deref(),
-        &song.normalized_delays,
-        chart.chart_warps.as_deref(),
-        &song.normalized_warps,
-        chart.chart_speeds.as_deref(),
-        &song.normalized_speeds,
-        chart.chart_scrolls.as_deref(),
-        &song.normalized_scrolls,
-        chart.chart_fakes.as_deref(),
-        &song.normalized_fakes,
-        &chart.notes,
-    ));
+    let mut timing = chart.timing.clone();
+    timing.set_global_offset_seconds(config.global_offset_seconds);
+    let timing = Arc::new(timing);
 
-    let parsed_notes = note_parser::parse_chart_notes(&chart.notes);
+    let parsed_notes = &chart.parsed_notes;
     let mut notes: Vec<Note> = Vec::with_capacity(parsed_notes.len());
     let mut holds_total: u32 = 0;
     let mut rolls_total: u32 = 0;
