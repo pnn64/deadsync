@@ -60,6 +60,19 @@ fn quantize_offset_seconds(v: f32) -> f32 {
     (v / step).round() * step
 }
 
+#[inline(always)]
+fn quantization_index_from_beat(beat: f32) -> u8 {
+    match (beat.fract() * 192.0).round() as u32 {
+        0 | 192 => noteskin::Quantization::Q4th as u8,
+        96 => noteskin::Quantization::Q8th as u8,
+        48 | 144 => noteskin::Quantization::Q16th as u8,
+        24 | 72 | 120 | 168 => noteskin::Quantization::Q32nd as u8,
+        64 | 128 => noteskin::Quantization::Q12th as u8,
+        32 | 160 => noteskin::Quantization::Q24th as u8,
+        _ => noteskin::Quantization::Q192nd as u8,
+    }
+}
+
 fn compute_music_end_time(
     notes: &[Note],
     note_time_cache: &[f32],
@@ -454,8 +467,11 @@ pub fn init(
             _ => None,
         };
 
+        let quantization_idx = quantization_index_from_beat(beat);
+
         notes.push(Note {
             beat,
+            quantization_idx,
             column: parsed.column,
             note_type,
             row_index,

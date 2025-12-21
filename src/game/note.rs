@@ -36,6 +36,7 @@ pub struct HoldData {
 #[derive(Clone, Debug)]
 pub struct Note {
     pub beat: f32,
+    pub quantization_idx: u8,
     pub column: usize,
     pub note_type: NoteType,
     pub row_index: usize,
