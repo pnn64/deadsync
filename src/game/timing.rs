@@ -271,8 +271,7 @@ impl TimingData {
         global_scrolls: &str,
         chart_fakes: Option<&str>,
         global_fakes: &str,
-        row_to_beat: Option<&[f32]>,
-        raw_note_bytes: &[u8],
+        row_to_beat: &[f32],
     ) -> Self {
         let bpms_str = chart_bpms.filter(|s| !s.is_empty()).unwrap_or(global_bpms);
         let normalized_bpms = normalize_float_digits(bpms_str);
@@ -410,32 +409,7 @@ impl TimingData {
             timing_with_stops.scroll_prefix = prefixes;
         }
 
-        let row_to_beat = if let Some(precomputed) = row_to_beat {
-            precomputed.to_vec()
-        } else {
-            let mut row_to_beat = Vec::new();
-            let mut measure_index = 0;
-
-            for measure_bytes in raw_note_bytes.split(|&b| b == b',') {
-                let num_rows_in_measure = measure_bytes
-                    .split(|&b| b == b'\n')
-                    .filter(|line| {
-                        !line.is_empty() && !line.iter().all(|c| c.is_ascii_whitespace())
-                    })
-                    .count();
-                if num_rows_in_measure == 0 {
-                    continue;
-                }
-
-                for row_in_measure in 0..num_rows_in_measure {
-                    let beat = (measure_index as f32 * 4.0)
-                        + (row_in_measure as f32 / num_rows_in_measure as f32 * 4.0);
-                    row_to_beat.push(beat);
-                }
-                measure_index += 1;
-            }
-            row_to_beat
-        };
+        let row_to_beat = row_to_beat.to_vec();
         info!("TimingData processed {} note rows.", row_to_beat.len());
         timing_with_stops.row_to_beat = Arc::new(row_to_beat);
 

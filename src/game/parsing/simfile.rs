@@ -455,8 +455,7 @@ fn hydrate_chart_timings(song: &mut SongData, global_offset_seconds: f32) {
             &normalized_scrolls,
             chart.chart_fakes.as_deref(),
             &normalized_fakes,
-            Some(&chart.row_to_beat),
-            &chart.notes,
+            &chart.row_to_beat,
         );
     }
 }
@@ -689,7 +688,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
                 step_artist: c.step_artist_str.join(", "),
                 notes: c.minimized_note_data,
                 parsed_notes,
-                row_to_beat: c.row_to_beat.iter().map(|&b| b as f32).collect(),
+                row_to_beat: c.row_to_beat,
                 timing: TimingData::default(),
                 short_hash: c.short_hash,
                 stats: c.stats,
