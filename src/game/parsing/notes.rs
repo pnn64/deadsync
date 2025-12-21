@@ -26,11 +26,3 @@ impl From<RsspParsedNote> for ParsedNote {
         }
     }
 }
-
-/// Parses the raw, minimized `#NOTES:` data block via rssp.
-pub fn parse_chart_notes(raw_note_bytes: &[u8]) -> Vec<ParsedNote> {
-    rssp::notes::parse_chart_notes(raw_note_bytes, 4)
-        .into_iter()
-        .map(ParsedNote::from)
-        .collect()
-}
