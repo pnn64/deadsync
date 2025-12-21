@@ -11,6 +11,7 @@ pub struct ChartData {
     pub step_artist: String,
     pub notes: Vec<u8>, // This is the minimized raw data we will parse
     pub parsed_notes: Vec<ParsedNote>,
+    pub row_to_beat: Vec<f32>,
     pub timing: TimingData,
     pub short_hash: String,
     pub stats: ArrowStats,
