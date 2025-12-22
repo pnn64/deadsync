@@ -293,6 +293,34 @@ impl Default for GetBeatStarts {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct BeatInfoCache {
+    start: GetBeatStarts,
+    last_elapsed_time: f32,
+    global_offset_sec: f32,
+}
+
+impl BeatInfoCache {
+    pub fn new(timing: &TimingData) -> Self {
+        let mut cache = Self {
+            start: GetBeatStarts::default(),
+            last_elapsed_time: f32::NEG_INFINITY,
+            global_offset_sec: timing.global_offset_sec,
+        };
+        cache.start.last_time =
+            -timing.beat0_offset_seconds() - timing.beat0_group_offset_seconds();
+        cache
+    }
+
+    pub fn reset(&mut self, timing: &TimingData) {
+        self.start = GetBeatStarts::default();
+        self.start.last_time =
+            -timing.beat0_offset_seconds() - timing.beat0_group_offset_seconds();
+        self.last_elapsed_time = f32::NEG_INFINITY;
+        self.global_offset_sec = timing.global_offset_sec;
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GetBeatArgs {
     pub elapsed_time: f32,
@@ -531,7 +559,32 @@ impl TimingData {
         let mut start = GetBeatStarts::default();
         start.last_time = -self.beat0_offset_seconds() - self.beat0_group_offset_seconds();
 
-        self.get_beat_internal(start, &mut args, u32::MAX as usize);
+        self.get_beat_internal(&mut start, &mut args, u32::MAX as usize);
+
+        BeatInfo {
+            beat: args.beat,
+            is_in_freeze: args.freeze_out,
+            is_in_delay: args.delay_out,
+        }
+    }
+
+    pub fn get_beat_info_from_time_cached(
+        &self,
+        target_time_sec: f32,
+        cache: &mut BeatInfoCache,
+    ) -> BeatInfo {
+        let elapsed_time = target_time_sec + self.global_offset_sec;
+        if cache.global_offset_sec != self.global_offset_sec
+            || !cache.last_elapsed_time.is_finite()
+            || elapsed_time < cache.last_elapsed_time
+        {
+            cache.reset(self);
+        }
+
+        let mut args = GetBeatArgs::default();
+        args.elapsed_time = elapsed_time;
+        self.get_beat_internal(&mut cache.start, &mut args, u32::MAX as usize);
+        cache.last_elapsed_time = elapsed_time;
 
         BeatInfo {
             beat: args.beat,
@@ -656,7 +709,7 @@ impl TimingData {
 
     fn get_beat_internal(
         &self,
-        mut start: GetBeatStarts,
+        start: &mut GetBeatStarts,
         args: &mut GetBeatArgs,
         max_segment: usize,
     ) {
@@ -673,7 +726,7 @@ impl TimingData {
             find_event(
                 &mut event_row,
                 &mut event_type,
-                start,
+                *start,
                 0.0,
                 false,
                 bpms,
@@ -708,12 +761,14 @@ impl TimingData {
                         args.delay_out = true;
                         args.beat = delay.beat;
                         args.bps_out = bps;
+                        start.last_row = event_row;
                         return;
                     }
                     start.last_time += delay.duration;
                     start.delay_idx += 1;
                     curr_segment += 1;
                     if event_type == TimingEvent::Delay {
+                        start.last_row = event_row;
                         continue;
                     }
                 }
@@ -723,6 +778,7 @@ impl TimingData {
                         args.freeze_out = true;
                         args.beat = stop.beat;
                         args.bps_out = bps;
+                        start.last_row = event_row;
                         return;
                     }
                     start.last_time += stop.duration;

@@ -8,7 +8,7 @@ use crate::game::judgment::{self, JudgeGrade, Judgment};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{self, Noteskin, Style};
 use crate::game::song::SongData;
-use crate::game::timing::{TimingData, TimingProfile, classify_offset_s};
+use crate::game::timing::{BeatInfoCache, TimingData, TimingProfile, classify_offset_s};
 use crate::game::{
     life::{LifeChange, REGEN_COMBO_AFTER_MISS},
     profile,
@@ -197,6 +197,7 @@ pub struct State {
     pub background_texture_key: String,
     pub chart: Arc<ChartData>,
     pub timing: Arc<TimingData>,
+    pub beat_info_cache: BeatInfoCache,
     pub timing_profile: TimingProfile,
     pub notes: Vec<Note>,
     pub audio_lead_in_seconds: f32,
@@ -405,6 +406,7 @@ pub fn init(
     let mut timing = chart.timing.clone();
     timing.set_global_offset_seconds(config.global_offset_seconds);
     let timing = Arc::new(timing);
+    let beat_info_cache = BeatInfoCache::new(&timing);
 
     let parsed_notes = &chart.parsed_notes;
     let mut notes: Vec<Note> = Vec::with_capacity(parsed_notes.len());
@@ -632,6 +634,7 @@ pub fn init(
         chart,
         background_texture_key: "__white".to_string(),
         timing,
+        beat_info_cache,
         timing_profile,
         notes,
         audio_lead_in_seconds: start_delay,
@@ -1444,6 +1447,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
             .as_ref()
             .map(|h| state.timing.get_time_for_beat(h.end_beat));
     }
+    state.beat_info_cache.reset(&state.timing);
 
     state.music_end_time = compute_music_end_time(
         &state.notes,
@@ -2186,7 +2190,8 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         state.life_history.push((music_time_sec, state.life));
     }
 
-    let beat_info = state.timing.get_beat_info_from_time(music_time_sec);
+    let beat_info =
+        state.timing.get_beat_info_from_time_cached(music_time_sec, &mut state.beat_info_cache);
     state.current_beat = beat_info.beat;
     state.is_in_freeze = beat_info.is_in_freeze;
     state.is_in_delay = beat_info.is_in_delay;
