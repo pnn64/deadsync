@@ -806,10 +806,22 @@ fn layout_text<'a>(
         return vec![];
     }
 
+    #[inline(always)]
+    fn advance_logical(glyph: &font::Glyph) -> i32 {
+        lrint_ties_even(glyph.advance) as i32
+    }
+
     // 1) Logical (integer) widths like SM: sum integer advances (default glyph if unmapped).
     let logical_line_widths: Vec<i32> = lines
         .iter()
-        .map(|l| font::measure_line_width_logical(font, l, fonts))
+        .map(|line| {
+            line.chars()
+                .map(|c| {
+                    font::find_glyph(font, c, fonts)
+                        .map_or(0, |glyph| advance_logical(glyph))
+                })
+                .sum()
+        })
         .collect();
     let max_logical_width_i = logical_line_widths.iter().copied().max().unwrap_or(0);
     let block_w_logical_even = quantize_up_even_i32(max_logical_width_i) as f32;
@@ -920,11 +932,6 @@ fn layout_text<'a>(
         };
         let start = -0.5 * block_w_logical + align_value * (block_w_logical - line_w_logical);
         lrint_ties_even(start) as i32
-    }
-
-    #[inline(always)]
-    fn advance_logical(glyph: &font::Glyph) -> i32 {
-        lrint_ties_even(glyph.advance) as i32
     }
 
     #[inline(always)]
