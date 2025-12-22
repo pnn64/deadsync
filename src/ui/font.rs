@@ -1,6 +1,6 @@
 //! StepMania bitmap font parser (Rust port — dependency-light, functional/procedural)
 //! - SM-parity defaults for metrics and width handling (fixes tight/overlapping glyphs)
-//! - Supports LINE, MAP U+XXXX / "..." (Unicode, ASCII, CP1252, numbers)
+//! - Supports LINE, MAP U+XXXX / "..." / aliases (Unicode, ASCII, CP1252, numbers)
 //! - SM extra-pixels quirk (+1/+1, left forced even) to avoid stroke clipping
 //! - Canonical texture keys (assets-relative, forward slashes) so lookups match
 //! - Parses "(res WxH)" from sheet filenames and scales INI-authored metrics like StepMania
@@ -11,6 +11,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use image;
 use log::{debug, info, trace, warn};
@@ -18,6 +19,300 @@ use log::{debug, info, trace, warn};
 use crate::assets;
 
 const FONT_DEFAULT_CHAR: char = '\u{F8FF}'; // SM default glyph (private use)
+const INTERNAL_ALIAS_START: u32 = 0xE000;
+
+#[derive(Clone, Copy)]
+enum AliasValue {
+    Codepoint(u32),
+    Internal,
+}
+
+static FONT_CHAR_ALIAS_TABLE: &[(&str, AliasValue)] = &[
+    ("ha", AliasValue::Codepoint(0x3042)),
+    ("hi", AliasValue::Codepoint(0x3044)),
+    ("hu", AliasValue::Codepoint(0x3046)),
+    ("he", AliasValue::Codepoint(0x3048)),
+    ("ho", AliasValue::Codepoint(0x304a)),
+    ("hka", AliasValue::Codepoint(0x304b)),
+    ("hki", AliasValue::Codepoint(0x304d)),
+    ("hku", AliasValue::Codepoint(0x304f)),
+    ("hke", AliasValue::Codepoint(0x3051)),
+    ("hko", AliasValue::Codepoint(0x3053)),
+    ("hga", AliasValue::Codepoint(0x304c)),
+    ("hgi", AliasValue::Codepoint(0x304e)),
+    ("hgu", AliasValue::Codepoint(0x3050)),
+    ("hge", AliasValue::Codepoint(0x3052)),
+    ("hgo", AliasValue::Codepoint(0x3054)),
+    ("hza", AliasValue::Codepoint(0x3056)),
+    ("hzi", AliasValue::Codepoint(0x3058)),
+    ("hzu", AliasValue::Codepoint(0x305a)),
+    ("hze", AliasValue::Codepoint(0x305c)),
+    ("hzo", AliasValue::Codepoint(0x305e)),
+    ("hta", AliasValue::Codepoint(0x305f)),
+    ("hti", AliasValue::Codepoint(0x3061)),
+    ("htu", AliasValue::Codepoint(0x3064)),
+    ("hte", AliasValue::Codepoint(0x3066)),
+    ("hto", AliasValue::Codepoint(0x3068)),
+    ("hda", AliasValue::Codepoint(0x3060)),
+    ("hdi", AliasValue::Codepoint(0x3062)),
+    ("hdu", AliasValue::Codepoint(0x3065)),
+    ("hde", AliasValue::Codepoint(0x3067)),
+    ("hdo", AliasValue::Codepoint(0x3069)),
+    ("hna", AliasValue::Codepoint(0x306a)),
+    ("hni", AliasValue::Codepoint(0x306b)),
+    ("hnu", AliasValue::Codepoint(0x306c)),
+    ("hne", AliasValue::Codepoint(0x306d)),
+    ("hno", AliasValue::Codepoint(0x306e)),
+    ("hha", AliasValue::Codepoint(0x306f)),
+    ("hhi", AliasValue::Codepoint(0x3072)),
+    ("hhu", AliasValue::Codepoint(0x3075)),
+    ("hhe", AliasValue::Codepoint(0x3078)),
+    ("hho", AliasValue::Codepoint(0x307b)),
+    ("hba", AliasValue::Codepoint(0x3070)),
+    ("hbi", AliasValue::Codepoint(0x3073)),
+    ("hbu", AliasValue::Codepoint(0x3076)),
+    ("hbe", AliasValue::Codepoint(0x3079)),
+    ("hbo", AliasValue::Codepoint(0x307c)),
+    ("hpa", AliasValue::Codepoint(0x3071)),
+    ("hpi", AliasValue::Codepoint(0x3074)),
+    ("hpu", AliasValue::Codepoint(0x3077)),
+    ("hpe", AliasValue::Codepoint(0x307a)),
+    ("hpo", AliasValue::Codepoint(0x307d)),
+    ("hma", AliasValue::Codepoint(0x307e)),
+    ("hmi", AliasValue::Codepoint(0x307f)),
+    ("hmu", AliasValue::Codepoint(0x3080)),
+    ("hme", AliasValue::Codepoint(0x3081)),
+    ("hmo", AliasValue::Codepoint(0x3082)),
+    ("hya", AliasValue::Codepoint(0x3084)),
+    ("hyu", AliasValue::Codepoint(0x3086)),
+    ("hyo", AliasValue::Codepoint(0x3088)),
+    ("hra", AliasValue::Codepoint(0x3089)),
+    ("hri", AliasValue::Codepoint(0x308a)),
+    ("hru", AliasValue::Codepoint(0x308b)),
+    ("hre", AliasValue::Codepoint(0x308c)),
+    ("hro", AliasValue::Codepoint(0x308d)),
+    ("hwa", AliasValue::Codepoint(0x308f)),
+    ("hwi", AliasValue::Codepoint(0x3090)),
+    ("hwe", AliasValue::Codepoint(0x3091)),
+    ("hwo", AliasValue::Codepoint(0x3092)),
+    ("hn", AliasValue::Codepoint(0x3093)),
+    ("hvu", AliasValue::Codepoint(0x3094)),
+    ("has", AliasValue::Codepoint(0x3041)),
+    ("his", AliasValue::Codepoint(0x3043)),
+    ("hus", AliasValue::Codepoint(0x3045)),
+    ("hes", AliasValue::Codepoint(0x3047)),
+    ("hos", AliasValue::Codepoint(0x3049)),
+    ("hkas", AliasValue::Codepoint(0x3095)),
+    ("hkes", AliasValue::Codepoint(0x3096)),
+    ("hsa", AliasValue::Codepoint(0x3055)),
+    ("hsi", AliasValue::Codepoint(0x3057)),
+    ("hsu", AliasValue::Codepoint(0x3059)),
+    ("hse", AliasValue::Codepoint(0x305b)),
+    ("hso", AliasValue::Codepoint(0x305d)),
+    ("hyas", AliasValue::Codepoint(0x3083)),
+    ("hyus", AliasValue::Codepoint(0x3085)),
+    ("hyos", AliasValue::Codepoint(0x3087)),
+    ("hwas", AliasValue::Codepoint(0x308e)),
+    ("hq", AliasValue::Codepoint(0x3063)),
+    ("ka", AliasValue::Codepoint(0x30a2)),
+    ("ki", AliasValue::Codepoint(0x30a4)),
+    ("ku", AliasValue::Codepoint(0x30a6)),
+    ("ke", AliasValue::Codepoint(0x30a8)),
+    ("ko", AliasValue::Codepoint(0x30aa)),
+    ("kka", AliasValue::Codepoint(0x30ab)),
+    ("kki", AliasValue::Codepoint(0x30ad)),
+    ("kku", AliasValue::Codepoint(0x30af)),
+    ("kke", AliasValue::Codepoint(0x30b1)),
+    ("kko", AliasValue::Codepoint(0x30b3)),
+    ("kga", AliasValue::Codepoint(0x30ac)),
+    ("kgi", AliasValue::Codepoint(0x30ae)),
+    ("kgu", AliasValue::Codepoint(0x30b0)),
+    ("kge", AliasValue::Codepoint(0x30b2)),
+    ("kgo", AliasValue::Codepoint(0x30b4)),
+    ("kza", AliasValue::Codepoint(0x30b6)),
+    ("kzi", AliasValue::Codepoint(0x30b8)),
+    ("kji", AliasValue::Codepoint(0x30b8)),
+    ("kzu", AliasValue::Codepoint(0x30ba)),
+    ("kze", AliasValue::Codepoint(0x30bc)),
+    ("kzo", AliasValue::Codepoint(0x30be)),
+    ("kta", AliasValue::Codepoint(0x30bf)),
+    ("kti", AliasValue::Codepoint(0x30c1)),
+    ("ktu", AliasValue::Codepoint(0x30c4)),
+    ("kte", AliasValue::Codepoint(0x30c6)),
+    ("kto", AliasValue::Codepoint(0x30c8)),
+    ("kda", AliasValue::Codepoint(0x30c0)),
+    ("kdi", AliasValue::Codepoint(0x30c2)),
+    ("kdu", AliasValue::Codepoint(0x30c5)),
+    ("kde", AliasValue::Codepoint(0x30c7)),
+    ("kdo", AliasValue::Codepoint(0x30c9)),
+    ("kna", AliasValue::Codepoint(0x30ca)),
+    ("kni", AliasValue::Codepoint(0x30cb)),
+    ("knu", AliasValue::Codepoint(0x30cc)),
+    ("kne", AliasValue::Codepoint(0x30cd)),
+    ("kno", AliasValue::Codepoint(0x30ce)),
+    ("kha", AliasValue::Codepoint(0x30cf)),
+    ("khi", AliasValue::Codepoint(0x30d2)),
+    ("khu", AliasValue::Codepoint(0x30d5)),
+    ("khe", AliasValue::Codepoint(0x30d8)),
+    ("kho", AliasValue::Codepoint(0x30db)),
+    ("kba", AliasValue::Codepoint(0x30d0)),
+    ("kbi", AliasValue::Codepoint(0x30d3)),
+    ("kbu", AliasValue::Codepoint(0x30d6)),
+    ("kbe", AliasValue::Codepoint(0x30d9)),
+    ("kbo", AliasValue::Codepoint(0x30dc)),
+    ("kpa", AliasValue::Codepoint(0x30d1)),
+    ("kpi", AliasValue::Codepoint(0x30d4)),
+    ("kpu", AliasValue::Codepoint(0x30d7)),
+    ("kpe", AliasValue::Codepoint(0x30da)),
+    ("kpo", AliasValue::Codepoint(0x30dd)),
+    ("kma", AliasValue::Codepoint(0x30de)),
+    ("kmi", AliasValue::Codepoint(0x30df)),
+    ("kmu", AliasValue::Codepoint(0x30e0)),
+    ("kme", AliasValue::Codepoint(0x30e1)),
+    ("kmo", AliasValue::Codepoint(0x30e2)),
+    ("kya", AliasValue::Codepoint(0x30e4)),
+    ("kyu", AliasValue::Codepoint(0x30e6)),
+    ("kyo", AliasValue::Codepoint(0x30e8)),
+    ("kra", AliasValue::Codepoint(0x30e9)),
+    ("kri", AliasValue::Codepoint(0x30ea)),
+    ("kru", AliasValue::Codepoint(0x30eb)),
+    ("kre", AliasValue::Codepoint(0x30ec)),
+    ("kro", AliasValue::Codepoint(0x30ed)),
+    ("kwa", AliasValue::Codepoint(0x30ef)),
+    ("kwi", AliasValue::Codepoint(0x30f0)),
+    ("kwe", AliasValue::Codepoint(0x30f1)),
+    ("kwo", AliasValue::Codepoint(0x30f2)),
+    ("kn", AliasValue::Codepoint(0x30f3)),
+    ("kvu", AliasValue::Codepoint(0x30f4)),
+    ("kas", AliasValue::Codepoint(0x30a1)),
+    ("kis", AliasValue::Codepoint(0x30a3)),
+    ("kus", AliasValue::Codepoint(0x30a5)),
+    ("kes", AliasValue::Codepoint(0x30a7)),
+    ("kos", AliasValue::Codepoint(0x30a9)),
+    ("kkas", AliasValue::Codepoint(0x30f5)),
+    ("kkes", AliasValue::Codepoint(0x30f6)),
+    ("ksa", AliasValue::Codepoint(0x30b5)),
+    ("ksi", AliasValue::Codepoint(0x30b7)),
+    ("ksu", AliasValue::Codepoint(0x30b9)),
+    ("kse", AliasValue::Codepoint(0x30bb)),
+    ("kso", AliasValue::Codepoint(0x30bd)),
+    ("kyas", AliasValue::Codepoint(0x30e3)),
+    ("kyus", AliasValue::Codepoint(0x30e5)),
+    ("kyos", AliasValue::Codepoint(0x30e7)),
+    ("kwas", AliasValue::Codepoint(0x30ee)),
+    ("kq", AliasValue::Codepoint(0x30c3)),
+    ("kdot", AliasValue::Codepoint(0x30FB)),
+    ("kdash", AliasValue::Codepoint(0x30FC)),
+    ("nbsp", AliasValue::Codepoint(0x00a0)),
+    ("delta", AliasValue::Codepoint(0x0394)),
+    ("sigma", AliasValue::Codepoint(0x03a3)),
+    ("omega", AliasValue::Codepoint(0x03a9)),
+    ("angle", AliasValue::Codepoint(0x2220)),
+    ("whiteheart", AliasValue::Codepoint(0x2661)),
+    ("blackstar", AliasValue::Codepoint(0x2605)),
+    ("whitestar", AliasValue::Codepoint(0x2606)),
+    ("flipped-a", AliasValue::Codepoint(0x2200)),
+    ("squared", AliasValue::Codepoint(0x00b2)),
+    ("cubed", AliasValue::Codepoint(0x00b3)),
+    ("oq", AliasValue::Codepoint(0x201c)),
+    ("cq", AliasValue::Codepoint(0x201d)),
+    ("leftarrow", AliasValue::Codepoint(0x2190)),
+    ("uparrow", AliasValue::Codepoint(0x2191)),
+    ("rightarrow", AliasValue::Codepoint(0x2192)),
+    ("downarrow", AliasValue::Codepoint(0x2193)),
+    ("4thnote", AliasValue::Codepoint(0x2669)),
+    ("8thnote", AliasValue::Codepoint(0x266A)),
+    ("b8thnote", AliasValue::Codepoint(0x266B)),
+    ("b16thnote", AliasValue::Codepoint(0x266C)),
+    ("flat", AliasValue::Codepoint(0x266D)),
+    ("natural", AliasValue::Codepoint(0x266E)),
+    ("sharp", AliasValue::Codepoint(0x266F)),
+    ("up", AliasValue::Internal),
+    ("down", AliasValue::Internal),
+    ("left", AliasValue::Internal),
+    ("right", AliasValue::Internal),
+    ("downleft", AliasValue::Internal),
+    ("downright", AliasValue::Internal),
+    ("upleft", AliasValue::Internal),
+    ("upright", AliasValue::Internal),
+    ("center", AliasValue::Internal),
+    ("menuup", AliasValue::Internal),
+    ("menudown", AliasValue::Internal),
+    ("menuleft", AliasValue::Internal),
+    ("menuright", AliasValue::Internal),
+    ("start", AliasValue::Internal),
+    ("doublezeta", AliasValue::Internal),
+    ("planet", AliasValue::Internal),
+    ("back", AliasValue::Internal),
+    ("ok", AliasValue::Internal),
+    ("nextrow", AliasValue::Internal),
+    ("select", AliasValue::Internal),
+    ("auxx", AliasValue::Internal),
+    ("auxtriangle", AliasValue::Internal),
+    ("auxsquare", AliasValue::Internal),
+    ("auxcircle", AliasValue::Internal),
+    ("auxl1", AliasValue::Internal),
+    ("auxl2", AliasValue::Internal),
+    ("auxl3", AliasValue::Internal),
+    ("auxr1", AliasValue::Internal),
+    ("auxr2", AliasValue::Internal),
+    ("auxr3", AliasValue::Internal),
+    ("auxselect", AliasValue::Internal),
+    ("auxstart", AliasValue::Internal),
+    ("auxa", AliasValue::Internal),
+    ("auxb", AliasValue::Internal),
+    ("auxc", AliasValue::Internal),
+    ("auxd", AliasValue::Internal),
+    ("auxy", AliasValue::Internal),
+    ("auxz", AliasValue::Internal),
+    ("auxl", AliasValue::Internal),
+    ("auxr", AliasValue::Internal),
+    ("auxwhite", AliasValue::Internal),
+    ("auxblack", AliasValue::Internal),
+    ("auxlb", AliasValue::Internal),
+    ("auxrb", AliasValue::Internal),
+    ("auxlt", AliasValue::Internal),
+    ("auxrt", AliasValue::Internal),
+    ("auxback", AliasValue::Internal),
+];
+
+static FONT_CHAR_ALIAS_MAP: OnceLock<HashMap<String, char>> = OnceLock::new();
+
+#[inline(always)]
+fn font_char_alias_map() -> &'static HashMap<String, char> {
+    FONT_CHAR_ALIAS_MAP.get_or_init(|| {
+        let mut map = HashMap::with_capacity(FONT_CHAR_ALIAS_TABLE.len() + 2);
+        map.insert("default".to_string(), FONT_DEFAULT_CHAR);
+        map.insert("invalid".to_string(), char::REPLACEMENT_CHARACTER);
+
+        let mut next_internal = INTERNAL_ALIAS_START;
+        for &(name, value) in FONT_CHAR_ALIAS_TABLE {
+            let cp = match value {
+                AliasValue::Codepoint(cp) => cp,
+                AliasValue::Internal => {
+                    let cp = next_internal;
+                    next_internal = next_internal.saturating_add(1);
+                    cp
+                }
+            };
+            if let Some(ch) = char::from_u32(cp) {
+                map.insert(name.to_ascii_lowercase(), ch);
+            }
+        }
+        map
+    })
+}
+
+#[inline(always)]
+fn lookup_font_char_alias(spec: &str) -> Option<char> {
+    let key = spec.trim();
+    if key.is_empty() {
+        return None;
+    }
+    font_char_alias_map()
+        .get(&key.to_ascii_lowercase())
+        .copied()
+}
 
 /* ======================= TYPES ======================= */
 
@@ -509,11 +804,9 @@ fn apply_range_mapping(
             }
         }
         "numbers" => {
-            // Include both 'x' and 'X'; many SM fonts expect upper-case as well.
-            // Also include the multiplication sign × for completeness.
+            // StepMania order: 0-9, %, ., space, :, x.
             let numbers_map: &[char] = &[
-                '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ':', '-', '+', '/', 'x',
-                'X', '×', '%', ' ',
+                '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '%', '.', ' ', ':', 'x',
             ];
             let (start, end) = hex_range.unwrap_or((0, (numbers_map.len() as u32) - 1));
             let mut ff = first_frame;
@@ -808,6 +1101,16 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                                         char_to_frame.insert(ch, frame_index);
                                     }
                                 }
+                            } else if spec.chars().count() == 1 {
+                                if let Some(ch) = spec.chars().next()
+                                    && frame_index < total_frames
+                                {
+                                    char_to_frame.insert(ch, frame_index);
+                                }
+                            } else if let Some(ch) = lookup_font_char_alias(spec)
+                                && frame_index < total_frames
+                            {
+                                char_to_frame.insert(ch, frame_index);
                             }
                         }
                     } else if key_lc.starts_with("range ")
