@@ -1,4 +1,7 @@
-use crate::core::gfx::{BlendMode, ObjectType, RenderList, Texture as RendererTexture};
+use crate::core::gfx::{
+    BlendMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    Texture as RendererTexture,
+};
 use crate::core::space::ortho_for_window;
 use cgmath::Matrix4;
 use image::RgbaImage;
@@ -81,7 +84,7 @@ pub struct State {
     projection_group: wgpu::BindGroup,
     proj_layout: wgpu::BindGroupLayout,
     bind_layout: wgpu::BindGroupLayout,
-    sampler: wgpu::Sampler,
+    samplers: HashMap<SamplerDesc, wgpu::Sampler>,
     shader: wgpu::ShaderModule,
     pipeline_layout: wgpu::PipelineLayout,
     pipelines: PipelineSet,
@@ -199,17 +202,6 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         ],
     });
 
-    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        label: Some("gl sampler"),
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Linear,
-        mipmap_filter: wgpu::FilterMode::Nearest,
-        ..Default::default()
-    });
-
     let (shader, pipeline_layout, pipelines) =
         build_pipeline_set(&device, &proj_layout, &bind_layout, format);
 
@@ -266,7 +258,7 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         projection_group,
         proj_layout,
         bind_layout,
-        sampler,
+        samplers: HashMap::new(),
         shader,
         pipeline_layout,
         pipelines,
@@ -281,7 +273,11 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
     })
 }
 
-pub fn create_texture(state: &mut State, image: &RgbaImage) -> Result<Texture, Box<dyn Error>> {
+pub fn create_texture(
+    state: &mut State,
+    image: &RgbaImage,
+    sampler: SamplerDesc,
+) -> Result<Texture, Box<dyn Error>> {
     let size = wgpu::Extent3d {
         width: image.width(),
         height: image.height(),
@@ -316,13 +312,14 @@ pub fn create_texture(state: &mut State, image: &RgbaImage) -> Result<Texture, B
     );
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let sampler = get_sampler(state, sampler);
     let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("gl texture bind group"),
         layout: &state.bind_layout,
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::Sampler(&state.sampler),
+                resource: wgpu::BindingResource::Sampler(&sampler),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
@@ -755,6 +752,52 @@ fn cast_slice<T>(data: &[T]) -> &[u8] {
 }
 
 #[inline(always)]
+fn wgpu_filter_mode(filter: SamplerFilter) -> wgpu::FilterMode {
+    match filter {
+        SamplerFilter::Linear => wgpu::FilterMode::Linear,
+        SamplerFilter::Nearest => wgpu::FilterMode::Nearest,
+    }
+}
+
+#[inline(always)]
+fn wgpu_address_mode(wrap: SamplerWrap) -> wgpu::AddressMode {
+    match wrap {
+        SamplerWrap::Clamp => wgpu::AddressMode::ClampToEdge,
+        SamplerWrap::Repeat => wgpu::AddressMode::Repeat,
+    }
+}
+
+#[inline(always)]
+fn sampler_descriptor(desc: SamplerDesc) -> wgpu::SamplerDescriptor<'static> {
+    let filter = wgpu_filter_mode(desc.filter);
+    let address = wgpu_address_mode(desc.wrap);
+    let mip_filter = if desc.mipmaps {
+        filter
+    } else {
+        wgpu::FilterMode::Nearest
+    };
+    wgpu::SamplerDescriptor {
+        label: Some("gl sampler"),
+        address_mode_u: address,
+        address_mode_v: address,
+        address_mode_w: address,
+        mag_filter: filter,
+        min_filter: filter,
+        mipmap_filter: mip_filter,
+        ..Default::default()
+    }
+}
+
+fn get_sampler(state: &mut State, desc: SamplerDesc) -> wgpu::Sampler {
+    if let Some(existing) = state.samplers.get(&desc) {
+        return existing.clone();
+    }
+    let sampler = state.device.create_sampler(&sampler_descriptor(desc));
+    state.samplers.insert(desc, sampler.clone());
+    sampler
+}
+
+#[inline(always)]
 fn write_projection(queue: &wgpu::Queue, buffer: &wgpu::Buffer, proj: Matrix4<f32>) {
     let arr: [[f32; 4]; 4] = proj.into();
     queue.write_buffer(buffer, 0, cast_slice(&arr));
@@ -818,7 +861,7 @@ fn edge_factor(t: f32, feather_l: f32, feather_r: f32) -> f32 {
 
 @fragment
 fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
-    let texel = textureSample(u_tex, u_sampler, fract(input.uv));
+    let texel = textureSample(u_tex, u_sampler, input.uv);
     let fade_x = edge_factor(input.uv.x, input.edge_fade.x, input.edge_fade.y);
     let fade_y = edge_factor(input.uv.y, input.edge_fade.z, input.edge_fade.w);
     let fade = min(fade_x, fade_y);

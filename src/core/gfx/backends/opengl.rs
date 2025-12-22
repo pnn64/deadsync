@@ -1,4 +1,7 @@
-use crate::core::gfx::{BlendMode, ObjectType, RenderList, Texture as RendererTexture};
+use crate::core::gfx::{
+    BlendMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    Texture as RendererTexture,
+};
 use crate::core::space::ortho_for_window;
 use cgmath::Matrix4;
 use glow::{HasContext, PixelUnpackData, UniformLocation};
@@ -145,7 +148,19 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
     Ok(state)
 }
 
-pub fn create_texture(gl: &glow::Context, image: &RgbaImage) -> Result<Texture, String> {
+pub fn create_texture(
+    gl: &glow::Context,
+    image: &RgbaImage,
+    sampler: SamplerDesc,
+) -> Result<Texture, String> {
+    let wrap_mode = match sampler.wrap {
+        SamplerWrap::Clamp => glow::CLAMP_TO_EDGE,
+        SamplerWrap::Repeat => glow::REPEAT,
+    };
+    let filter_mode = match sampler.filter {
+        SamplerFilter::Linear => glow::LINEAR,
+        SamplerFilter::Nearest => glow::NEAREST,
+    };
     unsafe {
         let t = gl.create_texture()?;
         gl.bind_texture(glow::TEXTURE_2D, Some(t));
@@ -155,26 +170,10 @@ pub fn create_texture(gl: &glow::Context, image: &RgbaImage) -> Result<Texture, 
         gl.pixel_store_i32(glow::UNPACK_SKIP_ROWS, 0);
         gl.pixel_store_i32(glow::UNPACK_SKIP_PIXELS, 0);
 
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_WRAP_S,
-            glow::CLAMP_TO_EDGE as i32,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_WRAP_T,
-            glow::CLAMP_TO_EDGE as i32,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MIN_FILTER,
-            glow::LINEAR as i32,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MAG_FILTER,
-            glow::LINEAR as i32,
-        );
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, wrap_mode as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, wrap_mode as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, filter_mode as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, filter_mode as i32);
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_BASE_LEVEL, 0);
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAX_LEVEL, 0);
 

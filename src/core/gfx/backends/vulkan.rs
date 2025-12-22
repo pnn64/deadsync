@@ -1,4 +1,7 @@
-use crate::core::gfx::{BlendMode, ObjectType, RenderList, Texture as RendererTexture};
+use crate::core::gfx::{
+    BlendMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    Texture as RendererTexture,
+};
 use crate::core::space::ortho_for_window;
 use ash::{
     Device, Entry, Instance,
@@ -101,7 +104,7 @@ pub struct State {
     index_buffer: Option<BufferResource>,
     pub descriptor_set_layout: vk::DescriptorSetLayout,
     pub descriptor_pool: vk::DescriptorPool,
-    pub sampler: vk::Sampler,
+    sampler_cache: HashMap<SamplerDesc, vk::Sampler>,
     command_buffers: Vec<vk::CommandBuffer>,
     image_available_semaphores: Vec<vk::Semaphore>,
     render_finished_semaphores: Vec<vk::Semaphore>,
@@ -151,7 +154,6 @@ pub fn init(window: &Window, vsync_enabled: bool) -> Result<State, Box<dyn Error
         render_pass,
     )?;
 
-    let sampler = create_sampler(device.as_ref().unwrap())?;
     let descriptor_set_layout = create_descriptor_set_layout(device.as_ref().unwrap())?;
     let descriptor_pool = create_descriptor_pool(device.as_ref().unwrap())?;
 
@@ -192,7 +194,7 @@ pub fn init(window: &Window, vsync_enabled: bool) -> Result<State, Box<dyn Error
         index_buffer: None,
         descriptor_set_layout,
         descriptor_pool,
-        sampler,
+        sampler_cache: HashMap::new(),
         command_buffers,
         image_available_semaphores,
         render_finished_semaphores,
@@ -244,20 +246,46 @@ pub fn init(window: &Window, vsync_enabled: bool) -> Result<State, Box<dyn Error
     Ok(state)
 }
 
-fn create_sampler(device: &Device) -> Result<vk::Sampler, vk::Result> {
+fn create_sampler(device: &Device, desc: SamplerDesc) -> Result<vk::Sampler, vk::Result> {
+    let filter = match desc.filter {
+        SamplerFilter::Linear => vk::Filter::LINEAR,
+        SamplerFilter::Nearest => vk::Filter::NEAREST,
+    };
+    let address = match desc.wrap {
+        SamplerWrap::Clamp => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+        SamplerWrap::Repeat => vk::SamplerAddressMode::REPEAT,
+    };
+    let mipmap_mode = if desc.mipmaps {
+        match desc.filter {
+            SamplerFilter::Linear => vk::SamplerMipmapMode::LINEAR,
+            SamplerFilter::Nearest => vk::SamplerMipmapMode::NEAREST,
+        }
+    } else {
+        vk::SamplerMipmapMode::NEAREST
+    };
     let sampler_info = vk::SamplerCreateInfo::default()
-        .mag_filter(vk::Filter::LINEAR)
-        .min_filter(vk::Filter::LINEAR)
-        .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
-        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .mag_filter(filter)
+        .min_filter(filter)
+        .mipmap_mode(mipmap_mode)
+        .address_mode_u(address)
+        .address_mode_v(address)
+        .address_mode_w(address)
         .anisotropy_enable(false)
         .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
         .unnormalized_coordinates(false)
         .compare_enable(false)
         .compare_op(vk::CompareOp::ALWAYS);
     unsafe { device.create_sampler(&sampler_info, None) }
+}
+
+fn get_sampler(state: &mut State, desc: SamplerDesc) -> Result<vk::Sampler, vk::Result> {
+    if let Some(&sampler) = state.sampler_cache.get(&desc) {
+        return Ok(sampler);
+    }
+    let device = state.device.as_ref().unwrap();
+    let sampler = create_sampler(device, desc)?;
+    state.sampler_cache.insert(desc, sampler);
+    Ok(sampler)
 }
 
 fn create_descriptor_set_layout(device: &Device) -> Result<vk::DescriptorSetLayout, vk::Result> {
@@ -515,7 +543,11 @@ fn transition_image_layout_cmd(
     }
 }
 
-pub fn create_texture(state: &mut State, image: &RgbaImage) -> Result<Texture, Box<dyn Error>> {
+pub fn create_texture(
+    state: &mut State,
+    image: &RgbaImage,
+    sampler: SamplerDesc,
+) -> Result<Texture, Box<dyn Error>> {
     let device_arc = state.device.as_ref().unwrap().clone();
     let device = device_arc.as_ref();
 
@@ -589,7 +621,8 @@ pub fn create_texture(state: &mut State, image: &RgbaImage) -> Result<Texture, B
 
     destroy_buffer(device, &staging);
     let view = create_image_view(device, tex_image, fmt)?;
-    let set = create_texture_descriptor_set(state, view, state.sampler)?;
+    let sampler = get_sampler(state, sampler)?;
+    let set = create_texture_descriptor_set(state, view, sampler)?;
 
     Ok(Texture {
         device: device_arc.clone(),
@@ -982,11 +1015,14 @@ pub fn cleanup(state: &mut State) {
             destroy_buffer(state.device.as_ref().unwrap(), &ring);
         }
 
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_sampler(state.sampler, None);
+        for sampler in state.sampler_cache.values() {
+            state
+                .device
+                .as_ref()
+                .unwrap()
+                .destroy_sampler(*sampler, None);
+        }
+        state.sampler_cache.clear();
         state
             .device
             .as_ref()

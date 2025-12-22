@@ -1,4 +1,7 @@
-use crate::core::gfx::{BlendMode, ObjectType, RenderList, Texture as RendererTexture};
+use crate::core::gfx::{
+    BlendMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    Texture as RendererTexture,
+};
 use crate::core::space::ortho_for_window;
 use cgmath::{Matrix4, Vector4};
 use image::RgbaImage;
@@ -17,6 +20,7 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 pub struct Texture {
     pub image: RgbaImage,
+    sampler: SamplerDesc,
 }
 
 pub struct State {
@@ -49,9 +53,10 @@ pub fn set_thread_hint(state: &mut State, threads: Option<usize>) {
     state.thread_hint = threads;
 }
 
-pub fn create_texture(image: &RgbaImage) -> Result<Texture, Box<dyn Error>> {
+pub fn create_texture(image: &RgbaImage, sampler: SamplerDesc) -> Result<Texture, Box<dyn Error>> {
     Ok(Texture {
         image: image.clone(),
+        sampler,
     })
 }
 
@@ -147,6 +152,7 @@ pub fn draw<'a>(
                             *uv_offset,
                             obj.blend,
                             &tex.image,
+                            tex.sampler,
                             width,
                             height,
                             y_start,
@@ -182,6 +188,7 @@ pub fn draw<'a>(
                 *uv_offset,
                 obj.blend,
                 &tex.image,
+                tex.sampler,
                 w,
                 h,
                 0,
@@ -246,6 +253,7 @@ fn rasterize_sprite(
     uv_offset: [f32; 2],
     blend: BlendMode,
     image: &RgbaImage,
+    sampler: SamplerDesc,
     width: usize,
     height: usize,
     stripe_y_start: usize,
@@ -300,6 +308,7 @@ fn rasterize_sprite(
         tint,
         blend,
         image,
+        sampler,
         width,
         height,
         stripe_y_start,
@@ -313,6 +322,7 @@ fn rasterize_sprite(
         tint,
         blend,
         image,
+        sampler,
         width,
         height,
         stripe_y_start,
@@ -331,6 +341,7 @@ fn rasterize_triangle(
     tint: [f32; 4],
     blend: BlendMode,
     image: &RgbaImage,
+    sampler: SamplerDesc,
     width: usize,
     height: usize,
     stripe_y_start: usize,
@@ -372,6 +383,39 @@ fn rasterize_triangle(
     let tex_h = image.height().max(1) as usize;
     let tex_data = image.as_raw();
 
+    #[inline(always)]
+    fn wrap_uv(u: f32, wrap: SamplerWrap) -> f32 {
+        match wrap {
+            SamplerWrap::Clamp => u.clamp(0.0, 1.0),
+            SamplerWrap::Repeat => {
+                let mut f = u.fract();
+                if f < 0.0 {
+                    f += 1.0;
+                }
+                f
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn wrap_index(i: i32, max: usize, wrap: SamplerWrap) -> usize {
+        match wrap {
+            SamplerWrap::Clamp => i.clamp(0, max.saturating_sub(1) as i32) as usize,
+            SamplerWrap::Repeat => {
+                let m = max as i32;
+                if m == 0 {
+                    0
+                } else {
+                    let mut v = i % m;
+                    if v < 0 {
+                        v += m;
+                    }
+                    v as usize
+                }
+            }
+        }
+    }
+
     for y in min_y..=max_y {
         let py = y as f32 + 0.5;
         let row = (y - stripe_start) as usize;
@@ -389,21 +433,88 @@ fn rasterize_triangle(
             let u = v0.u * w0 + v1.u * w1 + v2.u * w2;
             let v = v0.v * w0 + v1.v * w1 + v2.v * w2;
 
-            let u_norm = u.fract().max(0.0);
-            let v_norm = v.fract().max(0.0);
+            let u_norm = wrap_uv(u, sampler.wrap);
+            let v_norm = wrap_uv(v, sampler.wrap);
 
-            let tx = (u_norm * tex_w as f32).floor() as usize % tex_w;
-            let ty = (v_norm * tex_h as f32).floor() as usize % tex_h;
+            let (sr, sg, sb, sa) = if sampler.filter == SamplerFilter::Nearest {
+                let tx = (u_norm * tex_w as f32).floor() as i32;
+                let ty = (v_norm * tex_h as f32).floor() as i32;
+                let tx = wrap_index(tx, tex_w, sampler.wrap);
+                let ty = wrap_index(ty, tex_h, sampler.wrap);
+                let idx = (ty * tex_w + tx) * 4;
+                if idx + 3 >= tex_data.len() {
+                    continue;
+                }
+                (
+                    tex_data[idx] as f32 / 255.0,
+                    tex_data[idx + 1] as f32 / 255.0,
+                    tex_data[idx + 2] as f32 / 255.0,
+                    tex_data[idx + 3] as f32 / 255.0,
+                )
+            } else {
+                let x = u_norm * tex_w as f32 - 0.5;
+                let y = v_norm * tex_h as f32 - 0.5;
+                let x0 = x.floor() as i32;
+                let y0 = y.floor() as i32;
+                let x1 = x0 + 1;
+                let y1 = y0 + 1;
+                let fx = (x - x0 as f32).clamp(0.0, 1.0);
+                let fy = (y - y0 as f32).clamp(0.0, 1.0);
 
-            let idx = (ty * tex_w + tx) * 4;
-            if idx + 3 >= tex_data.len() {
-                continue;
-            }
+                let ix0 = wrap_index(x0, tex_w, sampler.wrap);
+                let ix1 = wrap_index(x1, tex_w, sampler.wrap);
+                let iy0 = wrap_index(y0, tex_h, sampler.wrap);
+                let iy1 = wrap_index(y1, tex_h, sampler.wrap);
 
-            let sr = tex_data[idx] as f32 / 255.0;
-            let sg = tex_data[idx + 1] as f32 / 255.0;
-            let sb = tex_data[idx + 2] as f32 / 255.0;
-            let sa = tex_data[idx + 3] as f32 / 255.0;
+                let idx00 = (iy0 * tex_w + ix0) * 4;
+                let idx10 = (iy0 * tex_w + ix1) * 4;
+                let idx01 = (iy1 * tex_w + ix0) * 4;
+                let idx11 = (iy1 * tex_w + ix1) * 4;
+                if idx11 + 3 >= tex_data.len() {
+                    continue;
+                }
+
+                let c00 = [
+                    tex_data[idx00] as f32 / 255.0,
+                    tex_data[idx00 + 1] as f32 / 255.0,
+                    tex_data[idx00 + 2] as f32 / 255.0,
+                    tex_data[idx00 + 3] as f32 / 255.0,
+                ];
+                let c10 = [
+                    tex_data[idx10] as f32 / 255.0,
+                    tex_data[idx10 + 1] as f32 / 255.0,
+                    tex_data[idx10 + 2] as f32 / 255.0,
+                    tex_data[idx10 + 3] as f32 / 255.0,
+                ];
+                let c01 = [
+                    tex_data[idx01] as f32 / 255.0,
+                    tex_data[idx01 + 1] as f32 / 255.0,
+                    tex_data[idx01 + 2] as f32 / 255.0,
+                    tex_data[idx01 + 3] as f32 / 255.0,
+                ];
+                let c11 = [
+                    tex_data[idx11] as f32 / 255.0,
+                    tex_data[idx11 + 1] as f32 / 255.0,
+                    tex_data[idx11 + 2] as f32 / 255.0,
+                    tex_data[idx11 + 3] as f32 / 255.0,
+                ];
+
+                let lerp = |a: f32, b: f32, t: f32| a + (b - a) * t;
+                let r0 = lerp(c00[0], c10[0], fx);
+                let g0 = lerp(c00[1], c10[1], fx);
+                let b0 = lerp(c00[2], c10[2], fx);
+                let a0 = lerp(c00[3], c10[3], fx);
+                let r1 = lerp(c01[0], c11[0], fx);
+                let g1 = lerp(c01[1], c11[1], fx);
+                let b1 = lerp(c01[2], c11[2], fx);
+                let a1 = lerp(c01[3], c11[3], fx);
+                (
+                    lerp(r0, r1, fy),
+                    lerp(g0, g1, fy),
+                    lerp(b0, b1, fy),
+                    lerp(a0, a1, fy),
+                )
+            };
 
             if sa <= 0.0 {
                 continue;

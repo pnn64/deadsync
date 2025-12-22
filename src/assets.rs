@@ -1,4 +1,6 @@
-use crate::core::gfx::{Backend, Texture as GfxTexture};
+use crate::core::gfx::{
+    Backend, SamplerDesc, SamplerFilter, SamplerWrap, Texture as GfxTexture,
+};
 use crate::game::profile;
 use crate::ui::font::{self, Font, FontLoadData};
 use image::RgbaImage;
@@ -29,6 +31,8 @@ pub struct TextureHints {
     pub stretch: bool,
     pub dither: bool,
     pub color_depth: Option<u32>,
+    pub sampler_filter: Option<SamplerFilter>,
+    pub sampler_wrap: Option<SamplerWrap>,
 }
 
 impl TextureHints {
@@ -76,8 +80,31 @@ pub fn parse_texture_hints(raw: &str) -> TextureHints {
     if s.contains("doubleres") {
         hints.doubleres = true;
     }
+    if s.contains("nearest") || s.contains("point") {
+        hints.sampler_filter = Some(SamplerFilter::Nearest);
+    }
+    if s.contains("linear") {
+        hints.sampler_filter = Some(SamplerFilter::Linear);
+    }
+    if s.contains("wrap") || s.contains("repeat") {
+        hints.sampler_wrap = Some(SamplerWrap::Repeat);
+    }
+    if s.contains("clamp") {
+        hints.sampler_wrap = Some(SamplerWrap::Clamp);
+    }
 
     hints
+}
+
+impl TextureHints {
+    #[inline(always)]
+    pub fn sampler_desc(&self) -> SamplerDesc {
+        SamplerDesc {
+            filter: self.sampler_filter.unwrap_or(SamplerFilter::Linear),
+            wrap: self.sampler_wrap.unwrap_or(SamplerWrap::Clamp),
+            mipmaps: self.mipmaps.unwrap_or(false),
+        }
+    }
 }
 
 static TEX_META: once_cell::sync::Lazy<RwLock<HashMap<String, TexMeta>>> =
@@ -297,7 +324,7 @@ impl AssetManager {
 
         // Load __white texture
         let white_img = RgbaImage::from_raw(1, 1, vec![255, 255, 255, 255]).unwrap();
-        let white_tex = backend.create_texture(&white_img)?;
+        let white_tex = backend.create_texture(&white_img, SamplerDesc::default())?;
         self.textures.insert("__white".to_string(), white_tex);
         register_texture_dims("__white", 1, 1);
         info!("Loaded built-in texture: __white");
@@ -553,7 +580,7 @@ impl AssetManager {
         for h in handles {
             match h.join().expect("texture decode thread panicked") {
                 Ok((key, rgba)) => {
-                    let texture = backend.create_texture(&rgba)?;
+                    let texture = backend.create_texture(&rgba, SamplerDesc::default())?;
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     info!("Loaded texture: {}", key);
                     self.textures.insert(key, texture);
@@ -563,7 +590,7 @@ impl AssetManager {
                         "Failed to load texture for key '{}': {}. Using fallback.",
                         key, msg
                     );
-                    let texture = backend.create_texture(&fallback_image)?;
+                    let texture = backend.create_texture(&fallback_image, SamplerDesc::default())?;
                     register_texture_dims(&key, fallback_image.width(), fallback_image.height());
                     self.textures.insert(key, texture);
                 }
@@ -640,7 +667,7 @@ impl AssetManager {
                     if !hints.is_default() {
                         apply_texture_hints(&mut image_data, &hints);
                     }
-                    let texture = backend.create_texture(&image_data)?;
+                    let texture = backend.create_texture(&image_data, hints.sampler_desc())?;
                     register_texture_dims(&key, image_data.width(), image_data.height());
                     self.textures.insert(key.clone(), texture);
                     info!("Loaded font texture: {}", key);
@@ -692,7 +719,7 @@ impl AssetManager {
             match image::open(&path) {
                 Ok(img) => {
                     let rgba = img.to_rgba8();
-                    match backend.create_texture(&rgba) {
+                    match backend.create_texture(&rgba, SamplerDesc::default()) {
                         Ok(texture) => {
                             let key = path.to_string_lossy().into_owned();
                             self.textures.insert(key.clone(), texture);
@@ -753,7 +780,7 @@ impl AssetManager {
                     }
                 };
 
-            match backend.create_texture(&rgba_image) {
+            match backend.create_texture(&rgba_image, SamplerDesc::default()) {
                 Ok(texture) => {
                     self.textures.insert(key.clone(), texture);
                     register_texture_dims(&key, rgba_image.width(), rgba_image.height());
@@ -795,7 +822,7 @@ impl AssetManager {
             match image::open(&path) {
                 Ok(img) => {
                     let rgba = img.to_rgba8();
-                    match backend.create_texture(&rgba) {
+                    match backend.create_texture(&rgba, SamplerDesc::default()) {
                         Ok(texture) => {
                             let key = path.to_string_lossy().into_owned();
                             self.textures.insert(key.clone(), texture);
@@ -844,7 +871,7 @@ impl AssetManager {
             match image::open(&path) {
                 Ok(img) => {
                     let rgba = img.to_rgba8();
-                    match backend.create_texture(&rgba) {
+                    match backend.create_texture(&rgba, SamplerDesc::default()) {
                         Ok(texture) => {
                             let key = path.to_string_lossy().into_owned();
                             self.textures.insert(key.clone(), texture);

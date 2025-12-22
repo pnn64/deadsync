@@ -18,7 +18,7 @@ float edge_fade_factor(vec2 q, vec4 e) {
 }
 
 void main() {
-    vec4 s = texture(u_texture, fract(v_tex_coord));
+    vec4 s = texture(u_texture, v_tex_coord);
     
     float f = edge_fade_factor(v_quad, u_edge_fade);
     s.a *= f;

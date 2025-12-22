@@ -33,6 +33,36 @@ pub enum ObjectType<'a> {
         edge_fade: [f32; 4],
     },
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SamplerFilter {
+    Linear,
+    Nearest,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SamplerWrap {
+    Clamp,
+    Repeat,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct SamplerDesc {
+    pub filter: SamplerFilter,
+    pub wrap: SamplerWrap,
+    pub mipmaps: bool,
+}
+
+impl Default for SamplerDesc {
+    #[inline(always)]
+    fn default() -> Self {
+        Self {
+            filter: SamplerFilter::Linear,
+            wrap: SamplerWrap::Clamp,
+            mipmaps: false,
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BlendMode {
     Alpha,
@@ -129,31 +159,35 @@ impl Backend {
         }
     }
 
-    pub fn create_texture(&mut self, image: &RgbaImage) -> Result<Texture, Box<dyn Error>> {
+    pub fn create_texture(
+        &mut self,
+        image: &RgbaImage,
+        sampler: SamplerDesc,
+    ) -> Result<Texture, Box<dyn Error>> {
         match &mut self.0 {
             BackendImpl::Vulkan(state) => {
-                let tex = vulkan::create_texture(state, image)?;
+                let tex = vulkan::create_texture(state, image, sampler)?;
                 Ok(Texture::Vulkan(tex))
             }
             BackendImpl::VulkanWgpu(state) => {
-                let tex = wgpu_vk::create_texture(state, image)?;
+                let tex = wgpu_vk::create_texture(state, image, sampler)?;
                 Ok(Texture::VulkanWgpu(tex))
             }
             BackendImpl::OpenGL(state) => {
-                let tex = opengl::create_texture(&state.gl, image)?;
+                let tex = opengl::create_texture(&state.gl, image, sampler)?;
                 Ok(Texture::OpenGL(tex))
             }
             BackendImpl::OpenGLWgpu(state) => {
-                let tex = wgpu_gl::create_texture(state, image)?;
+                let tex = wgpu_gl::create_texture(state, image, sampler)?;
                 Ok(Texture::OpenGLWgpu(tex))
             }
             BackendImpl::Software(_state) => {
-                let tex = software::create_texture(image)?;
+                let tex = software::create_texture(image, sampler)?;
                 Ok(Texture::Software(tex))
             }
             #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => {
-                let tex = wgpu_dx::create_texture(state, image)?;
+                let tex = wgpu_dx::create_texture(state, image, sampler)?;
                 Ok(Texture::DirectX(tex))
             }
         }
