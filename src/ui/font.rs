@@ -9,6 +9,7 @@
 //! - No regex/glob/configparser/once_cell; pure std + image + log
 //! - VERBOSE TRACE logging for troubleshooting: enable with RUST_LOG=new_engine::core::font=trace
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -280,6 +281,9 @@ static FONT_CHAR_ALIAS_TABLE: &[(&str, AliasValue)] = &[
 ];
 
 static FONT_CHAR_ALIAS_MAP: OnceLock<HashMap<String, char>> = OnceLock::new();
+thread_local! {
+    static FONT_LOAD_STACK: RefCell<Vec<PathBuf>> = RefCell::new(Vec::new());
+}
 
 #[inline(always)]
 fn font_char_alias_map() -> &'static HashMap<String, char> {
@@ -1107,7 +1111,7 @@ fn apply_range_mapping(
 /* ======================= PARSE ======================= */
 
 pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Error>> {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
 
     fn resolve_import_path(base_ini: &Path, spec: &str) -> Option<PathBuf> {
         // Accept either "Folder/Name" or ".../Name.ini"
@@ -1131,27 +1135,16 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
 
     fn gather_import_specs(
         ini_map_lower: &HashMap<String, HashMap<String, String>>,
+        is_top_level: bool,
     ) -> Vec<String> {
         let mut specs: Vec<String> = Vec::new();
-        // SM implicitly seeds "Common default". We'll add it first; failure is non-fatal.
-        specs.push("Common default".to_string());
-        for map in ini_map_lower.values() {
+        if is_top_level {
+            // SM implicitly seeds "Common default" for top-level fonts.
+            specs.push("Common default".to_string());
+        }
+        if let Some(map) = ini_map_lower.get("main") {
             if let Some(v) = map.get("import") {
-                // allow comma/semicolon separated or single value
-                for s in v
-                    .split(&[',', ';'][..])
-                    .map(|s| s.trim())
-                    .filter(|s| !s.is_empty())
-                {
-                    specs.push(s.to_string());
-                }
-            }
-            if let Some(v) = map.get("_imports") {
-                for s in v
-                    .split(&[',', ';'][..])
-                    .map(|s| s.trim())
-                    .filter(|s| !s.is_empty())
-                {
+                for s in v.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
                     specs.push(s.to_string());
                 }
             }
@@ -1161,6 +1154,46 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
 
     // ---- original parse begins
     let ini_path = Path::new(ini_path_str);
+    let ini_path_buf = ini_path.to_path_buf();
+    let mut is_top_level = false;
+    let mut recursion = false;
+    FONT_LOAD_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        if stack.iter().any(|p| p == &ini_path_buf) {
+            recursion = true;
+        } else {
+            is_top_level = stack.is_empty();
+            stack.push(ini_path_buf.clone());
+        }
+    });
+    if recursion {
+        let chain = FONT_LOAD_STACK.with(|stack| {
+            let stack = stack.borrow();
+            let mut out = String::new();
+            for (idx, path) in stack.iter().enumerate() {
+                if idx > 0 {
+                    out.push('\n');
+                }
+                out.push_str(&path.to_string_lossy());
+            }
+            out
+        });
+        warn!(
+            "Font import recursion detected\n{}\nCurrent font: {}",
+            chain,
+            ini_path_buf.to_string_lossy()
+        );
+        return Err("Font import recursion detected".into());
+    }
+    struct LoadStackGuard;
+    impl Drop for LoadStackGuard {
+        fn drop(&mut self) {
+            FONT_LOAD_STACK.with(|stack| {
+                stack.borrow_mut().pop();
+            });
+        }
+    }
+    let _guard = LoadStackGuard;
     let font_dir = ini_path.parent().ok_or("Could not find font directory")?;
     let mut ini_text = fs::read_to_string(ini_path_str)?;
     ini_text = strip_bom(ini_text);
@@ -1195,12 +1228,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
     let mut all_glyphs: HashMap<char, Glyph> = HashMap::new();
     let mut stroke_texture_map: HashMap<String, String> = HashMap::new();
     let mut texture_hints_map: HashMap<String, String> = HashMap::new();
-    let mut imported_once: HashSet<String> = HashSet::new();
-
-    for spec in gather_import_specs(&ini_map_lower) {
-        if !imported_once.insert(spec.clone()) {
-            continue;
-        }
+    for spec in gather_import_specs(&ini_map_lower, is_top_level) {
         if let Some(import_ini) = resolve_import_path(ini_path, &spec) {
             match parse(import_ini.to_string_lossy().as_ref()) {
                 Ok(imported) => {
@@ -1208,13 +1236,13 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                     required_textures.extend(imported.required_textures.into_iter());
                     // Merge glyphs: imported -> base; local pages will override later
                     for (ch, g) in imported.font.glyph_map.into_iter() {
-                        all_glyphs.entry(ch).or_insert(g);
+                        all_glyphs.insert(ch, g);
                     }
                     for (k, v) in imported.font.stroke_texture_map.into_iter() {
-                        stroke_texture_map.entry(k).or_insert(v);
+                        stroke_texture_map.insert(k, v);
                     }
                     for (k, v) in imported.font.texture_hints_map.into_iter() {
-                        texture_hints_map.entry(k).or_insert(v);
+                        texture_hints_map.insert(k, v);
                     }
                     debug!("Imported font '{}' merged.", spec);
                 }
