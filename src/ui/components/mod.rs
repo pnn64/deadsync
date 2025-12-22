@@ -1,4 +1,5 @@
 pub mod gamepad_overlay;
+pub mod gameplay_stats;
 pub mod heart_bg;
 pub mod logo;
 pub mod menu_list;
