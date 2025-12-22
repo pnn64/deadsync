@@ -70,6 +70,7 @@ pub enum Actor {
         align: [f32; 2],  // halign/valign pivot inside line box
         offset: [f32; 2], // parent top-left space
         color: [f32; 4],
+        stroke_color: Option<[f32; 4]>,
         #[allow(dead_code)]
         glow: [f32; 4],
         font: &'static str,

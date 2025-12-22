@@ -1,6 +1,7 @@
 //! StepMania bitmap font parser (Rust port — dependency-light, functional/procedural)
 //! - SM-parity defaults for metrics and width handling (fixes tight/overlapping glyphs)
 //! - Supports LINE, MAP U+XXXX / "..." / aliases (Unicode, ASCII, CP1252, numbers)
+//! - Honors TextureHints and loads -stroke textures for stroke-capable fonts
 //! - SM extra-pixels quirk (+1/+1, left forced even) to avoid stroke clipping
 //! - Canonical texture keys (assets-relative, forward slashes) so lookups match
 //! - Parses "(res WxH)" from sheet filenames and scales INI-authored metrics like StepMania
@@ -21,6 +22,7 @@ use crate::assets;
 const FONT_DEFAULT_CHAR: char = '\u{F8FF}'; // SM default glyph (private use)
 const INTERNAL_ALIAS_START: u32 = 0xE000;
 const M_SKIP_CODEPOINT: u32 = 0xFEFF;
+const DEFAULT_STROKE_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 
 #[derive(Clone, Copy)]
 enum AliasValue {
@@ -333,6 +335,9 @@ pub struct Font {
     pub line_spacing: i32, // draw units (from main/default page)
     pub height: i32,       // draw units (baseline - top)
     pub fallback_font_name: Option<&'static str>,
+    pub default_stroke_color: [f32; 4],
+    pub stroke_texture_map: HashMap<String, String>,
+    pub texture_hints_map: HashMap<String, String>,
 }
 
 pub struct FontLoadData {
@@ -351,6 +356,7 @@ struct FontPageSettings {
     pub(crate) baseline: i32,             // -1 = “center + line_spacing/2”
     pub(crate) default_width: i32,        // -1 = “use frame width”
     pub(crate) advance_extra_pixels: i32, // SM default is 0
+    pub(crate) texture_hints: String,
     pub(crate) glyph_widths: HashMap<usize, i32>,
 }
 
@@ -367,6 +373,7 @@ impl Default for FontPageSettings {
             baseline: -1,
             default_width: -1,
             advance_extra_pixels: 1, // SM default
+            texture_hints: "default".to_string(),
             glyph_widths: HashMap::new(),
         }
     }
@@ -577,6 +584,22 @@ fn list_texture_pages(font_dir: &Path, prefix: &str) -> std::io::Result<Vec<Path
     Ok(v)
 }
 
+/// Derive the "-stroke" path from a main page, if it exists.
+#[inline(always)]
+fn find_stroke_texture_path(main_path: &Path) -> Option<PathBuf> {
+    let name = main_path.file_name()?.to_string_lossy();
+    if !name.contains(']') {
+        return None;
+    }
+    let stroke_name = name.replace(']', "-stroke]");
+    let stroke_path = main_path.with_file_name(stroke_name);
+    if stroke_path.is_file() {
+        Some(stroke_path)
+    } else {
+        None
+    }
+}
+
 /// Parse range <codeset> [#start-end] from a key (key only).
 #[inline(always)]
 fn parse_range_key(key: &str) -> Option<(String, Option<(u32, u32)>)> {
@@ -614,6 +637,98 @@ fn parse_range_key(key: &str) -> Option<(String, Option<(u32, u32)>)> {
         return None;
     }
     Some((codeset.to_string(), Some((start, end))))
+}
+
+#[inline(always)]
+fn parse_rgba_string(raw: &str) -> Option<[f32; 4]> {
+    #[inline(always)]
+    fn hex_val(b: u8) -> Option<u8> {
+        match b {
+            b'0'..=b'9' => Some(b - b'0'),
+            b'a'..=b'f' => Some(10 + (b - b'a')),
+            b'A'..=b'F' => Some(10 + (b - b'A')),
+            _ => None,
+        }
+    }
+    #[inline(always)]
+    fn hex_byte(h: u8, l: u8) -> Option<u8> {
+        Some((hex_val(h)? << 4) | hex_val(l)?)
+    }
+
+    let s = raw.trim();
+    if s.is_empty() {
+        return None;
+    }
+
+    if s.contains(',') {
+        let mut vals = [0.0_f32; 4];
+        let mut count = 0usize;
+        for part in s.split(',') {
+            let t = part.trim();
+            if t.is_empty() {
+                continue;
+            }
+            if count >= 4 {
+                return None;
+            }
+            vals[count] = t.parse::<f32>().ok()?;
+            count += 1;
+        }
+        if count == 3 {
+            vals[3] = 1.0;
+        } else if count != 4 {
+            return None;
+        }
+        let use_255 = vals[..count].iter().any(|v| *v > 1.0);
+        if use_255 {
+            for v in vals.iter_mut().take(count) {
+                *v = (*v / 255.0).clamp(0.0, 1.0);
+            }
+        } else {
+            for v in vals.iter_mut().take(count) {
+                *v = (*v).clamp(0.0, 1.0);
+            }
+        }
+        return Some(vals);
+    }
+
+    let s = s.strip_prefix('#').unwrap_or(s);
+    let bytes = s.as_bytes();
+    let (r, g, b, a) = match bytes.len() {
+        3 => {
+            let r = hex_val(bytes[0])?;
+            let g = hex_val(bytes[1])?;
+            let b = hex_val(bytes[2])?;
+            (r << 4 | r, g << 4 | g, b << 4 | b, 0xFF)
+        }
+        4 => {
+            let r = hex_val(bytes[0])?;
+            let g = hex_val(bytes[1])?;
+            let b = hex_val(bytes[2])?;
+            let a = hex_val(bytes[3])?;
+            (r << 4 | r, g << 4 | g, b << 4 | b, a << 4 | a)
+        }
+        6 => (
+            hex_byte(bytes[0], bytes[1])?,
+            hex_byte(bytes[2], bytes[3])?,
+            hex_byte(bytes[4], bytes[5])?,
+            0xFF,
+        ),
+        8 => (
+            hex_byte(bytes[0], bytes[1])?,
+            hex_byte(bytes[2], bytes[3])?,
+            hex_byte(bytes[4], bytes[5])?,
+            hex_byte(bytes[6], bytes[7])?,
+        ),
+        _ => return None,
+    };
+
+    Some([
+        (r as f32) / 255.0,
+        (g as f32) / 255.0,
+        (b as f32) / 255.0,
+        (a as f32) / 255.0,
+    ])
 }
 
 /* ======================= LOG HELPERS ======================= */
@@ -1052,6 +1167,22 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
 
     let ini_map_lower = parse_ini_trimmed_map(&ini_text);
     let raw_line_map = harvest_raw_line_entries_from_text(&ini_text);
+    let default_stroke_color = ini_map_lower
+        .get("common")
+        .and_then(|m| m.get("defaultstrokecolor"))
+        .and_then(|s| parse_rgba_string(s))
+        .unwrap_or_else(|| {
+            if let Some(v) = ini_map_lower
+                .get("common")
+                .and_then(|m| m.get("defaultstrokecolor"))
+            {
+                warn!(
+                    "Font '{}' has invalid DefaultStrokeColor '{}'; using transparent.",
+                    ini_path_str, v
+                );
+            }
+            DEFAULT_STROKE_COLOR
+        });
 
     let prefix = ini_path.file_stem().unwrap().to_str().unwrap();
     let texture_paths = list_texture_pages(font_dir, prefix)?;
@@ -1062,6 +1193,8 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
     // ---- NEW: import merge (before local pages)
     let mut required_textures: Vec<PathBuf> = Vec::new();
     let mut all_glyphs: HashMap<char, Glyph> = HashMap::new();
+    let mut stroke_texture_map: HashMap<String, String> = HashMap::new();
+    let mut texture_hints_map: HashMap<String, String> = HashMap::new();
     let mut imported_once: HashSet<String> = HashSet::new();
 
     for spec in gather_import_specs(&ini_map_lower) {
@@ -1076,6 +1209,12 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                     // Merge glyphs: imported -> base; local pages will override later
                     for (ch, g) in imported.font.glyph_map.into_iter() {
                         all_glyphs.entry(ch).or_insert(g);
+                    }
+                    for (k, v) in imported.font.stroke_texture_map.into_iter() {
+                        stroke_texture_map.entry(k).or_insert(v);
+                    }
+                    for (k, v) in imported.font.texture_hints_map.into_iter() {
+                        texture_hints_map.entry(k).or_insert(v);
                     }
                     debug!("Imported font '{}' merged.", spec);
                 }
@@ -1099,26 +1238,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
         required_textures.push(tex_path.to_path_buf());
 
         let (num_frames_wide, num_frames_high) = assets::parse_sprite_sheet_dims(&texture_key);
-        let has_doubleres = is_doubleres_in_name(&texture_key);
         let total_frames = (num_frames_wide * num_frames_high) as usize;
-
-        let (base_tex_w, base_tex_h) =
-            parse_base_res_from_filename(&texture_key).unwrap_or((tex_dims.0, tex_dims.1));
-
-        // authored metrics parity w/ StepMania
-        let mut authored_tex_w = base_tex_w;
-        let mut authored_tex_h = base_tex_h;
-        if has_doubleres {
-            authored_tex_w = (authored_tex_w / 2).max(1);
-            authored_tex_h = (authored_tex_h / 2).max(1);
-        }
-        let frame_w_i = (authored_tex_w / num_frames_wide) as i32;
-        let frame_h_i = (authored_tex_h / num_frames_high) as i32;
-
-        info!(
-            " Page '{}', Texture: '{}' -> Authored Grid: {}x{} (frame {}x{} px)",
-            page_name, texture_key, num_frames_wide, num_frames_high, frame_w_i, frame_h_i
-        );
 
         // settings: common → page → legacy
         let mut settings = FontPageSettings::default();
@@ -1158,6 +1278,9 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                 if let Some(n) = get_int("advanceextrapixels") {
                     settings.advance_extra_pixels = n;
                 }
+                if let Some(v) = map.get("texturehints") {
+                    settings.texture_hints = v.to_string();
+                }
 
                 for (key, val) in map {
                     if let Ok(frame_idx) = key.parse::<usize>()
@@ -1168,6 +1291,31 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                 }
             }
         }
+
+        let hints_raw = settings.texture_hints.trim();
+        let hints = assets::parse_texture_hints(hints_raw);
+        if !hints.is_default() {
+            texture_hints_map.insert(texture_key.clone(), hints_raw.to_string());
+        }
+
+        let has_doubleres = is_doubleres_in_name(&texture_key) || hints.doubleres;
+        let (base_tex_w, base_tex_h) =
+            parse_base_res_from_filename(&texture_key).unwrap_or((tex_dims.0, tex_dims.1));
+
+        // authored metrics parity w/ StepMania
+        let mut authored_tex_w = base_tex_w;
+        let mut authored_tex_h = base_tex_h;
+        if has_doubleres {
+            authored_tex_w = (authored_tex_w / 2).max(1);
+            authored_tex_h = (authored_tex_h / 2).max(1);
+        }
+        let frame_w_i = (authored_tex_w / num_frames_wide) as i32;
+        let frame_h_i = (authored_tex_h / num_frames_high) as i32;
+
+        info!(
+            " Page '{}', Texture: '{}' -> Authored Grid: {}x{} (frame {}x{} px)",
+            page_name, texture_key, num_frames_wide, num_frames_high, frame_w_i, frame_h_i
+        );
 
         trace!(
             " [{}] settings(authored): draw_extra L={} R={}, add_to_all_widths={}, scale_all_widths_by={:.3}, \
@@ -1187,6 +1335,43 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
             " [{}] frames: {}x{} (frame_w={} frame_h={}), total_frames={}",
             page_name, num_frames_wide, num_frames_high, frame_w_i, frame_h_i, total_frames
         );
+
+        if let Some(stroke_path) = find_stroke_texture_path(tex_path) {
+            let stroke_key = assets::canonical_texture_key(&stroke_path);
+            let (stroke_frames_w, stroke_frames_h) =
+                assets::parse_sprite_sheet_dims(&stroke_key);
+            let stroke_total_frames = (stroke_frames_w * stroke_frames_h) as usize;
+            let stroke_dims = image::image_dimensions(&stroke_path)?;
+            let stroke_has_doubleres = is_doubleres_in_name(&stroke_key) || hints.doubleres;
+            let (stroke_base_w, _stroke_base_h) =
+                parse_base_res_from_filename(&stroke_key).unwrap_or((stroke_dims.0, stroke_dims.1));
+
+            let mut stroke_authored_w = stroke_base_w;
+            if stroke_has_doubleres {
+                stroke_authored_w = (stroke_authored_w / 2).max(1);
+            }
+            let stroke_frame_w_i = (stroke_authored_w / stroke_frames_w) as i32;
+            let stroke_ok = stroke_total_frames == total_frames && stroke_frame_w_i == frame_w_i;
+
+            if stroke_ok {
+                stroke_texture_map.insert(texture_key.clone(), stroke_key.clone());
+            } else {
+                warn!(
+                    "Font '{}' stroke mismatch for page '{}': main frame_w={} frames={} vs stroke frame_w={} frames={}. Using main.",
+                    ini_path_str,
+                    page_name,
+                    frame_w_i,
+                    total_frames,
+                    stroke_frame_w_i,
+                    stroke_total_frames
+                );
+                stroke_texture_map.insert(texture_key.clone(), texture_key.clone());
+            }
+            if !hints.is_default() {
+                texture_hints_map.insert(stroke_key.clone(), hints_raw.to_string());
+            }
+            required_textures.push(stroke_path);
+        }
 
         // vertical metrics (authored)
         let line_spacing_authored = if settings.line_spacing != -1 {
@@ -1435,6 +1620,9 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
         height: default_page_metrics.0,
         line_spacing: default_page_metrics.1,
         fallback_font_name: None,
+        default_stroke_color,
+        stroke_texture_map,
+        texture_hints_map,
     };
 
     if !font.glyph_map.contains_key(&' ') {

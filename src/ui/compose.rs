@@ -64,10 +64,16 @@ fn estimate_object_count(
                     total += 1;
                 }
             }
-            Actor::Text { content, font, .. } => {
+            Actor::Text {
+                content,
+                font,
+                color,
+                stroke_color,
+                ..
+            } => {
                 if let Some(fm) = fonts.get(font) {
                     let fallback_font = fm.fallback_font_name.and_then(|name| fonts.get(name));
-                    total += content
+                    let glyph_count = content
                         .chars()
                         .filter(|&c| {
                             if c == '\n' {
@@ -78,6 +84,10 @@ fn estimate_object_count(
                             mapped || fm.default_glyph.is_some()
                         })
                         .count();
+                    let mut stroke_rgba = stroke_color.unwrap_or(fm.default_stroke_color);
+                    stroke_rgba[3] *= color[3];
+                    let has_stroke = stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty();
+                    total += glyph_count * if has_stroke { 2 } else { 1 };
                 } else {
                     total += content.chars().filter(|&ch| ch != '\n').count();
                 }
@@ -290,6 +300,7 @@ fn build_actor_recursive<'a>(
             align,
             offset,
             color,
+            stroke_color,
             font,
             content,
             align_text,
@@ -326,6 +337,32 @@ fn build_actor_recursive<'a>(
                     m,
                 );
                 let layer = base_z.saturating_add(*z);
+                let mut stroke_rgba = stroke_color.unwrap_or(fm.default_stroke_color);
+                stroke_rgba[3] *= color[3];
+                if stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty() {
+                    let mut stroke_objects = Vec::with_capacity(objects.len());
+                    for obj in &objects {
+                        let renderer::ObjectType::Sprite { texture_id, .. } = &obj.object_type;
+                        if let Some(stroke_key) = fm.stroke_texture_map.get(texture_id.as_ref()) {
+                            let mut stroke_obj = obj.clone();
+                            let renderer::ObjectType::Sprite { texture_id, tint, .. } =
+                                &mut stroke_obj.object_type;
+                            *texture_id = std::borrow::Cow::Owned(stroke_key.clone());
+                            *tint = stroke_rgba;
+                            stroke_objects.push(stroke_obj);
+                        }
+                    }
+                    for obj in &mut stroke_objects {
+                        obj.z = layer;
+                        obj.order = {
+                            let o = *order_counter;
+                            *order_counter += 1;
+                            o
+                        };
+                        obj.blend = *blend;
+                    }
+                    out.extend(stroke_objects);
+                }
                 for obj in &mut objects {
                     obj.z = layer;
                     obj.order = {

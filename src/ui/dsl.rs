@@ -23,6 +23,7 @@ pub enum Mod<'a> {
     Tint([f32; 4]),
     Alpha(f32),
     Glow([f32; 4]),
+    StrokeColor([f32; 4]),
     Blend(BlendMode),
 
     // absolute size (pre-zoom) in SM TL space
@@ -172,6 +173,7 @@ fn build_sprite_like<'a>(
             Mod::Glow(rgba) => {
                 glow = *rgba;
             }
+            Mod::StrokeColor(_) => {}
             Mod::Blend(bm) => {
                 blend = *bm;
             }
@@ -496,6 +498,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
     let (mut hx, mut vy) = (0.5, 0.5);
     let mut color = [1.0, 1.0, 1.0, 1.0];
     let mut glow = [1.0, 1.0, 1.0, 0.0];
+    let mut stroke_color: Option<[f32; 4]> = None;
     let mut font: &'static str = "miso";
     let mut content: Cow<'a, str> = Cow::Borrowed("");
     let mut talign = TextAlign::Left;
@@ -558,6 +561,9 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
             }
             Mod::Glow(r) => {
                 glow = *r;
+            }
+            Mod::StrokeColor(r) => {
+                stroke_color = Some(*r);
             }
             Mod::Font(f) => {
                 font = *f;
@@ -692,6 +698,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
         align: [hx, vy],
         offset: [x, y],
         color,
+        stroke_color,
         glow,
         font,
         content: content.into_owned(),
@@ -949,6 +956,9 @@ macro_rules! __dsl_apply_one {
         } else {
             $mods.push($crate::ui::dsl::Mod::Glow([($r) as f32,($g) as f32,($b) as f32,($a) as f32]));
         }
+    }};
+    (strokecolor ($r:expr,$g:expr,$b:expr,$a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::StrokeColor([($r) as f32,($g) as f32,($b) as f32,($a) as f32]));
     }};
 
     // --- Shadows (SM parity) ---------------------------------------

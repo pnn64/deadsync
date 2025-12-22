@@ -109,6 +109,7 @@ pub(crate) struct RowEntry {
 
 #[derive(Clone, Debug)]
 pub struct Arrow {
+    #[allow(dead_code)]
     pub beat: f32,
     pub column: usize,
     #[allow(dead_code)]

@@ -19,6 +19,67 @@ pub struct TexMeta {
     pub h: u32,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct TextureHints {
+    pub raw: String,
+    pub mipmaps: Option<bool>,
+    pub grayscale: bool,
+    pub alphamap: bool,
+    pub doubleres: bool,
+    pub stretch: bool,
+    pub dither: bool,
+    pub color_depth: Option<u32>,
+}
+
+impl TextureHints {
+    #[inline(always)]
+    pub fn is_default(&self) -> bool {
+        self.raw.is_empty() || self.raw.eq_ignore_ascii_case("default")
+    }
+}
+
+pub fn parse_texture_hints(raw: &str) -> TextureHints {
+    let mut hints = TextureHints::default();
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return hints;
+    }
+    hints.raw = trimmed.to_string();
+    if trimmed.eq_ignore_ascii_case("default") {
+        return hints;
+    }
+
+    let s = trimmed.to_ascii_lowercase();
+    if s.contains("32bpp") {
+        hints.color_depth = Some(32);
+    } else if s.contains("16bpp") {
+        hints.color_depth = Some(16);
+    }
+    if s.contains("dither") {
+        hints.dither = true;
+    }
+    if s.contains("stretch") {
+        hints.stretch = true;
+    }
+    if s.contains("mipmaps") {
+        hints.mipmaps = Some(true);
+    }
+    if s.contains("nomipmaps") {
+        hints.mipmaps = Some(false);
+    }
+    if s.contains("grayscale") {
+        hints.grayscale = true;
+    }
+    if s.contains("alphamap") {
+        hints.alphamap = true;
+    }
+    if s.contains("doubleres") {
+        hints.doubleres = true;
+    }
+
+    hints
+}
+
 static TEX_META: once_cell::sync::Lazy<RwLock<HashMap<String, TexMeta>>> =
     once_cell::sync::Lazy::new(|| RwLock::new(HashMap::new()));
 
@@ -149,6 +210,23 @@ pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
     }
 
     dims.unwrap_or((1, 1))
+}
+
+#[inline(always)]
+fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
+    if !(hints.grayscale || hints.alphamap) {
+        return;
+    }
+
+    for pixel in image.pixels_mut() {
+        let [r, g, b, a] = pixel.0;
+        let lum = ((r as u16 * 30 + g as u16 * 59 + b as u16 * 11) / 100) as u8;
+        if hints.alphamap {
+            pixel.0 = [255, 255, 255, lum];
+        } else {
+            pixel.0 = [lum, lum, lum, a];
+        }
+    }
 }
 
 // --- Asset Manager ---
@@ -553,7 +631,15 @@ impl AssetManager {
             for tex_path in &required_textures {
                 let key = canonical_texture_key(tex_path);
                 if !self.textures.contains_key(&key) {
-                    let image_data = image::open(tex_path)?.to_rgba8();
+                    let hints = font
+                        .texture_hints_map
+                        .get(&key)
+                        .map(|s| parse_texture_hints(s))
+                        .unwrap_or_default();
+                    let mut image_data = image::open(tex_path)?.to_rgba8();
+                    if !hints.is_default() {
+                        apply_texture_hints(&mut image_data, &hints);
+                    }
                     let texture = backend.create_texture(&image_data)?;
                     register_texture_dims(&key, image_data.width(), image_data.height());
                     self.textures.insert(key.clone(), texture);
