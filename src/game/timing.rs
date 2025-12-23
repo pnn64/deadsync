@@ -366,7 +366,7 @@ impl TimingData {
     ) -> Self {
         let mut parsed_bpms = segments.bpms.clone();
         if parsed_bpms.is_empty() {
-            parsed_bpms.push((0.0, 120.0));
+            parsed_bpms.push((0.0, 60.0));
         }
         parsed_bpms.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Less));
 
@@ -626,7 +626,7 @@ impl TimingData {
     pub fn get_bpm_for_beat(&self, target_beat: f32) -> f32 {
         let points = &self.beat_to_time;
         if points.is_empty() {
-            return 120.0;
+            return 60.0;
         } // Fallback BPM
         let point_idx = self.get_bpm_point_index_for_beat(target_beat);
         points[point_idx].bpm
@@ -649,7 +649,7 @@ impl TimingData {
             max_bpm = max_bpm.min(cap_value);
         }
 
-        if max_bpm > 0.0 { max_bpm } else { 120.0 }
+        if max_bpm > 0.0 { max_bpm } else { 60.0 }
     }
 }
 

@@ -57,7 +57,7 @@ fn sec_at_beat_from_bpms(normalized_bpms: &str, target_beat: f64) -> f64 {
     }
     let mut bpm_map = parse_bpm_map(normalized_bpms);
     if bpm_map.is_empty() {
-        bpm_map.push((0.0, 120.0));
+        bpm_map.push((0.0, 60.0));
     }
     if bpm_map.first().is_none_or(|(b, _)| *b != 0.0) {
         let first_bpm = bpm_map[0].1;
@@ -95,7 +95,7 @@ fn beat_at_sec_from_bpms(normalized_bpms: &str, target_sec: f64) -> f64 {
     }
     let mut bpm_map = parse_bpm_map(normalized_bpms);
     if bpm_map.is_empty() {
-        bpm_map.push((0.0, 120.0));
+        bpm_map.push((0.0, 60.0));
     }
     if bpm_map.first().is_none_or(|(b, _)| *b != 0.0) {
         let first_bpm = bpm_map[0].1;
@@ -134,6 +134,26 @@ fn beat_at_sec_from_bpms(normalized_bpms: &str, target_sec: f64) -> f64 {
     (last_beat + add_beats).max(0.0)
 }
 
+fn sec_at_beat(song: &SongData, target_beat: f64) -> f64 {
+    if !target_beat.is_finite() || target_beat <= 0.0 {
+        return 0.0;
+    }
+    if let Some(chart) = song.charts.first() {
+        return chart.timing.get_time_for_beat(target_beat as f32).max(0.0) as f64;
+    }
+    sec_at_beat_from_bpms(&song.normalized_bpms, target_beat)
+}
+
+fn beat_at_sec(song: &SongData, target_sec: f64) -> f64 {
+    if !target_sec.is_finite() || target_sec <= 0.0 {
+        return 0.0;
+    }
+    if let Some(chart) = song.charts.first() {
+        return chart.timing.get_beat_for_time(target_sec as f32).max(0.0) as f64;
+    }
+    beat_at_sec_from_bpms(&song.normalized_bpms, target_sec)
+}
+
 fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cut)> {
     let path = song.music_path.clone()?;
     // Start with raw tags (treat missing as 0)
@@ -149,10 +169,10 @@ fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cu
     // If length is not valid, mirror ITGmania defaults
     if !(length.is_sign_positive() && length.is_finite()) || length == 0.0 {
         // First try beat 100
-        let at_beat_100 = sec_at_beat_from_bpms(&song.normalized_bpms, 100.0);
+        let at_beat_100 = sec_at_beat(song, 100.0);
         // If that would overflow the track, back off to a sensible aligned point
         start = if total_len > 0.0 && at_beat_100 + DEFAULT_PREVIEW_LENGTH > total_len {
-            let last_beat = beat_at_sec_from_bpms(&song.normalized_bpms, total_len);
+            let last_beat = beat_at_sec(song, total_len);
             // Round to half of last beat, align to 4-beat boundary
             let mut i_beat = (last_beat / 2.0).round();
             if i_beat.is_finite() {
@@ -161,7 +181,7 @@ fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cu
             } else {
                 i_beat = 0.0;
             }
-            sec_at_beat_from_bpms(&song.normalized_bpms, i_beat)
+            sec_at_beat(song, i_beat)
         } else {
             at_beat_100
         };
@@ -169,14 +189,14 @@ fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cu
     } else {
         // Length is valid; if start+length overflows total, adjust start similar to ITGmania
         if total_len > 0.0 && (start + length) > total_len {
-            let last_beat = beat_at_sec_from_bpms(&song.normalized_bpms, total_len);
+            let last_beat = beat_at_sec(song, total_len);
             let mut i_beat = (last_beat / 2.0).round();
             if i_beat.is_finite() {
                 i_beat -= i_beat % 4.0;
             } else {
                 i_beat = 0.0;
             }
-            start = sec_at_beat_from_bpms(&song.normalized_bpms, i_beat);
+            start = sec_at_beat(song, i_beat);
         }
     }
 
