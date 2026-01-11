@@ -635,10 +635,10 @@ mod platform {
                 .map_err(|e| format!("{:?}", e))?;
 
             Ok((
-                crtc_info.x(),
-                crtc_info.y(),
-                crtc_info.width(),
-                crtc_info.height(),
+                crtc_info.x().into(),
+                crtc_info.y().into(),
+                crtc_info.width().into(),
+                crtc_info.height().into(),
             ))
         }
 
@@ -691,14 +691,21 @@ mod platform {
         use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
         use smithay_client_toolkit::{delegate_output, delegate_registry, registry_handlers};
 
-        fn snapshot_from_info(info: &OutputInfo) -> DisplaySnapshot {
-            let scale = info.scale_factor as f32;
-            let (x, y) = info.logical_position.unwrap_or(info.location);
-            let (w, h) = info.logical_size.unwrap_or(info.physical_size);
-            let name = info
-                .name
-                .clone()
-                .unwrap_or_else(|| format!("Unknown Display {}", info.id));
+        fn snapshot_from_info(info: OutputInfo) -> DisplaySnapshot {
+            let OutputInfo {
+                scale_factor,
+                logical_position,
+                location,
+                logical_size,
+                physical_size,
+                name,
+                id,
+                ..
+            } = info;
+            let scale = scale_factor as f32;
+            let (x, y) = logical_position.unwrap_or(location);
+            let (w, h) = logical_size.unwrap_or(physical_size);
+            let name = name.unwrap_or_else(|| format!("Unknown Display {}", id));
 
             DisplaySnapshot {
                 x: ((x as f32) / scale) as i32,

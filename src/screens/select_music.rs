@@ -18,7 +18,6 @@ use std::time::{Duration, Instant};
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 use crate::ui::font;
 use log::info;
-use std::fs;
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
 
@@ -29,7 +28,7 @@ use crate::core::space::widescale;
 use crate::game::chart::ChartData;
 use crate::game::profile;
 use crate::game::scores;
-use crate::game::song::{SongData, SongPack, get_song_cache};
+use crate::game::song::{SongData, get_song_cache};
 use rssp::bpm::parse_bpm_map;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -286,89 +285,6 @@ pub(crate) fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usi
     })
 }
 
-fn find_pack_banner(pack: &SongPack) -> Option<PathBuf> {
-    let Some(first_song) = pack.songs.first() else {
-        return None;
-    };
-    // A song's banner_path might not exist. music_path is more reliable for finding its folder.
-    let song_folder = first_song
-        .music_path
-        .as_ref()
-        .or(first_song.banner_path.as_ref())
-        .or(first_song.background_path.as_ref())
-        .and_then(|p| p.parent());
-
-    let Some(song_folder) = song_folder else {
-        return None;
-    };
-    let Some(pack_folder_path) = song_folder.parent() else {
-        return None;
-    };
-
-    if !pack_folder_path.is_dir() {
-        return None;
-    }
-
-    // --- Step 1: Collect all image files in the pack directory ---
-    let Ok(entries) = fs::read_dir(pack_folder_path) else {
-        return None;
-    };
-
-    let image_files: Vec<PathBuf> = entries
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| {
-            if !p.is_file() {
-                return false;
-            }
-            p.extension().and_then(|s| s.to_str()).is_some_and(|ext| {
-                let ext_lower = ext.to_lowercase();
-                ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg"
-            })
-        })
-        .collect();
-
-    if image_files.is_empty() {
-        return None;
-    }
-
-    // --- Step 2: Search by filename hints (case-insensitive) ---
-    // These hints are checked against the file stem (no extension).
-    // A simple `contains` check for "bn" is more effective than a strict
-    // `ends_with` and catches common variations like "-bn" or "abn".
-    let name_hints = ["banner", "bn"];
-
-    for path in &image_files {
-        if let Some(filename_str) = path.file_stem().and_then(|s| s.to_str()) {
-            let filename_lower = filename_str.to_lowercase();
-            if name_hints.iter().any(|&hint| filename_lower.contains(hint)) {
-                info!("Found pack banner by name hint: {:?}", path);
-                return Some(path.clone());
-            }
-        }
-    }
-
-    // --- Step 3: Fallback to searching by image dimensions ---
-    for path in &image_files {
-        if let Ok((width, height)) = image::image_dimensions(path) {
-            // Condition 1: Standard banner dimensions
-            let is_standard_banner = (100..=320).contains(&width) && (50..=240).contains(&height);
-
-            // Condition 2: Overlarge banner with a wide aspect ratio
-            let is_overlarge_banner =
-                width > 200 && height > 0 && (width as f32 / height as f32) > 2.0;
-
-            if is_standard_banner || is_overlarge_banner {
-                info!("Found pack banner by dimension hint: {:?}", path);
-                return Some(path.clone());
-            }
-        }
-    }
-
-    // --- Step 4: No banner found ---
-    None
-}
-
 fn rebuild_displayed_entries(state: &mut State) {
     let mut new_entries = Vec::new();
     let mut current_pack_name: Option<String> = None;
@@ -444,7 +360,7 @@ pub fn init() -> State {
             all_entries.push(MusicWheelEntry::PackHeader {
                 name: pack.name.clone(),
                 original_index: i,
-                banner_path: find_pack_banner(pack),
+                banner_path: pack.banner_path.clone(),
             });
             total_filtered_songs += single_dance_songs.len();
             for song in single_dance_songs {

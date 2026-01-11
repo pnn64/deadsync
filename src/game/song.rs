@@ -34,7 +34,15 @@ pub struct SongData {
 
 #[derive(Clone, Debug)]
 pub struct SongPack {
+    pub group_name: String,
     pub name: String,
+    pub sort_title: String,
+    pub translit_title: String,
+    pub series: String,
+    pub year: i32,
+    pub sync_pref: rssp::pack::SyncPref,
+    pub directory: PathBuf,
+    pub banner_path: Option<PathBuf>,
     pub songs: Vec<Arc<SongData>>,
 }
 
