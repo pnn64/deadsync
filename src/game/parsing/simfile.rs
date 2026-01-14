@@ -20,6 +20,8 @@ use memmap2::Mmap;
 use serde::{Deserialize, Serialize};
 use std::hash::Hasher;
 use std::io::{BufReader, Cursor, Read, Write};
+use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
@@ -538,6 +540,12 @@ struct CachedSong {
 
 // --- CACHING HELPER FUNCTIONS ---
 
+#[derive(Clone)]
+struct SongCacheKeys {
+    cache_path: Option<PathBuf>,
+    content_hash: Option<u64>,
+}
+
 fn get_content_hash(path: &Path) -> Result<u64, std::io::Error> {
     let mut file = fs::File::open(path)?;
     let mut hasher = XxHash64::with_seed(0);
@@ -564,6 +572,47 @@ fn get_cache_path(simfile_path: &Path) -> Result<PathBuf, std::io::Error> {
     Ok(cache_dir.join(file_name))
 }
 
+fn compute_song_cache_keys(path: &Path) -> SongCacheKeys {
+    let cache_path = match get_cache_path(path) {
+        Ok(p) => Some(p),
+        Err(e) => {
+            warn!(
+                "Could not generate cache path for {:?}: {}. Caching disabled for this file.",
+                path, e
+            );
+            None
+        }
+    };
+    let content_hash = match get_content_hash(path) {
+        Ok(h) => Some(h),
+        Err(e) => {
+            warn!(
+                "Could not hash content of {:?}: {}. Caching disabled for this file.",
+                path, e
+            );
+            None
+        }
+    };
+    SongCacheKeys {
+        cache_path,
+        content_hash,
+    }
+}
+
+fn fmt_scan_time(d: Duration) -> String {
+    let ms = d.as_millis();
+    if ms < 1000 {
+        return format!("{ms}ms");
+    }
+    if ms < 60_000 {
+        return format!("{:.2}s", ms as f64 / 1000.0);
+    }
+    let total_s = ms as f64 / 1000.0;
+    let m = (total_s / 60.0).floor() as u64;
+    let s = total_s - (m as f64 * 60.0);
+    format!("{m}m{s:.1}s")
+}
+
 fn step_type_lanes(step_type: &str) -> usize {
     let normalized = step_type.trim().to_ascii_lowercase().replace('_', "-");
     if normalized == "dance-double" { 8 } else { 4 }
@@ -587,7 +636,24 @@ fn hydrate_chart_timings(song: &mut SongData, global_offset_seconds: f32) {
 pub fn scan_and_load_songs(root_path_str: &'static str) {
     info!("Starting simfile scan in '{}'...", root_path_str);
 
+    let started = Instant::now();
     let config = crate::config::get();
+    let fastload = config.fastload;
+    let cachesongs = config.cachesongs;
+    let global_offset_seconds = config.global_offset_seconds;
+
+    let avail_threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    let mut parse_threads = match config.song_parsing_threads {
+        0 => avail_threads,
+        1 => 1,
+        n => (n as usize).min(avail_threads).max(1),
+    };
+    if parse_threads < 1 {
+        parse_threads = 1;
+    }
+    let parallel_parsing = parse_threads > 1;
 
     // Ensure the cache directory exists before we start scanning.
     let cache_dir = Path::new("cache/songs");
@@ -609,6 +675,9 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
     }
 
     let mut loaded_packs = Vec::new();
+    let mut songs_cache_hits = 0usize;
+    let mut songs_parsed = 0usize;
+    let mut songs_failed = 0usize;
 
     let packs = match rssp::pack::scan_songs_dir(root_path, rssp::pack::ScanOpt::default()) {
         Ok(p) => p,
@@ -618,8 +687,45 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
         }
     };
 
+    type ParseMsg = (usize, PathBuf, Result<Arc<SongData>, String>);
+
+    let mut runtime: Option<tokio::runtime::Runtime> = None;
+    let mut tx_opt: Option<std::sync::mpsc::Sender<ParseMsg>> = None;
+    let mut rx_opt: Option<std::sync::mpsc::Receiver<ParseMsg>> = None;
+    let mut in_flight = 0usize;
+
+    fn reap_one(
+        rx: Option<&std::sync::mpsc::Receiver<ParseMsg>>,
+        in_flight: &mut usize,
+        loaded_packs: &mut Vec<SongPack>,
+        songs_failed: &mut usize,
+    ) {
+        let Some(rx) = rx else {
+            return;
+        };
+        match rx.recv() {
+            Ok((pack_idx, simfile_path, result)) => {
+                *in_flight = in_flight.saturating_sub(1);
+                match result {
+                    Ok(song_data) => {
+                        if let Some(pack) = loaded_packs.get_mut(pack_idx) {
+                            pack.songs.push(song_data);
+                        }
+                    }
+                    Err(e) => {
+                        *songs_failed += 1;
+                        warn!("Failed to load '{:?}': {}", simfile_path, e)
+                    }
+                }
+            }
+            Err(_) => {
+                *in_flight = 0;
+            }
+        }
+    }
+
     for pack in packs {
-        let mut current_pack = SongPack {
+        let current_pack = SongPack {
             group_name: pack.group_name,
             name: pack.display_title,
             sort_title: pack.sort_title,
@@ -632,21 +738,131 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
             songs: Vec::new(),
         };
         info!("Scanning pack: {}", current_pack.name);
+        let pack_idx = loaded_packs.len();
+        loaded_packs.push(current_pack);
 
         for song in pack.songs {
-            match load_song_from_file(&song.simfile, config.fastload, config.cachesongs) {
-                Ok(song_data) => current_pack.songs.push(Arc::new(song_data)),
-                Err(e) => warn!("Failed to load '{:?}': {}", song.simfile, e),
+            let simfile_path = song.simfile;
+            let cache_keys = if fastload || cachesongs {
+                compute_song_cache_keys(&simfile_path)
+            } else {
+                SongCacheKeys {
+                    cache_path: None,
+                    content_hash: None,
+                }
+            };
+
+            if fastload
+                && let (Some(cp), Some(ch)) = (&cache_keys.cache_path, cache_keys.content_hash)
+                && let Some(song_data) = load_song_from_cache(
+                    &simfile_path,
+                    cp,
+                    ch,
+                    global_offset_seconds,
+                )
+            {
+                songs_cache_hits += 1;
+                loaded_packs[pack_idx].songs.push(Arc::new(song_data));
+                continue;
+            }
+
+            songs_parsed += 1;
+            if parallel_parsing {
+                let rt = runtime.get_or_insert_with(|| {
+                    tokio::runtime::Builder::new_current_thread()
+                        .max_blocking_threads(parse_threads)
+                        .build()
+                        .unwrap()
+                });
+                if tx_opt.is_none() || rx_opt.is_none() {
+                    let (tx, rx) = std::sync::mpsc::channel::<ParseMsg>();
+                    tx_opt = Some(tx);
+                    rx_opt = Some(rx);
+                }
+
+                while in_flight >= parse_threads {
+                    reap_one(
+                        rx_opt.as_ref(),
+                        &mut in_flight,
+                        &mut loaded_packs,
+                        &mut songs_failed,
+                    );
+                }
+
+                let Some(tx) = tx_opt.as_ref() else {
+                    warn!("Song parsing worker channel unavailable; falling back to sync parse.");
+                    match parse_song_and_maybe_write_cache(
+                        &simfile_path,
+                        fastload,
+                        cachesongs,
+                        cache_keys,
+                        global_offset_seconds,
+                    ) {
+                        Ok(song_data) => loaded_packs[pack_idx].songs.push(Arc::new(song_data)),
+                        Err(e) => {
+                            songs_failed += 1;
+                            warn!("Failed to load '{:?}': {}", simfile_path, e)
+                        }
+                    }
+                    continue;
+                };
+
+                let tx = tx.clone();
+                let simfile_path_owned = simfile_path.clone();
+                rt.handle().spawn_blocking(move || {
+                    let out = catch_unwind(AssertUnwindSafe(|| {
+                        parse_song_and_maybe_write_cache(
+                            &simfile_path,
+                            fastload,
+                            cachesongs,
+                            cache_keys,
+                            global_offset_seconds,
+                        )
+                        .map(Arc::new)
+                    }))
+                    .unwrap_or_else(|_| Err("Song parse panicked".to_string()));
+                    let _ = tx.send((pack_idx, simfile_path_owned, out));
+                });
+                in_flight += 1;
+                continue;
+            }
+
+            match parse_song_and_maybe_write_cache(
+                &simfile_path,
+                fastload,
+                cachesongs,
+                cache_keys,
+                global_offset_seconds,
+            ) {
+                Ok(song_data) => loaded_packs[pack_idx].songs.push(Arc::new(song_data)),
+                Err(e) => {
+                    songs_failed += 1;
+                    warn!("Failed to load '{:?}': {}", simfile_path, e)
+                }
             }
         }
+    }
 
-        if current_pack.songs.is_empty() {
-            continue;
-        }
+    while in_flight > 0 {
+        reap_one(
+            rx_opt.as_ref(),
+            &mut in_flight,
+            &mut loaded_packs,
+            &mut songs_failed,
+        );
+    }
 
-        // Sort songs within the pack with a more natural order, grouping songs
-        // that start with non-alphanumeric characters (like '[Marathon]') at the end.
-        current_pack.songs.sort_by(|a, b| {
+    if runtime.is_some() {
+        info!(
+            "Song parsing: used {} threads for cache misses (SongParsingThreads={}).",
+            parse_threads,
+            config.song_parsing_threads
+        );
+    }
+
+    loaded_packs.retain(|p| !p.songs.is_empty());
+    for pack in &mut loaded_packs {
+        pack.songs.sort_by(|a, b| {
             let a_title = a.title.to_lowercase();
             let b_title = b.title.to_lowercase();
 
@@ -668,73 +884,74 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
                 std::cmp::Ordering::Less
             }
         });
-        loaded_packs.push(current_pack);
     }
 
     loaded_packs.sort_by_cached_key(|p| {
         (p.sort_title.to_ascii_lowercase(), p.group_name.to_ascii_lowercase())
     });
 
-    info!("Finished scan. Found {} packs.", loaded_packs.len());
+    let songs_loaded = loaded_packs.iter().map(|p| p.songs.len()).sum::<usize>();
+    info!(
+        "Finished scan. Found {} packs / {} songs (parsed {}, cache hits {}, failed {}) in {}.",
+        loaded_packs.len(),
+        songs_loaded,
+        songs_parsed,
+        songs_cache_hits,
+        songs_failed,
+        fmt_scan_time(started.elapsed())
+    );
     set_song_cache(loaded_packs);
 }
 
-/// Helper function to parse a single simfile, using a cache if available and valid.
-fn load_song_from_file(path: &Path, fastload: bool, cachesongs: bool) -> Result<SongData, String> {
-    let config = crate::config::get();
-    let cache_path = match get_cache_path(path) {
-        Ok(p) => Some(p),
-        Err(e) => {
-            warn!(
-                "Could not generate cache path for {:?}: {}. Caching disabled for this file.",
-                path, e
-            );
-            None
-        }
-    };
-
-    let content_hash = match get_content_hash(path) {
-        Ok(h) => Some(h),
-        Err(e) => {
-            warn!(
-                "Could not hash content of {:?}: {}. Caching disabled for this file.",
-                path, e
-            );
-            None
-        }
-    };
-
-    // --- CACHE CHECK ---
-    if fastload
-        && let (Some(cp), Some(ch)) = (cache_path.as_ref(), content_hash)
-        && cp.exists()
-        && let Ok(mut file) = fs::File::open(cp)
-    {
-        let mut buffer = Vec::new();
-        if file.read_to_end(&mut buffer).is_ok()
-            && let Ok((cached_song, _)) =
-                bincode::decode_from_slice::<CachedSong, _>(&buffer, bincode::config::standard())
-        {
-            if cached_song.source_hash == ch && cached_song.rssp_version == rssp::RSSP_VERSION {
-                info!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
-                let mut song_data: SongData = cached_song.data.into();
-                hydrate_chart_timings(&mut song_data, config.global_offset_seconds);
-                return Ok(song_data);
-            } else if cached_song.source_hash != ch {
-                info!(
-                    "Cache stale (content hash mismatch) for: {:?}",
-                    path.file_name().unwrap_or_default()
-                );
-            } else {
-                info!(
-                    "Cache stale (rssp version mismatch) for: {:?}",
-                    path.file_name().unwrap_or_default()
-                );
-            }
-        }
+fn load_song_from_cache(
+    path: &Path,
+    cache_path: &Path,
+    content_hash: u64,
+    global_offset_seconds: f32,
+) -> Option<SongData> {
+    if !cache_path.exists() {
+        return None;
     }
+    let Ok(mut file) = fs::File::open(cache_path) else {
+        return None;
+    };
+    let mut buffer = Vec::new();
+    if file.read_to_end(&mut buffer).is_err() {
+        return None;
+    }
+    let Ok((cached_song, _)) =
+        bincode::decode_from_slice::<CachedSong, _>(&buffer, bincode::config::standard())
+    else {
+        return None;
+    };
 
-    // --- CACHE MISS: PARSE AND WRITE ---
+    if cached_song.source_hash == content_hash && cached_song.rssp_version == rssp::RSSP_VERSION {
+        info!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
+        let mut song_data: SongData = cached_song.data.into();
+        hydrate_chart_timings(&mut song_data, global_offset_seconds);
+        return Some(song_data);
+    }
+    if cached_song.source_hash != content_hash {
+        info!(
+            "Cache stale (content hash mismatch) for: {:?}",
+            path.file_name().unwrap_or_default()
+        );
+    } else {
+        info!(
+            "Cache stale (rssp version mismatch) for: {:?}",
+            path.file_name().unwrap_or_default()
+        );
+    }
+    None
+}
+
+fn parse_song_and_maybe_write_cache(
+    path: &Path,
+    fastload: bool,
+    cachesongs: bool,
+    cache_keys: SongCacheKeys,
+    global_offset_seconds: f32,
+) -> Result<SongData, String> {
     if fastload {
         info!("Cache miss for: {:?}", path.file_name().unwrap_or_default());
     } else {
@@ -745,7 +962,7 @@ fn load_song_from_file(path: &Path, fastload: bool, cachesongs: bool) -> Result<
     }
     let song_data = parse_and_process_song_file(path)?;
 
-    if cachesongs && let (Some(cp), Some(ch)) = (cache_path, content_hash) {
+    if cachesongs && let (Some(cp), Some(ch)) = (cache_keys.cache_path, cache_keys.content_hash) {
         let serializable_data: SerializableSongData = (&song_data).into();
         let cached_song = CachedSong {
             rssp_version: rssp::RSSP_VERSION.to_string(),
@@ -765,7 +982,7 @@ fn load_song_from_file(path: &Path, fastload: bool, cachesongs: bool) -> Result<
     }
 
     let mut song_data = song_data;
-    hydrate_chart_timings(&mut song_data, config.global_offset_seconds);
+    hydrate_chart_timings(&mut song_data, global_offset_seconds);
     Ok(song_data)
 }
 

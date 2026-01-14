@@ -125,6 +125,11 @@ pub struct Config {
     // 1 = Single-threaded
     // N >= 2 = cap at N threads (clamped to available cores).
     pub software_renderer_threads: u8,
+    // When parsing simfiles at startup:
+    // 0 = Auto (use all logical cores) for cache misses
+    // 1 = Single-threaded
+    // N >= 2 = cap at N threads (clamped to available cores).
+    pub song_parsing_threads: u8,
     pub simply_love_color: i32,
     pub global_offset_seconds: f32,
     pub master_volume: u8,
@@ -152,6 +157,7 @@ impl Default for Config {
             display_height: 900,
             video_renderer: BackendType::OpenGL,
             software_renderer_threads: 1,
+            song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             global_offset_seconds: -0.008,
             master_volume: 90,
@@ -231,6 +237,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         "SmoothHistogram={}\n",
         if default.smooth_histogram { "1" } else { "0" }
     ));
+    content.push_str(&format!("SongParsingThreads={}\n", default.song_parsing_threads));
     content.push_str(&format!(
         "SoftwareRendererThreads={}\n",
         default.software_renderer_threads
@@ -381,6 +388,17 @@ pub fn load() {
                     .get("Options", "CacheSongs")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.cachesongs, |v| v != 0);
+                cfg.song_parsing_threads = conf
+                    .get("Options", "SongParsingThreads")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.eq_ignore_ascii_case("auto") || v.is_empty() {
+                            Some(0u8)
+                        } else {
+                            v.parse::<u8>().ok()
+                        }
+                    })
+                    .unwrap_or(default.song_parsing_threads);
                 cfg.smooth_histogram = conf
                     .get("Options", "SmoothHistogram")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -423,6 +441,7 @@ pub fn load() {
                     "MasterVolume",
                     "MineHitSound",
                     "MusicVolume",
+                    "SongParsingThreads",
                     "RateModPreservesPitch",
                     "ShowStats",
                     "SmoothHistogram",
@@ -1154,6 +1173,7 @@ fn save_without_keymaps() {
         if cfg.smooth_histogram { "1" } else { "0" }
     ));
     content.push_str(&format!("DisplayMonitor={}\n", cfg.display_monitor));
+    content.push_str(&format!("SongParsingThreads={}\n", cfg.song_parsing_threads));
     content.push_str(&format!(
         "SoftwareRendererThreads={}\n",
         cfg.software_renderer_threads
