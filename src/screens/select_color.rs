@@ -20,7 +20,9 @@ const HEART_NATIVE_H: f32 = 566.0;
 const HEART_ASPECT: f32 = HEART_NATIVE_W / HEART_NATIVE_H;
 
 // Wheel tuning (baseline behavior)
-const SCROLL_SPEED_SLOTS_PER_SEC: f32 = 5.0; // how fast the wheel slides
+// Simply Love uses `finishtweening(); linear(0.2)` when a new scroll input arrives.
+// This keeps rapid presses responsive by canceling in-flight scrolls instead of queueing.
+const SCROLL_TWEEN_DURATION: f32 = 0.20;
 const ROT_PER_SLOT_DEG: f32 = 15.0; // inward tilt amount (± per slot)
 const ZOOM_CENTER: f32 = 1.05; // center heart size
 const EDGE_MIN_RATIO: f32 = 0.17; // edge zoom = ZOOM_CENTER * EDGE_MIN_RATIO
@@ -45,8 +47,11 @@ fn is_wide() -> bool {
 pub struct State {
     /// Which color in DECORATIVE_HEX is focused (and previewed in the bg)
     pub active_color_index: i32,
-    /// Smooth wheel offset (in “slots”); eased toward active_color_index
+    /// Smooth wheel offset (in “slots”); tweened toward active_color_index
     pub scroll: f32,
+    scroll_from: f32,
+    scroll_to: f32,
+    scroll_t: f32, // [0, SCROLL_TWEEN_DURATION]
     bg: heart_bg::State,
     /// Background fade: from -> to over BG_FADE_DURATION
     pub bg_from_index: i32,
@@ -55,14 +60,26 @@ pub struct State {
 }
 
 pub fn init() -> State {
+    let scroll = color::DEFAULT_COLOR_INDEX as f32;
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        scroll: color::DEFAULT_COLOR_INDEX as f32,
+        scroll,
+        scroll_from: scroll,
+        scroll_to: scroll,
+        scroll_t: SCROLL_TWEEN_DURATION, // start "finished"
         bg: heart_bg::State::new(),
         bg_from_index: color::DEFAULT_COLOR_INDEX,
         bg_to_index: color::DEFAULT_COLOR_INDEX,
         bg_fade_t: BG_FADE_DURATION, // start "finished"
     }
+}
+
+pub fn snap_scroll_to_active(state: &mut State) {
+    let s = state.active_color_index as f32;
+    state.scroll = s;
+    state.scroll_from = s;
+    state.scroll_to = s;
+    state.scroll_t = SCROLL_TWEEN_DURATION;
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
@@ -323,15 +340,18 @@ fn sample_exp_from_logs(logs: &[f32], x: f32) -> f32 {
 /* ------------------------------- update ------------------------------- */
 
 pub fn update(state: &mut State, dt: f32) {
-    // glide scroll toward the selected slot
-    let target = state.active_color_index as f32;
-    let delta = target - state.scroll;
-
-    let max_step = SCROLL_SPEED_SLOTS_PER_SEC * dt;
-    if delta.abs() <= max_step {
-        state.scroll = target; // snap when close
+    // Scroll tween (matches Simply Love's `linear(0.2)` behavior)
+    if SCROLL_TWEEN_DURATION <= 0.0 {
+        snap_scroll_to_active(state);
+    } else if state.scroll_t < SCROLL_TWEEN_DURATION {
+        state.scroll_t = (state.scroll_t + dt).min(SCROLL_TWEEN_DURATION);
+        state.scroll = lerp(
+            state.scroll_from,
+            state.scroll_to,
+            state.scroll_t / SCROLL_TWEEN_DURATION,
+        );
     } else {
-        state.scroll += delta.signum() * max_step;
+        state.scroll = state.scroll_to;
     }
 
     // drive background cross-fade
@@ -347,7 +367,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match ev.action {
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             let num_colors = color::DECORATIVE_HEX.len() as i32;
+            // Mimic SM's `finishtweening()` before starting a new scroll.
+            state.scroll = state.scroll_to;
+            state.scroll_from = state.scroll;
             state.active_color_index -= 1;
+            state.scroll_to = state.active_color_index as f32;
+            state.scroll_t = 0.0;
             crate::core::audio::play_sfx("assets/sounds/expand.ogg");
             crate::config::update_simply_love_color(
                 state.active_color_index.rem_euclid(num_colors),
@@ -369,7 +394,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             let num_colors = color::DECORATIVE_HEX.len() as i32;
+            // Mimic SM's `finishtweening()` before starting a new scroll.
+            state.scroll = state.scroll_to;
+            state.scroll_from = state.scroll;
             state.active_color_index += 1;
+            state.scroll_to = state.active_color_index as f32;
+            state.scroll_t = 0.0;
             crate::core::audio::play_sfx("assets/sounds/expand.ogg");
             crate::config::update_simply_love_color(
                 state.active_color_index.rem_euclid(num_colors),

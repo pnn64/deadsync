@@ -201,7 +201,7 @@ impl ScreensState {
 
         let mut select_color_state = select_color::init();
         select_color_state.active_color_index = color_index;
-        select_color_state.scroll = color_index as f32;
+        select_color::snap_scroll_to_active(&mut select_color_state);
         select_color_state.bg_from_index = color_index;
         select_color_state.bg_to_index = color_index;
 
