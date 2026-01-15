@@ -2,6 +2,7 @@ use crate::act;
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::*;
+use crate::game::parsing::noteskin::{self, Noteskin, Quantization, NUM_QUANTIZATIONS};
 use crate::game::profile::{self, ActiveProfile};
 use crate::game::scroll::ScrollSpeedSetting;
 use crate::screens::{Screen, ScreenAction};
@@ -9,6 +10,7 @@ use crate::ui::actors::{self, Actor};
 use crate::ui::color;
 use crate::ui::components::screen_bar::{ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::ui::components::{heart_bg, screen_bar};
+use std::path::Path;
 use std::str::FromStr;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -33,6 +35,18 @@ const SCROLLER_W: f32 = FRAME_W_SCROLLER - INFO_W;
 const SCROLLER_CX_OFF: f32 = -47.0;
 const SCROLLER_TEXT_PAD_X: f32 = 6.0;
 
+const AVATAR_BG_HEX: &str = "#283239aa";
+const AVATAR_X_OFF: f32 = INFO_PAD * 1.125;
+const AVATAR_Y_OFF: f32 = -103.5;
+const AVATAR_HEART_X: f32 = 13.0;
+const AVATAR_HEART_Y: f32 = 8.0;
+const AVATAR_HEART_ZOOM: f32 = 0.09;
+const AVATAR_TEXT_Y: f32 = 67.0;
+
+const INFO_LINE_Y_OFF: f32 = 18.0;
+const PREVIEW_NOTESKIN_Y_OFF: f32 = 32.0;
+const PREVIEW_JUDGMENT_Y_OFF: f32 = 48.0;
+
 const PREVIEW_LABEL_H: f32 = 12.0;
 const PREVIEW_VALUE_H: f32 = 16.0;
 
@@ -41,6 +55,9 @@ struct Choice {
     kind: ActiveProfile,
     display_name: String,
     speed_mod: String,
+    avatar_key: Option<String>,
+    noteskin: profile::NoteSkin,
+    judgment: profile::JudgmentGraphic,
 }
 
 pub struct State {
@@ -48,6 +65,38 @@ pub struct State {
     selected_index: usize,
     choices: Vec<Choice>,
     bg: heart_bg::State,
+    preview_noteskin: Option<Noteskin>,
+}
+
+fn load_noteskin(kind: profile::NoteSkin) -> Option<Noteskin> {
+    let style = noteskin::Style {
+        num_cols: 4,
+        num_players: 1,
+    };
+
+    let path_str = match kind {
+        profile::NoteSkin::Cel => "assets/noteskins/cel/dance-single.txt",
+        profile::NoteSkin::Metal => "assets/noteskins/metal/dance-single.txt",
+        profile::NoteSkin::EnchantmentV2 => "assets/noteskins/enchantment-v2/dance-single.txt",
+        profile::NoteSkin::DevCel2024V3 => "assets/noteskins/devcel-2024-v3/dance-single.txt",
+    };
+
+    noteskin::load(Path::new(path_str), &style)
+        .ok()
+        .or_else(|| noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style).ok())
+        .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok())
+}
+
+fn rebuild_preview(state: &mut State) {
+    let Some(choice) = state.choices.get(state.selected_index) else {
+        state.preview_noteskin = None;
+        return;
+    };
+
+    state.preview_noteskin = match choice.kind {
+        ActiveProfile::Guest => None,
+        ActiveProfile::Local { .. } => load_noteskin(choice.noteskin),
+    };
 }
 
 fn build_choices() -> Vec<Choice> {
@@ -58,9 +107,14 @@ fn build_choices() -> Vec<Choice> {
         kind: ActiveProfile::Guest,
         display_name: "[ GUEST ]".to_string(),
         speed_mod: guest_speed_mod,
+        avatar_key: None,
+        noteskin: profile::NoteSkin::default(),
+        judgment: profile::JudgmentGraphic::default(),
     });
     for p in profile::scan_local_profiles() {
         let mut speed_mod = String::new();
+        let mut noteskin = profile::NoteSkin::default();
+        let mut judgment = profile::JudgmentGraphic::default();
         let ini_path = std::path::Path::new("save/profiles")
             .join(&p.id)
             .join("profile.ini");
@@ -75,11 +129,28 @@ fn build_choices() -> Vec<Choice> {
                 trimmed.to_string()
             };
         }
+        if let Ok(value) = ini
+            .get("PlayerOptions", "NoteSkin")
+            .unwrap_or_default()
+            .parse::<profile::NoteSkin>()
+        {
+            noteskin = value;
+        }
+        if let Ok(value) = ini
+            .get("PlayerOptions", "JudgmentGraphic")
+            .unwrap_or_default()
+            .parse::<profile::JudgmentGraphic>()
+        {
+            judgment = value;
+        }
 
         out.push(Choice {
             kind: ActiveProfile::Local { id: p.id },
             display_name: p.display_name,
             speed_mod,
+            avatar_key: p.avatar_path.map(|path| path.to_string_lossy().into_owned()),
+            noteskin,
+            judgment,
         });
     }
     out
@@ -88,6 +159,7 @@ fn build_choices() -> Vec<Choice> {
 pub fn init() -> State {
     let choices = build_choices();
     let active = profile::get_active_profile();
+    let active_color_index = crate::config::get().simply_love_color;
 
     let mut selected_index = 0usize;
     if let ActiveProfile::Local { id } = active {
@@ -99,12 +171,15 @@ pub fn init() -> State {
         }
     }
 
-    State {
-        active_color_index: color::DEFAULT_COLOR_INDEX,
+    let mut state = State {
+        active_color_index,
         selected_index,
         choices,
         bg: heart_bg::State::new(),
-    }
+        preview_noteskin: None,
+    };
+    rebuild_preview(&mut state);
+    state
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -139,6 +214,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
             if state.selected_index > 0 {
                 state.selected_index -= 1;
+                rebuild_preview(state);
                 audio::play_sfx("assets/sounds/change.ogg");
             }
             ScreenAction::None
@@ -146,6 +222,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
             if state.selected_index + 1 < state.choices.len() {
                 state.selected_index += 1;
+                rebuild_preview(state);
                 audio::play_sfx("assets/sounds/change.ogg");
             }
             ScreenAction::None
@@ -236,17 +313,17 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let p1_cx = cx - FRAME_CX_OFF;
     let p2_cx = cx + FRAME_CX_OFF;
 
-    let mut p1_color = color::decorative_rgba(state.active_color_index - 1);
+    let mut p1_color = color::decorative_rgba(state.active_color_index);
     p1_color[3] *= 0.85;
 
-    let border_alpha = 0.75;
+    let border_rgba = [1.0, 1.0, 1.0, 1.0];
 
     // P1 frame background
     ui.push(act!(quad:
         align(0.5, 0.5):
         xy(p1_cx, cy):
         zoomto(FRAME_W_SCROLLER + FRAME_BORDER, frame_h + FRAME_BORDER):
-        diffuse(0.0, 0.0, 0.0, border_alpha):
+        diffuse(border_rgba[0], border_rgba[1], border_rgba[2], border_rgba[3]):
         z(100)
     ));
     ui.push(act!(quad:
@@ -275,7 +352,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         align(0.5, 0.5):
         xy(p2_cx, cy):
         zoomto(FRAME_W_JOIN + FRAME_BORDER, frame_h + FRAME_BORDER):
-        diffuse(0.0, 0.0, 0.0, border_alpha):
+        diffuse(border_rgba[0], border_rgba[1], border_rgba[2], border_rgba[3]):
         z(100)
     ));
     ui.push(act!(quad:
@@ -298,7 +375,6 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     // P1 scroller
     let scroller_cx = p1_cx + SCROLLER_CX_OFF;
-    let scroller_x0 = scroller_cx - SCROLLER_W * 0.5;
     let highlight_h = ROW_H;
 
     ui.push(act!(quad:
@@ -325,45 +401,74 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         }
 
         ui.push(act!(text:
-            align(0.0, 0.5):
-            xy(scroller_x0 + SCROLLER_TEXT_PAD_X, y):
+            align(0.5, 0.5):
+            xy(scroller_cx, y):
             font("miso"):
             maxwidth(SCROLLER_W - SCROLLER_TEXT_PAD_X * 2.0):
             zoom(0.92):
             settext(choice.display_name.clone()):
             diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
-            z(103)
+            z(103):
+            horizalign(center)
         ));
     }
 
-    let (selected_name, selected_speed) = state
-        .choices
-        .get(state.selected_index)
-        .map(|c| (c.display_name.as_str(), c.speed_mod.as_str()))
-        .unwrap_or(("[ GUEST ]", ""));
+    let selected = state.choices.get(state.selected_index);
+    let selected_speed = selected
+        .map(|c| c.speed_mod.as_str())
+        .unwrap_or_default();
+
+    // Avatar slot (SL-style): show profile.png if present, else heart + text.
+    let avatar_dim = INFO_W - INFO_PAD * 2.25;
+    let avatar_x = info_x0 + AVATAR_X_OFF;
+    let avatar_y = cy + AVATAR_Y_OFF;
+
+    if let Some(choice) = selected {
+        let is_guest = matches!(choice.kind, ActiveProfile::Guest);
+
+        let show_fallback = is_guest || choice.avatar_key.is_none();
+        if show_fallback {
+            let bg = color::rgba_hex(AVATAR_BG_HEX);
+            ui.push(act!(quad:
+                align(0.0, 0.0):
+                xy(avatar_x, avatar_y):
+                zoomto(avatar_dim, avatar_dim):
+                diffuse(bg[0], bg[1], bg[2], bg[3]):
+                z(103)
+            ));
+            ui.push(act!(sprite("heart.png"):
+                align(0.0, 0.0):
+                xy(avatar_x + AVATAR_HEART_X, avatar_y + AVATAR_HEART_Y):
+                zoom(AVATAR_HEART_ZOOM):
+                diffuse(1.0, 1.0, 1.0, 0.9):
+                z(104)
+            ));
+
+            let label = if is_guest { "[ GUEST ]" } else { "No Avatar" };
+            ui.push(act!(text:
+                align(0.5, 0.0):
+                xy(avatar_x + avatar_dim * 0.5, avatar_y + AVATAR_TEXT_Y):
+                font("miso"):
+                maxwidth(avatar_dim - 8.0):
+                zoomtoheight(14.0):
+                settext(label):
+                diffuse(1.0, 1.0, 1.0, 0.9):
+                z(105):
+                horizalign(center)
+            ));
+        } else if let Some(key) = &choice.avatar_key {
+            ui.push(act!(sprite(key.clone()):
+                align(0.0, 0.0):
+                xy(avatar_x, avatar_y):
+                zoomto(avatar_dim, avatar_dim):
+                z(104)
+            ));
+        }
+    }
 
     ui.push(act!(text:
         align(0.0, 0.0):
-        xy(info_text_x, frame_y0 + 10.0):
-        font("miso"):
-        zoomtoheight(PREVIEW_LABEL_H):
-        settext("PROFILE"):
-        diffuse(1.0, 1.0, 1.0, 0.65):
-        z(103)
-    ));
-    ui.push(act!(text:
-        align(0.0, 0.0):
-        xy(info_text_x, frame_y0 + 24.0):
-        font("miso"):
-        maxwidth(info_max_w):
-        zoomtoheight(PREVIEW_VALUE_H):
-        settext(selected_name.to_string()):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        z(103)
-    ));
-    ui.push(act!(text:
-        align(0.0, 0.0):
-        xy(info_text_x, frame_y0 + 52.0):
+        xy(info_text_x, avatar_y + avatar_dim + 6.0):
         font("miso"):
         zoomtoheight(PREVIEW_LABEL_H):
         settext("SPEED"):
@@ -372,7 +477,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     ));
     ui.push(act!(text:
         align(0.0, 0.0):
-        xy(info_text_x, frame_y0 + 66.0):
+        xy(info_text_x, avatar_y + avatar_dim + 20.0):
         font("miso"):
         maxwidth(info_max_w):
         zoomtoheight(PREVIEW_VALUE_H):
@@ -380,6 +485,105 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(103)
     ));
+
+    // Thin white line separating stats from mods (SL-style).
+    ui.push(act!(quad:
+        align(0.0, 0.0):
+        xy(info_x0 + INFO_PAD * 1.25, cy + INFO_LINE_Y_OFF):
+        zoomto(info_max_w, 1.0):
+        diffuse(1.0, 1.0, 1.0, 0.5):
+        z(103)
+    ));
+
+    // NoteSkin + JudgmentGraphic previews (like PlayerOptions; SL-style placement).
+    if selected.is_some_and(|c| matches!(c.kind, ActiveProfile::Local { .. })) {
+        if let Some(ns) = &state.preview_noteskin {
+            let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+            if let Some(note_slot) = ns.notes.get(note_idx) {
+                let frame = note_slot.frame_index(0.0, 0.0);
+                let uv = note_slot.uv_for_frame(frame);
+                let size = note_slot.size();
+                let width = size[0].max(1) as f32;
+                let height = size[1].max(1) as f32;
+
+                const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
+                const PREVIEW_SCALE: f32 = 0.4;
+                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                let scale = if height > 0.0 {
+                    target_height / height
+                } else {
+                    PREVIEW_SCALE
+                };
+
+                ui.push(act!(sprite(note_slot.texture_key().to_string()):
+                    align(0.0, 0.5):
+                    xy(info_x0 + INFO_PAD * 3.0, cy + PREVIEW_NOTESKIN_Y_OFF):
+                    zoomto(width * scale, target_height):
+                    rotationz(-note_slot.def.rotation_deg as f32):
+                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                    z(104)
+                ));
+            }
+        }
+
+        let judgment_texture = selected
+            .map(|c| match c.judgment {
+                profile::JudgmentGraphic::Love => Some("judgements/Love 2x7 (doubleres).png"),
+                profile::JudgmentGraphic::LoveChroma => {
+                    Some("judgements/Love Chroma 2x7 (doubleres).png")
+                }
+                profile::JudgmentGraphic::Rainbowmatic => {
+                    Some("judgements/Rainbowmatic 2x7 (doubleres).png")
+                }
+                profile::JudgmentGraphic::GrooveNights => {
+                    Some("judgements/GrooveNights 2x7 (doubleres).png")
+                }
+                profile::JudgmentGraphic::Emoticon => {
+                    Some("judgements/Emoticon 2x7 (doubleres).png")
+                }
+                profile::JudgmentGraphic::Censored => {
+                    Some("judgements/Censored 1x7 (doubleres).png")
+                }
+                profile::JudgmentGraphic::Chromatic => {
+                    Some("judgements/Chromatic 2x7 (doubleres).png")
+                }
+                profile::JudgmentGraphic::ITG2 => Some("judgements/ITG2 2x7 (doubleres).png"),
+                profile::JudgmentGraphic::Bebas => Some("judgements/Bebas 2x7 (doubleres).png"),
+                profile::JudgmentGraphic::Code => Some("judgements/Code 2x7 (doubleres).png"),
+                profile::JudgmentGraphic::ComicSans => {
+                    Some("judgements/Comic Sans 2x7 (doubleres).png")
+                }
+                profile::JudgmentGraphic::Focus => Some("judgements/Focus 2x7 (doubleres).png"),
+                profile::JudgmentGraphic::Grammar => {
+                    Some("judgements/Grammar 2x7 (doubleres).png")
+                }
+                profile::JudgmentGraphic::Miso => Some("judgements/Miso 2x7 (doubleres).png"),
+                profile::JudgmentGraphic::Papyrus => {
+                    Some("judgements/Papyrus 2x7 (doubleres).png")
+                }
+                profile::JudgmentGraphic::Roboto => Some("judgements/Roboto 2x7 (doubleres).png"),
+                profile::JudgmentGraphic::Shift => Some("judgements/Shift 2x7 (doubleres).png"),
+                profile::JudgmentGraphic::Tactics => {
+                    Some("judgements/Tactics 2x7 (doubleres).png")
+                }
+                profile::JudgmentGraphic::Wendy => Some("judgements/Wendy 2x7 (doubleres).png"),
+                profile::JudgmentGraphic::WendyChroma => {
+                    Some("judgements/Wendy Chroma 2x7 (doubleres).png")
+                }
+                profile::JudgmentGraphic::None => None,
+            })
+            .unwrap_or(None);
+
+        if let Some(texture) = judgment_texture {
+            ui.push(act!(sprite(texture):
+                align(0.0, 0.5):
+                xy(info_x0 + (INFO_PAD * 2.5 + INFO_W * 0.5), cy + PREVIEW_JUDGMENT_Y_OFF):
+                setstate(0):
+                zoom(0.225):
+                z(104)
+            ));
+        }
+    }
     ui.push(act!(text:
         align(0.0, 0.0):
         xy(info_text_x, frame_y0 + frame_h - 18.0):

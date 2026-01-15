@@ -597,6 +597,13 @@ impl AssetManager {
         }
 
         let profile = profile::get();
+        // Preload all local profile avatars so ScreenSelectProfile can preview them.
+        // These are user-generated assets; local profile counts are usually small.
+        for p in profile::scan_local_profiles() {
+            if let Some(path) = p.avatar_path {
+                self.ensure_texture_from_path(backend, &path);
+            }
+        }
         self.set_profile_avatar(backend, profile.avatar_path);
 
         Ok(())
@@ -696,7 +703,6 @@ impl AssetManager {
                 self.textures.remove(&key);
             }
         }
-        self.destroy_current_profile_avatar(backend);
     }
 
     pub fn set_dynamic_banner(
@@ -854,43 +860,13 @@ impl AssetManager {
 
     pub fn set_profile_avatar(&mut self, backend: &mut Backend, path_opt: Option<PathBuf>) {
         if let Some(path) = path_opt {
-            if self
-                .current_profile_avatar
-                .as_ref()
-                .is_some_and(|(_, p)| p == &path)
-            {
-                if let Some((key, _)) = &self.current_profile_avatar {
-                    profile::set_avatar_texture_key(Some(key.clone()));
-                }
-                return;
-            }
-
-            self.destroy_current_profile_avatar(backend);
-
-            match image::open(&path) {
-                Ok(img) => {
-                    let rgba = img.to_rgba8();
-                    match backend.create_texture(&rgba, SamplerDesc::default()) {
-                        Ok(texture) => {
-                            let key = path.to_string_lossy().into_owned();
-                            self.textures.insert(key.clone(), texture);
-                            register_texture_dims(&key, rgba.width(), rgba.height());
-                            self.current_profile_avatar = Some((key.clone(), path));
-                            profile::set_avatar_texture_key(Some(key));
-                        }
-                        Err(e) => {
-                            warn!(
-                                "Failed to create GPU texture for profile avatar {:?}: {}.",
-                                path, e
-                            );
-                            profile::set_avatar_texture_key(None);
-                        }
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to open profile avatar image {:?}: {}.", path, e);
-                    profile::set_avatar_texture_key(None);
-                }
+            let key = path.to_string_lossy().into_owned();
+            self.ensure_texture_from_path(backend, &path);
+            self.current_profile_avatar = Some((key.clone(), path));
+            if self.textures.contains_key(&key) {
+                profile::set_avatar_texture_key(Some(key));
+            } else {
+                profile::set_avatar_texture_key(None);
             }
         } else {
             self.destroy_current_profile_avatar(backend);
@@ -919,10 +895,36 @@ impl AssetManager {
     }
 
     fn destroy_current_profile_avatar(&mut self, backend: &mut Backend) {
-        if let Some((key, _)) = self.current_profile_avatar.take() {
-            backend.wait_for_idle();
-            self.textures.remove(&key);
-        }
+        let _ = backend;
+        self.current_profile_avatar = None;
         profile::set_avatar_texture_key(None);
+    }
+
+    fn ensure_texture_from_path(&mut self, backend: &mut Backend, path: &Path) {
+        let key = path.to_string_lossy().into_owned();
+        if self.textures.contains_key(&key) {
+            return;
+        }
+
+        match image::open(path) {
+            Ok(img) => {
+                let rgba = img.to_rgba8();
+                match backend.create_texture(&rgba, SamplerDesc::default()) {
+                    Ok(texture) => {
+                        self.textures.insert(key.clone(), texture);
+                        register_texture_dims(&key, rgba.width(), rgba.height());
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to create GPU texture for image {:?}: {}. Skipping.",
+                            path, e
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Failed to open image {:?}: {}. Skipping.", path, e);
+            }
+        }
     }
 }
