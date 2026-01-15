@@ -273,15 +273,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
 
-    if alpha_multiplier <= 0.0 {
-        return actors;
-    }
-
-    let mut ui: Vec<Actor> = Vec::new();
-
     let fg = [1.0, 1.0, 1.0, 1.0];
 
-    ui.push(screen_bar::build(ScreenBarParams {
+    actors.push(screen_bar::build(ScreenBarParams {
         title: "SELECT PROFILE",
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
@@ -292,7 +286,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         right_text: None,
         left_avatar: None,
     }));
-    ui.push(screen_bar::build(ScreenBarParams {
+    actors.push(screen_bar::build(ScreenBarParams {
         title: "EVENT MODE",
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,
@@ -303,6 +297,12 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         right_text: Some("PRESS START"),
         left_avatar: None,
     }));
+
+    if alpha_multiplier <= 0.0 {
+        return actors;
+    }
+
+    let mut ui: Vec<Actor> = Vec::new();
 
     let frame_h = FRAME_H;
     let cx = screen_center_x();

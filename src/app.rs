@@ -561,6 +561,10 @@ impl App {
                 || from == CurrentScreen::SelectColor)
                 && to == CurrentScreen::Menu)
             || (from == CurrentScreen::SelectProfile && to == CurrentScreen::SelectColor)
+            || (from == CurrentScreen::SelectProfile && to == CurrentScreen::SelectStyle)
+            || (from == CurrentScreen::SelectStyle && to == CurrentScreen::SelectProfile)
+            || (from == CurrentScreen::SelectColor && to == CurrentScreen::SelectStyle)
+            || (from == CurrentScreen::SelectStyle && to == CurrentScreen::SelectColor)
             || (from == CurrentScreen::Options && to == CurrentScreen::Mappings)
             || (from == CurrentScreen::Mappings && to == CurrentScreen::Options)
     }
@@ -573,6 +577,8 @@ impl App {
                 || target == CurrentScreen::Options)
         {
             MENU_TO_SELECT_COLOR_OUT_DURATION
+        } else if from == CurrentScreen::SelectColor {
+            select_color::exit_anim_duration()
         } else {
             FADE_OUT_DURATION
         };
@@ -1461,6 +1467,9 @@ impl App {
 
         let prev = self.state.screens.current_screen;
         self.state.screens.current_screen = target;
+        if target == CurrentScreen::SelectColor {
+            select_color::on_enter(&mut self.state.screens.select_color_state);
+        }
 
         let mut commands: Vec<Command> = Vec::new();
 
@@ -1911,6 +1920,9 @@ impl ApplicationHandler<UserEvent> for App {
                         if *elapsed >= *duration {
                             let prev = self.state.screens.current_screen;
                             self.state.screens.current_screen = *target;
+                            if *target == CurrentScreen::SelectColor {
+                                select_color::on_enter(&mut self.state.screens.select_color_state);
+                            }
 
                             // SelectProfile/SelectColor/SelectStyle share the looping menu BGM.
                             // Keep SelectMusic preview playing when moving to/from PlayerOptions.

@@ -23,6 +23,10 @@ const HEART_ASPECT: f32 = HEART_NATIVE_W / HEART_NATIVE_H;
 // Simply Love uses `finishtweening(); linear(0.2)` when a new scroll input arrives.
 // This keeps rapid presses responsive by canceling in-flight scrolls instead of queueing.
 const SCROLL_TWEEN_DURATION: f32 = 0.20;
+// Simply Love wheel in/out details (ScreenSelectColor underlay.lua)
+const WHEEL_FORM_DURATION: f32 = 0.20; // container `linear(0.2)` in transform()
+const WHEEL_OFF_STAGGER: f32 = 0.04; // OffCommand: sleep(0.04 * index)
+const WHEEL_OFF_FADE_DURATION: f32 = 0.20; // OffCommand: linear(0.2) diffusealpha(0)
 const ROT_PER_SLOT_DEG: f32 = 15.0; // inward tilt amount (± per slot)
 const ZOOM_CENTER: f32 = 1.05; // center heart size
 const EDGE_MIN_RATIO: f32 = 0.17; // edge zoom = ZOOM_CENTER * EDGE_MIN_RATIO
@@ -52,6 +56,7 @@ pub struct State {
     scroll_from: f32,
     scroll_to: f32,
     scroll_t: f32, // [0, SCROLL_TWEEN_DURATION]
+    exit_requested: bool,
     bg: heart_bg::State,
     /// Background fade: from -> to over BG_FADE_DURATION
     pub bg_from_index: i32,
@@ -67,6 +72,7 @@ pub fn init() -> State {
         scroll_from: scroll,
         scroll_to: scroll,
         scroll_t: SCROLL_TWEEN_DURATION, // start "finished"
+        exit_requested: false,
         bg: heart_bg::State::new(),
         bg_from_index: color::DEFAULT_COLOR_INDEX,
         bg_to_index: color::DEFAULT_COLOR_INDEX,
@@ -80,6 +86,15 @@ pub fn snap_scroll_to_active(state: &mut State) {
     state.scroll_from = s;
     state.scroll_to = s;
     state.scroll_t = SCROLL_TWEEN_DURATION;
+}
+
+pub fn on_enter(state: &mut State) {
+    state.exit_requested = false;
+}
+
+pub fn exit_anim_duration() -> f32 {
+    let num_slots = if is_wide() { 11 } else { 7 };
+    WHEEL_OFF_STAGGER * (num_slots as f32) + WHEEL_OFF_FADE_DURATION
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
@@ -162,15 +177,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         }));
     }
 
-    if alpha_multiplier <= 0.0 {
-        return actors;
-    }
-
-    let mut ui_actors = Vec::new();
-
     // 2) Bars (top + bottom)
     const FG: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
-    ui_actors.push(screen_bar::build(screen_bar::ScreenBarParams {
+    actors.push(screen_bar::build(screen_bar::ScreenBarParams {
         title: "SELECT A COLOR",
         title_placement: ScreenBarTitlePlacement::Left, // big title on the left
         position: ScreenBarPosition::Top,
@@ -181,7 +190,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         left_avatar: None,
         fg_color: FG,
     }));
-    ui_actors.push(screen_bar::build(screen_bar::ScreenBarParams {
+    actors.push(screen_bar::build(screen_bar::ScreenBarParams {
         title: "EVENT MODE",
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,
@@ -193,11 +202,70 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         fg_color: FG,
     }));
 
+    let mut wheel_actors = Vec::new();
+
     // 3) The bow of hearts (wheel) — smooth + inward tilt, no refade
     let wide = is_wide();
     let num_slots: i32 = if wide { 11 } else { 7 };
     let center_slot: i32 = num_slots / 2;
     let w_screen = screen_width();
+    let cx = screen_center_x();
+    let cy = screen_center_y();
+
+    #[inline(always)]
+    fn wheel_form_p() -> f32 {
+        use crate::ui::{anim, runtime};
+        static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
+        let steps = STEPS.get_or_init(|| vec![anim::linear(WHEEL_FORM_DURATION).x(1.0).build()]);
+
+        let mut init = anim::TweenState::default();
+        init.x = 0.0;
+        let sid = runtime::site_id(file!(), line!(), column!(), 0x53434F4C464F524Du64); // "SCOLFORM"
+        runtime::materialize(sid, init, steps).x.clamp(0.0, 1.0)
+    }
+
+    #[inline(always)]
+    fn wheel_exit_t(wide: bool) -> f32 {
+        use crate::ui::{anim, runtime};
+        static STEPS_WIDE: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
+        static STEPS_NARROW: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
+
+        let num_slots = if wide { 11 } else { 7 };
+        let dur = WHEEL_OFF_STAGGER * (num_slots as f32) + WHEEL_OFF_FADE_DURATION;
+
+        let steps = if wide {
+            STEPS_WIDE.get_or_init(|| vec![anim::linear(dur).x(dur).build()])
+        } else {
+            STEPS_NARROW.get_or_init(|| vec![anim::linear(dur).x(dur).build()])
+        };
+
+        let mut init = anim::TweenState::default();
+        init.x = 0.0;
+        let sid = runtime::site_id(
+            file!(),
+            line!(),
+            column!(),
+            if wide { 0x53434F4C45584954u64 } else { 0x53434F4C45584954u64 ^ 1 }, // "SCOLEXIT"
+        );
+        runtime::materialize(sid, init, steps).x.max(0.0)
+    }
+
+    #[inline(always)]
+    fn wheel_off_alpha(t: f32, index_1based: i32) -> f32 {
+        let start = WHEEL_OFF_STAGGER * (index_1based as f32);
+        if t <= start {
+            return 1.0;
+        }
+        let u = (t - start) / WHEEL_OFF_FADE_DURATION;
+        (1.0 - u).clamp(0.0, 1.0)
+    }
+
+    let form_p = wheel_form_p();
+    let exit_t = if state.exit_requested {
+        wheel_exit_t(wide)
+    } else {
+        0.0
+    };
 
     let x_spacing = w_screen / (num_slots as f32 - 1.0);
 
@@ -246,17 +314,17 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
         // X centered via distance samples (sign from side)
         let x_off = super::select_color::sample_linear(&x_samples, a);
-        let x = screen_center_x() + if o >= 0.0 { x_off } else { -x_off };
+        let x_final = cx + if o >= 0.0 { x_off } else { -x_off };
 
         // Y forms a gentle bow
-        let y = 12.0 * o * o - 20.0;
+        let y_off_final = 12.0 * o * o - 20.0;
 
         // inward tilt
-        let rot_deg = -o * ROT_PER_SLOT_DEG;
+        let rot_deg_final = -o * ROT_PER_SLOT_DEG;
 
         // Zoom via exponential sampling in log space
         let a_clamped = a.min(max_off_visible);
-        let zoom = super::select_color::sample_exp_from_logs(&zoom_logs, a_clamped);
+        let zoom_final = super::select_color::sample_exp_from_logs(&zoom_logs, a_clamped);
 
         // depth so near-center draws on top
         let z_layer = WHEEL_Z_BASE - (a.round() as i16);
@@ -277,9 +345,22 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             1.0 - t * t // ease-out
         };
 
-        ui_actors.push(act!(sprite("heart.png"):
+        let off_alpha = if state.exit_requested {
+            wheel_off_alpha(exit_t, slot + 1)
+        } else {
+            1.0
+        };
+        let alpha = alpha * off_alpha;
+
+        // Enter: collapse from center into the bow (like SL wheel transform tween)
+        let x = lerp(cx, x_final, form_p);
+        let y = lerp(cy, cy + y_off_final, form_p);
+        let rot_deg = lerp(0.0, rot_deg_final, form_p);
+        let zoom = lerp(1.0, zoom_final, form_p);
+
+        wheel_actors.push(act!(sprite("heart.png"):
             align(0.5, 0.5):
-            xy(x, screen_center_y() + y):
+            xy(x, y):
             rotationz(rot_deg):
             z(z_layer):
             zoomto(base_w, base_h):
@@ -288,10 +369,10 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         ));
     }
 
-    for actor in &mut ui_actors {
+    for actor in &mut wheel_actors {
         apply_alpha_to_actor(actor, alpha_multiplier);
     }
-    actors.extend(ui_actors);
+    actors.extend(wheel_actors);
 
     actors
 }
@@ -364,6 +445,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if !ev.pressed {
         return ScreenAction::None;
     }
+    if state.exit_requested {
+        return ScreenAction::None;
+    }
     match ev.action {
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             let num_colors = color::DECORATIVE_HEX.len() as i32;
@@ -419,8 +503,21 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.bg_fade_t = 0.0;
             ScreenAction::None
         }
-        VirtualAction::p1_start => ScreenAction::Navigate(Screen::SelectStyle),
-        VirtualAction::p1_back => ScreenAction::Navigate(Screen::Menu),
+        VirtualAction::p1_start => {
+            state.exit_requested = true;
+            state.scroll = state.scroll_to;
+            state.scroll_from = state.scroll;
+            state.scroll_t = SCROLL_TWEEN_DURATION;
+            crate::core::audio::play_sfx("assets/sounds/start.ogg");
+            ScreenAction::Navigate(Screen::SelectStyle)
+        }
+        VirtualAction::p1_back => {
+            state.exit_requested = true;
+            state.scroll = state.scroll_to;
+            state.scroll_from = state.scroll;
+            state.scroll_t = SCROLL_TWEEN_DURATION;
+            ScreenAction::Navigate(Screen::Menu)
+        }
         _ => ScreenAction::None,
     }
 }
