@@ -51,43 +51,50 @@ pub fn parse_texture_hints(raw: &str) -> TextureHints {
         return hints;
     }
 
-    let s = trimmed.to_ascii_lowercase();
-    if s.contains("32bpp") {
+    // Zero-allocation case-insensitive substring check
+    let has = |sub: &[u8]| {
+        trimmed
+            .as_bytes()
+            .windows(sub.len())
+            .any(|w| w.eq_ignore_ascii_case(sub))
+    };
+
+    if has(b"32bpp") {
         hints.color_depth = Some(32);
-    } else if s.contains("16bpp") {
+    } else if has(b"16bpp") {
         hints.color_depth = Some(16);
     }
-    if s.contains("dither") {
+    if has(b"dither") {
         hints.dither = true;
     }
-    if s.contains("stretch") {
+    if has(b"stretch") {
         hints.stretch = true;
     }
-    if s.contains("mipmaps") {
+    if has(b"mipmaps") {
         hints.mipmaps = Some(true);
     }
-    if s.contains("nomipmaps") {
+    if has(b"nomipmaps") {
         hints.mipmaps = Some(false);
     }
-    if s.contains("grayscale") {
+    if has(b"grayscale") {
         hints.grayscale = true;
     }
-    if s.contains("alphamap") {
+    if has(b"alphamap") {
         hints.alphamap = true;
     }
-    if s.contains("doubleres") {
+    if has(b"doubleres") {
         hints.doubleres = true;
     }
-    if s.contains("nearest") || s.contains("point") {
+    if has(b"nearest") || has(b"point") {
         hints.sampler_filter = Some(SamplerFilter::Nearest);
     }
-    if s.contains("linear") {
+    if has(b"linear") {
         hints.sampler_filter = Some(SamplerFilter::Linear);
     }
-    if s.contains("wrap") || s.contains("repeat") {
+    if has(b"wrap") || has(b"repeat") {
         hints.sampler_wrap = Some(SamplerWrap::Repeat);
     }
-    if s.contains("clamp") {
+    if has(b"clamp") {
         hints.sampler_wrap = Some(SamplerWrap::Clamp);
     }
 
