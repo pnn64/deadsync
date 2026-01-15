@@ -3,11 +3,13 @@ use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::*;
 use crate::game::profile::{self, ActiveProfile};
+use crate::game::scroll::ScrollSpeedSetting;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{self, Actor};
 use crate::ui::color;
 use crate::ui::components::screen_bar::{ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::ui::components::{heart_bg, screen_bar};
+use std::str::FromStr;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -16,17 +18,29 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 /* ------------------------------ layout ------------------------------- */
 const ROW_H: f32 = 35.0;
 const ROWS_VISIBLE: i32 = 9;
-const PANEL_W_4_3: f32 = 520.0;
-const PANEL_W_16_9: f32 = 720.0;
-const PANEL_H: f32 = 250.0;
-const PANEL_BORDER: f32 = 2.0;
-const PANEL_PAD: f32 = 14.0;
-const LIST_W_FRAC: f32 = 0.44;
+const FRAME_BASE_W: f32 = 200.0;
+const FRAME_W_SCROLLER: f32 = FRAME_BASE_W * 1.1;
+const FRAME_W_JOIN: f32 = FRAME_BASE_W * 0.9;
+const FRAME_H: f32 = 214.0;
+const FRAME_BORDER: f32 = 2.0;
+const FRAME_CX_OFF: f32 = 150.0;
+
+const INFO_W: f32 = FRAME_BASE_W * 0.475;
+const INFO_X0_OFF: f32 = 15.5;
+const INFO_PAD: f32 = 4.0;
+
+const SCROLLER_W: f32 = FRAME_W_SCROLLER - INFO_W;
+const SCROLLER_CX_OFF: f32 = -47.0;
+const SCROLLER_TEXT_PAD_X: f32 = 6.0;
+
+const PREVIEW_LABEL_H: f32 = 12.0;
+const PREVIEW_VALUE_H: f32 = 16.0;
 
 #[derive(Clone)]
 struct Choice {
     kind: ActiveProfile,
     display_name: String,
+    speed_mod: String,
 }
 
 pub struct State {
@@ -38,14 +52,34 @@ pub struct State {
 
 fn build_choices() -> Vec<Choice> {
     let mut out = Vec::new();
+
+    let guest_speed_mod = format!("{}", crate::game::profile::Profile::default().scroll_speed);
     out.push(Choice {
         kind: ActiveProfile::Guest,
         display_name: "[ GUEST ]".to_string(),
+        speed_mod: guest_speed_mod,
     });
     for p in profile::scan_local_profiles() {
+        let mut speed_mod = String::new();
+        let ini_path = std::path::Path::new("save/profiles")
+            .join(&p.id)
+            .join("profile.ini");
+        let mut ini = crate::config::SimpleIni::new();
+        if ini.load(&ini_path).is_ok()
+            && let Some(raw) = ini.get("PlayerOptions", "ScrollSpeed")
+        {
+            let trimmed = raw.trim();
+            speed_mod = if let Ok(setting) = ScrollSpeedSetting::from_str(trimmed) {
+                format!("{}", setting)
+            } else {
+                trimmed.to_string()
+            };
+        }
+
         out.push(Choice {
             kind: ActiveProfile::Local { id: p.id },
             display_name: p.display_name,
+            speed_mod,
         });
     }
     out
@@ -102,14 +136,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
 
     match ev.action {
-        VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+        VirtualAction::p1_up | VirtualAction::p1_menu_up => {
             if state.selected_index > 0 {
                 state.selected_index -= 1;
                 audio::play_sfx("assets/sounds/change.ogg");
             }
             ScreenAction::None
         }
-        VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+        VirtualAction::p1_down | VirtualAction::p1_menu_down => {
             if state.selected_index + 1 < state.choices.len() {
                 state.selected_index += 1;
                 audio::play_sfx("assets/sounds/change.ogg");
@@ -193,43 +227,85 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         left_avatar: None,
     }));
 
-    let panel_w = widescale(PANEL_W_4_3, PANEL_W_16_9);
-    let panel_h = PANEL_H;
+    let frame_h = FRAME_H;
     let cx = screen_center_x();
     let cy = screen_center_y();
-    let panel_x0 = cx - panel_w * 0.5;
-    let panel_y0 = cy - panel_h * 0.5;
 
-    let mut panel_color = color::decorative_rgba(state.active_color_index);
-    panel_color[3] *= 0.85;
+    let frame_y0 = cy - frame_h * 0.5;
+
+    let p1_cx = cx - FRAME_CX_OFF;
+    let p2_cx = cx + FRAME_CX_OFF;
+
+    let mut p1_color = color::decorative_rgba(state.active_color_index - 1);
+    p1_color[3] *= 0.85;
+
     let border_alpha = 0.75;
 
+    // P1 frame background
     ui.push(act!(quad:
-        align(0.0, 0.0):
-        xy(panel_x0 - PANEL_BORDER, panel_y0 - PANEL_BORDER):
-        zoomto(panel_w + PANEL_BORDER * 2.0, panel_h + PANEL_BORDER * 2.0):
+        align(0.5, 0.5):
+        xy(p1_cx, cy):
+        zoomto(FRAME_W_SCROLLER + FRAME_BORDER, frame_h + FRAME_BORDER):
         diffuse(0.0, 0.0, 0.0, border_alpha):
         z(100)
     ));
     ui.push(act!(quad:
-        align(0.0, 0.0):
-        xy(panel_x0, panel_y0):
-        zoomto(panel_w, panel_h):
-        diffuse(panel_color[0], panel_color[1], panel_color[2], panel_color[3]):
+        align(0.5, 0.5):
+        xy(p1_cx, cy):
+        zoomto(FRAME_W_SCROLLER, frame_h):
+        diffuse(p1_color[0], p1_color[1], p1_color[2], p1_color[3]):
         z(101)
     ));
 
-    let list_w = panel_w * LIST_W_FRAC;
-    let list_x0 = panel_x0 + PANEL_PAD;
-    let info_x0 = panel_x0 + list_w + PANEL_PAD * 2.0;
-    let highlight_w = list_w - PANEL_PAD * 2.0;
+    // P1 info pane background
+    let info_x0 = p1_cx + INFO_X0_OFF;
+    let info_text_x = info_x0 + INFO_PAD * 1.25;
+    let info_max_w = INFO_W - INFO_PAD * 2.5;
+
+    ui.push(act!(quad:
+        align(0.0, 0.0):
+        xy(info_x0, frame_y0):
+        zoomto(INFO_W, frame_h):
+        diffuse(0.0, 0.0, 0.0, 0.5):
+        z(102)
+    ));
+
+    // P2 join prompt (template only; not functional yet)
+    ui.push(act!(quad:
+        align(0.5, 0.5):
+        xy(p2_cx, cy):
+        zoomto(FRAME_W_JOIN + FRAME_BORDER, frame_h + FRAME_BORDER):
+        diffuse(0.0, 0.0, 0.0, border_alpha):
+        z(100)
+    ));
+    ui.push(act!(quad:
+        align(0.5, 0.5):
+        xy(p2_cx, cy):
+        zoomto(FRAME_W_JOIN, frame_h):
+        diffuse(0.0, 0.0, 0.0, 0.65):
+        z(101)
+    ));
+    ui.push(act!(text:
+        align(0.5, 0.5):
+        xy(p2_cx, cy):
+        font("miso"):
+        zoomtoheight(18.0):
+        maxwidth(FRAME_W_JOIN - 20.0):
+        settext("Press START to join!"):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(103)
+    ));
+
+    // P1 scroller
+    let scroller_cx = p1_cx + SCROLLER_CX_OFF;
+    let scroller_x0 = scroller_cx - SCROLLER_W * 0.5;
     let highlight_h = ROW_H;
 
     ui.push(act!(quad:
-        align(0.0, 0.5):
-        xy(list_x0, cy):
-        zoomto(highlight_w, highlight_h):
-        diffuse(0.0, 0.0, 0.0, 0.45):
+        align(0.5, 0.5):
+        xy(scroller_cx, cy):
+        zoomto(SCROLLER_W, highlight_h):
+        diffuse(0.0, 0.0, 0.0, 0.5):
         z(102)
     ));
 
@@ -250,8 +326,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
         ui.push(act!(text:
             align(0.0, 0.5):
-            xy(list_x0 + 6.0, y):
+            xy(scroller_x0 + SCROLLER_TEXT_PAD_X, y):
             font("miso"):
+            maxwidth(SCROLLER_W - SCROLLER_TEXT_PAD_X * 2.0):
             zoom(0.92):
             settext(choice.display_name.clone()):
             diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
@@ -259,36 +336,57 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         ));
     }
 
-    let selected_name = state
+    let (selected_name, selected_speed) = state
         .choices
         .get(state.selected_index)
-        .map(|c| c.display_name.as_str())
-        .unwrap_or("[ GUEST ]");
+        .map(|c| (c.display_name.as_str(), c.speed_mod.as_str()))
+        .unwrap_or(("[ GUEST ]", ""));
 
     ui.push(act!(text:
         align(0.0, 0.0):
-        xy(info_x0, panel_y0 + PANEL_PAD):
-        font("wendy"):
-        zoom(0.9):
+        xy(info_text_x, frame_y0 + 10.0):
+        font("miso"):
+        zoomtoheight(PREVIEW_LABEL_H):
         settext("PROFILE"):
         diffuse(1.0, 1.0, 1.0, 0.65):
         z(103)
     ));
     ui.push(act!(text:
         align(0.0, 0.0):
-        xy(info_x0, panel_y0 + PANEL_PAD + 22.0):
-        font("wendy"):
-        zoom(1.15):
+        xy(info_text_x, frame_y0 + 24.0):
+        font("miso"):
+        maxwidth(info_max_w):
+        zoomtoheight(PREVIEW_VALUE_H):
         settext(selected_name.to_string()):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(103)
     ));
     ui.push(act!(text:
         align(0.0, 0.0):
-        xy(info_x0, panel_y0 + panel_h - PANEL_PAD - 18.0):
+        xy(info_text_x, frame_y0 + 52.0):
         font("miso"):
-        zoom(0.75):
-        settext("Use ◄ ► to choose, then press START"):
+        zoomtoheight(PREVIEW_LABEL_H):
+        settext("SPEED"):
+        diffuse(1.0, 1.0, 1.0, 0.65):
+        z(103)
+    ));
+    ui.push(act!(text:
+        align(0.0, 0.0):
+        xy(info_text_x, frame_y0 + 66.0):
+        font("miso"):
+        maxwidth(info_max_w):
+        zoomtoheight(PREVIEW_VALUE_H):
+        settext(selected_speed.to_string()):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(103)
+    ));
+    ui.push(act!(text:
+        align(0.0, 0.0):
+        xy(info_text_x, frame_y0 + frame_h - 18.0):
+        font("miso"):
+        maxwidth(info_max_w):
+        zoomtoheight(12.0):
+        settext("Use ▲ ▼ to choose, then press START"):
         diffuse(1.0, 1.0, 1.0, 0.75):
         z(103)
     ));
