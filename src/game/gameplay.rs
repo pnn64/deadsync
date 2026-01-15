@@ -2191,8 +2191,9 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         state.life_history.push((music_time_sec, state.life));
     }
 
-    let beat_info =
-        state.timing.get_beat_info_from_time_cached(music_time_sec, &mut state.beat_info_cache);
+    let beat_info = state
+        .timing
+        .get_beat_info_from_time_cached(music_time_sec, &mut state.beat_info_cache);
     state.current_beat = beat_info.beat;
     state.is_in_freeze = beat_info.is_in_freeze;
     state.is_in_delay = beat_info.is_in_delay;

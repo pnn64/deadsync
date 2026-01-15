@@ -1,7 +1,7 @@
+use crate::game::parsing::notes::ParsedNote;
+use crate::game::timing::{TimingData, TimingSegments};
 use rssp::TechCounts;
 use rssp::stats::ArrowStats;
-use crate::game::timing::{TimingData, TimingSegments};
-use crate::game::parsing::notes::ParsedNote;
 
 #[derive(Clone, Debug)]
 pub struct ChartData {

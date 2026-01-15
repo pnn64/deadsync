@@ -2,9 +2,9 @@ use crate::core::gfx::BackendType;
 use crate::core::input::{
     FaceBtn, GamepadCodeBinding, InputBinding, Keymap, PadButton, PadDir, VirtualAction,
 };
-use std::collections::HashMap;
 use log::{info, warn};
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Mutex;
@@ -65,10 +65,7 @@ impl SimpleIni {
     }
 
     pub fn get(&self, section: &str, key: &str) -> Option<String> {
-        self.sections
-            .get(section)
-            .and_then(|s| s.get(key))
-            .cloned()
+        self.sections.get(section).and_then(|s| s.get(key)).cloned()
     }
 
     pub fn get_section(&self, section: &str) -> Option<&HashMap<String, String>> {
@@ -237,7 +234,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         "SmoothHistogram={}\n",
         if default.smooth_histogram { "1" } else { "0" }
     ));
-    content.push_str(&format!("SongParsingThreads={}\n", default.song_parsing_threads));
+    content.push_str(&format!(
+        "SongParsingThreads={}\n",
+        default.song_parsing_threads
+    ));
     content.push_str(&format!(
         "SoftwareRendererThreads={}\n",
         default.software_renderer_threads
@@ -1173,7 +1173,10 @@ fn save_without_keymaps() {
         if cfg.smooth_histogram { "1" } else { "0" }
     ));
     content.push_str(&format!("DisplayMonitor={}\n", cfg.display_monitor));
-    content.push_str(&format!("SongParsingThreads={}\n", cfg.song_parsing_threads));
+    content.push_str(&format!(
+        "SongParsingThreads={}\n",
+        cfg.song_parsing_threads
+    ));
     content.push_str(&format!(
         "SoftwareRendererThreads={}\n",
         cfg.software_renderer_threads

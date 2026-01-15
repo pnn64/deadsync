@@ -9,6 +9,7 @@ pub mod player_options;
 pub mod sandbox;
 pub mod select_color;
 pub mod select_music;
+pub mod select_style;
 use std::path::PathBuf;
 
 use crate::config::DisplayMode;
@@ -40,6 +41,7 @@ pub enum Screen {
     Mappings,
     Input,
     SelectColor,
+    SelectStyle,
     SelectMusic,
     Sandbox,
     Evaluation,

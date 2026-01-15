@@ -314,8 +314,7 @@ impl BeatInfoCache {
 
     pub fn reset(&mut self, timing: &TimingData) {
         self.start = GetBeatStarts::default();
-        self.start.last_time =
-            -timing.beat0_offset_seconds() - timing.beat0_group_offset_seconds();
+        self.start.last_time = -timing.beat0_offset_seconds() - timing.beat0_group_offset_seconds();
         self.last_elapsed_time = f32::NEG_INFINITY;
         self.global_offset_sec = timing.global_offset_sec;
     }

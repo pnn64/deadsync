@@ -1,6 +1,4 @@
-use crate::core::gfx::{
-    Backend, SamplerDesc, SamplerFilter, SamplerWrap, Texture as GfxTexture,
-};
+use crate::core::gfx::{Backend, SamplerDesc, SamplerFilter, SamplerWrap, Texture as GfxTexture};
 use crate::game::profile;
 use crate::ui::font::{self, Font, FontLoadData};
 use image::RgbaImage;
@@ -590,7 +588,8 @@ impl AssetManager {
                         "Failed to load texture for key '{}': {}. Using fallback.",
                         key, msg
                     );
-                    let texture = backend.create_texture(&fallback_image, SamplerDesc::default())?;
+                    let texture =
+                        backend.create_texture(&fallback_image, SamplerDesc::default())?;
                     register_texture_dims(&key, fallback_image.width(), fallback_image.height());
                     self.textures.insert(key, texture);
                 }

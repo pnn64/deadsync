@@ -389,7 +389,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.bg_fade_t = 0.0;
             ScreenAction::None
         }
-        VirtualAction::p1_start => ScreenAction::Navigate(Screen::SelectMusic),
+        VirtualAction::p1_start => ScreenAction::Navigate(Screen::SelectStyle),
         VirtualAction::p1_back => ScreenAction::Navigate(Screen::Menu),
         _ => ScreenAction::None,
     }

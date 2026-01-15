@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::{self, AssetManager};
+use crate::core::space::widescale;
 use crate::core::space::*;
-use crate::core::space::{widescale};
 use crate::game::judgment;
 use crate::game::judgment::{JudgeGrade, TimingWindow};
 use crate::game::note::{HoldResult, NoteType};

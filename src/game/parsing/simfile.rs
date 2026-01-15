@@ -4,8 +4,8 @@ use crate::game::{
     parsing::notes::ParsedNote,
     song::{SongData, SongPack, set_song_cache},
     timing::{
-        DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
-        TimingData, TimingSegments, WarpSegment,
+        DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment, TimingData,
+        TimingSegments, WarpSegment,
     },
 };
 use log::{info, warn};
@@ -220,7 +220,11 @@ impl From<&TimingSegments> for CachedTimingSegments {
                 .iter()
                 .map(|seg| (seg.beat, seg.length))
                 .collect(),
-            speeds: segments.speeds.iter().map(CachedSpeedSegment::from).collect(),
+            speeds: segments
+                .speeds
+                .iter()
+                .map(CachedSpeedSegment::from)
+                .collect(),
             scrolls: segments
                 .scrolls
                 .iter()
@@ -255,7 +259,11 @@ impl From<CachedTimingSegments> for TimingSegments {
                 .into_iter()
                 .map(|(beat, length)| WarpSegment { beat, length })
                 .collect(),
-            speeds: segments.speeds.into_iter().map(SpeedSegment::from).collect(),
+            speeds: segments
+                .speeds
+                .into_iter()
+                .map(SpeedSegment::from)
+                .collect(),
             scrolls: segments
                 .scrolls
                 .into_iter()
@@ -371,7 +379,11 @@ impl From<&ChartData> for SerializableChartData {
             meter: chart.meter,
             step_artist: chart.step_artist.clone(),
             notes: chart.notes.clone(),
-            parsed_notes: chart.parsed_notes.iter().map(CachedParsedNote::from).collect(),
+            parsed_notes: chart
+                .parsed_notes
+                .iter()
+                .map(CachedParsedNote::from)
+                .collect(),
             row_to_beat: chart.row_to_beat.clone(),
             timing_segments: (&chart.timing_segments).into(),
             short_hash: chart.short_hash.clone(),
@@ -754,12 +766,8 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
 
             if fastload
                 && let (Some(cp), Some(ch)) = (&cache_keys.cache_path, cache_keys.content_hash)
-                && let Some(song_data) = load_song_from_cache(
-                    &simfile_path,
-                    cp,
-                    ch,
-                    global_offset_seconds,
-                )
+                && let Some(song_data) =
+                    load_song_from_cache(&simfile_path, cp, ch, global_offset_seconds)
             {
                 songs_cache_hits += 1;
                 loaded_packs[pack_idx].songs.push(Arc::new(song_data));
@@ -855,8 +863,7 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
     if runtime.is_some() {
         info!(
             "Song parsing: used {} threads for cache misses (SongParsingThreads={}).",
-            parse_threads,
-            config.song_parsing_threads
+            parse_threads, config.song_parsing_threads
         );
     }
 
@@ -887,7 +894,10 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
     }
 
     loaded_packs.sort_by_cached_key(|p| {
-        (p.sort_title.to_ascii_lowercase(), p.group_name.to_ascii_lowercase())
+        (
+            p.sort_title.to_ascii_lowercase(),
+            p.group_name.to_ascii_lowercase(),
+        )
     });
 
     let songs_loaded = loaded_packs.iter().map(|p| p.songs.len()).sum::<usize>();
@@ -998,10 +1008,8 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
         .into_iter()
         .map(|c| {
             let lanes = step_type_lanes(&c.step_type_str);
-            let parsed_notes = crate::game::parsing::notes::parse_chart_notes(
-                &c.minimized_note_data,
-                lanes,
-            );
+            let parsed_notes =
+                crate::game::parsing::notes::parse_chart_notes(&c.minimized_note_data, lanes);
             info!(
                 "  Chart '{}' [{}] loaded with {} bytes of note data.",
                 c.difficulty_str,

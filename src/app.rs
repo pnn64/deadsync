@@ -9,7 +9,7 @@ use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting};
 use crate::screens::{
     Screen as CurrentScreen, ScreenAction, evaluation, gameplay, init, input as input_screen,
-    mappings, menu, options, player_options, sandbox, select_color, select_music,
+    mappings, menu, options, player_options, sandbox, select_color, select_music, select_style,
 };
 use crate::ui::color;
 use winit::{
@@ -122,6 +122,7 @@ pub struct ScreensState {
     player_options_state: Option<player_options::State>,
     init_state: init::State,
     select_color_state: select_color::State,
+    select_style_state: select_style::State,
     select_music_state: select_music::State,
     sandbox_state: sandbox::State,
     evaluation_state: evaluation::State,
@@ -204,6 +205,9 @@ impl ScreensState {
         select_music_state.preferred_difficulty_index = preferred_difficulty_index;
         select_music_state.selected_difficulty_index = preferred_difficulty_index;
 
+        let mut select_style_state = select_style::init();
+        select_style_state.active_color_index = color_index;
+
         let mut options_state = options::init();
         options_state.active_color_index = color_index;
 
@@ -229,6 +233,7 @@ impl ScreensState {
             player_options_state: None,
             init_state,
             select_color_state,
+            select_style_state,
             select_music_state,
             sandbox_state: sandbox::init(),
             evaluation_state,
@@ -272,6 +277,9 @@ impl ScreensState {
             CurrentScreen::SelectColor => {
                 select_color::update(&mut self.select_color_state, delta_time);
                 None
+            }
+            CurrentScreen::SelectStyle => {
+                select_style::update(&mut self.select_style_state, delta_time)
             }
             CurrentScreen::Evaluation => {
                 if let Some(start) = session.session_start_time {
@@ -579,6 +587,10 @@ impl App {
                 &mut self.state.screens.select_color_state,
                 &ev,
             ),
+            CurrentScreen::SelectStyle => crate::screens::select_style::handle_input(
+                &mut self.state.screens.select_style_state,
+                &ev,
+            ),
             CurrentScreen::Options => {
                 crate::screens::options::handle_input(&mut self.state.screens.options_state, &ev)
             }
@@ -836,6 +848,9 @@ impl App {
                 &self.state.screens.select_color_state,
                 screen_alpha_multiplier,
             ),
+            CurrentScreen::SelectStyle => {
+                select_style::get_actors(&self.state.screens.select_style_state)
+            }
             CurrentScreen::SelectMusic => select_music::get_actors(
                 &self.state.screens.select_music_state,
                 &self.asset_manager,
@@ -901,6 +916,7 @@ impl App {
             CurrentScreen::Mappings => mappings::out_transition(),
             CurrentScreen::PlayerOptions => player_options::out_transition(),
             CurrentScreen::SelectColor => select_color::out_transition(),
+            CurrentScreen::SelectStyle => select_style::out_transition(),
             CurrentScreen::SelectMusic => select_music::out_transition(),
             CurrentScreen::Sandbox => sandbox::out_transition(),
             CurrentScreen::Init => init::out_transition(),
@@ -917,6 +933,7 @@ impl App {
             CurrentScreen::Mappings => mappings::in_transition(),
             CurrentScreen::PlayerOptions => player_options::in_transition(),
             CurrentScreen::SelectColor => select_color::in_transition(),
+            CurrentScreen::SelectStyle => select_style::in_transition(),
             CurrentScreen::SelectMusic => select_music::in_transition(),
             CurrentScreen::Sandbox => sandbox::in_transition(),
             CurrentScreen::Evaluation => evaluation::in_transition(),
@@ -1418,12 +1435,25 @@ impl App {
         target: CurrentScreen,
     ) -> Vec<Command> {
         let mut commands = Vec::new();
-        if target == CurrentScreen::SelectColor {
-            commands.push(Command::PlayMusic {
-                path: PathBuf::from("assets/music/in_two (loop).ogg"),
-                looped: true,
-                volume: 1.0,
-            });
+        let target_menu_music = matches!(
+            target,
+            CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+        );
+        let prev_menu_music = matches!(
+            prev,
+            CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+        );
+
+        if target_menu_music {
+            if !prev_menu_music {
+                commands.push(Command::PlayMusic {
+                    path: PathBuf::from("assets/music/in_two (loop).ogg"),
+                    looped: true,
+                    volume: 1.0,
+                });
+            }
+        } else if prev_menu_music {
+            commands.push(Command::StopMusic);
         } else if target != CurrentScreen::Gameplay
             && !((prev == CurrentScreen::SelectMusic && target == CurrentScreen::PlayerOptions)
                 || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic))
@@ -1494,6 +1524,7 @@ impl App {
         if prev == CurrentScreen::SelectColor {
             let idx = self.state.screens.select_color_state.active_color_index;
             self.state.screens.menu_state.active_color_index = idx;
+            self.state.screens.select_style_state.active_color_index = idx;
             self.state.screens.select_music_state.active_color_index = idx;
             self.state.screens.options_state.active_color_index = idx;
             self.state.screens.input_state.active_color_index = idx;
@@ -1515,6 +1546,16 @@ impl App {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.mappings_state = mappings::init();
             self.state.screens.mappings_state.active_color_index = color_index;
+        } else if target == CurrentScreen::SelectStyle {
+            let current_color_index = self.state.screens.select_style_state.active_color_index;
+            self.state.screens.select_style_state = select_style::init();
+            self.state.screens.select_style_state.active_color_index = current_color_index;
+            self.state.screens.select_style_state.selected_index =
+                match profile::get_session_play_style() {
+                    profile::PlayStyle::Single => 0,
+                    profile::PlayStyle::Versus => 1,
+                    profile::PlayStyle::Double => 2,
+                };
         } else if target == CurrentScreen::PlayerOptions {
             let (song_arc, chart_difficulty_index) = {
                 let sm_state = &self.state.screens.select_music_state;
@@ -1812,9 +1853,11 @@ impl ApplicationHandler<UserEvent> for App {
                         if *elapsed >= *duration {
                             let prev = self.state.screens.current_screen;
                             self.state.screens.current_screen = *target;
-                            // Only SelectColor has its own looping BGM; keep SelectMusic preview
+                            // SelectColor/SelectStyle have their own looping BGM; keep SelectMusic preview
                             // playing when moving to/from PlayerOptions.
-                            if *target == CurrentScreen::SelectColor {
+                            if *target == CurrentScreen::SelectColor
+                                || *target == CurrentScreen::SelectStyle
+                            {
                                 crate::core::audio::play_music(
                                     std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
                                     crate::core::audio::Cut::default(),
@@ -1851,6 +1894,7 @@ impl ApplicationHandler<UserEvent> for App {
                             if prev == CurrentScreen::SelectColor {
                                 let idx = self.state.screens.select_color_state.active_color_index;
                                 self.state.screens.menu_state.active_color_index = idx;
+                                self.state.screens.select_style_state.active_color_index = idx;
                                 self.state.screens.select_music_state.active_color_index = idx;
                                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                                     gs.active_color_index = idx;

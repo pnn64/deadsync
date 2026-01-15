@@ -345,8 +345,9 @@ fn build_actor_recursive<'a>(
                         let renderer::ObjectType::Sprite { texture_id, .. } = &obj.object_type;
                         if let Some(stroke_key) = fm.stroke_texture_map.get(texture_id.as_ref()) {
                             let mut stroke_obj = obj.clone();
-                            let renderer::ObjectType::Sprite { texture_id, tint, .. } =
-                                &mut stroke_obj.object_type;
+                            let renderer::ObjectType::Sprite {
+                                texture_id, tint, ..
+                            } = &mut stroke_obj.object_type;
                             *texture_id = std::borrow::Cow::Owned(stroke_key.clone());
                             *tint = stroke_rgba;
                             stroke_objects.push(stroke_obj);
@@ -816,10 +817,7 @@ fn layout_text<'a>(
         .iter()
         .map(|line| {
             line.chars()
-                .map(|c| {
-                    font::find_glyph(font, c, fonts)
-                        .map_or(0, |glyph| advance_logical(glyph))
-                })
+                .map(|c| font::find_glyph(font, c, fonts).map_or(0, |glyph| advance_logical(glyph)))
                 .sum()
         })
         .collect();

@@ -428,13 +428,26 @@ impl Default for Profile {
 static PROFILE: Lazy<Mutex<Profile>> = Lazy::new(|| Mutex::new(Profile::default()));
 
 // --- Session-scoped state (not persisted) ---
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlayStyle {
+    #[default]
+    Single,
+    Versus,
+    Double,
+}
+
 #[derive(Debug)]
 struct SessionState {
     music_rate: f32,
+    play_style: PlayStyle,
 }
 
-static SESSION: Lazy<Mutex<SessionState>> =
-    Lazy::new(|| Mutex::new(SessionState { music_rate: 1.0 }));
+static SESSION: Lazy<Mutex<SessionState>> = Lazy::new(|| {
+    Mutex::new(SessionState {
+        music_rate: 1.0,
+        play_style: PlayStyle::Single,
+    })
+});
 
 /// Creates the default profile directory and .ini files if they don't exist.
 fn create_default_files() -> Result<(), std::io::Error> {
@@ -785,6 +798,14 @@ pub fn set_session_music_rate(rate: f32) {
     } else {
         1.0
     };
+}
+
+pub fn get_session_play_style() -> PlayStyle {
+    SESSION.lock().unwrap().play_style
+}
+
+pub fn set_session_play_style(style: PlayStyle) {
+    SESSION.lock().unwrap().play_style = style;
 }
 
 /// Persist the last played song and difficulty to the on-disk profile.
