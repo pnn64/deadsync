@@ -557,7 +557,6 @@ struct CachedSong {
 #[derive(Clone)]
 struct SongCacheKeys {
     cache_path: Option<PathBuf>,
-    content_hash: Option<u64>,
 }
 
 fn get_content_hash(path: &Path) -> Result<u64, std::io::Error> {
@@ -597,20 +596,7 @@ fn compute_song_cache_keys(path: &Path) -> SongCacheKeys {
             None
         }
     };
-    let content_hash = match get_content_hash(path) {
-        Ok(h) => Some(h),
-        Err(e) => {
-            warn!(
-                "Could not hash content of {:?}: {}. Caching disabled for this file.",
-                path, e
-            );
-            None
-        }
-    };
-    SongCacheKeys {
-        cache_path,
-        content_hash,
-    }
+    SongCacheKeys { cache_path }
 }
 
 fn fmt_scan_time(d: Duration) -> String {
@@ -760,16 +746,12 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
             let cache_keys = if fastload || cachesongs {
                 compute_song_cache_keys(&simfile_path)
             } else {
-                SongCacheKeys {
-                    cache_path: None,
-                    content_hash: None,
-                }
+                SongCacheKeys { cache_path: None }
             };
 
             if fastload
-                && let (Some(cp), Some(ch)) = (&cache_keys.cache_path, cache_keys.content_hash)
-                && let Some(song_data) =
-                    load_song_from_cache(&simfile_path, cp, ch, global_offset_seconds)
+                && let Some(cp) = &cache_keys.cache_path
+                && let Some(song_data) = load_song_from_cache(&simfile_path, cp, global_offset_seconds)
             {
                 songs_cache_hits += 1;
                 loaded_packs[pack_idx].songs.push(Arc::new(song_data));
@@ -1127,7 +1109,6 @@ pub fn scan_and_load_courses(courses_root_str: &'static str, songs_root_str: &'s
 fn load_song_from_cache(
     path: &Path,
     cache_path: &Path,
-    content_hash: u64,
     global_offset_seconds: f32,
 ) -> Option<SongData> {
     if !cache_path.exists() {
@@ -1146,24 +1127,38 @@ fn load_song_from_cache(
         return None;
     };
 
-    if cached_song.source_hash == content_hash && cached_song.rssp_version == rssp::RSSP_VERSION {
-        info!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
-        let mut song_data: SongData = cached_song.data.into();
-        hydrate_chart_timings(&mut song_data, global_offset_seconds);
-        return Some(song_data);
+    if cached_song.rssp_version != rssp::RSSP_VERSION {
+        info!(
+            "Cache stale (rssp version mismatch) for: {:?}",
+            path.file_name().unwrap_or_default()
+        );
+        return None;
     }
+
+    let content_hash = match get_content_hash(path) {
+        Ok(h) => h,
+        Err(e) => {
+            warn!(
+                "Could not hash content of {:?}: {}. Ignoring cache.",
+                path.file_name().unwrap_or_default(),
+                e
+            );
+            return None;
+        }
+    };
+
     if cached_song.source_hash != content_hash {
         info!(
             "Cache stale (content hash mismatch) for: {:?}",
             path.file_name().unwrap_or_default()
         );
-    } else {
-        info!(
-            "Cache stale (rssp version mismatch) for: {:?}",
-            path.file_name().unwrap_or_default()
-        );
+        return None;
     }
-    None
+
+    info!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
+    let mut song_data: SongData = cached_song.data.into();
+    hydrate_chart_timings(&mut song_data, global_offset_seconds);
+    Some(song_data)
 }
 
 fn parse_song_and_maybe_write_cache(
@@ -1181,9 +1176,10 @@ fn parse_song_and_maybe_write_cache(
             path.file_name().unwrap_or_default()
         );
     }
-    let song_data = parse_and_process_song_file(path)?;
+    let need_hash = cachesongs && cache_keys.cache_path.is_some();
+    let (song_data, content_hash) = parse_and_process_song_file(path, need_hash)?;
 
-    if cachesongs && let (Some(cp), Some(ch)) = (cache_keys.cache_path, cache_keys.content_hash) {
+    if cachesongs && let (Some(cp), Some(ch)) = (cache_keys.cache_path, content_hash) {
         let serializable_data: SerializableSongData = (&song_data).into();
         let cached_song = CachedSong {
             rssp_version: rssp::RSSP_VERSION.to_string(),
@@ -1208,8 +1204,13 @@ fn parse_song_and_maybe_write_cache(
 }
 
 /// The original parsing logic, now separated to be called on a cache miss.
-fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
+fn parse_and_process_song_file(path: &Path, need_hash: bool) -> Result<(SongData, Option<u64>), String> {
     let simfile_data = fs::read(path).map_err(|e| format!("Could not read file: {}", e))?;
+    let content_hash = need_hash.then(|| {
+        let mut hasher = XxHash64::with_seed(0);
+        hasher.write(&simfile_data);
+        hasher.finish()
+    });
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
     let options = AnalysisOptions::default(); // Use default parsing options
 
@@ -1293,7 +1294,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
         music_length_seconds = chart_length_seconds;
     }
 
-    Ok(SongData {
+    Ok((SongData {
         title: summary.title_str,
         subtitle: summary.subtitle_str,
         artist: summary.artist_str,
@@ -1324,7 +1325,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SongData, String> {
         music_length_seconds,
         total_length_seconds: summary.total_length,
         charts,
-    })
+    }, content_hash))
 }
 
 /// Computes the length of the music file in seconds, if it is a readable OGG file.
