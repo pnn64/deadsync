@@ -67,6 +67,18 @@ pub const SIMPLY_LOVE_HEX: [&str; 12] = [
     "#AEFA44", "#FFFF00", "#FFBE00", "#FF7D00",
 ];
 
+/// Select Profile Bright Palette
+pub const SELECT_PROFILE_HEX: [&str; 12] = [
+    "#FF7157", "#FF6A99", "#FF56D9", "#FA6AFF", "#A7A3FF", "#4AB3FF", "#00E0F8", "#70FCA5",
+    "#D4FE52", "#FFFF00", "#FFE800", "#FF9A00",
+];
+
+/// Select Profile Dim/Dark Palette
+pub const SELECT_PROFILE_DIM_HEX: [&str; 12] = [
+    "#7F3528", "#7F3147", "#7F2866", "#77317F", "#4D4B7F", "#22547F", "#006974", "#34784C",
+    "#637E26", "#7F7F00", "#7F6C00", "#7F4700",
+];
+
 /// Judgment colors for the statistics display, ordered from best to worst.
 pub const JUDGMENT_HEX: [&str; 6] = [
     "#21CCE8", // Fantastic
@@ -126,6 +138,16 @@ pub fn decorative_rgba(idx: i32) -> [f32; 4] {
 #[inline(always)]
 pub fn simply_love_rgba(idx: i32) -> [f32; 4] {
     rgba_hex(SIMPLY_LOVE_HEX[wrap(SIMPLY_LOVE_HEX.len(), idx)])
+}
+
+#[inline(always)]
+pub fn select_profile_rgba(idx: i32) -> [f32; 4] {
+    rgba_hex(SELECT_PROFILE_HEX[wrap(SELECT_PROFILE_HEX.len(), idx)])
+}
+
+#[inline(always)]
+pub fn select_profile_dim_rgba(idx: i32) -> [f32; 4] {
+    rgba_hex(SELECT_PROFILE_DIM_HEX[wrap(SELECT_PROFILE_DIM_HEX.len(), idx)])
 }
 
 /// Menu selected color rule: “current SIMPLY_LOVE minus 2”

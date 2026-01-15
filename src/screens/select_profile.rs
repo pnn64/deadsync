@@ -44,8 +44,8 @@ const AVATAR_HEART_ZOOM: f32 = 0.09;
 const AVATAR_TEXT_Y: f32 = 67.0;
 
 const INFO_LINE_Y_OFF: f32 = 18.0;
-const PREVIEW_NOTESKIN_Y_OFF: f32 = 32.0;
-const PREVIEW_JUDGMENT_Y_OFF: f32 = 48.0;
+// Unified Y offset for side-by-side previews
+const PREVIEW_Y_OFF: f32 = 42.0;
 
 const PREVIEW_LABEL_H: f32 = 12.0;
 const PREVIEW_VALUE_H: f32 = 16.0;
@@ -313,12 +313,14 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let p1_cx = cx - FRAME_CX_OFF;
     let p2_cx = cx + FRAME_CX_OFF;
 
-    let mut p1_color = color::decorative_rgba(state.active_color_index);
-    p1_color[3] *= 0.85;
+    // Use dim profile palette for the info pane (Left Column).
+    let col_dim = color::select_profile_dim_rgba(state.active_color_index);
+    // Use bright profile palette for the main frame (Right Column).
+    let col_bright = color::select_profile_rgba(state.active_color_index);
 
     let border_rgba = [1.0, 1.0, 1.0, 1.0];
 
-    // P1 frame background
+    // P1 frame background (Right Column / Scroller) - Bright Color
     ui.push(act!(quad:
         align(0.5, 0.5):
         xy(p1_cx, cy):
@@ -330,11 +332,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         align(0.5, 0.5):
         xy(p1_cx, cy):
         zoomto(FRAME_W_SCROLLER, frame_h):
-        diffuse(p1_color[0], p1_color[1], p1_color[2], p1_color[3]):
+        diffuse(col_bright[0], col_bright[1], col_bright[2], col_bright[3]):
         z(101)
     ));
 
-    // P1 info pane background
+    // P1 info pane background (Left Column / Stats) - Dim Color
     let info_x0 = p1_cx + INFO_X0_OFF;
     let info_text_x = info_x0 + INFO_PAD * 1.25;
     let info_max_w = INFO_W - INFO_PAD * 2.5;
@@ -343,7 +345,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         align(0.0, 0.0):
         xy(info_x0, frame_y0):
         zoomto(INFO_W, frame_h):
-        diffuse(0.0, 0.0, 0.0, 0.5):
+        diffuse(col_dim[0], col_dim[1], col_dim[2], col_dim[3]):
         z(102)
     ));
 
@@ -373,7 +375,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         z(103)
     ));
 
-    // P1 scroller
+    // P1 scroller (Selection Bar) - Dim Color (contrast against bright bg)
     let scroller_cx = p1_cx + SCROLLER_CX_OFF;
     let highlight_h = ROW_H;
 
@@ -381,7 +383,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         align(0.5, 0.5):
         xy(scroller_cx, cy):
         zoomto(SCROLLER_W, highlight_h):
-        diffuse(0.0, 0.0, 0.0, 0.5):
+        diffuse(col_dim[0], col_dim[1], col_dim[2], col_dim[3]):
         z(102)
     ));
 
@@ -396,8 +398,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
         let a = 1.0 - (d.abs() as f32 / (rows_half as f32 + 1.0));
         let mut text_color = [1.0, 1.0, 1.0, 0.35 + 0.65 * a];
+        let mut shadow = 0.0;
         if d == 0 {
-            text_color = color::menu_selected_rgba(state.active_color_index);
+            // Selected row: pure white with shadow
+            text_color = [1.0, 1.0, 1.0, 1.0];
+            shadow = 1.0;
         }
 
         ui.push(act!(text:
@@ -408,6 +413,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             zoom(0.92):
             settext(choice.display_name.clone()):
             diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
+            shadowlength(shadow):
             z(103):
             horizalign(center)
         ));
@@ -468,15 +474,6 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     ui.push(act!(text:
         align(0.0, 0.0):
-        xy(info_text_x, avatar_y + avatar_dim + 6.0):
-        font("miso"):
-        zoomtoheight(PREVIEW_LABEL_H):
-        settext("SPEED"):
-        diffuse(1.0, 1.0, 1.0, 0.65):
-        z(103)
-    ));
-    ui.push(act!(text:
-        align(0.0, 0.0):
         xy(info_text_x, avatar_y + avatar_dim + 20.0):
         font("miso"):
         maxwidth(info_max_w):
@@ -496,7 +493,10 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     ));
 
     // NoteSkin + JudgmentGraphic previews (like PlayerOptions; SL-style placement).
+    // Now positioned side-by-side within the info pane.
     if selected.is_some_and(|c| matches!(c.kind, ActiveProfile::Local { .. })) {
+        let preview_y = cy + PREVIEW_Y_OFF;
+
         if let Some(ns) = &state.preview_noteskin {
             let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
             if let Some(note_slot) = ns.notes.get(note_idx) {
@@ -515,9 +515,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
                     PREVIEW_SCALE
                 };
 
+                let ns_x = info_x0 + INFO_W * 0.28;
+
                 ui.push(act!(sprite(note_slot.texture_key().to_string()):
-                    align(0.0, 0.5):
-                    xy(info_x0 + INFO_PAD * 3.0, cy + PREVIEW_NOTESKIN_Y_OFF):
+                    align(0.5, 0.5):
+                    xy(ns_x, preview_y):
                     zoomto(width * scale, target_height):
                     rotationz(-note_slot.def.rotation_deg as f32):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -575,25 +577,16 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             .unwrap_or(None);
 
         if let Some(texture) = judgment_texture {
+            let jd_x = info_x0 + INFO_W * 0.72;
             ui.push(act!(sprite(texture):
-                align(0.0, 0.5):
-                xy(info_x0 + (INFO_PAD * 2.5 + INFO_W * 0.5), cy + PREVIEW_JUDGMENT_Y_OFF):
+                align(0.5, 0.5):
+                xy(jd_x, preview_y):
                 setstate(0):
                 zoom(0.225):
                 z(104)
             ));
         }
     }
-    ui.push(act!(text:
-        align(0.0, 0.0):
-        xy(info_text_x, frame_y0 + frame_h - 18.0):
-        font("miso"):
-        maxwidth(info_max_w):
-        zoomtoheight(12.0):
-        settext("Use ▲ ▼ to choose, then press START"):
-        diffuse(1.0, 1.0, 1.0, 0.75):
-        z(103)
-    ));
 
     for mut a in ui {
         apply_alpha_to_actor(&mut a, alpha_multiplier);
