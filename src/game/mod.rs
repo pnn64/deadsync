@@ -1,4 +1,5 @@
 pub mod chart;
+pub mod course;
 pub mod gameplay;
 pub mod judgment;
 pub mod life;

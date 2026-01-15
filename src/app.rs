@@ -2067,6 +2067,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let profile_data = profile::get();
 
     song_loading::scan_and_load_songs("songs");
+    song_loading::scan_and_load_courses("courses", "songs");
     let event_loop: EventLoop<UserEvent> = EventLoop::<UserEvent>::with_user_event().build()?;
 
     // Spawn background thread to pump gilrs and emit user events; decoupled from frame rate.

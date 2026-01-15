@@ -1,5 +1,6 @@
 use crate::game::{
     chart::ChartData,
+    course::set_course_cache,
     note::NoteType,
     parsing::notes::ParsedNote,
     song::{SongData, SongPack, set_song_cache},
@@ -10,6 +11,7 @@ use crate::game::{
 };
 use log::{info, warn};
 use rssp::{AnalysisOptions, analyze};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -911,6 +913,232 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
         fmt_scan_time(started.elapsed())
     );
     set_song_cache(loaded_packs);
+}
+
+fn is_dir_ci(dir: &Path, name: &str) -> Option<PathBuf> {
+    let want = name.trim().to_ascii_lowercase();
+    if want.is_empty() {
+        return None;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return None;
+    };
+    for entry in entries.flatten() {
+        if !entry.path().is_dir() {
+            continue;
+        }
+        let got = entry.file_name().to_string_lossy().to_ascii_lowercase();
+        if got == want {
+            return Some(entry.path());
+        }
+    }
+    None
+}
+
+fn collect_course_paths(root: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("crs"))
+            {
+                out.push(path);
+            }
+        }
+    }
+    out.sort_by_cached_key(|p| p.to_string_lossy().to_ascii_lowercase());
+    out
+}
+
+fn resolve_song_dir(
+    songs_dir: &Path,
+    group_dirs: &mut HashMap<String, PathBuf>,
+    group: Option<&str>,
+    song: &str,
+) -> Option<PathBuf> {
+    fn group_dir<'a>(
+        songs_dir: &Path,
+        group_dirs: &'a mut HashMap<String, PathBuf>,
+        group: &str,
+    ) -> Option<&'a Path> {
+        let key = group.trim().to_ascii_lowercase();
+        if key.is_empty() {
+            return None;
+        }
+        if !group_dirs.contains_key(&key) {
+            let direct = songs_dir.join(group);
+            let path = if direct.is_dir() {
+                Some(direct)
+            } else {
+                is_dir_ci(songs_dir, group)
+            }?;
+            group_dirs.insert(key.clone(), path);
+        }
+        group_dirs.get(&key).map(|p| p.as_path())
+    }
+
+    let song = song.trim();
+    if song.is_empty() {
+        return None;
+    }
+
+    if let Some(group) = group.map(str::trim).filter(|g| !g.is_empty()) {
+        let group_dir = group_dir(songs_dir, group_dirs, group)?;
+        let direct = group_dir.join(song);
+        return if direct.is_dir() {
+            Some(direct)
+        } else {
+            is_dir_ci(group_dir, song)
+        };
+    }
+
+    let Ok(entries) = fs::read_dir(songs_dir) else {
+        return None;
+    };
+    for entry in entries.flatten() {
+        let group_dir = entry.path();
+        if !group_dir.is_dir() {
+            continue;
+        }
+        let direct = group_dir.join(song);
+        if direct.is_dir() {
+            return Some(direct);
+        }
+        if let Some(found) = is_dir_ci(&group_dir, song) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+pub fn scan_and_load_courses(courses_root_str: &'static str, songs_root_str: &'static str) {
+    info!("Starting course scan in '{}'...", courses_root_str);
+    let started = Instant::now();
+
+    let courses_root = Path::new(courses_root_str);
+    if !courses_root.is_dir() {
+        warn!(
+            "Courses directory '{}' not found. No courses will be loaded.",
+            courses_root_str
+        );
+        set_course_cache(Vec::new());
+        return;
+    }
+
+    let songs_root = Path::new(songs_root_str);
+    if !songs_root.is_dir() {
+        warn!(
+            "Songs directory '{}' not found. No courses will be loaded.",
+            songs_root_str
+        );
+        set_course_cache(Vec::new());
+        return;
+    }
+
+    let mut loaded_courses = Vec::new();
+    let mut courses_failed = 0usize;
+    let mut group_dirs: HashMap<String, PathBuf> = HashMap::new();
+
+    for course_path in collect_course_paths(courses_root) {
+        let data = match fs::read(&course_path) {
+            Ok(d) => d,
+            Err(e) => {
+                courses_failed += 1;
+                warn!("Failed to read course '{}': {}", course_path.display(), e);
+                continue;
+            }
+        };
+
+        let course = match rssp::course::parse_crs(&data) {
+            Ok(c) => c,
+            Err(e) => {
+                courses_failed += 1;
+                warn!("Failed to parse course '{}': {}", course_path.display(), e);
+                continue;
+            }
+        };
+
+        let mut ok = true;
+        for (idx, entry) in course.entries.iter().enumerate() {
+            let rssp::course::CourseSong::Fixed { group, song } = &entry.song else {
+                warn!(
+                    "Course '{}' has unsupported song selector in entry {} (only fixed #SONG is supported).",
+                    course.name,
+                    idx + 1
+                );
+                ok = false;
+                break;
+            };
+
+            let Some(song_dir) = resolve_song_dir(
+                songs_root,
+                &mut group_dirs,
+                group.as_deref(),
+                song,
+            ) else {
+                warn!(
+                    "Course '{}' entry {} references missing song '{}{}'.",
+                    course.name,
+                    idx + 1,
+                    group
+                        .as_deref()
+                        .map(|g| format!("{g}/"))
+                        .unwrap_or_default(),
+                    song
+                );
+                ok = false;
+                break;
+            };
+
+            match rssp::pack::scan_song_dir(&song_dir, rssp::pack::ScanOpt::default()) {
+                Ok(Some(_)) => {}
+                Ok(None) => {
+                    warn!(
+                        "Course '{}' entry {} song dir has no simfile: {}",
+                        course.name,
+                        idx + 1,
+                        song_dir.display()
+                    );
+                    ok = false;
+                    break;
+                }
+                Err(e) => {
+                    warn!(
+                        "Course '{}' entry {} failed scanning song dir {}: {e:?}",
+                        course.name,
+                        idx + 1,
+                        song_dir.display()
+                    );
+                    ok = false;
+                    break;
+                }
+            }
+        }
+
+        if ok {
+            loaded_courses.push((course_path, course));
+        } else {
+            courses_failed += 1;
+        }
+    }
+
+    info!(
+        "Finished course scan. Loaded {} courses (failed {}) in {}.",
+        loaded_courses.len(),
+        courses_failed,
+        fmt_scan_time(started.elapsed())
+    );
+    set_course_cache(loaded_courses);
 }
 
 fn load_song_from_cache(

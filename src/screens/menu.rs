@@ -2,6 +2,7 @@ use crate::act;
 // Screen navigation is handled in app.rs
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::network::{self, ConnectionStatus};
+use crate::game::course::get_course_cache;
 use crate::game::song::get_song_cache;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
@@ -141,10 +142,17 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     // --- DYNAMICALLY CALCULATE AND DISPLAY SONG/PACK COUNT ---
     let version = env!("CARGO_PKG_VERSION");
-    let song_cache = get_song_cache();
-    let num_packs = song_cache.len();
-    let num_songs: usize = song_cache.iter().map(|pack| pack.songs.len()).sum();
-    let song_info_text = format!("{} songs in {} groups, X courses", num_songs, num_packs);
+    let (num_packs, num_songs) = {
+        let song_cache = get_song_cache();
+        let num_packs = song_cache.len();
+        let num_songs: usize = song_cache.iter().map(|pack| pack.songs.len()).sum();
+        (num_packs, num_songs)
+    };
+    let num_courses = { get_course_cache().len() };
+    let song_info_text = format!(
+        "{} songs in {} groups, {} courses",
+        num_songs, num_packs, num_courses
+    );
 
     // --- Create a single multi-line string and pass it to one text actor ---
     let combined_text = format!("DeadSync {}\n{}", version, song_info_text);
