@@ -4,7 +4,7 @@ use crate::core::gfx::{BlendMode, RenderList, RenderObject};
 use crate::core::space::Metrics;
 use crate::ui::actors::{self, Actor, SizeSpec};
 use crate::ui::font;
-use cgmath::{Deg, Matrix4, Vector2, Vector3};
+use cgmath::{Matrix4, Vector2, Vector3};
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
 
@@ -16,7 +16,7 @@ pub fn build_screen<'a>(
     fonts: &std::collections::HashMap<&'static str, font::Font>,
     total_elapsed: f32,
 ) -> RenderList<'a> {
-    let mut objects = Vec::with_capacity(estimate_object_count(actors, fonts));
+    let mut objects = Vec::with_capacity(estimate_object_count(actors));
     let mut order_counter: u32 = 0;
 
     let root_rect = SmRect {
@@ -49,48 +49,22 @@ pub fn build_screen<'a>(
 }
 
 #[inline(always)]
-fn estimate_object_count(
-    actors: &[Actor],
-    fonts: &std::collections::HashMap<&'static str, font::Font>,
-) -> usize {
+fn estimate_object_count(actors: &[Actor]) -> usize {
     let mut stack: Vec<&Actor> = Vec::with_capacity(actors.len());
     stack.extend(actors.iter());
     let mut total = 0usize;
 
     while let Some(a) = stack.pop() {
         match a {
-            Actor::Sprite { visible, tint, .. } => {
-                if *visible && tint[3] > 0.0 {
+            Actor::Sprite { visible, .. } => {
+                if *visible {
                     total += 1;
                 }
             }
-            Actor::Text {
-                content,
-                font,
-                color,
-                stroke_color,
-                ..
-            } => {
-                if let Some(fm) = fonts.get(font) {
-                    let fallback_font = fm.fallback_font_name.and_then(|name| fonts.get(name));
-                    let glyph_count = content
-                        .chars()
-                        .filter(|&c| {
-                            if c == '\n' {
-                                return false;
-                            }
-                            let mapped = fm.glyph_map.contains_key(&c)
-                                || fallback_font.is_some_and(|f| f.glyph_map.contains_key(&c));
-                            mapped || fm.default_glyph.is_some()
-                        })
-                        .count();
-                    let mut stroke_rgba = stroke_color.unwrap_or(fm.default_stroke_color);
-                    stroke_rgba[3] *= color[3];
-                    let has_stroke = stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty();
-                    total += glyph_count * if has_stroke { 2 } else { 1 };
-                } else {
-                    total += content.chars().filter(|&ch| ch != '\n').count();
-                }
+            Actor::Text { content, .. } => {
+                // Heuristic: each char is a glyph + potentially stroke.
+                // 2 objects per char is a safe upper bound.
+                total += content.len() * 2;
             }
             Actor::Frame {
                 children,
@@ -103,7 +77,6 @@ fn estimate_object_count(
                 stack.extend(children.iter());
             }
             Actor::Shadow { child, .. } => {
-                // Shadow duplicates its child's objects; count by visiting the child.
                 stack.push(child);
             }
         }
@@ -706,9 +679,34 @@ fn push_sprite<'a>(
         std::mem::swap(&mut ft_eff, &mut fb_eff);
     }
 
-    let transform = Matrix4::from_translation(Vector3::new(center_x, center_y, 0.0))
-        * Matrix4::from_angle_z(Deg(rot_z_deg))
-        * Matrix4::from_nonuniform_scale(size_x, size_y, 1.0);
+    let transform = {
+        let r_rad = rot_z_deg.to_radians();
+        let (s, c) = r_rad.sin_cos();
+        // Matrix = T * R * S
+        // Cgmath is column-major: new(c0, c1, c2, c3)
+        // c0 = [sx*c, sx*s, 0, 0]
+        // c1 = [-sy*s, sy*c, 0, 0]
+        // c2 = [0, 0, 1, 0]
+        // c3 = [ctx, cty, 0, 1]
+        Matrix4::new(
+            size_x * c,
+            size_x * s,
+            0.0,
+            0.0,
+            -size_y * s,
+            size_y * c,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            center_x,
+            center_y,
+            0.0,
+            1.0,
+        )
+    };
 
     let final_texture_id = if is_solid {
         std::borrow::Cow::Borrowed("__white")
@@ -802,8 +800,9 @@ fn layout_text<'a>(
     if text.is_empty() {
         return vec![];
     }
-    let lines: Vec<&str> = text.lines().collect();
-    if lines.is_empty() {
+    // Optimization: Avoid allocating Vec for lines; iterate twice.
+    let mut line_iter_check = text.lines();
+    if line_iter_check.next().is_none() {
         return vec![];
     }
 
@@ -813,14 +812,15 @@ fn layout_text<'a>(
     }
 
     // 1) Logical (integer) widths like SM: sum integer advances (default glyph if unmapped).
-    let logical_line_widths: Vec<i32> = lines
-        .iter()
+    let logical_line_widths: Vec<i32> = text
+        .lines()
         .map(|line| {
             line.chars()
                 .map(|c| font::find_glyph(font, c, fonts).map_or(0, |glyph| advance_logical(glyph)))
                 .sum()
         })
         .collect();
+
     let max_logical_width_i = logical_line_widths.iter().copied().max().unwrap_or(0);
     let block_w_logical_even = quantize_up_even_i32(max_logical_width_i) as f32;
 
@@ -830,7 +830,8 @@ fn layout_text<'a>(
     } else {
         font.line_spacing as f32
     };
-    let num_lines = lines.len();
+
+    let num_lines = text.lines().count();
     let block_h_logical_i = if num_lines > 1 {
         font.height + ((num_lines - 1) as i32 * font.line_spacing)
     } else {
@@ -872,8 +873,6 @@ fn layout_text<'a>(
     let height_after_zoom = height_before_zoom * scale[1];
 
     // 5) Decide the clamp denominators per axis based on order flags
-    // If a zoom occurred AFTER the last max for that axis, SM semantics = clamp BEFORE that zoom.
-    // Otherwise clamp AFTER zoom.
     let denom_w_for_max = if max_w_pre_zoom {
         width_before_zoom
     } else {
@@ -937,23 +936,12 @@ fn layout_text<'a>(
         center + logical * scale
     }
 
-    use std::collections::HashMap;
-    let mut dims_cache: HashMap<&str, (f32, f32)> = HashMap::new();
-
-    #[inline(always)]
-    fn atlas_dims<'t>(cache: &mut HashMap<&'t str, (f32, f32)>, key: &'t str) -> (f32, f32) {
-        if let Some(&d) = cache.get(key) {
-            return d;
-        }
-        let d = assets::texture_dims(key)
-            .map_or((1.0_f32, 1.0_f32), |meta| (meta.w as f32, meta.h as f32));
-        cache.insert(key, d);
-        d
-    }
+    // Optimization: Use linear scan on simple vec instead of HashMap for texture dims cache
+    let mut dims_cache: Vec<(&str, (f32, f32))> = Vec::with_capacity(4);
 
     let mut objects = Vec::new();
 
-    for (i, line) in lines.iter().enumerate() {
+    for (i, line) in text.lines().enumerate() {
         pen_y_logical += font.height;
         let baseline_local_logical = pen_y_logical as f32;
 
@@ -961,32 +949,52 @@ fn layout_text<'a>(
         let mut pen_x_logical = start_x_logical(text_align, block_w_logical_even, line_w_logical);
 
         for ch in line.chars() {
-            let glyph = font::find_glyph(font, ch, fonts);
-
-            let glyph = match glyph {
+            let glyph = match font::find_glyph(font, ch, fonts) {
                 Some(g) => g,
-                None => continue, // no glyph and no default; skip entirely
+                None => continue,
             };
 
             let quad_w = glyph.size[0] * sx;
             let quad_h = glyph.size[1] * sy;
 
             let draw_quad = !(ch == ' ' && font.glyph_map.get(&ch).is_none());
-
-            let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
-            let quad_y_logical = baseline_local_logical + glyph.offset[1];
-
             if draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
+                let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
+                let quad_y_logical = baseline_local_logical + glyph.offset[1];
+
                 let quad_x_sm = logical_to_world(block_center_x, quad_x_logical, sx);
                 let quad_y_sm = logical_to_world(block_center_y, quad_y_logical, sy);
 
                 let center_x = m.left + quad_x_sm + quad_w * 0.5;
                 let center_y = m.top - (quad_y_sm + quad_h * 0.5);
 
-                let transform = Matrix4::from_translation(Vector3::new(center_x, center_y, 0.0))
-                    * Matrix4::from_nonuniform_scale(quad_w, quad_h, 1.0);
+                // Optimization: T * S manually
+                // c0 = [w, 0, 0, 0]
+                // c1 = [0, h, 0, 0]
+                // c2 = [0, 0, 1, 0]
+                // c3 = [tx, ty, 0, 1]
+                let transform = Matrix4::new(
+                    quad_w, 0.0, 0.0, 0.0,
+                    0.0, quad_h, 0.0, 0.0,
+                    0.0, 0.0, 1.0, 0.0,
+                    center_x, center_y, 0.0, 1.0,
+                );
 
-                let (tex_w, tex_h) = atlas_dims(&mut dims_cache, &glyph.texture_key);
+                // Inline atlas_dims with linear scan
+                let (tex_w, tex_h) = {
+                    let key = &glyph.texture_key;
+                    if let Some(&(_, d)) = dims_cache.iter().find(|(k, _)| k == key) {
+                        d
+                    } else {
+                        let d = assets::texture_dims(key)
+                            .map_or((1.0_f32, 1.0_f32), |meta| (meta.w as f32, meta.h as f32));
+                        if dims_cache.len() < 8 {
+                             dims_cache.push((key, d));
+                        }
+                        d
+                    }
+                };
+
                 let uv_scale = [
                     (glyph.tex_rect[2] - glyph.tex_rect[0]) / tex_w,
                     (glyph.tex_rect[3] - glyph.tex_rect[1]) / tex_h,
