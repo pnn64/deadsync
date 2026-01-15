@@ -9,7 +9,8 @@ use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting};
 use crate::screens::{
     Screen as CurrentScreen, ScreenAction, evaluation, gameplay, init, input as input_screen,
-    mappings, menu, options, player_options, sandbox, select_color, select_music, select_style,
+    mappings, menu, options, player_options, sandbox, select_color, select_music, select_profile,
+    select_style,
 };
 use crate::ui::color;
 use winit::{
@@ -121,6 +122,7 @@ pub struct ScreensState {
     input_state: input_screen::State,
     player_options_state: Option<player_options::State>,
     init_state: init::State,
+    select_profile_state: select_profile::State,
     select_color_state: select_color::State,
     select_style_state: select_style::State,
     select_music_state: select_music::State,
@@ -194,6 +196,9 @@ impl ScreensState {
         let mut menu_state = menu::init();
         menu_state.active_color_index = color_index;
 
+        let mut select_profile_state = select_profile::init();
+        select_profile_state.active_color_index = color_index;
+
         let mut select_color_state = select_color::init();
         select_color_state.active_color_index = color_index;
         select_color_state.scroll = color_index as f32;
@@ -232,6 +237,7 @@ impl ScreensState {
             input_state,
             player_options_state: None,
             init_state,
+            select_profile_state,
             select_color_state,
             select_style_state,
             select_music_state,
@@ -274,6 +280,7 @@ impl ScreensState {
                 sandbox::update(&mut self.sandbox_state, delta_time);
                 None
             }
+            CurrentScreen::SelectProfile => None,
             CurrentScreen::SelectColor => {
                 select_color::update(&mut self.select_color_state, delta_time);
                 None
@@ -377,6 +384,32 @@ impl App {
                 Vec::new()
             }
             ScreenAction::Exit => self.handle_exit_action(),
+            ScreenAction::SelectProfile(selected) => {
+                let profile_data = profile::set_active_profile(selected);
+                if let Some(backend) = self.backend.as_mut() {
+                    self.asset_manager
+                        .set_profile_avatar(backend, profile_data.avatar_path.clone());
+                }
+
+                let max_diff_index = crate::ui::color::FILE_DIFFICULTY_NAMES
+                    .len()
+                    .saturating_sub(1);
+                let preferred = if max_diff_index == 0 {
+                    0
+                } else {
+                    cmp::min(profile_data.last_difficulty_index, max_diff_index)
+                };
+                self.state.session.preferred_difficulty_index = preferred;
+
+                let current_color_index = self.state.screens.select_profile_state.active_color_index;
+                self.state.screens.select_music_state = select_music::init();
+                self.state.screens.select_music_state.active_color_index = current_color_index;
+                self.state.screens.select_music_state.preferred_difficulty_index = preferred;
+                self.state.screens.select_music_state.selected_difficulty_index = preferred;
+
+                self.handle_navigation_action(CurrentScreen::SelectColor);
+                Vec::new()
+            }
             ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
             ScreenAction::RequestDensityGraph(chart_opt) => {
                 vec![Command::SetDensityGraph(chart_opt)]
@@ -520,9 +553,14 @@ impl App {
 
     fn is_actor_only_fade(&self, from: CurrentScreen, to: CurrentScreen) -> bool {
         (from == CurrentScreen::Menu
-            && (to == CurrentScreen::Options || to == CurrentScreen::SelectColor))
-            || ((from == CurrentScreen::Options || from == CurrentScreen::SelectColor)
+            && (to == CurrentScreen::Options
+                || to == CurrentScreen::SelectProfile
+                || to == CurrentScreen::SelectColor))
+            || ((from == CurrentScreen::Options
+                || from == CurrentScreen::SelectProfile
+                || from == CurrentScreen::SelectColor)
                 && to == CurrentScreen::Menu)
+            || (from == CurrentScreen::SelectProfile && to == CurrentScreen::SelectColor)
             || (from == CurrentScreen::Options && to == CurrentScreen::Mappings)
             || (from == CurrentScreen::Mappings && to == CurrentScreen::Options)
     }
@@ -530,7 +568,9 @@ impl App {
     fn start_actor_fade(&mut self, from: CurrentScreen, target: CurrentScreen) {
         info!("Starting actor-only fade out to screen: {:?}", target);
         let duration = if from == CurrentScreen::Menu
-            && (target == CurrentScreen::SelectColor || target == CurrentScreen::Options)
+            && (target == CurrentScreen::SelectProfile
+                || target == CurrentScreen::SelectColor
+                || target == CurrentScreen::Options)
         {
             MENU_TO_SELECT_COLOR_OUT_DURATION
         } else {
@@ -583,6 +623,10 @@ impl App {
             CurrentScreen::Menu => {
                 crate::screens::menu::handle_input(&mut self.state.screens.menu_state, &ev)
             }
+            CurrentScreen::SelectProfile => crate::screens::select_profile::handle_input(
+                &mut self.state.screens.select_profile_state,
+                &ev,
+            ),
             CurrentScreen::SelectColor => crate::screens::select_color::handle_input(
                 &mut self.state.screens.select_color_state,
                 &ev,
@@ -796,6 +840,7 @@ impl App {
             self.state.screens.current_screen,
             CurrentScreen::Menu
                 | CurrentScreen::Options
+                | CurrentScreen::SelectProfile
                 | CurrentScreen::SelectColor
                 | CurrentScreen::Mappings
                 | CurrentScreen::Input
@@ -844,6 +889,10 @@ impl App {
                     vec![]
                 }
             }
+            CurrentScreen::SelectProfile => select_profile::get_actors(
+                &self.state.screens.select_profile_state,
+                screen_alpha_multiplier,
+            ),
             CurrentScreen::SelectColor => select_color::get_actors(
                 &self.state.screens.select_color_state,
                 screen_alpha_multiplier,
@@ -887,7 +936,9 @@ impl App {
                 // Special case: Menu → SelectColor / Menu → Options should keep the heart
                 // background bright and only fade UI, but still play the hearts splash.
                 if self.state.screens.current_screen == CurrentScreen::Menu
-                    && (*target == CurrentScreen::SelectColor || *target == CurrentScreen::Options)
+                    && (*target == CurrentScreen::SelectProfile
+                        || *target == CurrentScreen::SelectColor
+                        || *target == CurrentScreen::Options)
                 {
                     let splash = crate::ui::components::menu_splash::build(
                         self.state.screens.menu_state.active_color_index,
@@ -915,6 +966,7 @@ impl App {
             CurrentScreen::Options => options::out_transition(),
             CurrentScreen::Mappings => mappings::out_transition(),
             CurrentScreen::PlayerOptions => player_options::out_transition(),
+            CurrentScreen::SelectProfile => select_profile::out_transition(),
             CurrentScreen::SelectColor => select_color::out_transition(),
             CurrentScreen::SelectStyle => select_style::out_transition(),
             CurrentScreen::SelectMusic => select_music::out_transition(),
@@ -932,6 +984,7 @@ impl App {
             CurrentScreen::Options => options::in_transition(),
             CurrentScreen::Mappings => mappings::in_transition(),
             CurrentScreen::PlayerOptions => player_options::in_transition(),
+            CurrentScreen::SelectProfile => select_profile::in_transition(),
             CurrentScreen::SelectColor => select_color::in_transition(),
             CurrentScreen::SelectStyle => select_style::in_transition(),
             CurrentScreen::SelectMusic => select_music::in_transition(),
@@ -1437,11 +1490,11 @@ impl App {
         let mut commands = Vec::new();
         let target_menu_music = matches!(
             target,
-            CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+            CurrentScreen::SelectProfile | CurrentScreen::SelectColor | CurrentScreen::SelectStyle
         );
         let prev_menu_music = matches!(
             prev,
-            CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+            CurrentScreen::SelectProfile | CurrentScreen::SelectColor | CurrentScreen::SelectStyle
         );
 
         if target_menu_music {
@@ -1524,6 +1577,7 @@ impl App {
         if prev == CurrentScreen::SelectColor {
             let idx = self.state.screens.select_color_state.active_color_index;
             self.state.screens.menu_state.active_color_index = idx;
+            self.state.screens.select_profile_state.active_color_index = idx;
             self.state.screens.select_style_state.active_color_index = idx;
             self.state.screens.select_music_state.active_color_index = idx;
             self.state.screens.options_state.active_color_index = idx;
@@ -1546,6 +1600,10 @@ impl App {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.mappings_state = mappings::init();
             self.state.screens.mappings_state.active_color_index = color_index;
+        } else if target == CurrentScreen::SelectProfile {
+            let current_color_index = self.state.screens.select_profile_state.active_color_index;
+            self.state.screens.select_profile_state = select_profile::init();
+            self.state.screens.select_profile_state.active_color_index = current_color_index;
         } else if target == CurrentScreen::SelectStyle {
             let current_color_index = self.state.screens.select_style_state.active_color_index;
             self.state.screens.select_style_state = select_style::init();
@@ -1853,22 +1911,38 @@ impl ApplicationHandler<UserEvent> for App {
                         if *elapsed >= *duration {
                             let prev = self.state.screens.current_screen;
                             self.state.screens.current_screen = *target;
-                            // SelectColor/SelectStyle have their own looping BGM; keep SelectMusic preview
-                            // playing when moving to/from PlayerOptions.
-                            if *target == CurrentScreen::SelectColor
-                                || *target == CurrentScreen::SelectStyle
-                            {
-                                crate::core::audio::play_music(
-                                    std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
-                                    crate::core::audio::Cut::default(),
-                                    true,
-                                    1.0,
-                                );
-                            } else if !((prev == CurrentScreen::SelectMusic
+
+                            // SelectProfile/SelectColor/SelectStyle share the looping menu BGM.
+                            // Keep SelectMusic preview playing when moving to/from PlayerOptions.
+                            let target_menu_music = matches!(
+                                *target,
+                                CurrentScreen::SelectProfile
+                                    | CurrentScreen::SelectColor
+                                    | CurrentScreen::SelectStyle
+                            );
+                            let prev_menu_music = matches!(
+                                prev,
+                                CurrentScreen::SelectProfile
+                                    | CurrentScreen::SelectColor
+                                    | CurrentScreen::SelectStyle
+                            );
+                            let keep_preview = (prev == CurrentScreen::SelectMusic
                                 && *target == CurrentScreen::PlayerOptions)
                                 || (prev == CurrentScreen::PlayerOptions
-                                    && *target == CurrentScreen::SelectMusic))
-                            {
+                                    && *target == CurrentScreen::SelectMusic);
+
+                            if target_menu_music {
+                                if !prev_menu_music {
+                                    crate::core::audio::play_music(
+                                        std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
+                                        crate::core::audio::Cut::default(),
+                                        true,
+                                        1.0,
+                                    );
+                                }
+                            } else if prev_menu_music {
+                                crate::core::audio::stop_music();
+                            } else if !keep_preview {
                                 crate::core::audio::stop_music();
                             }
 
@@ -1884,6 +1958,12 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.state.screens.options_state = options::init();
                                 self.state.screens.options_state.active_color_index =
                                     current_color_index;
+                            } else if *target == CurrentScreen::SelectProfile {
+                                let current_color_index =
+                                    self.state.screens.select_profile_state.active_color_index;
+                                self.state.screens.select_profile_state = select_profile::init();
+                                self.state.screens.select_profile_state.active_color_index =
+                                    current_color_index;
                             } else if *target == CurrentScreen::Mappings {
                                 let color_index =
                                     self.state.screens.options_state.active_color_index;
@@ -1894,6 +1974,7 @@ impl ApplicationHandler<UserEvent> for App {
                             if prev == CurrentScreen::SelectColor {
                                 let idx = self.state.screens.select_color_state.active_color_index;
                                 self.state.screens.menu_state.active_color_index = idx;
+                                self.state.screens.select_profile_state.active_color_index = idx;
                                 self.state.screens.select_style_state.active_color_index = idx;
                                 self.state.screens.select_music_state.active_color_index = idx;
                                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {

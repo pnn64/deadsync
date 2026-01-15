@@ -109,10 +109,28 @@ impl core::fmt::Display for ScrollOption {
 }
 
 // --- Profile Data ---
-const PROFILE_DIR: &str = "save/profiles/00000000";
-const PROFILE_INI_PATH: &str = "save/profiles/00000000/profile.ini";
-const GROOVESTATS_INI_PATH: &str = "save/profiles/00000000/groovestats.ini";
-const PROFILE_AVATAR_PATH: &str = "save/profiles/00000000/profile.png";
+const PROFILES_ROOT: &str = "save/profiles";
+const DEFAULT_PROFILE_ID: &str = "00000000";
+
+#[inline(always)]
+fn local_profile_dir(id: &str) -> PathBuf {
+    PathBuf::from(PROFILES_ROOT).join(id)
+}
+
+#[inline(always)]
+fn profile_ini_path(id: &str) -> PathBuf {
+    local_profile_dir(id).join("profile.ini")
+}
+
+#[inline(always)]
+fn groovestats_ini_path(id: &str) -> PathBuf {
+    local_profile_dir(id).join("groovestats.ini")
+}
+
+#[inline(always)]
+fn profile_avatar_path(id: &str) -> PathBuf {
+    local_profile_dir(id).join("profile.png")
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BackgroundFilter {
@@ -428,6 +446,12 @@ impl Default for Profile {
 static PROFILE: Lazy<Mutex<Profile>> = Lazy::new(|| Mutex::new(Profile::default()));
 
 // --- Session-scoped state (not persisted) ---
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActiveProfile {
+    Guest,
+    Local { id: String },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PlayStyle {
     #[default]
@@ -438,27 +462,34 @@ pub enum PlayStyle {
 
 #[derive(Debug)]
 struct SessionState {
+    active_profile: ActiveProfile,
     music_rate: f32,
     play_style: PlayStyle,
 }
 
 static SESSION: Lazy<Mutex<SessionState>> = Lazy::new(|| {
     Mutex::new(SessionState {
+        active_profile: ActiveProfile::Local {
+            id: DEFAULT_PROFILE_ID.to_string(),
+        },
         music_rate: 1.0,
         play_style: PlayStyle::Single,
     })
 });
 
-/// Creates the default profile directory and .ini files if they don't exist.
-fn create_default_files() -> Result<(), std::io::Error> {
+fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
+    let dir = local_profile_dir(id);
+    let profile_ini = profile_ini_path(id);
+    let groovestats_ini = groovestats_ini_path(id);
+
     info!(
         "Profile files not found, creating defaults in '{}'.",
-        PROFILE_DIR
+        dir.display()
     );
-    fs::create_dir_all(PROFILE_DIR)?;
+    fs::create_dir_all(&dir)?;
 
     // Create profile.ini
-    if !Path::new(PROFILE_INI_PATH).exists() {
+    if !profile_ini.exists() {
         let default_profile = Profile::default();
         let mut content = String::new();
 
@@ -522,11 +553,11 @@ fn create_default_files() -> Result<(), std::io::Error> {
         ));
         content.push('\n');
 
-        fs::write(PROFILE_INI_PATH, content)?;
+        fs::write(profile_ini, content)?;
     }
 
     // Create groovestats.ini
-    if !Path::new(GROOVESTATS_INI_PATH).exists() {
+    if !groovestats_ini.exists() {
         let mut content = String::new();
 
         content.push_str("[GrooveStats]\n");
@@ -535,13 +566,24 @@ fn create_default_files() -> Result<(), std::io::Error> {
         content.push_str("Username = \n");
         content.push('\n');
 
-        fs::write(GROOVESTATS_INI_PATH, content)?;
+        fs::write(groovestats_ini, content)?;
     }
 
     Ok(())
 }
 
 fn save_profile_ini() {
+    let profile_id = {
+        let session = SESSION.lock().unwrap();
+        match &session.active_profile {
+            ActiveProfile::Local { id } => Some(id.clone()),
+            ActiveProfile::Guest => None,
+        }
+    };
+    let Some(profile_id) = profile_id else {
+        return;
+    };
+
     let profile = PROFILE.lock().unwrap();
     let mut content = String::new();
 
@@ -602,12 +644,24 @@ fn save_profile_ini() {
     ));
     content.push('\n');
 
-    if let Err(e) = fs::write(PROFILE_INI_PATH, content) {
-        warn!("Failed to save {}: {}", PROFILE_INI_PATH, e);
+    let path = profile_ini_path(&profile_id);
+    if let Err(e) = fs::write(&path, content) {
+        warn!("Failed to save {}: {}", path.display(), e);
     }
 }
 
 fn save_groovestats_ini() {
+    let profile_id = {
+        let session = SESSION.lock().unwrap();
+        match &session.active_profile {
+            ActiveProfile::Local { id } => Some(id.clone()),
+            ActiveProfile::Guest => None,
+        }
+    };
+    let Some(profile_id) = profile_id else {
+        return;
+    };
+
     let profile = PROFILE.lock().unwrap();
     let mut content = String::new();
 
@@ -624,14 +678,35 @@ fn save_groovestats_ini() {
     content.push_str(&format!("Username={}\n", profile.groovestats_username));
     content.push('\n');
 
-    if let Err(e) = fs::write(GROOVESTATS_INI_PATH, content) {
-        warn!("Failed to save {}: {}", GROOVESTATS_INI_PATH, e);
+    let path = groovestats_ini_path(&profile_id);
+    if let Err(e) = fs::write(&path, content) {
+        warn!("Failed to save {}: {}", path.display(), e);
     }
 }
 
 pub fn load() {
-    if (!Path::new(PROFILE_INI_PATH).exists() || !Path::new(GROOVESTATS_INI_PATH).exists())
-        && let Err(e) = create_default_files()
+    let profile_id = {
+        let session = SESSION.lock().unwrap();
+        match &session.active_profile {
+            ActiveProfile::Local { id } => Some(id.clone()),
+            ActiveProfile::Guest => None,
+        }
+    };
+
+    let Some(profile_id) = profile_id else {
+        let mut profile = PROFILE.lock().unwrap();
+        let mut guest = Profile::default();
+        guest.display_name = "[ GUEST ]".to_string();
+        guest.avatar_path = None;
+        guest.avatar_texture_key = None;
+        *profile = guest;
+        return;
+    };
+
+    let profile_ini = profile_ini_path(&profile_id);
+    let groovestats_ini = groovestats_ini_path(&profile_id);
+    if (!profile_ini.exists() || !groovestats_ini.exists())
+        && let Err(e) = ensure_local_profile_files(&profile_id)
     {
         warn!("Failed to create default profile files: {}", e);
         // Proceed with default struct values and attempt to save them.
@@ -643,7 +718,7 @@ pub fn load() {
 
         // Load profile.ini
         let mut profile_conf = SimpleIni::new();
-        if profile_conf.load(PROFILE_INI_PATH).is_ok() {
+        if profile_conf.load(&profile_ini).is_ok() {
             profile.display_name = profile_conf
                 .get("userprofile", "DisplayName")
                 .unwrap_or(default_profile.display_name.clone());
@@ -736,13 +811,13 @@ pub fn load() {
         } else {
             warn!(
                 "Failed to load '{}', using default profile settings.",
-                PROFILE_INI_PATH
+                profile_ini.display()
             );
         }
 
         // Load groovestats.ini
         let mut gs_conf = SimpleIni::new();
-        if gs_conf.load(GROOVESTATS_INI_PATH).is_ok() {
+        if gs_conf.load(&groovestats_ini).is_ok() {
             profile.groovestats_api_key = gs_conf
                 .get("GrooveStats", "ApiKey")
                 .unwrap_or(default_profile.groovestats_api_key.clone());
@@ -756,13 +831,13 @@ pub fn load() {
         } else {
             warn!(
                 "Failed to load '{}', using default GrooveStats info.",
-                GROOVESTATS_INI_PATH
+                groovestats_ini.display()
             );
         }
 
-        let avatar_path = Path::new(PROFILE_AVATAR_PATH);
+        let avatar_path = profile_avatar_path(&profile_id);
         profile.avatar_path = if avatar_path.exists() {
-            Some(avatar_path.to_path_buf())
+            Some(avatar_path)
         } else {
             None
         };
@@ -785,6 +860,89 @@ pub fn set_avatar_texture_key(key: Option<String>) {
 }
 
 // --- Session helpers ---
+pub fn get_active_profile() -> ActiveProfile {
+    SESSION.lock().unwrap().active_profile.clone()
+}
+
+pub fn active_local_profile_id() -> Option<String> {
+    let session = SESSION.lock().unwrap();
+    match &session.active_profile {
+        ActiveProfile::Local { id } => Some(id.clone()),
+        ActiveProfile::Guest => None,
+    }
+}
+
+pub fn set_active_profile(profile: ActiveProfile) -> Profile {
+    {
+        let mut session = SESSION.lock().unwrap();
+        if session.active_profile == profile {
+            return get();
+        }
+        session.active_profile = profile;
+    }
+    load();
+    get()
+}
+
+pub struct LocalProfileSummary {
+    pub id: String,
+    pub display_name: String,
+    pub avatar_path: Option<PathBuf>,
+}
+
+pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
+    fn is_profile_id(s: &str) -> bool {
+        s.len() == 8 && s.bytes().all(|b| b.is_ascii_hexdigit())
+    }
+
+    let root = Path::new(PROFILES_ROOT);
+    let Ok(read_dir) = fs::read_dir(root) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for entry in read_dir.flatten() {
+        let Ok(ft) = entry.file_type() else {
+            continue;
+        };
+        if !ft.is_dir() {
+            continue;
+        }
+        let Some(id) = entry.file_name().to_str().map(|s| s.to_string()) else {
+            continue;
+        };
+        if !is_profile_id(&id) {
+            continue;
+        }
+
+        let ini_path = entry.path().join("profile.ini");
+        if !ini_path.is_file() {
+            continue;
+        }
+
+        let mut display_name = id.clone();
+        let mut ini = SimpleIni::new();
+        if ini.load(&ini_path).is_ok()
+            && let Some(name) = ini.get("userprofile", "DisplayName")
+            && !name.trim().is_empty()
+        {
+            display_name = name;
+        }
+
+        let avatar_path = entry.path().join("profile.png");
+        let avatar_path = avatar_path.is_file().then_some(avatar_path);
+
+        out.push(LocalProfileSummary {
+            id,
+            display_name,
+            avatar_path,
+        });
+    }
+
+    out.sort_by(|a, b| a.id.cmp(&b.id));
+    out
+}
+
 pub fn get_session_music_rate() -> f32 {
     let s = SESSION.lock().unwrap();
     let r = s.music_rate;

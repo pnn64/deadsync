@@ -9,17 +9,20 @@ pub mod player_options;
 pub mod sandbox;
 pub mod select_color;
 pub mod select_music;
+pub mod select_profile;
 pub mod select_style;
 use std::path::PathBuf;
 
 use crate::config::DisplayMode;
 use crate::core::gfx::BackendType;
 use crate::game::chart::ChartData;
+use crate::game::profile::ActiveProfile;
 #[derive(Debug, Clone)]
 pub enum ScreenAction {
     None,
     Navigate(Screen),
     Exit,
+    SelectProfile(ActiveProfile),
     RequestBanner(Option<PathBuf>),
     RequestDensityGraph(Option<ChartData>),
     FetchOnlineGrade(String),
@@ -40,6 +43,7 @@ pub enum Screen {
     Init,
     Mappings,
     Input,
+    SelectProfile,
     SelectColor,
     SelectStyle,
     SelectMusic,

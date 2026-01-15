@@ -1,5 +1,5 @@
 use crate::core::network;
-use crate::game::profile::Profile;
+use crate::game::profile::{self, Profile};
 use crate::game::song::get_song_cache;
 use log::{info, warn};
 use once_cell::sync::Lazy;
@@ -7,14 +7,13 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bincode::{Decode, Encode};
 
 const API_URL: &str = "https://api.groovestats.com/player-leaderboards.php";
-const GS_SCORES_DIR: &str = "save/profiles/00000000/scores/gs";
 
 // --- Grade Definitions ---
 
@@ -82,21 +81,61 @@ pub struct CachedScore {
 
 // --- Global Grade Cache ---
 
-static GRADE_CACHE: Lazy<Mutex<HashMap<String, CachedScore>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+#[derive(Default)]
+struct GradeCacheState {
+    profile_id: Option<String>,
+    loaded: bool,
+    cache: HashMap<String, CachedScore>,
+}
 
-static GS_DISK_BOOTSTRAP: Lazy<()> = Lazy::new(|| {
-    preload_scores_from_disk();
-});
+static GRADE_CACHE: Lazy<Mutex<GradeCacheState>> = Lazy::new(|| Mutex::new(GradeCacheState::default()));
+
+fn gs_scores_dir_for_profile(profile_id: &str) -> PathBuf {
+    PathBuf::from("save/profiles")
+        .join(profile_id)
+        .join("scores")
+        .join("gs")
+}
+
+fn gs_scores_dir() -> Option<PathBuf> {
+    profile::active_local_profile_id().map(|id| gs_scores_dir_for_profile(&id))
+}
+
+fn ensure_score_cache_loaded() {
+    let profile_id = profile::active_local_profile_id();
+    let should_reload = {
+        let state = GRADE_CACHE.lock().unwrap();
+        !state.loaded || state.profile_id != profile_id
+    };
+    if !should_reload {
+        return;
+    }
+
+    let disk_cache = profile_id
+        .as_deref()
+        .map(|id| best_scores_from_disk(&gs_scores_dir_for_profile(id)))
+        .unwrap_or_default();
+
+    let mut state = GRADE_CACHE.lock().unwrap();
+    state.profile_id = profile_id;
+    state.loaded = true;
+    state.cache = disk_cache;
+}
 
 pub fn get_cached_score(chart_hash: &str) -> Option<CachedScore> {
-    Lazy::force(&GS_DISK_BOOTSTRAP);
-    GRADE_CACHE.lock().unwrap().get(chart_hash).copied()
+    ensure_score_cache_loaded();
+    GRADE_CACHE
+        .lock()
+        .unwrap()
+        .cache
+        .get(chart_hash)
+        .copied()
 }
 
 pub fn set_cached_score(chart_hash: String, score: CachedScore) {
     info!("Caching score {:?} for chart hash {}", score, chart_hash);
-    GRADE_CACHE.lock().unwrap().insert(chart_hash, score);
+    ensure_score_cache_loaded();
+    GRADE_CACHE.lock().unwrap().cache.insert(chart_hash, score);
 }
 
 // --- On-disk GrooveStats score storage ---
@@ -158,10 +197,6 @@ fn grade_from_code(code: u8) -> Grade {
     }
 }
 
-fn gs_scores_dir() -> PathBuf {
-    PathBuf::from(GS_SCORES_DIR)
-}
-
 fn entry_from_cached(score: CachedScore, username: &str, fetched_at_ms: i64) -> GsScoreEntry {
     GsScoreEntry {
         score_percent: score.score_percent,
@@ -180,16 +215,15 @@ fn cached_from_entry(entry: &GsScoreEntry) -> CachedScore {
     }
 }
 
-fn preload_scores_from_disk() {
-    let dir = gs_scores_dir();
-    if !dir.is_dir() {
-        return;
-    }
-    let Ok(read_dir) = fs::read_dir(&dir) else {
-        return;
-    };
-
+fn best_scores_from_disk(dir: &Path) -> HashMap<String, CachedScore> {
     let mut best_by_chart: HashMap<String, CachedScore> = HashMap::new();
+
+    if !dir.is_dir() {
+        return best_by_chart;
+    }
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return best_by_chart;
+    };
 
     for item in read_dir.flatten() {
         let path = item.path();
@@ -233,28 +267,15 @@ fn preload_scores_from_disk() {
         }
     }
 
-    let mut cache = GRADE_CACHE.lock().unwrap();
-    for (chart_hash, score) in best_by_chart {
-        match cache.get(&chart_hash) {
-            Some(existing) => {
-                if score.score_percent > existing.score_percent {
-                    cache.insert(chart_hash, score);
-                }
-            }
-            None => {
-                cache.insert(chart_hash, score);
-            }
-        }
-    }
+    best_by_chart
 }
 
-fn load_all_entries_for_chart(chart_hash: &str) -> Vec<GsScoreEntry> {
-    let dir = gs_scores_dir();
+fn load_all_entries_for_chart(chart_hash: &str, dir: &Path) -> Vec<GsScoreEntry> {
     if !dir.is_dir() {
         return Vec::new();
     }
     let prefix = format!("{}-", chart_hash);
-    let Ok(read_dir) = fs::read_dir(&dir) else {
+    let Ok(read_dir) = fs::read_dir(dir) else {
         return Vec::new();
     };
     let mut entries = Vec::new();
@@ -285,7 +306,11 @@ fn append_gs_score_on_disk(chart_hash: &str, score: CachedScore, username: &str)
     if username.trim().is_empty() {
         return;
     }
-    let mut entries = load_all_entries_for_chart(chart_hash);
+    let Some(dir) = gs_scores_dir() else {
+        return;
+    };
+
+    let mut entries = load_all_entries_for_chart(chart_hash, &dir);
     let fetched_at_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
@@ -305,7 +330,6 @@ fn append_gs_score_on_disk(chart_hash: &str, score: CachedScore, username: &str)
 
     entries.push(new_entry.clone());
 
-    let dir = gs_scores_dir();
     if let Err(e) = fs::create_dir_all(&dir) {
         warn!("Failed to create GrooveStats scores dir {:?}: {}", dir, e);
         return;

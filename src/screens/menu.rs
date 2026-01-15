@@ -272,7 +272,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_start => {
             crate::core::audio::play_sfx("assets/sounds/start.ogg");
             match state.selected_index {
-                0 => ScreenAction::Navigate(Screen::SelectColor),
+                0 => ScreenAction::Navigate(Screen::SelectProfile),
                 1 => ScreenAction::Navigate(Screen::Options),
                 2 => ScreenAction::Exit,
                 _ => ScreenAction::None,
