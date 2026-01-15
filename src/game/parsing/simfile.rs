@@ -871,27 +871,10 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
 
     loaded_packs.retain(|p| !p.songs.is_empty());
     for pack in &mut loaded_packs {
-        pack.songs.sort_by(|a, b| {
-            let a_title = a.title.to_lowercase();
-            let b_title = b.title.to_lowercase();
-
-            let a_first_char = a_title.chars().next();
-            let b_first_char = b_title.chars().next();
-
-            // Treat a title as "special" if it starts with a non-alphanumeric character.
-            let a_is_special = a_first_char.is_some_and(|c| !c.is_alphanumeric());
-            let b_is_special = b_first_char.is_some_and(|c| !c.is_alphanumeric());
-
-            if a_is_special == b_is_special {
-                // If both are special or both are not, sort them alphabetically.
-                a_title.cmp(&b_title)
-            } else if a_is_special {
-                // `a` is special and `b` is not, so `b` should come first.
-                std::cmp::Ordering::Greater
-            } else {
-                // `b` is special and `a` is not, so `a` should come first.
-                std::cmp::Ordering::Less
-            }
+        pack.songs.sort_by_cached_key(|s| {
+            let title = s.title.to_lowercase();
+            let is_special = title.chars().next().is_some_and(|c| !c.is_alphanumeric());
+            (is_special, title)
         });
     }
 
