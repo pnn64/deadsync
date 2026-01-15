@@ -47,7 +47,6 @@ const INFO_LINE_Y_OFF: f32 = 18.0;
 // Unified Y offset for side-by-side previews
 const PREVIEW_Y_OFF: f32 = 42.0;
 
-const PREVIEW_LABEL_H: f32 = 12.0;
 const PREVIEW_VALUE_H: f32 = 16.0;
 
 #[derive(Clone)]
@@ -361,7 +360,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         align(0.5, 0.5):
         xy(p2_cx, cy):
         zoomto(FRAME_W_JOIN, frame_h):
-        diffuse(0.0, 0.0, 0.0, 0.65):
+        diffuse(0.0, 0.0, 0.0, 1.0):
         z(101)
     ));
     ui.push(act!(text:
@@ -402,7 +401,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         if d == 0 {
             // Selected row: pure white with shadow
             text_color = [1.0, 1.0, 1.0, 1.0];
-            shadow = 1.0;
+            shadow = 0.5;
         }
 
         ui.push(act!(text:

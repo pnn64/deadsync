@@ -1499,11 +1499,11 @@ impl App {
         let mut commands = Vec::new();
         let target_menu_music = matches!(
             target,
-            CurrentScreen::SelectProfile | CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+            CurrentScreen::SelectColor | CurrentScreen::SelectStyle
         );
         let prev_menu_music = matches!(
             prev,
-            CurrentScreen::SelectProfile | CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+            CurrentScreen::SelectColor | CurrentScreen::SelectStyle
         );
 
         if target_menu_music {
@@ -1928,14 +1928,12 @@ impl ApplicationHandler<UserEvent> for App {
                             // Keep SelectMusic preview playing when moving to/from PlayerOptions.
                             let target_menu_music = matches!(
                                 *target,
-                                CurrentScreen::SelectProfile
-                                    | CurrentScreen::SelectColor
+                                CurrentScreen::SelectColor
                                     | CurrentScreen::SelectStyle
                             );
                             let prev_menu_music = matches!(
                                 prev,
-                                CurrentScreen::SelectProfile
-                                    | CurrentScreen::SelectColor
+                                CurrentScreen::SelectColor
                                     | CurrentScreen::SelectStyle
                             );
                             let keep_preview = (prev == CurrentScreen::SelectMusic
