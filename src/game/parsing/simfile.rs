@@ -631,6 +631,41 @@ fn hydrate_chart_timings(song: &mut SongData, global_offset_seconds: f32) {
     }
 }
 
+/// Helper to load a song from cache OR parse it if needed.
+/// Returns (SongData, is_cache_hit).
+fn process_song(
+    simfile_path: PathBuf,
+    fastload: bool,
+    cachesongs: bool,
+    global_offset_seconds: f32,
+) -> Result<(SongData, bool), String> {
+    let cache_keys = if fastload || cachesongs {
+        compute_song_cache_keys(&simfile_path)
+    } else {
+        SongCacheKeys { cache_path: None }
+    };
+
+    // 1. Try Loading from Cache
+    if fastload {
+        if let Some(cp) = &cache_keys.cache_path {
+            if let Some(song_data) = load_song_from_cache(&simfile_path, cp, global_offset_seconds)
+            {
+                return Ok((song_data, true)); // is_hit = true
+            }
+        }
+    }
+
+    // 2. Parse from Source (Cache Miss)
+    let song_data = parse_song_and_maybe_write_cache(
+        &simfile_path,
+        fastload,
+        cachesongs,
+        cache_keys,
+        global_offset_seconds,
+    )?;
+    Ok((song_data, false)) // is_hit = false
+}
+
 /// Scans the provided root directory (e.g., "songs/") for simfiles,
 /// parses them, and populates the global cache. This should be run once at startup.
 pub fn scan_and_load_songs(root_path_str: &'static str) {
@@ -687,7 +722,8 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
         }
     };
 
-    type ParseMsg = (usize, PathBuf, Result<Arc<SongData>, String>);
+    // (pack_idx, simfile_path, result(song_data, is_cache_hit))
+    type ParseMsg = (usize, PathBuf, Result<(Arc<SongData>, bool), String>);
 
     let mut runtime: Option<tokio::runtime::Runtime> = None;
     let mut tx_opt: Option<std::sync::mpsc::Sender<ParseMsg>> = None;
@@ -699,6 +735,8 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
         in_flight: &mut usize,
         loaded_packs: &mut Vec<SongPack>,
         songs_failed: &mut usize,
+        songs_cache_hits: &mut usize,
+        songs_parsed: &mut usize,
     ) {
         let Some(rx) = rx else {
             return;
@@ -707,7 +745,12 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
             Ok((pack_idx, simfile_path, result)) => {
                 *in_flight = in_flight.saturating_sub(1);
                 match result {
-                    Ok(song_data) => {
+                    Ok((song_data, is_hit)) => {
+                        if is_hit {
+                            *songs_cache_hits += 1;
+                        } else {
+                            *songs_parsed += 1;
+                        }
                         if let Some(pack) = loaded_packs.get_mut(pack_idx) {
                             pack.songs.push(song_data);
                         }
@@ -743,22 +786,7 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
 
         for song in pack.songs {
             let simfile_path = song.simfile;
-            let cache_keys = if fastload || cachesongs {
-                compute_song_cache_keys(&simfile_path)
-            } else {
-                SongCacheKeys { cache_path: None }
-            };
 
-            if fastload
-                && let Some(cp) = &cache_keys.cache_path
-                && let Some(song_data) = load_song_from_cache(&simfile_path, cp, global_offset_seconds)
-            {
-                songs_cache_hits += 1;
-                loaded_packs[pack_idx].songs.push(Arc::new(song_data));
-                continue;
-            }
-
-            songs_parsed += 1;
             if parallel_parsing {
                 let rt = runtime.get_or_insert_with(|| {
                     tokio::runtime::Builder::new_current_thread()
@@ -778,19 +806,27 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
                         &mut in_flight,
                         &mut loaded_packs,
                         &mut songs_failed,
+                        &mut songs_cache_hits,
+                        &mut songs_parsed,
                     );
                 }
 
                 let Some(tx) = tx_opt.as_ref() else {
-                    warn!("Song parsing worker channel unavailable; falling back to sync parse.");
-                    match parse_song_and_maybe_write_cache(
-                        &simfile_path,
+                    // Fallback to sync if channel creation failed (unlikely)
+                    match process_song(
+                        simfile_path.clone(),
                         fastload,
                         cachesongs,
-                        cache_keys,
                         global_offset_seconds,
                     ) {
-                        Ok(song_data) => loaded_packs[pack_idx].songs.push(Arc::new(song_data)),
+                        Ok((song_data, is_hit)) => {
+                            if is_hit {
+                                songs_cache_hits += 1;
+                            } else {
+                                songs_parsed += 1;
+                            }
+                            loaded_packs[pack_idx].songs.push(Arc::new(song_data));
+                        }
                         Err(e) => {
                             songs_failed += 1;
                             warn!("Failed to load '{:?}': {}", simfile_path, e)
@@ -803,33 +839,37 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
                 let simfile_path_owned = simfile_path.clone();
                 rt.handle().spawn_blocking(move || {
                     let out = catch_unwind(AssertUnwindSafe(|| {
-                        parse_song_and_maybe_write_cache(
-                            &simfile_path,
+                        process_song(
+                            simfile_path_owned.clone(),
                             fastload,
                             cachesongs,
-                            cache_keys,
                             global_offset_seconds,
                         )
-                        .map(Arc::new)
+                        .map(|(d, h)| (Arc::new(d), h))
                     }))
                     .unwrap_or_else(|_| Err("Song parse panicked".to_string()));
                     let _ = tx.send((pack_idx, simfile_path_owned, out));
                 });
                 in_flight += 1;
-                continue;
-            }
-
-            match parse_song_and_maybe_write_cache(
-                &simfile_path,
-                fastload,
-                cachesongs,
-                cache_keys,
-                global_offset_seconds,
-            ) {
-                Ok(song_data) => loaded_packs[pack_idx].songs.push(Arc::new(song_data)),
-                Err(e) => {
-                    songs_failed += 1;
-                    warn!("Failed to load '{:?}': {}", simfile_path, e)
+            } else {
+                match process_song(
+                    simfile_path.clone(),
+                    fastload,
+                    cachesongs,
+                    global_offset_seconds,
+                ) {
+                    Ok((song_data, is_hit)) => {
+                        if is_hit {
+                            songs_cache_hits += 1;
+                        } else {
+                            songs_parsed += 1;
+                        }
+                        loaded_packs[pack_idx].songs.push(Arc::new(song_data));
+                    }
+                    Err(e) => {
+                        songs_failed += 1;
+                        warn!("Failed to load '{:?}': {}", simfile_path, e)
+                    }
                 }
             }
         }
@@ -841,12 +881,14 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
             &mut in_flight,
             &mut loaded_packs,
             &mut songs_failed,
+            &mut songs_cache_hits,
+            &mut songs_parsed,
         );
     }
 
     if runtime.is_some() {
         info!(
-            "Song parsing: used {} threads for cache misses (SongParsingThreads={}).",
+            "Song parsing: used {} threads for cache/parsing (SongParsingThreads={}).",
             parse_threads, config.song_parsing_threads
         );
     }
