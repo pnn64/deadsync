@@ -931,11 +931,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 format!("banner{}.png", banner_num)
             });
 
-        let full_title = if score_info.song.subtitle.trim().is_empty() {
-            score_info.song.title.clone()
-        } else {
-            format!("{} {}", score_info.song.title, score_info.song.subtitle)
-        };
+        let full_title = score_info
+            .song
+            .display_full_title(crate::config::get().translated_titles);
 
         let title_and_banner_frame = Actor::Frame {
             align: [0.5, 0.5],

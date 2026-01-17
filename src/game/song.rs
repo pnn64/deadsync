@@ -62,6 +62,32 @@ pub(super) fn set_song_cache(packs: Vec<SongPack>) {
 }
 
 impl SongData {
+    pub fn display_title(&self, translit: bool) -> &str {
+        if translit && !self.translit_title.trim().is_empty() {
+            self.translit_title.as_str()
+        } else {
+            self.title.as_str()
+        }
+    }
+
+    pub fn display_subtitle(&self, translit: bool) -> &str {
+        if translit && !self.translit_subtitle.trim().is_empty() {
+            self.translit_subtitle.as_str()
+        } else {
+            self.subtitle.as_str()
+        }
+    }
+
+    pub fn display_full_title(&self, translit: bool) -> String {
+        let title = self.display_title(translit);
+        let subtitle = self.display_subtitle(translit);
+        if subtitle.trim().is_empty() {
+            title.to_string()
+        } else {
+            format!("{title} {subtitle}")
+        }
+    }
+
     /// Formats the display BPM for the UI, prioritizing #DISPLAYBPM and cleaning up the format
     /// to match ITGmania (e.g., "128" instead of "128.000000"). Falls back to the
     /// calculated min-max range if #DISPLAYBPM is absent or set to "*".

@@ -113,6 +113,7 @@ pub struct Config {
     pub fullscreen_type: FullscreenType,
     pub display_monitor: usize,
     pub show_stats: bool,
+    pub translated_titles: bool,
     pub mine_hit_sound: bool,
     pub display_width: u32,
     pub display_height: u32,
@@ -149,6 +150,7 @@ impl Default for Config {
             fullscreen_type: FullscreenType::Exclusive,
             display_monitor: 0,
             show_stats: false,
+            translated_titles: false,
             mine_hit_sound: true,
             display_width: 1600,
             display_height: 900,
@@ -243,6 +245,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         default.software_renderer_threads
     ));
     content.push_str(&format!("SFXVolume={}\n", default.sfx_volume));
+    content.push_str(&format!(
+        "TranslatedTitles={}\n",
+        if default.translated_titles { "1" } else { "0" }
+    ));
     content.push_str(&format!("VideoRenderer={}\n", default.video_renderer));
     content.push_str(&format!(
         "Vsync={}\n",
@@ -334,6 +340,28 @@ pub fn load() {
                     .get("Options", "ShowStats")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_stats, |v| v != 0);
+                cfg.translated_titles = conf
+                    .get("Options", "TranslatedTitles")
+                    .or_else(|| conf.get("Options", "translatedtitles"))
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.translated_titles);
                 cfg.display_width = conf
                     .get("Options", "DisplayWidth")
                     .and_then(|v| v.parse().ok())
@@ -427,30 +455,31 @@ pub fn load() {
             crate::core::input::set_keymap(km);
 
             // Only write [Options]/[Theme] if any of those keys are missing.
-            let missing_opts = {
-                let has = |sec: &str, key: &str| conf.get(sec, key).is_some();
-                let mut miss = false;
-                let options_keys = [
-                    "AudioSampleRateHz",
-                    "CacheSongs",
-                    "DisplayHeight",
-                    "DisplayWidth",
-                    "FastLoad",
-                    "FullscreenType",
-                    "GlobalOffsetSeconds",
-                    "MasterVolume",
-                    "MineHitSound",
-                    "MusicVolume",
-                    "SongParsingThreads",
-                    "RateModPreservesPitch",
-                    "ShowStats",
-                    "SmoothHistogram",
-                    "SFXVolume",
-                    "SoftwareRendererThreads",
-                    "VideoRenderer",
-                    "Vsync",
-                    "Windowed",
-                ];
+                let missing_opts = {
+                    let has = |sec: &str, key: &str| conf.get(sec, key).is_some();
+                    let mut miss = false;
+                    let options_keys = [
+                        "AudioSampleRateHz",
+                        "CacheSongs",
+                        "DisplayHeight",
+                        "DisplayWidth",
+                        "FastLoad",
+                        "FullscreenType",
+                        "GlobalOffsetSeconds",
+                        "MasterVolume",
+                        "MineHitSound",
+                        "MusicVolume",
+                        "SongParsingThreads",
+                        "RateModPreservesPitch",
+                        "ShowStats",
+                        "SmoothHistogram",
+                        "SFXVolume",
+                        "SoftwareRendererThreads",
+                        "TranslatedTitles",
+                        "VideoRenderer",
+                        "Vsync",
+                        "Windowed",
+                    ];
                 for k in options_keys {
                     if !has("Options", k) {
                         miss = true;
@@ -1182,6 +1211,10 @@ fn save_without_keymaps() {
         cfg.software_renderer_threads
     ));
     content.push_str(&format!("SFXVolume={}\n", cfg.sfx_volume));
+    content.push_str(&format!(
+        "TranslatedTitles={}\n",
+        if cfg.translated_titles { "1" } else { "0" }
+    ));
     content.push_str(&format!("VideoRenderer={}\n", cfg.video_renderer));
     content.push_str(&format!("Vsync={}\n", if cfg.vsync { "1" } else { "0" }));
     content.push_str(&format!(

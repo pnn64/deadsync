@@ -1789,11 +1789,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 diffuse(state.player_color[0], state.player_color[1], state.player_color[2], 1.0): z(2)
             ));
         }
-        let full_title = if state.song.subtitle.trim().is_empty() {
-            state.song.title.clone()
-        } else {
-            format!("{} {}", state.song.title, state.song.subtitle)
-        };
+        let full_title = state
+            .song
+            .display_full_title(crate::config::get().translated_titles);
         frame_children.push(act!(text:
             font("miso"): settext(full_title): align(0.5, 0.5): xy(w / 2.0, h / 2.0):
             zoom(0.8): maxwidth(screen_width() / 2.5 - 10.0): horizalign(center): z(3)

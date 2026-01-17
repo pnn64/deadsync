@@ -47,6 +47,7 @@ pub struct MusicWheelParams<'a> {
 
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let mut actors = Vec::new();
+    let translated_titles = crate::config::get().translated_titles;
 
     const WHEEL_WIDTH_DIVISOR: f32 = 2.125;
     let num_visible_items = NUM_WHEEL_ITEMS - 2; // 17 -> 15 visible
@@ -111,8 +112,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             false,
                             bg,
                             [1.0, 1.0, 1.0, 1.0],
-                            info.title.clone(),
-                            info.subtitle.clone(),
+                            info.display_title(translated_titles).to_string(),
+                            info.display_subtitle(translated_titles).to_string(),
                             None,
                         )
                     }
