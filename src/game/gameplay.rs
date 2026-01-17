@@ -195,6 +195,7 @@ fn compute_column_scroll_dirs(scroll_option: profile::ScrollOption) -> [f32; 4] 
 
 pub struct State {
     pub song: Arc<SongData>,
+    pub song_full_title: Arc<str>,
     pub background_texture_key: String,
     pub chart: Arc<ChartData>,
     pub timing: Arc<TimingData>,
@@ -404,6 +405,7 @@ pub fn init(
     }
 
     let config = crate::config::get();
+    let song_full_title: Arc<str> = Arc::from(song.display_full_title(config.translated_titles));
     let mut timing = chart.timing.clone();
     timing.set_global_offset_seconds(config.global_offset_seconds);
     let timing = Arc::new(timing);
@@ -632,6 +634,7 @@ pub fn init(
 
     State {
         song,
+        song_full_title,
         chart,
         background_texture_key: "__white".to_string(),
         timing,

@@ -1,7 +1,6 @@
 use crate::core::gfx::BlendMode;
-use crate::ui::actors::{Actor, SizeSpec, SpriteSource, TextAlign};
+use crate::ui::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
 use crate::ui::{anim, runtime};
-use std::borrow::Cow;
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -61,7 +60,7 @@ pub enum Mod<'a> {
 
     // text
     Font(&'static str),
-    Content(std::borrow::Cow<'a, str>),
+    Content(TextContent),
     TAlign(TextAlign),
 
     // visibility + rotation
@@ -500,7 +499,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
     let mut glow = [1.0, 1.0, 1.0, 0.0];
     let mut stroke_color: Option<[f32; 4]> = None;
     let mut font: &'static str = "miso";
-    let mut content: Cow<'a, str> = Cow::Borrowed("");
+    let mut content: TextContent = TextContent::default();
     let mut talign = TextAlign::Left;
     let mut z: i16 = 0;
 
@@ -675,7 +674,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
         // different text gets a different animation state.
         let salt = {
             let mut h = 0xcbf29ce484222325u64;
-            for b in content.as_bytes() {
+            for b in content.as_str().as_bytes() {
                 h ^= *b as u64;
                 h = h.wrapping_mul(0x100000001b3);
             }
@@ -701,7 +700,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
         stroke_color,
         glow,
         font,
-        content: content.into_owned(),
+        content,
         align_text: talign,
         z,
         scale: [sx, sy],
@@ -1136,7 +1135,7 @@ macro_rules! __dsl_apply_one {
     // Text properties (SM-compatible)
     (font ($n:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{ $mods.push($crate::ui::dsl::Mod::Font($n)); }};
     (settext ($s:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::Content(::std::borrow::Cow::from(($s))));
+        $mods.push($crate::ui::dsl::Mod::Content($crate::ui::actors::TextContent::from(($s))));
     }};
     (horizalign ($dir:ident) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::TAlign($crate::__ui_textalign_from_ident!($dir)));

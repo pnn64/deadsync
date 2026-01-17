@@ -1,4 +1,5 @@
 use crate::core::gfx::BlendMode;
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub enum Background {
@@ -74,7 +75,7 @@ pub enum Actor {
         #[allow(dead_code)]
         glow: [f32; 4],
         font: &'static str,
-        content: String,
+        content: TextContent,
         align_text: TextAlign, // talign: left/center/right
         z: i16,
         scale: [f32; 2],
@@ -104,4 +105,61 @@ pub enum Actor {
         color: [f32; 4],   // shadow color; alpha multiplies the child's alpha
         child: Box<Actor>, // wrapped actor
     },
+}
+
+#[derive(Clone, Debug)]
+pub enum TextContent {
+    Owned(String),
+    Shared(Arc<str>),
+}
+
+impl TextContent {
+    #[inline(always)]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Owned(s) => s.as_str(),
+            Self::Shared(s) => s.as_ref(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.as_str().len()
+    }
+}
+
+impl Default for TextContent {
+    fn default() -> Self {
+        Self::Owned(String::new())
+    }
+}
+
+impl From<String> for TextContent {
+    fn from(value: String) -> Self {
+        Self::Owned(value)
+    }
+}
+
+impl From<&String> for TextContent {
+    fn from(value: &String) -> Self {
+        Self::Owned(value.clone())
+    }
+}
+
+impl From<&str> for TextContent {
+    fn from(value: &str) -> Self {
+        Self::Owned(value.to_owned())
+    }
+}
+
+impl From<Arc<str>> for TextContent {
+    fn from(value: Arc<str>) -> Self {
+        Self::Shared(value)
+    }
+}
+
+impl From<&Arc<str>> for TextContent {
+    fn from(value: &Arc<str>) -> Self {
+        Self::Shared(value.clone())
+    }
 }

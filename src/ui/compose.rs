@@ -293,7 +293,7 @@ fn build_actor_recursive<'a>(
                 let mut objects = layout_text(
                     fm,
                     fonts,
-                    content,
+                    content.as_str(),
                     0.0, // _px_size unused
                     *scale,
                     *fit_width,
