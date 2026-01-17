@@ -55,7 +55,7 @@ rssp = { path = "src/extern/rssp" }
 # DirectX + Input (Windows)
 [target.'cfg(windows)'.dependencies]
 gpu-allocator = "0.28.0"
-gilrs = { version = "0.11.1", default-features = false, features = ["xinput"] }
+gilrs = "0.11.1"
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
