@@ -5,8 +5,11 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
 pub struct SongData {
+    pub simfile_path: PathBuf,
     pub title: String,
     pub subtitle: String,
+    pub translit_title: String,
+    pub translit_subtitle: String,
     pub artist: String,
     pub banner_path: Option<PathBuf>,
     pub background_path: Option<PathBuf>,

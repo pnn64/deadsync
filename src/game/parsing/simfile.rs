@@ -450,8 +450,11 @@ impl From<SerializableChartData> for ChartData {
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 struct SerializableSongData {
+    simfile_path: String,
     title: String,
     subtitle: String,
+    translit_title: String,
+    translit_subtitle: String,
     artist: String,
     banner_path: Option<String>,
     background_path: Option<String>,
@@ -477,8 +480,11 @@ struct SerializableSongData {
 impl From<&SongData> for SerializableSongData {
     fn from(song: &SongData) -> Self {
         Self {
+            simfile_path: song.simfile_path.to_string_lossy().into_owned(),
             title: song.title.clone(),
             subtitle: song.subtitle.clone(),
+            translit_title: song.translit_title.clone(),
+            translit_subtitle: song.translit_subtitle.clone(),
             artist: song.artist.clone(),
             banner_path: song
                 .banner_path
@@ -519,8 +525,11 @@ impl From<&SongData> for SerializableSongData {
 impl From<SerializableSongData> for SongData {
     fn from(song: SerializableSongData) -> Self {
         Self {
+            simfile_path: PathBuf::from(song.simfile_path),
             title: song.title,
             subtitle: song.subtitle,
+            translit_title: song.translit_title,
+            translit_subtitle: song.translit_subtitle,
             artist: song.artist,
             banner_path: song.banner_path.map(PathBuf::from),
             background_path: song.background_path.map(PathBuf::from),
@@ -611,6 +620,90 @@ fn fmt_scan_time(d: Duration) -> String {
     let m = (total_s / 60.0).floor() as u64;
     let s = total_s - (m as f64 * 60.0);
     format!("{m}m{s:.1}s")
+}
+
+// Mirrors ITGmania's `SongUtil::MakeSortString` behavior for song title sorting.
+fn itgmania_make_sort_bytes(s: &str) -> Vec<u8> {
+    let mut out = s.as_bytes().to_vec();
+    out.make_ascii_uppercase();
+
+    if matches!(out.first(), Some(b'.')) {
+        out.remove(0);
+    }
+
+    if let Some(&b) = out.first() {
+        let is_alpha = (b'A'..=b'Z').contains(&b);
+        let is_digit = (b'0'..=b'9').contains(&b);
+        if !is_alpha && !is_digit {
+            out.insert(0, b'~');
+        }
+    }
+
+    out
+}
+
+// Mirrors ITGmania's `CompareSongPointersByTitle` (translit main title, then translit subtitle,
+// then case-insensitive song file path for deterministic ordering).
+struct ItgmaniaSongTitleKey {
+    main_raw: Vec<u8>,
+    main_sort: Vec<u8>,
+    sub_sort: Vec<u8>,
+    path_fold: Vec<u8>,
+}
+
+impl ItgmaniaSongTitleKey {
+    fn new(song: &SongData) -> Self {
+        let main_raw_str = if song.translit_title.is_empty() {
+            song.title.as_str()
+        } else {
+            song.translit_title.as_str()
+        };
+        let sub_raw_str = if song.translit_subtitle.is_empty() {
+            song.subtitle.as_str()
+        } else {
+            song.translit_subtitle.as_str()
+        };
+
+        let mut path_fold = song.simfile_path.to_string_lossy().into_owned().into_bytes();
+        path_fold.make_ascii_lowercase();
+
+        Self {
+            main_raw: main_raw_str.as_bytes().to_vec(),
+            main_sort: itgmania_make_sort_bytes(main_raw_str),
+            sub_sort: itgmania_make_sort_bytes(sub_raw_str),
+            path_fold,
+        }
+    }
+}
+
+impl PartialEq for ItgmaniaSongTitleKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == std::cmp::Ordering::Equal
+    }
+}
+
+impl Eq for ItgmaniaSongTitleKey {}
+
+impl PartialOrd for ItgmaniaSongTitleKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ItgmaniaSongTitleKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if self.main_raw == other.main_raw {
+            match self.sub_sort.cmp(&other.sub_sort) {
+                std::cmp::Ordering::Equal => self.path_fold.cmp(&other.path_fold),
+                o => o,
+            }
+        } else {
+            match self.main_sort.cmp(&other.main_sort) {
+                std::cmp::Ordering::Equal => self.path_fold.cmp(&other.path_fold),
+                o => o,
+            }
+        }
+    }
 }
 
 fn step_type_lanes(step_type: &str) -> usize {
@@ -895,11 +988,8 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
 
     loaded_packs.retain(|p| !p.songs.is_empty());
     for pack in &mut loaded_packs {
-        pack.songs.sort_by_cached_key(|s| {
-            let title = s.title.to_lowercase();
-            let is_special = title.chars().next().is_some_and(|c| !c.is_alphanumeric());
-            (is_special, title)
-        });
+        pack.songs
+            .sort_by_cached_key(|s| ItgmaniaSongTitleKey::new(s.as_ref()));
     }
 
     loaded_packs.sort_by_cached_key(|p| {
@@ -1337,8 +1427,11 @@ fn parse_and_process_song_file(path: &Path, need_hash: bool) -> Result<(SongData
     }
 
     Ok((SongData {
+        simfile_path: path.to_path_buf(),
         title: summary.title_str,
         subtitle: summary.subtitle_str,
+        translit_title: summary.titletranslit_str,
+        translit_subtitle: summary.subtitletranslit_str,
         artist: summary.artist_str,
         banner_path, // Keep original logic for banner
         background_path: background_path_opt,
