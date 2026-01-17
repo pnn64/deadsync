@@ -675,27 +675,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             .min()
             .unwrap_or(0);
         let max_visible_index = state.note_spawn_cursor.min(state.notes.len());
-        // Build candidate indices: visible heads + active holds + decaying holds
-        let mut render_indices: Vec<usize> = (min_visible_index..max_visible_index).collect();
-        for a in &state.active_holds {
-            if let Some(h) = a.as_ref()
-                && h.note_index < state.notes.len()
-            {
-                render_indices.push(h.note_index);
-            }
-        }
-        for &idx in &state.decaying_hold_indices {
-            if idx < state.notes.len() {
-                render_indices.push(idx);
-            }
-        }
-        // Deduplicate while roughly preserving order
-        {
-            use std::collections::HashSet;
-            let mut seen = HashSet::with_capacity(render_indices.len());
-            render_indices.retain(|i| seen.insert(*i));
-        }
-        for note_index in render_indices {
+        let notes_len = state.notes.len();
+        let extra_hold_indices = state
+            .active_holds
+            .iter()
+            .filter_map(|a| a.as_ref().map(|h| h.note_index))
+            .chain(state.decaying_hold_indices.iter().copied())
+            .filter(|&idx| idx < notes_len && (idx < min_visible_index || idx >= max_visible_index));
+
+        // Render holds in the visible window, plus any active/decaying holds outside it.
+        // This avoids per-frame allocations and hashing for deduping.
+        for note_index in (min_visible_index..max_visible_index).chain(extra_hold_indices) {
             let note = &state.notes[note_index];
             if !matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
                 continue;
