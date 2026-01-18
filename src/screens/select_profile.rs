@@ -267,6 +267,24 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
     }
 }
 
+#[inline(always)]
+fn box_inner_alpha() -> f32 {
+    use crate::ui::{anim, runtime};
+    static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
+
+    let steps = STEPS.get_or_init(|| {
+        vec![
+            anim::sleep(FRAME_IN_CROP_DUR),
+            anim::linear(OVERLAY_IN_DUR).x(1.0).build(),
+        ]
+    });
+
+    let mut init = anim::TweenState::default();
+    init.x = 0.0;
+    let sid = runtime::site_id(file!(), line!(), column!(), 0x53454C50524F4649u64); // "SELPROFI"
+    runtime::materialize(sid, init, steps).x.clamp(0.0, 1.0)
+}
+
 pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(128);
 
@@ -306,6 +324,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     }
 
     let mut ui: Vec<Actor> = Vec::new();
+    let inner_alpha = box_inner_alpha();
 
     let frame_h = FRAME_H;
     let cx = screen_center_x();
@@ -442,7 +461,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             maxwidth(SCROLLER_W - SCROLLER_TEXT_PAD_X * 2.0):
             zoom(1.0):
             settext(choice.display_name.clone()):
-            diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
+            diffuse(text_color[0], text_color[1], text_color[2], text_color[3] * inner_alpha):
             shadowlength(0.5):
             z(103):
             horizalign(center)
@@ -469,14 +488,14 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
                 align(0.0, 0.0):
                 xy(avatar_x, avatar_y):
                 zoomto(avatar_dim, avatar_dim):
-                diffuse(bg[0], bg[1], bg[2], bg[3]):
+                diffuse(bg[0], bg[1], bg[2], bg[3] * inner_alpha):
                 z(103)
             ));
             ui.push(act!(sprite("heart.png"):
                 align(0.0, 0.0):
                 xy(avatar_x + AVATAR_HEART_X, avatar_y + AVATAR_HEART_Y):
                 zoom(AVATAR_HEART_ZOOM):
-                diffuse(1.0, 1.0, 1.0, 0.9):
+                diffuse(1.0, 1.0, 1.0, 0.9 * inner_alpha):
                 z(104)
             ));
 
@@ -488,7 +507,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
                 maxwidth(avatar_dim - 8.0):
                 zoomtoheight(14.0):
                 settext(label):
-                diffuse(1.0, 1.0, 1.0, 0.9):
+                diffuse(1.0, 1.0, 1.0, 0.9 * inner_alpha):
                 z(105):
                 horizalign(center)
             ));
@@ -497,6 +516,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
                 align(0.0, 0.0):
                 xy(avatar_x, avatar_y):
                 zoomto(avatar_dim, avatar_dim):
+                diffusealpha(inner_alpha):
                 z(104)
             ));
         }
@@ -510,7 +530,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             maxwidth(info_max_w):
             zoomtoheight(PREVIEW_VALUE_H):
             settext(TOTAL_SONGS_STATIC):
-            diffuse(1.0, 1.0, 1.0, 1.0):
+            diffuse(1.0, 1.0, 1.0, inner_alpha):
             z(103)
         ));
     }
@@ -520,7 +540,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         align(0.0, 0.0):
         xy(info_x0 + INFO_PAD * 1.25, cy + INFO_LINE_Y_OFF):
         zoomto(info_max_w, 1.0):
-        diffuse(1.0, 1.0, 1.0, 0.5):
+        diffuse(1.0, 1.0, 1.0, 0.5 * inner_alpha):
         z(103)
     ));
 
@@ -555,6 +575,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
                     zoomto(width * scale, target_height):
                     rotationz(-note_slot.def.rotation_deg as f32):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                    diffusealpha(inner_alpha):
                     z(104)
                 ));
             }
@@ -615,6 +636,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
                 xy(jd_x, preview_y):
                 setstate(0):
                 zoom(0.225):
+                diffusealpha(inner_alpha):
                 z(104)
             ));
         }
@@ -628,7 +650,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             maxwidth(info_max_w):
             zoomtoheight(PREVIEW_VALUE_H):
             settext(selected_speed.to_string()):
-            diffuse(1.0, 1.0, 1.0, 1.0):
+            diffuse(1.0, 1.0, 1.0, inner_alpha):
             z(103)
         ));
     }
