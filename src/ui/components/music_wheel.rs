@@ -16,8 +16,14 @@ fn col_pack_header_box() -> [f32; 4] {
 }
 
 // --- Layout Constants ---
-const NUM_WHEEL_ITEMS: usize = 17;
-const CENTER_WHEEL_SLOT_INDEX: usize = NUM_WHEEL_ITEMS / 2;
+// Simply Love theme metric: [MusicWheel] NumWheelItems=17.
+// StepMania/ITGmania WheelBase allocates `ceil(NumWheelItems+2)` internal items so that
+// extra off-screen items can slide in during scroll and avoid exposing gaps.
+const NUM_WHEEL_ITEMS_TO_DRAW: usize = 17;
+const NUM_VISIBLE_WHEEL_ITEMS: usize = NUM_WHEEL_ITEMS_TO_DRAW - 2; // 17 -> 15 visible on-screen
+const NUM_WHEEL_SLOTS: usize = NUM_WHEEL_ITEMS_TO_DRAW + 2; // 17 -> 19 internal
+const CENTER_WHEEL_SLOT_INDEX: usize = NUM_WHEEL_SLOTS / 2;
+const WHEEL_DRAW_RADIUS: f32 = (NUM_WHEEL_ITEMS_TO_DRAW as f32) * 0.5; // 8.5
 const SELECTION_ANIMATION_CYCLE_DURATION: f32 = 1.0;
 const LAMP_PULSE_PERIOD: f32 = 0.8;
 const LAMP_PULSE_LERP_TO_WHITE: f32 = 0.70;
@@ -71,7 +77,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let translated_titles = crate::config::get().translated_titles;
 
     const WHEEL_WIDTH_DIVISOR: f32 = 2.125;
-    let num_visible_items = NUM_WHEEL_ITEMS - 2; // 17 -> 15 visible
+    let num_visible_items = NUM_VISIBLE_WHEEL_ITEMS;
 
     // SL metrics-derived values
     let sl_shift = widescale(28.0, 33.0); // InitCommand shift in SL
@@ -113,10 +119,13 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let num_entries = p.entries.len();
 
     if num_entries > 0 {
-        for i_slot in 0..NUM_WHEEL_ITEMS {
+        for i_slot in 0..NUM_WHEEL_SLOTS {
             let offset_from_center = i_slot as isize - CENTER_WHEEL_SLOT_INDEX as isize;
             let offset_from_center_f =
                 offset_from_center as f32 + p.position_offset_from_selection;
+            if offset_from_center_f.abs() > WHEEL_DRAW_RADIUS {
+                continue;
+            }
             let y_center_item = center_y + offset_from_center_f * slot_spacing;
             let is_selected_slot = i_slot == CENTER_WHEEL_SLOT_INDEX;
 
@@ -383,10 +392,13 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
         let empty_text = "- EMPTY -";
         let text_color = color::decorative_rgba(0); // Red
 
-        for i_slot in 0..NUM_WHEEL_ITEMS {
+        for i_slot in 0..NUM_WHEEL_SLOTS {
             let offset_from_center = i_slot as isize - CENTER_WHEEL_SLOT_INDEX as isize;
             let offset_from_center_f =
                 offset_from_center as f32 + p.position_offset_from_selection;
+            if offset_from_center_f.abs() > WHEEL_DRAW_RADIUS {
+                continue;
+            }
             let y_center_item = center_y + offset_from_center_f * slot_spacing;
 
             // Use pack header colors for the empty state
