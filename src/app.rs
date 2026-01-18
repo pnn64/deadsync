@@ -280,7 +280,10 @@ impl ScreensState {
                 sandbox::update(&mut self.sandbox_state, delta_time);
                 None
             }
-            CurrentScreen::SelectProfile => None,
+            CurrentScreen::SelectProfile => {
+                select_profile::update(&mut self.select_profile_state, delta_time);
+                None
+            }
             CurrentScreen::SelectColor => {
                 select_color::update(&mut self.select_color_state, delta_time);
                 None

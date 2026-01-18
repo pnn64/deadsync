@@ -72,6 +72,8 @@ pub struct State {
     choices: Vec<Choice>,
     bg: heart_bg::State,
     preview_noteskin: Option<Noteskin>,
+    preview_time: f32,
+    preview_beat: f32,
 }
 
 fn load_noteskin(kind: profile::NoteSkin) -> Option<Noteskin> {
@@ -239,9 +241,17 @@ pub fn init() -> State {
         choices,
         bg: heart_bg::State::new(),
         preview_noteskin: None,
+        preview_time: 0.0,
+        preview_beat: 0.0,
     };
     rebuild_preview(&mut state);
     state
+}
+
+pub fn update(state: &mut State, dt: f32) {
+    const BPM: f32 = 120.0;
+    state.preview_time += dt;
+    state.preview_beat += dt * (BPM / 60.0);
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -612,7 +622,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         if let Some(ns) = &state.preview_noteskin {
             let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
             if let Some(note_slot) = ns.notes.get(note_idx) {
-                let frame = note_slot.frame_index(0.0, 0.0);
+                let frame = note_slot.frame_index(state.preview_time, state.preview_beat);
                 let uv = note_slot.uv_for_frame(frame);
                 let size = note_slot.size();
                 let width = size[0].max(1) as f32;
