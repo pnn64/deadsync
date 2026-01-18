@@ -77,6 +77,8 @@ pub struct CachedScore {
     /// This is intentionally UI-agnostic: the meaning of the index is left
     /// to the presentation layer (colors, effects, etc.).
     pub lamp_index: Option<u8>,
+    /// Optional single-digit judge count for the lamp (e.g. 1..=9).
+    pub lamp_judge_count: Option<u8>,
 }
 
 // --- Global Grade Cache ---
@@ -141,10 +143,20 @@ pub fn set_cached_score(chart_hash: String, score: CachedScore) {
 // --- On-disk GrooveStats score storage ---
 
 #[derive(Debug, Clone, Encode, Decode)]
+struct GsScoreEntryV1 {
+    score_percent: f64,
+    grade_code: u8,
+    lamp_index: Option<u8>,
+    username: String,
+    fetched_at_ms: i64,
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
 struct GsScoreEntry {
     score_percent: f64,
     grade_code: u8,
     lamp_index: Option<u8>,
+    lamp_judge_count: Option<u8>,
     username: String,
     fetched_at_ms: i64,
 }
@@ -202,6 +214,7 @@ fn entry_from_cached(score: CachedScore, username: &str, fetched_at_ms: i64) -> 
         score_percent: score.score_percent,
         grade_code: grade_to_code(score.grade),
         lamp_index: score.lamp_index,
+        lamp_judge_count: score.lamp_judge_count,
         username: username.to_string(),
         fetched_at_ms,
     }
@@ -212,7 +225,29 @@ fn cached_from_entry(entry: &GsScoreEntry) -> CachedScore {
         grade: grade_from_code(entry.grade_code),
         score_percent: entry.score_percent,
         lamp_index: entry.lamp_index,
+        lamp_judge_count: entry.lamp_judge_count,
     }
+}
+
+fn decode_gs_score_entry(bytes: &[u8]) -> Option<GsScoreEntry> {
+    if let Ok((entry, _)) =
+        bincode::decode_from_slice::<GsScoreEntry, _>(bytes, bincode::config::standard())
+    {
+        return Some(entry);
+    }
+    if let Ok((v1, _)) =
+        bincode::decode_from_slice::<GsScoreEntryV1, _>(bytes, bincode::config::standard())
+    {
+        return Some(GsScoreEntry {
+            score_percent: v1.score_percent,
+            grade_code: v1.grade_code,
+            lamp_index: v1.lamp_index,
+            lamp_judge_count: None,
+            username: v1.username,
+            fetched_at_ms: v1.fetched_at_ms,
+        });
+    }
+    None
 }
 
 fn best_scores_from_disk(dir: &Path) -> HashMap<String, CachedScore> {
@@ -248,9 +283,7 @@ fn best_scores_from_disk(dir: &Path) -> HashMap<String, CachedScore> {
         let Ok(bytes) = fs::read(&path) else {
             continue;
         };
-        let Ok((entry, _)) =
-            bincode::decode_from_slice::<GsScoreEntry, _>(&bytes, bincode::config::standard())
-        else {
+        let Some(entry) = decode_gs_score_entry(&bytes) else {
             continue;
         };
         let cached = cached_from_entry(&entry);
@@ -293,9 +326,7 @@ fn load_all_entries_for_chart(chart_hash: &str, dir: &Path) -> Vec<GsScoreEntry>
         let Ok(bytes) = fs::read(&path) else {
             continue;
         };
-        if let Ok((entry, _)) =
-            bincode::decode_from_slice::<GsScoreEntry, _>(&bytes, bincode::config::standard())
-        {
+        if let Some(entry) = decode_gs_score_entry(&bytes) {
             entries.push(entry);
         }
     }
@@ -322,6 +353,7 @@ fn append_gs_score_on_disk(chart_hash: &str, score: CachedScore, username: &str)
         if existing.username.eq_ignore_ascii_case(username)
             && (existing.score_percent - new_entry.score_percent).abs() <= epsilon
             && existing.lamp_index == new_entry.lamp_index
+            && existing.lamp_judge_count == new_entry.lamp_judge_count
             && existing.grade_code == new_entry.grade_code
         {
             return;
@@ -636,6 +668,27 @@ taps_rows={} holds={} rolls={} counts[w={}, e={}, g={}, d={}, wo={}, m={}] -> la
     None
 }
 
+fn compute_lamp_judge_count(lamp_index: Option<u8>, comment: Option<&str>) -> Option<u8> {
+    let lamp_index = lamp_index?;
+    let comment = comment?;
+    let counts = parse_comment_counts(comment);
+
+    // zmod-style single-digit overlay:
+    // - lamp 2 shows #W2
+    // - lamp 3 shows #W3
+    // (lamp 1 would show FA+ blue W1 count, which we don't track yet)
+    let count = match lamp_index {
+        2 => counts.e,
+        3 => counts.g,
+        _ => return None,
+    };
+    if (1..=9).contains(&count) {
+        Some(count as u8)
+    } else {
+        None
+    }
+}
+
 // --- Grade Calculation ---
 
 pub fn score_to_grade(score: f64) -> Grade {
@@ -750,15 +803,14 @@ pub fn fetch_and_store_grade(
 
     if let Some(score_data) = player_score {
         let grade = score_to_grade(score_data.score);
-        let lamp_index = compute_lamp_index(
-            score_data.score,
-            score_data.comments.as_deref(),
-            &chart_hash,
-        );
+        let lamp_index =
+            compute_lamp_index(score_data.score, score_data.comments.as_deref(), &chart_hash);
+        let lamp_judge_count = compute_lamp_judge_count(lamp_index, score_data.comments.as_deref());
         let cached_score = CachedScore {
             grade,
             score_percent: score_data.score / 10000.0,
             lamp_index,
+            lamp_judge_count,
         };
         set_cached_score(chart_hash.clone(), cached_score);
         append_gs_score_on_disk(&chart_hash, cached_score, &profile.groovestats_username);
@@ -772,6 +824,7 @@ pub fn fetch_and_store_grade(
             score_percent: 0.0,
             // No lamp when there is no score for this chart.
             lamp_index: None,
+            lamp_judge_count: None,
         };
         set_cached_score(chart_hash, cached_score);
     }

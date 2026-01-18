@@ -25,6 +25,32 @@ fn col_selected_pack_header_box() -> [f32; 4] {
 const NUM_WHEEL_ITEMS: usize = 17;
 const CENTER_WHEEL_SLOT_INDEX: usize = NUM_WHEEL_ITEMS / 2;
 const SELECTION_ANIMATION_CYCLE_DURATION: f32 = 1.0;
+const LAMP_PULSE_PERIOD: f32 = 0.8;
+const LAMP_PULSE_LERP_TO_WHITE: f32 = 0.70;
+
+fn col_quint_lamp() -> [f32; 4] {
+    // zmod quint color: color("1,0.2,0.406,1")
+    [1.0, 0.2, 0.406, 1.0]
+}
+fn col_clear_lamp() -> [f32; 4] {
+    // zmod clear lamp
+    color::rgba_hex("#0000CC")
+}
+fn col_fail_lamp() -> [f32; 4] {
+    // zmod fail lamp
+    color::rgba_hex("#990000")
+}
+
+fn lamp_judge_count_color(lamp_index: u8) -> [f32; 4] {
+    // zmod uses SL.JudgmentColors["FA+"][lamp+1] for the single-digit overlay.
+    match lamp_index {
+        1 => color::rgba_hex(color::JUDGMENT_FA_PLUS_WHITE_HEX),
+        2 => color::rgba_hex(color::JUDGMENT_HEX[1]),
+        3 => color::rgba_hex(color::JUDGMENT_HEX[2]),
+        4 => color::rgba_hex(color::JUDGMENT_HEX[3]),
+        _ => [1.0; 4],
+    }
+}
 
 // Helper from select_music.rs
 fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
@@ -83,6 +109,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
         * std::f32::consts::PI
         * 2.0;
     let anim_t = (anim_t_unscaled.sin() + 1.0) / 2.0;
+
+    let lamp_pulse_t_unscaled = (p.selection_animation_timer / LAMP_PULSE_PERIOD)
+        * std::f32::consts::PI
+        * 2.0;
+    let lamp_pulse_t = (lamp_pulse_t_unscaled.sin() + 1.0) / 2.0;
 
     let num_entries = p.entries.len();
 
@@ -244,6 +275,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 
                 // Optional lamp quad, positioned to the left of the grade sprite.
                 let mut lamp_actor: Option<Actor> = None;
+                let mut judge_actor: Option<Actor> = None;
 
                 // Find the relevant chart to check for a grade (and lamp).
                 if let Some(MusicWheelEntry::Song(info)) = p.entries.get(list_index) {
@@ -263,34 +295,78 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         .iter()
                         .find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name))
                     {
-                        if let Some(cached_score) = scores::get_cached_score(&chart.short_hash)
-                            && cached_score.grade != scores::Grade::Failed
-                        {
-                            if let Actor::Sprite { visible, cell, .. } = &mut grade_actor {
-                                *visible = true;
-                                *cell = Some((cached_score.grade.to_sprite_state(), u32::MAX));
-                            }
+                        if let Some(cached_score) = scores::get_cached_score(&chart.short_hash) {
+                            let has_score = cached_score.grade != scores::Grade::Failed
+                                || cached_score.score_percent > 0.0;
+                            if has_score {
+                                if let Actor::Sprite { visible, cell, .. } = &mut grade_actor {
+                                    *visible = true;
+                                    *cell = Some((cached_score.grade.to_sprite_state(), u32::MAX));
+                                }
 
-                            if let Some(idx) = cached_score.lamp_index {
-                                // Lamp indices are StageAward-like (1=W1 FC, 2=FEC/W2 FC, ...).
-                                // Map 1->Fantastic, 2->Excellent, etc. by shifting into 0-based.
-                                let lamp_color_index =
-                                    (idx.saturating_sub(1) as usize) % color::JUDGMENT_HEX.len();
-                                let lamp_color =
-                                    color::rgba_hex(color::JUDGMENT_HEX[lamp_color_index]);
-
-                                // Position and size mirror Simply Love's lamp quad.
+                                // Position and size mirror Simply Love/zmod's lamp quad.
                                 let lamp_x = grade_x - widescale(13.0, 20.0);
                                 let lamp_w = widescale(5.0, 6.0);
                                 let lamp_h = 31.0;
+
+                                // zmod: show a clear/fail lamp if no StageAward-like lamp exists.
+                                // In deadsync today, that means:
+                                // - `lamp_index=Some(..)` => FC lamp tier (pulse)
+                                // - `lamp_index=None`     => clear lamp (solid) for any non-FC score
+                                // - `grade=Failed`        => fail lamp (solid) if a real fail score exists
+                                let (lamp_color, lamp_pulsing, lamp_index) =
+                                    match cached_score.lamp_index {
+                                        Some(0) => (col_quint_lamp(), true, Some(0u8)),
+                                        Some(idx @ 1..=4) => {
+                                            let color_index = (idx - 1) as usize;
+                                            let base = color::rgba_hex(
+                                                color::JUDGMENT_HEX[color_index.min(5)],
+                                            );
+                                            (base, true, Some(idx))
+                                        }
+                                        Some(_) => (col_clear_lamp(), false, None),
+                                        None if cached_score.grade == scores::Grade::Failed => {
+                                            (col_fail_lamp(), false, None)
+                                        }
+                                        None => (col_clear_lamp(), false, None),
+                                    };
+
+                                let lamp_color_final = if lamp_pulsing {
+                                    let lamp_color2 = lerp_color(
+                                        [1.0; 4],
+                                        lamp_color,
+                                        LAMP_PULSE_LERP_TO_WHITE,
+                                    );
+                                    lerp_color(lamp_color, lamp_color2, lamp_pulse_t)
+                                } else {
+                                    lamp_color
+                                };
 
                                 lamp_actor = Some(act!(quad:
                                     align(0.5, 0.5):
                                     xy(lamp_x, grade_y):
                                     zoomto(lamp_w, lamp_h):
-                                    diffuse(lamp_color[0], lamp_color[1], lamp_color[2], lamp_color[3]):
+                                    diffuse(lamp_color_final[0], lamp_color_final[1], lamp_color_final[2], lamp_color_final[3]):
                                     z(2)
                                 ));
+
+                                if let Some(lamp_index) = lamp_index
+                                    && let Some(count) = cached_score.lamp_judge_count
+                                    && count < 10
+                                {
+                                    let judge_x = grade_x - widescale(7.0, 13.0);
+                                    let judge_y = grade_y + 10.0;
+                                    let judge_col = lamp_judge_count_color(lamp_index);
+                                    judge_actor = Some(act!(text:
+                                        font("miso"):
+                                        settext(format!("{}", count)):
+                                        align(0.5, 0.5):
+                                        xy(judge_x, judge_y):
+                                        zoom(0.15):
+                                        diffuse(judge_col[0], judge_col[1], judge_col[2], judge_col[3]):
+                                        z(3)
+                                    ));
+                                }
                             }
                         }
                     }
@@ -299,6 +375,9 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                 slot_children.push(grade_actor);
                 if let Some(lamp) = lamp_actor {
                     slot_children.push(lamp);
+                }
+                if let Some(judge) = judge_actor {
+                    slot_children.push(judge);
                 }
             }
 
