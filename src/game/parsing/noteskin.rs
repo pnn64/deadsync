@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub const NUM_QUANTIZATIONS: usize = 9;
+const MINE_GRADIENT_SAMPLES: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(usize)]
@@ -414,6 +415,7 @@ pub struct Noteskin {
     pub receptor_off: Vec<SpriteSlot>,
     pub receptor_glow: Vec<Option<SpriteSlot>>,
     pub mines: Vec<Option<SpriteSlot>>,
+    pub mine_fill_gradients: Vec<Option<Vec<[f32; 4]>>>,
     pub mine_frames: Vec<Option<SpriteSlot>>,
     pub column_xs: Vec<i32>,
     pub tap_explosions: HashMap<String, TapExplosion>,
@@ -496,6 +498,131 @@ impl Default for ReceptorPulse {
             effect_offset: -0.25,
         }
     }
+}
+
+fn mine_fill_gradients(mines: &[Option<SpriteSlot>]) -> Vec<Option<Vec<[f32; 4]>>> {
+    mines
+        .iter()
+        .map(|slot| slot.as_ref().and_then(load_mine_gradient_colors))
+        .collect()
+}
+
+fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
+    let texture_key = slot.texture_key();
+    let path = Path::new("assets").join(texture_key);
+    let image = image::open(&path).ok()?.to_rgba8();
+
+    let mut width = slot.def.size[0];
+    let mut height = slot.def.size[1];
+    if (width <= 0 || height <= 0)
+        && let Some(frame) = slot.source.frame_size()
+    {
+        width = frame[0];
+        height = frame[1];
+    }
+
+    if width <= 0 || height <= 0 {
+        warn!("Mine fill slot has invalid size for gradient sampling");
+        return None;
+    }
+
+    let src_x = slot.def.src[0].max(0) as u32;
+    let src_y = slot.def.src[1].max(0) as u32;
+    let mut sample_width = width as u32;
+    let mut sample_height = height as u32;
+
+    if src_x >= image.width() || src_y >= image.height() {
+        warn!(
+            "Mine fill region ({}, {}) is outside of texture {}",
+            src_x, src_y, texture_key
+        );
+        return None;
+    }
+
+    if src_x + sample_width > image.width() {
+        sample_width = image.width().saturating_sub(src_x);
+    }
+    if src_y + sample_height > image.height() {
+        sample_height = image.height().saturating_sub(src_y);
+    }
+
+    if sample_width == 0 || sample_height == 0 {
+        warn!(
+            "Mine fill region has zero sample size for texture {}",
+            texture_key
+        );
+        return None;
+    }
+
+    let mut colors = Vec::with_capacity(sample_width as usize);
+    for dx in 0..sample_width {
+        let mut r = 0.0_f32;
+        let mut g = 0.0_f32;
+        let mut b = 0.0_f32;
+        let mut alpha_weight = 0.0_f32;
+
+        for dy in 0..sample_height {
+            let pixel = image.get_pixel(src_x + dx, src_y + dy);
+            let a = pixel[3] as f32 / 255.0;
+            if a <= f32::EPSILON {
+                continue;
+            }
+            r += pixel[0] as f32 * a;
+            g += pixel[1] as f32 * a;
+            b += pixel[2] as f32 * a;
+            alpha_weight += a;
+        }
+
+        if alpha_weight <= f32::EPSILON {
+            colors.push([0.0, 0.0, 0.0, 0.0]);
+        } else {
+            let inv = 1.0 / alpha_weight;
+            colors.push([
+                (r * inv) / 255.0,
+                (g * inv) / 255.0,
+                (b * inv) / 255.0,
+                (alpha_weight / sample_height as f32).clamp(0.0, 1.0),
+            ]);
+        }
+    }
+
+    if colors.is_empty() {
+        return None;
+    }
+
+    if colors.len() == 1 {
+        let mut color = colors[0];
+        color[3] = 1.0;
+        return Some(vec![color; MINE_GRADIENT_SAMPLES.max(1)]);
+    }
+
+    let max_index = (colors.len() - 1) as f32;
+    let mut samples = Vec::with_capacity(MINE_GRADIENT_SAMPLES);
+    let divisor = (MINE_GRADIENT_SAMPLES.saturating_sub(1)).max(1) as f32;
+    for i in 0..MINE_GRADIENT_SAMPLES {
+        let t = i as f32 / divisor;
+        let position = t * max_index;
+        let base_index = position.floor() as usize;
+        let next_index = (base_index + 1).min(colors.len() - 1);
+        let frac = (position - base_index as f32).clamp(0.0, 1.0);
+
+        let c0 = colors[base_index];
+        let c1 = colors[next_index];
+        let mut sampled = [
+            c0[0] + (c1[0] - c0[0]) * frac,
+            c0[1] + (c1[1] - c0[1]) * frac,
+            c0[2] + (c1[2] - c0[2]) * frac,
+            1.0,
+        ];
+
+        sampled[0] = sampled[0].clamp(0.0, 1.0);
+        sampled[1] = sampled[1].clamp(0.0, 1.0);
+        sampled[2] = sampled[2].clamp(0.0, 1.0);
+
+        samples.push(sampled);
+    }
+
+    Some(samples)
 }
 
 #[derive(Clone, Default)]
@@ -663,6 +790,7 @@ impl NoteskinBuilder {
         let mines = finalize_optional_slots(self.mines, self.default_sources.get("Mine"));
         let mine_frames =
             finalize_optional_slots(self.mine_frames, self.default_sources.get("Mine-frame"));
+        let mine_fill_gradients = mine_fill_gradients(&mines);
 
         let hold_body_inactive = finalize_single_slot(
             self.hold_body_inactive,
@@ -816,6 +944,7 @@ impl NoteskinBuilder {
             receptor_off,
             receptor_glow,
             mines,
+            mine_fill_gradients,
             mine_frames,
             column_xs,
             tap_explosions,

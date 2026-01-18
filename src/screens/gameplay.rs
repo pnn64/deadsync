@@ -5,18 +5,13 @@ use crate::core::space::*;
 use crate::game::judgment;
 use crate::game::judgment::{JudgeGrade, TimingWindow};
 use crate::game::note::{HoldResult, NoteType};
-use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, SpriteSlot};
+use crate::game::parsing::noteskin::NUM_QUANTIZATIONS;
 use crate::game::{profile, scroll::ScrollSpeedSetting};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use crate::ui::components::gameplay_stats;
 use crate::ui::components::screen_bar::{self, ScreenBarParams};
-use log::warn;
 use std::array::from_fn;
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-use std::path::Path;
-use std::sync::{Arc, LazyLock, Mutex};
 
 use crate::game::gameplay::active_hold_is_engaged;
 use crate::game::gameplay::{
@@ -60,53 +55,19 @@ const Z_MINE_EXPLOSION: i32 = 101;
 const Z_TAP_NOTE: i32 = 140;
 const MINE_CORE_SIZE_RATIO: f32 = 0.45;
 const MINE_FILL_LAYERS: usize = 32;
-const MINE_GRADIENT_SAMPLES: usize = 64;
-
-#[derive(Hash, PartialEq, Eq, Clone)]
-struct MineGradientKey {
-    texture_key: String,
-    src: [i32; 2],
-    size: [i32; 2],
-}
-
-type MineGradientCache = HashMap<MineGradientKey, Arc<Vec<[f32; 4]>>>;
-
-static MINE_GRADIENT_CACHE: LazyLock<Mutex<MineGradientCache>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Clone, Debug)]
 struct MineFillState {
     layers: [[f32; 4]; MINE_FILL_LAYERS],
 }
 
-fn mine_fill_state(slot: &SpriteSlot, beat: f32) -> Option<MineFillState> {
-    let colors = {
-        let key = MineGradientKey {
-            texture_key: slot.texture_key().to_string(),
-            src: slot.def.src,
-            size: slot.def.size,
-        };
-
-        let mut cache = MINE_GRADIENT_CACHE.lock().ok()?;
-        match cache.entry(key.clone()) {
-            Entry::Occupied(entry) => entry.get().clone(),
-            Entry::Vacant(entry) => {
-                let colors = Arc::new(load_mine_gradient_colors(slot)?);
-                entry.insert(colors.clone());
-                colors
-            }
-        }
-    };
-
+fn mine_fill_state(colors: &[[f32; 4]], beat: f32) -> Option<MineFillState> {
     if colors.is_empty() {
         return None;
     }
 
     let phase = beat.rem_euclid(1.0);
     let len = colors.len();
-    if len == 0 {
-        return None;
-    }
 
     let idx_float = phase * len as f32;
     let idx = (idx_float.floor() as usize) % len;
@@ -120,124 +81,6 @@ fn mine_fill_state(slot: &SpriteSlot, beat: f32) -> Option<MineFillState> {
     });
 
     Some(MineFillState { layers })
-}
-
-fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
-    let texture_key = slot.texture_key();
-    let path = Path::new("assets").join(texture_key);
-    let image = image::open(&path).ok()?.to_rgba8();
-
-    let mut width = slot.def.size[0];
-    let mut height = slot.def.size[1];
-    if (width <= 0 || height <= 0)
-        && let Some(frame) = slot.source.frame_size()
-    {
-        width = frame[0];
-        height = frame[1];
-    }
-
-    if width <= 0 || height <= 0 {
-        warn!("Mine fill slot has invalid size for gradient sampling");
-        return None;
-    }
-
-    let src_x = slot.def.src[0].max(0) as u32;
-    let src_y = slot.def.src[1].max(0) as u32;
-    let mut sample_width = width as u32;
-    let mut sample_height = height as u32;
-
-    if src_x >= image.width() || src_y >= image.height() {
-        warn!(
-            "Mine fill region ({}, {}) is outside of texture {}",
-            src_x, src_y, texture_key
-        );
-        return None;
-    }
-
-    if src_x + sample_width > image.width() {
-        sample_width = image.width().saturating_sub(src_x);
-    }
-    if src_y + sample_height > image.height() {
-        sample_height = image.height().saturating_sub(src_y);
-    }
-
-    if sample_width == 0 || sample_height == 0 {
-        warn!(
-            "Mine fill region has zero sample size for texture {}",
-            texture_key
-        );
-        return None;
-    }
-
-    let mut colors = Vec::with_capacity(sample_width as usize);
-    for dx in 0..sample_width {
-        let mut r = 0.0_f32;
-        let mut g = 0.0_f32;
-        let mut b = 0.0_f32;
-        let mut alpha_weight = 0.0_f32;
-
-        for dy in 0..sample_height {
-            let pixel = image.get_pixel(src_x + dx, src_y + dy);
-            let a = pixel[3] as f32 / 255.0;
-            if a <= f32::EPSILON {
-                continue;
-            }
-            r += pixel[0] as f32 * a;
-            g += pixel[1] as f32 * a;
-            b += pixel[2] as f32 * a;
-            alpha_weight += a;
-        }
-
-        if alpha_weight <= f32::EPSILON {
-            colors.push([0.0, 0.0, 0.0, 0.0]);
-        } else {
-            let inv = 1.0 / alpha_weight;
-            colors.push([
-                (r * inv) / 255.0,
-                (g * inv) / 255.0,
-                (b * inv) / 255.0,
-                (alpha_weight / sample_height as f32).clamp(0.0, 1.0),
-            ]);
-        }
-    }
-
-    if colors.is_empty() {
-        return None;
-    }
-
-    if colors.len() == 1 {
-        let mut color = colors[0];
-        color[3] = 1.0;
-        return Some(vec![color; MINE_GRADIENT_SAMPLES.max(1)]);
-    }
-
-    let max_index = (colors.len() - 1) as f32;
-    let mut samples = Vec::with_capacity(MINE_GRADIENT_SAMPLES);
-    let divisor = (MINE_GRADIENT_SAMPLES.saturating_sub(1)).max(1) as f32;
-    for i in 0..MINE_GRADIENT_SAMPLES {
-        let t = i as f32 / divisor;
-        let position = t * max_index;
-        let base_index = position.floor() as usize;
-        let next_index = (base_index + 1).min(colors.len() - 1);
-        let frac = (position - base_index as f32).clamp(0.0, 1.0);
-
-        let c0 = colors[base_index];
-        let c1 = colors[next_index];
-        let mut sampled = [
-            c0[0] + (c1[0] - c0[0]) * frac,
-            c0[1] + (c1[1] - c0[1]) * frac,
-            c0[2] + (c1[2] - c0[2]) * frac,
-            1.0,
-        ];
-
-        sampled[0] = sampled[0].clamp(0.0, 1.0);
-        sampled[1] = sampled[1].clamp(0.0, 1.0);
-        sampled[2] = sampled[2].clamp(0.0, 1.0);
-
-        samples.push(sampled);
-    }
-
-    Some(samples)
 }
 
 // --- TRANSITIONS ---
@@ -1228,7 +1071,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             TARGET_ARROW_PIXEL_SIZE * field_zoom,
                         ]);
                     if let Some(slot) = fill_slot {
-                        if let Some(fill_state) = mine_fill_state(slot, state.current_beat) {
+                        let fill_gradient = ns
+                            .mine_fill_gradients
+                            .get(arrow.column)
+                            .and_then(|colors| colors.as_deref());
+                        if let Some(fill_state) = fill_gradient
+                            .and_then(|colors| mine_fill_state(colors, state.current_beat))
+                        {
                             let width = circle_reference[0] * MINE_CORE_SIZE_RATIO;
                             let height = circle_reference[1] * MINE_CORE_SIZE_RATIO;
                             for layer_idx in (0..MINE_FILL_LAYERS).rev() {
