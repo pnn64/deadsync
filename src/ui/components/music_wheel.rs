@@ -358,13 +358,14 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                     let judge_y = grade_y + 10.0;
                                     let judge_col = lamp_judge_count_color(lamp_index);
                                     judge_actor = Some(act!(text:
-                                        font("miso"):
+                                        font("wendy_screenevaluation"):
                                         settext(format!("{}", count)):
                                         align(0.5, 0.5):
+                                        horizalign(center):
                                         xy(judge_x, judge_y):
                                         zoom(0.15):
                                         diffuse(judge_col[0], judge_col[1], judge_col[2], judge_col[3]):
-                                        z(3)
+                                        z(10)
                                     ));
                                 }
                             }
