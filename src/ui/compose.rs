@@ -638,8 +638,10 @@ fn push_sprite<'a>(
         return;
     }
 
-    let center_x = base_center.x;
-    let center_y = base_center.y;
+    // StepMania parity: crop shifts geometry toward the un-cropped side(s).
+    // (This matches Sprite::DrawTexture(), which moves quad vertices instead of the actor.)
+    let center_x = base_center.x + (cl - cr) * base_size.x * 0.5;
+    let center_y = base_center.y + (cb - ct) * base_size.y * 0.5;
     let size_x = base_size.x * sx_crop;
     let size_y = base_size.y * sy_crop;
 

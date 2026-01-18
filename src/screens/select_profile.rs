@@ -26,6 +26,9 @@ const FRAME_W_JOIN: f32 = FRAME_BASE_W * 0.9;
 const FRAME_H: f32 = 214.0;
 const FRAME_BORDER: f32 = 2.0;
 const FRAME_CX_OFF: f32 = 150.0;
+const FRAME_IN_CROP_DUR: f32 = 0.30; // SL: smooth(0.3):cropbottom(0)
+const OVERLAY_IN_DELAY: f32 = 0.30; // SL: sleep(0.3)
+const OVERLAY_IN_DUR: f32 = 0.10; // SL: linear(0.1)
 
 const INFO_W: f32 = FRAME_BASE_W * 0.475;
 const INFO_X0_OFF: f32 = 15.5;
@@ -48,6 +51,7 @@ const INFO_LINE_Y_OFF: f32 = 18.0;
 const PREVIEW_Y_OFF: f32 = 42.0;
 
 const PREVIEW_VALUE_H: f32 = 16.0;
+const TOTAL_SONGS_STATIC: &str = "123 Songs Played";
 
 #[derive(Clone)]
 struct Choice {
@@ -328,6 +332,8 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         xy(p1_cx, cy):
         zoomto(FRAME_W_SCROLLER + FRAME_BORDER, frame_h + FRAME_BORDER):
         diffuse(border_rgba[0], border_rgba[1], border_rgba[2], border_rgba[3]):
+        cropbottom(1.0):
+        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
         z(100)
     ));
     // Base fill.
@@ -336,6 +342,8 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         xy(p1_cx, cy):
         zoomto(FRAME_W_SCROLLER, frame_h):
         diffuse(col_frame[0], col_frame[1], col_frame[2], col_frame[3]):
+        cropbottom(1.0):
+        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
         z(101)
     ));
     // Top-edge lighten gradient (approx for diffusetopedge()).
@@ -345,6 +353,8 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         zoomto(FRAME_W_SCROLLER, frame_h):
         diffuse(col_frame_top[0], col_frame_top[1], col_frame_top[2], col_frame_top[3]):
         fadebottom(1.0):
+        cropbottom(1.0):
+        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
         z(101)
     ));
 
@@ -357,7 +367,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         align(0.0, 0.0):
         xy(info_x0, frame_y0):
         zoomto(INFO_W, frame_h):
-        diffuse(col_overlay[0], col_overlay[1], col_overlay[2], col_overlay[3]):
+        diffuse(0.0, 0.0, 0.0, 0.0):
+        sleep(OVERLAY_IN_DELAY):
+        linear(OVERLAY_IN_DUR): diffusealpha(col_overlay[3]):
         z(102)
     ));
 
@@ -367,6 +379,8 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         xy(p2_cx, cy):
         zoomto(FRAME_W_JOIN + FRAME_BORDER, frame_h + FRAME_BORDER):
         diffuse(border_rgba[0], border_rgba[1], border_rgba[2], border_rgba[3]):
+        cropbottom(1.0):
+        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
         z(100)
     ));
     ui.push(act!(quad:
@@ -374,6 +388,8 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         xy(p2_cx, cy):
         zoomto(FRAME_W_JOIN, frame_h):
         diffuse(0.0, 0.0, 0.0, 1.0):
+        cropbottom(1.0):
+        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
         z(101)
     ));
     ui.push(act!(text:
@@ -383,7 +399,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         zoomtoheight(18.0):
         maxwidth(FRAME_W_JOIN - 20.0):
         settext("Press START to join!"):
-        diffuse(1.0, 1.0, 1.0, 1.0):
+        diffuse(1.0, 1.0, 1.0, 0.0):
+        sleep(OVERLAY_IN_DELAY):
+        linear(OVERLAY_IN_DUR): diffusealpha(1.0):
         z(103)
     ));
 
@@ -395,7 +413,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         align(0.5, 0.5):
         xy(scroller_cx, cy):
         zoomto(SCROLLER_W, highlight_h):
-        diffuse(col_overlay[0], col_overlay[1], col_overlay[2], col_overlay[3]):
+        diffuse(0.0, 0.0, 0.0, 0.0):
+        sleep(OVERLAY_IN_DELAY):
+        linear(OVERLAY_IN_DUR): diffusealpha(col_overlay[3]):
         z(102)
     ));
 
@@ -410,11 +430,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
         let a = 1.0 - (d.abs() as f32 / (rows_half as f32 + 1.0));
         let mut text_color = [1.0, 1.0, 1.0, 0.35 + 0.65 * a];
-        let mut shadow = 0.0;
         if d == 0 {
-            // Selected row: pure white with shadow
+            // Selected row: pure white
             text_color = [1.0, 1.0, 1.0, 1.0];
-            shadow = 0.5;
         }
 
         ui.push(act!(text:
@@ -422,19 +440,19 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             xy(scroller_cx, y):
             font("miso"):
             maxwidth(SCROLLER_W - SCROLLER_TEXT_PAD_X * 2.0):
-            zoom(0.92):
+            zoom(1.0):
             settext(choice.display_name.clone()):
             diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
-            shadowlength(shadow):
+            shadowlength(0.5):
             z(103):
             horizalign(center)
         ));
     }
 
     let selected = state.choices.get(state.selected_index);
-    let selected_speed = selected
-        .map(|c| c.speed_mod.as_str())
-        .unwrap_or_default();
+    let selected_speed = selected.map(|c| c.speed_mod.as_str()).unwrap_or_default();
+    let selected_is_local =
+        selected.is_some_and(|c| matches!(c.kind, ActiveProfile::Local { .. }));
 
     // Avatar slot (SL-style): show profile.png if present, else heart + text.
     let avatar_dim = INFO_W - INFO_PAD * 2.25;
@@ -484,16 +502,18 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         }
     }
 
-    ui.push(act!(text:
-        align(0.0, 0.0):
-        xy(info_text_x, avatar_y + avatar_dim + 20.0):
-        font("miso"):
-        maxwidth(info_max_w):
-        zoomtoheight(PREVIEW_VALUE_H):
-        settext(selected_speed.to_string()):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        z(103)
-    ));
+    if selected_is_local {
+        ui.push(act!(text:
+            align(0.0, 0.0):
+            xy(info_text_x, avatar_y + avatar_dim + 20.0):
+            font("miso"):
+            maxwidth(info_max_w):
+            zoomtoheight(PREVIEW_VALUE_H):
+            settext(TOTAL_SONGS_STATIC):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(103)
+        ));
+    }
 
     // Thin white line separating stats from mods (SL-style).
     ui.push(act!(quad:
@@ -506,7 +526,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     // NoteSkin + JudgmentGraphic previews (like PlayerOptions; SL-style placement).
     // Now positioned side-by-side within the info pane.
-    if selected.is_some_and(|c| matches!(c.kind, ActiveProfile::Local { .. })) {
+    if selected_is_local {
         let preview_y = cy + PREVIEW_Y_OFF;
 
         if let Some(ns) = &state.preview_noteskin {
@@ -598,6 +618,19 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
                 z(104)
             ));
         }
+
+        // Speed mod (e.g. M600) lives in the RecentMods string in SL; for now, show it
+        // separately under the previews.
+        ui.push(act!(text:
+            align(0.0, 0.0):
+            xy(info_text_x, preview_y + 30.0):
+            font("miso"):
+            maxwidth(info_max_w):
+            zoomtoheight(PREVIEW_VALUE_H):
+            settext(selected_speed.to_string()):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(103)
+        ));
     }
 
     for mut a in ui {
