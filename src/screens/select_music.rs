@@ -887,6 +887,26 @@ pub fn reset_preview_after_gameplay(state: &mut State) {
     trigger_immediate_refresh(state);
 }
 
+/// Prime `displayed_chart_data` so delayed UI panes render immediately on screen entry.
+pub fn prime_displayed_chart_data(state: &mut State) {
+    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+        state.displayed_chart_data = None;
+        return;
+    };
+    let Some(&difficulty_name) = color::FILE_DIFFICULTY_NAMES.get(state.selected_difficulty_index)
+    else {
+        state.displayed_chart_data = None;
+        return;
+    };
+
+    let chart = song
+        .charts
+        .iter()
+        .find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name))
+        .cloned();
+    state.displayed_chart_data = chart.map(Arc::new);
+}
+
 fn format_session_time(seconds_total: f32) -> String {
     if seconds_total < 0.0 {
         return "00:00".to_string();

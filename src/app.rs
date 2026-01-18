@@ -1793,8 +1793,55 @@ impl App {
                         .screens
                         .select_music_state
                         .preferred_difficulty_index = self.state.session.preferred_difficulty_index;
+
+                    // Treat the initial selection as already "settled" so preview/graphs can start
+                    // immediately after the transition, matching ITG/Simply Love behavior.
+                    select_music::trigger_immediate_refresh(
+                        &mut self.state.screens.select_music_state,
+                    );
                 }
             }
+
+            // Prime the delayed panes (tech counts, breakdown, etc.) for the selected chart so they
+            // render immediately on entry (no initial debounce delay).
+            select_music::prime_displayed_chart_data(&mut self.state.screens.select_music_state);
+
+            // Load the selected entry's banner during the fade-in so it appears immediately.
+            let banner_path = match self
+                .state
+                .screens
+                .select_music_state
+                .entries
+                .get(self.state.screens.select_music_state.selected_index)
+            {
+                Some(select_music::MusicWheelEntry::Song(song)) => song.banner_path.clone(),
+                Some(select_music::MusicWheelEntry::PackHeader { banner_path, .. }) => {
+                    banner_path.clone()
+                }
+                None => None,
+            };
+            commands.push(Command::SetBanner(banner_path));
+
+            // Pre-render the density graph during the fade-in so the panel isn't blank on entry.
+            let chart_to_graph = match self
+                .state
+                .screens
+                .select_music_state
+                .entries
+                .get(self.state.screens.select_music_state.selected_index)
+            {
+                Some(select_music::MusicWheelEntry::Song(song)) => color::FILE_DIFFICULTY_NAMES
+                    .get(self.state.screens.select_music_state.selected_difficulty_index)
+                    .copied()
+                    .and_then(|difficulty_name| {
+                        song.charts
+                            .iter()
+                            .find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name))
+                            .cloned()
+                    }),
+                _ => None,
+            };
+            commands.push(Command::SetDensityGraph(chart_to_graph));
         }
         commands
     }
