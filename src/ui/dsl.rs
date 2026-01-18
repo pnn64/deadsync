@@ -430,10 +430,19 @@ fn build_sprite_like<'a>(
     }
 
     // If size is already known, apply zoom now. Else, carry to compose.
+    //
+    // IMPORTANT: `SizeSpec::Px(0,0)` is used in compose as a sentinel meaning
+    // "use native texture dims". If a sprite had an explicit size and is then
+    // scaled to exactly 0 (e.g. `zoom(0)`), we must not let it fall back to
+    // native size on the final frame.
     let scale_carry = if w != 0.0 || h != 0.0 {
         w *= sx;
         h *= sy;
-        [1.0, 1.0]
+        if w == 0.0 && h == 0.0 {
+            [0.0, 0.0]
+        } else {
+            [1.0, 1.0]
+        }
     } else {
         [sx, sy]
     };
