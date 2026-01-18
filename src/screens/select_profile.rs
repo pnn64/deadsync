@@ -563,10 +563,7 @@ fn push_scroller_frame(
         let y = frame_cy + d as f32 * ROW_H;
 
         let a = 1.0 - (d.abs() as f32 / (rows_half as f32 + 1.0));
-        let mut text_color = [1.0, 1.0, 1.0, 0.35 + 0.65 * a];
-        if d == 0 {
-            text_color = [1.0, 1.0, 1.0, 1.0];
-        }
+        let text_color = [1.0, 1.0, 1.0, 1.0];
 
         out.push(act!(text:
             align(0.5, 0.5):
@@ -671,7 +668,7 @@ fn push_scroller_frame(
                 let width = size[0].max(1) as f32;
                 let height = size[1].max(1) as f32;
 
-                const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
+                const TARGET_ARROW_PIXEL_SIZE: f32 = 40.0;
                 const PREVIEW_SCALE: f32 = 0.4;
                 let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
                 let scale = if height > 0.0 {
@@ -680,11 +677,12 @@ fn push_scroller_frame(
                     PREVIEW_SCALE
                 };
 
-                let ns_x = info_x0 + INFO_W * 0.28;
+                let ns_x = info_x0 + INFO_W * 0.13;
+                let ns_y = preview_y - 10.0;
 
                 out.push(act!(sprite(note_slot.texture_key().to_string()):
                     align(0.5, 0.5):
-                    xy(ns_x, preview_y):
+                    xy(ns_x, ns_y):
                     zoomto(width * scale, target_height):
                     rotationz(-note_slot.def.rotation_deg as f32):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -743,12 +741,13 @@ fn push_scroller_frame(
             .unwrap_or(None);
 
         if let Some(texture) = judgment_texture {
-            let jd_x = info_x0 + INFO_W * 0.72;
+            let jd_x = info_x0 + INFO_W * 0.61;
+            let jd_y = preview_y - 10.0;
             out.push(act!(sprite(texture):
                 align(0.5, 0.5):
-                xy(jd_x, preview_y):
+                xy(jd_x, jd_y):
                 setstate(0):
-                zoom(0.225):
+                zoom(0.160):
                 diffusealpha(inner_alpha):
                 z(104)
             ));
