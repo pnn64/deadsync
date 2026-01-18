@@ -68,6 +68,7 @@ struct Choice {
 
 pub struct State {
     pub active_color_index: i32,
+    p1_joined: bool,
     selected_index: usize,
     choices: Vec<Choice>,
     bg: heart_bg::State,
@@ -237,6 +238,7 @@ pub fn init() -> State {
 
     let mut state = State {
         active_color_index,
+        p1_joined: true,
         selected_index,
         choices,
         bg: heart_bg::State::new(),
@@ -284,6 +286,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     match ev.action {
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
+            if !state.p1_joined {
+                return ScreenAction::None;
+            }
             if state.selected_index > 0 {
                 state.selected_index -= 1;
                 rebuild_preview(state);
@@ -292,6 +297,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
+            if !state.p1_joined {
+                return ScreenAction::None;
+            }
             if state.selected_index + 1 < state.choices.len() {
                 state.selected_index += 1;
                 rebuild_preview(state);
@@ -300,6 +308,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p1_start => {
+            if !state.p1_joined {
+                state.p1_joined = true;
+                rebuild_preview(state);
+                audio::play_sfx("assets/sounds/start.ogg");
+                return ScreenAction::None;
+            }
+
             audio::play_sfx("assets/sounds/start.ogg");
             let choice = state
                 .choices
@@ -308,7 +323,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 .unwrap_or(ActiveProfile::Guest);
             ScreenAction::SelectProfile(choice)
         }
-        VirtualAction::p1_back | VirtualAction::p1_select => ScreenAction::Navigate(Screen::Menu),
+        VirtualAction::p1_back | VirtualAction::p1_select => {
+            if state.p1_joined {
+                state.p1_joined = false;
+                return ScreenAction::None;
+            }
+            ScreenAction::Navigate(Screen::Menu)
+        }
         _ => ScreenAction::None,
     }
 }
@@ -352,6 +373,44 @@ fn box_inner_alpha() -> f32 {
     init.x = 0.0;
     let sid = runtime::site_id(file!(), line!(), column!(), 0x53454C50524F4649u64); // "SELPROFI"
     runtime::materialize(sid, init, steps).x.clamp(0.0, 1.0)
+}
+
+fn push_join_prompt(
+    out: &mut Vec<Actor>,
+    cx: f32,
+    cy: f32,
+    frame_h: f32,
+    border_rgba: [f32; 4],
+    inner_alpha: f32,
+) {
+    out.push(act!(quad:
+        align(0.5, 0.5):
+        xy(cx, cy):
+        zoomto(FRAME_W_JOIN + FRAME_BORDER, frame_h + FRAME_BORDER):
+        diffuse(border_rgba[0], border_rgba[1], border_rgba[2], border_rgba[3]):
+        cropbottom(1.0):
+        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
+        z(100)
+    ));
+    out.push(act!(quad:
+        align(0.5, 0.5):
+        xy(cx, cy):
+        zoomto(FRAME_W_JOIN, frame_h):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        cropbottom(1.0):
+        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
+        z(101)
+    ));
+    out.push(act!(text:
+        align(0.5, 0.5):
+        xy(cx, cy):
+        font("miso"):
+        zoomtoheight(18.0):
+        maxwidth(FRAME_W_JOIN - 20.0):
+        settext("Press START to join!"):
+        diffuse(1.0, 1.0, 1.0, inner_alpha):
+        z(103)
+    ));
 }
 
 pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
@@ -414,314 +473,302 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     let border_rgba = [1.0, 1.0, 1.0, 1.0];
 
-    // P1 frame background (Right Column / Scroller) - Bright Color
-    ui.push(act!(quad:
-        align(0.5, 0.5):
-        xy(p1_cx, cy):
-        zoomto(FRAME_W_SCROLLER + FRAME_BORDER, frame_h + FRAME_BORDER):
-        diffuse(border_rgba[0], border_rgba[1], border_rgba[2], border_rgba[3]):
-        cropbottom(1.0):
-        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
-        z(100)
-    ));
-    // Base fill.
-    ui.push(act!(quad:
-        align(0.5, 0.5):
-        xy(p1_cx, cy):
-        zoomto(FRAME_W_SCROLLER, frame_h):
-        diffuse(col_frame[0], col_frame[1], col_frame[2], col_frame[3]):
-        cropbottom(1.0):
-        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
-        z(101)
-    ));
-    // Top-edge lighten gradient (approx for diffusetopedge()).
-    ui.push(act!(quad:
-        align(0.5, 0.5):
-        xy(p1_cx, cy):
-        zoomto(FRAME_W_SCROLLER, frame_h):
-        diffuse(col_frame_top[0], col_frame_top[1], col_frame_top[2], col_frame_top[3]):
-        fadebottom(1.0):
-        cropbottom(1.0):
-        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
-        z(101)
-    ));
-
-    // P1 info pane background (Left Column / Stats) - semi-transparent black overlay
-    let info_x0 = p1_cx + INFO_X0_OFF;
-    let info_text_x = info_x0 + INFO_PAD * 1.25;
-    let info_max_w = INFO_W - INFO_PAD * 2.5;
-
-    ui.push(act!(quad:
-        align(0.0, 0.0):
-        xy(info_x0, frame_y0):
-        zoomto(INFO_W, frame_h):
-        diffuse(0.0, 0.0, 0.0, 0.0):
-        sleep(OVERLAY_IN_DELAY):
-        linear(OVERLAY_IN_DUR): diffusealpha(col_overlay[3]):
-        z(102)
-    ));
-
-    // P2 join prompt (template only; not functional yet)
-    ui.push(act!(quad:
-        align(0.5, 0.5):
-        xy(p2_cx, cy):
-        zoomto(FRAME_W_JOIN + FRAME_BORDER, frame_h + FRAME_BORDER):
-        diffuse(border_rgba[0], border_rgba[1], border_rgba[2], border_rgba[3]):
-        cropbottom(1.0):
-        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
-        z(100)
-    ));
-    ui.push(act!(quad:
-        align(0.5, 0.5):
-        xy(p2_cx, cy):
-        zoomto(FRAME_W_JOIN, frame_h):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        cropbottom(1.0):
-        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
-        z(101)
-    ));
-    ui.push(act!(text:
-        align(0.5, 0.5):
-        xy(p2_cx, cy):
-        font("miso"):
-        zoomtoheight(18.0):
-        maxwidth(FRAME_W_JOIN - 20.0):
-        settext("Press START to join!"):
-        diffuse(1.0, 1.0, 1.0, 0.0):
-        sleep(OVERLAY_IN_DELAY):
-        linear(OVERLAY_IN_DUR): diffusealpha(1.0):
-        z(103)
-    ));
-
-    // P1 scroller (Selection Bar) - Dim Color (contrast against bright bg)
-    let scroller_cx = p1_cx + SCROLLER_CX_OFF;
-    let highlight_h = ROW_H;
-
-    ui.push(act!(quad:
-        align(0.5, 0.5):
-        xy(scroller_cx, cy):
-        zoomto(SCROLLER_W, highlight_h):
-        diffuse(0.0, 0.0, 0.0, 0.0):
-        sleep(OVERLAY_IN_DELAY):
-        linear(OVERLAY_IN_DUR): diffusealpha(col_overlay[3]):
-        z(102)
-    ));
-
-    let rows_half = ROWS_VISIBLE / 2;
-    for d in -rows_half..=rows_half {
-        let idx_i = state.selected_index as i32 + d;
-        if idx_i < 0 || idx_i >= state.choices.len() as i32 {
-            continue;
-        }
-        let choice = &state.choices[idx_i as usize];
-        let y = cy + d as f32 * ROW_H;
-
-        let a = 1.0 - (d.abs() as f32 / (rows_half as f32 + 1.0));
-        let mut text_color = [1.0, 1.0, 1.0, 0.35 + 0.65 * a];
-        if d == 0 {
-            // Selected row: pure white
-            text_color = [1.0, 1.0, 1.0, 1.0];
-        }
-
-        ui.push(act!(text:
+    if state.p1_joined {
+        // P1 frame background (Right Column / Scroller) - Bright Color
+        ui.push(act!(quad:
             align(0.5, 0.5):
-            xy(scroller_cx, y):
-            font("miso"):
-            maxwidth(SCROLLER_W - SCROLLER_TEXT_PAD_X * 2.0):
-            zoom(1.0):
-            settext(choice.display_name.clone()):
-            diffuse(text_color[0], text_color[1], text_color[2], text_color[3] * inner_alpha):
-            shadowlength(0.5):
-            z(103):
-            horizalign(center)
+            xy(p1_cx, cy):
+            zoomto(FRAME_W_SCROLLER + FRAME_BORDER, frame_h + FRAME_BORDER):
+            diffuse(border_rgba[0], border_rgba[1], border_rgba[2], border_rgba[3]):
+            cropbottom(1.0):
+            ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
+            z(100)
         ));
-    }
+        // Base fill.
+        ui.push(act!(quad:
+            align(0.5, 0.5):
+            xy(p1_cx, cy):
+            zoomto(FRAME_W_SCROLLER, frame_h):
+            diffuse(col_frame[0], col_frame[1], col_frame[2], col_frame[3]):
+            cropbottom(1.0):
+            ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
+            z(101)
+        ));
+        // Top-edge lighten gradient (approx for diffusetopedge()).
+        ui.push(act!(quad:
+            align(0.5, 0.5):
+            xy(p1_cx, cy):
+            zoomto(FRAME_W_SCROLLER, frame_h):
+            diffuse(col_frame_top[0], col_frame_top[1], col_frame_top[2], col_frame_top[3]):
+            fadebottom(1.0):
+            cropbottom(1.0):
+            ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
+            z(101)
+        ));
 
-    let selected = state.choices.get(state.selected_index);
-    let selected_is_local = selected.is_some_and(|c| matches!(c.kind, ActiveProfile::Local { .. }));
+        // P1 info pane background (Left Column / Stats) - semi-transparent black overlay
+        let info_x0 = p1_cx + INFO_X0_OFF;
+        let info_text_x = info_x0 + INFO_PAD * 1.25;
+        let info_max_w = INFO_W - INFO_PAD * 2.5;
 
-    // Avatar slot (SL-style): show profile.png if present, else heart + text.
-    let avatar_dim = INFO_W - INFO_PAD * 2.25;
-    let avatar_x = info_x0 + AVATAR_X_OFF;
-    let avatar_y = cy + AVATAR_Y_OFF;
+        ui.push(act!(quad:
+            align(0.0, 0.0):
+            xy(info_x0, frame_y0):
+            zoomto(INFO_W, frame_h):
+            diffuse(0.0, 0.0, 0.0, 0.0):
+            sleep(OVERLAY_IN_DELAY):
+            linear(OVERLAY_IN_DUR): diffusealpha(col_overlay[3]):
+            z(102)
+        ));
 
-    if let Some(choice) = selected {
-        let is_guest = matches!(choice.kind, ActiveProfile::Guest);
+        // P1 scroller (Selection Bar) - Dim Color (contrast against bright bg)
+        let scroller_cx = p1_cx + SCROLLER_CX_OFF;
+        let highlight_h = ROW_H;
 
-        let show_fallback = is_guest || choice.avatar_key.is_none();
-        if show_fallback {
-            let bg = color::rgba_hex(AVATAR_BG_HEX);
-            ui.push(act!(quad:
-                align(0.0, 0.0):
-                xy(avatar_x, avatar_y):
-                zoomto(avatar_dim, avatar_dim):
-                diffuse(bg[0], bg[1], bg[2], bg[3] * inner_alpha):
-                z(103)
-            ));
-            ui.push(act!(sprite("heart.png"):
-                align(0.0, 0.0):
-                xy(avatar_x + AVATAR_HEART_X, avatar_y + AVATAR_HEART_Y):
-                zoom(AVATAR_HEART_ZOOM):
-                diffuse(1.0, 1.0, 1.0, 0.9 * inner_alpha):
-                z(104)
-            ));
+        ui.push(act!(quad:
+            align(0.5, 0.5):
+            xy(scroller_cx, cy):
+            zoomto(SCROLLER_W, highlight_h):
+            diffuse(0.0, 0.0, 0.0, 0.0):
+            sleep(OVERLAY_IN_DELAY):
+            linear(OVERLAY_IN_DUR): diffusealpha(col_overlay[3]):
+            z(102)
+        ));
 
-            let label = if is_guest { "[ GUEST ]" } else { "No Avatar" };
+        let rows_half = ROWS_VISIBLE / 2;
+        for d in -rows_half..=rows_half {
+            let idx_i = state.selected_index as i32 + d;
+            if idx_i < 0 || idx_i >= state.choices.len() as i32 {
+                continue;
+            }
+            let choice = &state.choices[idx_i as usize];
+            let y = cy + d as f32 * ROW_H;
+
+            let a = 1.0 - (d.abs() as f32 / (rows_half as f32 + 1.0));
+            let mut text_color = [1.0, 1.0, 1.0, 0.35 + 0.65 * a];
+            if d == 0 {
+                // Selected row: pure white
+                text_color = [1.0, 1.0, 1.0, 1.0];
+            }
+
             ui.push(act!(text:
-                align(0.5, 0.0):
-                xy(avatar_x + avatar_dim * 0.5, avatar_y + AVATAR_TEXT_Y):
+                align(0.5, 0.5):
+                xy(scroller_cx, y):
                 font("miso"):
-                maxwidth(avatar_dim - 8.0):
-                zoomtoheight(14.0):
-                settext(label):
-                diffuse(1.0, 1.0, 1.0, 0.9 * inner_alpha):
-                z(105):
+                maxwidth(SCROLLER_W - SCROLLER_TEXT_PAD_X * 2.0):
+                zoom(1.0):
+                settext(choice.display_name.clone()):
+                diffuse(text_color[0], text_color[1], text_color[2], text_color[3] * inner_alpha):
+                shadowlength(0.5):
+                z(103):
                 horizalign(center)
             ));
-        } else if let Some(key) = &choice.avatar_key {
-            ui.push(act!(sprite(key.clone()):
-                align(0.0, 0.0):
-                xy(avatar_x, avatar_y):
-                zoomto(avatar_dim, avatar_dim):
-                diffusealpha(inner_alpha):
-                z(104)
-            ));
         }
-    }
 
-    if selected_is_local {
-        ui.push(act!(text:
-            align(0.0, 0.0):
-            xy(info_text_x, cy):
-            font("miso"):
-            zoom(TOTAL_SONGS_ZOOM):
-            maxwidth(info_max_w):
-            settext(TOTAL_SONGS_STATIC):
-            diffuse(1.0, 1.0, 1.0, inner_alpha):
-            z(103)
-        ));
-    }
+        let selected = state.choices.get(state.selected_index);
+        let selected_is_local =
+            selected.is_some_and(|c| matches!(c.kind, ActiveProfile::Local { .. }));
 
-    // Thin white line separating stats from mods (SL-style).
-    ui.push(act!(quad:
-        align(0.0, 0.0):
-        xy(info_x0 + INFO_PAD * 1.25, cy + INFO_LINE_Y_OFF):
-        zoomto(info_max_w, 1.0):
-        diffuse(1.0, 1.0, 1.0, 0.5 * inner_alpha):
-        z(103)
-    ));
+        // Avatar slot (SL-style): show profile.png if present, else heart + text.
+        let avatar_dim = INFO_W - INFO_PAD * 2.25;
+        let avatar_x = info_x0 + AVATAR_X_OFF;
+        let avatar_y = cy + AVATAR_Y_OFF;
 
-    // NoteSkin + JudgmentGraphic previews (like PlayerOptions; SL-style placement).
-    // Now positioned side-by-side within the info pane.
-    if selected_is_local {
-        let selected_mods = selected
-            .map(|c| format_recent_mods(&c.speed_mod, c.scroll_option))
-            .unwrap_or_default();
-        let preview_y = cy + PREVIEW_Y_OFF;
+        if let Some(choice) = selected {
+            let is_guest = matches!(choice.kind, ActiveProfile::Guest);
 
-        if let Some(ns) = &state.preview_noteskin {
-            let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
-            if let Some(note_slot) = ns.notes.get(note_idx) {
-                let frame = note_slot.frame_index(state.preview_time, state.preview_beat);
-                let uv = note_slot.uv_for_frame(frame);
-                let size = note_slot.size();
-                let width = size[0].max(1) as f32;
-                let height = size[1].max(1) as f32;
+            let show_fallback = is_guest || choice.avatar_key.is_none();
+            if show_fallback {
+                let bg = color::rgba_hex(AVATAR_BG_HEX);
+                ui.push(act!(quad:
+                    align(0.0, 0.0):
+                    xy(avatar_x, avatar_y):
+                    zoomto(avatar_dim, avatar_dim):
+                    diffuse(bg[0], bg[1], bg[2], bg[3] * inner_alpha):
+                    z(103)
+                ));
+                ui.push(act!(sprite("heart.png"):
+                    align(0.0, 0.0):
+                    xy(avatar_x + AVATAR_HEART_X, avatar_y + AVATAR_HEART_Y):
+                    zoom(AVATAR_HEART_ZOOM):
+                    diffuse(1.0, 1.0, 1.0, 0.9 * inner_alpha):
+                    z(104)
+                ));
 
-                const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
-                const PREVIEW_SCALE: f32 = 0.4;
-                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
-                let scale = if height > 0.0 {
-                    target_height / height
-                } else {
-                    PREVIEW_SCALE
-                };
-
-                let ns_x = info_x0 + INFO_W * 0.28;
-
-                ui.push(act!(sprite(note_slot.texture_key().to_string()):
-                    align(0.5, 0.5):
-                    xy(ns_x, preview_y):
-                    zoomto(width * scale, target_height):
-                    rotationz(-note_slot.def.rotation_deg as f32):
-                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                let label = if is_guest { "[ GUEST ]" } else { "No Avatar" };
+                ui.push(act!(text:
+                    align(0.5, 0.0):
+                    xy(avatar_x + avatar_dim * 0.5, avatar_y + AVATAR_TEXT_Y):
+                    font("miso"):
+                    maxwidth(avatar_dim - 8.0):
+                    zoomtoheight(14.0):
+                    settext(label):
+                    diffuse(1.0, 1.0, 1.0, 0.9 * inner_alpha):
+                    z(105):
+                    horizalign(center)
+                ));
+            } else if let Some(key) = &choice.avatar_key {
+                ui.push(act!(sprite(key.clone()):
+                    align(0.0, 0.0):
+                    xy(avatar_x, avatar_y):
+                    zoomto(avatar_dim, avatar_dim):
                     diffusealpha(inner_alpha):
                     z(104)
                 ));
             }
         }
 
-        let judgment_texture = selected
-            .map(|c| match c.judgment {
-                profile::JudgmentGraphic::Love => Some("judgements/Love 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::LoveChroma => {
-                    Some("judgements/Love Chroma 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Rainbowmatic => {
-                    Some("judgements/Rainbowmatic 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::GrooveNights => {
-                    Some("judgements/GrooveNights 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Emoticon => {
-                    Some("judgements/Emoticon 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Censored => {
-                    Some("judgements/Censored 1x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Chromatic => {
-                    Some("judgements/Chromatic 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::ITG2 => Some("judgements/ITG2 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::Bebas => Some("judgements/Bebas 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::Code => Some("judgements/Code 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::ComicSans => {
-                    Some("judgements/Comic Sans 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Focus => Some("judgements/Focus 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::Grammar => {
-                    Some("judgements/Grammar 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Miso => Some("judgements/Miso 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::Papyrus => {
-                    Some("judgements/Papyrus 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Roboto => Some("judgements/Roboto 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::Shift => Some("judgements/Shift 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::Tactics => {
-                    Some("judgements/Tactics 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Wendy => Some("judgements/Wendy 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::WendyChroma => {
-                    Some("judgements/Wendy Chroma 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::None => None,
-            })
-            .unwrap_or(None);
-
-        if let Some(texture) = judgment_texture {
-            let jd_x = info_x0 + INFO_W * 0.72;
-            ui.push(act!(sprite(texture):
-                align(0.5, 0.5):
-                xy(jd_x, preview_y):
-                setstate(0):
-                zoom(0.225):
-                diffusealpha(inner_alpha):
-                z(104)
+        if selected_is_local {
+            ui.push(act!(text:
+                align(0.0, 0.0):
+                xy(info_text_x, cy):
+                font("miso"):
+                zoom(TOTAL_SONGS_ZOOM):
+                maxwidth(info_max_w):
+                settext(TOTAL_SONGS_STATIC):
+                diffuse(1.0, 1.0, 1.0, inner_alpha):
+                z(103)
             ));
         }
 
-        ui.push(act!(text:
+        // Thin white line separating stats from mods (SL-style).
+        ui.push(act!(quad:
             align(0.0, 0.0):
-            xy(info_text_x, cy + MODS_Y_OFF):
-            font("miso"):
-            zoom(MODS_ZOOM):
-            maxwidth(info_max_w):
-            settext(selected_mods):
-            diffuse(1.0, 1.0, 1.0, inner_alpha):
+            xy(info_x0 + INFO_PAD * 1.25, cy + INFO_LINE_Y_OFF):
+            zoomto(info_max_w, 1.0):
+            diffuse(1.0, 1.0, 1.0, 0.5 * inner_alpha):
             z(103)
         ));
+
+        // NoteSkin + JudgmentGraphic previews (like PlayerOptions; SL-style placement).
+        // Now positioned side-by-side within the info pane.
+        if selected_is_local {
+            let selected_mods = selected
+                .map(|c| format_recent_mods(&c.speed_mod, c.scroll_option))
+                .unwrap_or_default();
+            let preview_y = cy + PREVIEW_Y_OFF;
+
+            if let Some(ns) = &state.preview_noteskin {
+                let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+                if let Some(note_slot) = ns.notes.get(note_idx) {
+                    let frame = note_slot.frame_index(state.preview_time, state.preview_beat);
+                    let uv = note_slot.uv_for_frame(frame);
+                    let size = note_slot.size();
+                    let width = size[0].max(1) as f32;
+                    let height = size[1].max(1) as f32;
+
+                    const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
+                    const PREVIEW_SCALE: f32 = 0.4;
+                    let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                    let scale = if height > 0.0 {
+                        target_height / height
+                    } else {
+                        PREVIEW_SCALE
+                    };
+
+                    let ns_x = info_x0 + INFO_W * 0.28;
+
+                    ui.push(act!(sprite(note_slot.texture_key().to_string()):
+                        align(0.5, 0.5):
+                        xy(ns_x, preview_y):
+                        zoomto(width * scale, target_height):
+                        rotationz(-note_slot.def.rotation_deg as f32):
+                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                        diffusealpha(inner_alpha):
+                        z(104)
+                    ));
+                }
+            }
+
+            let judgment_texture = selected
+                .map(|c| match c.judgment {
+                    profile::JudgmentGraphic::Love => Some("judgements/Love 2x7 (doubleres).png"),
+                    profile::JudgmentGraphic::LoveChroma => {
+                        Some("judgements/Love Chroma 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::Rainbowmatic => {
+                        Some("judgements/Rainbowmatic 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::GrooveNights => {
+                        Some("judgements/GrooveNights 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::Emoticon => {
+                        Some("judgements/Emoticon 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::Censored => {
+                        Some("judgements/Censored 1x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::Chromatic => {
+                        Some("judgements/Chromatic 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::ITG2 => {
+                        Some("judgements/ITG2 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::Bebas => {
+                        Some("judgements/Bebas 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::Code => Some("judgements/Code 2x7 (doubleres).png"),
+                    profile::JudgmentGraphic::ComicSans => {
+                        Some("judgements/Comic Sans 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::Focus => {
+                        Some("judgements/Focus 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::Grammar => {
+                        Some("judgements/Grammar 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::Miso => Some("judgements/Miso 2x7 (doubleres).png"),
+                    profile::JudgmentGraphic::Papyrus => {
+                        Some("judgements/Papyrus 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::Roboto => {
+                        Some("judgements/Roboto 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::Shift => {
+                        Some("judgements/Shift 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::Tactics => {
+                        Some("judgements/Tactics 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::Wendy => {
+                        Some("judgements/Wendy 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::WendyChroma => {
+                        Some("judgements/Wendy Chroma 2x7 (doubleres).png")
+                    }
+                    profile::JudgmentGraphic::None => None,
+                })
+                .unwrap_or(None);
+
+            if let Some(texture) = judgment_texture {
+                let jd_x = info_x0 + INFO_W * 0.72;
+                ui.push(act!(sprite(texture):
+                    align(0.5, 0.5):
+                    xy(jd_x, preview_y):
+                    setstate(0):
+                    zoom(0.225):
+                    diffusealpha(inner_alpha):
+                    z(104)
+                ));
+            }
+
+            ui.push(act!(text:
+                align(0.0, 0.0):
+                xy(info_text_x, cy + MODS_Y_OFF):
+                font("miso"):
+                zoom(MODS_ZOOM):
+                maxwidth(info_max_w):
+                settext(selected_mods):
+                diffuse(1.0, 1.0, 1.0, inner_alpha):
+                z(103)
+            ));
+        }
+    } else {
+        push_join_prompt(&mut ui, p1_cx, cy, frame_h, border_rgba, inner_alpha);
     }
+
+    // P2 join prompt (template only; not functional yet)
+    push_join_prompt(&mut ui, p2_cx, cy, frame_h, border_rgba, inner_alpha);
 
     for mut a in ui {
         apply_alpha_to_actor(&mut a, alpha_multiplier);
