@@ -14,12 +14,6 @@ fn col_music_wheel_box() -> [f32; 4] {
 fn col_pack_header_box() -> [f32; 4] {
     color::rgba_hex("#4c565d")
 }
-fn col_selected_song_box() -> [f32; 4] {
-    color::rgba_hex("#272f35")
-}
-fn col_selected_pack_header_box() -> [f32; 4] {
-    color::rgba_hex("#5f686e")
-}
 
 // --- Layout Constants ---
 const NUM_WHEEL_ITEMS: usize = 17;
@@ -65,6 +59,7 @@ fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
 pub struct MusicWheelParams<'a> {
     pub entries: &'a [MusicWheelEntry],
     pub selected_index: usize,
+    pub position_offset_from_selection: f32,
     pub selection_animation_timer: f32,
     pub pack_song_counts: &'a HashMap<String, usize>,
     pub preferred_difficulty_index: usize,
@@ -120,7 +115,9 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     if num_entries > 0 {
         for i_slot in 0..NUM_WHEEL_ITEMS {
             let offset_from_center = i_slot as isize - CENTER_WHEEL_SLOT_INDEX as isize;
-            let y_center_item = center_y + (offset_from_center as f32) * slot_spacing;
+            let offset_from_center_f =
+                offset_from_center as f32 + p.position_offset_from_selection;
+            let y_center_item = center_y + offset_from_center_f * slot_spacing;
             let is_selected_slot = i_slot == CENTER_WHEEL_SLOT_INDEX;
 
             // The selected_index from the state now freely increments/decrements. We use it as a base
@@ -132,16 +129,9 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
             let (is_pack, bg_col, txt_col, title_str, subtitle_str, pack_name_opt) =
                 match p.entries.get(list_index) {
                     Some(MusicWheelEntry::Song(info)) => {
-                        let base = col_music_wheel_box();
-                        let sel = col_selected_song_box();
-                        let bg = if is_selected_slot {
-                            lerp_color(base, sel, anim_t)
-                        } else {
-                            base
-                        };
                         (
                             false,
-                            bg,
+                            col_music_wheel_box(),
                             [1.0, 1.0, 1.0, 1.0],
                             info.display_title(translated_titles).to_string(),
                             info.display_subtitle(translated_titles).to_string(),
@@ -153,17 +143,10 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         original_index,
                         ..
                     }) => {
-                        let base = col_pack_header_box();
-                        let sel = col_selected_pack_header_box();
-                        let bg = if is_selected_slot {
-                            lerp_color(base, sel, anim_t)
-                        } else {
-                            base
-                        };
                         let c = color::simply_love_rgba(*original_index as i32);
                         (
                             true,
-                            bg,
+                            col_pack_header_box(),
                             [c[0], c[1], c[2], 1.0],
                             name.clone(),
                             String::new(),
@@ -185,17 +168,20 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
             // Children local to container-left (highlight_left_world)
             let mut slot_children: Vec<Actor> = Vec::new();
 
-            // Base black quad (full height)
-            if is_pack {
-                // Base black quad (full height) — only for packs
-                slot_children.push(act!(quad:
-                    align(0.0, 0.5):
-                    xy(0.0, half_item_h):
-                    zoomto(highlight_w, item_h_full):
-                    diffuse(0.0, 0.0, 0.0, 1.0):
-                    z(0)
-                ));
-            }
+            // Base quad (full height) for the 1px gap effect.
+            // Simply Love uses a solid black base for pack headers, and a dark translucent base for songs.
+            let base_full_col = if is_pack {
+                [0.0, 0.0, 0.0, 1.0]
+            } else {
+                [0.0, 10.0 / 255.0, 17.0 / 255.0, 0.5]
+            };
+            slot_children.push(act!(quad:
+                align(0.0, 0.5):
+                xy(0.0, half_item_h):
+                zoomto(highlight_w, item_h_full):
+                diffuse(base_full_col[0], base_full_col[1], base_full_col[2], base_full_col[3]):
+                z(0)
+            ));
             // Colored quad (height - 1)
             slot_children.push(act!(quad:
                 align(0.0, 0.5):
@@ -399,17 +385,12 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 
         for i_slot in 0..NUM_WHEEL_ITEMS {
             let offset_from_center = i_slot as isize - CENTER_WHEEL_SLOT_INDEX as isize;
-            let y_center_item = center_y + (offset_from_center as f32) * slot_spacing;
-            let is_selected_slot = i_slot == CENTER_WHEEL_SLOT_INDEX;
+            let offset_from_center_f =
+                offset_from_center as f32 + p.position_offset_from_selection;
+            let y_center_item = center_y + offset_from_center_f * slot_spacing;
 
             // Use pack header colors for the empty state
-            let base = col_pack_header_box();
-            let sel = col_selected_pack_header_box();
-            let bg_col = if is_selected_slot {
-                lerp_color(base, sel, anim_t)
-            } else {
-                base
-            };
+            let bg_col = col_pack_header_box();
 
             let mut slot_children: Vec<Actor> = Vec::new();
 
@@ -454,6 +435,18 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
             });
         }
     }
+
+    // Selection highlight overlay (Simply Love: Graphics/MusicWheel highlight.lua + [MusicWheel] HighlightOnCommand)
+    let highlight_c1: [f32; 4] = [0.8, 0.8, 0.8, 0.15];
+    let highlight_c2: [f32; 4] = [0.8, 0.8, 0.8, 0.05];
+    let highlight_col = lerp_color(highlight_c1, highlight_c2, anim_t);
+    actors.push(act!(quad:
+        align(0.0, 0.5):
+        xy(highlight_left_world, center_y):
+        zoomto(highlight_w, item_h_colored):
+        diffuse(highlight_col[0], highlight_col[1], highlight_col[2], highlight_col[3]):
+        z(62)
+    ));
 
     actors
 }

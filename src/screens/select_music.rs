@@ -41,13 +41,16 @@ const BANNER_NATIVE_HEIGHT: f32 = 164.0;
 
 // --- Other UI Constants ---
 static UI_BOX_BG_COLOR: LazyLock<[f32; 4]> = LazyLock::new(|| color::rgba_hex("#1E282F"));
-const SELECTION_ANIMATION_CYCLE_DURATION: f32 = 1.0;
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(200);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(40);
 const PREVIEW_DELAY_SECONDS: f32 = 0.25;
 const PREVIEW_FADE_OUT_SECONDS: f64 = 1.5;
 const DEFAULT_PREVIEW_LENGTH: f64 = 12.0; // ITGmania default when unspecified
+
+// MusicWheel animation timing (ITGmania fallback theme: [MusicWheel] SwitchSeconds=0.10)
+const MUSIC_WHEEL_SWITCH_SECONDS: f32 = 0.10;
+const MUSIC_WHEEL_SETTLE_MIN_SPEED: f32 = 0.2;
 
 // --- Preview helpers (mirror ITGmania behavior for missing/zero values) ---
 fn sec_at_beat_from_bpms(normalized_bpms: &str, target_beat: f64) -> f64 {
@@ -252,6 +255,7 @@ pub struct State {
     pub preferred_difficulty_index: usize,
     pub active_color_index: i32,
     pub selection_animation_timer: f32,
+    pub wheel_offset_from_selection: f32,
     pub current_banner_key: String,
     pub current_graph_key: String,
     pub session_elapsed: f32,
@@ -306,6 +310,7 @@ fn rebuild_displayed_entries(state: &mut State) {
         }
     }
     state.entries = new_entries;
+    state.wheel_offset_from_selection = 0.0;
 }
 
 pub fn init() -> State {
@@ -385,6 +390,7 @@ pub fn init() -> State {
         preferred_difficulty_index: initial_diff_index,
         active_color_index: color::DEFAULT_COLOR_INDEX,
         selection_animation_timer: 0.0,
+        wheel_offset_from_selection: 0.0,
         expanded_pack_name: last_pack_name,
         bg: heart_bg::State::new(),
         last_requested_banner_path: None,
@@ -439,6 +445,27 @@ pub fn init() -> State {
     state
 }
 
+#[inline(always)]
+fn music_wheel_settle_offset(state: &mut State, dt: f32) {
+    if !(dt.is_finite() && dt > 0.0) {
+        return;
+    }
+    let off = state.wheel_offset_from_selection;
+    if off == 0.0 {
+        return;
+    }
+
+    // Mirror ITGmania WheelBase behavior:
+    // fSpinSpeed = 0.2 + abs(offset)/SwitchSeconds; then move offset toward 0.
+    let spin_speed = MUSIC_WHEEL_SETTLE_MIN_SPEED + off.abs() / MUSIC_WHEEL_SWITCH_SECONDS;
+
+    if off > 0.0 {
+        state.wheel_offset_from_selection = (off - spin_speed * dt).max(0.0);
+    } else {
+        state.wheel_offset_from_selection = (off + spin_speed * dt).min(0.0);
+    }
+}
+
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
 // Handle D-pad / left-stick as if arrow keys were used.
@@ -454,7 +481,7 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                 } else {
                     state.selected_index = state.selected_index.wrapping_add(1);
                 }
-                state.selection_animation_timer = 0.0;
+                state.wheel_offset_from_selection += 1.0;
                 state.nav_key_held_direction = Some(NavDirection::Right);
                 state.nav_key_held_since = Some(Instant::now());
                 state.nav_key_last_scrolled_at = Some(Instant::now());
@@ -466,7 +493,7 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                 } else {
                     state.selected_index = state.selected_index.wrapping_sub(1);
                 }
-                state.selection_animation_timer = 0.0;
+                state.wheel_offset_from_selection -= 1.0;
                 state.nav_key_held_direction = Some(NavDirection::Left);
                 state.nav_key_held_since = Some(Instant::now());
                 state.nav_key_last_scrolled_at = Some(Instant::now());
@@ -708,8 +735,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
 pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     state.time_since_selection_change += dt;
-    state.selection_animation_timer =
-        (state.selection_animation_timer + dt) % SELECTION_ANIMATION_CYCLE_DURATION;
+    if dt.is_finite() && dt > 0.0 {
+        state.selection_animation_timer += dt;
+    }
+    music_wheel_settle_offset(state, dt);
 
     // Handle rapid scrolling when a navigation key is held down.
     if let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
@@ -726,19 +755,23 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 match direction {
                     NavDirection::Left => {
                         state.selected_index =
-                            (state.selected_index + num_entries - 1) % num_entries
+                            (state.selected_index + num_entries - 1) % num_entries;
+                        state.wheel_offset_from_selection -= 1.0;
                     }
                     NavDirection::Right => {
-                        state.selected_index = (state.selected_index + 1) % num_entries
+                        state.selected_index = (state.selected_index + 1) % num_entries;
+                        state.wheel_offset_from_selection += 1.0;
                     }
                 }
             } else {
                 match direction {
                     NavDirection::Left => {
-                        state.selected_index = state.selected_index.wrapping_sub(1)
+                        state.selected_index = state.selected_index.wrapping_sub(1);
+                        state.wheel_offset_from_selection -= 1.0;
                     }
                     NavDirection::Right => {
-                        state.selected_index = state.selected_index.wrapping_add(1)
+                        state.selected_index = state.selected_index.wrapping_add(1);
+                        state.wheel_offset_from_selection += 1.0;
                     }
                 }
             }
@@ -1836,6 +1869,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     actors.extend(music_wheel::build(music_wheel::MusicWheelParams {
         entries: &state.entries,
         selected_index: state.selected_index,
+        position_offset_from_selection: state.wheel_offset_from_selection,
         selection_animation_timer: state.selection_animation_timer,
         pack_song_counts: &pack_song_counts,
         preferred_difficulty_index: state.preferred_difficulty_index,
