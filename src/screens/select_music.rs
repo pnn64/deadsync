@@ -1,58 +1,52 @@
 use crate::act;
+use crate::assets::AssetManager;
 use crate::core::audio;
-use crate::core::input::{PadButton, PadDir};
-use crate::core::space::is_wide;
-use crate::core::space::*;
+use crate::core::input::{InputEvent, PadButton, PadDir, VirtualAction};
+use crate::core::space::{
+    is_wide, screen_center_x, screen_center_y, screen_height, screen_width, widescale,
+};
+use crate::game::chart::ChartData;
+use crate::game::profile;
+use crate::game::scores;
+use crate::game::song::{get_song_cache, SongData};
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::Actor;
-use crate::ui::actors::SizeSpec;
+use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use crate::ui::components::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::ui::components::{heart_bg, music_wheel, pad_display};
+use crate::ui::font;
+use log::info;
+use rssp::bpm::parse_bpm_map;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
-// Keyboard input is handled centrally via the virtual dispatcher in app.rs
-use crate::ui::font;
-use log::info;
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
-
-// --- engine imports ---
-use crate::assets::AssetManager;
-use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::widescale;
-use crate::game::chart::ChartData;
-use crate::game::profile;
-use crate::game::scores;
-use crate::game::song::{SongData, get_song_cache};
-use rssp::bpm::parse_bpm_map;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;
 const TRANSITION_OUT_DURATION: f32 = 0.3;
 
-// --- THEME LAYOUT CONSTANTS (unscaled, native dimensions) ---
+// --- THEME LAYOUT CONSTANTS ---
 const BANNER_NATIVE_WIDTH: f32 = 418.0;
 const BANNER_NATIVE_HEIGHT: f32 = 164.0;
-
-// --- Other UI Constants ---
 static UI_BOX_BG_COLOR: LazyLock<[f32; 4]> = LazyLock::new(|| color::rgba_hex("#1E282F"));
+
+// --- Timing & Logic Constants ---
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(200);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(40);
 const PREVIEW_DELAY_SECONDS: f32 = 0.25;
 const PREVIEW_FADE_OUT_SECONDS: f64 = 1.5;
-const DEFAULT_PREVIEW_LENGTH: f64 = 12.0; // ITGmania default when unspecified
+const DEFAULT_PREVIEW_LENGTH: f64 = 12.0;
 
-// MusicWheel animation timing (ITGmania fallback theme: [MusicWheel] SwitchSeconds=0.10)
 const MUSIC_WHEEL_SWITCH_SECONDS: f32 = 0.10;
 const MUSIC_WHEEL_SETTLE_MIN_SPEED: f32 = 0.2;
 
-// --- Preview helpers (mirror ITGmania behavior for missing/zero values) ---
+// --- Preview helpers ---
 fn sec_at_beat_from_bpms(normalized_bpms: &str, target_beat: f64) -> f64 {
     if !target_beat.is_finite() || target_beat <= 0.0 {
         return 0.0;
@@ -70,21 +64,18 @@ fn sec_at_beat_from_bpms(normalized_bpms: &str, target_beat: f64) -> f64 {
     let mut last_bpm = bpm_map[0].1;
     for &(beat, bpm) in &bpm_map {
         if target_beat <= beat {
-            // target lies before this change
             let delta_beats = (target_beat - last_beat).max(0.0);
             if last_bpm > 0.0 {
                 time += (delta_beats * 60.0) / last_bpm;
             }
             return time.max(0.0);
         }
-        // advance fully to this change
         if beat > last_beat && last_bpm > 0.0 {
             time += ((beat - last_beat) * 60.0) / last_bpm;
         }
         last_beat = beat;
         last_bpm = bpm;
     }
-    // past last change
     if last_bpm > 0.0 {
         time += ((target_beat - last_beat).max(0.0) * 60.0) / last_bpm;
     }
@@ -126,7 +117,6 @@ fn beat_at_sec_from_bpms(normalized_bpms: &str, target_sec: f64) -> f64 {
         last_beat = beat;
         last_bpm = bpm;
     }
-    // beyond last change; continue with last BPM
     let remain = (target_sec - elapsed).max(0.0);
     let add_beats = if last_bpm > 0.0 {
         remain * last_bpm / 60.0
@@ -158,27 +148,20 @@ fn beat_at_sec(song: &SongData, target_sec: f64) -> f64 {
 
 fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cut)> {
     let path = song.music_path.clone()?;
-    // Start with raw tags (treat missing as 0)
     let mut start = song.sample_start.unwrap_or(0.0) as f64;
     let mut length = song.sample_length.unwrap_or(0.0) as f64;
-    // Prefer true music length (audio duration); fall back to chart length.
     let total_len = if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
         song.music_length_seconds as f64
     } else {
         song.total_length_seconds.max(0) as f64
     };
 
-    // If length is not valid, mirror ITGmania defaults
     if !(length.is_sign_positive() && length.is_finite()) || length == 0.0 {
-        // First try beat 100
         let at_beat_100 = sec_at_beat(song, 100.0);
-        // If that would overflow the track, back off to a sensible aligned point
         start = if total_len > 0.0 && at_beat_100 + DEFAULT_PREVIEW_LENGTH > total_len {
             let last_beat = beat_at_sec(song, total_len);
-            // Round to half of last beat, align to 4-beat boundary
             let mut i_beat = (last_beat / 2.0).round();
             if i_beat.is_finite() {
-                // align down to multiple of 4
                 i_beat -= i_beat % 4.0;
             } else {
                 i_beat = 0.0;
@@ -188,18 +171,15 @@ fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cu
             at_beat_100
         };
         length = DEFAULT_PREVIEW_LENGTH;
-    } else {
-        // Length is valid; if start+length overflows total, adjust start similar to ITGmania
-        if total_len > 0.0 && (start + length) > total_len {
-            let last_beat = beat_at_sec(song, total_len);
-            let mut i_beat = (last_beat / 2.0).round();
-            if i_beat.is_finite() {
-                i_beat -= i_beat % 4.0;
-            } else {
-                i_beat = 0.0;
-            }
-            start = sec_at_beat(song, i_beat);
+    } else if total_len > 0.0 && (start + length) > total_len {
+        let last_beat = beat_at_sec(song, total_len);
+        let mut i_beat = (last_beat / 2.0).round();
+        if i_beat.is_finite() {
+            i_beat -= i_beat % 4.0;
+        } else {
+            i_beat = 0.0;
         }
+        start = sec_at_beat(song, i_beat);
     }
 
     if !start.is_finite() || start < 0.0 {
@@ -209,18 +189,23 @@ fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cu
         length = DEFAULT_PREVIEW_LENGTH;
     }
 
-    let cut = audio::Cut {
-        start_sec: start,
-        length_sec: length,
-        fade_out_sec: PREVIEW_FADE_OUT_SECONDS,
-        ..Default::default()
-    };
-    Some((path, cut))
+    Some((
+        path,
+        audio::Cut {
+            start_sec: start,
+            length_sec: length,
+            fade_out_sec: PREVIEW_FADE_OUT_SECONDS,
+            ..Default::default()
+        },
+    ))
 }
 
-// Format music rate like Simply Love wants (mirrors PlayerOptions).
+// Optimized formatter
 fn fmt_music_rate(rate: f32) -> String {
     let scaled = (rate * 100.0).round() as i32;
+    if scaled == 100 {
+        return "1.0".to_string();
+    }
     let int_part = scaled / 100;
     let frac2 = (scaled % 100).abs();
     if frac2 == 0 {
@@ -259,6 +244,9 @@ pub struct State {
     pub current_banner_key: String,
     pub current_graph_key: String,
     pub session_elapsed: f32,
+    pub displayed_chart_data: Option<Arc<ChartData>>,
+
+    // Internal state
     all_entries: Vec<MusicWheelEntry>,
     expanded_pack_name: Option<String>,
     bg: heart_bg::State,
@@ -273,10 +261,11 @@ pub struct State {
     currently_playing_preview_path: Option<PathBuf>,
     prev_selected_index: usize,
     time_since_selection_change: f32,
-    pub displayed_chart_data: Option<Arc<ChartData>>,
+
+    // Caches to avoid O(N) ops in hot paths
+    pub pack_song_counts: HashMap<String, usize>,
 }
 
-/// Helper function to check if a specific difficulty index has a playable chart
 pub(crate) fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usize) -> bool {
     if difficulty_index >= color::FILE_DIFFICULTY_NAMES.len() {
         return false;
@@ -290,20 +279,18 @@ pub(crate) fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usi
 }
 
 fn rebuild_displayed_entries(state: &mut State) {
-    let mut new_entries = Vec::new();
-    let mut current_pack_name: Option<String> = None;
+    let mut new_entries = Vec::with_capacity(state.all_entries.len());
+    let mut current_pack_name: Option<&String> = None;
+
+    // Linear pass, minimized cloning
     for entry in &state.all_entries {
         match entry {
-            MusicWheelEntry::PackHeader { .. } => {
-                current_pack_name = if let MusicWheelEntry::PackHeader { name, .. } = entry {
-                    Some(name.clone())
-                } else {
-                    None
-                };
+            MusicWheelEntry::PackHeader { name, .. } => {
+                current_pack_name = Some(name);
                 new_entries.push(entry.clone());
             }
             MusicWheelEntry::Song(_) => {
-                if state.expanded_pack_name.as_ref() == current_pack_name.as_ref() {
+                if state.expanded_pack_name.as_ref() == current_pack_name.cloned().as_ref() {
                     new_entries.push(entry.clone());
                 }
             }
@@ -314,73 +301,66 @@ fn rebuild_displayed_entries(state: &mut State) {
 }
 
 pub fn init() -> State {
-    info!("Initializing SelectMusic screen, reading from song cache...");
-    let mut all_entries = vec![];
+    info!("Initializing SelectMusic screen...");
     let song_cache = get_song_cache();
-    let mut total_filtered_songs = 0;
+    let mut all_entries = Vec::with_capacity(song_cache.len() * 10); // Heuristic alloc
+    let mut pack_song_counts = HashMap::with_capacity(song_cache.len());
 
-    // Seed initial selection from the profile's last-played song, if any.
     let profile_data = profile::get();
-    let max_diff_index = crate::ui::color::FILE_DIFFICULTY_NAMES
-        .len()
-        .saturating_sub(1);
+    let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
     let initial_diff_index = if max_diff_index == 0 {
         0
     } else {
         profile_data.last_difficulty_index.min(max_diff_index)
     };
+
     let mut last_song_arc: Option<Arc<SongData>> = None;
     let mut last_pack_name: Option<String> = None;
 
-    if let Some(last_path) = profile_data.last_song_music_path.as_deref() {
-        'outer: for pack in song_cache.iter() {
-            for song in &pack.songs {
-                if let Some(music_path) = &song.music_path {
-                    let path_str = music_path.to_string_lossy();
-                    if path_str == last_path {
-                        last_song_arc = Some(song.clone());
-                        last_pack_name = Some(pack.name.clone());
-                        break 'outer;
-                    }
-                }
-            }
-        }
-    }
-
+    // Filter and build entries in one pass
     for (i, pack) in song_cache.iter().enumerate() {
-        // Filter songs for this pack to only include those with "dance-single" charts.
         let single_dance_songs: Vec<Arc<SongData>> = pack
             .songs
             .iter()
             .filter(|song| {
                 song.charts
                     .iter()
-                    .any(|chart| chart.chart_type.eq_ignore_ascii_case("dance-single"))
+                    .any(|c| c.chart_type.eq_ignore_ascii_case("dance-single"))
             })
             .cloned()
             .collect();
 
-        // Only add the pack header and its songs if there are any "dance-single" songs in it.
         if !single_dance_songs.is_empty() {
+            // Compute cache for get_actors (HOT PATH OPTIMIZATION)
+            pack_song_counts.insert(pack.name.clone(), single_dance_songs.len());
+
             all_entries.push(MusicWheelEntry::PackHeader {
                 name: pack.name.clone(),
                 original_index: i,
                 banner_path: pack.banner_path.clone(),
             });
-            total_filtered_songs += single_dance_songs.len();
+
+            // Check for last played song
+            if let Some(last_path) = profile_data.last_song_music_path.as_deref() {
+                if last_song_arc.is_none() {
+                    for song in &single_dance_songs {
+                        if song
+                            .music_path
+                            .as_ref()
+                            .is_some_and(|p| p.to_string_lossy() == last_path)
+                        {
+                            last_song_arc = Some(song.clone());
+                            last_pack_name = Some(pack.name.clone());
+                        }
+                    }
+                }
+            }
+
             for song in single_dance_songs {
                 all_entries.push(MusicWheelEntry::Song(song));
             }
         }
     }
-
-    let total_songs_before_filter: usize = song_cache.iter().map(|p| p.songs.len()).sum();
-    info!(
-        "Read {} packs and {} total songs from cache. After filtering for dance-single, {} songs remain.",
-        song_cache.len(),
-        total_songs_before_filter,
-        total_filtered_songs
-    );
 
     let mut state = State {
         all_entries,
@@ -408,24 +388,23 @@ pub fn init() -> State {
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
         displayed_chart_data: None,
+        pack_song_counts,
     };
 
     rebuild_displayed_entries(&mut state);
 
-    // If we found a last-played song, move the selection to it and
-    // clamp the difficulty to the nearest playable stepchart.
+    // Restore selection
     if let Some(last_song) = last_song_arc {
         if let Some(idx) = state.entries.iter().position(|e| match e {
             MusicWheelEntry::Song(s) => Arc::ptr_eq(s, &last_song),
             _ => false,
         }) {
             state.selected_index = idx;
-
             if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
                 let preferred = state.preferred_difficulty_index;
                 let mut best_match_index = None;
                 let mut min_diff = i32::MAX;
-                for i in 0..crate::ui::color::FILE_DIFFICULTY_NAMES.len() {
+                for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
                     if is_difficulty_playable(song, i) {
                         let diff = (i as i32 - preferred as i32).abs();
                         if diff < min_diff {
@@ -447,18 +426,11 @@ pub fn init() -> State {
 
 #[inline(always)]
 fn music_wheel_settle_offset(state: &mut State, dt: f32) {
-    if !(dt.is_finite() && dt > 0.0) {
+    if dt <= 0.0 || state.wheel_offset_from_selection == 0.0 {
         return;
     }
     let off = state.wheel_offset_from_selection;
-    if off == 0.0 {
-        return;
-    }
-
-    // Mirror ITGmania WheelBase behavior:
-    // fSpinSpeed = 0.2 + abs(offset)/SwitchSeconds; then move offset toward 0.
     let spin_speed = MUSIC_WHEEL_SETTLE_MIN_SPEED + off.abs() / MUSIC_WHEEL_SWITCH_SECONDS;
-
     if off > 0.0 {
         state.wheel_offset_from_selection = (off - spin_speed * dt).max(0.0);
     } else {
@@ -466,21 +438,16 @@ fn music_wheel_settle_offset(state: &mut State, dt: f32) {
     }
 }
 
-// Keyboard input is handled centrally via the virtual dispatcher in app.rs
-
-// Handle D-pad / left-stick as if arrow keys were used.
 pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAction {
-    use winit::keyboard::KeyCode;
     let num_entries = state.entries.len();
-
     if pressed {
         match dir {
             PadDir::Right => {
-                if num_entries > 0 {
-                    state.selected_index = (state.selected_index + 1) % num_entries;
+                state.selected_index = if num_entries > 0 {
+                    (state.selected_index + 1) % num_entries
                 } else {
-                    state.selected_index = state.selected_index.wrapping_add(1);
-                }
+                    0
+                };
                 state.wheel_offset_from_selection += 1.0;
                 state.nav_key_held_direction = Some(NavDirection::Right);
                 state.nav_key_held_since = Some(Instant::now());
@@ -488,125 +455,90 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                 state.time_since_selection_change = 0.0;
             }
             PadDir::Left => {
-                if num_entries > 0 {
-                    state.selected_index = (state.selected_index + num_entries - 1) % num_entries;
+                state.selected_index = if num_entries > 0 {
+                    (state.selected_index + num_entries - 1) % num_entries
                 } else {
-                    state.selected_index = state.selected_index.wrapping_sub(1);
-                }
+                    0
+                };
                 state.wheel_offset_from_selection -= 1.0;
                 state.nav_key_held_direction = Some(NavDirection::Left);
                 state.nav_key_held_since = Some(Instant::now());
                 state.nav_key_last_scrolled_at = Some(Instant::now());
                 state.time_since_selection_change = 0.0;
             }
-            PadDir::Up => {
-                // Mirror ArrowUp pressed (double-tap → easier) and Up+Down combo collapse
-                let is_song_selected = state
-                    .entries
-                    .get(state.selected_index)
-                    .is_some_and(|e| matches!(e, MusicWheelEntry::Song(_)));
-                if is_song_selected {
+            PadDir::Up | PadDir::Down => {
+                if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
+                    let is_up = matches!(dir, PadDir::Up);
+                    let kc = if is_up {
+                        KeyCode::ArrowUp
+                    } else {
+                        KeyCode::ArrowDown
+                    };
                     let now = Instant::now();
-                    let kc = KeyCode::ArrowUp;
+
                     if state.last_difficulty_nav_key == Some(kc)
                         && state
                             .last_difficulty_nav_time
                             .is_some_and(|t| now.duration_since(t) < DOUBLE_TAP_WINDOW)
                     {
-                        if let Some(MusicWheelEntry::Song(song)) =
-                            state.entries.get(state.selected_index)
-                        {
-                            let mut new_idx = state.selected_difficulty_index;
-                            while new_idx > 0 {
-                                new_idx -= 1;
-                                if is_difficulty_playable(song, new_idx) {
-                                    state.selected_difficulty_index = new_idx;
-                                    state.preferred_difficulty_index = new_idx;
-                                    audio::play_sfx("assets/sounds/easier.ogg");
+                        // Double tap logic
+                        let mut new_idx = state.selected_difficulty_index;
+                        let range = if is_up {
+                            0..state.selected_difficulty_index
+                        } else {
+                            (state.selected_difficulty_index + 1)
+                                ..color::FILE_DIFFICULTY_NAMES.len()
+                        };
+                        let mut found = false;
+
+                        if is_up {
+                            for i in range.rev() {
+                                if is_difficulty_playable(song, i) {
+                                    new_idx = i;
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        } else {
+                            for i in range {
+                                if is_difficulty_playable(song, i) {
+                                    new_idx = i;
+                                    found = true;
                                     break;
                                 }
                             }
                         }
+
+                        if found {
+                            state.selected_difficulty_index = new_idx;
+                            state.preferred_difficulty_index = new_idx;
+                            audio::play_sfx(if is_up {
+                                "assets/sounds/easier.ogg"
+                            } else {
+                                "assets/sounds/harder.ogg"
+                            });
+                        }
                         state.last_difficulty_nav_key = None;
-                        state.last_difficulty_nav_time = None;
                     } else {
                         state.last_difficulty_nav_key = Some(kc);
                         state.last_difficulty_nav_time = Some(now);
                     }
-                    // If Down already pressed, treat as chord: collapse current pack if any
-                    if state.active_chord_keys.contains(&KeyCode::ArrowDown)
-                        && let Some(pack_to_collapse) = state.expanded_pack_name.clone()
-                    {
-                        info!("Up+Down combo: Collapsing pack '{}'.", pack_to_collapse);
-                        state.expanded_pack_name = None;
-                        rebuild_displayed_entries(state);
-                        if let Some(new_selection_index) =
-                            state.entries.iter().position(|e| match e {
-                                MusicWheelEntry::PackHeader { name, .. } => {
-                                    *name == pack_to_collapse
-                                }
-                                _ => false,
-                            })
-                        {
-                            state.selected_index = new_selection_index;
-                            state.prev_selected_index = new_selection_index;
-                            state.time_since_selection_change = 0.0;
-                        }
-                    }
-                    state.active_chord_keys.insert(kc);
-                }
-            }
-            PadDir::Down => {
-                // Mirror ArrowDown pressed (double-tap → harder) and Up+Down combo collapse
-                let is_song_selected = state
-                    .entries
-                    .get(state.selected_index)
-                    .is_some_and(|e| matches!(e, MusicWheelEntry::Song(_)));
-                if is_song_selected {
-                    let now = Instant::now();
-                    let kc = KeyCode::ArrowDown;
-                    if state.last_difficulty_nav_key == Some(kc)
-                        && state
-                            .last_difficulty_nav_time
-                            .is_some_and(|t| now.duration_since(t) < DOUBLE_TAP_WINDOW)
-                    {
-                        if let Some(MusicWheelEntry::Song(song)) =
-                            state.entries.get(state.selected_index)
-                        {
-                            let mut new_idx = state.selected_difficulty_index;
-                            while new_idx < crate::ui::color::FILE_DIFFICULTY_NAMES.len() - 1 {
-                                new_idx += 1;
-                                if is_difficulty_playable(song, new_idx) {
-                                    state.selected_difficulty_index = new_idx;
-                                    state.preferred_difficulty_index = new_idx;
-                                    audio::play_sfx("assets/sounds/harder.ogg");
-                                    break;
-                                }
+
+                    // Combo check
+                    let other_key = if is_up {
+                        KeyCode::ArrowDown
+                    } else {
+                        KeyCode::ArrowUp
+                    };
+                    if state.active_chord_keys.contains(&other_key) {
+                        if let Some(pack) = state.expanded_pack_name.take() {
+                            info!("Up+Down combo: Collapsing pack '{}'.", pack);
+                            rebuild_displayed_entries(state);
+                            if let Some(new_sel) = state.entries.iter().position(|e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &pack)) {
+                                state.selected_index = new_sel;
+                                state.prev_selected_index = new_sel;
+                                state.time_since_selection_change = 0.0;
                             }
-                        }
-                        state.last_difficulty_nav_key = None;
-                        state.last_difficulty_nav_time = None;
-                    } else {
-                        state.last_difficulty_nav_key = Some(kc);
-                        state.last_difficulty_nav_time = Some(now);
-                    }
-                    if state.active_chord_keys.contains(&KeyCode::ArrowUp)
-                        && let Some(pack_to_collapse) = state.expanded_pack_name.clone()
-                    {
-                        info!("Up+Down combo: Collapsing pack '{}'.", pack_to_collapse);
-                        state.expanded_pack_name = None;
-                        rebuild_displayed_entries(state);
-                        if let Some(new_selection_index) =
-                            state.entries.iter().position(|e| match e {
-                                MusicWheelEntry::PackHeader { name, .. } => {
-                                    *name == pack_to_collapse
-                                }
-                                _ => false,
-                            })
-                        {
-                            state.selected_index = new_selection_index;
-                            state.prev_selected_index = new_selection_index;
-                            state.time_since_selection_change = 0.0;
                         }
                     }
                     state.active_chord_keys.insert(kc);
@@ -614,29 +546,22 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
             }
         }
     } else {
-        // releases
         match dir {
             PadDir::Up => {
-                state
-                    .active_chord_keys
-                    .remove(&winit::keyboard::KeyCode::ArrowUp);
+                state.active_chord_keys.remove(&KeyCode::ArrowUp);
             }
             PadDir::Down => {
-                state
-                    .active_chord_keys
-                    .remove(&winit::keyboard::KeyCode::ArrowDown);
+                state.active_chord_keys.remove(&KeyCode::ArrowDown);
             }
             PadDir::Left | PadDir::Right => {
                 state.nav_key_held_direction = None;
                 state.nav_key_held_since = None;
-                state.nav_key_last_scrolled_at = None;
             }
         }
     }
     ScreenAction::None
 }
 
-// Handle A/Start (Confirm) and B/Select (Back) on this screen.
 pub fn handle_pad_button(state: &mut State, btn: PadButton, pressed: bool) -> ScreenAction {
     if !pressed {
         return ScreenAction::None;
@@ -647,66 +572,45 @@ pub fn handle_pad_button(state: &mut State, btn: PadButton, pressed: bool) -> Sc
                 audio::play_sfx("assets/sounds/expand.ogg");
                 return ScreenAction::None;
             }
-
-            if let Some(entry) = state.entries.get(state.selected_index).cloned() {
-                match entry {
-                    MusicWheelEntry::Song(_song) => {
-                        // same as Enter on a song
-                        return ScreenAction::Navigate(Screen::PlayerOptions);
+            match state.entries.get(state.selected_index) {
+                Some(MusicWheelEntry::Song(_)) => ScreenAction::Navigate(Screen::PlayerOptions),
+                Some(MusicWheelEntry::PackHeader { name, .. }) => {
+                    audio::play_sfx("assets/sounds/expand.ogg");
+                    let target = name.clone();
+                    if state.expanded_pack_name.as_ref() == Some(&target) {
+                        state.expanded_pack_name = None;
+                    } else {
+                        state.expanded_pack_name = Some(target.clone());
                     }
-                    MusicWheelEntry::PackHeader { name, .. } => {
-                        // toggle expand/collapse (same as Enter on pack)
-                        audio::play_sfx("assets/sounds/expand.ogg");
-                        let target = name.clone();
-                        if state.expanded_pack_name.as_ref() == Some(&target) {
-                            state.expanded_pack_name = None;
-                        } else {
-                            state.expanded_pack_name = Some(target.clone());
-                        }
-                        // local function in this module
-                        rebuild_displayed_entries(state);
-
-                        // refocus header
-                        if let Some(new_sel) = state.entries.iter().position(|e| {
-                            if let MusicWheelEntry::PackHeader { name: n, .. } = e {
-                                n == &target
-                            } else {
-                                false
-                            }
-                        }) {
-                            state.selected_index = new_sel;
-                        } else {
-                            state.selected_index = 0;
-                        }
-                        state.time_since_selection_change = 0.0;
-                        return ScreenAction::None;
+                    rebuild_displayed_entries(state);
+                    if let Some(new_sel) = state.entries.iter().position(|e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &target)) {
+                        state.selected_index = new_sel;
+                    } else {
+                        state.selected_index = 0;
                     }
+                    state.time_since_selection_change = 0.0;
+                    ScreenAction::None
                 }
+                None => ScreenAction::None,
             }
-            ScreenAction::None
         }
         PadButton::Back => ScreenAction::Navigate(Screen::Menu),
     }
 }
 
-// Screen-specific raw keyboard handling (keyboard-only actions like F7)
 pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
     if key.state != ElementState::Pressed {
         return ScreenAction::None;
     }
-    if let winit::keyboard::PhysicalKey::Code(KeyCode::F7) = key.physical_key
-        && let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index)
-    {
-        let difficulty_name = color::FILE_DIFFICULTY_NAMES[state.selected_difficulty_index];
-        if let Some(chart) = song
-            .charts
-            .iter()
-            .find(|c| {
+    if let winit::keyboard::PhysicalKey::Code(KeyCode::F7) = key.physical_key {
+        if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
+            let difficulty_name = color::FILE_DIFFICULTY_NAMES[state.selected_difficulty_index];
+            if let Some(chart) = song.charts.iter().find(|c| {
                 c.chart_type.eq_ignore_ascii_case("dance-single")
                     && c.difficulty.eq_ignore_ascii_case(difficulty_name)
-            })
-        {
-            return ScreenAction::FetchOnlineGrade(chart.short_hash.clone());
+            }) {
+                return ScreenAction::FetchOnlineGrade(chart.short_hash.clone());
+            }
         }
     }
     ScreenAction::None
@@ -715,7 +619,6 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match ev.action {
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-            // route as D-Pad Left
             handle_pad_dir(state, PadDir::Left, ev.pressed)
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
@@ -735,48 +638,36 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
 pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     state.time_since_selection_change += dt;
-    if dt.is_finite() && dt > 0.0 {
+    if dt > 0.0 {
         state.selection_animation_timer += dt;
     }
     music_wheel_settle_offset(state, dt);
 
-    // Handle rapid scrolling when a navigation key is held down.
-    if let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
+    // Rapid scrolling
+    if let (Some(dir), Some(held_since), Some(last_scroll)) = (
         state.nav_key_held_direction.clone(),
         state.nav_key_held_since,
         state.nav_key_last_scrolled_at,
     ) {
         let now = Instant::now();
         if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
-            && now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL
+            && now.duration_since(last_scroll) >= NAV_REPEAT_SCROLL_INTERVAL
         {
-            let num_entries = state.entries.len();
-            if num_entries > 0 {
-                match direction {
+            let num = state.entries.len();
+            if num > 0 {
+                match dir {
                     NavDirection::Left => {
-                        state.selected_index =
-                            (state.selected_index + num_entries - 1) % num_entries;
+                        state.selected_index = (state.selected_index + num - 1) % num;
                         state.wheel_offset_from_selection -= 1.0;
                     }
                     NavDirection::Right => {
-                        state.selected_index = (state.selected_index + 1) % num_entries;
+                        state.selected_index = (state.selected_index + 1) % num;
                         state.wheel_offset_from_selection += 1.0;
                     }
                 }
-            } else {
-                match direction {
-                    NavDirection::Left => {
-                        state.selected_index = state.selected_index.wrapping_sub(1);
-                        state.wheel_offset_from_selection -= 1.0;
-                    }
-                    NavDirection::Right => {
-                        state.selected_index = state.selected_index.wrapping_add(1);
-                        state.wheel_offset_from_selection += 1.0;
-                    }
-                }
+                state.nav_key_last_scrolled_at = Some(now);
+                state.time_since_selection_change = 0.0;
             }
-            state.nav_key_last_scrolled_at = Some(now);
-            state.time_since_selection_change = 0.0;
         }
     }
 
@@ -785,98 +676,92 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         state.prev_selected_index = state.selected_index;
         state.time_since_selection_change = 0.0;
 
-        // NEW: Clear displayed data only if we scroll onto a pack header.
-        if let Some(MusicWheelEntry::PackHeader { .. }) = state.entries.get(state.selected_index) {
+        if matches!(
+            state.entries.get(state.selected_index),
+            Some(MusicWheelEntry::PackHeader { .. })
+        ) {
             state.displayed_chart_data = None;
         }
 
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-            let preferred_difficulty = state.preferred_difficulty_index;
-            let mut best_match_index = None;
-            let mut min_diff = i32::MAX;
+            let pref = state.preferred_difficulty_index;
+            let mut best = None;
+            let mut min = i32::MAX;
             for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
                 if is_difficulty_playable(song, i) {
-                    let diff = (i as i32 - preferred_difficulty as i32).abs();
-                    if diff < min_diff {
-                        min_diff = diff;
-                        best_match_index = Some(i);
+                    let diff = (i as i32 - pref as i32).abs();
+                    if diff < min {
+                        min = diff;
+                        best = Some(i);
                     }
                 }
             }
-            if let Some(best_index) = best_match_index {
-                state.selected_difficulty_index = best_index;
+            if let Some(b) = best {
+                state.selected_difficulty_index = b;
             }
         }
     }
 
-    // --- Get current selection for IMMEDIATE updates ---
-    let (selected_song, selected_pack) =
-        if let Some(entry) = state.entries.get(state.selected_index) {
-            match entry {
-                MusicWheelEntry::Song(song) => (Some(song.clone()), None),
-                MusicWheelEntry::PackHeader {
-                    name, banner_path, ..
-                } => (None, Some((name.clone(), banner_path.clone()))),
-            }
-        } else {
-            (None, None)
-        };
+    // --- Immediate Updates ---
+    let (selected_song, selected_pack) = match state.entries.get(state.selected_index) {
+        Some(MusicWheelEntry::Song(s)) => (Some(s.clone()), None),
+        Some(MusicWheelEntry::PackHeader {
+            name, banner_path, ..
+        }) => (None, Some((name, banner_path))),
+        None => (None, None),
+    };
 
-    // --- IMMEDIATE UPDATES (Banner) ---
-    let new_banner_path = selected_song
+    let new_banner = selected_song
         .as_ref()
         .and_then(|s| s.banner_path.clone())
-        .or_else(|| selected_pack.and_then(|(_, path)| path));
-    if state.last_requested_banner_path != new_banner_path {
-        state.last_requested_banner_path = new_banner_path.clone();
-        return ScreenAction::RequestBanner(new_banner_path);
+        .or_else(|| {
+            selected_pack
+                .as_ref()
+                .and_then(|(_, p)| p.as_ref().cloned())
+        });
+
+    if state.last_requested_banner_path != new_banner {
+        state.last_requested_banner_path = new_banner.clone();
+        return ScreenAction::RequestBanner(new_banner);
     }
 
-    // --- DELAYED UPDATES ---
+    // --- Delayed Updates ---
     if state.time_since_selection_change >= PREVIEW_DELAY_SECONDS {
-        // Music Preview
-        let music_path_for_preview = selected_song.as_ref().and_then(|s| s.music_path.clone());
-        if state.currently_playing_preview_path != music_path_for_preview {
-            state.currently_playing_preview_path = music_path_for_preview;
-            let mut played = false;
-            if let Some(song) = &selected_song
-                && let Some((path, cut)) = compute_preview_cut(song)
-            {
-                info!(
-                    "Playing preview for '{}' at {:.2}s for {:.2}s",
-                    song.title, cut.start_sec, cut.length_sec
-                );
-                audio::play_music(
-                    path,
-                    cut,
-                    true,
-                    crate::game::profile::get_session_music_rate(),
-                );
-                played = true;
-            }
-            if !played {
+        let music_path = selected_song.as_ref().and_then(|s| s.music_path.clone());
+        if state.currently_playing_preview_path != music_path {
+            state.currently_playing_preview_path = music_path;
+            if let Some(song) = &selected_song {
+                if let Some((path, cut)) = compute_preview_cut(song) {
+                    audio::play_music(
+                        path,
+                        cut,
+                        true,
+                        crate::game::profile::get_session_music_rate(),
+                    );
+                } else {
+                    audio::stop_music();
+                }
+            } else {
                 audio::stop_music();
             }
         }
 
-        // Update displayed chart for UI and Graph
-        let chart_to_display = selected_song.as_ref().and_then(|song| {
-            let difficulty_name = color::FILE_DIFFICULTY_NAMES[state.selected_difficulty_index];
+        let chart_disp = selected_song.as_ref().and_then(|song| {
+            let diff_name = color::FILE_DIFFICULTY_NAMES[state.selected_difficulty_index];
             song.charts
                 .iter()
                 .find(|c| {
                     c.chart_type.eq_ignore_ascii_case("dance-single")
-                        && c.difficulty.eq_ignore_ascii_case(difficulty_name)
+                        && c.difficulty.eq_ignore_ascii_case(diff_name)
                 })
                 .cloned()
         });
-        state.displayed_chart_data = chart_to_display.clone().map(Arc::new);
+        state.displayed_chart_data = chart_disp.clone().map(Arc::new);
 
-        // Density Graph
-        let new_chart_hash = chart_to_display.as_ref().map(|c| c.short_hash.clone());
-        if state.last_requested_chart_hash != new_chart_hash {
-            state.last_requested_chart_hash = new_chart_hash;
-            return ScreenAction::RequestDensityGraph(chart_to_display);
+        let new_hash = chart_disp.as_ref().map(|c| c.short_hash.clone());
+        if state.last_requested_chart_hash != new_hash {
+            state.last_requested_chart_hash = new_hash;
+            return ScreenAction::RequestDensityGraph(chart_disp);
         }
     } else if state.currently_playing_preview_path.is_some() {
         state.currently_playing_preview_path = None;
@@ -887,103 +772,73 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        z(1100):
-        linear(TRANSITION_IN_DURATION): alpha(0.0):
-        linear(0.0): visible(false)
-    );
-    (vec![actor], TRANSITION_IN_DURATION)
+    (
+        vec![
+            act!(quad: align(0.0, 0.0): xy(0.0, 0.0): zoomto(screen_width(), screen_height()): diffuse(0.0, 0.0, 0.0, 1.0): z(1100): linear(TRANSITION_IN_DURATION): alpha(0.0): linear(0.0): visible(false)),
+        ],
+        TRANSITION_IN_DURATION,
+    )
 }
 
 pub fn out_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 0.0):
-        z(1200):
-        linear(TRANSITION_OUT_DURATION): alpha(1.0)
-    );
-    (vec![actor], TRANSITION_OUT_DURATION)
+    (
+        vec![
+            act!(quad: align(0.0, 0.0): xy(0.0, 0.0): zoomto(screen_width(), screen_height()): diffuse(0.0, 0.0, 0.0, 0.0): z(1200): linear(TRANSITION_OUT_DURATION): alpha(1.0)),
+        ],
+        TRANSITION_OUT_DURATION,
+    )
 }
 
-/// Force the SelectMusic screen to refresh its delayed assets (graph, preview)
-/// on the next update tick without waiting for the usual delay.
 pub fn trigger_immediate_refresh(state: &mut State) {
-    // Ensure we exceed the preview delay so update() runs the delayed branch
     state.time_since_selection_change = PREVIEW_DELAY_SECONDS;
-    // Setting this to None forces a new density graph request for the selected chart
     state.last_requested_chart_hash = None;
     state.last_requested_banner_path = None;
 }
 
-/// Reset preview state after returning from Gameplay/Evaluation so that the
-/// SelectMusic screen restarts the preview and regenerates the density graph.
 pub fn reset_preview_after_gameplay(state: &mut State) {
     state.currently_playing_preview_path = None;
     trigger_immediate_refresh(state);
 }
 
-/// Prime `displayed_chart_data` so delayed UI panes render immediately on screen entry.
 pub fn prime_displayed_chart_data(state: &mut State) {
-    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
-        state.displayed_chart_data = None;
-        return;
-    };
-    let Some(&difficulty_name) = color::FILE_DIFFICULTY_NAMES.get(state.selected_difficulty_index)
-    else {
-        state.displayed_chart_data = None;
-        return;
-    };
-
-    let chart = song
-        .charts
-        .iter()
-        .find(|c| {
-            c.chart_type.eq_ignore_ascii_case("dance-single")
-                && c.difficulty.eq_ignore_ascii_case(difficulty_name)
-        })
-        .cloned();
-    state.displayed_chart_data = chart.map(Arc::new);
+    if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
+        if let Some(&diff) = color::FILE_DIFFICULTY_NAMES.get(state.selected_difficulty_index) {
+            state.displayed_chart_data = song
+                .charts
+                .iter()
+                .find(|c| {
+                    c.chart_type.eq_ignore_ascii_case("dance-single")
+                        && c.difficulty.eq_ignore_ascii_case(diff)
+                })
+                .cloned()
+                .map(Arc::new);
+            return;
+        }
+    }
+    state.displayed_chart_data = None;
 }
 
-fn format_session_time(seconds_total: f32) -> String {
-    if seconds_total < 0.0 {
+// Fast non-allocating formatters where possible
+fn format_session_time(seconds: f32) -> String {
+    if seconds < 0.0 {
         return "00:00".to_string();
     }
-    let seconds_total = seconds_total as u64;
-
-    let hours = seconds_total / 3600;
-    let minutes = (seconds_total % 3600) / 60;
-    let seconds = seconds_total % 60;
-
-    if hours > 0 {
-        format!("{}:{:02}:{:02}", hours, minutes, seconds)
+    let s = seconds as u64;
+    let (h, m, s) = (s / 3600, (s % 3600) / 60, s % 60);
+    if h > 0 {
+        format!("{}:{:02}:{:02}", h, m, s)
     } else {
-        format!("{:02}:{:02}", minutes, seconds)
+        format!("{:02}:{:02}", m, s)
     }
 }
 
-fn format_chart_length(seconds_total: i32) -> String {
-    // Clamp negatives to 0
-    let seconds_total = if seconds_total < 0 {
-        0
+fn format_chart_length(seconds: i32) -> String {
+    let s = seconds.max(0) as u64;
+    let (h, m, s) = (s / 3600, (s % 3600) / 60, s % 60);
+    if h > 0 {
+        format!("{}:{:02}:{:02}", h, m, s)
     } else {
-        seconds_total as u64
-    };
-
-    let hours = seconds_total / 3600;
-    let minutes = (seconds_total % 3600) / 60;
-    let seconds = seconds_total % 60;
-
-    if hours > 0 {
-        // For very long charts (e.g. 6h), mirror pack style: H:MM:SS
-        format!("{}:{:02}:{:02}", hours, minutes, seconds)
-    } else {
-        // For normal charts: M:SS, NO leading zero on minutes
-        format!("{}:{:02}", minutes, seconds)
+        format!("{}:{:02}", m, s)
     }
 }
 
@@ -1007,10 +862,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         right_text: None,
         left_avatar: None,
     }));
+
     let footer_avatar = profile
         .avatar_texture_key
         .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
+        .map(|k| AvatarParams { texture_key: k });
     actors.push(screen_bar::build(ScreenBarParams {
         title: "EVENT MODE",
         title_placement: ScreenBarTitlePlacement::Center,
@@ -1023,907 +879,415 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         left_avatar: footer_avatar,
     }));
 
-    // Calculate the color for the currently selected difficulty based on the active theme color
-    let selected_difficulty_color_index =
-        state.active_color_index - (4 - state.selected_difficulty_index) as i32;
-    let selected_difficulty_color = color::simply_love_rgba(selected_difficulty_color_index);
+    let sel_col = color::simply_love_rgba(
+        state.active_color_index - (4 - state.selected_difficulty_index) as i32,
+    );
 
-    // --- Build pack song counts for music wheel ---
-    let mut pack_song_counts = HashMap::new();
-    let song_cache = get_song_cache();
-    for pack in song_cache.iter() {
-        let count = pack
-            .songs
-            .iter()
-            .filter(|song| {
-                song.charts
-                    .iter()
-                    .any(|chart| chart.chart_type.eq_ignore_ascii_case("dance-single"))
-            })
-            .count();
-        pack_song_counts.insert(pack.name.clone(), count);
-    }
+    // Timer
+    actors.push(act!(text: font("wendy_monospace_numbers"): settext(format_session_time(state.session_elapsed)): align(0.5, 0.5): xy(screen_center_x(), 10.0): zoom(widescale(0.3, 0.36)): z(121): diffuse(1.0, 1.0, 1.0, 1.0): horizalign(center)));
 
-    // Session Timer, centered in the top bar.
-    let timer_text = format_session_time(state.session_elapsed);
-
-    actors.push(act!(text:
-        font("wendy_monospace_numbers"):
-        settext(timer_text):
-        align(0.5, 0.5): // center, v-center
-        xy(screen_center_x(), 10.0): // Slightly higher, matching Lua theme
-        zoom(widescale(0.3, 0.36)):
-        z(121): // Draw above the bar
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        horizalign(center)
-    ));
-
-    // --- "ITG" text and Pads (top right), matching Simply Love layout ---
+    // Pads
     {
-        // "ITG" text, positioned to the left of the pads.
-        let itg_text_x = screen_width() - widescale(55.0, 62.0);
-        actors.push(act!(text:
-            font("wendy"):
-            settext("ITG"):
-            align(1.0, 0.5): // right, v-center
-            xy(itg_text_x, 15.0):
-            zoom(widescale(0.5, 0.6)):
-            z(121):
-            diffuse(1.0, 1.0, 1.0, 1.0)
-        ));
-
-        // Calculate the final combined zoom for the pads.
-        let final_pad_zoom = 0.24 * widescale(0.435, 0.525);
-
-        // P1 Pad
+        actors.push(act!(text: font("wendy"): settext("ITG"): align(1.0, 0.5): xy(screen_width() - widescale(55.0, 62.0), 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+        let pad_zoom = 0.24 * widescale(0.435, 0.525);
         actors.push(pad_display::build(pad_display::PadDisplayParams {
             center_x: screen_width() - widescale(35.0, 41.0),
             center_y: widescale(22.0, 23.5),
-            zoom: final_pad_zoom,
+            zoom: pad_zoom,
             z: 121,
             is_active: true,
         }));
-        // P2 Pad
         actors.push(pad_display::build(pad_display::PadDisplayParams {
             center_x: screen_width() - widescale(15.0, 17.0),
             center_y: widescale(22.0, 23.5),
-            zoom: final_pad_zoom,
+            zoom: pad_zoom,
             z: 121,
             is_active: false,
         }));
     }
 
-    // --- BANNER (center-anchored like SL's ActorFrame) ---
+    // Banner
     let (banner_zoom, banner_cx, banner_cy) = if is_wide() {
         (0.7655, screen_center_x() - 170.0, 96.0)
     } else {
-        (0.75, screen_center_x() - 166.0, 96.0) // <- keep -166 like the Lua
+        (0.75, screen_center_x() - 166.0, 96.0)
     };
+    actors.push(act!(sprite(state.current_banner_key.clone()): align(0.5, 0.5): xy(banner_cx, banner_cy): setsize(BANNER_NATIVE_WIDTH, BANNER_NATIVE_HEIGHT): zoom(banner_zoom): z(51)));
 
-    actors.push(act!(sprite(state.current_banner_key.clone()):
-        align(0.5, 0.5):                 // <- match SL (center)
-        xy(banner_cx, banner_cy):
-        setsize(BANNER_NATIVE_WIDTH, BANNER_NATIVE_HEIGHT):
-        zoom(banner_zoom):
-        z(51)
-    ));
-
-    // Music Rate overlay bar at bottom of banner (full width), when rate != 1.0x.
-    {
-        let rate = crate::game::profile::get_session_music_rate();
-        if (rate - 1.0).abs() > 0.001 {
-            let text = format!("{}x Music Rate", fmt_music_rate(rate));
-
-            // Match Simply Love: quad width 418, height 14, offset y=75 within the banner frame,
-            // all scaled by the banner's zoom.
-            let banner_w = BANNER_NATIVE_WIDTH * banner_zoom;
-            let overlay_h = 14.0 * banner_zoom;
-            let overlay_cx = banner_cx;
-            let overlay_cy = banner_cy + 75.0 * banner_zoom;
-
-            let quad_color = color::rgba_hex("#1E282FCC");
-
-            // Background quad spanning the banner width.
-            actors.push(act!(quad:
-                align(0.5, 0.5):
-                xy(overlay_cx, overlay_cy):
-                setsize(banner_w, overlay_h):
-                z(52):
-                diffuse(quad_color[0], quad_color[1], quad_color[2], quad_color[3])
-            ));
-
-            // Text centered in the overlay.
-            actors.push(act!(text:
-                font("miso"):
-                settext(text):
-                align(0.5, 0.5):
-                xy(overlay_cx, overlay_cy):
-                zoom(0.85 * banner_zoom):
-                shadowlength(1.0):
-                z(53):
-                diffuse(1.0, 1.0, 1.0, 1.0)
-            ));
-        }
+    let music_rate = crate::game::profile::get_session_music_rate();
+    if (music_rate - 1.0).abs() > 0.001 {
+        let text = format!("{}x Music Rate", fmt_music_rate(music_rate));
+        actors.push(act!(quad: align(0.5, 0.5): xy(banner_cx, banner_cy + 75.0 * banner_zoom): setsize(BANNER_NATIVE_WIDTH * banner_zoom, 14.0 * banner_zoom): z(52): diffuse(0.117, 0.156, 0.184, 0.8)));
+        actors.push(act!(text: font("miso"): settext(text): align(0.5, 0.5): xy(banner_cx, banner_cy + 75.0 * banner_zoom): zoom(0.85 * banner_zoom): shadowlength(1.0): z(53): diffuse(1.0, 1.0, 1.0, 1.0)));
     }
 
-    // --- ARTIST / BPM / LENGTH INFO BOX ---
-    let (box_width, frame_x, frame_y) = if is_wide() {
+    // Info Box
+    let (box_w, frame_x, frame_y) = if is_wide() {
         (320.0, screen_center_x() - 170.0, screen_center_y() - 55.0)
     } else {
         (310.0, screen_center_x() - 165.0, screen_center_y() - 55.0)
     };
-
-    // Data for the box
-    let selected_entry = state.entries.get(state.selected_index);
-    let (artist_text, bpm_text, length_text) = if let Some(entry) = selected_entry {
-        match entry {
-            MusicWheelEntry::Song(song) => {
-                let formatted_bpm = {
-                    // Rate-aware BPM display: scale #DISPLAYBPM or computed min/max by session music rate
-                    let rate = crate::game::profile::get_session_music_rate();
-                    if (rate - 1.0).abs() <= 0.001 {
-                        song.formatted_display_bpm()
-                    } else {
-                        let s = song.display_bpm.trim();
-                        if !s.is_empty() && s != "*" {
-                            let parts: Vec<&str> = s.split([':', '-']).map(str::trim).collect();
-                            if parts.len() == 2 {
-                                let min = parts[0].parse::<f32>().ok();
-                                let max = parts[1].parse::<f32>().ok();
-                                if let (Some(min), Some(max)) = (min, max) {
-                                    let min_i = (min * rate).round() as i32;
-                                    let max_i = (max * rate).round() as i32;
-                                    if min_i == max_i {
-                                        format!("{}", min_i)
-                                    } else {
-                                        format!("{} - {}", min_i.min(max_i), min_i.max(max_i))
-                                    }
-                                } else {
-                                    let min_i = (song.min_bpm as f32 * rate).round() as i32;
-                                    let max_i = (song.max_bpm as f32 * rate).round() as i32;
-                                    if min_i == max_i {
-                                        format!("{}", min_i)
-                                    } else {
-                                        format!("{} - {}", min_i, max_i)
-                                    }
-                                }
-                            } else if let Ok(val) = s.parse::<f32>() {
-                                format!("{}", (val * rate).round() as i32)
-                            } else {
-                                let min_i = (song.min_bpm as f32 * rate).round() as i32;
-                                let max_i = (song.max_bpm as f32 * rate).round() as i32;
-                                if min_i == max_i {
-                                    format!("{}", min_i)
-                                } else {
-                                    format!("{} - {}", min_i, max_i)
-                                }
-                            }
-                        } else {
-                            let min_i = (song.min_bpm as f32 * rate).round() as i32;
-                            let max_i = (song.max_bpm as f32 * rate).round() as i32;
-                            if min_i == max_i {
-                                format!("{}", min_i)
-                            } else {
-                                format!("{} - {}", min_i, max_i)
-                            }
-                        }
-                    }
-                };
-
-                // Simply Love uses Song:MusicLengthSeconds() divided by MusicRate
-                // for this display (audio duration at the chosen rate).
-                let base_seconds =
-                    if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
-                        song.music_length_seconds
-                    } else {
-                        song.total_length_seconds.max(0) as f32
-                    };
-                let rate = crate::game::profile::get_session_music_rate();
-                let rate = if rate.is_finite() && rate > 0.0 {
-                    rate
+    let entry_opt = state.entries.get(state.selected_index);
+    let (artist, bpm, len_text) = match entry_opt {
+        Some(MusicWheelEntry::Song(s)) => (
+            s.artist.clone(),
+            s.formatted_display_bpm(),
+            format_chart_length(
+                ((if s.music_length_seconds > 0.0 {
+                    s.music_length_seconds
                 } else {
-                    1.0
-                };
-                let length_seconds = (base_seconds / rate).round() as i32;
-                let length_text = format_chart_length(length_seconds);
-
-                (song.artist.clone(), formatted_bpm, length_text)
-            }
-            MusicWheelEntry::PackHeader { original_index, .. } => {
-                // Sum true music lengths per song for group duration, mirroring
-                // Simply Love's use of MusicLengthSeconds in GroupDurations.lua.
-                let total_length_sec: f64 = if let Some(pack) = song_cache.get(*original_index) {
-                    pack.songs
+                    s.total_length_seconds.max(0) as f32
+                }) / music_rate)
+                    .round() as i32,
+            ),
+        ),
+        Some(MusicWheelEntry::PackHeader { original_index, .. }) => {
+            let total_sec: f64 = get_song_cache()
+                .get(*original_index)
+                .map(|p| {
+                    p.songs
                         .iter()
                         .map(|s| {
-                            if s.music_length_seconds.is_finite() && s.music_length_seconds > 0.0 {
-                                s.music_length_seconds as f64
+                            (if s.music_length_seconds > 0.0 {
+                                s.music_length_seconds
                             } else {
-                                s.total_length_seconds.max(0) as f64
-                            }
+                                s.total_length_seconds.max(0) as f32
+                            }) as f64
                         })
                         .sum()
-                } else {
-                    0.0
-                };
-                let rate = crate::game::profile::get_session_music_rate();
-                let rate = if rate.is_finite() && rate > 0.0 {
-                    rate
-                } else {
-                    1.0
-                };
-                (
-                    "".to_string(),
-                    "".to_string(),
-                    format_session_time((total_length_sec / rate as f64) as f32),
-                )
-            }
+                })
+                .unwrap_or(0.0);
+            (
+                "".to_string(),
+                "".to_string(),
+                format_session_time((total_sec / music_rate as f64) as f32),
+            )
         }
-    } else {
-        // Fallback text for empty list
-        ("".to_string(), "".to_string(), "".to_string())
+        None => ("".to_string(), "".to_string(), "".to_string()),
     };
 
-    let label_color = [0.5, 0.5, 0.5, 1.0];
-    let value_color = [1.0, 1.0, 1.0, 1.0];
-
-    let artist_max_w = box_width - 60.0;
-
-    let main_frame = Actor::Frame {
-        align: [0.0, 0.0],
-        offset: [frame_x, frame_y],
-        size: [SizeSpec::Px(box_width), SizeSpec::Px(50.0)],
-        background: None,
-        z: 51,
+    actors.push(Actor::Frame {
+        align: [0.0, 0.0], offset: [frame_x, frame_y], size: [SizeSpec::Px(box_w), SizeSpec::Px(50.0)], background: None, z: 51,
         children: vec![
-            // Background Quad
-            act!(quad:
-                setsize(box_width, 50.0):
-                diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])
-            ),
-            // Inner Frame for Text
+            act!(quad: setsize(box_w, 50.0): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
             Actor::Frame {
-                align: [0.0, 0.0],
-                offset: [-110.0, -6.0],
-                size: [SizeSpec::Fill, SizeSpec::Fill],
-                background: None,
-                z: 0,
+                align: [0.0, 0.0], offset: [-110.0, -6.0], size: [SizeSpec::Fill, SizeSpec::Fill], background: None, z: 0,
                 children: vec![
-                    // --- Artist ---
-                    act!(text: font("miso"): settext("ARTIST"):
-                        align(1.0, 0.0): y(-11.0):
-                        maxwidth(44.0):
-                        diffuse(label_color[0], label_color[1], label_color[2], label_color[3]):
-                        z(52)
-                    ),
-                    act!(text: font("miso"): settext(artist_text):
-                        align(0.0, 0.0): xy(5.0, -11.0):
-                        maxwidth(artist_max_w): // maxwidth is applied before final size calc
-                        zoomtoheight(15.0):     // Enforce a consistent height for alignment
-                        diffuse(value_color[0], value_color[1], value_color[2], value_color[3]):
-                        z(52)
-                    ),
-                    // --- BPM ---
-                    act!(text: font("miso"): settext("BPM"):
-                        align(1.0, 0.0): y(10.0):
-                        diffuse(label_color[0], label_color[1], label_color[2], label_color[3]):
-                        z(52)
-                    ),
-                    act!(text: font("miso"): settext(bpm_text):
-                        align(0.0, 0.0): xy(5.0, 10.0):
-                        zoomtoheight(15.0):     // Base height for alignment
-                        diffuse(value_color[0], value_color[1], value_color[2], value_color[3]):
-                        z(52)
-                    ),
-                    // --- Length ---
-                    act!(text: font("miso"): settext("LENGTH"):
-                        align(1.0, 0.0): xy(box_width - 130.0, 10.0):
-                        diffuse(label_color[0], label_color[1], label_color[2], label_color[3]):
-                        z(52)
-                    ),
-                    act!(text: font("miso"): settext(length_text):
-                        align(0.0, 0.0): xy(box_width - 125.0, 10.0):
-                        zoomtoheight(15.0):     // Enforce a consistent height for alignment
-                        diffuse(value_color[0], value_color[1], value_color[2], value_color[3]):
-                        z(52)
-                    ),
+                    act!(text: font("miso"): settext("ARTIST"): align(1.0, 0.0): y(-11.0): maxwidth(44.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
+                    act!(text: font("miso"): settext(artist): align(0.0, 0.0): xy(5.0, -11.0): maxwidth(box_w - 60.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
+                    act!(text: font("miso"): settext("BPM"): align(1.0, 0.0): y(10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
+                    act!(text: font("miso"): settext(bpm): align(0.0, 0.0): xy(5.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
+                    act!(text: font("miso"): settext("LENGTH"): align(1.0, 0.0): xy(box_w - 130.0, 10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
+                    act!(text: font("miso"): settext(len_text): align(0.0, 0.0): xy(box_w - 125.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
                 ],
             },
         ],
-    };
+    });
 
-    actors.push(main_frame);
-
-    // --- Get data for the various info panes ---
-    // IMMEDIATE data for things that update instantly (stats, artist, etc.)
-    let immediate_chart_data = match selected_entry {
-        Some(MusicWheelEntry::Song(song)) => color::FILE_DIFFICULTY_NAMES
-            .get(state.selected_difficulty_index)
-            .and_then(|difficulty_name| {
-                song.charts
-                    .iter()
-                    .find(|c| {
-                        c.chart_type.eq_ignore_ascii_case("dance-single")
-                            && c.difficulty.eq_ignore_ascii_case(difficulty_name)
-                    })
-            }),
+    // Chart Stats & Graph
+    let immediate_chart = match entry_opt {
+        Some(MusicWheelEntry::Song(s)) => {
+            let diff = color::FILE_DIFFICULTY_NAMES[state.selected_difficulty_index];
+            s.charts.iter().find(|c| {
+                c.chart_type.eq_ignore_ascii_case("dance-single")
+                    && c.difficulty.eq_ignore_ascii_case(diff)
+            })
+        }
         _ => None,
     };
 
-    // DELAYED data for things that update after a pause (tech, density graph text)
-    let displayed_chart_data = state.displayed_chart_data.as_deref();
+    let disp_chart = state.displayed_chart_data.as_deref();
 
-    let (crossovers_text, footswitches_text, sideswitches_text, jacks_text, brackets_text) =
-        if let Some(chart) = displayed_chart_data {
+    let (step_artist, steps, jumps, holds, mines, hands, rolls, meter) =
+        if let Some(c) = immediate_chart {
             (
-                chart.tech_counts.crossovers.to_string(),
-                chart.tech_counts.footswitches.to_string(),
-                chart.tech_counts.sideswitches.to_string(),
-                chart.tech_counts.jacks.to_string(),
-                chart.tech_counts.brackets.to_string(),
+                c.step_artist.as_str(),
+                c.stats.total_steps.to_string(),
+                c.stats.jumps.to_string(),
+                c.stats.holds.to_string(),
+                c.mines_nonfake.to_string(),
+                c.stats.hands.to_string(),
+                c.stats.rolls.to_string(),
+                c.meter.to_string(),
             )
         } else {
-            // When a pack is selected, or chart doesn't exist for difficulty, show "0"
             (
-                "0".to_string(),
-                "0".to_string(),
-                "0".to_string(),
-                "0".to_string(),
-                "0".to_string(),
+                "",
+                "?".to_string(),
+                "?".to_string(),
+                "?".to_string(),
+                "?".to_string(),
+                "?".to_string(),
+                "?".to_string(),
+                if matches!(entry_opt, Some(MusicWheelEntry::Song(_))) {
+                    "?".to_string()
+                } else {
+                    "".to_string()
+                },
             )
         };
 
-    let step_artist_text = immediate_chart_data.map_or(String::new(), |c| c.step_artist.clone());
-    let peak_nps_text = displayed_chart_data.map_or("".to_string(), |c| {
-        let rate = crate::game::profile::get_session_music_rate() as f64;
-        let scaled = if rate.is_finite() {
-            c.max_nps * rate
-        } else {
-            c.max_nps
-        };
-        format!("Peak NPS: {:.1}", scaled)
-    });
-    let breakdown_text = if let Some(chart) = displayed_chart_data {
-        asset_manager
-            .with_fonts(|all_fonts| {
-                asset_manager.with_font("miso", |miso_font| -> Option<String> {
-                    let panel_w = if is_wide() { 286.0 } else { 276.0 };
-                    let text_zoom = 0.8;
-                    let horizontal_padding = 16.0; // 8px padding on each side
-                    let max_allowed_width = panel_w - horizontal_padding;
-
-                    let check_width = |text: &str| {
-                        let logical_width =
-                            font::measure_line_width_logical(miso_font, text, all_fonts) as f32;
-                        let final_width = logical_width * text_zoom;
-                        final_width <= max_allowed_width
-                    };
-
-                    if check_width(&chart.detailed_breakdown) {
-                        Some(chart.detailed_breakdown.clone())
-                    } else if check_width(&chart.partial_breakdown) {
-                        Some(chart.partial_breakdown.clone())
-                    } else if check_width(&chart.simple_breakdown) {
-                        Some(chart.simple_breakdown.clone())
-                    } else {
-                        Some(format!("{} Total", chart.total_streams))
-                    }
-                })
-            })
-            .flatten()
-            .unwrap_or_else(|| chart.simple_breakdown.clone()) // Fallback if font isn't found
+    // Step Artist & Steps
+    let comp_h = screen_height() / 28.0;
+    let y_cen = (screen_center_y() - 9.0) - 0.5 * comp_h;
+    let (q_cx, s_x, a_x) = if is_wide() {
+        (
+            screen_center_x() - 243.0,
+            screen_center_x() - 326.0,
+            screen_center_x() - 281.0,
+        )
     } else {
-        "".to_string()
+        (
+            screen_center_x() - 233.0,
+            screen_center_x() - 316.0,
+            screen_center_x() - 271.0,
+        )
     };
 
-    // --- Get stats for the PaneDisplay ---
-    let (steps_text, jumps_text, holds_text, mines_text, hands_text, rolls_text) =
-        if let Some(chart) = immediate_chart_data {
-            (
-                chart.stats.total_steps.to_string(),
-                chart.stats.jumps.to_string(),
-                chart.stats.holds.to_string(),
-                chart.mines_nonfake.to_string(),
-                chart.stats.hands.to_string(),
-                chart.stats.rolls.to_string(),
-            )
-        } else {
-            (
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-            )
-        };
+    actors.push(act!(quad: align(0.5, 0.5): xy(q_cx, y_cen): setsize(175.0, comp_h): z(120): diffuse(sel_col[0], sel_col[1], sel_col[2], 1.0)));
+    actors.push(act!(text: font("miso"): settext("STEPS"): align(0.0, 0.5): xy(s_x, y_cen): zoom(0.8): maxwidth(40.0): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+    actors.push(act!(text: font("miso"): settext(step_artist): align(0.0, 0.5): xy(a_x, y_cen): zoom(0.8): maxwidth(124.0): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
 
-    // --- Step credit panel (P1, song mode) — positioned directly above the density graph ---
-
-    // The component's bottom edge should align with the density graph's top edge.
-    // Density Graph Top Y = (screen_center_y() + 23.0) - (64.0 / 2.0) = screen_center_y() - 9.0
-    let graph_top_y = screen_center_y() - 9.0;
-
-    // This component's height is defined in SL as screen.h / 28
-    let component_h = screen_height() / 28.0;
-
-    // The center of this component will be its height / 2 above the graph's top.
-    let y_center = graph_top_y - (0.5 * component_h);
-
-    if is_wide() {
-        // --- Widescreen Layout (X positions from StepArtistAF.lua) ---
-        let quad_cx = screen_center_x() - 243.0; // Lua: (cx-356) + 113
-        let steps_label_x = screen_center_x() - 326.0; // Lua: (cx-356) + 30
-        let artist_text_x = screen_center_x() - 281.0; // Lua: (cx-356) + 75
-
-        // Background quad
-        actors.push(act!(quad:
-            align(0.5, 0.5):
-            xy(quad_cx, y_center):
-            setsize(175.0, component_h):
-            z(120):
-            diffuse(selected_difficulty_color[0], selected_difficulty_color[1], selected_difficulty_color[2], 1.0)
-        ));
-
-        // "STEPS" label
-        actors.push(act!(text:
-            font("miso"):
-            settext("STEPS"):
-            align(0.0, 0.5):
-            xy(steps_label_x, y_center):
-            zoom(0.8):
-            maxwidth(40.0):
-            z(121):
-            diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-
-        // Step artist text
-        actors.push(act!(text:
-            font("miso"):
-            settext(step_artist_text):
-            align(0.0, 0.5):
-            xy(artist_text_x, y_center):
-            zoom(0.8):
-            maxwidth(124.0):
-            z(121):
-            diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-    } else {
-        // --- 4:3 Layout (X positions from StepArtistAF.lua) ---
-        let quad_cx = screen_center_x() - 233.0; // Lua: (cx-346) + 113
-        let steps_label_x = screen_center_x() - 316.0; // Lua: (cx-346) + 30
-        let artist_text_x = screen_center_x() - 271.0; // Lua: (cx-346) + 75
-
-        // Background quad
-        actors.push(act!(quad:
-            align(0.5, 0.5):
-            xy(quad_cx, y_center):
-            setsize(175.0, component_h):
-            z(120):
-            diffuse(selected_difficulty_color[0], selected_difficulty_color[1], selected_difficulty_color[2], 1.0)
-        ));
-
-        // "STEPS" label
-        actors.push(act!(text:
-            font("miso"):
-            settext("STEPS"):
-            align(0.0, 0.5):
-            xy(steps_label_x, y_center):
-            zoom(0.8):
-            maxwidth(40.0):
-            z(121):
-            diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-
-        // Step artist text
-        actors.push(act!(text:
-            font("miso"):
-            settext(step_artist_text):
-            align(0.0, 0.5):
-            xy(artist_text_x, y_center):
-            zoom(0.8):
-            maxwidth(124.0):
-            z(121):
-            diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-    }
-
-    // --- Density graph panel (SL 1:1, Player 1, top-left anchored) ---
+    // Density Graph
     let panel_w = if is_wide() { 286.0 } else { 276.0 };
-    let panel_h = 64.0;
+    let mut graph_kids = vec![
+        act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
+    ];
 
-    let mut graph_children: Vec<Actor> = Vec::new();
+    if let Some(c) = disp_chart {
+        let peak = format!(
+            "Peak NPS: {:.1}",
+            if music_rate.is_finite() {
+                c.max_nps * music_rate as f64
+            } else {
+                c.max_nps
+            }
+        );
+        // Minimal font measure logic here for breakdown, only done when chart exists
+        let bd_text = asset_manager
+            .with_fonts(|f| {
+                asset_manager
+                    .with_font("miso", |mf| {
+                        let w = panel_w - 16.0;
+                        let mz = 0.8;
+                        if (font::measure_line_width_logical(mf, &c.detailed_breakdown, f) as f32)
+                            * mz
+                            <= w
+                        {
+                            Some(c.detailed_breakdown.clone())
+                        } else if (font::measure_line_width_logical(mf, &c.partial_breakdown, f)
+                            as f32)
+                            * mz
+                            <= w
+                        {
+                            Some(c.partial_breakdown.clone())
+                        } else if (font::measure_line_width_logical(mf, &c.simple_breakdown, f)
+                            as f32)
+                            * mz
+                            <= w
+                        {
+                            Some(c.simple_breakdown.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten()
+            })
+            .unwrap_or_else(|| c.simple_breakdown.clone());
 
-    // Background quad (#1e282f), always drawn and exactly panel-sized
-    graph_children.push(act!(quad:
-        align(0.0, 0.0):
-        xy(0.0, 0.0):
-        setsize(panel_w, panel_h):
-        diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])
-    ));
-
-    // Only draw the graph sprite + labels + breakdown when we have delayed chart data to show
-    if state.displayed_chart_data.is_some() {
-        // Density graph image fills the panel
-        graph_children.push(act!(sprite(state.current_graph_key.clone()):
-            align(0.0, 0.0):
-            xy(0.0, 0.0):
-            setsize(panel_w, panel_h)
-        ));
-
-        // Peak NPS text
-        graph_children.push(act!(text: font("miso"): settext(peak_nps_text):
-            align(0.0, 0.5):
-            xy(0.5 * panel_w + 60.0, 0.5 * panel_h - 41.0):
-            zoom(0.8):
-            diffuse(1.0, 1.0, 1.0, 1.0)
-        ));
-
-        // Breakdown strip + centered text at the bottom of the panel
-        graph_children.push(act!(quad:
-            align(0.0, 0.0):
-            xy(0.0, panel_h - 17.0):
-            setsize(panel_w, 17.0):
-            diffuse(0.0, 0.0, 0.0, 0.5)
-        ));
-        graph_children.push(act!(text: font("miso"): settext(breakdown_text):
-            align(0.5, 0.5):
-            xy(0.5 * panel_w, panel_h - 17.0 + 8.5):
-            zoom(0.8):
-            maxheight(15.0)
-        ));
+        graph_kids.push(act!(sprite(state.current_graph_key.clone()): align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0)));
+        graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(panel_w * 0.5 + 60.0, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0)));
+        graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, 47.0): setsize(panel_w, 17.0): diffuse(0.0, 0.0, 0.0, 0.5)));
+        graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxheight(15.0)));
     }
 
-    let density_graph_panel = Actor::Frame {
+    actors.push(Actor::Frame {
         align: [0.0, 0.0],
         offset: [
             (screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 }) - 0.5 * panel_w,
-            (screen_center_y() + 23.0) - 0.5 * panel_h,
+            (screen_center_y() + 23.0) - 32.0,
         ],
-        size: [SizeSpec::Px(panel_w), SizeSpec::Px(panel_h)],
+        size: [SizeSpec::Px(panel_w), SizeSpec::Px(64.0)],
         background: None,
         z: 51,
-        children: graph_children,
-    };
-    actors.push(density_graph_panel);
+        children: graph_kids,
+    });
 
-    // --- PaneDisplay (P1) just above footer — absolute placement, SL 1:1 layout ---
-
-    // pane anchor (center-top), same as SL
+    // Pane Display
     let pane_cx = screen_width() * 0.25 - 5.0;
-    let pane_top = screen_height() - 32.0 - 60.0;
+    let pane_top = screen_height() - 92.0;
+    actors.push(act!(quad: align(0.5, 0.0): xy(pane_cx, pane_top): setsize(screen_width() / 2.0 - 10.0, 60.0): z(120): diffuse(sel_col[0], sel_col[1], sel_col[2], 1.0)));
 
-    // background bar — spans half-screen minus 10, height 60
-    actors.push(act!(quad:
-        align(0.5, 0.0):
-        xy(pane_cx, pane_top):
-        setsize(screen_width() / 2.0 - 10.0, 60.0):
-        z(120):
-        diffuse(selected_difficulty_color[0], selected_difficulty_color[1], selected_difficulty_color[2], 1.0)
-    ));
+    let tz = widescale(0.8, 0.9);
+    let cols = [
+        widescale(-104.0, -133.0),
+        widescale(-36.0, -38.0),
+        widescale(54.0, 76.0),
+        widescale(150.0, 190.0),
+    ];
+    let rows = [13.0, 31.0, 49.0];
 
-    // --- Stats Grid, High Scores, and Meter (SL Parity) ---
-    {
-        let text_zoom = widescale(0.8, 0.9);
-        let cols_x = [
-            widescale(-104.0, -133.0), // col 1
-            widescale(-36.0, -38.0),   // col 2
-            widescale(54.0, 76.0),     // col 3
-            widescale(150.0, 190.0),   // col 4
-        ];
-        let rows_y = [13.0, 31.0, 49.0];
+    // Stats Grid
+    let stats = [
+        ("Steps", &steps),
+        ("Mines", &mines),
+        ("Jumps", &jumps),
+        ("Hands", &hands),
+        ("Holds", &holds),
+        ("Rolls", &rolls),
+    ];
+    for (i, (lbl, val)) in stats.iter().enumerate() {
+        let (c, r) = (i % 2, i / 2);
+        actors.push(act!(text: font("miso"): settext(*val): align(1.0, 0.5): horizalign(right): xy(pane_cx + cols[c], pane_top + rows[r]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+        actors.push(act!(text: font("miso"): settext(*lbl): align(0.0, 0.5): xy(pane_cx + cols[c] + 3.0, pane_top + rows[r]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+    }
 
-        // --- Main Stats Grid ---
-        let items = [
-            ("Steps", &steps_text),
-            ("Mines", &mines_text),
-            ("Jumps", &jumps_text),
-            ("Hands", &hands_text),
-            ("Holds", &holds_text),
-            ("Rolls", &rolls_text),
-        ];
-
-        for (i, (label, value)) in items.iter().enumerate() {
-            let (col_idx, row_idx) = (i % 2, i / 2);
-            let (col_x, row_y) = (cols_x[col_idx], rows_y[row_idx]);
-
-            // Stat value (right-aligned)
-            actors.push(act!(text: font("miso"): settext(*value):
-                align(1.0, 0.5): horizalign(right): xy(pane_cx + col_x, pane_top + row_y):
-                zoom(text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)
-            ));
-            // Stat label (left-aligned, +3px offset)
-            actors.push(act!(text: font("miso"): settext(*label):
-                align(0.0, 0.5): xy(pane_cx + col_x + 3.0, pane_top + row_y):
-                zoom(text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)
-            ));
-        }
-
-        // --- High Scores ---
-        // NEW LOGIC: Default to "----", then fill with initials if a score is found.
-        let (score_name, score_percent) = if let Some(chart) = immediate_chart_data {
-            if let Some(cached_score) = scores::get_cached_score(&chart.short_hash) {
-                // A 'Failed' grade from GS means no score was found. Don't show 0.00%.
-                if cached_score.grade != scores::Grade::Failed {
-                    (
-                        profile.player_initials.clone(),
-                        format!("{:.2}%", cached_score.score_percent * 100.0),
-                    )
-                } else {
-                    ("----".to_string(), "??.??%".to_string())
-                }
+    // Scores
+    let (s_name, s_pct) = if let Some(c) = immediate_chart {
+        if let Some(sc) = scores::get_cached_score(&c.short_hash) {
+            if sc.grade != scores::Grade::Failed {
+                (
+                    profile.player_initials.clone(),
+                    format!("{:.2}%", sc.score_percent * 100.0),
+                )
             } else {
                 ("----".to_string(), "??.??%".to_string())
             }
         } else {
             ("----".to_string(), "??.??%".to_string())
-        };
-
-        // Machine High Score (displays player score for now)
-        actors.push(act!(text: font("miso"): settext(score_name.clone()):
-            align(0.5, 0.5): // Centered, like default BitmapText in SM
-            xy(pane_cx + cols_x[2] - (50.0 * text_zoom), pane_top + rows_y[0]):
-            maxwidth(30.0): zoom(text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-        actors.push(act!(text: font("miso"): settext(score_percent.clone()):
-            align(1.0, 0.5): // Right-aligned
-            xy(pane_cx + cols_x[2] + (25.0 * text_zoom), pane_top + rows_y[0]):
-            zoom(text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-
-        // Player High Score
-        actors.push(act!(text: font("miso"): settext(score_name):
-            align(0.5, 0.5): // Centered, like default BitmapText in SM
-            xy(pane_cx + cols_x[2] - (50.0 * text_zoom), pane_top + rows_y[1]):
-            maxwidth(30.0): zoom(text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-        actors.push(act!(text: font("miso"): settext(score_percent):
-            align(1.0, 0.5): // Right-aligned
-            xy(pane_cx + cols_x[2] + (25.0 * text_zoom), pane_top + rows_y[1]):
-            zoom(text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-
-        // --- Difficulty Meter ---
-        let meter_text = if let Some(MusicWheelEntry::Song(_)) = selected_entry {
-            // It's a song, show meter or "?" if no chart exists for the difficulty
-            immediate_chart_data
-                .map_or("?".to_string(), |c| c.meter.to_string())
-        } else {
-            // It's a pack header, show nothing
-            "".to_string()
-        };
-
-        let mut meter_actor = act!(text: font("wendy"): settext(meter_text):
-            align(1.0, 0.5): horizalign(right):
-            xy(pane_cx + cols_x[3], pane_top + rows_y[1]):
-            z(121): diffuse(0.0, 0.0, 0.0, 1.0)
-        );
-        if !is_wide()
-            && let Actor::Text { max_width, .. } = &mut meter_actor
-        {
-            *max_width = Some(66.0);
-        }
-        actors.push(meter_actor);
-    }
-
-    // --- Pattern Info (P1) — SL 1:1 geometry ---
-    let pat_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
-    let pat_cy = screen_center_y() + 23.0 + 88.0;
-    let pat_w = if is_wide() { 286.0 } else { 276.0 };
-    let pat_h = 64.0;
-
-    // background
-    actors.push(act!(quad:
-        align(0.5, 0.5):
-        xy(pat_cx, pat_cy):
-        setsize(pat_w, pat_h):
-        z(120):
-        diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])
-    ));
-
-    let base_val_x = pat_cx - pat_w * 0.5 + 40.0; // values (right-aligned)
-    let base_label_x = pat_cx - pat_w * 0.5 + 50.0; // labels (left-aligned)
-    let base_y = pat_cy - pat_h * 0.5 + 13.0;
-
-    let col_spacing = 150.0;
-    let row_spacing = 20.0;
-    let text_zoom = 0.8;
-
-    // helper: push one (value, label) cell — ONLY the value supports maxwidth
-    let mut add_item = |col_idx: i32,
-                        row_idx: i32,
-                        value_text: &str,
-                        label_text: &str,
-                        max_value_w: Option<f32>| {
-        let x_val = base_val_x + (col_idx as f32) * col_spacing;
-        let x_label = base_label_x + (col_idx as f32) * col_spacing;
-        let y = base_y + (row_idx as f32) * row_spacing;
-
-        // value (right-aligned), optionally clamped
-        match max_value_w {
-            Some(maxw) => actors.push(act!(text: font("miso"): settext(value_text):
-                align(1.0, 0.5):
-                horizalign(right):
-                xy(x_val, y):
-                maxwidth(maxw):
-                zoom(text_zoom):
-                z(121):
-                diffuse(1.0, 1.0, 1.0, 1.0)
-            )),
-            None => actors.push(act!(text: font("miso"): settext(value_text):
-                align(1.0, 0.5):
-                horizalign(right):
-                xy(x_val, y):
-                zoom(text_zoom):
-                z(121):
-                diffuse(1.0, 1.0, 1.0, 1.0)
-            )),
-        }
-
-        // label (left-aligned) — no clamp for SL parity
-        actors.push(act!(text: font("miso"): settext(label_text):
-            align(0.0, 0.5):
-            horizalign(left):
-            xy(x_label, y):
-            zoom(text_zoom):
-            z(121):
-            diffuse(1.0, 1.0, 1.0, 1.0)
-        ));
-    };
-
-    // Row 0: Crossovers | Footswitches
-    add_item(0, 0, &crossovers_text, "Crossovers", None);
-    add_item(1, 0, &footswitches_text, "Footswitches", None);
-
-    // Row 1: Sideswitches | Jacks
-    add_item(0, 1, &sideswitches_text, "Sideswitches", None);
-    add_item(1, 1, &jacks_text, "Jacks", None);
-
-    // Row 2: Brackets | Total Stream
-    add_item(0, 2, &brackets_text, "Brackets", None);
-
-    // Total Stream value text (only this one is clamped to 100 like SL)
-    let total_stream_value = if let Some(chart) = displayed_chart_data {
-        if chart.total_measures > 0 {
-            let pct = (chart.total_streams as f32 / chart.total_measures as f32) * 100.0;
-            format!(
-                "{}/{} ({:.1}%)",
-                chart.total_streams, chart.total_measures, pct
-            )
-        } else {
-            "None (0.0%)".to_string()
         }
     } else {
-        "None (0.0%)".to_string()
+        ("----".to_string(), "??.??%".to_string())
     };
 
-    // clamp ONLY the value to 100
-    add_item(1, 2, &total_stream_value, "Total Stream", Some(100.0));
+    for i in 0..2 {
+        actors.push(act!(text: font("miso"): settext(&s_name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+        actors.push(act!(text: font("miso"): settext(&s_pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+    }
 
-    // --- StepsDisplayList (Difficulty Meter Grid, SL parity) ---
-    // Center at (_screen.cx - 26, _screen.cy + 67) with a 32x152 background,
-    // five 28x28 squares spaced by 2px.
+    // Difficulty Meter
+    let mut m_actor = act!(text: font("wendy"): settext(meter): align(1.0, 0.5): horizalign(right): xy(pane_cx + cols[3], pane_top + rows[1]): z(121): diffuse(0.0, 0.0, 0.0, 1.0));
+    if !is_wide() {
+        if let Actor::Text { max_width, .. } = &mut m_actor {
+            *max_width = Some(66.0);
+        }
+    }
+    actors.push(m_actor);
 
-    let panel_cx = screen_center_x() - 26.0;
-    let panel_cy = screen_center_y() + 67.0;
+    // Pattern Info
+    let (cross, foot, side, jack, brack, stream) = if let Some(c) = disp_chart {
+        (
+            c.tech_counts.crossovers.to_string(),
+            c.tech_counts.footswitches.to_string(),
+            c.tech_counts.sideswitches.to_string(),
+            c.tech_counts.jacks.to_string(),
+            c.tech_counts.brackets.to_string(),
+            if c.total_measures > 0 {
+                format!(
+                    "{}/{} ({:.1}%)",
+                    c.total_streams,
+                    c.total_measures,
+                    (c.total_streams as f32 / c.total_measures as f32) * 100.0
+                )
+            } else {
+                "None (0.0%)".to_string()
+            },
+        )
+    } else {
+        (
+            "0".to_string(),
+            "0".to_string(),
+            "0".to_string(),
+            "0".to_string(),
+            "0".to_string(),
+            "None (0.0%)".to_string(),
+        )
+    };
 
-    // Background panel (#1e282f), 32x152
-    actors.push(act!(quad:
-        align(0.5, 0.5):
-        xy(panel_cx, panel_cy):
-        setsize(32.0, 152.0):
-        z(120):
-        diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])
-    ));
+    let pat_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
+    let pat_cy = screen_center_y() + 111.0;
+    actors.push(act!(quad: align(0.5, 0.5): xy(pat_cx, pat_cy): setsize(panel_w, 64.0): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
 
-    // Prepare meters per difficulty (Beginner..Challenge)
-    let mut meters: [Option<i32>; 5] = [None, None, None, None, None];
-    if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-        for (i, name) in color::FILE_DIFFICULTY_NAMES.iter().enumerate() {
-            if let Some(chart) = song.charts.iter().find(|c| {
-                c.chart_type.eq_ignore_ascii_case("dance-single")
-                    && c.difficulty.eq_ignore_ascii_case(name)
-            }) {
-                meters[i] = Some(chart.meter as i32);
-            }
+    let p_v_x = pat_cx - panel_w * 0.5 + 40.0;
+    let p_l_x = pat_cx - panel_w * 0.5 + 50.0;
+    let p_base_y = pat_cy - 19.0;
+    let items = [
+        (&cross, "Crossovers", 0, 0, None),
+        (&foot, "Footswitches", 1, 0, None),
+        (&side, "Sideswitches", 0, 1, None),
+        (&jack, "Jacks", 1, 1, None),
+        (&brack, "Brackets", 0, 2, None),
+        (&stream, "Total Stream", 1, 2, Some(100.0)),
+    ];
+
+    for (val, lbl, c, r, mw) in items {
+        let y = p_base_y + r as f32 * 20.0;
+        let vx = p_v_x + c as f32 * 150.0;
+        let lx = p_l_x + c as f32 * 150.0;
+        match mw {
+            Some(w) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(w): zoom(0.8): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+            None => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(0.8): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+        }
+        actors.push(act!(text: font("miso"): settext(lbl): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(0.8): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+    }
+
+    // Steps Display List
+    let lst_cx = screen_center_x() - 26.0;
+    let lst_cy = screen_center_y() + 67.0;
+    actors.push(act!(quad: align(0.5, 0.5): xy(lst_cx, lst_cy): setsize(32.0, 152.0): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
+
+    // We only need meters if a song is selected, else None
+    let meters = if let Some(MusicWheelEntry::Song(s)) = entry_opt {
+        color::FILE_DIFFICULTY_NAMES
+            .iter()
+            .map(|n| {
+                s.charts
+                    .iter()
+                    .find(|c| {
+                        c.chart_type.eq_ignore_ascii_case("dance-single")
+                            && c.difficulty.eq_ignore_ascii_case(n)
+                    })
+                    .map(|c| c.meter)
+            })
+            .collect::<Vec<_>>()
+    } else {
+        vec![None; 5]
+    };
+
+    for i in 0..5 {
+        let y = (i as i32 - 2) as f32 * 30.0;
+        actors.push(act!(quad: align(0.5, 0.5): xy(lst_cx, lst_cy + y): setsize(28.0, 28.0): z(121): diffuse(0.059, 0.059, 0.059, 1.0)));
+        if let Some(m) = meters[i] {
+            let c = color::simply_love_rgba(state.active_color_index - (4 - i) as i32);
+            actors.push(act!(text: font("wendy"): settext(m.to_string()): align(0.5, 0.5): xy(lst_cx, lst_cy + y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
         }
     }
 
-    // Draw five rows: RowNumber = -2..2  (centered list)
-    for (row_num, row_i) in (-2..=2).zip(0..5) {
-        let y_off = (28.0 + 2.0) * (row_num as f32); // -60, -30, 0, +30, +60
-
-        let inner_c = color::rgba_hex("#0f0f0f");
-        // Square background (#0f0f0f), 28x28
-        actors.push(act!(quad:
-            align(0.5, 0.5):
-            xy(panel_cx, panel_cy + y_off):
-            setsize(28.0, 28.0):
-            z(121):
-            diffuse(inner_c[0], inner_c[1], inner_c[2], inner_c[3])
-        ));
-
-        // Meter text, centered, zoom 0.45
-        let (r, g, b, a) = if meters[row_i].is_some() {
-            let meter_color_index = state.active_color_index - (4 - row_i) as i32;
-            let c = color::simply_love_rgba(meter_color_index);
-            (c[0], c[1], c[2], 1.0) // difficulty color
-        } else {
-            // dim when no chart: #182025
-            (0.0941, 0.1255, 0.1451, 1.0)
-        };
-        let meter_text = meters[row_i].map(|m| m.to_string()).unwrap_or_default();
-
-        actors.push(act!(text:
-            font("wendy"):
-            settext(meter_text):
-            align(0.5, 0.5):                   // centered in the square
-            xy(panel_cx, panel_cy + y_off):
-            zoom(0.45):
-            z(122):
-            diffuse(r, g, b, a)
-        ));
-    }
-
-    // --- MUSIC WHEEL (Now a component) ---
+    // Music Wheel
     actors.extend(music_wheel::build(music_wheel::MusicWheelParams {
         entries: &state.entries,
         selected_index: state.selected_index,
         position_offset_from_selection: state.wheel_offset_from_selection,
         selection_animation_timer: state.selection_animation_timer,
-        pack_song_counts: &pack_song_counts,
+        pack_song_counts: &state.pack_song_counts, // O(1) Lookup
         preferred_difficulty_index: state.preferred_difficulty_index,
         selected_difficulty_index: state.selected_difficulty_index,
     }));
 
-    // --- Pulsating Meter Arrow (P1) ---
-    let arrow_x_base = screen_center_x() - 53.0;
-    let arrow_zoom = 0.575;
-
-    // Determine which difficulty index to use for the arrow's position.
-    // For packs, use the preferred difficulty. For songs, use the actual selected difficulty.
-    let difficulty_index_for_arrow = if matches!(
-        state.entries.get(state.selected_index),
-        Some(MusicWheelEntry::PackHeader { .. })
-    ) {
+    // Bouncing Arrow
+    let arrow_idx = if matches!(entry_opt, Some(MusicWheelEntry::PackHeader { .. })) {
         state.preferred_difficulty_index
     } else {
         state.selected_difficulty_index
     };
-
-    // Y position must match the corresponding difficulty meter's Y.
-    let row_num = difficulty_index_for_arrow as i32 - 2;
-    let y_off = (28.0 + 2.0) * (row_num as f32);
-    // The +1 matches the offset in the original Lua code.
-    let arrow_y = panel_cy + y_off + 1.0;
-
-    // The bounce animation is synced to the song's beat if a song is selected.
-    let selected_song_for_bpm =
-        if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-            Some(song.clone())
-        } else {
-            None
-        };
-
-    // Use song's max BPM if available, otherwise default to a common value like 150.
-    let bpm = selected_song_for_bpm
-        .as_ref()
-        .map_or(150.0, |s| s.max_bpm.max(1.0)) as f32;
-    let beat_duration_secs = 60.0 / bpm;
-
-    // Calculate the phase for a 1-beat period cosine oscillation.
-    // This simulates StepMania's `effectmagnitude(-3)` bounce effect.
-    let phase = (state.session_elapsed / beat_duration_secs) * 2.0 * std::f32::consts::PI;
-    let bounce_offset_x = -1.5 + 1.5 * phase.cos();
-
-    // The arrow is always visible, pointing at the current song's difficulty
-    // or the preferred difficulty if a pack is selected.
-    actors.push(act!(sprite("meter_arrow.png"):
-        align(0.0, 0.5): // Left-center align to match Lua's halign(0)
-        xy(arrow_x_base + bounce_offset_x, arrow_y):
-        zoom(arrow_zoom):
-        z(122) // Above the difficulty display panel
-    ));
+    let arrow_y = lst_cy + (arrow_idx as i32 - 2) as f32 * 30.0 + 1.0;
+    let bpm_val = if let Some(MusicWheelEntry::Song(s)) = entry_opt {
+        s.max_bpm.max(1.0)
+    } else {
+        150.0
+    };
+    let phase = (state.session_elapsed / (60.0 / bpm_val as f32)) * 6.28318;
+    actors.push(act!(sprite("meter_arrow.png"): align(0.0, 0.5): xy(screen_center_x() - 53.0 + (-1.5 + 1.5 * phase.cos()), arrow_y): zoom(0.575): z(122)));
 
     actors
 }
