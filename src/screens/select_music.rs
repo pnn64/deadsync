@@ -674,7 +674,10 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         if let Some(chart) = song
             .charts
             .iter()
-            .find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name))
+            .find(|c| {
+                c.chart_type.eq_ignore_ascii_case("dance-single")
+                    && c.difficulty.eq_ignore_ascii_case(difficulty_name)
+            })
         {
             return ScreenAction::FetchOnlineGrade(chart.short_hash.clone());
         }
@@ -828,7 +831,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             let difficulty_name = color::FILE_DIFFICULTY_NAMES[state.selected_difficulty_index];
             song.charts
                 .iter()
-                .find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name))
+                .find(|c| {
+                    c.chart_type.eq_ignore_ascii_case("dance-single")
+                        && c.difficulty.eq_ignore_ascii_case(difficulty_name)
+                })
                 .cloned()
         });
         state.displayed_chart_data = chart_to_display.clone().map(Arc::new);
@@ -902,7 +908,10 @@ pub fn prime_displayed_chart_data(state: &mut State) {
     let chart = song
         .charts
         .iter()
-        .find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name))
+        .find(|c| {
+            c.chart_type.eq_ignore_ascii_case("dance-single")
+                && c.difficulty.eq_ignore_ascii_case(difficulty_name)
+        })
         .cloned();
     state.displayed_chart_data = chart.map(Arc::new);
 }
@@ -1294,17 +1303,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // --- Get data for the various info panes ---
     // IMMEDIATE data for things that update instantly (stats, artist, etc.)
-    let immediate_chart_data = if let Some(MusicWheelEntry::Song(song)) = selected_entry {
-        song.charts
-            .iter()
-            .find(|c| {
-                c.difficulty.eq_ignore_ascii_case(
-                    color::FILE_DIFFICULTY_NAMES[state.selected_difficulty_index],
-                )
-            })
-            .cloned()
-    } else {
-        None
+    let immediate_chart_data = match selected_entry {
+        Some(MusicWheelEntry::Song(song)) => color::FILE_DIFFICULTY_NAMES
+            .get(state.selected_difficulty_index)
+            .and_then(|difficulty_name| {
+                song.charts
+                    .iter()
+                    .find(|c| {
+                        c.chart_type.eq_ignore_ascii_case("dance-single")
+                            && c.difficulty.eq_ignore_ascii_case(difficulty_name)
+                    })
+            }),
+        _ => None,
     };
 
     // DELAYED data for things that update after a pause (tech, density graph text)
@@ -1330,9 +1340,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             )
         };
 
-    let step_artist_text = immediate_chart_data
-        .as_ref()
-        .map_or("".to_string(), |c| c.step_artist.clone());
+    let step_artist_text = immediate_chart_data.map_or(String::new(), |c| c.step_artist.clone());
     let peak_nps_text = displayed_chart_data.map_or("".to_string(), |c| {
         let rate = crate::game::profile::get_session_music_rate() as f64;
         let scaled = if rate.is_finite() {
@@ -1377,7 +1385,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // --- Get stats for the PaneDisplay ---
     let (steps_text, jumps_text, holds_text, mines_text, hands_text, rolls_text) =
-        if let Some(chart) = displayed_chart_data {
+        if let Some(chart) = immediate_chart_data {
             (
                 chart.stats.total_steps.to_string(),
                 chart.stats.jumps.to_string(),
@@ -1600,7 +1608,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         // --- High Scores ---
         // NEW LOGIC: Default to "----", then fill with initials if a score is found.
-        let (score_name, score_percent) = if let Some(chart) = &immediate_chart_data {
+        let (score_name, score_percent) = if let Some(chart) = immediate_chart_data {
             if let Some(cached_score) = scores::get_cached_score(&chart.short_hash) {
                 // A 'Failed' grade from GS means no score was found. Don't show 0.00%.
                 if cached_score.grade != scores::Grade::Failed {
@@ -1646,7 +1654,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let meter_text = if let Some(MusicWheelEntry::Song(_)) = selected_entry {
             // It's a song, show meter or "?" if no chart exists for the difficulty
             immediate_chart_data
-                .as_ref()
                 .map_or("?".to_string(), |c| c.meter.to_string())
         } else {
             // It's a pack header, show nothing
