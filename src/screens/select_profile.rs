@@ -312,10 +312,13 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let p1_cx = cx - FRAME_CX_OFF;
     let p2_cx = cx + FRAME_CX_OFF;
 
-    // Use dim profile palette for the info pane (Left Column).
-    let col_dim = color::select_profile_dim_rgba(state.active_color_index);
-    // Use bright profile palette for the main frame (Right Column).
-    let col_bright = color::select_profile_rgba(state.active_color_index);
+    // Simply Love parity:
+    // - Frame bg uses PlayerColor(P1) => SL.Colors[ActiveColorIndex]
+    // - Top edge is LightenColor(c) (rgb * 1.25), producing a subtle vertical gradient
+    // - Scroller highlight + info pane use semi-transparent black overlays (alpha 0.5)
+    let col_frame = color::simply_love_rgba(state.active_color_index);
+    let col_frame_top = color::lighten_rgba(col_frame);
+    let col_overlay = [0.0, 0.0, 0.0, 0.5];
 
     let border_rgba = [1.0, 1.0, 1.0, 1.0];
 
@@ -327,15 +330,25 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         diffuse(border_rgba[0], border_rgba[1], border_rgba[2], border_rgba[3]):
         z(100)
     ));
+    // Base fill.
     ui.push(act!(quad:
         align(0.5, 0.5):
         xy(p1_cx, cy):
         zoomto(FRAME_W_SCROLLER, frame_h):
-        diffuse(col_bright[0], col_bright[1], col_bright[2], col_bright[3]):
+        diffuse(col_frame[0], col_frame[1], col_frame[2], col_frame[3]):
+        z(101)
+    ));
+    // Top-edge lighten gradient (approx for diffusetopedge()).
+    ui.push(act!(quad:
+        align(0.5, 0.5):
+        xy(p1_cx, cy):
+        zoomto(FRAME_W_SCROLLER, frame_h):
+        diffuse(col_frame_top[0], col_frame_top[1], col_frame_top[2], col_frame_top[3]):
+        fadebottom(1.0):
         z(101)
     ));
 
-    // P1 info pane background (Left Column / Stats) - Dim Color
+    // P1 info pane background (Left Column / Stats) - semi-transparent black overlay
     let info_x0 = p1_cx + INFO_X0_OFF;
     let info_text_x = info_x0 + INFO_PAD * 1.25;
     let info_max_w = INFO_W - INFO_PAD * 2.5;
@@ -344,7 +357,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         align(0.0, 0.0):
         xy(info_x0, frame_y0):
         zoomto(INFO_W, frame_h):
-        diffuse(col_dim[0], col_dim[1], col_dim[2], col_dim[3]):
+        diffuse(col_overlay[0], col_overlay[1], col_overlay[2], col_overlay[3]):
         z(102)
     ));
 
@@ -382,7 +395,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         align(0.5, 0.5):
         xy(scroller_cx, cy):
         zoomto(SCROLLER_W, highlight_h):
-        diffuse(col_dim[0], col_dim[1], col_dim[2], col_dim[3]):
+        diffuse(col_overlay[0], col_overlay[1], col_overlay[2], col_overlay[3]):
         z(102)
     ));
 
