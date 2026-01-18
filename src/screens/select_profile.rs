@@ -50,7 +50,9 @@ const INFO_LINE_Y_OFF: f32 = 18.0;
 // Unified Y offset for side-by-side previews
 const PREVIEW_Y_OFF: f32 = 42.0;
 
-const PREVIEW_VALUE_H: f32 = 16.0;
+const TOTAL_SONGS_ZOOM: f32 = 0.65; // SL: TotalSongs zoom(0.65)
+const MODS_ZOOM: f32 = 0.625; // SL: RecentMods zoom(0.625)
+const MODS_Y_OFF: f32 = 47.0; // SL: RecentMods xy(...,47)
 const TOTAL_SONGS_STATIC: &str = "123 Songs Played";
 
 #[derive(Clone)]
@@ -59,6 +61,7 @@ struct Choice {
     display_name: String,
     speed_mod: String,
     avatar_key: Option<String>,
+    scroll_option: profile::ScrollOption,
     noteskin: profile::NoteSkin,
     judgment: profile::JudgmentGraphic,
 }
@@ -102,35 +105,90 @@ fn rebuild_preview(state: &mut State) {
     };
 }
 
+#[inline(always)]
+fn format_recent_mods(speed_mod: &str, scroll: profile::ScrollOption) -> String {
+    let mut out = String::new();
+    let mut first = true;
+
+    let mut push = |s: &str| {
+        if s.is_empty() {
+            return;
+        }
+        if !first {
+            out.push_str(", ");
+        }
+        first = false;
+        out.push_str(s);
+    };
+
+    push(speed_mod.trim());
+    if scroll.contains(profile::ScrollOption::Reverse) {
+        push("Reverse");
+    }
+    if scroll.contains(profile::ScrollOption::Split) {
+        push("Split");
+    }
+    if scroll.contains(profile::ScrollOption::Alternate) {
+        push("Alternate");
+    }
+    if scroll.contains(profile::ScrollOption::Cross) {
+        push("Cross");
+    }
+    if scroll.contains(profile::ScrollOption::Centered) {
+        push("Centered");
+    }
+    push("Overhead");
+    out
+}
+
 fn build_choices() -> Vec<Choice> {
     let mut out = Vec::new();
 
-    let guest_speed_mod = format!("{}", crate::game::profile::Profile::default().scroll_speed);
+    let default_profile = crate::game::profile::Profile::default();
+    let default_speed_mod = format!("{}", default_profile.scroll_speed);
+    let default_scroll_option = default_profile.scroll_option;
     out.push(Choice {
         kind: ActiveProfile::Guest,
         display_name: "[ GUEST ]".to_string(),
-        speed_mod: guest_speed_mod,
+        speed_mod: default_speed_mod.clone(),
         avatar_key: None,
+        scroll_option: default_scroll_option,
         noteskin: profile::NoteSkin::default(),
         judgment: profile::JudgmentGraphic::default(),
     });
     for p in profile::scan_local_profiles() {
-        let mut speed_mod = String::new();
+        let mut speed_mod = default_speed_mod.clone();
+        let mut scroll_option = default_scroll_option;
         let mut noteskin = profile::NoteSkin::default();
         let mut judgment = profile::JudgmentGraphic::default();
         let ini_path = std::path::Path::new("save/profiles")
             .join(&p.id)
             .join("profile.ini");
         let mut ini = crate::config::SimpleIni::new();
-        if ini.load(&ini_path).is_ok()
-            && let Some(raw) = ini.get("PlayerOptions", "ScrollSpeed")
-        {
-            let trimmed = raw.trim();
-            speed_mod = if let Ok(setting) = ScrollSpeedSetting::from_str(trimmed) {
-                format!("{}", setting)
-            } else {
-                trimmed.to_string()
-            };
+        if ini.load(&ini_path).is_ok() {
+            if let Some(raw) = ini.get("PlayerOptions", "ScrollSpeed") {
+                let trimmed = raw.trim();
+                speed_mod = if let Ok(setting) = ScrollSpeedSetting::from_str(trimmed) {
+                    format!("{}", setting)
+                } else {
+                    trimmed.to_string()
+                };
+            }
+
+            scroll_option = ini
+                .get("PlayerOptions", "Scroll")
+                .and_then(|s| profile::ScrollOption::from_str(&s).ok())
+                .unwrap_or_else(|| {
+                    let reverse_enabled = ini
+                        .get("PlayerOptions", "ReverseScroll")
+                        .and_then(|v| v.parse::<u8>().ok())
+                        .is_some_and(|v| v != 0);
+                    if reverse_enabled {
+                        profile::ScrollOption::Reverse
+                    } else {
+                        default_scroll_option
+                    }
+                });
         }
         if let Ok(value) = ini
             .get("PlayerOptions", "NoteSkin")
@@ -152,6 +210,7 @@ fn build_choices() -> Vec<Choice> {
             display_name: p.display_name,
             speed_mod,
             avatar_key: p.avatar_path.map(|path| path.to_string_lossy().into_owned()),
+            scroll_option,
             noteskin,
             judgment,
         });
@@ -469,9 +528,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     }
 
     let selected = state.choices.get(state.selected_index);
-    let selected_speed = selected.map(|c| c.speed_mod.as_str()).unwrap_or_default();
-    let selected_is_local =
-        selected.is_some_and(|c| matches!(c.kind, ActiveProfile::Local { .. }));
+    let selected_is_local = selected.is_some_and(|c| matches!(c.kind, ActiveProfile::Local { .. }));
 
     // Avatar slot (SL-style): show profile.png if present, else heart + text.
     let avatar_dim = INFO_W - INFO_PAD * 2.25;
@@ -525,10 +582,10 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     if selected_is_local {
         ui.push(act!(text:
             align(0.0, 0.0):
-            xy(info_text_x, avatar_y + avatar_dim + 20.0):
+            xy(info_text_x, cy):
             font("miso"):
+            zoom(TOTAL_SONGS_ZOOM):
             maxwidth(info_max_w):
-            zoomtoheight(PREVIEW_VALUE_H):
             settext(TOTAL_SONGS_STATIC):
             diffuse(1.0, 1.0, 1.0, inner_alpha):
             z(103)
@@ -547,6 +604,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     // NoteSkin + JudgmentGraphic previews (like PlayerOptions; SL-style placement).
     // Now positioned side-by-side within the info pane.
     if selected_is_local {
+        let selected_mods = selected
+            .map(|c| format_recent_mods(&c.speed_mod, c.scroll_option))
+            .unwrap_or_default();
         let preview_y = cy + PREVIEW_Y_OFF;
 
         if let Some(ns) = &state.preview_noteskin {
@@ -641,15 +701,13 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             ));
         }
 
-        // Speed mod (e.g. M600) lives in the RecentMods string in SL; for now, show it
-        // separately under the previews.
         ui.push(act!(text:
             align(0.0, 0.0):
-            xy(info_text_x, preview_y + 30.0):
+            xy(info_text_x, cy + MODS_Y_OFF):
             font("miso"):
+            zoom(MODS_ZOOM):
             maxwidth(info_max_w):
-            zoomtoheight(PREVIEW_VALUE_H):
-            settext(selected_speed.to_string()):
+            settext(selected_mods):
             diffuse(1.0, 1.0, 1.0, inner_alpha):
             z(103)
         ));
