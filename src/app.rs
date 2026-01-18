@@ -348,6 +348,19 @@ pub struct App {
 }
 
 impl App {
+    #[inline(always)]
+    fn is_actor_fade_screen(screen: CurrentScreen) -> bool {
+        matches!(
+            screen,
+            CurrentScreen::Menu
+                | CurrentScreen::Options
+                | CurrentScreen::SelectProfile
+                | CurrentScreen::SelectColor
+                | CurrentScreen::Mappings
+                | CurrentScreen::Input
+        )
+    }
+
     fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
         let monitors: Vec<MonitorHandle> = event_loop.available_monitors().collect();
         let specs = display::monitor_specs(&monitors);
@@ -842,24 +855,16 @@ impl App {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
 
-        let is_actor_fade_screen = matches!(
-            self.state.screens.current_screen,
-            CurrentScreen::Menu
-                | CurrentScreen::Options
-                | CurrentScreen::SelectProfile
-                | CurrentScreen::SelectColor
-                | CurrentScreen::Mappings
-                | CurrentScreen::Input
-        );
+        let is_actor_fade_screen = Self::is_actor_fade_screen(self.state.screens.current_screen);
 
         if is_actor_fade_screen {
             match self.state.shell.transition {
                 TransitionState::ActorsFadeIn { elapsed } => {
                     screen_alpha_multiplier = (elapsed / MENU_ACTORS_FADE_DURATION).clamp(0.0, 1.0);
                 }
-                TransitionState::ActorsFadeOut {
-                    elapsed, duration, ..
-                } => {
+                    TransitionState::ActorsFadeOut {
+                        elapsed, duration, ..
+                    } => {
                     screen_alpha_multiplier = 1.0 - (elapsed / duration).clamp(0.0, 1.0);
                 }
                 _ => {}
@@ -1918,16 +1923,17 @@ impl ApplicationHandler<UserEvent> for App {
                     } => {
                         *elapsed += delta_time;
                         if *elapsed >= *duration {
+                            let target_screen = *target;
                             let prev = self.state.screens.current_screen;
-                            self.state.screens.current_screen = *target;
-                            if *target == CurrentScreen::SelectColor {
+                            self.state.screens.current_screen = target_screen;
+                            if target_screen == CurrentScreen::SelectColor {
                                 select_color::on_enter(&mut self.state.screens.select_color_state);
                             }
 
                             // SelectProfile/SelectColor/SelectStyle share the looping menu BGM.
                             // Keep SelectMusic preview playing when moving to/from PlayerOptions.
                             let target_menu_music = matches!(
-                                *target,
+                                target_screen,
                                 CurrentScreen::SelectColor
                                     | CurrentScreen::SelectStyle
                             );
@@ -1937,9 +1943,9 @@ impl ApplicationHandler<UserEvent> for App {
                                     | CurrentScreen::SelectStyle
                             );
                             let keep_preview = (prev == CurrentScreen::SelectMusic
-                                && *target == CurrentScreen::PlayerOptions)
+                                && target_screen == CurrentScreen::PlayerOptions)
                                 || (prev == CurrentScreen::PlayerOptions
-                                    && *target == CurrentScreen::SelectMusic);
+                                    && target_screen == CurrentScreen::SelectMusic);
 
                             if target_menu_music {
                                 if !prev_menu_music {
@@ -1956,25 +1962,25 @@ impl ApplicationHandler<UserEvent> for App {
                                 crate::core::audio::stop_music();
                             }
 
-                            if *target == CurrentScreen::Menu {
+                            if target_screen == CurrentScreen::Menu {
                                 let current_color_index =
                                     self.state.screens.menu_state.active_color_index;
                                 self.state.screens.menu_state = menu::init();
                                 self.state.screens.menu_state.active_color_index =
                                     current_color_index;
-                            } else if *target == CurrentScreen::Options {
+                            } else if target_screen == CurrentScreen::Options {
                                 let current_color_index =
                                     self.state.screens.options_state.active_color_index;
                                 self.state.screens.options_state = options::init();
                                 self.state.screens.options_state.active_color_index =
                                     current_color_index;
-                            } else if *target == CurrentScreen::SelectProfile {
+                            } else if target_screen == CurrentScreen::SelectProfile {
                                 let current_color_index =
                                     self.state.screens.select_profile_state.active_color_index;
                                 self.state.screens.select_profile_state = select_profile::init();
                                 self.state.screens.select_profile_state.active_color_index =
                                     current_color_index;
-                            } else if *target == CurrentScreen::Mappings {
+                            } else if target_screen == CurrentScreen::Mappings {
                                 let color_index =
                                     self.state.screens.options_state.active_color_index;
                                 self.state.screens.mappings_state = mappings::init();
@@ -1994,12 +2000,15 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.state.screens.options_state.active_color_index = idx;
                             }
 
-                            if *target == CurrentScreen::Options {
+                            if target_screen == CurrentScreen::Options {
                                 self.update_options_monitor_specs(event_loop);
                             }
 
-                            self.state.shell.transition =
-                                TransitionState::ActorsFadeIn { elapsed: 0.0 };
+                            self.state.shell.transition = if Self::is_actor_fade_screen(target_screen) {
+                                TransitionState::ActorsFadeIn { elapsed: 0.0 }
+                            } else {
+                                TransitionState::Idle
+                            };
                             crate::ui::runtime::clear_all();
                         }
                     }
