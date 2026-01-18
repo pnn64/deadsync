@@ -19,6 +19,10 @@ const CHOICE_COUNT: usize = 3;
 const CHOICE_ZOOM_UNFOCUSED: f32 = 0.5;
 const CHOICE_ZOOM_FOCUSED: f32 = 1.0;
 const CHOICE_ZOOM_TWEEN_DURATION: f32 = 0.125;
+// Simply Love: ScreenSelectStyle underlay/choice.lua
+const CHOICE_CHOSEN_ZOOM_OUT_DURATION: f32 = 0.415;
+const CHOICE_NOT_CHOSEN_FADE_DELAY: f32 = 0.1;
+const CHOICE_NOT_CHOSEN_FADE_DURATION: f32 = 0.2;
 const PAD_TILE_NATIVE_SIZE: f32 = 64.0;
 const PAD_TILE_ZOOM_4_3: f32 = 0.435;
 const PAD_TILE_ZOOM_16_9: f32 = 0.525;
@@ -63,6 +67,9 @@ pub struct State {
     pub active_color_index: i32,
     pub selected_index: usize,
     choice_zooms: [f32; CHOICE_COUNT],
+    exit_requested: bool,
+    exit_chosen_anim: bool,
+    exit_target: Option<Screen>,
     bg: heart_bg::State,
 }
 
@@ -71,6 +78,9 @@ pub fn init() -> State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         selected_index: 0,
         choice_zooms: [CHOICE_ZOOM_UNFOCUSED; CHOICE_COUNT],
+        exit_requested: false,
+        exit_chosen_anim: false,
+        exit_target: None,
         bg: heart_bg::State::new(),
     }
 }
@@ -99,6 +109,15 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 }
 
 pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
+    if state.exit_requested {
+        if let Some(target) = state.exit_target {
+            if exit_anim_t(state.exit_chosen_anim) >= CHOICE_CHOSEN_ZOOM_OUT_DURATION {
+                state.exit_target = None;
+                return Some(ScreenAction::Navigate(target));
+            }
+        }
+        return None;
+    }
     let speed = (CHOICE_ZOOM_FOCUSED - CHOICE_ZOOM_UNFOCUSED) / CHOICE_ZOOM_TWEEN_DURATION;
     let max_step = speed * dt.max(0.0);
 
@@ -123,6 +142,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if !ev.pressed {
         return ScreenAction::None;
     }
+    if state.exit_requested {
+        return ScreenAction::None;
+    }
 
     match ev.action {
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
@@ -136,6 +158,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p1_start => {
+            state.exit_requested = true;
+            state.exit_chosen_anim = true;
+            state.exit_target = Some(Screen::SelectMusic);
+            let _ = exit_anim_t(true);
             let choice = Choice::from_index(state.selected_index);
             crate::game::profile::set_session_play_style(match choice {
                 Choice::Single => crate::game::profile::PlayStyle::Single,
@@ -143,11 +169,125 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 Choice::Double => crate::game::profile::PlayStyle::Double,
             });
             audio::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::Navigate(Screen::SelectMusic)
+            ScreenAction::None
         }
-        VirtualAction::p1_back => ScreenAction::Navigate(Screen::Menu),
+        VirtualAction::p1_back => {
+            state.exit_requested = true;
+            state.exit_chosen_anim = false;
+            state.exit_target = None;
+            ScreenAction::Navigate(Screen::Menu)
+        }
         _ => ScreenAction::None,
     }
+}
+
+#[inline(always)]
+fn smoothstep(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+#[inline(always)]
+fn not_chosen_alpha(exit_t: f32) -> f32 {
+    if exit_t <= CHOICE_NOT_CHOSEN_FADE_DELAY {
+        return 1.0;
+    }
+    let t = (exit_t - CHOICE_NOT_CHOSEN_FADE_DELAY) / CHOICE_NOT_CHOSEN_FADE_DURATION;
+    1.0 - smoothstep(t)
+}
+
+#[inline(always)]
+fn bezier_coeff(c1: f32, c2: f32, c3: f32, c4: f32) -> (f32, f32, f32, f32) {
+    let d = c1;
+    let c = 3.0 * (c2 - c1);
+    let b = 3.0 * (c3 - c2) - c;
+    let a = c4 - c1 - c - b;
+    (a, b, c, d)
+}
+
+#[inline(always)]
+fn cubic_eval((a, b, c, d): (f32, f32, f32, f32), t: f32) -> f32 {
+    ((a * t + b) * t + c) * t + d
+}
+
+#[inline(always)]
+fn cubic_slope((a, b, c, _): (f32, f32, f32, f32), t: f32) -> f32 {
+    3.0 * a * t * t + 2.0 * b * t + c
+}
+
+// ITGmania: RageBezier2D::EvaluateYFromX()
+#[inline(always)]
+fn bezier_y_from_x(
+    x: f32,
+    c1x: f32,
+    c1y: f32,
+    c2x: f32,
+    c2y: f32,
+    c3x: f32,
+    c3y: f32,
+    c4x: f32,
+    c4y: f32,
+) -> f32 {
+    let x = x.clamp(0.0, 1.0);
+    let px = bezier_coeff(c1x, c2x, c3x, c4x);
+    let py = bezier_coeff(c1y, c2y, c3y, c4y);
+
+    let start = px.3;
+    let end = px.0 + px.1 + px.2 + px.3;
+    let denom = end - start;
+    let mut t = if denom.abs() <= f32::EPSILON {
+        0.0
+    } else {
+        (x - start) / denom
+    };
+
+    for _ in 0..100 {
+        let guessed_x = cubic_eval(px, t);
+        let err = x - guessed_x;
+        if err.abs() < 0.0001 {
+            return cubic_eval(py, t);
+        }
+        let slope = cubic_slope(px, t);
+        if slope.abs() <= f32::EPSILON {
+            break;
+        }
+        t += err / slope;
+    }
+
+    cubic_eval(py, t)
+}
+
+#[inline(always)]
+fn bouncebegin_p(x: f32) -> f32 {
+    // itgmania/Themes/_fallback/Scripts/02 Actor.lua
+    bezier_y_from_x(
+        x,
+        0.0,
+        0.0,
+        0.42,
+        -0.42,
+        2.0 / 3.0,
+        0.3,
+        1.0,
+        1.0,
+    )
+}
+
+#[inline(always)]
+fn exit_anim_t(exiting: bool) -> f32 {
+    if !exiting {
+        return 0.0;
+    }
+
+    use crate::ui::{anim, runtime};
+    static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
+    let dur = CHOICE_CHOSEN_ZOOM_OUT_DURATION.max(0.0);
+    let steps = STEPS.get_or_init(|| vec![anim::linear(dur).x(dur).build()]);
+
+    let mut init = anim::TweenState::default();
+    init.x = 0.0;
+    let sid = runtime::site_id(file!(), line!(), column!(), 0x5353544C45584954u64); // "SSTLEXIT"
+    runtime::materialize(sid, init, steps).x.max(0.0)
 }
 
 fn push_pad_tiles(
@@ -155,6 +295,7 @@ fn push_pad_tiles(
     base_x: f32,
     base_y: f32,
     zoom: f32,
+    alpha_mul: f32,
     used_rgba: [f32; 4],
     unused_rgba: [f32; 4],
 ) {
@@ -164,11 +305,12 @@ fn push_pad_tiles(
     for row in 0..3 {
         for col in 0..3 {
             let idx = row * 3 + col;
-            let tint = if DANCE_PAD_LAYOUT[idx] {
+            let mut tint = if DANCE_PAD_LAYOUT[idx] {
                 used_rgba
             } else {
                 unused_rgba
             };
+            tint[3] *= alpha_mul;
 
             let x = base_x + tile_step * (col as f32 - 1.0);
             let y = base_y + tile_step * (row as f32 - 2.0);
@@ -186,6 +328,15 @@ fn push_pad_tiles(
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(128);
     let profile = crate::game::profile::get();
+    let exit_t = exit_anim_t(state.exit_chosen_anim);
+    let (chosen_p, other_alpha) = if state.exit_chosen_anim {
+        (
+            bouncebegin_p(exit_t / CHOICE_CHOSEN_ZOOM_OUT_DURATION),
+            not_chosen_alpha(exit_t),
+        )
+    } else {
+        (0.0, 1.0)
+    };
 
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
@@ -233,25 +384,33 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             Choice::Versus => cx,
             Choice::Double => cx + choice_x_off,
         };
-        let zoom = state.choice_zooms[i];
+        let (zoom, alpha) = if state.exit_chosen_anim {
+            if i == state.selected_index {
+                (CHOICE_ZOOM_FOCUSED * (1.0 - chosen_p), 1.0)
+            } else {
+                (CHOICE_ZOOM_UNFOCUSED, other_alpha)
+            }
+        } else {
+            (state.choice_zooms[i], 1.0)
+        };
 
         match choice {
             Choice::Single => {
                 let used = color::decorative_rgba(state.active_color_index);
-                push_pad_tiles(&mut actors, x, cy, zoom, used, PAD_UNUSED_RGBA);
+                push_pad_tiles(&mut actors, x, cy, zoom, alpha, used, PAD_UNUSED_RGBA);
             }
             Choice::Versus => {
                 let left = color::decorative_rgba(state.active_color_index - 1);
                 let right = color::decorative_rgba(state.active_color_index + 2);
                 let off = dual_pad_off * zoom;
-                push_pad_tiles(&mut actors, x - off, cy, zoom, left, PAD_UNUSED_RGBA);
-                push_pad_tiles(&mut actors, x + off, cy, zoom, right, PAD_UNUSED_RGBA);
+                push_pad_tiles(&mut actors, x - off, cy, zoom, alpha, left, PAD_UNUSED_RGBA);
+                push_pad_tiles(&mut actors, x + off, cy, zoom, alpha, right, PAD_UNUSED_RGBA);
             }
             Choice::Double => {
                 let used = color::decorative_rgba(state.active_color_index + 1);
                 let off = dual_pad_off * zoom;
-                push_pad_tiles(&mut actors, x - off, cy, zoom, used, PAD_UNUSED_RGBA);
-                push_pad_tiles(&mut actors, x + off, cy, zoom, used, PAD_UNUSED_RGBA);
+                push_pad_tiles(&mut actors, x - off, cy, zoom, alpha, used, PAD_UNUSED_RGBA);
+                push_pad_tiles(&mut actors, x + off, cy, zoom, alpha, used, PAD_UNUSED_RGBA);
             }
         }
 
@@ -262,7 +421,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             zoom(0.5 * zoom):
             z(1):
             shadowlength(1.0):
-            diffuse(1.0, 1.0, 1.0, 1.0):
+            diffuse(1.0, 1.0, 1.0, alpha):
             font("wendy"): settext(choice.label()): horizalign(center)
         ));
     }
