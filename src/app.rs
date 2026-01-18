@@ -354,8 +354,6 @@ impl App {
             screen,
             CurrentScreen::Menu
                 | CurrentScreen::Options
-                | CurrentScreen::SelectProfile
-                | CurrentScreen::SelectColor
                 | CurrentScreen::Mappings
                 | CurrentScreen::Input
         )
