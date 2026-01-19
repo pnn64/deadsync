@@ -1093,7 +1093,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     })
                     .flatten()
             })
-            .unwrap_or_else(|| c.simple_breakdown.clone());
+            .unwrap_or_else(|| format!("{} Total", c.total_streams));
 
         graph_kids.push(act!(sprite(state.current_graph_key.clone()): align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0)));
         graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(panel_w * 0.5 + 60.0, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0)));
