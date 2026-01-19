@@ -16,6 +16,15 @@ use std::str::FromStr;
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
+// Simply Love:
+// - PlayerFrame.lua: bouncebegin(0.35):zoom(0)
+// - default.lua: OffCommand sleep(0.5) to let PlayerFrames tween out
+const EXIT_ANIM_DURATION: f32 = 0.5;
+const PLAYERFRAME_EXIT_ZOOM_OUT_DURATION: f32 = 0.35;
+
+pub fn exit_anim_duration() -> f32 {
+    EXIT_ANIM_DURATION
+}
 
 /* ------------------------------ layout ------------------------------- */
 const ROW_H: f32 = 35.0;
@@ -73,6 +82,7 @@ pub struct State {
     p2_joined: bool,
     p1_selected_index: usize,
     p2_selected_index: usize,
+    exit_anim: bool,
     choices: Vec<Choice>,
     bg: heart_bg::State,
     p1_preview_noteskin: Option<Noteskin>,
@@ -244,6 +254,7 @@ pub fn init() -> State {
         p2_joined: false,
         p1_selected_index: selected_index,
         p2_selected_index: selected_index,
+        exit_anim: false,
         choices,
         bg: heart_bg::State::new(),
         p1_preview_noteskin: None,
@@ -332,16 +343,21 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 .get(state.p1_selected_index)
                 .map(|c| c.kind.clone())
                 .unwrap_or(ActiveProfile::Guest);
+            state.exit_anim = true;
+            let _ = exit_anim_t(true);
             ScreenAction::SelectProfile(choice)
         }
         VirtualAction::p1_back | VirtualAction::p1_select => {
             if state.p1_joined {
                 state.p1_joined = false;
+                audio::play_sfx("assets/sounds/unjoin.ogg");
                 return ScreenAction::None;
             }
             if state.p2_joined {
                 return ScreenAction::None;
             }
+            state.exit_anim = true;
+            let _ = exit_anim_t(true);
             ScreenAction::Navigate(Screen::Menu)
         }
         VirtualAction::p2_up | VirtualAction::p2_menu_up => {
@@ -380,11 +396,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p2_back | VirtualAction::p2_select => {
             if state.p2_joined {
                 state.p2_joined = false;
+                audio::play_sfx("assets/sounds/unjoin.ogg");
                 return ScreenAction::None;
             }
             if state.p1_joined {
                 return ScreenAction::None;
             }
+            state.exit_anim = true;
+            let _ = exit_anim_t(true);
             ScreenAction::Navigate(Screen::Menu)
         }
         _ => ScreenAction::None,
@@ -410,6 +429,101 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
         Actor::Shadow { color, child, .. } => {
             color[3] *= alpha;
             apply_alpha_to_actor(child, alpha);
+        }
+    }
+}
+
+#[inline(always)]
+fn exit_anim_t(exiting: bool) -> f32 {
+    if !exiting {
+        return 0.0;
+    }
+
+    use crate::ui::{anim, runtime};
+    static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
+    let dur = EXIT_ANIM_DURATION.max(0.0);
+    let steps = STEPS.get_or_init(|| vec![anim::linear(dur).x(dur).build()]);
+
+    let mut init = anim::TweenState::default();
+    init.x = 0.0;
+    let sid = runtime::site_id(file!(), line!(), column!(), 0x53454C5052455849u64); // "SELPREXI"
+    runtime::materialize(sid, init, steps).x.max(0.0)
+}
+
+#[inline(always)]
+fn exit_zoom(exit_t: f32) -> f32 {
+    let p = crate::ui::anim::bouncebegin_p(
+        (exit_t / PLAYERFRAME_EXIT_ZOOM_OUT_DURATION).clamp(0.0, 1.0),
+    );
+    (1.0 - p).max(0.0)
+}
+
+#[inline(always)]
+fn scale_about(v: f32, pivot: f32, zoom: f32) -> f32 {
+    pivot + (v - pivot) * zoom
+}
+
+fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
+    match actor {
+        Actor::Sprite {
+            offset, size, scale, ..
+        } => {
+            offset[0] = scale_about(offset[0], pivot[0], zoom);
+            offset[1] = scale_about(offset[1], pivot[1], zoom);
+            for s in size.iter_mut() {
+                if let actors::SizeSpec::Px(v) = s {
+                    *v *= zoom;
+                }
+            }
+            scale[0] *= zoom;
+            scale[1] *= zoom;
+        }
+        Actor::Text {
+            offset,
+            scale,
+            max_width,
+            max_height,
+            max_w_pre_zoom,
+            max_h_pre_zoom,
+            ..
+        } => {
+            offset[0] = scale_about(offset[0], pivot[0], zoom);
+            offset[1] = scale_about(offset[1], pivot[1], zoom);
+            scale[0] *= zoom;
+            scale[1] *= zoom;
+
+            if !*max_w_pre_zoom {
+                if let Some(w) = max_width {
+                    *max_width = Some(*w * zoom);
+                }
+            }
+            if !*max_h_pre_zoom {
+                if let Some(h) = max_height {
+                    *max_height = Some(*h * zoom);
+                }
+            }
+        }
+        Actor::Frame {
+            offset,
+            size,
+            children,
+            ..
+        } => {
+            offset[0] = scale_about(offset[0], pivot[0], zoom);
+            offset[1] = scale_about(offset[1], pivot[1], zoom);
+            for s in size.iter_mut() {
+                if let actors::SizeSpec::Px(v) = s {
+                    *v *= zoom;
+                }
+            }
+            for child in children {
+                apply_zoom_to_actor(child, pivot, zoom);
+            }
+        }
+        Actor::Shadow { len, child, .. } => {
+            len[0] *= zoom;
+            len[1] *= zoom;
+            apply_zoom_to_actor(child, pivot, zoom);
         }
     }
 }
@@ -563,7 +677,7 @@ fn push_scroller_frame(
         let choice = &choices[idx_i as usize];
         let y = frame_cy + d as f32 * ROW_H;
 
-        let a = 1.0 - (d.abs() as f32 / (rows_half as f32 + 1.0));
+        let a = if d == 0 { 1.0 } else { 0.8 };
         let text_color = [1.0, 1.0, 1.0, 1.0];
 
         out.push(act!(text:
@@ -573,7 +687,7 @@ fn push_scroller_frame(
             maxwidth(SCROLLER_W - SCROLLER_TEXT_PAD_X * 2.0):
             zoom(1.0):
             settext(choice.display_name.clone()):
-            diffuse(text_color[0], text_color[1], text_color[2], text_color[3] * inner_alpha):
+            diffuse(text_color[0], text_color[1], text_color[2], text_color[3] * inner_alpha * a):
             shadowlength(0.5):
             z(103):
             horizalign(center)
@@ -807,6 +921,12 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     let mut ui: Vec<Actor> = Vec::new();
     let inner_alpha = box_inner_alpha();
+    let exit_t = exit_anim_t(state.exit_anim);
+    let frame_zoom = if state.exit_anim {
+        exit_zoom(exit_t)
+    } else {
+        1.0
+    };
 
     let frame_h = FRAME_H;
     let cx = screen_center_x();
@@ -821,8 +941,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let border_rgba = [1.0, 1.0, 1.0, 1.0];
 
     if state.p1_joined {
+        let mut p1_ui: Vec<Actor> = Vec::new();
         push_scroller_frame(
-            &mut ui,
+            &mut p1_ui,
             &state.choices,
             state.p1_selected_index,
             state.p1_preview_noteskin.as_ref(),
@@ -837,13 +958,20 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             border_rgba,
             col_overlay,
         );
+        if state.exit_anim {
+            for a in &mut p1_ui {
+                apply_zoom_to_actor(a, [p1_cx, cy], frame_zoom);
+            }
+        }
+        ui.extend(p1_ui);
     } else {
         push_join_prompt(&mut ui, p1_cx, cy, frame_h, border_rgba, inner_alpha);
     }
 
     if state.p2_joined {
+        let mut p2_ui: Vec<Actor> = Vec::new();
         push_scroller_frame(
-            &mut ui,
+            &mut p2_ui,
             &state.choices,
             state.p2_selected_index,
             state.p2_preview_noteskin.as_ref(),
@@ -858,6 +986,12 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             border_rgba,
             col_overlay,
         );
+        if state.exit_anim {
+            for a in &mut p2_ui {
+                apply_zoom_to_actor(a, [p2_cx, cy], frame_zoom);
+            }
+        }
+        ui.extend(p2_ui);
     } else {
         push_join_prompt(&mut ui, p2_cx, cy, frame_h, border_rgba, inner_alpha);
     }

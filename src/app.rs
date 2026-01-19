@@ -594,6 +594,8 @@ impl App {
             MENU_TO_SELECT_COLOR_OUT_DURATION
         } else if from == CurrentScreen::SelectColor {
             select_color::exit_anim_duration()
+        } else if from == CurrentScreen::SelectProfile {
+            select_profile::exit_anim_duration()
         } else {
             FADE_OUT_DURATION
         };

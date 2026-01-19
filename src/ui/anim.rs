@@ -94,6 +94,84 @@ fn ease_apply(e: Ease, t: f32) -> f32 {
     }
 }
 
+#[inline(always)]
+fn bezier_coeff(c1: f32, c2: f32, c3: f32, c4: f32) -> (f32, f32, f32, f32) {
+    let d = c1;
+    let c = 3.0 * (c2 - c1);
+    let b = 3.0 * (c3 - c2) - c;
+    let a = c4 - c1 - c - b;
+    (a, b, c, d)
+}
+
+#[inline(always)]
+fn cubic_eval((a, b, c, d): (f32, f32, f32, f32), t: f32) -> f32 {
+    ((a * t + b) * t + c) * t + d
+}
+
+#[inline(always)]
+fn cubic_slope((a, b, c, _): (f32, f32, f32, f32), t: f32) -> f32 {
+    3.0 * a * t * t + 2.0 * b * t + c
+}
+
+// ITGmania: RageBezier2D::EvaluateYFromX()
+#[inline(always)]
+fn bezier_y_from_x(
+    x: f32,
+    c1x: f32,
+    c1y: f32,
+    c2x: f32,
+    c2y: f32,
+    c3x: f32,
+    c3y: f32,
+    c4x: f32,
+    c4y: f32,
+) -> f32 {
+    let x = x.clamp(0.0, 1.0);
+    let px = bezier_coeff(c1x, c2x, c3x, c4x);
+    let py = bezier_coeff(c1y, c2y, c3y, c4y);
+
+    let start = px.3;
+    let end = px.0 + px.1 + px.2 + px.3;
+    let denom = end - start;
+    let mut t = if denom.abs() <= f32::EPSILON {
+        0.0
+    } else {
+        (x - start) / denom
+    };
+
+    for _ in 0..100 {
+        let guessed_x = cubic_eval(px, t);
+        let err = x - guessed_x;
+        if err.abs() < 0.0001 {
+            return cubic_eval(py, t);
+        }
+        let slope = cubic_slope(px, t);
+        if slope.abs() <= f32::EPSILON {
+            break;
+        }
+        t += err / slope;
+    }
+
+    cubic_eval(py, t)
+}
+
+/// StepMania/ITGmania `bouncebegin` tween curve parameterization.
+/// Ported from `itgmania/Themes/_fallback/Scripts/02 Actor.lua`.
+#[inline(always)]
+pub fn bouncebegin_p(x: f32) -> f32 {
+    bezier_y_from_x(
+        x,
+        0.0,
+        0.0,
+        0.42,
+        -0.42,
+        2.0 / 3.0,
+        0.3,
+        1.0,
+        1.0,
+    )
+}
+
 /// Construct `ease(time, fEase)` — fEase in [-100, 100]; 0 = symmetric in–out.
 /// Positive fEase biases ease-out (fast early), negative biases ease-in.
 #[inline(always)]
