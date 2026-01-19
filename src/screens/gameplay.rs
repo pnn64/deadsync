@@ -202,6 +202,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         .scroll_option
         .contains(profile::ScrollOption::Centered);
     let receptor_y_centered = screen_center_y() + notefield_offset_y;
+    let column_dirs = state.column_scroll_dirs;
+    let column_receptor_ys: [f32; 4] = from_fn(|i| {
+        if is_centered {
+            receptor_y_centered
+        } else if column_dirs[i] >= 0.0 {
+            receptor_y_normal
+        } else {
+            receptor_y_reverse
+        }
+    });
 
     if let Some(ns) = &state.noteskin {
         let target_arrow_px = TARGET_ARROW_PIXEL_SIZE * field_zoom;
@@ -253,15 +263,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         // For dynamic values (e.g., last_held_beat while letting go), fall back to timing for that beat.
         // Direction and receptor row are per-lane: upwards lanes anchor to the normal receptor row,
         // downwards lanes anchor to the reverse row.
-        let compute_lane_y_dynamic = |beat: f32, dir: f32| -> f32 {
+        let compute_lane_y_dynamic = |beat: f32, receptor_y_lane: f32, dir: f32| -> f32 {
             let dir = if dir >= 0.0 { 1.0 } else { -1.0 };
-            let receptor_y_lane = if is_centered {
-                receptor_y_centered
-            } else if dir >= 0.0 {
-                receptor_y_normal
-            } else {
-                receptor_y_reverse
-            };
             match state.scroll_speed {
                 ScrollSpeedSetting::CMod(_) => {
                     let pps_chart = cmod_pps_opt.expect("cmod pps computed");
@@ -296,19 +299,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         // Receptors + glow
         for i in 0..4 {
             let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
-            let raw_dir = state
-                .column_scroll_dirs
-                .get(i)
-                .copied()
-                .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
-            let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
-            let receptor_y_lane = if is_centered {
-                receptor_y_centered
-            } else if dir >= 0.0 {
-                receptor_y_normal
-            } else {
-                receptor_y_reverse
-            };
+            let receptor_y_lane = column_receptor_ys[i];
             let bop_timer = state.receptor_bop_timers[i];
             let bop_zoom = if bop_timer > 0.0 {
                 let t = (0.11 - bop_timer) / 0.11;
@@ -401,19 +392,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 && let Some(explosion) = ns.tap_explosions.get(&active.window)
             {
                 let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
-                let raw_dir = state
-                    .column_scroll_dirs
-                    .get(i)
-                    .copied()
-                    .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
-                let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
-                let receptor_y_lane = if is_centered {
-                    receptor_y_centered
-                } else if dir >= 0.0 {
-                    receptor_y_normal
-                } else {
-                    receptor_y_reverse
-                };
+                let receptor_y_lane = column_receptor_ys[i];
                 let anim_time = active.elapsed;
                 let slot = &explosion.slot;
                 let beat_for_anim = if slot.source.is_beat_based() {
@@ -479,19 +458,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
                 let rotation_progress = 180.0 * progress;
                 let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
-                let raw_dir = state
-                    .column_scroll_dirs
-                    .get(i)
-                    .copied()
-                    .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
-                let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
-                let receptor_y_lane = if is_centered {
-                    receptor_y_centered
-                } else if dir >= 0.0 {
-                    receptor_y_normal
-                } else {
-                    receptor_y_reverse
-                };
+                let receptor_y_lane = column_receptor_ys[i];
                 let base_rotation = ns
                     .receptor_off
                     .get(i)
@@ -550,23 +517,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 head_beat = hold.last_held_beat.clamp(note.beat, hold.end_beat);
             }
 
-            let col_dir = state
-                .column_scroll_dirs
-                .get(note.column)
-                .copied()
-                .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
-            let dir = if col_dir >= 0.0 { 1.0 } else { -1.0 };
-            let lane_receptor_y = if is_centered {
-                receptor_y_centered
-            } else if col_dir >= 0.0 {
-                receptor_y_normal
-            } else {
-                receptor_y_reverse
-            };
+            let col_dir = column_dirs[note.column];
+            let dir = col_dir;
+            let lane_receptor_y = column_receptor_ys[note.column];
 
             // Compute Y positions: O(1) via cache for static parts, dynamic for moving head
             let head_y = if is_head_dynamic {
-                compute_lane_y_dynamic(head_beat, col_dir)
+                compute_lane_y_dynamic(head_beat, lane_receptor_y, dir)
             } else {
                 match state.scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
@@ -1008,19 +965,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
         // Active arrows
         for (col_idx, column_arrows) in state.arrows.iter().enumerate() {
-            let raw_dir = state
-                .column_scroll_dirs
-                .get(col_idx)
-                .copied()
-                .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
-            let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
-            let receptor_y_lane = if is_centered {
-                receptor_y_centered
-            } else if dir >= 0.0 {
-                receptor_y_normal
-            } else {
-                receptor_y_reverse
-            };
+            let dir = column_dirs[col_idx];
+            let receptor_y_lane = column_receptor_ys[col_idx];
             for arrow in column_arrows {
                 // Use cached per-note timing to avoid per-frame timing queries
                 let y_pos = match state.scroll_speed {
@@ -1458,19 +1404,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             HoldResult::LetGo => 1,
         } as u32;
         if let Some(texture) = hold_judgment_texture {
-            let raw_dir = state
-                .column_scroll_dirs
-                .get(column)
-                .copied()
-                .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
-            let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
-            let receptor_y_lane = if is_centered {
-                receptor_y_centered
-            } else if dir >= 0.0 {
-                receptor_y_normal
-            } else {
-                receptor_y_reverse
-            };
+            let dir = column_dirs[column];
+            let receptor_y_lane = column_receptor_ys[column];
             let hold_judgment_y = if dir >= 0.0 {
                 // Non-reverse lane: match Simply Love's baseline offset below receptors.
                 receptor_y_lane + HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR

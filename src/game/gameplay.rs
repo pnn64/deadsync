@@ -2030,23 +2030,24 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     let is_centered = profile
         .scroll_option
         .contains(profile::ScrollOption::Centered);
+    let column_dirs = state.column_scroll_dirs;
 
-    for (col_idx, col_arrows) in state.arrows.iter_mut().enumerate() {
-        let raw_dir = state
-            .column_scroll_dirs
-            .get(col_idx)
-            .copied()
-            .unwrap_or_else(|| if state.reverse_scroll { -1.0 } else { 1.0 });
-        let dir = if raw_dir >= 0.0 { 1.0 } else { -1.0 };
-        let receptor_y = if is_centered {
-            // Centered receptors ignore Reverse for positioning (but not for direction)
-            // We apply notefield offset here too for consistency
-            screen_center_y() + profile.note_field_offset_y as f32
-        } else if dir >= 0.0 {
+    // Centered receptors ignore Reverse for positioning (but not direction).
+    // Apply notefield offset here too for consistency.
+    let receptor_y_centered = screen_center_y() + profile.note_field_offset_y as f32;
+    let column_receptor_ys: [f32; 4] = std::array::from_fn(|i| {
+        if is_centered {
+            receptor_y_centered
+        } else if column_dirs[i] >= 0.0 {
             receptor_y_normal
         } else {
             receptor_y_reverse
-        };
+        }
+    });
+
+    for (col_idx, col_arrows) in state.arrows.iter_mut().enumerate() {
+        let dir = column_dirs[col_idx];
+        let receptor_y = column_receptor_ys[col_idx];
 
         let miss_cull_threshold = receptor_y - dir * state.draw_distance_after_targets;
         col_arrows.retain(|arrow| {
