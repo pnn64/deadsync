@@ -97,6 +97,9 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     // Pack count
     let pack_count_x_local: f32 = screen_width() / 2.0 - widescale(9.0, 10.0) - sl_shift;
 
+    // "Has Edit" icon (Simply Love: Graphics/MusicWheelItem Song NormalPart/default.lua)
+    let has_edit_right_x_local: f32 = screen_width() / widescale(2.15, 2.14) - 8.0;
+
     // --- VERTICAL GEOMETRY (1:1 with Simply Love Lua) ---
     let slot_spacing: f32 = screen_height() / (num_visible_items as f32);
     let item_h_full: f32 = slot_spacing;
@@ -135,9 +138,14 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                 ((p.selected_index as isize + offset_from_center + num_entries as isize) as usize)
                     % num_entries;
 
-            let (is_pack, bg_col, txt_col, title_str, subtitle_str, pack_name_opt) =
+            let (is_pack, bg_col, txt_col, title_str, subtitle_str, pack_name_opt, has_edit) =
                 match p.entries.get(list_index) {
                     Some(MusicWheelEntry::Song(info)) => {
+                        let has_edit = info.charts.iter().any(|c| {
+                            c.chart_type.eq_ignore_ascii_case("dance-single")
+                                && c.difficulty.eq_ignore_ascii_case("edit")
+                                && !c.notes.is_empty()
+                        });
                         (
                             false,
                             col_music_wheel_box(),
@@ -145,6 +153,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             info.display_title(translated_titles).to_string(),
                             info.display_subtitle(translated_titles).to_string(),
                             None,
+                            has_edit,
                         )
                     }
                     Some(MusicWheelEntry::PackHeader {
@@ -160,6 +169,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             name.clone(),
                             String::new(),
                             Some(name.clone()),
+                            false,
                         )
                     }
                     _ => (
@@ -169,6 +179,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         String::new(),
                         String::new(),
                         None,
+                        false,
                     ),
                 };
 
@@ -251,6 +262,17 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         maxwidth(title_max_w_local):
                         zoom(0.7):
                         diffuse(1.0, 1.0, 1.0, 1.0):
+                        z(2)
+                    ));
+                }
+
+                if has_edit {
+                    slot_children.push(act!(sprite("has_edit.png"):
+                        align(1.0, 0.5):
+                        xy(has_edit_right_x_local, half_item_h):
+                        // Simply Love uses `Has Edit (doubleres).png` at `zoom(0.375)`;
+                        // our asset is untagged, so scale down by 0.5 for parity.
+                        zoom(0.1875):
                         z(2)
                     ));
                 }

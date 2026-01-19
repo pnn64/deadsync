@@ -364,6 +364,7 @@ impl AssetManager {
                 "test_input/highlightarrow.png".to_string(),
             ),
             ("meter_arrow.png".to_string(), "meter_arrow.png".to_string()),
+            ("has_edit.png".to_string(), "has_edit.png".to_string()),
             (
                 "rounded-square.png".to_string(),
                 "rounded-square.png".to_string(),
