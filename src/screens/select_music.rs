@@ -1063,42 +1063,35 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 c.max_nps
             }
         );
-        // Minimal font measure logic here for breakdown, only done when chart exists
+        // Match Simply Love's minimization loop (0 -> 3) based on rendered width.
         let bd_text = asset_manager
-            .with_fonts(|f| {
-                asset_manager
-                    .with_font("miso", |mf| {
-                        let w = panel_w - 16.0;
-                        let mz = 0.8;
-                        if (font::measure_line_width_logical(mf, &c.detailed_breakdown, f) as f32)
-                            * mz
-                            <= w
-                        {
-                            Some(c.detailed_breakdown.clone())
-                        } else if (font::measure_line_width_logical(mf, &c.partial_breakdown, f)
-                            as f32)
-                            * mz
-                            <= w
-                        {
-                            Some(c.partial_breakdown.clone())
-                        } else if (font::measure_line_width_logical(mf, &c.simple_breakdown, f)
-                            as f32)
-                            * mz
-                            <= w
-                        {
-                            Some(c.simple_breakdown.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .flatten()
+            .with_fonts(|all_fonts| {
+                asset_manager.with_font("miso", |miso_font| -> Option<String> {
+                    let text_zoom = 0.8;
+                    let max_allowed_logical_width = panel_w / text_zoom;
+                    let fits = |text: &str| {
+                        (font::measure_line_width_logical(miso_font, text, all_fonts) as f32)
+                            <= max_allowed_logical_width
+                    };
+
+                    if fits(&c.detailed_breakdown) {
+                        Some(c.detailed_breakdown.clone())
+                    } else if fits(&c.partial_breakdown) {
+                        Some(c.partial_breakdown.clone())
+                    } else if fits(&c.simple_breakdown) {
+                        Some(c.simple_breakdown.clone())
+                    } else {
+                        Some(format!("{} Total", c.total_streams))
+                    }
+                })
             })
-            .unwrap_or_else(|| format!("{} Total", c.total_streams));
+            .flatten()
+            .unwrap_or_else(|| c.simple_breakdown.clone());
 
         graph_kids.push(act!(sprite(state.current_graph_key.clone()): align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0)));
         graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(panel_w * 0.5 + 60.0, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0)));
         graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, 47.0): setsize(panel_w, 17.0): diffuse(0.0, 0.0, 0.0, 0.5)));
-        graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxheight(15.0)));
+        graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w)));
     }
 
     actors.push(Actor::Frame {
