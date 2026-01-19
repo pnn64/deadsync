@@ -5,6 +5,7 @@ pub mod logo;
 pub mod menu_list;
 pub mod menu_splash;
 pub mod music_wheel;
+pub mod notefield;
 pub mod pad_display;
 pub mod screen_bar;
 pub mod stats_overlay;
