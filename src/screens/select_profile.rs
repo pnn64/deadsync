@@ -45,6 +45,7 @@ const AVATAR_HEART_X: f32 = 13.0;
 const AVATAR_HEART_Y: f32 = 8.0;
 const AVATAR_HEART_ZOOM: f32 = 0.09;
 const AVATAR_TEXT_Y: f32 = 67.0;
+const AVATAR_LABEL_ZOOM: f32 = 0.815; // SL: fallback avatar label zoom(0.815)
 
 const INFO_LINE_Y_OFF: f32 = 18.0;
 // Unified Y offset for side-by-side previews
@@ -613,7 +614,7 @@ fn push_scroller_frame(
                 xy(avatar_x + avatar_dim * 0.5, avatar_y + AVATAR_TEXT_Y):
                 font("miso"):
                 maxwidth(avatar_dim - 8.0):
-                zoomtoheight(14.0):
+                zoom(AVATAR_LABEL_ZOOM):
                 settext(label):
                 diffuse(1.0, 1.0, 1.0, 0.9 * inner_alpha):
                 z(105):
