@@ -1498,12 +1498,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Difficulty Box
     let x = screen_center_x() - widescale(292.5, 342.5);
     let y = 56.0;
-    let difficulty_index = color::FILE_DIFFICULTY_NAMES
-        .iter()
-        .position(|&name| name.eq_ignore_ascii_case(&state.chart.difficulty))
-        .unwrap_or(2);
-    let difficulty_color_index = state.active_color_index - (4 - difficulty_index) as i32;
-    let difficulty_color = color::simply_love_rgba(difficulty_color_index);
+    let difficulty_color = color::difficulty_rgba(&state.chart.difficulty, state.active_color_index);
     let meter_text = state.chart.meter.to_string();
     actors.push(Actor::Frame {
         align: [0.5, 0.5],

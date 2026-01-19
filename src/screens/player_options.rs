@@ -73,6 +73,7 @@ pub struct SpeedMod {
 
 pub struct State {
     pub song: Arc<SongData>,
+    pub chart_steps_index: usize,
     pub chart_difficulty_index: usize,
     pub rows: Vec<Row>,
     pub selected_row: usize,
@@ -179,7 +180,8 @@ fn what_comes_next_choices(pane: OptionsPane) -> Vec<String> {
 fn build_main_rows(
     song: &SongData,
     speed_mod: &SpeedMod,
-    selected_difficulty_index: usize,
+    chart_steps_index: usize,
+    preferred_difficulty_index: usize,
     session_music_rate: f32,
 ) -> Vec<Row> {
     let speed_mod_value_str = match speed_mod.mod_type.as_str() {
@@ -189,7 +191,7 @@ fn build_main_rows(
         _ => "".to_string(),
     };
     // Build Stepchart choices from the song's charts for the current play style, ordered
-    // Beginner..Challenge.
+    // Beginner..Challenge, then Edit charts.
     let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
     let mut stepchart_choices: Vec<String> = Vec::with_capacity(5);
     let mut stepchart_choice_indices: Vec<usize> = Vec::with_capacity(5);
@@ -197,21 +199,35 @@ fn build_main_rows(
         if let Some(chart) = song.charts.iter().find(|c| {
             c.chart_type.eq_ignore_ascii_case(target_chart_type)
                 && c.difficulty.eq_ignore_ascii_case(file_name)
+                && !c.notes.is_empty()
         }) {
             let display_name = crate::ui::color::DISPLAY_DIFFICULTY_NAMES[i];
             stepchart_choices.push(format!("{} {}", display_name, chart.meter));
             stepchart_choice_indices.push(i);
         }
     }
+    for (i, chart) in crate::screens::select_music::edit_charts_sorted(song, target_chart_type)
+        .into_iter()
+        .enumerate()
+    {
+        let desc = chart.description.trim();
+        if desc.is_empty() {
+            stepchart_choices.push(format!("Edit {}", chart.meter));
+        } else {
+            stepchart_choices.push(format!("Edit {} {}", desc, chart.meter));
+        }
+        stepchart_choice_indices.push(crate::ui::color::FILE_DIFFICULTY_NAMES.len() + i);
+    }
     // Fallback if none found (defensive; SelectMusic filters songs by play style).
     if stepchart_choices.is_empty() {
         stepchart_choices.push("(Current)".to_string());
         stepchart_choice_indices
-            .push(selected_difficulty_index.min(crate::ui::color::FILE_DIFFICULTY_NAMES.len() - 1));
+            .push(preferred_difficulty_index.min(crate::ui::color::FILE_DIFFICULTY_NAMES.len() - 1));
     }
     let initial_stepchart_choice_index = stepchart_choice_indices
         .iter()
-        .position(|&idx| idx == selected_difficulty_index)
+        .position(|&idx| idx == chart_steps_index)
+        .or_else(|| stepchart_choice_indices.iter().position(|&idx| idx == preferred_difficulty_index))
         .unwrap_or(0);
     vec![
         Row {
@@ -827,7 +843,8 @@ fn build_uncommon_rows() -> Vec<Row> {
 fn build_rows(
     song: &SongData,
     speed_mod: &SpeedMod,
-    selected_difficulty_index: usize,
+    chart_steps_index: usize,
+    preferred_difficulty_index: usize,
     session_music_rate: f32,
     pane: OptionsPane,
 ) -> Vec<Row> {
@@ -835,7 +852,8 @@ fn build_rows(
         OptionsPane::Main => build_main_rows(
             song,
             speed_mod,
-            selected_difficulty_index,
+            chart_steps_index,
+            preferred_difficulty_index,
             session_music_rate,
         ),
         OptionsPane::Advanced => build_advanced_rows(),
@@ -1003,7 +1021,12 @@ fn apply_profile_defaults(rows: &mut [Row]) -> (u8, u8) {
     (scroll_active_mask, fa_plus_active_mask)
 }
 
-pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_index: i32) -> State {
+pub fn init(
+    song: Arc<SongData>,
+    chart_steps_index: usize,
+    preferred_difficulty_index: usize,
+    active_color_index: i32,
+) -> State {
     let session_music_rate = crate::game::profile::get_session_music_rate();
     let profile = crate::game::profile::get();
     let speed_mod = match profile.scroll_speed {
@@ -1020,9 +1043,16 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
             value: bpm,
         },
     };
+    let mut chart_difficulty_index = preferred_difficulty_index
+        .min(crate::ui::color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
+    if chart_steps_index < crate::ui::color::FILE_DIFFICULTY_NAMES.len() {
+        chart_difficulty_index = chart_steps_index;
+    }
+
     let mut rows = build_rows(
         &song,
         &speed_mod,
+        chart_steps_index,
         chart_difficulty_index,
         session_music_rate,
         OptionsPane::Main,
@@ -1049,6 +1079,7 @@ pub fn init(song: Arc<SongData>, chart_difficulty_index: usize, active_color_ind
         .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok());
     State {
         song,
+        chart_steps_index,
         chart_difficulty_index,
         rows,
         selected_row: 0,
@@ -1371,11 +1402,14 @@ fn change_choice(state: &mut State, delta: isize) {
                         noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok()
                     });
             } else if row.name == "Stepchart" {
-                // Update the state's difficulty index to match the newly selected choice
+                // Update the state's selected chart index (Beginner..Challenge, then Edit).
                 if let Some(diff_indices) = &row.choice_difficulty_indices
                     && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index)
                 {
-                    state.chart_difficulty_index = difficulty_idx;
+                    state.chart_steps_index = difficulty_idx;
+                    if difficulty_idx < crate::ui::color::FILE_DIFFICULTY_NAMES.len() {
+                        state.chart_difficulty_index = difficulty_idx;
+                    }
                 }
             }
             audio::play_sfx("assets/sounds/change_value.ogg");
@@ -1637,6 +1671,7 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     let mut rows = build_rows(
         &state.song,
         &state.speed_mod,
+        state.chart_steps_index,
         state.chart_difficulty_index,
         state.music_rate,
         pane,

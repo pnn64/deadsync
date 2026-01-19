@@ -7,6 +7,7 @@ use rssp::stats::ArrowStats;
 pub struct ChartData {
     pub chart_type: String,
     pub difficulty: String,
+    pub description: String,
     pub meter: u32,
     pub step_artist: String,
     pub notes: Vec<u8>, // This is the minimized raw data we will parse

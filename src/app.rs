@@ -57,6 +57,7 @@ enum Command {
     UpdatePreferredDifficulty(usize),
     UpdateLastPlayed {
         music_path: Option<PathBuf>,
+        chart_hash: Option<String>,
         difficulty_index: usize,
     },
 }
@@ -208,7 +209,7 @@ impl ScreensState {
         let mut select_music_state = select_music::init();
         select_music_state.active_color_index = color_index;
         select_music_state.preferred_difficulty_index = preferred_difficulty_index;
-        select_music_state.selected_difficulty_index = preferred_difficulty_index;
+        select_music_state.selected_steps_index = preferred_difficulty_index;
 
         let mut select_style_state = select_style::init();
         select_style_state.active_color_index = color_index;
@@ -419,7 +420,7 @@ impl App {
                 self.state.screens.select_music_state = select_music::init();
                 self.state.screens.select_music_state.active_color_index = current_color_index;
                 self.state.screens.select_music_state.preferred_difficulty_index = preferred;
-                self.state.screens.select_music_state.selected_difficulty_index = preferred;
+                self.state.screens.select_music_state.selected_steps_index = preferred;
 
                 self.handle_navigation_action(CurrentScreen::SelectColor);
                 Vec::new()
@@ -741,9 +742,14 @@ impl App {
             }
             Command::UpdateLastPlayed {
                 music_path,
+                chart_hash,
                 difficulty_index,
             } => {
-                profile::update_last_played(music_path.as_deref(), difficulty_index);
+                profile::update_last_played(
+                    music_path.as_deref(),
+                    chart_hash.as_deref(),
+                    difficulty_index,
+                );
             }
         }
         Ok(())
@@ -1630,20 +1636,25 @@ impl App {
                     profile::PlayStyle::Double => 2,
                 };
         } else if target == CurrentScreen::PlayerOptions {
-            let (song_arc, chart_difficulty_index) = {
+            let (song_arc, chart_steps_index, preferred_difficulty_index) = {
                 let sm_state = &self.state.screens.select_music_state;
                 let entry = sm_state.entries.get(sm_state.selected_index).unwrap();
                 let song = match entry {
                     select_music::MusicWheelEntry::Song(s) => s,
                     _ => panic!("Cannot open player options on a pack header"),
                 };
-                (song.clone(), sm_state.selected_difficulty_index)
+                (
+                    song.clone(),
+                    sm_state.selected_steps_index,
+                    sm_state.preferred_difficulty_index,
+                )
             };
 
             let color_index = self.state.screens.select_music_state.active_color_index;
             self.state.screens.player_options_state = Some(player_options::init(
                 song_arc,
-                chart_difficulty_index,
+                chart_steps_index,
+                preferred_difficulty_index,
                 color_index,
             ));
         }
@@ -1658,28 +1669,24 @@ impl App {
         if target == CurrentScreen::Gameplay {
             if let Some(po_state) = self.state.screens.player_options_state.take() {
                 let song_arc = po_state.song;
-                let chart_difficulty_index = po_state.chart_difficulty_index;
-                let difficulty_name = color::FILE_DIFFICULTY_NAMES[chart_difficulty_index];
                 let target_chart_type = profile::get_session_play_style().chart_type();
-                let chart_ref = song_arc
-                    .charts
-                    .iter()
-                    .find(|c| {
-                        c.chart_type.eq_ignore_ascii_case(target_chart_type)
-                            && c.difficulty.eq_ignore_ascii_case(difficulty_name)
-                    })
-                    .or_else(|| {
-                        song_arc
-                            .charts
-                            .iter()
-                            .find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name))
-                    })
-                    .expect("No chart found for selected difficulty");
+                let chart_ref = select_music::chart_for_steps_index(
+                    &song_arc,
+                    target_chart_type,
+                    po_state.chart_steps_index,
+                )
+                .expect("No chart found for selected stepchart");
                 let chart = Arc::new(chart_ref.clone());
+
+                // Keep SelectMusic's current stepchart in sync with what we're about to play.
+                self.state.screens.select_music_state.preferred_difficulty_index =
+                    po_state.chart_difficulty_index;
+                self.state.screens.select_music_state.selected_steps_index = po_state.chart_steps_index;
 
                 commands.push(Command::UpdateLastPlayed {
                     music_path: song_arc.music_path.clone(),
-                    difficulty_index: chart_difficulty_index,
+                    chart_hash: Some(chart_ref.short_hash.clone()),
+                    difficulty_index: po_state.chart_difficulty_index,
                 });
 
                 let color_index = po_state.active_color_index;
@@ -1744,10 +1751,14 @@ impl App {
                         .screens
                         .select_music_state
                         .preferred_difficulty_index = preferred;
-                    self.state
+
+                    let desired_steps_index = self
+                        .state
                         .screens
-                        .select_music_state
-                        .selected_difficulty_index = preferred;
+                        .player_options_state
+                        .as_ref()
+                        .map_or(preferred, |po| po.chart_steps_index);
+                    self.state.screens.select_music_state.selected_steps_index = desired_steps_index;
 
                     if let Some(select_music::MusicWheelEntry::Song(song)) = self
                         .state
@@ -1756,22 +1767,28 @@ impl App {
                         .entries
                         .get(self.state.screens.select_music_state.selected_index)
                     {
-                        let mut best_match_index = None;
-                        let mut min_diff = i32::MAX;
-                        for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
-                            if select_music::is_difficulty_playable(song, i) {
-                                let diff = (i as i32 - preferred as i32).abs();
-                                if diff < min_diff {
-                                    min_diff = diff;
-                                    best_match_index = Some(i);
+                        let chart_type = profile::get_session_play_style().chart_type();
+                        if select_music::chart_for_steps_index(
+                            song,
+                            chart_type,
+                            desired_steps_index,
+                        )
+                        .is_none()
+                        {
+                            let mut best_match_index = None;
+                            let mut min_diff = i32::MAX;
+                            for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
+                                if select_music::is_difficulty_playable(song, i) {
+                                    let diff = (i as i32 - preferred as i32).abs();
+                                    if diff < min_diff {
+                                        min_diff = diff;
+                                        best_match_index = Some(i);
+                                    }
                                 }
                             }
-                        }
-                        if let Some(idx) = best_match_index {
-                            self.state
-                                .screens
-                                .select_music_state
-                                .selected_difficulty_index = idx;
+                            if let Some(idx) = best_match_index {
+                                self.state.screens.select_music_state.selected_steps_index = idx;
+                            }
                         }
                     }
 
@@ -1792,7 +1809,7 @@ impl App {
                     self.state
                         .screens
                         .select_music_state
-                        .selected_difficulty_index = self.state.session.preferred_difficulty_index;
+                        .selected_steps_index = self.state.session.preferred_difficulty_index;
                     self.state
                         .screens
                         .select_music_state
@@ -1834,15 +1851,15 @@ impl App {
                 .entries
                 .get(self.state.screens.select_music_state.selected_index)
             {
-                Some(select_music::MusicWheelEntry::Song(song)) => color::FILE_DIFFICULTY_NAMES
-                    .get(self.state.screens.select_music_state.selected_difficulty_index)
-                    .copied()
-                    .and_then(|difficulty_name| {
-                        song.charts
-                            .iter()
-                            .find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name))
-                            .cloned()
-                    }),
+                Some(select_music::MusicWheelEntry::Song(song)) => {
+                    let chart_type = profile::get_session_play_style().chart_type();
+                    select_music::chart_for_steps_index(
+                        song,
+                        chart_type,
+                        self.state.screens.select_music_state.selected_steps_index,
+                    )
+                    .cloned()
+                }
                 _ => None,
             };
             commands.push(Command::SetDensityGraph(chart_to_graph));

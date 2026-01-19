@@ -347,6 +347,7 @@ impl From<CachedParsedNote> for ParsedNote {
 struct SerializableChartData {
     chart_type: String,
     difficulty: String,
+    description: String,
     meter: u32,
     step_artist: String,
     notes: Vec<u8>,
@@ -378,6 +379,7 @@ impl From<&ChartData> for SerializableChartData {
         Self {
             chart_type: chart.chart_type.clone(),
             difficulty: chart.difficulty.clone(),
+            description: chart.description.clone(),
             meter: chart.meter,
             step_artist: chart.step_artist.clone(),
             notes: chart.notes.clone(),
@@ -415,6 +417,7 @@ impl From<SerializableChartData> for ChartData {
         Self {
             chart_type: chart.chart_type,
             difficulty: chart.difficulty,
+            description: chart.description,
             meter: chart.meter,
             step_artist: chart.step_artist,
             notes: chart.notes,
@@ -1363,6 +1366,7 @@ fn parse_and_process_song_file(path: &Path, need_hash: bool) -> Result<(SongData
             ChartData {
                 chart_type: c.step_type_str,
                 difficulty: c.difficulty_str,
+                description: c.description_str,
                 meter: c.rating_str.parse().unwrap_or(0),
                 step_artist: c.step_artist_str,
                 notes: c.minimized_note_data,

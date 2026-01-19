@@ -69,7 +69,7 @@ pub struct MusicWheelParams<'a> {
     pub selection_animation_timer: f32,
     pub pack_song_counts: &'a HashMap<String, usize>,
     pub preferred_difficulty_index: usize,
-    pub selected_difficulty_index: usize,
+    pub selected_steps_index: usize,
 }
 
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
@@ -299,20 +299,21 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                 if let Some(MusicWheelEntry::Song(info)) = p.entries.get(list_index) {
                     // For the selected item, use the *actual* selected difficulty.
                     // For all other items, use the player's *preferred* difficulty.
-                    let difficulty_index_to_check = if is_selected_slot {
-                        p.selected_difficulty_index
+                    let chart = if is_selected_slot {
+                        crate::screens::select_music::chart_for_steps_index(
+                            info,
+                            target_chart_type,
+                            p.selected_steps_index,
+                        )
                     } else {
-                        p.preferred_difficulty_index
+                        crate::screens::select_music::chart_for_steps_index(
+                            info,
+                            target_chart_type,
+                            p.preferred_difficulty_index,
+                        )
                     };
 
-                    let difficulty_name =
-                        crate::ui::color::FILE_DIFFICULTY_NAMES[difficulty_index_to_check];
-
-                    if let Some(chart) = info
-                        .charts
-                        .iter()
-                        .find(|c| c.difficulty.eq_ignore_ascii_case(difficulty_name))
-                    {
+                    if let Some(chart) = chart {
                         if let Some(cached_score) = scores::get_cached_score(&chart.short_hash) {
                             let has_score = cached_score.grade != scores::Grade::Failed
                                 || cached_score.score_percent > 0.0;

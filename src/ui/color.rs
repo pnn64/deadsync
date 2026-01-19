@@ -101,9 +101,15 @@ pub const FILE_DIFFICULTY_NAMES: [&str; 5] = ["Beginner", "Easy", "Medium", "Har
 /// Difficulty names as they should be displayed in the UI.
 pub const DISPLAY_DIFFICULTY_NAMES: [&str; 5] = ["Beginner", "Easy", "Medium", "Hard", "Expert"];
 
+/// Simply Love Edit chart color override.
+pub const EDIT_DIFFICULTY_HEX: &str = "#B4B7BA";
+
 /// Returns the Simply Love color for a given difficulty, based on an active theme color index.
 #[inline(always)]
 pub fn difficulty_rgba(difficulty_name: &str, active_color_index: i32) -> [f32; 4] {
+    if difficulty_name.eq_ignore_ascii_case("edit") {
+        return rgba_hex(EDIT_DIFFICULTY_HEX);
+    }
     let difficulty_index = FILE_DIFFICULTY_NAMES
         .iter()
         .position(|&name| name.eq_ignore_ascii_case(difficulty_name))

@@ -408,6 +408,7 @@ pub struct Profile {
     // reopen on the last song+difficulty the player actually played.
     // Stored as a serialized music file path and a raw difficulty index.
     pub last_song_music_path: Option<String>,
+    pub last_chart_hash: Option<String>,
     pub last_difficulty_index: usize,
 }
 
@@ -436,6 +437,7 @@ impl Default for Profile {
             note_field_offset_x: 0,
             note_field_offset_y: 0,
             last_song_music_path: None,
+            last_chart_hash: None,
             // Mirror FILE_DIFFICULTY_NAMES[2] ("Medium") as the default.
             last_difficulty_index: 2,
         }
@@ -647,6 +649,11 @@ fn save_profile_ini() {
     } else {
         content.push_str("MusicPath=\n");
     }
+    if let Some(hash) = &profile.last_chart_hash {
+        content.push_str(&format!("ChartHash={}\n", hash));
+    } else {
+        content.push_str("ChartHash=\n");
+    }
     content.push_str(&format!(
         "DifficultyIndex={}\n",
         profile.last_difficulty_index
@@ -801,6 +808,18 @@ pub fn load() {
             // Optional last-played section: if missing, fall back to defaults.
             profile.last_song_music_path = profile_conf
                 .get("LastPlayed", "MusicPath")
+                .map(|s| {
+                    let trimmed = s.trim();
+                    if trimmed.is_empty() {
+                        None
+                    } else {
+                        Some(trimmed.to_string())
+                    }
+                })
+                .unwrap_or(None);
+
+            profile.last_chart_hash = profile_conf
+                .get("LastPlayed", "ChartHash")
                 .map(|s| {
                     let trimmed = s.trim();
                     if trimmed.is_empty() {
@@ -977,13 +996,18 @@ pub fn set_session_play_style(style: PlayStyle) {
 
 /// Persist the last played song and difficulty to the on-disk profile.
 /// The caller is responsible for clamping difficulty indices to a valid range.
-pub fn update_last_played(music_path: Option<&Path>, difficulty_index: usize) {
+pub fn update_last_played(music_path: Option<&Path>, chart_hash: Option<&str>, difficulty_index: usize) {
     let new_path = music_path.map(|p| p.to_string_lossy().into_owned());
+    let new_hash = chart_hash.map(str::to_string);
     {
         let mut profile = PROFILE.lock().unwrap();
         let mut changed = false;
         if profile.last_song_music_path != new_path {
             profile.last_song_music_path = new_path;
+            changed = true;
+        }
+        if profile.last_chart_hash != new_hash {
+            profile.last_chart_hash = new_hash;
             changed = true;
         }
         if profile.last_difficulty_index != difficulty_index {
