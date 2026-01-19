@@ -300,7 +300,9 @@ fn rebuild_displayed_entries(state: &mut State) {
         }
     }
     state.entries = new_entries;
-    state.wheel_offset_from_selection = 0.0;
+    if state.entries.is_empty() {
+        state.wheel_offset_from_selection = 0.0;
+    }
 }
 
 pub fn init() -> State {
@@ -636,6 +638,8 @@ pub fn handle_pad_button(state: &mut State, btn: PadButton, pressed: bool) -> Sc
     }
     match btn {
         PadButton::Confirm => {
+            state.nav_key_held_direction = None;
+            state.nav_key_held_since = None;
             if state.entries.is_empty() {
                 audio::play_sfx("assets/sounds/expand.ogg");
                 return ScreenAction::None;
@@ -656,6 +660,7 @@ pub fn handle_pad_button(state: &mut State, btn: PadButton, pressed: bool) -> Sc
                     } else {
                         state.selected_index = 0;
                     }
+                    state.prev_selected_index = state.selected_index;
                     state.time_since_selection_change = 0.0;
                     ScreenAction::None
                 }
