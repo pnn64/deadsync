@@ -75,6 +75,7 @@ pub struct MusicWheelParams<'a> {
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let mut actors = Vec::new();
     let translated_titles = crate::config::get().translated_titles;
+    let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
 
     const WHEEL_WIDTH_DIVISOR: f32 = 2.125;
     let num_visible_items = NUM_VISIBLE_WHEEL_ITEMS;
@@ -142,7 +143,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                 match p.entries.get(list_index) {
                     Some(MusicWheelEntry::Song(info)) => {
                         let has_edit = info.charts.iter().any(|c| {
-                            c.chart_type.eq_ignore_ascii_case("dance-single")
+                            c.chart_type.eq_ignore_ascii_case(target_chart_type)
                                 && c.difficulty.eq_ignore_ascii_case("edit")
                                 && !c.notes.is_empty()
                         });

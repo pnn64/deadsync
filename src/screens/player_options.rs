@@ -188,12 +188,14 @@ fn build_main_rows(
         "M" => format!("M{}", speed_mod.value as i32),
         _ => "".to_string(),
     };
-    // Build Stepchart choices from the song's dance-single charts, ordered Beginner..Challenge
+    // Build Stepchart choices from the song's charts for the current play style, ordered
+    // Beginner..Challenge.
+    let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
     let mut stepchart_choices: Vec<String> = Vec::with_capacity(5);
     let mut stepchart_choice_indices: Vec<usize> = Vec::with_capacity(5);
     for (i, file_name) in crate::ui::color::FILE_DIFFICULTY_NAMES.iter().enumerate() {
         if let Some(chart) = song.charts.iter().find(|c| {
-            c.chart_type.eq_ignore_ascii_case("dance-single")
+            c.chart_type.eq_ignore_ascii_case(target_chart_type)
                 && c.difficulty.eq_ignore_ascii_case(file_name)
         }) {
             let display_name = crate::ui::color::DISPLAY_DIFFICULTY_NAMES[i];
@@ -201,7 +203,7 @@ fn build_main_rows(
             stepchart_choice_indices.push(i);
         }
     }
-    // Fallback if none found (defensive; SelectMusic filters to dance-single songs)
+    // Fallback if none found (defensive; SelectMusic filters songs by play style).
     if stepchart_choices.is_empty() {
         stepchart_choices.push("(Current)".to_string());
         stepchart_choice_indices

@@ -460,6 +460,15 @@ pub enum PlayStyle {
     Double,
 }
 
+impl PlayStyle {
+    pub const fn chart_type(self) -> &'static str {
+        match self {
+            PlayStyle::Single | PlayStyle::Versus => "dance-single",
+            PlayStyle::Double => "dance-double",
+        }
+    }
+}
+
 #[derive(Debug)]
 struct SessionState {
     active_profile: ActiveProfile,

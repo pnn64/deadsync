@@ -274,8 +274,9 @@ pub(crate) fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usi
         return false;
     }
     let target_difficulty_name = color::FILE_DIFFICULTY_NAMES[difficulty_index];
+    let target_chart_type = profile::get_session_play_style().chart_type();
     song.charts.iter().any(|c| {
-        c.chart_type.eq_ignore_ascii_case("dance-single")
+        c.chart_type.eq_ignore_ascii_case(target_chart_type)
             && c.difficulty.eq_ignore_ascii_case(target_difficulty_name)
             && !c.notes.is_empty()
     })
@@ -310,6 +311,7 @@ pub fn init() -> State {
     let song_cache = get_song_cache();
     let mut all_entries = Vec::with_capacity(song_cache.len() * 10); // Heuristic alloc
     let mut pack_song_counts = HashMap::with_capacity(song_cache.len());
+    let target_chart_type = profile::get_session_play_style().chart_type();
 
     let profile_data = profile::get();
     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
@@ -324,20 +326,20 @@ pub fn init() -> State {
 
     // Filter and build entries in one pass
     for (i, pack) in song_cache.iter().enumerate() {
-        let single_dance_songs: Vec<Arc<SongData>> = pack
+        let style_songs: Vec<Arc<SongData>> = pack
             .songs
             .iter()
             .filter(|song| {
                 song.charts
                     .iter()
-                    .any(|c| c.chart_type.eq_ignore_ascii_case("dance-single"))
+                    .any(|c| c.chart_type.eq_ignore_ascii_case(target_chart_type))
             })
             .cloned()
             .collect();
 
-        if !single_dance_songs.is_empty() {
+        if !style_songs.is_empty() {
             // Compute cache for get_actors (HOT PATH OPTIMIZATION)
-            pack_song_counts.insert(pack.name.clone(), single_dance_songs.len());
+            pack_song_counts.insert(pack.name.clone(), style_songs.len());
 
             all_entries.push(MusicWheelEntry::PackHeader {
                 name: pack.name.clone(),
@@ -348,7 +350,7 @@ pub fn init() -> State {
             // Check for last played song
             if let Some(last_path) = profile_data.last_song_music_path.as_deref() {
                 if last_song_arc.is_none() {
-                    for song in &single_dance_songs {
+                    for song in &style_songs {
                         if song
                             .music_path
                             .as_ref()
@@ -361,7 +363,7 @@ pub fn init() -> State {
                 }
             }
 
-            for song in single_dance_songs {
+            for song in style_songs {
                 all_entries.push(MusicWheelEntry::Song(song));
             }
         }
@@ -676,10 +678,11 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         return ScreenAction::None;
     }
     if let winit::keyboard::PhysicalKey::Code(KeyCode::F7) = key.physical_key {
+        let target_chart_type = profile::get_session_play_style().chart_type();
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
             let difficulty_name = color::FILE_DIFFICULTY_NAMES[state.selected_difficulty_index];
             if let Some(chart) = song.charts.iter().find(|c| {
-                c.chart_type.eq_ignore_ascii_case("dance-single")
+                c.chart_type.eq_ignore_ascii_case(target_chart_type)
                     && c.difficulty.eq_ignore_ascii_case(difficulty_name)
             }) {
                 return ScreenAction::FetchOnlineGrade(chart.short_hash.clone());
@@ -804,11 +807,12 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         }
 
         let chart_disp = selected_song.as_ref().and_then(|song| {
+            let target_chart_type = profile::get_session_play_style().chart_type();
             let diff_name = color::FILE_DIFFICULTY_NAMES[state.selected_difficulty_index];
             song.charts
                 .iter()
                 .find(|c| {
-                    c.chart_type.eq_ignore_ascii_case("dance-single")
+                    c.chart_type.eq_ignore_ascii_case(target_chart_type)
                         && c.difficulty.eq_ignore_ascii_case(diff_name)
                 })
                 .cloned()
@@ -859,12 +863,13 @@ pub fn reset_preview_after_gameplay(state: &mut State) {
 
 pub fn prime_displayed_chart_data(state: &mut State) {
     if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
+        let target_chart_type = profile::get_session_play_style().chart_type();
         if let Some(&diff) = color::FILE_DIFFICULTY_NAMES.get(state.selected_difficulty_index) {
             state.displayed_chart_data = song
                 .charts
                 .iter()
                 .find(|c| {
-                    c.chart_type.eq_ignore_ascii_case("dance-single")
+                    c.chart_type.eq_ignore_ascii_case(target_chart_type)
                         && c.difficulty.eq_ignore_ascii_case(diff)
                 })
                 .cloned()
@@ -902,6 +907,7 @@ fn format_chart_length(seconds: i32) -> String {
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     let profile = profile::get();
+    let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
 
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
@@ -1046,7 +1052,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         Some(MusicWheelEntry::Song(s)) => {
             let diff = color::FILE_DIFFICULTY_NAMES[state.selected_difficulty_index];
             s.charts.iter().find(|c| {
-                c.chart_type.eq_ignore_ascii_case("dance-single")
+                c.chart_type.eq_ignore_ascii_case(target_chart_type)
                     && c.difficulty.eq_ignore_ascii_case(diff)
             })
         }
@@ -1294,7 +1300,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 s.charts
                     .iter()
                     .find(|c| {
-                        c.chart_type.eq_ignore_ascii_case("dance-single")
+                        c.chart_type.eq_ignore_ascii_case(target_chart_type)
                             && c.difficulty.eq_ignore_ascii_case(n)
                     })
                     .map(|c| c.meter)

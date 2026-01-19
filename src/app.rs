@@ -1660,11 +1660,12 @@ impl App {
                 let song_arc = po_state.song;
                 let chart_difficulty_index = po_state.chart_difficulty_index;
                 let difficulty_name = color::FILE_DIFFICULTY_NAMES[chart_difficulty_index];
+                let target_chart_type = profile::get_session_play_style().chart_type();
                 let chart_ref = song_arc
                     .charts
                     .iter()
                     .find(|c| {
-                        c.chart_type.eq_ignore_ascii_case("dance-single")
+                        c.chart_type.eq_ignore_ascii_case(target_chart_type)
                             && c.difficulty.eq_ignore_ascii_case(difficulty_name)
                     })
                     .or_else(|| {
