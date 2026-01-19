@@ -8,7 +8,7 @@ use crate::core::space::{
 use crate::game::chart::ChartData;
 use crate::game::profile;
 use crate::game::scores;
-use crate::game::song::{get_song_cache, SongData};
+use crate::game::song::{SongData, get_song_cache};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -37,14 +37,18 @@ static UI_BOX_BG_COLOR: LazyLock<[f32; 4]> = LazyLock::new(|| color::rgba_hex("#
 
 // --- Timing & Logic Constants ---
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
-const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(200);
-const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(40);
+// ITGmania WheelBase::Move() uses `m_TimeBeforeMovingBegins = 1/4.0f` before auto-scrolling.
+const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
 const PREVIEW_DELAY_SECONDS: f32 = 0.25;
 const PREVIEW_FADE_OUT_SECONDS: f64 = 1.5;
 const DEFAULT_PREVIEW_LENGTH: f64 = 12.0;
 
 const MUSIC_WHEEL_SWITCH_SECONDS: f32 = 0.10;
 const MUSIC_WHEEL_SETTLE_MIN_SPEED: f32 = 0.2;
+// ITGmania PrefsManager default: MusicWheelSwitchSpeed=15.
+const MUSIC_WHEEL_HOLD_SPIN_SPEED: f32 = 15.0;
+// ITGmania WheelBase::MoveSpecific(): if |offset| < 0.25 then one more move for spin-down.
+const MUSIC_WHEEL_STOP_SPINDOWN_THRESHOLD: f32 = 0.25;
 
 // --- Preview helpers ---
 fn sec_at_beat_from_bpms(normalized_bpms: &str, target_beat: f64) -> f64 {
@@ -257,7 +261,6 @@ pub struct State {
     last_difficulty_nav_time: Option<Instant>,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
-    nav_key_last_scrolled_at: Option<Instant>,
     currently_playing_preview_path: Option<PathBuf>,
     prev_selected_index: usize,
     time_since_selection_change: f32,
@@ -382,7 +385,6 @@ pub fn init() -> State {
         last_difficulty_nav_time: None,
         nav_key_held_direction: None,
         nav_key_held_since: None,
-        nav_key_last_scrolled_at: None,
         currently_playing_preview_path: None,
         session_elapsed: 0.0,
         prev_selected_index: 0,
@@ -438,33 +440,71 @@ fn music_wheel_settle_offset(state: &mut State, dt: f32) {
     }
 }
 
-pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAction {
+#[inline(always)]
+fn music_wheel_change(state: &mut State, dist: isize) {
+    if dist == 0 {
+        return;
+    }
     let num_entries = state.entries.len();
+    if num_entries == 0 {
+        state.selected_index = 0;
+        state.wheel_offset_from_selection = 0.0;
+        state.time_since_selection_change = 0.0;
+        return;
+    }
+
+    if dist > 0 {
+        state.selected_index = (state.selected_index + 1) % num_entries;
+        state.wheel_offset_from_selection += 1.0;
+    } else if dist < 0 {
+        state.selected_index = (state.selected_index + num_entries - 1) % num_entries;
+        state.wheel_offset_from_selection -= 1.0;
+    }
+    state.time_since_selection_change = 0.0;
+}
+
+#[inline(always)]
+fn music_wheel_update_hold_scroll(state: &mut State, dt: f32, dir: NavDirection) {
+    if dt <= 0.0 {
+        return;
+    }
+
+    let moving = match dir {
+        NavDirection::Left => -1.0,
+        NavDirection::Right => 1.0,
+    };
+
+    state.wheel_offset_from_selection -= MUSIC_WHEEL_HOLD_SPIN_SPEED * moving * dt;
+    state.wheel_offset_from_selection = state.wheel_offset_from_selection.clamp(-1.0, 1.0);
+
+    let off = state.wheel_offset_from_selection;
+    let passed_selection = (moving < 0.0 && off >= 0.0) || (moving > 0.0 && off <= 0.0);
+    if !passed_selection {
+        return;
+    }
+
+    let dist = if moving < 0.0 { -1 } else { 1 };
+    music_wheel_change(state, dist);
+}
+
+pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAction {
     if pressed {
         match dir {
             PadDir::Right => {
-                state.selected_index = if num_entries > 0 {
-                    (state.selected_index + 1) % num_entries
-                } else {
-                    0
-                };
-                state.wheel_offset_from_selection += 1.0;
+                if state.nav_key_held_direction == Some(NavDirection::Right) {
+                    return ScreenAction::None;
+                }
+                music_wheel_change(state, 1);
                 state.nav_key_held_direction = Some(NavDirection::Right);
                 state.nav_key_held_since = Some(Instant::now());
-                state.nav_key_last_scrolled_at = Some(Instant::now());
-                state.time_since_selection_change = 0.0;
             }
             PadDir::Left => {
-                state.selected_index = if num_entries > 0 {
-                    (state.selected_index + num_entries - 1) % num_entries
-                } else {
-                    0
-                };
-                state.wheel_offset_from_selection -= 1.0;
+                if state.nav_key_held_direction == Some(NavDirection::Left) {
+                    return ScreenAction::None;
+                }
+                music_wheel_change(state, -1);
                 state.nav_key_held_direction = Some(NavDirection::Left);
                 state.nav_key_held_since = Some(Instant::now());
-                state.nav_key_last_scrolled_at = Some(Instant::now());
-                state.time_since_selection_change = 0.0;
             }
             PadDir::Up | PadDir::Down => {
                 if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
@@ -553,9 +593,37 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
             PadDir::Down => {
                 state.active_chord_keys.remove(&KeyCode::ArrowDown);
             }
-            PadDir::Left | PadDir::Right => {
-                state.nav_key_held_direction = None;
-                state.nav_key_held_since = None;
+            PadDir::Left => {
+                if state.nav_key_held_direction == Some(NavDirection::Left) {
+                    let now = Instant::now();
+                    let moving_started = state
+                        .nav_key_held_since
+                        .is_some_and(|t| now.duration_since(t) >= NAV_INITIAL_HOLD_DELAY);
+                    if moving_started
+                        && state.wheel_offset_from_selection.abs()
+                            < MUSIC_WHEEL_STOP_SPINDOWN_THRESHOLD
+                    {
+                        music_wheel_change(state, -1);
+                    }
+                    state.nav_key_held_direction = None;
+                    state.nav_key_held_since = None;
+                }
+            }
+            PadDir::Right => {
+                if state.nav_key_held_direction == Some(NavDirection::Right) {
+                    let now = Instant::now();
+                    let moving_started = state
+                        .nav_key_held_since
+                        .is_some_and(|t| now.duration_since(t) >= NAV_INITIAL_HOLD_DELAY);
+                    if moving_started
+                        && state.wheel_offset_from_selection.abs()
+                            < MUSIC_WHEEL_STOP_SPINDOWN_THRESHOLD
+                    {
+                        music_wheel_change(state, 1);
+                    }
+                    state.nav_key_held_direction = None;
+                    state.nav_key_held_since = None;
+                }
             }
         }
     }
@@ -641,34 +709,18 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     if dt > 0.0 {
         state.selection_animation_timer += dt;
     }
-    music_wheel_settle_offset(state, dt);
 
-    // Rapid scrolling
-    if let (Some(dir), Some(held_since), Some(last_scroll)) = (
-        state.nav_key_held_direction.clone(),
-        state.nav_key_held_since,
-        state.nav_key_last_scrolled_at,
-    ) {
-        let now = Instant::now();
-        if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
-            && now.duration_since(last_scroll) >= NAV_REPEAT_SCROLL_INTERVAL
-        {
-            let num = state.entries.len();
-            if num > 0 {
-                match dir {
-                    NavDirection::Left => {
-                        state.selected_index = (state.selected_index + num - 1) % num;
-                        state.wheel_offset_from_selection -= 1.0;
-                    }
-                    NavDirection::Right => {
-                        state.selected_index = (state.selected_index + 1) % num;
-                        state.wheel_offset_from_selection += 1.0;
-                    }
-                }
-                state.nav_key_last_scrolled_at = Some(now);
-                state.time_since_selection_change = 0.0;
-            }
-        }
+    let now = Instant::now();
+    let wheel_moving = state
+        .nav_key_held_since
+        .is_some_and(|t| now.duration_since(t) >= NAV_INITIAL_HOLD_DELAY);
+    if wheel_moving {
+        match state.nav_key_held_direction.clone() {
+            Some(dir) => music_wheel_update_hold_scroll(state, dt, dir),
+            None => music_wheel_settle_offset(state, dt),
+        };
+    } else {
+        music_wheel_settle_offset(state, dt);
     }
 
     if state.selected_index != state.prev_selected_index {
