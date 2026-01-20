@@ -677,9 +677,6 @@ fn push_scroller_frame(
         let choice = &choices[idx_i as usize];
         let y = frame_cy + d as f32 * ROW_H;
 
-        let a = if d == 0 { 1.0 } else { 0.8 };
-        let text_color = [1.0, 1.0, 1.0, 1.0];
-
         out.push(act!(text:
             align(0.5, 0.5):
             xy(scroller_cx, y):
@@ -687,7 +684,7 @@ fn push_scroller_frame(
             maxwidth(SCROLLER_W - SCROLLER_TEXT_PAD_X * 2.0):
             zoom(1.0):
             settext(choice.display_name.clone()):
-            diffuse(text_color[0], text_color[1], text_color[2], text_color[3] * inner_alpha * a):
+            diffuse(1.0, 1.0, 1.0, inner_alpha):
             shadowlength(0.5):
             z(103):
             horizalign(center)
