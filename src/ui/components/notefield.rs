@@ -47,6 +47,12 @@ const Z_TAP_NOTE: i32 = 140;
 const MINE_CORE_SIZE_RATIO: f32 = 0.45;
 const MINE_FILL_LAYERS: usize = 32;
 
+#[derive(Clone, Copy, Debug)]
+pub enum FieldPlacement {
+    P1,
+    P2,
+}
+
 #[derive(Clone, Debug)]
 struct MineFillState {
     layers: [[f32; 4]; MINE_FILL_LAYERS],
@@ -74,7 +80,7 @@ fn mine_fill_state(colors: &[[f32; 4]], beat: f32) -> Option<MineFillState> {
     Some(MineFillState { layers })
 }
 
-pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
+pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacement) -> (Vec<Actor>, f32) {
     let mut actors = Vec::new();
     let hold_judgment_texture: Option<&str> = match profile.hold_judgment_graphic {
         profile::HoldJudgmentGraphic::Love => Some("hold_judgements/Love 1x2 (doubleres).png"),
@@ -87,13 +93,44 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
     // Use the cached field_zoom from gameplay state so visual layout and
     // scroll math share the exact same scaling as gameplay.
     let field_zoom = state.field_zoom;
+
+    let player_idx = match placement {
+        FieldPlacement::P1 => 0,
+        FieldPlacement::P2 => 1,
+    };
+    if player_idx >= state.num_players {
+        return (Vec::new(), screen_center_x());
+    }
+    let col_start = player_idx * state.cols_per_player;
+    let col_end = (col_start + state.cols_per_player)
+        .min(state.num_cols)
+        .min(MAX_COLS);
+    let num_cols = col_end.saturating_sub(col_start);
+    if num_cols == 0 {
+        return (Vec::new(), screen_center_x());
+    }
+    let p = &state.players[player_idx];
+
     // NoteFieldOffsetX is stored as a non-negative magnitude; for a single P1-style field,
     // positive values move the field left, mirroring Simply Love's use of a sign flip.
-    let notefield_offset_x = -(profile.note_field_offset_x.clamp(0, 50) as f32);
+    let offset_sign = if state.num_players == 1 {
+        -1.0
+    } else {
+        match placement {
+            FieldPlacement::P1 => -1.0,
+            FieldPlacement::P2 => 1.0,
+        }
+    };
+    let notefield_offset_x = offset_sign * (profile.note_field_offset_x.clamp(0, 50) as f32);
     let notefield_offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
-    let base_playfield_center_x = if state.num_cols > 4 {
+    let base_playfield_center_x = if state.num_players == 2 {
+        match placement {
+            FieldPlacement::P1 => screen_center_x() - (clamped_width * 0.25),
+            FieldPlacement::P2 => screen_center_x() + (clamped_width * 0.25),
+        }
+    } else if state.cols_per_player > 4 {
         screen_center_x()
     } else {
         screen_center_x() - (clamped_width * 0.25)
@@ -107,8 +144,12 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
         .scroll_option
         .contains(profile::ScrollOption::Centered);
     let receptor_y_centered = screen_center_y() + notefield_offset_y;
-    let column_dirs = state.column_scroll_dirs;
-    let num_cols = state.num_cols;
+    let column_dirs: [f32; MAX_COLS] = from_fn(|i| {
+        if i >= num_cols {
+            return 1.0;
+        }
+        state.column_scroll_dirs[col_start + i]
+    });
     let column_receptor_ys: [f32; MAX_COLS] = from_fn(|i| {
         if i >= num_cols {
             return receptor_y_normal;
@@ -207,9 +248,10 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
         };
         // Receptors + glow
         for i in 0..num_cols {
+            let col = col_start + i;
             let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
             let receptor_y_lane = column_receptor_ys[i];
-            let bop_timer = state.receptor_bop_timers[i];
+            let bop_timer = state.receptor_bop_timers[col];
             let bop_zoom = if bop_timer > 0.0 {
                 let t = (0.11 - bop_timer) / 0.11;
                 0.75 + (1.0 - 0.75) * t
@@ -242,7 +284,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
                 ):
                 z(Z_RECEPTOR)
             ));
-            if let Some(hold_slot) = state.active_holds[i]
+            if let Some(hold_slot) = state.active_holds[col]
                 .as_ref()
                 .filter(|active| active_hold_is_engaged(active))
                 .and_then(|active| {
@@ -274,7 +316,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
                     z(Z_HOLD_EXPLOSION)
                 ));
             }
-            let glow_timer = state.receptor_glow_timers[i];
+            let glow_timer = state.receptor_glow_timers[col];
             if glow_timer > 0.0
                 && let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref())
             {
@@ -297,7 +339,8 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
         }
         // Tap explosions
         for i in 0..num_cols {
-            if let Some(active) = state.tap_explosions[i].as_ref()
+            let col = col_start + i;
+            if let Some(active) = state.tap_explosions[col].as_ref()
                 && let Some(explosion) = ns.tap_explosions.get(&active.window)
             {
                 let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
@@ -353,7 +396,8 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
         }
         // Mine explosions
         for i in 0..num_cols {
-            if let Some(active) = state.mine_explosions[i].as_ref() {
+            let col = col_start + i;
+            if let Some(active) = state.mine_explosions[col].as_ref() {
                 let duration = MINE_EXPLOSION_DURATION.max(f32::EPSILON);
                 let progress = (active.elapsed / duration).clamp(0.0, 1.0);
                 let alpha = if progress < 0.5 {
@@ -406,6 +450,10 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
         // This avoids per-frame allocations and hashing for deduping.
         for note_index in (min_visible_index..max_visible_index).chain(extra_hold_indices) {
             let note = &state.notes[note_index];
+            if note.column < col_start || note.column >= col_end {
+                continue;
+            }
+            let local_col = note.column - col_start;
             if !matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
                 continue;
             }
@@ -426,9 +474,9 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
                 head_beat = hold.last_held_beat.clamp(note.beat, hold.end_beat);
             }
 
-            let col_dir = column_dirs[note.column];
+            let col_dir = column_dirs[local_col];
             let dir = col_dir;
-            let lane_receptor_y = column_receptor_ys[note.column];
+            let lane_receptor_y = column_receptor_ys[local_col];
 
             // Compute Y positions: O(1) via cache for static parts, dynamic for moving head
             let head_y = if is_head_dynamic {
@@ -487,7 +535,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
             if bottom <= top {
                 continue;
             }
-            let col_x_offset = ns.column_xs[note.column] as f32 * field_zoom;
+            let col_x_offset = ns.column_xs[local_col] as f32 * field_zoom;
 
             let active_state = state.active_holds[note.column]
                 .as_ref()
@@ -846,7 +894,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
                 && head_y >= lane_receptor_y - state.draw_distance_after_targets
                 && head_y <= lane_receptor_y + state.draw_distance_before_targets
             {
-                let note_idx = note.column * NUM_QUANTIZATIONS + note.quantization_idx as usize;
+                let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 if let Some(note_slot) = ns.notes.get(note_idx) {
                     let frame = note_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
                     let uv = note_slot.uv_for_frame(frame);
@@ -869,7 +917,9 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
             }
         }
         // Active arrows
-        for (col_idx, column_arrows) in state.arrows.iter().enumerate() {
+        for col_idx in 0..num_cols {
+            let col = col_start + col_idx;
+            let column_arrows = &state.arrows[col];
             let dir = column_dirs[col_idx];
             let receptor_y_lane = column_receptor_ys[col_idx];
             for arrow in column_arrows {
@@ -896,12 +946,12 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
                 if delta < -state.draw_distance_after_targets || delta > state.draw_distance_before_targets {
                     continue;
                 }
-                let col_x_offset = ns.column_xs[arrow.column] as f32 * field_zoom;
+                let col_x_offset = ns.column_xs[col_idx] as f32 * field_zoom;
                 if matches!(arrow.note_type, NoteType::Mine) {
-                    let fill_slot = ns.mines.get(arrow.column).and_then(|slot| slot.as_ref());
+                    let fill_slot = ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
                     let frame_slot = ns
                         .mine_frames
-                        .get(arrow.column)
+                        .get(col_idx)
                         .and_then(|slot| slot.as_ref());
                     if fill_slot.is_none() && frame_slot.is_none() {
                         continue;
@@ -922,7 +972,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
                     if let Some(slot) = fill_slot {
                         let fill_gradient = ns
                             .mine_fill_gradients
-                            .get(arrow.column)
+                            .get(col_idx)
                             .and_then(|colors| colors.as_deref());
                         if let Some(fill_state) =
                             fill_gradient.and_then(|colors| mine_fill_state(colors, state.current_beat))
@@ -980,7 +1030,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
                     continue;
                 }
                 let note = &state.notes[arrow.note_index];
-                let note_idx = arrow.column * NUM_QUANTIZATIONS + note.quantization_idx as usize;
+                let note_idx = col_idx * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 if let Some(note_slot) = ns.notes.get(note_idx) {
                     let note_frame =
                         note_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
@@ -999,7 +1049,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
         }
     }
     // Combo Milestone Explosions (100 / 1000 combo)
-    if !state.combo_milestones.is_empty() {
+    if !p.combo_milestones.is_empty() {
         let combo_center_x = playfield_center_x;
         let combo_center_y = if state.reverse_scroll {
             screen_center_y() - COMBO_OFFSET_FROM_CENTER
@@ -1011,7 +1061,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
             let t = t.clamp(0.0, 1.0);
             1.0 - (1.0 - t).powi(2)
         };
-        for milestone in &state.combo_milestones {
+        for milestone in &p.combo_milestones {
             match milestone.kind {
                 ComboMilestoneKind::Hundred => {
                     let elapsed = milestone.elapsed;
@@ -1091,7 +1141,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
         }
     }
     // Combo
-    if state.miss_combo >= SHOW_COMBO_AT {
+    if p.miss_combo >= SHOW_COMBO_AT {
         let combo_y = if is_centered {
             receptor_y_centered + 155.0
         } else if state.reverse_scroll {
@@ -1111,14 +1161,14 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
         };
         if let Some(font_name) = miss_combo_font_name {
             actors.push(act!(text:
-                font(font_name): settext(state.miss_combo.to_string()):
+                font(font_name): settext(p.miss_combo.to_string()):
                 align(0.5, 0.5): xy(playfield_center_x, combo_y):
                 zoom(0.75): horizalign(center): shadowlength(1.0):
                 diffuse(1.0, 0.0, 0.0, 1.0):
                 z(90)
             ));
         }
-    } else if state.combo >= SHOW_COMBO_AT {
+    } else if p.combo >= SHOW_COMBO_AT {
         let combo_y = if is_centered {
             receptor_y_centered + 155.0
         } else if state.reverse_scroll {
@@ -1126,7 +1176,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
         } else {
             screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
         };
-        let (color1, color2) = if let Some(fc_grade) = &state.full_combo_grade {
+        let (color1, color2) = if let Some(fc_grade) = &p.full_combo_grade {
             match fc_grade {
                 JudgeGrade::Fantastic => (color::rgba_hex("#C8FFFF"), color::rgba_hex("#6BF0FF")),
                 JudgeGrade::Excellent => (color::rgba_hex("#FDFFC9"), color::rgba_hex("#FDDB85")),
@@ -1157,7 +1207,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
         };
         if let Some(font_name) = combo_font_name {
             actors.push(act!(text:
-                font(font_name): settext(state.combo.to_string()):
+                font(font_name): settext(p.combo.to_string()):
                 align(0.5, 0.5): xy(playfield_center_x, combo_y):
                 zoom(0.75): horizalign(center): shadowlength(1.0):
                 diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
@@ -1166,7 +1216,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
         }
     }
     // Judgment Sprite (tap judgments)
-    if let Some(render_info) = &state.last_judgment {
+    if let Some(render_info) = &p.last_judgment {
         if matches!(profile.judgment_graphic, profile::JudgmentGraphic::None) {
             // Player chose to hide tap judgment graphics.
             // Still keep life/score effects; only suppress the visual sprite.
@@ -1264,8 +1314,9 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
             }
         }
     }
-    for (column, render_info) in state.hold_judgments.iter().enumerate() {
-        let Some(render_info) = render_info else {
+    for i in 0..num_cols {
+        let col = col_start + i;
+        let Some(render_info) = state.hold_judgments[col].as_ref() else {
             continue;
         };
         let elapsed = render_info.triggered_at.elapsed().as_secs_f32();
@@ -1288,8 +1339,8 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
             HoldResult::LetGo => 1,
         } as u32;
         if let Some(texture) = hold_judgment_texture {
-            let dir = column_dirs[column];
-            let receptor_y_lane = column_receptor_ys[column];
+            let dir = column_dirs[i];
+            let receptor_y_lane = column_receptor_ys[i];
             let hold_judgment_y = if dir >= 0.0 {
                 // Non-reverse lane: match Simply Love's baseline offset below receptors.
                 receptor_y_lane + HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR
@@ -1301,9 +1352,9 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
             let column_offset = state
                 .noteskin
                 .as_ref()
-                .and_then(|ns| ns.column_xs.get(column))
+                .and_then(|ns| ns.column_xs.get(i))
                 .map(|&x| x as f32)
-                .unwrap_or_else(|| ((column as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
+                .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
             actors.push(act!(sprite(texture):
                 align(0.5, 0.5):
                 xy(playfield_center_x + column_offset, hold_judgment_y):

@@ -141,6 +141,7 @@ fn build_holds_mines_rolls_pane(state: &State, asset_manager: &AssetManager) -> 
     if !is_wide() {
         return vec![];
     }
+    let p = &state.players[0];
     let mut actors = Vec::new();
 
     let sidepane_center_x = screen_width() * 0.75;
@@ -164,9 +165,9 @@ fn build_holds_mines_rolls_pane(state: &State, asset_manager: &AssetManager) -> 
     let frame_zoom = banner_data_zoom;
 
     let categories = [
-        ("holds", state.holds_held, state.holds_total),
-        ("mines", state.mines_avoided, state.mines_total),
-        ("rolls", state.rolls_held, state.rolls_total),
+        ("holds", p.holds_held, state.holds_total),
+        ("mines", p.mines_avoided, state.mines_total),
+        ("rolls", p.rolls_held, state.rolls_total),
     ];
 
     let largest_count = categories
@@ -326,7 +327,7 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Standard ITG-style rows: Fantastic..Miss using aggregate grade counts.
             for (index, grade) in JUDGMENT_ORDER.iter().enumerate() {
                 let info = JUDGMENT_INFO.get(grade).unwrap();
-                let count = *state.judgment_counts.get(grade).unwrap_or(&0);
+                let count = *state.players[0].judgment_counts.get(grade).unwrap_or(&0);
 
                 let local_y = y_base + (index as f32 * row_height);
                 let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
@@ -474,7 +475,7 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
             let total_time_str = format_game_time(total_display_seconds, total_display_seconds);
 
-            let remaining_display_seconds = if let Some(fail_time) = state.fail_time {
+            let remaining_display_seconds = if let Some(fail_time) = state.players[0].fail_time {
                 let fail_disp = if rate != 0.0 {
                     fail_time.max(0.0) / rate
                 } else {
@@ -524,7 +525,7 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
             let red_color = color::rgba_hex("#ff3030");
             let white_color = [1.0, 1.0, 1.0, 1.0];
-            let remaining_color = if state.is_failing { red_color } else { white_color };
+            let remaining_color = if state.players[0].is_failing { red_color } else { white_color };
 
             // --- Total Time Row ---
             let y_pos_total = sidepane_center_y + local_y + 13.0;

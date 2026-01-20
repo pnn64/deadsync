@@ -27,6 +27,7 @@ use winit::keyboard::KeyCode;
 pub const TRANSITION_IN_DURATION: f32 = 0.4;
 pub const TRANSITION_OUT_DURATION: f32 = 0.4;
 pub const MAX_COLS: usize = 8;
+pub const MAX_PLAYERS: usize = 2;
 
 // These mirror ScreenGameplay's MinSecondsToStep/MinSecondsToMusic metrics in ITGmania.
 // Simply Love scales them by MusicRate, so we apply that in init().
@@ -213,12 +214,87 @@ fn compute_column_scroll_dirs(scroll_option: profile::ScrollOption, num_cols: us
     dirs
 }
 
+#[derive(Clone, Debug)]
+pub struct PlayerRuntime {
+    pub combo: u32,
+    pub miss_combo: u32,
+    pub full_combo_grade: Option<JudgeGrade>,
+    pub first_fc_attempt_broken: bool,
+    pub judgment_counts: HashMap<JudgeGrade, u32>,
+    pub scoring_counts: HashMap<JudgeGrade, u32>,
+    pub last_judgment: Option<JudgmentRenderInfo>,
+
+    pub life: f32,
+    pub combo_after_miss: u32,
+    pub is_failing: bool,
+    pub fail_time: Option<f32>,
+
+    pub earned_grade_points: i32,
+
+    pub combo_milestones: Vec<ActiveComboMilestone>,
+    pub hands_achieved: u32,
+    pub holds_held: u32,
+    pub holds_held_for_score: u32,
+    pub rolls_held: u32,
+    pub rolls_held_for_score: u32,
+    pub mines_hit: u32,
+    pub mines_hit_for_score: u32,
+    pub mines_avoided: u32,
+    hands_holding_count_for_stats: i32,
+
+    pub life_history: Vec<(f32, f32)>, // (time, life_value)
+}
+
+fn init_player_runtime() -> PlayerRuntime {
+    PlayerRuntime {
+        combo: 0,
+        miss_combo: 0,
+        full_combo_grade: None,
+        first_fc_attempt_broken: false,
+        judgment_counts: HashMap::from_iter([
+            (JudgeGrade::Fantastic, 0),
+            (JudgeGrade::Excellent, 0),
+            (JudgeGrade::Great, 0),
+            (JudgeGrade::Decent, 0),
+            (JudgeGrade::WayOff, 0),
+            (JudgeGrade::Miss, 0),
+        ]),
+        scoring_counts: HashMap::from_iter([
+            (JudgeGrade::Fantastic, 0),
+            (JudgeGrade::Excellent, 0),
+            (JudgeGrade::Great, 0),
+            (JudgeGrade::Decent, 0),
+            (JudgeGrade::WayOff, 0),
+            (JudgeGrade::Miss, 0),
+        ]),
+        last_judgment: None,
+        life: 0.5,
+        combo_after_miss: 0,
+        is_failing: false,
+        fail_time: None,
+        earned_grade_points: 0,
+        combo_milestones: Vec::new(),
+        hands_achieved: 0,
+        holds_held: 0,
+        holds_held_for_score: 0,
+        rolls_held: 0,
+        rolls_held_for_score: 0,
+        mines_hit: 0,
+        mines_hit_for_score: 0,
+        mines_avoided: 0,
+        hands_holding_count_for_stats: 0,
+        life_history: Vec::with_capacity(10000),
+    }
+}
+
 pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
     pub background_texture_key: String,
     pub chart: Arc<ChartData>,
     pub num_cols: usize,
+    pub cols_per_player: usize,
+    pub num_players: usize,
     pub timing: Arc<TimingData>,
     pub beat_info_cache: BeatInfoCache,
     pub timing_profile: TimingProfile,
@@ -227,7 +303,7 @@ pub struct State {
     pub current_beat: f32,
     pub current_music_time: f32,
     pub note_spawn_cursor: usize,
-    pub judged_row_cursor: usize,
+    pub judged_row_cursor: [usize; MAX_PLAYERS],
     pub arrows: [Vec<Arrow>; MAX_COLS],
     pub note_time_cache: Vec<f32>,
     pub note_display_beat_cache: Vec<f32>,
@@ -247,25 +323,12 @@ pub struct State {
 
     pub decaying_hold_indices: Vec<usize>,
     pub hold_decay_active: Vec<bool>,
-    pub life_history: Vec<(f32, f32)>, // (time, life_value)
 
-    pub combo: u32,
-    pub miss_combo: u32,
-    pub full_combo_grade: Option<JudgeGrade>,
-    pub first_fc_attempt_broken: bool,
-    pub judgment_counts: HashMap<JudgeGrade, u32>,
-    pub scoring_counts: HashMap<JudgeGrade, u32>,
-    pub last_judgment: Option<JudgmentRenderInfo>,
+    pub players: [PlayerRuntime; MAX_PLAYERS],
     pub hold_judgments: [Option<HoldJudgmentRenderInfo>; MAX_COLS],
-
-    pub life: f32,
-    pub combo_after_miss: u32,
-    pub is_failing: bool,
     pub is_in_freeze: bool,
     pub is_in_delay: bool,
-    pub fail_time: Option<f32>,
 
-    pub earned_grade_points: i32,
     pub possible_grade_points: i32,
     pub song_completed_naturally: bool,
 
@@ -286,19 +349,10 @@ pub struct State {
     pub tap_explosions: [Option<ActiveTapExplosion>; MAX_COLS],
     pub mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
     pub active_holds: [Option<ActiveHold>; MAX_COLS],
-    pub combo_milestones: Vec<ActiveComboMilestone>,
-    pub hands_achieved: u32,
+
     pub holds_total: u32,
-    pub holds_held: u32,
-    pub holds_held_for_score: u32,
     pub rolls_total: u32,
-    pub rolls_held: u32,
-    pub rolls_held_for_score: u32,
     pub mines_total: u32,
-    pub mines_hit: u32,
-    pub mines_hit_for_score: u32,
-    pub mines_avoided: u32,
-    hands_holding_count_for_stats: i32,
 
     pub total_elapsed_in_screen: f32,
 
@@ -315,35 +369,54 @@ pub struct State {
 }
 
 #[inline(always)]
-fn is_state_dead(state: &State) -> bool {
-    state.is_failing || state.life <= 0.0
+fn is_player_dead(p: &PlayerRuntime) -> bool {
+    p.is_failing || p.life <= 0.0
 }
 
-fn apply_life_change(state: &mut State, delta: f32) {
-    if is_state_dead(state) {
-        state.life = 0.0;
-        state.is_failing = true;
+#[inline(always)]
+fn is_state_dead(state: &State, player: usize) -> bool {
+    is_player_dead(&state.players[player])
+}
+
+#[inline(always)]
+fn player_for_col(state: &State, col: usize) -> usize {
+    if state.num_players <= 1 || state.cols_per_player == 0 {
+        return 0;
+    }
+    (col / state.cols_per_player).min(state.num_players.saturating_sub(1))
+}
+
+#[inline(always)]
+fn player_col_range(state: &State, player: usize) -> (usize, usize) {
+    let start = player * state.cols_per_player;
+    (start, start + state.cols_per_player)
+}
+
+fn apply_life_change(p: &mut PlayerRuntime, current_music_time: f32, delta: f32) {
+    if is_player_dead(p) {
+        p.life = 0.0;
+        p.is_failing = true;
         return;
     }
 
     let mut final_delta = delta;
     if final_delta > 0.0 {
-        if state.combo_after_miss > 0 {
+        if p.combo_after_miss > 0 {
             final_delta = 0.0;
-            state.combo_after_miss -= 1;
+            p.combo_after_miss -= 1;
         }
     } else if final_delta < 0.0 {
-        state.combo_after_miss = REGEN_COMBO_AFTER_MISS;
+        p.combo_after_miss = REGEN_COMBO_AFTER_MISS;
     }
 
-    state.life = (state.life + final_delta).clamp(0.0, 1.0);
+    p.life = (p.life + final_delta).clamp(0.0, 1.0);
 
-    if state.life <= 0.0 {
-        if !state.is_failing {
-            state.fail_time = Some(state.current_music_time);
+    if p.life <= 0.0 {
+        if !p.is_failing {
+            p.fail_time = Some(current_music_time);
         }
-        state.life = 0.0;
-        state.is_failing = true;
+        p.life = 0.0;
+        p.is_failing = true;
         info!("Player has failed!");
     }
 }
@@ -403,17 +476,20 @@ pub fn init(
         1.0
     };
 
-    let num_cols = if chart.chart_type.eq_ignore_ascii_case("dance-double") {
-        8
-    } else {
-        4
+    let play_style = profile::get_session_play_style();
+    let (cols_per_player, num_players, num_cols) = match play_style {
+        profile::PlayStyle::Single => (4, 1, 4),
+        profile::PlayStyle::Double => (8, 1, 8),
+        profile::PlayStyle::Versus => (4, 2, 8),
     };
+
     let style = Style {
-        num_cols,
+        num_cols: cols_per_player,
         num_players: 1,
     };
-    let profile = profile::get();
-    let noteskin_path = match (profile.noteskin, num_cols) {
+
+    let prof = profile::get();
+    let noteskin_path = match (prof.noteskin, cols_per_player) {
         (crate::game::profile::NoteSkin::Cel, 8) => "assets/noteskins/cel/dance-double.txt",
         (crate::game::profile::NoteSkin::Cel, _) => "assets/noteskins/cel/dance-single.txt",
         (crate::game::profile::NoteSkin::Metal, 8) => "assets/noteskins/metal/dance-double.txt",
@@ -431,7 +507,7 @@ pub fn init(
             "assets/noteskins/devcel-2024-v3/dance-single.txt"
         }
     };
-    let fallback_cel_path = if num_cols == 8 {
+    let fallback_cel_path = if cols_per_player == 8 {
         "assets/noteskins/cel/dance-double.txt"
     } else {
         "assets/noteskins/cel/dance-single.txt"
@@ -440,7 +516,7 @@ pub fn init(
         .ok()
         .or_else(|| noteskin::load(Path::new(fallback_cel_path), &style).ok());
 
-    let mini_value = (profile.mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
+    let mini_value = (prof.mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
     let mut field_zoom = 1.0 - mini_value * 0.5;
     if field_zoom.abs() < 0.01 {
         field_zoom = 0.01;
@@ -454,7 +530,7 @@ pub fn init(
     let beat_info_cache = BeatInfoCache::new(&timing);
 
     let parsed_notes = &chart.parsed_notes;
-    let mut notes: Vec<Note> = Vec::with_capacity(parsed_notes.len());
+    let mut notes: Vec<Note> = Vec::with_capacity(parsed_notes.len() * num_players);
     let mut holds_total: u32 = 0;
     let mut rolls_total: u32 = 0;
     let mut mines_total: u32 = 0;
@@ -528,6 +604,14 @@ pub fn init(
             is_fake,
             can_be_judged,
         });
+    }
+
+    if play_style == profile::PlayStyle::Versus {
+        let mut p2_notes = notes.clone();
+        for note in &mut p2_notes {
+            note.column = note.column.saturating_add(cols_per_player);
+        }
+        notes.extend(p2_notes);
     }
 
     let num_tap_rows = {
@@ -624,11 +708,10 @@ pub fn init(
         audio::play_music(music_path.clone(), cut, false, rate.max(0.01));
     }
 
-    let profile = profile::get();
-    let scroll_speed = profile.scroll_speed;
+    let scroll_speed = prof.scroll_speed;
     let initial_bpm = timing.get_bpm_for_beat(first_note_beat);
 
-    let centered = profile
+    let centered = prof
         .scroll_option
         .contains(profile::ScrollOption::Centered);
 
@@ -672,7 +755,7 @@ pub fn init(
     let music_end_time =
         compute_music_end_time(&notes, &note_time_cache, &hold_end_time_cache, rate);
     let notes_len = notes.len();
-    let column_scroll_dirs = compute_column_scroll_dirs(profile.scroll_option, num_cols);
+    let column_scroll_dirs = compute_column_scroll_dirs(prof.scroll_option, num_cols);
 
     State {
         song,
@@ -680,6 +763,8 @@ pub fn init(
         chart,
         background_texture_key: "__white".to_string(),
         num_cols,
+        cols_per_player,
+        num_players,
         timing,
         beat_info_cache,
         timing_profile,
@@ -688,7 +773,7 @@ pub fn init(
         current_beat: 0.0,
         current_music_time: -start_delay,
         note_spawn_cursor: 0,
-        judged_row_cursor: 0,
+        judged_row_cursor: [0; MAX_PLAYERS],
         arrows: std::array::from_fn(|_| Vec::new()),
         note_time_cache,
         note_display_beat_cache,
@@ -705,36 +790,10 @@ pub fn init(
         row_map_cache,
         decaying_hold_indices: Vec::new(),
         hold_decay_active: vec![false; notes_len],
-        life_history: Vec::with_capacity(10000),
-        judgment_counts: HashMap::from_iter([
-            (JudgeGrade::Fantastic, 0),
-            (JudgeGrade::Excellent, 0),
-            (JudgeGrade::Great, 0),
-            (JudgeGrade::Decent, 0),
-            (JudgeGrade::WayOff, 0),
-            (JudgeGrade::Miss, 0),
-        ]),
-        scoring_counts: HashMap::from_iter([
-            (JudgeGrade::Fantastic, 0),
-            (JudgeGrade::Excellent, 0),
-            (JudgeGrade::Great, 0),
-            (JudgeGrade::Decent, 0),
-            (JudgeGrade::WayOff, 0),
-            (JudgeGrade::Miss, 0),
-        ]),
-        combo: 0,
-        miss_combo: 0,
-        full_combo_grade: None,
-        first_fc_attempt_broken: false,
-        last_judgment: None,
+        players: std::array::from_fn(|_| init_player_runtime()),
         hold_judgments: Default::default(),
-        life: 0.5,
-        combo_after_miss: 0,
-        is_failing: false,
         is_in_freeze: false,
         is_in_delay: false,
-        fail_time: None,
-        earned_grade_points: 0,
         possible_grade_points,
         song_completed_naturally: false,
         noteskin,
@@ -747,26 +806,16 @@ pub fn init(
         scroll_travel_time: travel_time,
         draw_distance_before_targets,
         draw_distance_after_targets,
-        reverse_scroll: profile.reverse_scroll,
+        reverse_scroll: prof.reverse_scroll,
         column_scroll_dirs,
         receptor_glow_timers: [0.0; MAX_COLS],
         receptor_bop_timers: [0.0; MAX_COLS],
         tap_explosions: Default::default(),
         mine_explosions: Default::default(),
         active_holds: Default::default(),
-        combo_milestones: Vec::new(),
-        hands_achieved: 0,
         holds_total,
-        holds_held: 0,
-        holds_held_for_score: 0,
         rolls_total,
-        rolls_held: 0,
-        rolls_held_for_score: 0,
         mines_total,
-        mines_hit: 0,
-        mines_hit_for_score: 0,
-        mines_avoided: 0,
-        hands_holding_count_for_stats: 0,
         total_elapsed_in_screen: 0.0,
         sync_overlay_message: None,
         hold_to_exit_key: None,
@@ -779,12 +828,12 @@ pub fn init(
     }
 }
 
-fn update_itg_grade_totals(state: &mut State) {
-    state.earned_grade_points = judgment::calculate_itg_grade_points(
-        &state.scoring_counts,
-        state.holds_held_for_score,
-        state.rolls_held_for_score,
-        state.mines_hit_for_score,
+fn update_itg_grade_totals(p: &mut PlayerRuntime) {
+    p.earned_grade_points = judgment::calculate_itg_grade_points(
+        &p.scoring_counts,
+        p.holds_held_for_score,
+        p.rolls_held_for_score,
+        p.mines_hit_for_score,
     );
 }
 
@@ -826,16 +875,15 @@ fn trigger_mine_explosion(state: &mut State, column: usize) {
     }
 }
 
-fn trigger_combo_milestone(state: &mut State, kind: ComboMilestoneKind) {
-    if let Some(index) = state
+fn trigger_combo_milestone(p: &mut PlayerRuntime, kind: ComboMilestoneKind) {
+    if let Some(index) = p
         .combo_milestones
         .iter()
         .position(|milestone| milestone.kind == kind)
     {
-        state.combo_milestones[index].elapsed = 0.0;
+        p.combo_milestones[index].elapsed = 0.0;
     } else {
-        state
-            .combo_milestones
+        p.combo_milestones
             .push(ActiveComboMilestone { kind, elapsed: 0.0 });
     }
 }
@@ -847,6 +895,7 @@ fn handle_mine_hit(
     note_index: usize,
     time_error: f32,
 ) -> bool {
+    let player = player_for_col(state, column);
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -865,21 +914,22 @@ fn handle_mine_hit(
     }
 
     state.notes[note_index].mine_result = Some(MineResult::Hit);
-    state.mines_hit = state.mines_hit.saturating_add(1);
+    state.players[player].mines_hit = state.players[player].mines_hit.saturating_add(1);
     let mut updated_scoring = false;
 
     state.arrows[column].remove(arrow_list_index);
-    apply_life_change(state, LifeChange::HIT_MINE);
-    if !is_state_dead(state) {
-        state.mines_hit_for_score = state.mines_hit_for_score.saturating_add(1);
+    apply_life_change(&mut state.players[player], state.current_music_time, LifeChange::HIT_MINE);
+    if !is_state_dead(state, player) {
+        state.players[player].mines_hit_for_score =
+            state.players[player].mines_hit_for_score.saturating_add(1);
         updated_scoring = true;
     }
-    state.combo = 0;
-    state.miss_combo = state.miss_combo.saturating_add(1);
-    if state.full_combo_grade.is_some() {
-        state.first_fc_attempt_broken = true;
+    state.players[player].combo = 0;
+    state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
+    if state.players[player].full_combo_grade.is_some() {
+        state.players[player].first_fc_attempt_broken = true;
     }
-    state.full_combo_grade = None;
+    state.players[player].full_combo_grade = None;
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
     debug!(
@@ -893,7 +943,7 @@ fn handle_mine_hit(
         rate
     );
     if updated_scoring {
-        update_itg_grade_totals(state);
+        update_itg_grade_totals(&mut state.players[player]);
     }
     true
 }
@@ -957,6 +1007,7 @@ fn hit_mine_timebased(
     note_index: usize,
     time_error: f32,
 ) -> bool {
+    let player = player_for_col(state, column);
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -975,7 +1026,7 @@ fn hit_mine_timebased(
     }
 
     state.notes[note_index].mine_result = Some(MineResult::Hit);
-    state.mines_hit = state.mines_hit.saturating_add(1);
+    state.players[player].mines_hit = state.players[player].mines_hit.saturating_add(1);
     let mut updated_scoring = false;
     if let Some(pos) = state.arrows[column]
         .iter()
@@ -983,17 +1034,18 @@ fn hit_mine_timebased(
     {
         state.arrows[column].remove(pos);
     }
-    apply_life_change(state, LifeChange::HIT_MINE);
-    if !is_state_dead(state) {
-        state.mines_hit_for_score = state.mines_hit_for_score.saturating_add(1);
+    apply_life_change(&mut state.players[player], state.current_music_time, LifeChange::HIT_MINE);
+    if !is_state_dead(state, player) {
+        state.players[player].mines_hit_for_score =
+            state.players[player].mines_hit_for_score.saturating_add(1);
         updated_scoring = true;
     }
-    state.combo = 0;
-    state.miss_combo = state.miss_combo.saturating_add(1);
-    if state.full_combo_grade.is_some() {
-        state.first_fc_attempt_broken = true;
+    state.players[player].combo = 0;
+    state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
+    if state.players[player].full_combo_grade.is_some() {
+        state.players[player].first_fc_attempt_broken = true;
     }
-    state.full_combo_grade = None;
+    state.players[player].full_combo_grade = None;
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
     debug!(
@@ -1007,12 +1059,13 @@ fn hit_mine_timebased(
         rate
     );
     if updated_scoring {
-        update_itg_grade_totals(state);
+        update_itg_grade_totals(&mut state.players[player]);
     }
     true
 }
 
 fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
+    let player = player_for_col(state, column);
     if let Some(hold) = state.notes[note_index].hold.as_mut() {
         if hold.result == Some(HoldResult::LetGo) {
             return;
@@ -1027,27 +1080,28 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
             }
         }
     }
-    if state.hands_holding_count_for_stats > 0 {
-        state.hands_holding_count_for_stats -= 1;
+    if state.players[player].hands_holding_count_for_stats > 0 {
+        state.players[player].hands_holding_count_for_stats -= 1;
     }
     state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
         result: HoldResult::LetGo,
         triggered_at: Instant::now(),
     });
-    apply_life_change(state, LifeChange::LET_GO);
-    if !is_state_dead(state) {
-        update_itg_grade_totals(state);
+    apply_life_change(&mut state.players[player], state.current_music_time, LifeChange::LET_GO);
+    if !is_state_dead(state, player) {
+        update_itg_grade_totals(&mut state.players[player]);
     }
-    state.combo = 0;
-    state.miss_combo = state.miss_combo.saturating_add(1);
-    if state.full_combo_grade.is_some() {
-        state.first_fc_attempt_broken = true;
+    state.players[player].combo = 0;
+    state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
+    if state.players[player].full_combo_grade.is_some() {
+        state.players[player].first_fc_attempt_broken = true;
     }
-    state.full_combo_grade = None;
+    state.players[player].full_combo_grade = None;
     state.receptor_glow_timers[column] = 0.0;
 }
 
 fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
+    let player = player_for_col(state, column);
     if let Some(hold) = state.notes[note_index].hold.as_mut() {
         if hold.result == Some(HoldResult::Held) {
             return;
@@ -1062,32 +1116,34 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
     if note_index < state.hold_decay_active.len() && state.hold_decay_active[note_index] {
         state.hold_decay_active[note_index] = false;
     }
-    if state.hands_holding_count_for_stats > 0 {
-        state.hands_holding_count_for_stats -= 1;
+    if state.players[player].hands_holding_count_for_stats > 0 {
+        state.players[player].hands_holding_count_for_stats -= 1;
     }
     let mut updated_scoring = false;
     match state.notes[note_index].note_type {
         NoteType::Hold => {
-            state.holds_held = state.holds_held.saturating_add(1);
-            if !is_state_dead(state) {
-                state.holds_held_for_score = state.holds_held_for_score.saturating_add(1);
+            state.players[player].holds_held = state.players[player].holds_held.saturating_add(1);
+            if !is_state_dead(state, player) {
+                state.players[player].holds_held_for_score =
+                    state.players[player].holds_held_for_score.saturating_add(1);
                 updated_scoring = true;
             }
         }
         NoteType::Roll => {
-            state.rolls_held = state.rolls_held.saturating_add(1);
-            if !is_state_dead(state) {
-                state.rolls_held_for_score = state.rolls_held_for_score.saturating_add(1);
+            state.players[player].rolls_held = state.players[player].rolls_held.saturating_add(1);
+            if !is_state_dead(state, player) {
+                state.players[player].rolls_held_for_score =
+                    state.players[player].rolls_held_for_score.saturating_add(1);
                 updated_scoring = true;
             }
         }
         _ => {}
     }
-    apply_life_change(state, LifeChange::HELD);
+    apply_life_change(&mut state.players[player], state.current_music_time, LifeChange::HELD);
     if updated_scoring {
-        update_itg_grade_totals(state);
+        update_itg_grade_totals(&mut state.players[player]);
     }
-    state.miss_combo = 0;
+    state.players[player].miss_combo = 0;
     trigger_tap_explosion(state, column, JudgeGrade::Excellent);
     state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
         result: HoldResult::Held,
@@ -1244,6 +1300,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     let song_offset_s = state.song.offset;
     let global_offset_s = state.global_offset_seconds;
     let lead_in_s = state.audio_lead_in_seconds.max(0.0);
+    let player = player_for_col(state, column);
+    let (col_start, col_end) = player_col_range(state, player);
     let mut best: Option<(usize, usize, f32)> = None;
     for (idx, arrow) in state.arrows[column]
         .iter()
@@ -1308,6 +1366,10 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     .nonmine_note_indices
                     .iter()
                     .copied()
+                    .filter(|&i| {
+                        let col = state.notes[i].column;
+                        col >= col_start && col < col_end
+                    })
                     .filter(|&i| state.notes[i].result.is_none())
                     .collect()
             } else {
@@ -1317,6 +1379,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     .enumerate()
                     .filter(|(_, n)| {
                         n.row_index == note_row_index
+                            && n.column >= col_start
+                            && n.column < col_end
                             && !matches!(n.note_type, NoteType::Mine)
                             && !n.is_fake
                     })
@@ -1532,10 +1596,17 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
     ScreenAction::None
 }
 
-fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: Vec<Judgment>) {
+fn finalize_row_judgment(
+    state: &mut State,
+    player: usize,
+    row_index: usize,
+    judgments_in_row: Vec<Judgment>,
+) {
     if judgments_in_row.is_empty() {
         return;
     }
+    let (col_start, col_end) = player_col_range(state, player);
+    let p = &mut state.players[player];
     let row_has_miss = judgments_in_row
         .iter()
         .any(|judgment| judgment.grade == JudgeGrade::Miss);
@@ -1550,10 +1621,10 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
         return;
     };
     let final_grade = final_judgment.grade;
-    *state.judgment_counts.entry(final_grade).or_insert(0) += 1;
-    if !is_state_dead(state) {
-        *state.scoring_counts.entry(final_grade).or_insert(0) += 1;
-        update_itg_grade_totals(state);
+    *p.judgment_counts.entry(final_grade).or_insert(0) += 1;
+    if !is_player_dead(p) {
+        *p.scoring_counts.entry(final_grade).or_insert(0) += 1;
+        update_itg_grade_totals(p);
     }
     let life_delta = match final_grade {
         JudgeGrade::Fantastic => LifeChange::FANTASTIC,
@@ -1563,52 +1634,64 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
         JudgeGrade::WayOff => LifeChange::WAY_OFF,
         JudgeGrade::Miss => LifeChange::MISS,
     };
-    apply_life_change(state, life_delta);
-    state.last_judgment = Some(JudgmentRenderInfo {
+    apply_life_change(p, state.current_music_time, life_delta);
+    p.last_judgment = Some(JudgmentRenderInfo {
         judgment: final_judgment,
         judged_at: Instant::now(),
     });
     if row_has_successful_hit {
-        state.miss_combo = 0;
+        p.miss_combo = 0;
     }
     if row_has_miss {
-        state.miss_combo = state.miss_combo.saturating_add(1);
+        p.miss_combo = p.miss_combo.saturating_add(1);
     }
     if row_has_miss || matches!(final_grade, JudgeGrade::Decent | JudgeGrade::WayOff) {
-        state.combo = 0;
-        if state.full_combo_grade.is_some() {
-            state.first_fc_attempt_broken = true;
+        p.combo = 0;
+        if p.full_combo_grade.is_some() {
+            p.first_fc_attempt_broken = true;
         }
-        state.full_combo_grade = None;
+        p.full_combo_grade = None;
     } else {
         let combo_increment: u32 = if let Some(&pos) = state
             .row_map_cache
             .get(row_index)
             .filter(|&&x| x != u32::MAX)
         {
-            state.row_entries[pos as usize].nonmine_note_indices.len() as u32
+            state.row_entries[pos as usize]
+                .nonmine_note_indices
+                .iter()
+                .filter(|&&i| {
+                    let col = state.notes[i].column;
+                    col >= col_start && col < col_end
+                })
+                .count() as u32
         } else {
             state
                 .notes
                 .iter()
-                .filter(|n| n.row_index == row_index && !matches!(n.note_type, NoteType::Mine))
+                .filter(|n| {
+                    n.row_index == row_index
+                        && n.column >= col_start
+                        && n.column < col_end
+                        && !matches!(n.note_type, NoteType::Mine)
+                })
                 .count() as u32
         };
-        state.combo = state.combo.saturating_add(combo_increment);
-        let combo = state.combo;
+        p.combo = p.combo.saturating_add(combo_increment);
+        let combo = p.combo;
         if combo > 0 && combo.is_multiple_of(1000) {
-            trigger_combo_milestone(state, ComboMilestoneKind::Thousand);
-            trigger_combo_milestone(state, ComboMilestoneKind::Hundred);
+            trigger_combo_milestone(p, ComboMilestoneKind::Thousand);
+            trigger_combo_milestone(p, ComboMilestoneKind::Hundred);
         } else if combo > 0 && combo.is_multiple_of(100) {
-            trigger_combo_milestone(state, ComboMilestoneKind::Hundred);
+            trigger_combo_milestone(p, ComboMilestoneKind::Hundred);
         }
-        if !state.first_fc_attempt_broken {
-            let new_grade = if let Some(current_fc_grade) = &state.full_combo_grade {
+        if !p.first_fc_attempt_broken {
+            let new_grade = if let Some(current_fc_grade) = &p.full_combo_grade {
                 final_grade.max(*current_fc_grade)
             } else {
                 final_grade
             };
-            state.full_combo_grade = Some(new_grade);
+            p.full_combo_grade = Some(new_grade);
         }
     }
     let row_has_wayoff = judgments_in_row
@@ -1620,18 +1703,28 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
             .get(row_index)
             .filter(|&&x| x != u32::MAX)
         {
-            state.row_entries[pos as usize].nonmine_note_indices.len()
+            state.row_entries[pos as usize]
+                .nonmine_note_indices
+                .iter()
+                .filter(|&&i| {
+                    let col = state.notes[i].column;
+                    col >= col_start && col < col_end
+                })
+                .count()
         } else {
             state
                 .notes
                 .iter()
                 .filter(|n| {
-                    n.row_index == row_index && !matches!(n.note_type, NoteType::Mine) && !n.is_fake
+                    n.row_index == row_index
+                        && n.column >= col_start
+                        && n.column < col_end
+                        && !matches!(n.note_type, NoteType::Mine)
+                        && !n.is_fake
                 })
                 .count()
         };
-        let carried_holds_down: usize = state
-            .active_holds
+        let carried_holds_down: usize = state.active_holds[col_start..col_end]
             .iter()
             .filter_map(|a| a.as_ref())
             .filter(|a| active_hold_is_engaged(a))
@@ -1648,37 +1741,49 @@ fn finalize_row_judgment(state: &mut State, row_index: usize, judgments_in_row: 
             })
             .count();
         if notes_on_row_count + carried_holds_down >= 3 {
-            state.hands_achieved = state.hands_achieved.saturating_add(1);
+            p.hands_achieved = p.hands_achieved.saturating_add(1);
         }
     }
 }
 
 fn update_judged_rows(state: &mut State) {
-    loop {
-        if state.judged_row_cursor >= state.row_entries.len() {
-            break;
-        }
-        let row_entry = &state.row_entries[state.judged_row_cursor];
-        if row_entry.nonmine_note_indices.is_empty() {
-            state.judged_row_cursor += 1;
-            continue;
-        }
-        let is_row_complete = row_entry
-            .nonmine_note_indices
-            .iter()
-            .all(|&i| state.notes[i].result.is_some());
-        if is_row_complete {
-            let mut judgments_on_row: Vec<Judgment> =
-                Vec::with_capacity(row_entry.nonmine_note_indices.len());
-            for &i in &row_entry.nonmine_note_indices {
-                if let Some(j) = state.notes[i].result.clone() {
-                    judgments_on_row.push(j);
-                }
+    for player in 0..state.num_players {
+        let (col_start, col_end) = player_col_range(state, player);
+        loop {
+            let cursor = state.judged_row_cursor[player];
+            if cursor >= state.row_entries.len() {
+                break;
             }
-            finalize_row_judgment(state, row_entry.row_index, judgments_on_row);
-            state.judged_row_cursor += 1;
-        } else {
-            break;
+
+            let row_index = state.row_entries[cursor].row_index;
+            let notes_on_row: Vec<usize> = state.row_entries[cursor]
+                .nonmine_note_indices
+                .iter()
+                .copied()
+                .filter(|&i| {
+                    let col = state.notes[i].column;
+                    col >= col_start && col < col_end
+                })
+                .collect();
+
+            if notes_on_row.is_empty() {
+                state.judged_row_cursor[player] += 1;
+                continue;
+            }
+
+            let is_row_complete = notes_on_row
+                .iter()
+                .all(|&i| state.notes[i].result.is_some());
+            if is_row_complete {
+                let judgments_on_row: Vec<Judgment> = notes_on_row
+                    .iter()
+                    .filter_map(|&i| state.notes[i].result.clone())
+                    .collect();
+                finalize_row_judgment(state, player, row_index, judgments_on_row);
+                state.judged_row_cursor[player] += 1;
+            } else {
+                break;
+            }
         }
     }
 }
@@ -1762,14 +1867,16 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
     for timer in &mut state.receptor_bop_timers {
         *timer = (*timer - delta_time).max(0.0);
     }
-    state.combo_milestones.retain_mut(|milestone| {
-        milestone.elapsed += delta_time;
-        let max_duration = match milestone.kind {
-            ComboMilestoneKind::Hundred => COMBO_HUNDRED_MILESTONE_DURATION,
-            ComboMilestoneKind::Thousand => COMBO_THOUSAND_MILESTONE_DURATION,
-        };
-        milestone.elapsed < max_duration
-    });
+    for player in 0..state.num_players {
+        state.players[player].combo_milestones.retain_mut(|milestone| {
+            milestone.elapsed += delta_time;
+            let max_duration = match milestone.kind {
+                ComboMilestoneKind::Hundred => COMBO_HUNDRED_MILESTONE_DURATION,
+                ComboMilestoneKind::Thousand => COMBO_THOUSAND_MILESTONE_DURATION,
+            };
+            milestone.elapsed < max_duration
+        });
+    }
     for explosion in &mut state.tap_explosions {
         if let Some(active) = explosion {
             active.elapsed += delta_time;
@@ -1804,6 +1911,8 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
 #[inline(always)]
 fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
     let mine_window = state.timing_profile.mine_window_s;
+    let num_players = state.num_players;
+    let cols_per_player = state.cols_per_player;
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -1823,7 +1932,12 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
             && note.mine_result.is_none()
         {
             note.mine_result = Some(MineResult::Avoided);
-            state.mines_avoided = state.mines_avoided.saturating_add(1);
+            let player = if num_players <= 1 || cols_per_player == 0 {
+                0
+            } else {
+                (note.column / cols_per_player).min(num_players.saturating_sub(1))
+            };
+            state.players[player].mines_avoided = state.players[player].mines_avoided.saturating_add(1);
             info!(
                 "MINE AVOIDED: Row {}, Col {}, Time: {:.2}s",
                 note.row_index, note.column, music_time_sec
@@ -1894,6 +2008,8 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
 #[inline(always)]
 fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f32) {
     let way_off_window = state.timing_profile.windows_s[4];
+    let num_players = state.num_players;
+    let cols_per_player = state.cols_per_player;
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -1930,7 +2046,13 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                         && state.notes[note_index].can_be_judged
                     {
                         state.notes[note_index].mine_result = Some(MineResult::Avoided);
-                        state.mines_avoided = state.mines_avoided.saturating_add(1);
+                        let player = if num_players <= 1 || cols_per_player == 0 {
+                            0
+                        } else {
+                            (col_idx / cols_per_player).min(num_players.saturating_sub(1))
+                        };
+                        state.players[player].mines_avoided =
+                            state.players[player].mines_avoided.saturating_add(1);
                         info!(
                             "MINE AVOIDED: Row {}, Col {}, Time: {:.2}s",
                             note_row_index, col_idx, music_time_sec
@@ -2246,12 +2368,12 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     state.current_music_time = music_time_sec;
 
     // Optimization: only record if time has advanced slightly to avoid duplicates
-    if state
-        .life_history
-        .last()
-        .is_none_or(|(t, _)| *t < music_time_sec)
-    {
-        state.life_history.push((music_time_sec, state.life));
+    for player in 0..state.num_players {
+        let life = state.players[player].life;
+        let hist = &mut state.players[player].life_history;
+        if hist.last().is_none_or(|(t, _)| *t < music_time_sec) {
+            hist.push((music_time_sec, life));
+        }
     }
 
     let beat_info = state
@@ -2339,8 +2461,8 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             "Beat: {:.2}, Time: {:.2}, Combo: {}, Misses: {}, Active Arrows: {}",
             state.current_beat,
             music_time_sec,
-            state.combo,
-            state.miss_combo,
+            state.players[0].combo,
+            state.players[0].miss_combo,
             active_arrows
         );
         state.log_timer -= 1.0;

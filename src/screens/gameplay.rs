@@ -72,6 +72,7 @@ fn build_background(state: &State) -> Actor {
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::new();
     let profile = profile::get();
+    let play_style = profile::get_session_play_style();
     // --- Background and Filter ---
     actors.push(build_background(state));
     let filter_alpha = match profile.background_filter {
@@ -107,71 +108,106 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
 
-    let (notefield_actors, playfield_center_x) = notefield::build(state, &profile);
+    let (notefield_actors, playfield_center_x) = match play_style {
+        profile::PlayStyle::Versus => {
+            let (p1, p1_x) = notefield::build(state, &profile, notefield::FieldPlacement::P1);
+            let (p2, _) = notefield::build(state, &profile, notefield::FieldPlacement::P2);
+            actors.extend(p2);
+            (p1, p1_x)
+        }
+        _ => notefield::build(state, &profile, notefield::FieldPlacement::P1),
+    };
     actors.extend(notefield_actors);
-    // Difficulty Box
-    let x = screen_center_x() - widescale(292.5, 342.5);
-    let y = 56.0;
     let difficulty_color = color::difficulty_rgba(&state.chart.difficulty, state.active_color_index);
     let meter_text = state.chart.meter.to_string();
-    actors.push(Actor::Frame {
-        align: [0.5, 0.5],
-        offset: [x, y],
-        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-        children: vec![
-            act!(quad:
-                align(0.5, 0.5): xy(0.0, 0.0): zoomto(30.0, 30.0):
-                diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
+    let notes_per_player = if state.num_players > 0 {
+        state.notes.len() / state.num_players
+    } else {
+        state.notes.len()
+    };
+    let clamped_width = screen_width().clamp(640.0, 854.0);
+
+    let players: &[(usize, f32, f32)] = match play_style {
+        profile::PlayStyle::Versus => &[
+            (
+                0,
+                screen_center_x() - widescale(292.5, 342.5),
+                screen_center_x() - clamped_width / 4.3,
             ),
-            act!(text:
-                font("wendy"): settext(meter_text): align(0.5, 0.5): xy(0.0, 0.0):
-                zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0)
+            (
+                1,
+                screen_center_x() + widescale(292.5, 342.5),
+                screen_center_x() + clamped_width / 2.75,
             ),
         ],
-        background: None,
-        z: 90,
-    });
-    // Score Display (P1)
-    let clamped_width = screen_width().clamp(640.0, 854.0);
-    let score_x = screen_center_x() - clamped_width / 4.3;
-    let score_y = 56.0;
-    let (score_text, score_color) = if profile.show_ex_score {
-        // FA+ EX score display (Simply Love EX scoring semantics), with
-        // failure-aware gating so score stops changing after life reaches 0.
-        let mines_disabled = false; // NoMines handling not wired yet.
-        let ex_percent = judgment::calculate_ex_score_from_notes(
-            &state.notes,
-            &state.note_time_cache,
-            &state.hold_end_time_cache,
-            state.chart.stats.total_steps, // <- use this
-            state.holds_total,
-            state.rolls_total,
-            state.mines_total,
-            state.fail_time,
-            mines_disabled,
-        );
-        let text = format!("{:.2}", ex_percent.max(0.0));
-        let color = color::rgba_hex(color::JUDGMENT_HEX[0]); // Fantastic blue (#21CCE8)
-        (text, color)
-    } else {
-        let score_percent = (judgment::calculate_itg_score_percent(
-            &state.scoring_counts,
-            state.holds_held_for_score,
-            state.rolls_held_for_score,
-            state.mines_hit_for_score,
-            state.possible_grade_points,
-        ) * 100.0) as f32;
-        let text = format!("{:.2}", score_percent);
-        let color = [1.0, 1.0, 1.0, 1.0];
-        (text, color)
+        _ => &[(
+            0,
+            screen_center_x() - widescale(292.5, 342.5),
+            screen_center_x() - clamped_width / 4.3,
+        )],
     };
-    actors.push(act!(text:
-        font("wendy_monospace_numbers"): settext(score_text):
-        align(1.0, 1.0): xy(score_x, score_y):
-        zoom(0.5): horizalign(right):
-        diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
-        z(90)
-    ));
+
+    for &(player_idx, diff_x, score_x) in players {
+        // Difficulty Box
+        let y = 56.0;
+        actors.push(Actor::Frame {
+            align: [0.5, 0.5],
+            offset: [diff_x, y],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            children: vec![
+                act!(quad:
+                    align(0.5, 0.5): xy(0.0, 0.0): zoomto(30.0, 30.0):
+                    diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
+                ),
+                act!(text:
+                    font("wendy"): settext(meter_text.clone()): align(0.5, 0.5): xy(0.0, 0.0):
+                    zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0)
+                ),
+            ],
+            background: None,
+            z: 90,
+        });
+
+        // Score Display
+        let score_y = 56.0;
+        let (score_text, score_color) = if profile.show_ex_score {
+            let mines_disabled = false;
+            let start = player_idx * notes_per_player;
+            let end = start + notes_per_player;
+            let ex_percent = judgment::calculate_ex_score_from_notes(
+                &state.notes[start..end],
+                &state.note_time_cache[start..end],
+                &state.hold_end_time_cache[start..end],
+                state.chart.stats.total_steps,
+                state.holds_total,
+                state.rolls_total,
+                state.mines_total,
+                state.players[player_idx].fail_time,
+                mines_disabled,
+            );
+            (
+                format!("{:.2}", ex_percent.max(0.0)),
+                color::rgba_hex(color::JUDGMENT_HEX[0]),
+            )
+        } else {
+            let score_percent = (judgment::calculate_itg_score_percent(
+                &state.players[player_idx].scoring_counts,
+                state.players[player_idx].holds_held_for_score,
+                state.players[player_idx].rolls_held_for_score,
+                state.players[player_idx].mines_hit_for_score,
+                state.possible_grade_points,
+            ) * 100.0) as f32;
+            (format!("{:.2}", score_percent), [1.0, 1.0, 1.0, 1.0])
+        };
+
+        actors.push(act!(text:
+            font("wendy_monospace_numbers"): settext(score_text):
+            align(1.0, 1.0): xy(score_x, score_y):
+            zoom(0.5): horizalign(right):
+            diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
+            z(90)
+        ));
+    }
     // Current BPM Display (1:1 with Simply Love)
     {
         let base_bpm = state.timing.get_bpm_for_beat(state.current_beat);
@@ -251,62 +287,73 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             children: frame_children,
         });
     }
-    // --- Life Meter (P1) ---
+    // --- Life Meter ---
     {
         let w = 136.0;
         let h = 18.0;
-        let meter_cx = screen_center_x() - widescale(238.0, 288.0);
         let meter_cy = 20.0;
-        // Frames/border
-        actors.push(act!(quad: align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0): diffuse(1.0, 1.0, 1.0, 1.0): z(90) ));
-        actors.push(act!(quad: align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w, h): diffuse(0.0, 0.0, 0.0, 1.0): z(91) ));
-        // Latch-to-zero for rendering the very frame we die.
-        let dead = state.is_failing || state.life <= 0.0;
-        let life_for_render = if dead {
-            0.0
-        } else {
-            state.life.clamp(0.0, 1.0)
+
+        let life_players: &[(usize, f32)] = match play_style {
+            profile::PlayStyle::Versus => &[
+                (0, screen_center_x() - widescale(238.0, 288.0)),
+                (1, screen_center_x() + widescale(238.0, 288.0)),
+            ],
+            _ => &[(0, screen_center_x() - widescale(238.0, 288.0))],
         };
-        let is_hot = !dead && life_for_render >= 1.0;
-        let life_color = if is_hot {
-            [1.0, 1.0, 1.0, 1.0]
-        } else {
-            state.player_color
-        };
-        let filled_width = w * life_for_render;
-        // Never draw swoosh if dead OR nothing to fill.
-        if filled_width > 0.0 && !dead {
-            // Logic Parity:
-            // velocity = -(songposition:GetCurBPS() * 0.5)
-            // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
-            let bps = state.timing.get_bpm_for_beat(state.current_beat) / 60.0;
-            let velocity_x = if state.is_in_freeze || state.is_in_delay {
+
+        for &(player_idx, meter_cx) in life_players {
+            // Frames/border
+            actors.push(act!(quad: align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0): diffuse(1.0, 1.0, 1.0, 1.0): z(90) ));
+            actors.push(act!(quad: align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w, h): diffuse(0.0, 0.0, 0.0, 1.0): z(91) ));
+
+            // Latch-to-zero for rendering the very frame we die.
+            let dead = state.players[player_idx].is_failing || state.players[player_idx].life <= 0.0;
+            let life_for_render = if dead {
                 0.0
             } else {
-                -(bps * 0.5)
+                state.players[player_idx].life.clamp(0.0, 1.0)
             };
+            let is_hot = !dead && life_for_render >= 1.0;
+            let life_color = if is_hot {
+                [1.0, 1.0, 1.0, 1.0]
+            } else {
+                state.player_color
+            };
+            let filled_width = w * life_for_render;
+            // Never draw swoosh if dead OR nothing to fill.
+            if filled_width > 0.0 && !dead {
+                // Logic Parity:
+                // velocity = -(songposition:GetCurBPS() * 0.5)
+                // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
+                let bps = state.timing.get_bpm_for_beat(state.current_beat) / 60.0;
+                let velocity_x = if state.is_in_freeze || state.is_in_delay {
+                    0.0
+                } else {
+                    -(bps * 0.5)
+                };
 
-            let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
+                let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
 
-            // MeterSwoosh
-            actors.push(act!(sprite("swoosh.png"):
-                align(0.0, 0.5):
-                xy(meter_cx - w / 2.0, meter_cy):
-                zoomto(filled_width, h):
-                diffusealpha(swoosh_alpha):
-                // Apply the calculated velocity
-                texcoordvelocity(velocity_x, 0.0):
-                z(93)
-            ));
+                // MeterSwoosh
+                actors.push(act!(sprite("swoosh.png"):
+                    align(0.0, 0.5):
+                    xy(meter_cx - w / 2.0, meter_cy):
+                    zoomto(filled_width, h):
+                    diffusealpha(swoosh_alpha):
+                    // Apply the calculated velocity
+                    texcoordvelocity(velocity_x, 0.0):
+                    z(93)
+                ));
 
-            // MeterFill
-            actors.push(act!(quad:
-                align(0.0, 0.5):
-                xy(meter_cx - w / 2.0, meter_cy):
-                zoomto(filled_width, h):
-                diffuse(life_color[0], life_color[1], life_color[2], 1.0):
-                z(92)
-            ));
+                // MeterFill
+                actors.push(act!(quad:
+                    align(0.0, 0.5):
+                    xy(meter_cx - w / 2.0, meter_cy):
+                    zoomto(filled_width, h):
+                    diffuse(life_color[0], life_color[1], life_color[2], 1.0):
+                    z(92)
+                ));
+            }
         }
     }
     actors.push(screen_bar::build(ScreenBarParams {
@@ -320,7 +367,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         right_text: None,
         left_avatar: None,
     }));
-    if state.num_cols <= 4 {
+    if state.num_cols <= 4 && play_style != profile::PlayStyle::Versus {
         actors.extend(gameplay_stats::build(state, asset_manager, playfield_center_x));
     }
     actors

@@ -103,24 +103,37 @@ pub struct State {
 
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     let score_info = gameplay_results.map(|gs| {
+        let player_idx = 0;
+        let notes_per_player = if gs.num_players > 0 {
+            gs.notes.len() / gs.num_players
+        } else {
+            gs.notes.len()
+        };
+        let start = player_idx * notes_per_player;
+        let end = start + notes_per_player;
+        let notes = &gs.notes[start..end];
+        let note_times = &gs.note_time_cache[start..end];
+        let hold_end_times = &gs.hold_end_time_cache[start..end];
+        let p = &gs.players[player_idx];
+
         // Compute timing statistics across all non-miss tap judgments
-        let stats = timing_stats::compute_note_timing_stats(&gs.notes);
+        let stats = timing_stats::compute_note_timing_stats(notes);
         // Prepare scatter points and histogram bins
-        let scatter = timing_stats::build_scatter_points(&gs.notes, &gs.note_time_cache);
-        let histogram = timing_stats::build_histogram_ms(&gs.notes);
+        let scatter = timing_stats::build_scatter_points(notes, note_times);
+        let histogram = timing_stats::build_histogram_ms(notes);
         let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
         // Pad right bound slightly (0.05s) to match SL visual alignment.
         let graph_last_second = gs.song.total_length_seconds as f32 + 0.05;
 
         let score_percent = judgment::calculate_itg_score_percent(
-            &gs.scoring_counts,
-            gs.holds_held_for_score,
-            gs.rolls_held_for_score,
-            gs.mines_hit_for_score,
+            &p.scoring_counts,
+            p.holds_held_for_score,
+            p.rolls_held_for_score,
+            p.mines_hit_for_score,
             gs.possible_grade_points,
         );
 
-        let grade = if gs.is_failing || !gs.song_completed_naturally {
+        let grade = if p.is_failing || !gs.song_completed_naturally {
             scores::Grade::Failed
         } else {
             scores::score_to_grade(score_percent * 10000.0)
@@ -129,35 +142,35 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         // Per-window counts for the FA+ pane should always reflect all tap
         // judgments that occurred (including after failure), matching the
         // standard pane's judgment_counts semantics.
-        let window_counts = timing_stats::compute_window_counts(&gs.notes);
+        let window_counts = timing_stats::compute_window_counts(notes);
 
         // NoMines handling is not wired yet, so treat mines as enabled.
         let mines_disabled = false;
         let ex_score_percent = judgment::calculate_ex_score_from_notes(
-            &gs.notes,
-            &gs.note_time_cache,
-            &gs.hold_end_time_cache,
+            notes,
+            note_times,
+            hold_end_times,
             gs.chart.stats.total_steps,
             gs.holds_total,
             gs.rolls_total,
             gs.mines_total,
-            gs.fail_time,
+            p.fail_time,
             mines_disabled,
         );
 
         ScoreInfo {
             song: gs.song.clone(),
             chart: gs.chart.clone(),
-            judgment_counts: gs.judgment_counts.clone(),
+            judgment_counts: p.judgment_counts.clone(),
             score_percent,
             grade,
             speed_mod: gs.scroll_speed,
-            hands_achieved: gs.hands_achieved,
-            holds_held: gs.holds_held,
+            hands_achieved: p.hands_achieved,
+            holds_held: p.holds_held,
             holds_total: gs.holds_total,
-            rolls_held: gs.rolls_held,
+            rolls_held: p.rolls_held,
             rolls_total: gs.rolls_total,
-            mines_avoided: gs.mines_avoided,
+            mines_avoided: p.mines_avoided,
             mines_total: gs.mines_total,
             timing: stats,
             scatter,
@@ -170,8 +183,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 1.0
             },
             scroll_option: profile::get().scroll_option,
-            life_history: gs.life_history,
-            fail_time: gs.fail_time,
+            life_history: p.life_history.clone(),
+            fail_time: p.fail_time,
             window_counts,
             ex_score_percent,
         }
