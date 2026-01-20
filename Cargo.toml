@@ -38,9 +38,6 @@ lewton = "0.10.2"
 rubato = "0.16.2"
 memmap2 = "0.9.9"
 
-# Fonts
-regex = "1.12.2"
-
 # Networking
 ureq = { version = "3.1.4", features = ["json", "rustls"] }
 
