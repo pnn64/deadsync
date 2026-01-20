@@ -1,0 +1,95 @@
+# Metal noteskin definition for dance double style
+
+# Notes:
+# - All tap quants share a single 16x16 notesheet texture (2048x2048).
+# - Each quant uses 32 frames (2 rows x 16 columns).
+# - 4ths use rows 0–1, 8ths rows 2–3, 12ths rows 4–5, 16ths rows 6–7,
+#   24ths rows 8–9, 32nds rows 10–11, 48ths rows 12–13, 64ths/192nds rows 14–15.
+
+NoteSheet { texture="Notesheet (2048x2048).png"; quants=4;       grid=16,16; frames=32; frame_size=128,128; AnimationIsBeatBased=1; loop_beats=2; offset=0,0 }
+NoteSheet { texture="Notesheet (2048x2048).png"; quants=8;       grid=16,16; frames=32; frame_size=128,128; AnimationIsBeatBased=1; loop_beats=2; offset=0,256 }
+NoteSheet { texture="Notesheet (2048x2048).png"; quants=12;      grid=16,16; frames=32; frame_size=128,128; AnimationIsBeatBased=1; loop_beats=2; offset=0,512 }
+NoteSheet { texture="Notesheet (2048x2048).png"; quants=16;      grid=16,16; frames=32; frame_size=128,128; AnimationIsBeatBased=1; loop_beats=2; offset=0,768 }
+NoteSheet { texture="Notesheet (2048x2048).png"; quants=24;      grid=16,16; frames=32; frame_size=128,128; AnimationIsBeatBased=1; loop_beats=2; offset=0,1024 }
+NoteSheet { texture="Notesheet (2048x2048).png"; quants=32;      grid=16,16; frames=32; frame_size=128,128; AnimationIsBeatBased=1; loop_beats=2; offset=0,1280 }
+NoteSheet { texture="Notesheet (2048x2048).png"; quants=48;      grid=16,16; frames=32; frame_size=128,128; AnimationIsBeatBased=1; loop_beats=2; offset=0,1536 }
+NoteSheet { texture="Notesheet (2048x2048).png"; quants=64,192;  grid=16,16; frames=32; frame_size=128,128; AnimationIsBeatBased=1; loop_beats=2; offset=0,1792 }
+
+MineSheet { layer=fill; texture="_mine tex.png"; grid=1,1; frames=1; frame_size=256,256; offset=0,256 }
+MineSheet { layer=frame; texture="_mine tex.png"; grid=1,1; frames=1; frame_size=256,256; offset=0,0 }
+Mine { size=256,256 }
+Mine { col=0; rot=90 }
+Mine { col=1; rot=0 }
+Mine { col=2; rot=180 }
+Mine { col=3; rot=270 }
+Mine { col=4; rot=90 }
+Mine { col=5; rot=0 }
+Mine { col=6; rot=180 }
+Mine { col=7; rot=270 }
+
+HoldBody { state="inactive"; texture="Down Hold Body Inactive (res 512x2048).png"; grid=1,1; frames=1; frame_size=512,2048 }
+HoldBody { state="active";   texture="Down Hold Body Active (res 512x2048).png";   grid=1,1; frames=1; frame_size=512,2048 }
+HoldBottomCap { state="inactive"; texture="Down Hold BottomCap Inactive (res 512x512).png"; grid=1,1; frames=1; frame_size=512,512 }
+HoldBottomCap { state="active";   texture="Down Hold BottomCap Active (res 512x512).png";   grid=1,1; frames=1; frame_size=512,512 }
+HoldExplosion { texture="down hold explosion (res 256x256).png"; grid=1,1; frames=1; frame_size=256,256 }
+
+RollBody { state="inactive"; texture="Down Roll Body Inactive (res 256x1024).png"; grid=1,1; frames=1; frame_size=256,1024 }
+RollBody { state="active";   texture="Down Roll Body active (res 256x1024).png";   grid=1,1; frames=1; frame_size=256,1024 }
+RollBottomCap { state="inactive"; texture="Down Roll BottomCap Inactive (res 256x256).png"; grid=1,1; frames=1; frame_size=256,256 }
+RollBottomCap { state="active";   texture="Down Roll BottomCap Active (res 256x256).png";   grid=1,1; frames=1; frame_size=256,256 }
+RollExplosion { texture="down hold explosion (res 256x256).png"; grid=1,1; frames=1; frame_size=256,256 }
+
+HoldLetGoGrayPercent = 0.25
+
+ReceptorSheet { texture="_Down Receptor tex 4x1 (res 1024x256).png"; grid=4,1; frames=4; frame_size=256,256; fps=1; AnimationIsBeatBased=1; state=off }
+ReceptorPulse { base_color=0.1,0.1,0.1,1; beat_color=1,1,1,1; effect_timing=0.25,0.50,0,0,0.25; effect_offset=-0.25 }
+
+ExplosionSheet { texture="Down Tap Explosion Dim W1 (res 256x256).png"; window=W1; grid=1,1; frames=1, frame_size=256,256 }
+ExplosionSheet { texture="Down Tap Explosion Dim W2 (res 256x256).png"; window=W2; grid=1,1; frames=1, frame_size=256,256 }
+ExplosionSheet { texture="Down Tap Explosion Dim W3 (res 256x256).png"; window=W3; grid=1,1; frames=1, frame_size=256,256 }
+ExplosionSheet { texture="Down Tap Explosion Dim W4 (res 256x256).png"; window=W4; grid=1,1; frames=1, frame_size=256,256 }
+ExplosionSheet { texture="Down Tap Explosion Dim W5 (res 256x256).png"; window=W5; grid=1,1; frames=1, frame_size=256,256 }
+ExplosionCommand { window=W1; commands="diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5" }
+ExplosionCommand { window=W2; commands="diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0" }
+ExplosionCommand { window=W3; commands="diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0" }
+ExplosionCommand { window=W4; commands="diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0" }
+ExplosionCommand { window=W5; commands="diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0" }
+
+Receptor { col=0; x=-224 }
+Receptor { col=1; x=-160 }
+Receptor { col=2; x=-96 }
+Receptor { col=3; x=-32 }
+Receptor { col=4; x=+32 }
+Receptor { col=5; x=+96 }
+Receptor { col=6; x=+160 }
+Receptor { col=7; x=+224 }
+
+Receptor-off { size=512,512 }
+Receptor-off { col=0; rot=90 }
+Receptor-off { col=1; rot=0 }
+Receptor-off { col=2; rot=180 }
+Receptor-off { col=3; rot=270 }
+Receptor-off { col=4; rot=90 }
+Receptor-off { col=5; rot=0 }
+Receptor-off { col=6; rot=180 }
+Receptor-off { col=7; rot=270 }
+
+Receptor-glow { size=125,125 }
+Receptor-glow { col=0; rot=90 }
+Receptor-glow { col=1; rot=0 }
+Receptor-glow { col=2; rot=180 }
+Receptor-glow { col=3; rot=270 }
+Receptor-glow { col=4; rot=90 }
+Receptor-glow { col=5; rot=0 }
+Receptor-glow { col=6; rot=180 }
+Receptor-glow { col=7; rot=270 }
+
+Note { size=256,256 }
+Note { col=0; rot=90 }
+Note { col=1; rot=0 }
+Note { col=2; rot=180 }
+Note { col=3; rot=270 }
+Note { col=4; rot=90 }
+Note { col=5; rot=0 }
+Note { col=6; rot=180 }
+Note { col=7; rot=270 }

@@ -26,6 +26,7 @@ use winit::keyboard::KeyCode;
 
 pub const TRANSITION_IN_DURATION: f32 = 0.4;
 pub const TRANSITION_OUT_DURATION: f32 = 0.4;
+pub const MAX_COLS: usize = 8;
 
 // These mirror ScreenGameplay's MinSecondsToStep/MinSecondsToMusic metrics in ITGmania.
 // Simply Love scales them by MusicRate, so we apply that in init().
@@ -169,26 +170,45 @@ pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
 }
 
 #[inline(always)]
-fn compute_column_scroll_dirs(scroll_option: profile::ScrollOption) -> [f32; 4] {
+fn compute_column_scroll_dirs(scroll_option: profile::ScrollOption, num_cols: usize) -> [f32; MAX_COLS] {
     use profile::ScrollOption;
-    let mut dirs = [1.0_f32, 1.0_f32, 1.0_f32, 1.0_f32];
+    let mut dirs = [1.0_f32; MAX_COLS];
+    let n = num_cols.min(MAX_COLS);
 
     if scroll_option.contains(ScrollOption::Reverse) {
-        for d in &mut dirs {
+        for d in dirs.iter_mut().take(n) {
             *d *= -1.0;
         }
     }
     if scroll_option.contains(ScrollOption::Split) {
-        dirs[2] *= -1.0;
-        dirs[3] *= -1.0;
+        for base in (0..n).step_by(4) {
+            if base + 2 < n {
+                dirs[base + 2] *= -1.0;
+            }
+            if base + 3 < n {
+                dirs[base + 3] *= -1.0;
+            }
+        }
     }
     if scroll_option.contains(ScrollOption::Alternate) {
-        dirs[1] *= -1.0;
-        dirs[3] *= -1.0;
+        for base in (0..n).step_by(4) {
+            if base + 1 < n {
+                dirs[base + 1] *= -1.0;
+            }
+            if base + 3 < n {
+                dirs[base + 3] *= -1.0;
+            }
+        }
     }
     if scroll_option.contains(ScrollOption::Cross) {
-        dirs[1] *= -1.0;
-        dirs[2] *= -1.0;
+        for base in (0..n).step_by(4) {
+            if base + 1 < n {
+                dirs[base + 1] *= -1.0;
+            }
+            if base + 2 < n {
+                dirs[base + 2] *= -1.0;
+            }
+        }
     }
     dirs
 }
@@ -198,6 +218,7 @@ pub struct State {
     pub song_full_title: Arc<str>,
     pub background_texture_key: String,
     pub chart: Arc<ChartData>,
+    pub num_cols: usize,
     pub timing: Arc<TimingData>,
     pub beat_info_cache: BeatInfoCache,
     pub timing_profile: TimingProfile,
@@ -207,7 +228,7 @@ pub struct State {
     pub current_music_time: f32,
     pub note_spawn_cursor: usize,
     pub judged_row_cursor: usize,
-    pub arrows: [Vec<Arrow>; 4],
+    pub arrows: [Vec<Arrow>; MAX_COLS],
     pub note_time_cache: Vec<f32>,
     pub note_display_beat_cache: Vec<f32>,
     pub hold_end_time_cache: Vec<Option<f32>>,
@@ -235,7 +256,7 @@ pub struct State {
     pub judgment_counts: HashMap<JudgeGrade, u32>,
     pub scoring_counts: HashMap<JudgeGrade, u32>,
     pub last_judgment: Option<JudgmentRenderInfo>,
-    pub hold_judgments: [Option<HoldJudgmentRenderInfo>; 4],
+    pub hold_judgments: [Option<HoldJudgmentRenderInfo>; MAX_COLS],
 
     pub life: f32,
     pub combo_after_miss: u32,
@@ -259,12 +280,12 @@ pub struct State {
     pub draw_distance_before_targets: f32,
     pub draw_distance_after_targets: f32,
     pub reverse_scroll: bool,
-    pub column_scroll_dirs: [f32; 4],
-    pub receptor_glow_timers: [f32; 4],
-    pub receptor_bop_timers: [f32; 4],
-    pub tap_explosions: [Option<ActiveTapExplosion>; 4],
-    pub mine_explosions: [Option<ActiveMineExplosion>; 4],
-    pub active_holds: [Option<ActiveHold>; 4],
+    pub column_scroll_dirs: [f32; MAX_COLS],
+    pub receptor_glow_timers: [f32; MAX_COLS],
+    pub receptor_bop_timers: [f32; MAX_COLS],
+    pub tap_explosions: [Option<ActiveTapExplosion>; MAX_COLS],
+    pub mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
+    pub active_holds: [Option<ActiveHold>; MAX_COLS],
     pub combo_milestones: Vec<ActiveComboMilestone>,
     pub hands_achieved: u32,
     pub holds_total: u32,
@@ -285,9 +306,9 @@ pub struct State {
 
     pub hold_to_exit_key: Option<KeyCode>,
     pub hold_to_exit_start: Option<Instant>,
-    prev_inputs: [bool; 4],
-    keyboard_lane_state: [bool; 4],
-    gamepad_lane_state: [bool; 4],
+    prev_inputs: [bool; MAX_COLS],
+    keyboard_lane_state: [bool; MAX_COLS],
+    gamepad_lane_state: [bool; MAX_COLS],
     pending_edges: VecDeque<InputEdge>,
 
     log_timer: f32,
@@ -334,6 +355,10 @@ pub fn queue_input_edge(
     pressed: bool,
     _timestamp: Instant,
 ) {
+    if lane.index() >= state.num_cols {
+        return;
+    }
+
     // Map this input edge directly into the gameplay music time using the
     // audio device clock, so judgments are not tied to frame timing.
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
@@ -378,25 +403,42 @@ pub fn init(
         1.0
     };
 
+    let num_cols = if chart.chart_type.eq_ignore_ascii_case("dance-double") {
+        8
+    } else {
+        4
+    };
     let style = Style {
-        num_cols: 4,
+        num_cols,
         num_players: 1,
     };
     let profile = profile::get();
-    let noteskin_path = match profile.noteskin {
-        crate::game::profile::NoteSkin::Cel => "assets/noteskins/cel/dance-single.txt",
-        crate::game::profile::NoteSkin::Metal => "assets/noteskins/metal/dance-single.txt",
-        crate::game::profile::NoteSkin::EnchantmentV2 => {
+    let noteskin_path = match (profile.noteskin, num_cols) {
+        (crate::game::profile::NoteSkin::Cel, 8) => "assets/noteskins/cel/dance-double.txt",
+        (crate::game::profile::NoteSkin::Cel, _) => "assets/noteskins/cel/dance-single.txt",
+        (crate::game::profile::NoteSkin::Metal, 8) => "assets/noteskins/metal/dance-double.txt",
+        (crate::game::profile::NoteSkin::Metal, _) => "assets/noteskins/metal/dance-single.txt",
+        (crate::game::profile::NoteSkin::EnchantmentV2, 8) => {
+            "assets/noteskins/enchantment-v2/dance-double.txt"
+        }
+        (crate::game::profile::NoteSkin::EnchantmentV2, _) => {
             "assets/noteskins/enchantment-v2/dance-single.txt"
         }
-        crate::game::profile::NoteSkin::DevCel2024V3 => {
+        (crate::game::profile::NoteSkin::DevCel2024V3, 8) => {
+            "assets/noteskins/devcel-2024-v3/dance-double.txt"
+        }
+        (crate::game::profile::NoteSkin::DevCel2024V3, _) => {
             "assets/noteskins/devcel-2024-v3/dance-single.txt"
         }
     };
+    let fallback_cel_path = if num_cols == 8 {
+        "assets/noteskins/cel/dance-double.txt"
+    } else {
+        "assets/noteskins/cel/dance-single.txt"
+    };
     let noteskin = noteskin::load(Path::new(noteskin_path), &style)
         .ok()
-        .or_else(|| noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style).ok())
-        .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok());
+        .or_else(|| noteskin::load(Path::new(fallback_cel_path), &style).ok());
 
     let mini_value = (profile.mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
     let mut field_zoom = 1.0 - mini_value * 0.5;
@@ -630,13 +672,14 @@ pub fn init(
     let music_end_time =
         compute_music_end_time(&notes, &note_time_cache, &hold_end_time_cache, rate);
     let notes_len = notes.len();
-    let column_scroll_dirs = compute_column_scroll_dirs(profile.scroll_option);
+    let column_scroll_dirs = compute_column_scroll_dirs(profile.scroll_option, num_cols);
 
     State {
         song,
         song_full_title,
         chart,
         background_texture_key: "__white".to_string(),
+        num_cols,
         timing,
         beat_info_cache,
         timing_profile,
@@ -646,7 +689,7 @@ pub fn init(
         current_music_time: -start_delay,
         note_spawn_cursor: 0,
         judged_row_cursor: 0,
-        arrows: [vec![], vec![], vec![], vec![]],
+        arrows: std::array::from_fn(|_| Vec::new()),
         note_time_cache,
         note_display_beat_cache,
         hold_end_time_cache,
@@ -706,8 +749,8 @@ pub fn init(
         draw_distance_after_targets,
         reverse_scroll: profile.reverse_scroll,
         column_scroll_dirs,
-        receptor_glow_timers: [0.0; 4],
-        receptor_bop_timers: [0.0; 4],
+        receptor_glow_timers: [0.0; MAX_COLS],
+        receptor_bop_timers: [0.0; MAX_COLS],
         tap_explosions: Default::default(),
         mine_explosions: Default::default(),
         active_holds: Default::default(),
@@ -728,9 +771,9 @@ pub fn init(
         sync_overlay_message: None,
         hold_to_exit_key: None,
         hold_to_exit_start: None,
-        prev_inputs: [false; 4],
-        keyboard_lane_state: [false; 4],
-        gamepad_lane_state: [false; 4],
+        prev_inputs: [false; MAX_COLS],
+        keyboard_lane_state: [false; MAX_COLS],
+        gamepad_lane_state: [false; MAX_COLS],
         pending_edges: VecDeque::new(),
         log_timer: 0.0,
     }
@@ -1074,7 +1117,12 @@ fn refresh_roll_life_on_step(state: &mut State, column: usize) {
     hold.let_go_starting_life = 0.0;
 }
 
-fn update_active_holds(state: &mut State, inputs: &[bool; 4], current_time: f32, delta_time: f32) {
+fn update_active_holds(
+    state: &mut State,
+    inputs: &[bool; MAX_COLS],
+    current_time: f32,
+    delta_time: f32,
+) {
     for column in 0..state.active_holds.len() {
         let mut handle_let_go = None;
         let mut handle_success = None;
@@ -1639,6 +1687,9 @@ fn update_judged_rows(state: &mut State) {
 fn process_input_edges(state: &mut State) {
     while let Some(edge) = state.pending_edges.pop_front() {
         let lane_idx = edge.lane.index();
+        if lane_idx >= state.num_cols {
+            continue;
+        }
         let was_down = state.keyboard_lane_state[lane_idx] || state.gamepad_lane_state[lane_idx];
         match edge.source {
             InputSource::Keyboard => state.keyboard_lane_state[lane_idx] = edge.pressed,
@@ -1792,12 +1843,14 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
                 && state.notes[state.note_spawn_cursor].beat < lookahead_beat
             {
                 let note = &state.notes[state.note_spawn_cursor];
-                state.arrows[note.column].push(Arrow {
-                    beat: note.beat,
-                    column: note.column,
-                    note_type: note.note_type,
-                    note_index: state.note_spawn_cursor,
-                });
+                if note.column < state.num_cols {
+                    state.arrows[note.column].push(Arrow {
+                        beat: note.beat,
+                        column: note.column,
+                        note_type: note.note_type,
+                        note_index: state.note_spawn_cursor,
+                    });
+                }
                 state.note_spawn_cursor += 1;
             }
         }
@@ -1820,12 +1873,14 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
                     let note_disp_beat = state.note_display_beat_cache[state.note_spawn_cursor];
                     if note_disp_beat < target_displayed_beat {
                         let note = &state.notes[state.note_spawn_cursor];
-                        state.arrows[note.column].push(Arrow {
-                            beat: note.beat,
-                            column: note.column,
-                            note_type: note.note_type,
-                            note_index: state.note_spawn_cursor,
-                        });
+                        if note.column < state.num_cols {
+                            state.arrows[note.column].push(Arrow {
+                                beat: note.beat,
+                                column: note.column,
+                                note_type: note.note_type,
+                                note_index: state.note_spawn_cursor,
+                            });
+                        }
                         state.note_spawn_cursor += 1;
                     } else {
                         break;
@@ -2035,7 +2090,11 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     // Centered receptors ignore Reverse for positioning (but not direction).
     // Apply notefield offset here too for consistency.
     let receptor_y_centered = screen_center_y() + profile.note_field_offset_y as f32;
-    let column_receptor_ys: [f32; 4] = std::array::from_fn(|i| {
+    let num_cols = state.num_cols;
+    let column_receptor_ys: [f32; MAX_COLS] = std::array::from_fn(|i| {
+        if i >= num_cols {
+            return receptor_y_normal;
+        }
         if is_centered {
             receptor_y_centered
         } else if column_dirs[i] >= 0.0 {
@@ -2248,12 +2307,13 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     }
 
     process_input_edges(state);
-    let current_inputs = [
-        state.keyboard_lane_state[0] || state.gamepad_lane_state[0],
-        state.keyboard_lane_state[1] || state.gamepad_lane_state[1],
-        state.keyboard_lane_state[2] || state.gamepad_lane_state[2],
-        state.keyboard_lane_state[3] || state.gamepad_lane_state[3],
-    ];
+    let num_cols = state.num_cols;
+    let current_inputs: [bool; MAX_COLS] = std::array::from_fn(|i| {
+        if i >= num_cols {
+            return false;
+        }
+        state.keyboard_lane_state[i] || state.gamepad_lane_state[i]
+    });
     let prev_inputs = state.prev_inputs;
     for (col, (now_down, was_down)) in current_inputs.iter().copied().zip(prev_inputs).enumerate() {
         if now_down && was_down {

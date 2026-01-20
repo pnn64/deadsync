@@ -415,6 +415,10 @@ pub enum Lane {
     Down = 1,
     Up = 2,
     Right = 3,
+    P2Left = 4,
+    P2Down = 5,
+    P2Up = 6,
+    P2Right = 7,
 }
 
 impl Lane {
@@ -742,6 +746,10 @@ pub fn lane_from_action(act: VirtualAction) -> Option<Lane> {
         VirtualAction::p1_down => Some(Lane::Down),
         VirtualAction::p1_up => Some(Lane::Up),
         VirtualAction::p1_right => Some(Lane::Right),
+        VirtualAction::p2_left => Some(Lane::P2Left),
+        VirtualAction::p2_down => Some(Lane::P2Down),
+        VirtualAction::p2_up => Some(Lane::P2Up),
+        VirtualAction::p2_right => Some(Lane::P2Right),
         _ => None,
     }
 }

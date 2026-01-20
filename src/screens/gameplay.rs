@@ -320,10 +320,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         right_text: None,
         left_avatar: None,
     }));
-    actors.extend(gameplay_stats::build(
-        state,
-        asset_manager,
-        playfield_center_x,
-    ));
+    if state.num_cols <= 4 {
+        actors.extend(gameplay_stats::build(state, asset_manager, playfield_center_x));
+    }
     actors
 }

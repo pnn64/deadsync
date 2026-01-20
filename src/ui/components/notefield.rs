@@ -4,7 +4,7 @@ use crate::core::space::*;
 use crate::game::gameplay::active_hold_is_engaged;
 use crate::game::gameplay::{
     COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind,
-    HOLD_JUDGMENT_TOTAL_DURATION, MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION,
+    HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION,
     RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
 };
 use crate::game::judgment::{JudgeGrade, TimingWindow};
@@ -93,7 +93,12 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
     let notefield_offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
-    let playfield_center_x = screen_center_x() - (clamped_width * 0.25) + notefield_offset_x;
+    let base_playfield_center_x = if state.num_cols > 4 {
+        screen_center_x()
+    } else {
+        screen_center_x() - (clamped_width * 0.25)
+    };
+    let playfield_center_x = base_playfield_center_x + notefield_offset_x;
     let receptor_y_normal = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + notefield_offset_y;
     let receptor_y_reverse =
         screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE + notefield_offset_y;
@@ -103,7 +108,11 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
         .contains(profile::ScrollOption::Centered);
     let receptor_y_centered = screen_center_y() + notefield_offset_y;
     let column_dirs = state.column_scroll_dirs;
-    let column_receptor_ys: [f32; 4] = from_fn(|i| {
+    let num_cols = state.num_cols;
+    let column_receptor_ys: [f32; MAX_COLS] = from_fn(|i| {
+        if i >= num_cols {
+            return receptor_y_normal;
+        }
         if is_centered {
             receptor_y_centered
         } else if column_dirs[i] >= 0.0 {
@@ -197,7 +206,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
             }
         };
         // Receptors + glow
-        for i in 0..4 {
+        for i in 0..num_cols {
             let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
             let receptor_y_lane = column_receptor_ys[i];
             let bop_timer = state.receptor_bop_timers[i];
@@ -287,7 +296,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
             }
         }
         // Tap explosions
-        for i in 0..4 {
+        for i in 0..num_cols {
             if let Some(active) = state.tap_explosions[i].as_ref()
                 && let Some(explosion) = ns.tap_explosions.get(&active.window)
             {
@@ -343,7 +352,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
             }
         }
         // Mine explosions
-        for i in 0..4 {
+        for i in 0..num_cols {
             if let Some(active) = state.mine_explosions[i].as_ref() {
                 let duration = MINE_EXPLOSION_DURATION.max(f32::EPSILON);
                 let progress = (active.elapsed / duration).clamp(0.0, 1.0);
@@ -837,7 +846,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
                 && head_y >= lane_receptor_y - state.draw_distance_after_targets
                 && head_y <= lane_receptor_y + state.draw_distance_before_targets
             {
-                let note_idx = (note.column % 4) * NUM_QUANTIZATIONS + note.quantization_idx as usize;
+                let note_idx = note.column * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 if let Some(note_slot) = ns.notes.get(note_idx) {
                     let frame = note_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
                     let uv = note_slot.uv_for_frame(frame);
@@ -971,7 +980,7 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
                     continue;
                 }
                 let note = &state.notes[arrow.note_index];
-                let note_idx = (arrow.column % 4) * NUM_QUANTIZATIONS + note.quantization_idx as usize;
+                let note_idx = arrow.column * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 if let Some(note_slot) = ns.notes.get(note_idx) {
                     let note_frame =
                         note_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
@@ -1308,4 +1317,3 @@ pub fn build(state: &State, profile: &profile::Profile) -> (Vec<Actor>, f32) {
 
     (actors, playfield_center_x)
 }
-
