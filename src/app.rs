@@ -2,7 +2,7 @@ use crate::assets::AssetManager;
 use crate::config::{self, DisplayMode};
 use crate::core::display;
 use crate::core::gfx::{self as renderer, BackendType, RenderList, create_backend};
-use crate::core::input::{self, InputEvent};
+use crate::core::input::{self, InputEvent, VirtualAction};
 use crate::core::space::{self as space, Metrics};
 use crate::game::chart::ChartData;
 use crate::game::parsing::simfile as song_loading;
@@ -135,6 +135,7 @@ pub struct ScreensState {
 pub struct SessionState {
     preferred_difficulty_index: usize,
     session_start_time: Option<Instant>,
+    pending_select_profile_p2: bool,
 }
 
 /// Pure-ish container for the high-level game state.
@@ -188,6 +189,7 @@ impl SessionState {
         SessionState {
             preferred_difficulty_index,
             session_start_time: None,
+            pending_select_profile_p2: false,
         }
     }
 }
@@ -644,7 +646,31 @@ impl App {
     ) -> Result<(), Box<dyn Error>> {
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
-                crate::screens::menu::handle_input(&mut self.state.screens.menu_state, &ev)
+                let mut menu_ev = ev;
+                let p2_start = ev.action == VirtualAction::p2_start;
+                if p2_start {
+                    menu_ev.action = VirtualAction::p1_start;
+                }
+                let action = crate::screens::menu::handle_input(
+                    &mut self.state.screens.menu_state,
+                    &menu_ev,
+                );
+
+                if matches!(action, ScreenAction::Navigate(CurrentScreen::SelectProfile)) {
+                    let transitioning_to_sp = match self.state.shell.transition {
+                        TransitionState::Idle => true,
+                        TransitionState::ActorsFadeOut { target, .. }
+                        | TransitionState::FadingOut { target, .. } => {
+                            target == CurrentScreen::SelectProfile
+                        }
+                        _ => false,
+                    };
+                    if p2_start && transitioning_to_sp {
+                        self.state.session.pending_select_profile_p2 = true;
+                    }
+                }
+
+                action
             }
             CurrentScreen::SelectProfile => crate::screens::select_profile::handle_input(
                 &mut self.state.screens.select_profile_state,
@@ -1627,6 +1653,14 @@ impl App {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
             self.state.screens.select_profile_state = select_profile::init();
             self.state.screens.select_profile_state.active_color_index = current_color_index;
+            if self.state.session.pending_select_profile_p2 {
+                select_profile::set_joined(
+                    &mut self.state.screens.select_profile_state,
+                    false,
+                    true,
+                );
+                self.state.session.pending_select_profile_p2 = false;
+            }
         } else if target == CurrentScreen::SelectStyle {
             let current_color_index = self.state.screens.select_style_state.active_color_index;
             self.state.screens.select_style_state = select_style::init();
@@ -2059,6 +2093,14 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.state.screens.select_profile_state = select_profile::init();
                                 self.state.screens.select_profile_state.active_color_index =
                                     current_color_index;
+                                if self.state.session.pending_select_profile_p2 {
+                                    select_profile::set_joined(
+                                        &mut self.state.screens.select_profile_state,
+                                        false,
+                                        true,
+                                    );
+                                    self.state.session.pending_select_profile_p2 = false;
+                                }
                             } else if target_screen == CurrentScreen::SelectStyle {
                                 let current_color_index =
                                     self.state.screens.select_style_state.active_color_index;
