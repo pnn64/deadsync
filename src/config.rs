@@ -275,8 +275,8 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str("P1_Select=\n");
     content.push_str("P1_Start=KeyCode::Enter\n");
     content.push_str("P1_Up=KeyCode::ArrowUp,KeyCode::KeyW\n");
-    // Player 2 keyboard defaults: numpad directions + Start on NumpadEnter.
-    content.push_str("P2_Back=\n");
+    // Player 2 keyboard defaults: numpad directions + Start on NumpadEnter + Back on Numpad0.
+    content.push_str("P2_Back=KeyCode::Numpad0\n");
     content.push_str("P2_Down=KeyCode::Numpad2\n");
     content.push_str("P2_Left=KeyCode::Numpad4\n");
     content.push_str("P2_MenuDown=\n");
@@ -582,7 +582,8 @@ fn default_keymap_local() -> Keymap {
     km.bind(A::p2_left, &[InputBinding::Key(KeyCode::Numpad4)]);
     km.bind(A::p2_right, &[InputBinding::Key(KeyCode::Numpad6)]);
     km.bind(A::p2_start, &[InputBinding::Key(KeyCode::NumpadEnter)]);
-    // Leave P2_Back/Menu/Select/Operator/Restart unbound by default for now.
+    km.bind(A::p2_back, &[InputBinding::Key(KeyCode::Numpad0)]);
+    // Leave P2_Menu/Select/Operator/Restart unbound by default for now.
     km
 }
 
