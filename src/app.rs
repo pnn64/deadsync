@@ -1691,8 +1691,19 @@ impl App {
                     difficulty_index: po_state.chart_difficulty_index,
                 });
 
+                let to_scroll_speed = |m: &player_options::SpeedMod| match m.mod_type.as_str() {
+                    "X" => crate::game::scroll::ScrollSpeedSetting::XMod(m.value),
+                    "C" => crate::game::scroll::ScrollSpeedSetting::CMod(m.value),
+                    "M" => crate::game::scroll::ScrollSpeedSetting::MMod(m.value),
+                    _ => crate::game::scroll::ScrollSpeedSetting::default(),
+                };
+                let scroll_speeds = [
+                    to_scroll_speed(&po_state.speed_mod),
+                    to_scroll_speed(&po_state.p2_speed_mod),
+                ];
+
                 let color_index = po_state.active_color_index;
-                let gs = gameplay::init(song_arc, chart, color_index, po_state.music_rate);
+                let gs = gameplay::init(song_arc, chart, color_index, po_state.music_rate, scroll_speeds);
 
                 commands.push(Command::SetDynamicBackground(
                     gs.song.background_path.clone(),

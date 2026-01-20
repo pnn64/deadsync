@@ -66,6 +66,7 @@ pub struct Row {
     pub choice_difficulty_indices: Option<Vec<usize>>,
 }
 
+#[derive(Clone, Debug)]
 pub struct SpeedMod {
     pub mod_type: String, // "X", "C", "M"
     pub value: f32,
@@ -86,6 +87,7 @@ pub struct State {
     pub fa_plus_active_mask: u8,
     pub active_color_index: i32,
     pub speed_mod: SpeedMod,
+    pub p2_speed_mod: SpeedMod,
     pub music_rate: f32,
     pub current_pane: OptionsPane,
     bg: heart_bg::State,
@@ -1077,6 +1079,7 @@ pub fn init(
         .ok()
         .or_else(|| noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style).ok())
         .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok());
+    let p2_speed_mod = speed_mod.clone();
     State {
         song,
         chart_steps_index,
@@ -1088,6 +1091,7 @@ pub fn init(
         fa_plus_active_mask,
         active_color_index,
         speed_mod,
+        p2_speed_mod,
         music_rate: session_music_rate,
         current_pane: OptionsPane::Main,
         bg: heart_bg::State::new(),
@@ -1691,6 +1695,7 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    let show_p2 = crate::game::profile::get_session_play_style() == crate::game::profile::PlayStyle::Versus;
     match ev.action {
         VirtualAction::p1_back if ev.pressed => return ScreenAction::Navigate(Screen::SelectMusic),
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
@@ -1772,6 +1777,161 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 }
             }
         }
+        VirtualAction::p2_back if ev.pressed && show_p2 => return ScreenAction::Navigate(Screen::SelectMusic),
+        VirtualAction::p2_up | VirtualAction::p2_menu_up if show_p2 => {
+            if state.rows.first().is_some() {
+                if ev.pressed {
+                    let num_rows = state.rows.len();
+                    state.selected_row = (state.selected_row + num_rows - 1) % num_rows;
+                }
+            }
+        }
+        VirtualAction::p2_down | VirtualAction::p2_menu_down if show_p2 => {
+            if state.rows.first().is_some() {
+                if ev.pressed {
+                    let num_rows = state.rows.len();
+                    state.selected_row = (state.selected_row + 1) % num_rows;
+                }
+            }
+        }
+        VirtualAction::p2_left | VirtualAction::p2_menu_left if show_p2 && ev.pressed => {
+            if let Some(row) = state.rows.get(state.selected_row) {
+                if row.name == "Speed Mod" {
+                    let speed_mod = &mut state.p2_speed_mod;
+                    let (upper, increment) = match speed_mod.mod_type.as_str() {
+                        "X" => (20.0, 0.05),
+                        "C" | "M" => (2000.0, 5.0),
+                        _ => (1.0, 0.1),
+                    };
+                    speed_mod.value += -1.0 * increment;
+                    speed_mod.value = (speed_mod.value / increment).round() * increment;
+                    speed_mod.value = speed_mod.value.clamp(increment, upper);
+                    audio::play_sfx("assets/sounds/change_value.ogg");
+                } else if row.name == "Type of Speed Mod" {
+                    let reference_bpm = reference_bpm_for_song(&state.song);
+                    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+                        state.music_rate
+                    } else {
+                        1.0
+                    };
+                    let old_type = state.p2_speed_mod.mod_type.clone();
+                    let old_value = state.p2_speed_mod.value;
+                    let old_idx = match old_type.as_str() {
+                        "X" => 0,
+                        "C" => 1,
+                        "M" => 2,
+                        _ => 1,
+                    };
+                    let new_idx = (old_idx + 3 - 1) % 3;
+                    let new_type = match new_idx {
+                        0 => "X",
+                        1 => "C",
+                        _ => "M",
+                    };
+                    let target_bpm: f32 = match old_type.as_str() {
+                        "C" | "M" => old_value,
+                        "X" => (reference_bpm * rate * old_value).round(),
+                        _ => 600.0,
+                    };
+                    let new_value = match new_type {
+                        "X" => {
+                            let denom = reference_bpm * rate;
+                            let raw = if denom.is_finite() && denom > 0.0 {
+                                target_bpm / denom
+                            } else {
+                                1.0
+                            };
+                            let stepped = round_to_step(raw, 0.05);
+                            stepped.clamp(0.05, 20.0)
+                        }
+                        "C" | "M" => {
+                            let stepped = round_to_step(target_bpm, 5.0);
+                            stepped.clamp(5.0, 2000.0)
+                        }
+                        _ => 600.0,
+                    };
+                    state.p2_speed_mod.mod_type = new_type.to_string();
+                    state.p2_speed_mod.value = new_value;
+                    audio::play_sfx("assets/sounds/change_value.ogg");
+                }
+            }
+        }
+        VirtualAction::p2_right | VirtualAction::p2_menu_right if show_p2 && ev.pressed => {
+            if let Some(row) = state.rows.get(state.selected_row) {
+                if row.name == "Speed Mod" {
+                    let speed_mod = &mut state.p2_speed_mod;
+                    let (upper, increment) = match speed_mod.mod_type.as_str() {
+                        "X" => (20.0, 0.05),
+                        "C" | "M" => (2000.0, 5.0),
+                        _ => (1.0, 0.1),
+                    };
+                    speed_mod.value += 1.0 * increment;
+                    speed_mod.value = (speed_mod.value / increment).round() * increment;
+                    speed_mod.value = speed_mod.value.clamp(increment, upper);
+                    audio::play_sfx("assets/sounds/change_value.ogg");
+                } else if row.name == "Type of Speed Mod" {
+                    let reference_bpm = reference_bpm_for_song(&state.song);
+                    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+                        state.music_rate
+                    } else {
+                        1.0
+                    };
+                    let old_type = state.p2_speed_mod.mod_type.clone();
+                    let old_value = state.p2_speed_mod.value;
+                    let old_idx = match old_type.as_str() {
+                        "X" => 0,
+                        "C" => 1,
+                        "M" => 2,
+                        _ => 1,
+                    };
+                    let new_idx = (old_idx + 1) % 3;
+                    let new_type = match new_idx {
+                        0 => "X",
+                        1 => "C",
+                        _ => "M",
+                    };
+                    let target_bpm: f32 = match old_type.as_str() {
+                        "C" | "M" => old_value,
+                        "X" => (reference_bpm * rate * old_value).round(),
+                        _ => 600.0,
+                    };
+                    let new_value = match new_type {
+                        "X" => {
+                            let denom = reference_bpm * rate;
+                            let raw = if denom.is_finite() && denom > 0.0 {
+                                target_bpm / denom
+                            } else {
+                                1.0
+                            };
+                            let stepped = round_to_step(raw, 0.05);
+                            stepped.clamp(0.05, 20.0)
+                        }
+                        "C" | "M" => {
+                            let stepped = round_to_step(target_bpm, 5.0);
+                            stepped.clamp(5.0, 2000.0)
+                        }
+                        _ => 600.0,
+                    };
+                    state.p2_speed_mod.mod_type = new_type.to_string();
+                    state.p2_speed_mod.value = new_value;
+                    audio::play_sfx("assets/sounds/change_value.ogg");
+                }
+            }
+        }
+        VirtualAction::p2_start if ev.pressed && show_p2 => {
+            let num_rows = state.rows.len();
+            if state.selected_row == num_rows.saturating_sub(1)
+                && let Some(what_comes_next_row) = state.rows.get(num_rows.saturating_sub(2))
+                && what_comes_next_row.name == "What comes next?"
+                && let Some(choice) = what_comes_next_row
+                    .choices
+                    .get(what_comes_next_row.selected_choice_index)
+            {
+                if choice == "Gameplay" {
+                    return ScreenAction::Navigate(Screen::Gameplay);
+                }
+            }
+        }
         _ => {}
     }
     ScreenAction::None
@@ -1779,6 +1939,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
+    let show_p2 = crate::game::profile::get_session_play_style() == crate::game::profile::PlayStyle::Versus;
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
@@ -1828,6 +1989,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         diffuse(speed_color[0], speed_color[1], speed_color[2], 1.0):
         z(121)
     ));
+    if show_p2 {
+        let p2_speed_text = match state.p2_speed_mod.mod_type.as_str() {
+            "X" => {
+                let effective_bpm =
+                    (state.p2_speed_mod.value * effective_song_bpm as f32).round() as i32;
+                format!("X{}", effective_bpm)
+            }
+            "C" => format!("C{}", state.p2_speed_mod.value as i32),
+            "M" => format!("M{}", state.p2_speed_mod.value as i32),
+            _ => format!("{:.2}x", state.p2_speed_mod.value),
+        };
+        let p2_x = screen_center_x() * 2.0 - speed_mod_x;
+        actors.push(act!(text: font("wendy"): settext(p2_speed_text):
+            align(0.5, 0.5): xy(p2_x, speed_mod_y): zoom(0.5):
+            diffuse(speed_color[0], speed_color[1], speed_color[2], 1.0):
+            z(121)
+        ));
+    }
     /* ---------- SHARED GEOMETRY (rows aligned to help box) ---------- */
     // Help Text Box (from underlay.lua) — define this first so rows can match its width/left.
     let help_box_h = 40.0;
@@ -2578,6 +2757,100 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                             z(101)
                         ));
+                    }
+                    if show_p2 && !row.name.starts_with("Music Rate") {
+                        let p2_choice_center_x = screen_center_x() * 2.0 - choice_center_x;
+                        let p2_text = if row.name == "Speed Mod" {
+                            match state.p2_speed_mod.mod_type.as_str() {
+                                "X" => format!("{:.2}x", state.p2_speed_mod.value),
+                                "C" => format!("C{}", state.p2_speed_mod.value as i32),
+                                "M" => format!("M{}", state.p2_speed_mod.value as i32),
+                                _ => String::new(),
+                            }
+                        } else if row.name == "Type of Speed Mod" {
+                            let idx = match state.p2_speed_mod.mod_type.as_str() {
+                                "X" => 0,
+                                "C" => 1,
+                                "M" => 2,
+                                _ => 1,
+                            };
+                            row.choices.get(idx).cloned().unwrap_or_default()
+                        } else {
+                            choice_text.clone()
+                        };
+                        let mut p2_w = crate::ui::font::measure_line_width_logical(
+                            metrics_font,
+                            &p2_text,
+                            all_fonts,
+                        ) as f32;
+                        if !p2_w.is_finite() || p2_w <= 0.0 {
+                            p2_w = 1.0;
+                        }
+                        let p2_draw_w = p2_w * value_zoom;
+                        actors.push(act!(text: font("miso"): settext(p2_text):
+                            align(0.5, 0.5): xy(p2_choice_center_x, current_row_y): zoom(value_zoom):
+                            diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+                            z(101)
+                        ));
+                        let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                        let underline_w = p2_draw_w.ceil();
+                        let offset = widescale(3.0, 4.0);
+                        let underline_y = current_row_y + draw_h * 0.5 + offset;
+                        let underline_left_x = p2_choice_center_x - p2_draw_w * 0.5;
+                        let mut line_color = color::decorative_rgba(state.active_color_index);
+                        line_color[3] = 1.0;
+                        actors.push(act!(quad:
+                            align(0.0, 0.5):
+                            xy(underline_left_x, underline_y):
+                            zoomto(underline_w, line_thickness):
+                            diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                            z(101)
+                        ));
+                        if is_active {
+                            let pad_y = widescale(6.0, 8.0);
+                            let min_pad_x = widescale(2.0, 3.0);
+                            let max_pad_x = widescale(22.0, 28.0);
+                            let width_ref = widescale(180.0, 220.0);
+                            let t = (p2_draw_w / width_ref).clamp(0.0, 1.0);
+                            let mut pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
+                            let border_w = widescale(2.0, 2.5);
+                            let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
+                            if pad_x > max_pad_by_spacing {
+                                pad_x = max_pad_by_spacing;
+                            }
+                            let ring_w = p2_draw_w + pad_x * 2.0;
+                            let ring_h = draw_h + pad_y * 2.0;
+                            let left = p2_choice_center_x - ring_w * 0.5;
+                            let right = p2_choice_center_x + ring_w * 0.5;
+                            let top = current_row_y - ring_h / 2.0;
+                            let bottom = current_row_y + ring_h / 2.0;
+                            let mut ring_color = color::decorative_rgba(state.active_color_index);
+                            ring_color[3] = 1.0;
+                            actors.push(act!(quad:
+                                align(0.5, 0.5): xy(p2_choice_center_x, top + border_w * 0.5):
+                                zoomto(ring_w, border_w):
+                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                z(101)
+                            ));
+                            actors.push(act!(quad:
+                                align(0.5, 0.5): xy(p2_choice_center_x, bottom - border_w * 0.5):
+                                zoomto(ring_w, border_w):
+                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                z(101)
+                            ));
+                            actors.push(act!(quad:
+                                align(0.5, 0.5): xy(left + border_w * 0.5, current_row_y):
+                                zoomto(border_w, ring_h):
+                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                z(101)
+                            ));
+                            actors.push(act!(quad:
+                                align(0.5, 0.5): xy(right - border_w * 0.5, current_row_y):
+                                zoomto(border_w, ring_h):
+                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                z(101)
+                            ));
+                        }
                     }
                     // Add previews (centered on a shared vertical line)
                     // Add judgment preview for "Judgment Font" row showing Fantastic frame of the selected font

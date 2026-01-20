@@ -302,7 +302,7 @@ pub struct State {
     pub audio_lead_in_seconds: f32,
     pub current_beat: f32,
     pub current_music_time: f32,
-    pub note_spawn_cursor: usize,
+    pub note_spawn_cursor: [usize; MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
     pub arrows: [Vec<Arrow>; MAX_COLS],
     pub note_time_cache: Vec<f32>,
@@ -314,8 +314,8 @@ pub struct State {
     pub play_mine_sounds: bool,
     pub global_offset_seconds: f32,
     pub initial_global_offset_seconds: f32,
-    pub next_tap_miss_cursor: usize,
-    pub next_mine_avoid_cursor: usize,
+    pub next_tap_miss_cursor: [usize; MAX_PLAYERS],
+    pub next_mine_avoid_cursor: [usize; MAX_PLAYERS],
     pub row_entries: Vec<RowEntry>,
 
     // Optimization: Direct array lookup instead of HashMap
@@ -335,11 +335,11 @@ pub struct State {
     pub noteskin: Option<Noteskin>,
     pub active_color_index: i32,
     pub player_color: [f32; 4],
-    pub scroll_speed: ScrollSpeedSetting,
+    pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
     pub scroll_reference_bpm: f32,
     pub field_zoom: f32,
-    pub scroll_pixels_per_second: f32,
-    pub scroll_travel_time: f32,
+    pub scroll_pixels_per_second: [f32; MAX_PLAYERS],
+    pub scroll_travel_time: [f32; MAX_PLAYERS],
     pub draw_distance_before_targets: f32,
     pub draw_distance_after_targets: f32,
     pub reverse_scroll: bool,
@@ -390,6 +390,23 @@ fn player_for_col(state: &State, col: usize) -> usize {
 fn player_col_range(state: &State, player: usize) -> (usize, usize) {
     let start = player * state.cols_per_player;
     (start, start + state.cols_per_player)
+}
+
+#[inline(always)]
+fn player_note_range(state: &State, player: usize) -> (usize, usize) {
+    let num_players = state.num_players.max(1);
+    let total = state.notes.len();
+    if num_players <= 1 {
+        return (0, total);
+    }
+    let per = total / num_players;
+    let start = per.saturating_mul(player);
+    let end = if player + 1 >= num_players {
+        total
+    } else {
+        start.saturating_add(per).min(total)
+    };
+    (start, end)
 }
 
 fn apply_life_change(p: &mut PlayerRuntime, current_music_time: f32, delta: f32) {
@@ -468,6 +485,7 @@ pub fn init(
     chart: Arc<ChartData>,
     active_color_index: i32,
     music_rate: f32,
+    scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
 ) -> State {
     info!("Initializing Gameplay Screen...");
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
@@ -708,7 +726,6 @@ pub fn init(
         audio::play_music(music_path.clone(), cut, false, rate.max(0.01));
     }
 
-    let scroll_speed = prof.scroll_speed;
     let initial_bpm = timing.get_bpm_for_beat(first_note_beat);
 
     let centered = prof
@@ -727,11 +744,13 @@ pub fn init(
         reference_bpm = initial_bpm.max(120.0);
     }
 
-    let mut pixels_per_second = scroll_speed.pixels_per_second(initial_bpm, reference_bpm, rate);
-    if !pixels_per_second.is_finite() || pixels_per_second <= 0.0 {
-        pixels_per_second =
-            ScrollSpeedSetting::default().pixels_per_second(initial_bpm, reference_bpm, rate);
-    }
+    let pixels_per_second: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        let mut pps = scroll_speed[player].pixels_per_second(initial_bpm, reference_bpm, rate);
+        if !pps.is_finite() || pps <= 0.0 {
+            pps = ScrollSpeedSetting::default().pixels_per_second(initial_bpm, reference_bpm, rate);
+        }
+        pps
+    });
     let draw_distance_before_targets = screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER;
 
     // If Centered, we need to draw arrows well past the center line.
@@ -741,21 +760,32 @@ pub fn init(
         DRAW_DISTANCE_AFTER_TARGETS
     };
 
-    let mut travel_time = scroll_speed.travel_time_seconds(
-        draw_distance_before_targets,
-        initial_bpm,
-        reference_bpm,
-        rate,
-    );
-    if !travel_time.is_finite() || travel_time <= 0.0 {
-        travel_time = draw_distance_before_targets / pixels_per_second;
-    }
+    let travel_time: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        let mut tt = scroll_speed[player].travel_time_seconds(
+            draw_distance_before_targets,
+            initial_bpm,
+            reference_bpm,
+            rate,
+        );
+        if !tt.is_finite() || tt <= 0.0 {
+            tt = draw_distance_before_targets / pixels_per_second[player];
+        }
+        tt
+    });
 
     let timing_profile = TimingProfile::default_itg_with_fa_plus();
     let music_end_time =
         compute_music_end_time(&notes, &note_time_cache, &hold_end_time_cache, rate);
     let notes_len = notes.len();
     let column_scroll_dirs = compute_column_scroll_dirs(prof.scroll_option, num_cols);
+
+    let note_range_start: [usize; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if num_players <= 1 {
+            0
+        } else {
+            (notes_len / num_players).saturating_mul(player)
+        }
+    });
 
     State {
         song,
@@ -772,7 +802,7 @@ pub fn init(
         audio_lead_in_seconds: start_delay,
         current_beat: 0.0,
         current_music_time: -start_delay,
-        note_spawn_cursor: 0,
+        note_spawn_cursor: note_range_start,
         judged_row_cursor: [0; MAX_PLAYERS],
         arrows: std::array::from_fn(|_| Vec::new()),
         note_time_cache,
@@ -784,8 +814,8 @@ pub fn init(
         play_mine_sounds: config.mine_hit_sound,
         global_offset_seconds: config.global_offset_seconds,
         initial_global_offset_seconds: config.global_offset_seconds,
-        next_tap_miss_cursor: 0,
-        next_mine_avoid_cursor: 0,
+        next_tap_miss_cursor: note_range_start,
+        next_mine_avoid_cursor: note_range_start,
         row_entries,
         row_map_cache,
         decaying_hold_indices: Vec::new(),
@@ -959,12 +989,15 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time: f32) 
     let search_radius = mine_window * rate;
     let start_t = current_time - search_radius;
     let end_t = current_time + search_radius;
-    let times = &state.note_time_cache;
+    let player = player_for_col(state, column);
+    let (note_start, note_end) = player_note_range(state, player);
+    let times = &state.note_time_cache[note_start..note_end];
     let start_idx = times.partition_point(|&t| t < start_t);
     let end_idx = times.partition_point(|&t| t <= end_t);
     let mut best: Option<(usize, f32)> = None;
     for i in start_idx..end_idx {
-        let note = &state.notes[i];
+        let idx = note_start + i;
+        let note = &state.notes[idx];
         if note.column != column {
             continue;
         }
@@ -983,7 +1016,7 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time: f32) 
         if abs_err <= mine_window {
             match best {
                 Some((_, best_err)) if abs_err >= best_err => {}
-                _ => best = Some((i, time_error)),
+                _ => best = Some((idx, time_error)),
             }
         }
     }
@@ -1911,97 +1944,101 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
 #[inline(always)]
 fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
     let mine_window = state.timing_profile.mine_window_s;
-    let num_players = state.num_players;
-    let cols_per_player = state.cols_per_player;
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
         1.0
     };
     let cutoff_time = music_time_sec - mine_window * rate;
-    let len = state.notes.len();
-    while state.next_mine_avoid_cursor < len {
-        let i = state.next_mine_avoid_cursor;
-        let note_time = state.note_time_cache[i];
-        if note_time > cutoff_time {
-            break;
+    for player in 0..state.num_players {
+        let (note_start, note_end) = player_note_range(state, player);
+        let mut cursor = state.next_mine_avoid_cursor[player].max(note_start);
+        while cursor < note_end {
+            let note_time = state.note_time_cache[cursor];
+            if note_time > cutoff_time {
+                break;
+            }
+            let should_mark = matches!(state.notes[cursor].note_type, NoteType::Mine)
+                && state.notes[cursor].can_be_judged
+                && state.notes[cursor].mine_result.is_none();
+            if should_mark {
+                let (row_index, column) = {
+                    let note = &state.notes[cursor];
+                    (note.row_index, note.column)
+                };
+                state.notes[cursor].mine_result = Some(MineResult::Avoided);
+                state.players[player].mines_avoided =
+                    state.players[player].mines_avoided.saturating_add(1);
+                info!(
+                    "MINE AVOIDED: Row {}, Col {}, Time: {:.2}s",
+                    row_index, column, music_time_sec
+                );
+            }
+            cursor += 1;
         }
-        if let Some(note) = state.notes.get_mut(i)
-            && matches!(note.note_type, NoteType::Mine)
-            && note.can_be_judged
-            && note.mine_result.is_none()
-        {
-            note.mine_result = Some(MineResult::Avoided);
-            let player = if num_players <= 1 || cols_per_player == 0 {
-                0
-            } else {
-                (note.column / cols_per_player).min(num_players.saturating_sub(1))
-            };
-            state.players[player].mines_avoided = state.players[player].mines_avoided.saturating_add(1);
-            info!(
-                "MINE AVOIDED: Row {}, Col {}, Time: {:.2}s",
-                note.row_index, note.column, music_time_sec
-            );
-        }
-        state.next_mine_avoid_cursor += 1;
+        state.next_mine_avoid_cursor[player] = cursor;
     }
 }
 
 #[inline(always)]
 fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
-    match state.scroll_speed {
-        ScrollSpeedSetting::CMod(_) => {
-            let lookahead_time = music_time_sec + state.scroll_travel_time;
-            let lookahead_beat = state.timing.get_beat_for_time(lookahead_time);
-            while state.note_spawn_cursor < state.notes.len()
-                && state.notes[state.note_spawn_cursor].beat < lookahead_beat
-            {
-                let note = &state.notes[state.note_spawn_cursor];
-                if note.column < state.num_cols {
-                    state.arrows[note.column].push(Arrow {
-                        beat: note.beat,
-                        column: note.column,
-                        note_type: note.note_type,
-                        note_index: state.note_spawn_cursor,
-                    });
+    let speed_multiplier = state
+        .timing
+        .get_speed_multiplier(state.current_beat, state.current_music_time);
+    let current_displayed_beat = state.timing.get_displayed_beat(state.current_beat);
+
+    for player in 0..state.num_players {
+        let (note_start, note_end) = player_note_range(state, player);
+        let mut cursor = state.note_spawn_cursor[player].max(note_start);
+        match state.scroll_speed[player] {
+            ScrollSpeedSetting::CMod(_) => {
+                let lookahead_time = music_time_sec + state.scroll_travel_time[player];
+                let lookahead_beat = state.timing.get_beat_for_time(lookahead_time);
+                while cursor < note_end && state.notes[cursor].beat < lookahead_beat {
+                    let note = &state.notes[cursor];
+                    if note.column < state.num_cols {
+                        state.arrows[note.column].push(Arrow {
+                            beat: note.beat,
+                            column: note.column,
+                            note_type: note.note_type,
+                            note_index: cursor,
+                        });
+                    }
+                    cursor += 1;
                 }
-                state.note_spawn_cursor += 1;
             }
-        }
-        ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-            let speed_multiplier = state
-                .timing
-                .get_speed_multiplier(state.current_beat, state.current_music_time);
-            let player_multiplier = state
-                .scroll_speed
-                .beat_multiplier(state.scroll_reference_bpm, state.music_rate);
-            let final_multiplier = player_multiplier * speed_multiplier;
-            if final_multiplier > 0.0 {
-                let pixels_per_beat =
-                    ScrollSpeedSetting::ARROW_SPACING * final_multiplier * state.field_zoom;
-                let lookahead_in_displayed_beats =
-                    state.draw_distance_before_targets / pixels_per_beat;
-                let current_displayed_beat = state.timing.get_displayed_beat(state.current_beat);
-                let target_displayed_beat = current_displayed_beat + lookahead_in_displayed_beats;
-                while state.note_spawn_cursor < state.notes.len() {
-                    let note_disp_beat = state.note_display_beat_cache[state.note_spawn_cursor];
-                    if note_disp_beat < target_displayed_beat {
-                        let note = &state.notes[state.note_spawn_cursor];
+            ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                let player_multiplier = state.scroll_speed[player]
+                    .beat_multiplier(state.scroll_reference_bpm, state.music_rate);
+                let final_multiplier = player_multiplier * speed_multiplier;
+                if final_multiplier > 0.0 {
+                    let pixels_per_beat = ScrollSpeedSetting::ARROW_SPACING
+                        * final_multiplier
+                        * state.field_zoom;
+                    let lookahead_in_displayed_beats =
+                        state.draw_distance_before_targets / pixels_per_beat;
+                    let target_displayed_beat =
+                        current_displayed_beat + lookahead_in_displayed_beats;
+                    while cursor < note_end {
+                        let note_disp_beat = state.note_display_beat_cache[cursor];
+                        if note_disp_beat >= target_displayed_beat {
+                            break;
+                        }
+                        let note = &state.notes[cursor];
                         if note.column < state.num_cols {
                             state.arrows[note.column].push(Arrow {
                                 beat: note.beat,
                                 column: note.column,
                                 note_type: note.note_type,
-                                note_index: state.note_spawn_cursor,
+                                note_index: cursor,
                             });
                         }
-                        state.note_spawn_cursor += 1;
-                    } else {
-                        break;
+                        cursor += 1;
                     }
                 }
             }
         }
+        state.note_spawn_cursor[player] = cursor;
     }
 }
 
@@ -2109,76 +2146,83 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
     let global_offset_s = state.global_offset_seconds;
     let lead_in_s = state.audio_lead_in_seconds.max(0.0);
     let cutoff_time = music_time_sec - way_off_window * rate;
-    let len = state.notes.len();
-    while state.next_tap_miss_cursor < len {
-        let i = state.next_tap_miss_cursor;
-        let note_time = state.note_time_cache[i];
-        if note_time > cutoff_time {
-            break;
-        }
-        if let Some(note) = state.notes.get_mut(i)
-            && !matches!(note.note_type, NoteType::Mine)
-            && note.can_be_judged
-            && note.result.is_none()
-        {
-            let row = note.row_index;
-            let time_err_music = music_time_sec - note_time;
-            let time_err_real = time_err_music / rate;
-            note.result = Some(Judgment {
-                time_error_ms: time_err_real * 1000.0,
-                grade: JudgeGrade::Miss,
-                window: None,
-            });
+    for player in 0..state.num_players {
+        let (note_start, note_end) = player_note_range(state, player);
+        let mut cursor = state.next_tap_miss_cursor[player].max(note_start);
+        while cursor < note_end {
+            let note_time = state.note_time_cache[cursor];
+            if note_time > cutoff_time {
+                break;
+            }
+            let should_miss = !matches!(state.notes[cursor].note_type, NoteType::Mine)
+                && state.notes[cursor].can_be_judged
+                && state.notes[cursor].result.is_none();
+            if should_miss {
+                let (row, col, beat) = {
+                    let note = &state.notes[cursor];
+                    (note.row_index, note.column, note.beat)
+                };
+                let time_err_music = music_time_sec - note_time;
+                let time_err_real = time_err_music / rate;
+                state.notes[cursor].result = Some(Judgment {
+                    time_error_ms: time_err_real * 1000.0,
+                    grade: JudgeGrade::Miss,
+                    window: None,
+                });
 
-            let stream_pos_s = audio::get_music_stream_position_seconds();
-            let expected_stream_for_note_s =
-                note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-            let expected_stream_for_miss_s =
-                music_time_sec / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-            let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
-            let stream_delta_miss_ms = (stream_pos_s - expected_stream_for_miss_s) * 1000.0;
+                let stream_pos_s = audio::get_music_stream_position_seconds();
+                let expected_stream_for_note_s =
+                    note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                let expected_stream_for_miss_s =
+                    music_time_sec / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
+                let stream_delta_miss_ms = (stream_pos_s - expected_stream_for_miss_s) * 1000.0;
 
-            info!(
-                concat!(
-                    "TIMING MISS: row={}, col={}, beat={:.3}, ",
-                    "song_offset_s={:.4}, global_offset_s={:.4}, ",
-                    "note_time_s={:.6}, miss_time_s={:.6}, ",
-                    "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
-                    "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
-                    "stream_miss_s={:.6}, stream_delta_miss_ms={:.2}"
-                ),
-                row,
-                note.column,
-                note.beat,
-                song_offset_s,
-                global_offset_s,
-                note_time,
-                music_time_sec,
-                time_err_real * 1000.0,
-                rate,
-                lead_in_s,
-                stream_pos_s,
-                expected_stream_for_note_s,
-                stream_delta_note_ms,
-                expected_stream_for_miss_s,
-                stream_delta_miss_ms,
-            );
-            if let Some(hold) = note.hold.as_mut()
-                && hold.result != Some(HoldResult::Held)
-            {
-                hold.result = Some(HoldResult::LetGo);
-                if hold.let_go_started_at.is_none() {
-                    hold.let_go_started_at = Some(music_time_sec);
-                    hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
-                    if i < state.hold_decay_active.len() && !state.hold_decay_active[i] {
-                        state.hold_decay_active[i] = true;
-                        state.decaying_hold_indices.push(i);
+                info!(
+                    concat!(
+                        "TIMING MISS: row={}, col={}, beat={:.3}, ",
+                        "song_offset_s={:.4}, global_offset_s={:.4}, ",
+                        "note_time_s={:.6}, miss_time_s={:.6}, ",
+                        "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
+                        "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
+                        "stream_miss_s={:.6}, stream_delta_miss_ms={:.2}"
+                    ),
+                    row,
+                    col,
+                    beat,
+                    song_offset_s,
+                    global_offset_s,
+                    note_time,
+                    music_time_sec,
+                    time_err_real * 1000.0,
+                    rate,
+                    lead_in_s,
+                    stream_pos_s,
+                    expected_stream_for_note_s,
+                    stream_delta_note_ms,
+                    expected_stream_for_miss_s,
+                    stream_delta_miss_ms,
+                );
+                if let Some(hold) = state.notes[cursor].hold.as_mut()
+                    && hold.result != Some(HoldResult::Held)
+                {
+                    hold.result = Some(HoldResult::LetGo);
+                    if hold.let_go_started_at.is_none() {
+                        hold.let_go_started_at = Some(music_time_sec);
+                        hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
+                        if cursor < state.hold_decay_active.len()
+                            && !state.hold_decay_active[cursor]
+                        {
+                            state.hold_decay_active[cursor] = true;
+                            state.decaying_hold_indices.push(cursor);
+                        }
                     }
                 }
+                info!("MISSED (time-based): Row {}", row);
             }
-            info!("MISSED (time-based): Row {}", row);
+            cursor += 1;
         }
-        state.next_tap_miss_cursor += 1;
+        state.next_tap_miss_cursor[player] = cursor;
     }
 }
 
@@ -2186,22 +2230,30 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
 fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     let receptor_y_normal = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER;
     let receptor_y_reverse = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE;
-    let (cmod_pps_opt, curr_disp_beat, beatmod_multiplier) = match state.scroll_speed {
-        ScrollSpeedSetting::CMod(c_bpm) => {
-            let pps = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING * state.field_zoom;
-            (Some(pps), 0.0, 0.0)
+    let curr_disp_beat = state.timing.get_displayed_beat(state.current_beat);
+    let speed_multiplier = state
+        .timing
+        .get_speed_multiplier(state.current_beat, state.current_music_time);
+    let beatmod_multiplier: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        match state.scroll_speed[player] {
+            ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => state.scroll_speed[player]
+                .beat_multiplier(state.scroll_reference_bpm, state.music_rate)
+                * speed_multiplier,
+            ScrollSpeedSetting::CMod(_) => 0.0,
         }
-        ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-            let curr_disp = state.timing.get_displayed_beat(state.current_beat);
-            let speed_multiplier = state
-                .timing
-                .get_speed_multiplier(state.current_beat, state.current_music_time);
-            let player_multiplier = state
-                .scroll_speed
-                .beat_multiplier(state.scroll_reference_bpm, state.music_rate);
-            (None, curr_disp, player_multiplier * speed_multiplier)
+    });
+    let cmod_pps_zoomed: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        match state.scroll_speed[player] {
+            ScrollSpeedSetting::CMod(c_bpm) => {
+                (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING * state.field_zoom
+            }
+            _ => 0.0,
         }
-    };
+    });
+    let cmod_pps_raw: [f32; MAX_PLAYERS] = std::array::from_fn(|player| match state.scroll_speed[player] {
+        ScrollSpeedSetting::CMod(c_bpm) => (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING,
+        _ => 0.0,
+    });
 
     let profile = profile::get();
     let is_centered = profile
@@ -2226,26 +2278,37 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         }
     });
 
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    let num_players = state.num_players;
+    let cols_per_player = state.cols_per_player;
+
     for (col_idx, col_arrows) in state.arrows.iter_mut().enumerate() {
         let dir = column_dirs[col_idx];
         let receptor_y = column_receptor_ys[col_idx];
+        let player = if num_players <= 1 || cols_per_player == 0 {
+            0
+        } else {
+            (col_idx / cols_per_player).min(num_players.saturating_sub(1))
+        };
+        let scroll_speed = state.scroll_speed[player];
+        let beatmult = beatmod_multiplier[player];
+        let cmod_zoomed = cmod_pps_zoomed[player];
+        let cmod_raw = cmod_pps_raw[player];
 
         let miss_cull_threshold = receptor_y - dir * state.draw_distance_after_targets;
         col_arrows.retain(|arrow| {
             let note = &state.notes[arrow.note_index];
             if matches!(note.note_type, NoteType::Mine) {
                 if note.is_fake {
-                    let y_pos = match state.scroll_speed {
-                        ScrollSpeedSetting::CMod(c_bpm) => {
-                            let pps_chart = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING;
+                    let y_pos = match scroll_speed {
+                        ScrollSpeedSetting::CMod(_) => {
                             let note_time_chart = state.note_time_cache[arrow.note_index];
-                            let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-                                state.music_rate
-                            } else {
-                                1.0
-                            };
                             let time_diff_real = (note_time_chart - music_time_sec) / rate;
-                            receptor_y + dir * time_diff_real * pps_chart
+                            receptor_y + dir * time_diff_real * cmod_raw
                         }
                         ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                             let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
@@ -2254,7 +2317,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                                 + dir
                                     * beat_diff_disp
                                     * ScrollSpeedSetting::ARROW_SPACING
-                                    * beatmod_multiplier
+                                    * beatmult
                                     * state.field_zoom
                         }
                     };
@@ -2270,17 +2333,11 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                     None => return true,
                 }
             } else if note.is_fake {
-                let y_pos = match state.scroll_speed {
-                    ScrollSpeedSetting::CMod(c_bpm) => {
-                        let pps_chart = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING;
+                let y_pos = match scroll_speed {
+                    ScrollSpeedSetting::CMod(_) => {
                         let note_time_chart = state.note_time_cache[arrow.note_index];
-                        let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-                            state.music_rate
-                        } else {
-                            1.0
-                        };
                         let time_diff_real = (note_time_chart - music_time_sec) / rate;
-                        receptor_y + dir * time_diff_real * pps_chart
+                        receptor_y + dir * time_diff_real * cmod_raw
                     }
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                         let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
@@ -2289,7 +2346,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                             + dir
                                 * beat_diff_disp
                                 * ScrollSpeedSetting::ARROW_SPACING
-                                * beatmod_multiplier
+                                * beatmult
                                 * state.field_zoom
                     }
                 };
@@ -2307,17 +2364,11 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                 }
             }
 
-            let y_pos = match state.scroll_speed {
+            let y_pos = match scroll_speed {
                 ScrollSpeedSetting::CMod(_) => {
-                    let pps_chart = cmod_pps_opt.expect("cmod pps computed");
                     let note_time_chart = state.note_time_cache[arrow.note_index];
-                    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-                        state.music_rate
-                    } else {
-                        1.0
-                    };
                     let time_diff_real = (note_time_chart - music_time_sec) / rate;
-                    receptor_y + dir * time_diff_real * pps_chart
+                    receptor_y + dir * time_diff_real * cmod_zoomed
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
@@ -2326,7 +2377,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                         + dir
                             * beat_diff_disp
                             * ScrollSpeedSetting::ARROW_SPACING
-                            * beatmod_multiplier
+                            * beatmult
                             * state.field_zoom
                 }
             };
@@ -2384,19 +2435,21 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     state.is_in_delay = beat_info.is_in_delay;
 
     let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);
-    let mut dynamic_speed = state.scroll_speed.pixels_per_second(
-        current_bpm,
-        state.scroll_reference_bpm,
-        state.music_rate,
-    );
-    if !dynamic_speed.is_finite() || dynamic_speed <= 0.0 {
-        dynamic_speed = ScrollSpeedSetting::default().pixels_per_second(
+    for player in 0..state.num_players {
+        let mut dynamic_speed = state.scroll_speed[player].pixels_per_second(
             current_bpm,
             state.scroll_reference_bpm,
             state.music_rate,
         );
+        if !dynamic_speed.is_finite() || dynamic_speed <= 0.0 {
+            dynamic_speed = ScrollSpeedSetting::default().pixels_per_second(
+                current_bpm,
+                state.scroll_reference_bpm,
+                state.music_rate,
+            );
+        }
+        state.scroll_pixels_per_second[player] = dynamic_speed;
     }
-    state.scroll_pixels_per_second = dynamic_speed;
 
     let draw_distance_before_targets = screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER;
     state.draw_distance_before_targets = draw_distance_before_targets;
@@ -2411,16 +2464,19 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         DRAW_DISTANCE_AFTER_TARGETS
     };
 
-    let mut travel_time = state.scroll_speed.travel_time_seconds(
-        draw_distance_before_targets,
-        current_bpm,
-        state.scroll_reference_bpm,
-        state.music_rate,
-    );
-    if !travel_time.is_finite() || travel_time <= 0.0 {
-        travel_time = draw_distance_before_targets / dynamic_speed;
+    for player in 0..state.num_players {
+        let dynamic_speed = state.scroll_pixels_per_second[player];
+        let mut travel_time = state.scroll_speed[player].travel_time_seconds(
+            draw_distance_before_targets,
+            current_bpm,
+            state.scroll_reference_bpm,
+            state.music_rate,
+        );
+        if !travel_time.is_finite() || travel_time <= 0.0 {
+            travel_time = draw_distance_before_targets / dynamic_speed.max(f32::EPSILON);
+        }
+        state.scroll_travel_time[player] = travel_time;
     }
-    state.scroll_travel_time = travel_time;
 
     if state.current_music_time >= state.music_end_time {
         info!("Music end time reached. Transitioning to evaluation.");

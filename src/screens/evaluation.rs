@@ -164,7 +164,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             judgment_counts: p.judgment_counts.clone(),
             score_percent,
             grade,
-            speed_mod: gs.scroll_speed,
+            speed_mod: gs.scroll_speed[0],
             hands_achieved: p.hands_achieved,
             holds_held: p.holds_held,
             holds_total: gs.holds_total,

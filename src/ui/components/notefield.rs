@@ -101,6 +101,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
     if player_idx >= state.num_players {
         return (Vec::new(), screen_center_x());
     }
+    let scroll_speed = state.scroll_speed[player_idx];
     let col_start = player_idx * state.cols_per_player;
     let col_end = (col_start + state.cols_per_player)
         .min(state.num_cols)
@@ -188,7 +189,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
         };
         let current_time = state.current_music_time;
         // Precompute per-frame values used for converting beat/time to Y positions
-        let (rate, cmod_pps_opt, curr_disp_beat, beatmod_multiplier) = match state.scroll_speed {
+        let (rate, cmod_pps_opt, curr_disp_beat, beatmod_multiplier) = match scroll_speed {
             ScrollSpeedSetting::CMod(c_bpm) => {
                 let pps = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING * field_zoom;
                 let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
@@ -203,9 +204,8 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 let speed_multiplier = state
                     .timing
                     .get_speed_multiplier(state.current_beat, state.current_music_time);
-                let player_multiplier = state
-                    .scroll_speed
-                    .beat_multiplier(state.scroll_reference_bpm, state.music_rate);
+                let player_multiplier =
+                    scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
                 let final_multiplier = player_multiplier * speed_multiplier;
                 (1.0, None, curr_disp, final_multiplier)
             }
@@ -215,7 +215,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
         // downwards lanes anchor to the reverse row.
         let compute_lane_y_dynamic = |beat: f32, receptor_y_lane: f32, dir: f32| -> f32 {
             let dir = if dir >= 0.0 { 1.0 } else { -1.0 };
-            match state.scroll_speed {
+            match scroll_speed {
                 ScrollSpeedSetting::CMod(_) => {
                     let pps_chart = cmod_pps_opt.expect("cmod pps computed");
                     let note_time_chart = state.timing.get_time_for_beat(beat);
@@ -430,21 +430,40 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
             }
         }
         // Only consider notes that are currently in or near the lookahead window.
+        let notes_len = state.notes.len();
+        let note_range = if state.num_players <= 1 {
+            (0, notes_len)
+        } else {
+            let per = notes_len / state.num_players;
+            let start = per.saturating_mul(player_idx);
+            let end = if player_idx + 1 >= state.num_players {
+                notes_len
+            } else {
+                start.saturating_add(per).min(notes_len)
+            };
+            (start, end)
+        };
+        let (note_start, note_end) = note_range;
         let min_visible_index = state
-            .arrows
+            .arrows[col_start..col_end]
             .iter()
             .filter_map(|v| v.first())
             .map(|a| a.note_index)
             .min()
-            .unwrap_or(0);
-        let max_visible_index = state.note_spawn_cursor.min(state.notes.len());
-        let notes_len = state.notes.len();
+            .unwrap_or(note_start);
+        let max_visible_index = state.note_spawn_cursor[player_idx]
+            .clamp(note_start, note_end)
+            .min(notes_len);
         let extra_hold_indices = state
             .active_holds
             .iter()
             .filter_map(|a| a.as_ref().map(|h| h.note_index))
             .chain(state.decaying_hold_indices.iter().copied())
-            .filter(|&idx| idx < notes_len && (idx < min_visible_index || idx >= max_visible_index));
+            .filter(|&idx| {
+                idx >= note_start
+                    && idx < note_end
+                    && (idx < min_visible_index || idx >= max_visible_index)
+            });
 
         // Render holds in the visible window, plus any active/decaying holds outside it.
         // This avoids per-frame allocations and hashing for deduping.
@@ -482,7 +501,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
             let head_y = if is_head_dynamic {
                 compute_lane_y_dynamic(head_beat, lane_receptor_y, dir)
             } else {
-                match state.scroll_speed {
+                match scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
                         let pps_chart = cmod_pps_opt.expect("cmod pps computed");
                         let note_time_chart = state.note_time_cache[note_index];
@@ -502,7 +521,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 }
             };
 
-            let tail_y = match state.scroll_speed {
+            let tail_y = match scroll_speed {
                 ScrollSpeedSetting::CMod(_) => {
                     let pps_chart = cmod_pps_opt.expect("cmod pps computed");
                     // Use cached end time for O(1) lookup
@@ -924,7 +943,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
             let receptor_y_lane = column_receptor_ys[col_idx];
             for arrow in column_arrows {
                 // Use cached per-note timing to avoid per-frame timing queries
-                let y_pos = match state.scroll_speed {
+                let y_pos = match scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
                         let pps_chart = cmod_pps_opt.expect("cmod pps computed");
                         let note_time_chart = state.note_time_cache[arrow.note_index];
