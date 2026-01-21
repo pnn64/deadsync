@@ -845,6 +845,8 @@ mod windows_raw_input {
         emit_pad: Box<dyn FnMut(PadEvent) + Send>,
         emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
         devices: HashMap<isize, Dev>,
+        id_by_uuid: HashMap<[u8; 16], PadId>,
+        refs_by_uuid: HashMap<[u8; 16], u32>,        
         next_id: u32,
         buf: Vec<u8>,
     }
@@ -955,6 +957,10 @@ mod windows_raw_input {
     }
 
     fn add_device(ctx: &mut Ctx, h: HANDLE) {
+        if ctx.devices.contains_key(&hkey(h)) {
+            return;
+        }
+
         let info = get_device_info(h);
         let Some(hid) = info else {
             return;
@@ -965,6 +971,20 @@ mod windows_raw_input {
 
         let name = get_device_name(h).unwrap_or_else(|| format!("RawInput:{:?}", h));
         let uuid = uuid_from_bytes(name.as_bytes());
+
+        let id = ctx
+            .id_by_uuid
+            .get(&uuid)
+            .copied()
+            .unwrap_or_else(|| {
+                let id = PadId(ctx.next_id);
+                ctx.next_id += 1;
+                ctx.id_by_uuid.insert(uuid, id);
+                id
+            });
+
+        let refs = ctx.refs_by_uuid.get(&uuid).copied().unwrap_or(0);
+        ctx.refs_by_uuid.insert(uuid, refs + 1);
 
         let preparsed = get_preparsed(h).unwrap_or_default();
         let max_buttons = if preparsed.is_empty() {
@@ -979,7 +999,7 @@ mod windows_raw_input {
             }
         };
         let dev = Dev {
-            id: PadId(ctx.next_id),
+            id,
             name,
             vendor_id: Some(hid.dwVendorId as u16),
             product_id: Some(hid.dwProductId as u16),
@@ -990,9 +1010,10 @@ mod windows_raw_input {
             buttons_now: Vec::new(),
             dir: [false; 4],
         };
-        ctx.next_id += 1;
 
-        ctx.emit_connected(&dev);
+        if refs == 0 {
+            ctx.emit_connected(&dev);
+        }
         ctx.devices.insert(hkey(h), dev);
     }
 
@@ -1000,7 +1021,14 @@ mod windows_raw_input {
         let Some(dev) = ctx.devices.remove(&hkey(h)) else {
             return;
         };
-        ctx.emit_disconnected(&dev);
+
+        let refs = ctx.refs_by_uuid.get(&dev.uuid).copied().unwrap_or(0);
+        if refs <= 1 {
+            ctx.refs_by_uuid.remove(&dev.uuid);
+            ctx.emit_disconnected(&dev);
+        } else {
+            ctx.refs_by_uuid.insert(dev.uuid, refs - 1);
+        }
     }
 
     fn enumerate_existing(ctx: &mut Ctx) {
@@ -1297,6 +1325,8 @@ mod windows_raw_input {
                 emit_pad: Box::new(emit_pad),
                 emit_sys: Box::new(emit_sys),
                 devices: HashMap::new(),
+                id_by_uuid: HashMap::new(),
+                refs_by_uuid: HashMap::new(),
                 next_id: 0,
                 buf: Vec::with_capacity(1024),
             });
@@ -1442,6 +1472,7 @@ mod macos_iohid {
         emit_pad: Box<dyn FnMut(PadEvent) + Send>,
         emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
         next_id: u32,
+        id_by_uuid: HashMap<[u8; 16], PadId>,
         devs: HashMap<usize, Dev>,
 
         // CF strings (owned; we intentionally leak ctx).
@@ -1483,8 +1514,16 @@ mod macos_iohid {
                 location_id.unwrap_or(-1),
             );
             let uuid = uuid_from_bytes(name.as_bytes());
-            let id = PadId(ctx.next_id);
-            ctx.next_id += 1;
+            let id = ctx
+                .id_by_uuid
+                .get(&uuid)
+                .copied()
+                .unwrap_or_else(|| {
+                    let id = PadId(ctx.next_id);
+                    ctx.next_id += 1;
+                    ctx.id_by_uuid.insert(uuid, id);
+                    id
+                });
 
             let dev = Dev {
                 id,
@@ -1606,6 +1645,7 @@ mod macos_iohid {
                 emit_pad: Box::new(emit_pad),
                 emit_sys: Box::new(emit_sys),
                 next_id: 0,
+                id_by_uuid: HashMap::new(),
                 devs: HashMap::new(),
                 key_primary_usage_page: cfstr("PrimaryUsagePage"),
                 key_primary_usage: cfstr("PrimaryUsage"),
