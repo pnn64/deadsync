@@ -444,18 +444,24 @@ pub fn queue_input_edge(
     pressed: bool,
     _timestamp: Instant,
 ) {
-    let lane = if profile::get_session_play_style() == profile::PlayStyle::Single
-        && profile::get_session_player_side() == profile::PlayerSide::P2
-    {
-        match lane {
-            Lane::P2Left => Lane::Left,
-            Lane::P2Down => Lane::Down,
-            Lane::P2Up => Lane::Up,
-            Lane::P2Right => Lane::Right,
-            _ => lane,
-        }
-    } else {
-        lane
+    let play_style = profile::get_session_play_style();
+    let player_side = profile::get_session_player_side();
+    let lane = match (play_style, player_side, lane) {
+        // Single-player: reject the "other side" entirely so only one set of bindings can play.
+        (profile::PlayStyle::Single, profile::PlayerSide::P1, Lane::P2Left)
+        | (profile::PlayStyle::Single, profile::PlayerSide::P1, Lane::P2Down)
+        | (profile::PlayStyle::Single, profile::PlayerSide::P1, Lane::P2Up)
+        | (profile::PlayStyle::Single, profile::PlayerSide::P1, Lane::P2Right) => return,
+        (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::Left)
+        | (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::Down)
+        | (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::Up)
+        | (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::Right) => return,
+        // P2-only single: remap P2 lanes into the 4-col field.
+        (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::P2Left) => Lane::Left,
+        (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::P2Down) => Lane::Down,
+        (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::P2Up) => Lane::Up,
+        (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::P2Right) => Lane::Right,
+        _ => lane,
     };
     if lane.index() >= state.num_cols {
         return;
@@ -1556,7 +1562,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     let is_p2_single = profile::get_session_play_style() == profile::PlayStyle::Single
         && profile::get_session_player_side() == profile::PlayerSide::P2;
     match ev.action {
-        VirtualAction::p1_start => {
+        VirtualAction::p1_start if !is_p2_single => {
             if ev.pressed {
                 state.hold_to_exit_key = Some(KeyCode::Enter);
                 state.hold_to_exit_start = Some(ev.timestamp);
@@ -1574,7 +1580,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 state.hold_to_exit_start = None;
             }
         }
-        VirtualAction::p1_back => {
+        VirtualAction::p1_back if !is_p2_single => {
             if ev.pressed {
                 state.hold_to_exit_key = Some(KeyCode::Escape);
                 state.hold_to_exit_start = Some(ev.timestamp);

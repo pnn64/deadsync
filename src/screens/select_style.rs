@@ -146,18 +146,35 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    match ev.action {
-        VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+    let nav = match crate::game::profile::get_session_player_side() {
+        crate::game::profile::PlayerSide::P2 => match ev.action {
+            VirtualAction::p2_left | VirtualAction::p2_menu_left => Some(-1),
+            VirtualAction::p2_right | VirtualAction::p2_menu_right => Some(1),
+            VirtualAction::p2_start => Some(0),
+            VirtualAction::p2_back => Some(9),
+            _ => None,
+        },
+        crate::game::profile::PlayerSide::P1 => match ev.action {
+            VirtualAction::p1_left | VirtualAction::p1_menu_left => Some(-1),
+            VirtualAction::p1_right | VirtualAction::p1_menu_right => Some(1),
+            VirtualAction::p1_start => Some(0),
+            VirtualAction::p1_back => Some(9),
+            _ => None,
+        },
+    };
+
+    match nav {
+        Some(-1) => {
             state.selected_index = (state.selected_index + CHOICE_COUNT - 1) % CHOICE_COUNT;
             audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
-        VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+        Some(1) => {
             state.selected_index = (state.selected_index + 1) % CHOICE_COUNT;
             audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
-        VirtualAction::p1_start => {
+        Some(0) => {
             state.exit_requested = true;
             state.exit_chosen_anim = true;
             state.exit_target = Some(Screen::SelectMusic);
@@ -171,7 +188,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::None
         }
-        VirtualAction::p1_back => {
+        Some(9) => {
             state.exit_requested = true;
             state.exit_chosen_anim = false;
             state.exit_target = None;

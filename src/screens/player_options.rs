@@ -1138,9 +1138,16 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 }
 
 fn change_choice(state: &mut State, delta: isize) {
+    let is_p2_single = crate::game::profile::get_session_play_style() == crate::game::profile::PlayStyle::Single
+        && crate::game::profile::get_session_player_side() == crate::game::profile::PlayerSide::P2;
+
     let row = &mut state.rows[state.selected_row];
     if row.name == "Speed Mod" {
-        let speed_mod = &mut state.speed_mod;
+        let speed_mod = if is_p2_single {
+            &mut state.p2_speed_mod
+        } else {
+            &mut state.speed_mod
+        };
         let (upper, increment) = match speed_mod.mod_type.as_str() {
             "X" => (20.0, 0.05),
             "C" | "M" => (2000.0, 5.0),
@@ -1236,8 +1243,13 @@ fn change_choice(state: &mut State, delta: isize) {
                     2 => "M",
                     _ => "C",
                 };
-                let old_type = state.speed_mod.mod_type.clone();
-                let old_value = state.speed_mod.value;
+                let speed_mod = if is_p2_single {
+                    &mut state.p2_speed_mod
+                } else {
+                    &mut state.speed_mod
+                };
+                let old_type = speed_mod.mod_type.clone();
+                let old_value = speed_mod.value;
 
                 // Determine target effective BPM label we want to preserve when switching types.
                 let reference_bpm = reference_bpm_for_song(&state.song);
@@ -1275,8 +1287,8 @@ fn change_choice(state: &mut State, delta: isize) {
                     _ => 600.0,
                 };
 
-                state.speed_mod.mod_type = new_type.to_string();
-                state.speed_mod.value = new_value;
+                speed_mod.mod_type = new_type.to_string();
+                speed_mod.value = new_value;
 
                 // Update the choices vec for the "Speed Mod" row.
                 if let Some(speed_mod_row) = state.rows.get_mut(1)
@@ -1672,9 +1684,17 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     if state.current_pane == pane {
         return;
     }
+    let is_p2_single = crate::game::profile::get_session_play_style()
+        == crate::game::profile::PlayStyle::Single
+        && crate::game::profile::get_session_player_side() == crate::game::profile::PlayerSide::P2;
+    let speed_mod = if is_p2_single {
+        &state.p2_speed_mod
+    } else {
+        &state.speed_mod
+    };
     let mut rows = build_rows(
         &state.song,
-        &state.speed_mod,
+        speed_mod,
         state.chart_steps_index,
         state.chart_difficulty_index,
         state.music_rate,
@@ -1695,8 +1715,30 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    let show_p2 = crate::game::profile::get_session_play_style() == crate::game::profile::PlayStyle::Versus;
-    match ev.action {
+    let play_style = crate::game::profile::get_session_play_style();
+    let is_p2_single = play_style == crate::game::profile::PlayStyle::Single
+        && crate::game::profile::get_session_player_side() == crate::game::profile::PlayerSide::P2;
+    let show_p2 = play_style == crate::game::profile::PlayStyle::Versus;
+
+    let action = if is_p2_single {
+        match ev.action {
+            VirtualAction::p2_back => VirtualAction::p1_back,
+            VirtualAction::p2_start => VirtualAction::p1_start,
+            VirtualAction::p2_up => VirtualAction::p1_up,
+            VirtualAction::p2_down => VirtualAction::p1_down,
+            VirtualAction::p2_left => VirtualAction::p1_left,
+            VirtualAction::p2_right => VirtualAction::p1_right,
+            VirtualAction::p2_menu_up => VirtualAction::p1_menu_up,
+            VirtualAction::p2_menu_down => VirtualAction::p1_menu_down,
+            VirtualAction::p2_menu_left => VirtualAction::p1_menu_left,
+            VirtualAction::p2_menu_right => VirtualAction::p1_menu_right,
+            _ => return ScreenAction::None,
+        }
+    } else {
+        ev.action
+    };
+
+    match action {
         VirtualAction::p1_back if ev.pressed => return ScreenAction::Navigate(Screen::SelectMusic),
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
             if state.rows.first().is_some() {
@@ -1939,7 +1981,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
-    let show_p2 = crate::game::profile::get_session_play_style() == crate::game::profile::PlayStyle::Versus;
+    let play_style = crate::game::profile::get_session_play_style();
+    let is_p2_single = play_style == crate::game::profile::PlayStyle::Single
+        && crate::game::profile::get_session_player_side() == crate::game::profile::PlayerSide::P2;
+    let show_p2 = play_style == crate::game::profile::PlayStyle::Versus;
+    let speed_mod = if is_p2_single {
+        &state.p2_speed_mod
+    } else {
+        &state.speed_mod
+    };
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
@@ -1972,16 +2022,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let reference_bpm = reference_bpm_for_song(&state.song);
     let effective_song_bpm = (reference_bpm as f64) * state.music_rate as f64;
 
-    let speed_text = match state.speed_mod.mod_type.as_str() {
+    let speed_text = match speed_mod.mod_type.as_str() {
         "X" => {
             // For X-mod, show the effective BPM accounting for music rate
             // (e.g., "X390" for 3.25x on 120 BPM at 1.0x rate)
-            let effective_bpm = (state.speed_mod.value * effective_song_bpm as f32).round() as i32;
+            let effective_bpm = (speed_mod.value * effective_song_bpm as f32).round() as i32;
             format!("X{}", effective_bpm)
         }
-        "C" => format!("C{}", state.speed_mod.value as i32),
-        "M" => format!("M{}", state.speed_mod.value as i32),
-        _ => format!("{:.2}x", state.speed_mod.value),
+        "C" => format!("C{}", speed_mod.value as i32),
+        "M" => format!("M{}", speed_mod.value as i32),
+        _ => format!("{:.2}x", speed_mod.value),
     };
 
     actors.push(act!(text: font("wendy"): settext(speed_text):

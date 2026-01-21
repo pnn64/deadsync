@@ -758,22 +758,41 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    match ev.action {
-        VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-            handle_pad_dir(state, PadDir::Left, ev.pressed)
-        }
-        VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-            handle_pad_dir(state, PadDir::Right, ev.pressed)
-        }
-        VirtualAction::p1_up | VirtualAction::p1_menu_up => {
-            handle_pad_dir(state, PadDir::Up, ev.pressed)
-        }
-        VirtualAction::p1_down | VirtualAction::p1_menu_down => {
-            handle_pad_dir(state, PadDir::Down, ev.pressed)
-        }
-        VirtualAction::p1_start if ev.pressed => handle_confirm(state),
-        VirtualAction::p1_back if ev.pressed => ScreenAction::Navigate(Screen::Menu),
-        _ => ScreenAction::None,
+    match crate::game::profile::get_session_player_side() {
+        crate::game::profile::PlayerSide::P2 => match ev.action {
+            VirtualAction::p2_left | VirtualAction::p2_menu_left => {
+                handle_pad_dir(state, PadDir::Left, ev.pressed)
+            }
+            VirtualAction::p2_right | VirtualAction::p2_menu_right => {
+                handle_pad_dir(state, PadDir::Right, ev.pressed)
+            }
+            VirtualAction::p2_up | VirtualAction::p2_menu_up => {
+                handle_pad_dir(state, PadDir::Up, ev.pressed)
+            }
+            VirtualAction::p2_down | VirtualAction::p2_menu_down => {
+                handle_pad_dir(state, PadDir::Down, ev.pressed)
+            }
+            VirtualAction::p2_start if ev.pressed => handle_confirm(state),
+            VirtualAction::p2_back if ev.pressed => ScreenAction::Navigate(Screen::Menu),
+            _ => ScreenAction::None,
+        },
+        crate::game::profile::PlayerSide::P1 => match ev.action {
+            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+                handle_pad_dir(state, PadDir::Left, ev.pressed)
+            }
+            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+                handle_pad_dir(state, PadDir::Right, ev.pressed)
+            }
+            VirtualAction::p1_up | VirtualAction::p1_menu_up => {
+                handle_pad_dir(state, PadDir::Up, ev.pressed)
+            }
+            VirtualAction::p1_down | VirtualAction::p1_menu_down => {
+                handle_pad_dir(state, PadDir::Down, ev.pressed)
+            }
+            VirtualAction::p1_start if ev.pressed => handle_confirm(state),
+            VirtualAction::p1_back if ev.pressed => ScreenAction::Navigate(Screen::Menu),
+            _ => ScreenAction::None,
+        },
     }
 }
 
