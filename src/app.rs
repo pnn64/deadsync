@@ -108,6 +108,7 @@ pub struct ShellState {
     display_height: u32,
     pending_window_position: Option<PhysicalPosition<i32>>,
     gamepad_overlay_state: Option<(String, Instant)>,
+    gamepad_startup_complete: bool,
     pending_exit: bool,
     shift_held: bool,
 }
@@ -165,6 +166,7 @@ impl ShellState {
             display_monitor: cfg.display_monitor,
             pending_window_position: None,
             gamepad_overlay_state: None,
+            gamepad_startup_complete: false,
             pending_exit: false,
             shift_held: false,
         }
@@ -1890,7 +1892,10 @@ impl ApplicationHandler<UserEvent> for App {
                         &ev,
                     );
                 }
-                let msg = match &ev {
+                match &ev {
+                    GpSystemEvent::StartupComplete => {
+                        self.state.shell.gamepad_startup_complete = true;
+                    }
                     GpSystemEvent::Connected {
                         name, id, backend, ..
                     } => {
@@ -1900,12 +1905,17 @@ impl ApplicationHandler<UserEvent> for App {
                             usize::from(*id),
                             backend
                         );
-                        format!(
-                            "Connected: {} (ID: {}) via {:?}",
-                            name,
-                            usize::from(*id),
-                            backend
-                        )
+                        if self.state.shell.gamepad_startup_complete {
+                            self.state.shell.gamepad_overlay_state = Some((
+                                format!(
+                                    "Connected: {} (ID: {}) via {:?}",
+                                    name,
+                                    usize::from(*id),
+                                    backend
+                                ),
+                                Instant::now(),
+                            ));
+                        }
                     }
                     GpSystemEvent::Disconnected {
                         name, id, backend, ..
@@ -1916,15 +1926,19 @@ impl ApplicationHandler<UserEvent> for App {
                             usize::from(*id),
                             backend
                         );
-                        format!(
-                            "Disconnected: {} (ID: {}) via {:?}",
-                            name,
-                            usize::from(*id),
-                            backend
-                        )
+                        if self.state.shell.gamepad_startup_complete {
+                            self.state.shell.gamepad_overlay_state = Some((
+                                format!(
+                                    "Disconnected: {} (ID: {}) via {:?}",
+                                    name,
+                                    usize::from(*id),
+                                    backend
+                                ),
+                                Instant::now(),
+                            ));
+                        }
                     }
-                };
-                self.state.shell.gamepad_overlay_state = Some((msg, Instant::now()));
+                }
             }
             UserEvent::Pad(ev) => {
                 if self.state.screens.current_screen == CurrentScreen::Sandbox {

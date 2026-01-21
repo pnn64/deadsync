@@ -158,6 +158,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 pub fn handle_gamepad_system_event(state: &mut State, ev: &GpSystemEvent) {
     let now = Instant::now();
     let msg = match ev {
+        GpSystemEvent::StartupComplete => "[SYS] Gamepad startup complete".to_string(),
         GpSystemEvent::Connected {
             name,
             id,

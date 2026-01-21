@@ -131,6 +131,7 @@ pub enum GpSystemEvent {
         id: PadId,
         backend: PadBackend,
     },
+    StartupComplete,
 }
 
 /// Run the platform pad backend on the current thread.
@@ -692,6 +693,7 @@ mod linux_evdev {
             }
         }
 
+        emit_sys(GpSystemEvent::StartupComplete);
         if devs.is_empty() {
             loop {
                 std::thread::park();
@@ -1377,6 +1379,7 @@ mod windows_raw_input {
             let _ = RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32);
 
             enumerate_existing(&mut ctx);
+            (ctx.emit_sys)(GpSystemEvent::StartupComplete);
 
             let mut msg = MSG::default();
             loop {
@@ -1419,6 +1422,8 @@ mod macos_iohid {
         fn CFRunLoopRun();
         fn CFStringCreateWithCString(alloc: CFAllocatorRef, cstr: *const c_char, encoding: u32) -> CFStringRef;
         fn CFRelease(cf: CFTypeRef);
+        fn CFSetGetCount(the_set: CFTypeRef) -> CFIndex;
+        fn CFSetGetValues(the_set: CFTypeRef, values: *mut CFTypeRef);
         fn CFNumberGetValue(number: CFTypeRef, the_type: i32, value_ptr: *mut c_void) -> bool;
 
         static kCFRunLoopDefaultMode: CFStringRef;
@@ -1433,6 +1438,7 @@ mod macos_iohid {
         fn IOHIDManagerRegisterInputValueCallback(manager: IOHIDManagerRef, callback: extern "C" fn(*mut c_void, IOReturn, *mut c_void, IOHIDValueRef), context: *mut c_void);
         fn IOHIDManagerScheduleWithRunLoop(manager: IOHIDManagerRef, run_loop: CFRunLoopRef, mode: CFStringRef);
         fn IOHIDManagerOpen(manager: IOHIDManagerRef, options: u32) -> IOReturn;
+        fn IOHIDManagerCopyDevices(manager: IOHIDManagerRef) -> CFTypeRef;
 
         fn IOHIDDeviceGetProperty(device: IOHIDDeviceRef, key: CFStringRef) -> CFTypeRef;
         fn IOHIDValueGetElement(value: IOHIDValueRef) -> IOHIDElementRef;
@@ -1655,14 +1661,34 @@ mod macos_iohid {
                 key_location_id: cfstr("LocationID"),
             });
 
+            let ctx_ptr = ptr::addr_of_mut!(*ctx).cast::<c_void>();
             IOHIDManagerSetDeviceMatching(manager, ptr::null());
-            IOHIDManagerRegisterDeviceMatchingCallback(manager, on_match, ptr::addr_of_mut!(*ctx).cast::<c_void>());
-            IOHIDManagerRegisterDeviceRemovalCallback(manager, on_remove, ptr::addr_of_mut!(*ctx).cast::<c_void>());
-            IOHIDManagerRegisterInputValueCallback(manager, on_input, ptr::addr_of_mut!(*ctx).cast::<c_void>());
+            IOHIDManagerRegisterDeviceMatchingCallback(manager, on_match, ctx_ptr);
+            IOHIDManagerRegisterDeviceRemovalCallback(manager, on_remove, ctx_ptr);
+            IOHIDManagerRegisterInputValueCallback(manager, on_input, ctx_ptr);
 
             let rl = CFRunLoopGetCurrent();
             IOHIDManagerScheduleWithRunLoop(manager, rl, kCFRunLoopDefaultMode);
             let _ = IOHIDManagerOpen(manager, 0);
+
+            let set = IOHIDManagerCopyDevices(manager);
+            if !set.is_null() {
+                let n = CFSetGetCount(set);
+                if n > 0 {
+                    let mut vals: Vec<CFTypeRef> = vec![ptr::null(); n as usize];
+                    CFSetGetValues(set, vals.as_mut_ptr());
+                    for &v in &vals {
+                        let dev = v as IOHIDDeviceRef;
+                        if dev.is_null() {
+                            continue;
+                        }
+                        on_match(ctx_ptr, 0, ptr::null_mut(), dev);
+                    }
+                }
+                CFRelease(set);
+            }
+            (ctx.emit_sys)(GpSystemEvent::StartupComplete);
+
             CFRunLoopRun();
 
             // Keep ctx alive forever (run loop runs until process exit).
