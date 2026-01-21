@@ -368,8 +368,12 @@ fn active_choice(state: &State) -> ActiveProfile {
 fn trigger_invalid_choice(state: &mut State, is_p1: bool) {
     if is_p1 {
         state.p1_shake_t = 0.0;
+        // Simply Love `InvalidChoiceMessageCommand` starts with `finishtweening()`,
+        // so ensure any join pulse is fully settled before we shake.
+        state.p1_join_pulse_t = JOIN_PULSE_DURATION;
     } else {
         state.p2_shake_t = 0.0;
+        state.p2_join_pulse_t = JOIN_PULSE_DURATION;
     }
     audio::play_sfx("assets/sounds/boom.ogg");
 }
@@ -694,6 +698,26 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
             len[1] *= zoom;
             apply_zoom_to_actor(child, pivot, zoom);
         }
+    }
+}
+
+fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
+    match actor {
+        Actor::Sprite { offset, .. } => {
+            offset[0] += dx;
+            offset[1] += dy;
+        }
+        Actor::Text { offset, .. } => {
+            offset[0] += dx;
+            offset[1] += dy;
+        }
+        // Frame children are already in the frame's coordinate space; shifting the
+        // frame moves the whole subtree in compose.
+        Actor::Frame { offset, .. } => {
+            offset[0] += dx;
+            offset[1] += dy;
+        }
+        Actor::Shadow { child, .. } => apply_offset_to_actor(child, dx, dy),
     }
 }
 
@@ -1108,8 +1132,12 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     let frame_y0 = cy - frame_h * 0.5;
 
-    let p1_cx = cx - FRAME_CX_OFF + shake_x(state.p1_shake_t);
-    let p2_cx = cx + FRAME_CX_OFF + shake_x(state.p2_shake_t);
+    // IMPORTANT: Apply shake as a post-transform, otherwise the changing X affects
+    // act! tween site_ids (salt includes init.x) and restarts tweens every frame.
+    let p1_cx = cx - FRAME_CX_OFF;
+    let p2_cx = cx + FRAME_CX_OFF;
+    let p1_shake_dx = shake_x(state.p1_shake_t);
+    let p2_shake_dx = shake_x(state.p2_shake_t);
 
     let col_overlay = [0.0, 0.0, 0.0, 0.5];
     let border_rgba = [1.0, 1.0, 1.0, 1.0];
@@ -1187,6 +1215,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
                 apply_zoom_to_actor(a, [p1_cx, cy], zoom);
             }
         }
+        if p1_shake_dx != 0.0 {
+            for a in &mut p1_ui {
+                apply_offset_to_actor(a, p1_shake_dx, 0.0);
+            }
+        }
         ui.extend(p1_ui);
     }
 
@@ -1261,6 +1294,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         if (zoom - 1.0).abs() > f32::EPSILON {
             for a in &mut p2_ui {
                 apply_zoom_to_actor(a, [p2_cx, cy], zoom);
+            }
+        }
+        if p2_shake_dx != 0.0 {
+            for a in &mut p2_ui {
+                apply_offset_to_actor(a, p2_shake_dx, 0.0);
             }
         }
         ui.extend(p2_ui);
