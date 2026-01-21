@@ -823,25 +823,27 @@ mod windows_raw_input {
     const USAGE_GAMEPAD: u16 = 0x05;
     const USAGE_MULTI_AXIS: u16 = 0x08;
 
-    const USAGE_PAGE_BUTTON: u16 = 0x09;
-    const USAGE_HAT_SWITCH: u16 = 0x39;
+	    const USAGE_PAGE_BUTTON: u16 = 0x09;
+	    const USAGE_HAT_SWITCH: u16 = 0x39;
 
     const RIM_TYPEHID_U32: u32 = RIM_TYPEHID.0;
     const GIDC_ARRIVAL_U32: usize = 1;
     const GIDC_REMOVAL_U32: usize = 2;
 
-    struct Dev {
-        id: PadId,
-        name: String,
-        vendor_id: Option<u16>,
-        product_id: Option<u16>,
-        uuid: [u8; 16],
-        preparsed: Vec<u8>,
-        max_buttons: u32,
-        buttons_prev: Vec<u16>,
-        buttons_now: Vec<u16>,
-        dir: [bool; 4],
-    }
+	    struct Dev {
+	        id: PadId,
+	        name: String,
+	        vendor_id: Option<u16>,
+	        product_id: Option<u16>,
+	        uuid: [u8; 16],
+	        preparsed: Vec<u8>,
+	        max_buttons: u32,
+	        buttons_prev: Vec<u16>,
+	        buttons_now: Vec<u16>,
+	        hat_min: i32,
+	        hat_max: i32,
+	        dir: [bool; 4],
+	    }
 
     struct Ctx {
         emit_pad: Box<dyn FnMut(PadEvent) + Send>,
@@ -936,12 +938,12 @@ mod windows_raw_input {
         }
     }
 
-    fn get_preparsed(h: HANDLE) -> Option<Vec<u8>> {
-        unsafe {
-            let mut size: u32 = 0;
-            let _ = GetRawInputDeviceInfoW(Some(h), RIDI_PREPARSEDDATA, None, &mut size);
-            if size == 0 {
-                return None;
+	    fn get_preparsed(h: HANDLE) -> Option<Vec<u8>> {
+	        unsafe {
+	            let mut size: u32 = 0;
+	            let _ = GetRawInputDeviceInfoW(Some(h), RIDI_PREPARSEDDATA, None, &mut size);
+	            if size == 0 {
+	                return None;
             }
             let mut buf = vec![0u8; size as usize];
             let mut size2 = size;
@@ -953,12 +955,67 @@ mod windows_raw_input {
             );
             if rc == u32::MAX {
                 return None;
-            }
-            Some(buf)
-        }
-    }
+	            }
+	            Some(buf)
+	        }
+	    }
 
-    fn add_device(ctx: &mut Ctx, h: HANDLE) {
+	    fn hat_logical_range(preparsed: &[u8]) -> Option<(i32, i32)> {
+	        if preparsed.is_empty() {
+	            return None;
+	        }
+	        unsafe {
+	            let pd = PHIDP_PREPARSED_DATA(preparsed.as_ptr() as isize);
+
+	            let mut cap = HIDP_VALUE_CAPS::default();
+	            let mut len: u16 = 1;
+	            let status = HidP_GetSpecificValueCaps(
+	                HidP_Input,
+	                Some(USAGE_PAGE_GENERIC_DESKTOP),
+	                None,
+	                Some(USAGE_HAT_SWITCH),
+	                &mut cap,
+	                &mut len,
+	                pd,
+	            );
+	            if status == HIDP_STATUS_SUCCESS && len != 0 {
+	                return Some((cap.LogicalMin, cap.LogicalMax));
+	            }
+
+	            let mut hid_caps = HIDP_CAPS::default();
+	            let status = HidP_GetCaps(pd, &mut hid_caps);
+	            if status != HIDP_STATUS_SUCCESS || hid_caps.NumberInputValueCaps == 0 {
+	                return None;
+	            }
+
+	            let mut value_caps: Vec<HIDP_VALUE_CAPS> =
+	                vec![HIDP_VALUE_CAPS::default(); hid_caps.NumberInputValueCaps as usize];
+	            let mut value_len = hid_caps.NumberInputValueCaps;
+	            let status = HidP_GetValueCaps(HidP_Input, value_caps.as_mut_ptr(), &mut value_len, pd);
+	            if status != HIDP_STATUS_SUCCESS || value_len == 0 {
+	                return None;
+	            }
+
+	            for cap in value_caps.iter().take(value_len as usize) {
+	                if cap.UsagePage != USAGE_PAGE_GENERIC_DESKTOP {
+	                    continue;
+	                }
+	                let has_hat = if cap.IsRange {
+	                    let r = { cap.Anonymous.Range };
+	                    r.UsageMin <= USAGE_HAT_SWITCH && USAGE_HAT_SWITCH <= r.UsageMax
+	                } else {
+	                    let nr = { cap.Anonymous.NotRange };
+	                    nr.Usage == USAGE_HAT_SWITCH
+	                };
+	                if has_hat {
+	                    return Some((cap.LogicalMin, cap.LogicalMax));
+	                }
+	            }
+	            None
+	        }
+	    }
+
+	    fn add_device(ctx: &mut Ctx, h: HANDLE) {
         if ctx.devices.contains_key(&hkey(h)) {
             return;
         }
@@ -971,8 +1028,8 @@ mod windows_raw_input {
             return;
         }
 
-        let name = get_device_name(h).unwrap_or_else(|| format!("RawInput:{:?}", h));
-        let uuid = uuid_from_bytes(name.as_bytes());
+	        let name = get_device_name(h).unwrap_or_else(|| format!("RawInput:{:?}", h));
+	        let uuid = uuid_from_bytes(name.as_bytes());
 
         let id = ctx
             .id_by_uuid
@@ -985,14 +1042,15 @@ mod windows_raw_input {
                 id
             });
 
-        let refs = ctx.refs_by_uuid.get(&uuid).copied().unwrap_or(0);
-        ctx.refs_by_uuid.insert(uuid, refs + 1);
+	        let refs = ctx.refs_by_uuid.get(&uuid).copied().unwrap_or(0);
+	        ctx.refs_by_uuid.insert(uuid, refs + 1);
 
-        let preparsed = get_preparsed(h).unwrap_or_default();
-        let max_buttons = if preparsed.is_empty() {
-            0
-        } else {
-            unsafe {
+	        let preparsed = get_preparsed(h).unwrap_or_default();
+	        let (hat_min, hat_max) = hat_logical_range(&preparsed).unwrap_or((0, 7));
+	        let max_buttons = if preparsed.is_empty() {
+	            0
+	        } else {
+	            unsafe {
                 HidP_MaxUsageListLength(
                     HidP_Input,
                     Some(USAGE_PAGE_BUTTON),
@@ -1000,18 +1058,20 @@ mod windows_raw_input {
                 )
             }
         };
-        let dev = Dev {
-            id,
-            name,
-            vendor_id: Some(hid.dwVendorId as u16),
-            product_id: Some(hid.dwProductId as u16),
-            uuid,
-            preparsed,
-            max_buttons,
-            buttons_prev: Vec::new(),
-            buttons_now: Vec::new(),
-            dir: [false; 4],
-        };
+	        let dev = Dev {
+	            id,
+	            name,
+	            vendor_id: Some(hid.dwVendorId as u16),
+	            product_id: Some(hid.dwProductId as u16),
+	            uuid,
+	            preparsed,
+	            max_buttons,
+	            buttons_prev: Vec::new(),
+	            buttons_now: Vec::new(),
+	            hat_min,
+	            hat_max,
+	            dir: [false; 4],
+	        };
 
         if refs == 0 {
             ctx.emit_connected(&dev);
@@ -1120,11 +1180,11 @@ mod windows_raw_input {
         }
     }
 
-    fn process_hid_report(
-        emit_pad: &mut (dyn FnMut(PadEvent) + Send),
-        dev: &mut Dev,
-        report: &mut [u8],
-    ) {
+	    fn process_hid_report(
+	        emit_pad: &mut (dyn FnMut(PadEvent) + Send),
+	        dev: &mut Dev,
+	        report: &mut [u8],
+	    ) {
         if dev.max_buttons == 0 || dev.preparsed.is_empty() {
             return;
         }
@@ -1156,14 +1216,14 @@ mod windows_raw_input {
         }
         dev.buttons_now.sort_unstable();
 
-        emit_button_diff(emit_pad, dev, &dev.buttons_now);
-        std::mem::swap(&mut dev.buttons_prev, &mut dev.buttons_now);
-        dev.buttons_now.clear();
+	        emit_button_diff(emit_pad, dev, &dev.buttons_now);
+	        std::mem::swap(&mut dev.buttons_prev, &mut dev.buttons_now);
+	        dev.buttons_now.clear();
 
-        // D-pad hat switch → PadDir edges (so dance pads / DPAD-only devices can bind directions).
-        let mut hat: u32 = 0;
-        let status = unsafe {
-            HidP_GetUsageValue(
+	        // D-pad hat switch → PadDir edges (so dance pads / DPAD-only devices can bind directions).
+	        let mut hat: u32 = 0;
+	        let status = unsafe {
+	            HidP_GetUsageValue(
                 HidP_Input,
                 USAGE_PAGE_GENERIC_DESKTOP,
                 None,
@@ -1173,18 +1233,40 @@ mod windows_raw_input {
                 report,
             )
         };
-        if status != HIDP_STATUS_SUCCESS {
-            return;
-        }
+	        if status != HIDP_STATUS_SUCCESS {
+	            return;
+	        }
 
-        let want_up = matches!(hat, 0 | 1 | 7);
-        let want_right = matches!(hat, 1 | 2 | 3);
-        let want_down = matches!(hat, 3 | 4 | 5);
-        let want_left = matches!(hat, 5 | 6 | 7);
-        let want = [want_up, want_down, want_left, want_right];
-        let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
-        for i in 0..4 {
-            if dev.dir[i] == want[i] {
+	        // HID hat switches commonly come in two forms:
+	        // - logical 0..=7 with null state 8 (HasNull=true)
+	        // - logical 1..=8 with null state 0 (HasNull=true)
+	        // We use the descriptor-reported logical range to normalize to 0..=7, and treat values
+	        // outside the range as neutral.
+	        let hat = hat as i32;
+	        let mut hat0: i32 = -1;
+	        if hat >= dev.hat_min && hat <= dev.hat_max {
+	            let span = dev.hat_max - dev.hat_min + 1;
+	            let idx = hat - dev.hat_min;
+	            if span == 9 && dev.hat_min == 0 && dev.hat_max == 8 && idx == 8 {
+	                // Some devices include neutral as 8 inside the logical range.
+	                hat0 = -1;
+	            } else if span == 8 {
+	                hat0 = idx;
+	            } else if span == 9 && dev.hat_min == 0 && dev.hat_max == 8 && idx >= 0 && idx <= 7 {
+	                hat0 = idx;
+	            } else if span == 4 {
+	                hat0 = idx * 2;
+	            }
+	        }
+
+	        let want_up = matches!(hat0, 0 | 1 | 7);
+	        let want_right = matches!(hat0, 1 | 2 | 3);
+	        let want_down = matches!(hat0, 3 | 4 | 5);
+	        let want_left = matches!(hat0, 5 | 6 | 7);
+	        let want = [want_up, want_down, want_left, want_right];
+	        let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
+	        for i in 0..4 {
+	            if dev.dir[i] == want[i] {
                 continue;
             }
             dev.dir[i] = want[i];
