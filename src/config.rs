@@ -1,7 +1,5 @@
 use crate::core::gfx::BackendType;
-use crate::core::input::{
-    FaceBtn, GamepadCodeBinding, InputBinding, Keymap, PadButton, PadDir, VirtualAction,
-};
+use crate::core::input::{GamepadCodeBinding, InputBinding, Keymap, PadDir, VirtualAction};
 use log::{info, warn};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
@@ -659,16 +657,8 @@ fn binding_to_token(binding: InputBinding) -> String {
     match binding {
         InputBinding::Key(code) => format!("KeyCode::{:?}", code),
         InputBinding::PadDir(dir) => format!("PadDir::{:?}", dir),
-        InputBinding::PadButton(btn) => format!("PadButton::{:?}", btn),
-        InputBinding::Face(btn) => format!("Face::{:?}", btn),
         InputBinding::PadDirOn { device, dir } => {
             format!("Pad{}::Dir::{:?}", device, dir)
-        }
-        InputBinding::PadButtonOn { device, btn } => {
-            format!("Pad{}::Button::{:?}", device, btn)
-        }
-        InputBinding::FaceOn { device, btn } => {
-            format!("Pad{}::Face::{:?}", device, btn)
         }
         InputBinding::GamepadCode(binding) => {
             let mut s = String::new();
@@ -841,7 +831,7 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
         }
     }
 
-    // Gamepad (any pad): PadDir::Up, PadButton::Confirm, Face::WestX
+    // Gamepad (any pad): PadDir::Up
     if let Some(rest) = t.strip_prefix("PadDir::") {
         let dir = match rest {
             "Up" => PadDir::Up,
@@ -852,27 +842,8 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
         };
         return Some(InputBinding::PadDir(dir));
     }
-    if let Some(rest) = t.strip_prefix("PadButton::") {
-        let btn = match rest {
-            "Confirm" => PadButton::Confirm,
-            "Back" => PadButton::Back,
-            _ => return None,
-        };
-        return Some(InputBinding::PadButton(btn));
-    }
-    if let Some(rest) = t.strip_prefix("Face::") {
-        let btn = match rest {
-            "SouthA" => FaceBtn::SouthA,
-            "EastB" => FaceBtn::EastB,
-            "WestX" => FaceBtn::WestX,
-            "NorthY" => FaceBtn::NorthY,
-            _ => return None,
-        };
-        return Some(InputBinding::Face(btn));
-    }
 
-    // Gamepad (device-specific): Pad0::Dir::Up, Pad1::Button::Confirm, Pad0::Face::WestX
-    // Also accept Pad::... as any pad (handled above) but keep here for clarity.
+    // Gamepad (device-specific): Pad0::Dir::Up
     // Split by "::"
     let parts: Vec<&str> = t.split("::").collect();
     if parts.len() == 3 {
@@ -880,26 +851,13 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
         // Parse device index from PadN
         if let Some(dev_str) = pad_part.strip_prefix("Pad") {
             if dev_str.is_empty() {
-                // Treat as any-pad; handled at top via PadDir/PadButton/Face prefixes.
-                // But allow here too for flexibility.
+                // Treat as any-pad; handled at top via PadDir prefix.
                 return match kind {
                     "Dir" => match name {
                         "Up" => Some(InputBinding::PadDir(PadDir::Up)),
                         "Down" => Some(InputBinding::PadDir(PadDir::Down)),
                         "Left" => Some(InputBinding::PadDir(PadDir::Left)),
                         "Right" => Some(InputBinding::PadDir(PadDir::Right)),
-                        _ => None,
-                    },
-                    "Button" => match name {
-                        "Confirm" => Some(InputBinding::PadButton(PadButton::Confirm)),
-                        "Back" => Some(InputBinding::PadButton(PadButton::Back)),
-                        _ => None,
-                    },
-                    "Face" => match name {
-                        "SouthA" => Some(InputBinding::Face(FaceBtn::SouthA)),
-                        "EastB" => Some(InputBinding::Face(FaceBtn::EastB)),
-                        "WestX" => Some(InputBinding::Face(FaceBtn::WestX)),
-                        "NorthY" => Some(InputBinding::Face(FaceBtn::NorthY)),
                         _ => None,
                     },
                     _ => None,
@@ -923,36 +881,6 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
                         "Right" => Some(InputBinding::PadDirOn {
                             device,
                             dir: PadDir::Right,
-                        }),
-                        _ => None,
-                    },
-                    "Button" => match name {
-                        "Confirm" => Some(InputBinding::PadButtonOn {
-                            device,
-                            btn: PadButton::Confirm,
-                        }),
-                        "Back" => Some(InputBinding::PadButtonOn {
-                            device,
-                            btn: PadButton::Back,
-                        }),
-                        _ => None,
-                    },
-                    "Face" => match name {
-                        "SouthA" => Some(InputBinding::FaceOn {
-                            device,
-                            btn: FaceBtn::SouthA,
-                        }),
-                        "EastB" => Some(InputBinding::FaceOn {
-                            device,
-                            btn: FaceBtn::EastB,
-                        }),
-                        "WestX" => Some(InputBinding::FaceOn {
-                            device,
-                            btn: FaceBtn::WestX,
-                        }),
-                        "NorthY" => Some(InputBinding::FaceOn {
-                            device,
-                            btn: FaceBtn::NorthY,
                         }),
                         _ => None,
                     },

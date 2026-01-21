@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::core::audio;
-use crate::core::input::{InputEvent, PadButton, PadDir, VirtualAction};
+use crate::core::input::{InputEvent, PadDir, VirtualAction};
 use crate::core::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
@@ -709,42 +709,36 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
     ScreenAction::None
 }
 
-pub fn handle_pad_button(state: &mut State, btn: PadButton, pressed: bool) -> ScreenAction {
-    if !pressed {
+pub fn handle_confirm(state: &mut State) -> ScreenAction {
+    state.nav_key_held_direction = None;
+    state.nav_key_held_since = None;
+    if state.entries.is_empty() {
+        audio::play_sfx("assets/sounds/expand.ogg");
         return ScreenAction::None;
     }
-    match btn {
-        PadButton::Confirm => {
-            state.nav_key_held_direction = None;
-            state.nav_key_held_since = None;
-            if state.entries.is_empty() {
-                audio::play_sfx("assets/sounds/expand.ogg");
-                return ScreenAction::None;
+    match state.entries.get(state.selected_index) {
+        Some(MusicWheelEntry::Song(_)) => ScreenAction::Navigate(Screen::PlayerOptions),
+        Some(MusicWheelEntry::PackHeader { name, .. }) => {
+            audio::play_sfx("assets/sounds/expand.ogg");
+            let target = name.clone();
+            if state.expanded_pack_name.as_ref() == Some(&target) {
+                state.expanded_pack_name = None;
+            } else {
+                state.expanded_pack_name = Some(target.clone());
             }
-            match state.entries.get(state.selected_index) {
-                Some(MusicWheelEntry::Song(_)) => ScreenAction::Navigate(Screen::PlayerOptions),
-                Some(MusicWheelEntry::PackHeader { name, .. }) => {
-                    audio::play_sfx("assets/sounds/expand.ogg");
-                    let target = name.clone();
-                    if state.expanded_pack_name.as_ref() == Some(&target) {
-                        state.expanded_pack_name = None;
-                    } else {
-                        state.expanded_pack_name = Some(target.clone());
-                    }
-                    rebuild_displayed_entries(state);
-                    if let Some(new_sel) = state.entries.iter().position(|e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &target)) {
-                        state.selected_index = new_sel;
-                    } else {
-                        state.selected_index = 0;
-                    }
-                    state.prev_selected_index = state.selected_index;
-                    state.time_since_selection_change = 0.0;
-                    ScreenAction::None
-                }
-                None => ScreenAction::None,
+            rebuild_displayed_entries(state);
+            if let Some(new_sel) = state.entries.iter().position(|e| {
+                matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &target)
+            }) {
+                state.selected_index = new_sel;
+            } else {
+                state.selected_index = 0;
             }
+            state.prev_selected_index = state.selected_index;
+            state.time_since_selection_change = 0.0;
+            ScreenAction::None
         }
-        PadButton::Back => ScreenAction::Navigate(Screen::Menu),
+        None => ScreenAction::None,
     }
 }
 
@@ -777,8 +771,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
             handle_pad_dir(state, PadDir::Down, ev.pressed)
         }
-        VirtualAction::p1_start if ev.pressed => handle_pad_button(state, PadButton::Confirm, true),
-        VirtualAction::p1_back if ev.pressed => handle_pad_button(state, PadButton::Back, true),
+        VirtualAction::p1_start if ev.pressed => handle_confirm(state),
+        VirtualAction::p1_back if ev.pressed => ScreenAction::Navigate(Screen::Menu),
         _ => ScreenAction::None,
     }
 }

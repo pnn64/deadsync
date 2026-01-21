@@ -113,7 +113,6 @@ pub(crate) struct RowEntry {
 pub struct Arrow {
     #[allow(dead_code)]
     pub beat: f32,
-    pub column: usize,
     #[allow(dead_code)]
     pub note_type: NoteType,
     pub note_index: usize,
@@ -1999,7 +1998,6 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
                     if note.column < state.num_cols {
                         state.arrows[note.column].push(Arrow {
                             beat: note.beat,
-                            column: note.column,
                             note_type: note.note_type,
                             note_index: cursor,
                         });
@@ -2028,7 +2026,6 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
                         if note.column < state.num_cols {
                             state.arrows[note.column].push(Arrow {
                                 beat: note.beat,
-                                column: note.column,
                                 note_type: note.note_type,
                                 note_index: cursor,
                             });

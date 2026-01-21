@@ -182,17 +182,6 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             let dev = usize::from(*id);
             (format!("Gamepad {}: Dir::{:?}", dev, dir), Some(*pressed))
         }
-        PE::Button { id, btn, pressed, .. } => {
-            let dev = usize::from(*id);
-            (
-                format!("Gamepad {}: Button::{:?}", dev, btn),
-                Some(*pressed),
-            )
-        }
-        PE::Face { id, btn, pressed, .. } => {
-            let dev = usize::from(*id);
-            (format!("Gamepad {}: Face::{:?}", dev, btn), Some(*pressed))
-        }
         PE::RawButton {
             id,
             code,

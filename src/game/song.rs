@@ -40,10 +40,15 @@ pub struct SongPack {
     pub group_name: String,
     pub name: String,
     pub sort_title: String,
+    #[allow(dead_code)]
     pub translit_title: String,
+    #[allow(dead_code)]
     pub series: String,
+    #[allow(dead_code)]
     pub year: i32,
+    #[allow(dead_code)]
     pub sync_pref: rssp::pack::SyncPref,
+    #[allow(dead_code)]
     pub directory: PathBuf,
     pub banner_path: Option<PathBuf>,
     pub songs: Vec<Arc<SongData>>,

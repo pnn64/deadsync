@@ -85,8 +85,6 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     // We only care about press events for the log
     let pressed = match pad_event {
         PadEvent::Dir { pressed, .. } => *pressed,
-        PadEvent::Button { pressed, .. } => *pressed,
-        PadEvent::Face { pressed, .. } => *pressed,
         PadEvent::RawButton { pressed, .. } => *pressed,
         PadEvent::RawAxis { .. } => false,
     };
@@ -99,22 +97,6 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
                     "Gamepad {}: Dir {{ dir: {:?}, pressed: {} }}",
                     usize::from(*id),
                     dir,
-                    pressed
-                )
-            }
-            PadEvent::Button { id, btn, pressed, .. } => {
-                format!(
-                    "Gamepad {}: Button {{ btn: {:?}, pressed: {} }}",
-                    usize::from(*id),
-                    btn,
-                    pressed
-                )
-            }
-            PadEvent::Face { id, btn, pressed, .. } => {
-                format!(
-                    "Gamepad {}: Face {{ btn: {:?}, pressed: {} }}",
-                    usize::from(*id),
-                    btn,
                     pressed
                 )
             }

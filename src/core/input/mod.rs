@@ -30,8 +30,11 @@ impl PadCode {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PadBackend {
+    #[cfg(windows)]
     WindowsRawInput,
+    #[cfg(all(unix, not(target_os = "macos")))]
     LinuxEvdev,
+    #[cfg(target_os = "macos")]
     MacOsIohid,
 }
 
@@ -69,38 +72,12 @@ pub enum PadDir {
     Right,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum PadButton {
-    Confirm,
-    Back,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum FaceBtn {
-    SouthA,
-    EastB,
-    WestX,
-    NorthY,
-}
-
 #[derive(Clone, Copy, Debug)]
 pub enum PadEvent {
     Dir {
         id: PadId,
         timestamp: Instant,
         dir: PadDir,
-        pressed: bool,
-    },
-    Button {
-        id: PadId,
-        timestamp: Instant,
-        btn: PadButton,
-        pressed: bool,
-    },
-    Face {
-        id: PadId,
-        timestamp: Instant,
-        btn: FaceBtn,
         pressed: bool,
     },
     /// Raw low-level button event with platform-specific code and device UUID.
@@ -113,6 +90,7 @@ pub enum PadEvent {
         pressed: bool,
     },
     /// Raw low-level axis event with platform-specific code and device UUID.
+    #[cfg_attr(windows, allow(dead_code))]
     RawAxis {
         id: PadId,
         timestamp: Instant,
@@ -131,6 +109,7 @@ pub enum GpSystemEvent {
         product_id: Option<u16>,
         backend: PadBackend,
     },
+    #[cfg_attr(all(unix, not(target_os = "macos")), allow(dead_code))]
     Disconnected {
         name: String,
         id: PadId,
@@ -252,11 +231,7 @@ pub struct GamepadCodeBinding {
 pub enum InputBinding {
     Key(KeyCode),
     PadDir(PadDir),
-    PadButton(PadButton),
-    Face(FaceBtn),
     PadDirOn { device: usize, dir: PadDir },
-    PadButtonOn { device: usize, btn: PadButton },
-    FaceOn { device: usize, btn: FaceBtn },
     GamepadCode(GamepadCodeBinding),
 }
 
@@ -358,46 +333,6 @@ impl Keymap {
                     }
                 }
             }
-            PadEvent::Button { id, btn, pressed, .. } => {
-                let dev = usize::from(id);
-                for (act, binds) in &self.map {
-                    for b in binds {
-                        match *b {
-                            InputBinding::PadButton(b0) if b0 == btn => {
-                                out.push((*act, pressed));
-                                break;
-                            }
-                            InputBinding::PadButtonOn { device, btn: b0 }
-                                if b0 == btn && device == dev =>
-                            {
-                                out.push((*act, pressed));
-                                break;
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-            PadEvent::Face { id, btn, pressed, .. } => {
-                let dev = usize::from(id);
-                for (act, binds) in &self.map {
-                    for b in binds {
-                        match *b {
-                            InputBinding::Face(b0) if b0 == btn => {
-                                out.push((*act, pressed));
-                                break;
-                            }
-                            InputBinding::FaceOn { device, btn: b0 }
-                                if b0 == btn && device == dev =>
-                            {
-                                out.push((*act, pressed));
-                                break;
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
             PadEvent::RawButton {
                 id,
                 code,
@@ -487,8 +422,6 @@ pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
     }
     let timestamp = match *ev {
         PadEvent::Dir { timestamp, .. }
-        | PadEvent::Button { timestamp, .. }
-        | PadEvent::Face { timestamp, .. }
         | PadEvent::RawButton { timestamp, .. }
         | PadEvent::RawAxis { timestamp, .. } => timestamp,
     };

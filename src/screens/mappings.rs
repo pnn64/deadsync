@@ -563,20 +563,6 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             let dev = usize::from(id);
             Some(InputBinding::PadDirOn { device: dev, dir })
         }
-        PadEvent::Button { id, btn, pressed, .. } => {
-            if !pressed {
-                return;
-            }
-            let dev = usize::from(id);
-            Some(InputBinding::PadButtonOn { device: dev, btn })
-        }
-        PadEvent::Face { id, btn, pressed, .. } => {
-            if !pressed {
-                return;
-            }
-            let dev = usize::from(id);
-            Some(InputBinding::FaceOn { device: dev, btn })
-        }
         PadEvent::RawAxis { .. } => None,
     };
 
@@ -751,17 +737,9 @@ fn format_binding_for_display(binding: InputBinding) -> String {
         InputBinding::Key(code) => format!("{:?}", code),
         // Any-pad bindings
         InputBinding::PadDir(dir) => format!("Dir {:?}", dir),
-        InputBinding::PadButton(btn) => format!("Btn {:?}", btn),
-        InputBinding::Face(btn) => format!("Face {:?}", btn),
         // Device-specific bindings, aligned with "Pad N Btn 0x.." style.
         InputBinding::PadDirOn { device, dir } => {
             format!("Pad {} Dir {:?}", device, dir)
-        }
-        InputBinding::PadButtonOn { device, btn } => {
-            format!("Pad {} Btn {:?}", device, btn)
-        }
-        InputBinding::FaceOn { device, btn } => {
-            format!("Pad {} Face {:?}", device, btn)
         }
         InputBinding::GamepadCode(binding) => {
             let dev = binding.device.unwrap_or(0);

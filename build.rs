@@ -132,11 +132,6 @@ fn copy_assets(target_dir: &Path) -> Result<(), Box<dyn Error>> {
         // The default behavior (copy_inside=false) is correct.
         // It copies the `assets` directory itself into `target_dir`.
         copy("assets", target_dir, &options)?;
-        // Use `cargo:warning=` so the message is always visible.
-        println!(
-            "cargo:warning=Copied assets to {}",
-            target_dir.join("assets").display()
-        );
     }
     Ok(())
 }
