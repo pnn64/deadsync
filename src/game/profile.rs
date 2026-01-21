@@ -471,11 +471,19 @@ impl PlayStyle {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlayerSide {
+    #[default]
+    P1,
+    P2,
+}
+
 #[derive(Debug)]
 struct SessionState {
     active_profile: ActiveProfile,
     music_rate: f32,
     play_style: PlayStyle,
+    player_side: PlayerSide,
 }
 
 static SESSION: Lazy<Mutex<SessionState>> = Lazy::new(|| {
@@ -485,6 +493,7 @@ static SESSION: Lazy<Mutex<SessionState>> = Lazy::new(|| {
         },
         music_rate: 1.0,
         play_style: PlayStyle::Single,
+        player_side: PlayerSide::P1,
     })
 });
 
@@ -992,6 +1001,14 @@ pub fn get_session_play_style() -> PlayStyle {
 
 pub fn set_session_play_style(style: PlayStyle) {
     SESSION.lock().unwrap().play_style = style;
+}
+
+pub fn get_session_player_side() -> PlayerSide {
+    SESSION.lock().unwrap().player_side
+}
+
+pub fn set_session_player_side(side: PlayerSide) {
+    SESSION.lock().unwrap().player_side = side;
 }
 
 /// Persist the last played song and difficulty to the on-disk profile.

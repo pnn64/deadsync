@@ -958,7 +958,10 @@ fn format_chart_length(seconds: i32) -> String {
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     let profile = profile::get();
-    let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
+    let play_style = crate::game::profile::get_session_play_style();
+    let is_p2_single = play_style == crate::game::profile::PlayStyle::Single
+        && crate::game::profile::get_session_player_side() == crate::game::profile::PlayerSide::P2;
+    let target_chart_type = play_style.chart_type();
 
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
@@ -1150,19 +1153,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Step Artist & Steps
     let comp_h = screen_height() / 28.0;
     let y_cen = (screen_center_y() - 9.0) - 0.5 * comp_h;
-    let (q_cx, s_x, a_x) = if is_wide() {
-        (
-            screen_center_x() - 243.0,
-            screen_center_x() - 326.0,
-            screen_center_x() - 281.0,
-        )
+    let step_artist_x0 = if is_p2_single {
+        screen_center_x() - 244.0
+    } else if is_wide() {
+        screen_center_x() - 356.0
     } else {
-        (
-            screen_center_x() - 233.0,
-            screen_center_x() - 316.0,
-            screen_center_x() - 271.0,
-        )
+        screen_center_x() - 346.0
     };
+    let q_cx = step_artist_x0 + 113.0;
+    let s_x = step_artist_x0 + 30.0;
+    let a_x = step_artist_x0 + 75.0;
 
     actors.push(act!(quad: align(0.5, 0.5): xy(q_cx, y_cen): setsize(175.0, comp_h): z(120): diffuse(sel_col[0], sel_col[1], sel_col[2], 1.0)));
     actors.push(act!(text: font("miso"): settext("STEPS"): align(0.0, 0.5): xy(s_x, y_cen): zoom(0.8): maxwidth(40.0): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
@@ -1208,17 +1208,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             .flatten()
             .unwrap_or_else(|| c.simple_breakdown.clone());
 
+        let peak_x = panel_w * 0.5 + if is_p2_single { -136.0 } else { 60.0 };
         graph_kids.push(act!(sprite(state.current_graph_key.clone()): align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0)));
-        graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(panel_w * 0.5 + 60.0, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0)));
+        graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0)));
         graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, 47.0): setsize(panel_w, 17.0): diffuse(0.0, 0.0, 0.0, 0.5)));
         graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w)));
     }
 
+    let chart_info_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
+    let graph_cy = screen_center_y() + if is_p2_single { 111.0 } else { 23.0 };
     actors.push(Actor::Frame {
         align: [0.0, 0.0],
         offset: [
-            (screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 }) - 0.5 * panel_w,
-            (screen_center_y() + 23.0) - 32.0,
+            chart_info_cx - 0.5 * panel_w,
+            graph_cy - 32.0,
         ],
         size: [SizeSpec::Px(panel_w), SizeSpec::Px(64.0)],
         background: None,
@@ -1227,7 +1230,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     });
 
     // Pane Display
-    let pane_cx = screen_width() * 0.25 - 5.0;
+    let pane_cx = if is_p2_single {
+        screen_width() * 0.75 + 5.0
+    } else {
+        screen_width() * 0.25 - 5.0
+    };
     let pane_top = screen_height() - 92.0;
     actors.push(act!(quad: align(0.5, 0.0): xy(pane_cx, pane_top): setsize(screen_width() / 2.0 - 10.0, 60.0): z(120): diffuse(sel_col[0], sel_col[1], sel_col[2], 1.0)));
 
@@ -1317,8 +1324,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         )
     };
 
-    let pat_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
-    let pat_cy = screen_center_y() + 111.0;
+    let pat_cx = chart_info_cx;
+    let pat_cy = screen_center_y() + if is_p2_single { 23.0 } else { 111.0 };
     actors.push(act!(quad: align(0.5, 0.5): xy(pat_cx, pat_cy): setsize(panel_w, 64.0): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
 
     let p_v_x = pat_cx - panel_w * 0.5 + 40.0;
@@ -1416,7 +1423,28 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         150.0
     };
     let phase = (state.session_elapsed / (60.0 / bpm_val as f32)) * 6.28318;
-    actors.push(act!(sprite("meter_arrow.png"): align(0.0, 0.5): xy(screen_center_x() - 53.0 + (-1.5 + 1.5 * phase.cos()), arrow_y): zoom(0.575): z(122)));
+    let (arrow_x0, arrow_dx, arrow_align_x, arrow_rot) = if is_p2_single {
+        (
+            screen_center_x() - 17.0,
+            1.5 - 1.5 * phase.cos(),
+            1.0,
+            180.0,
+        )
+    } else {
+        (
+            screen_center_x() - 53.0,
+            -1.5 + 1.5 * phase.cos(),
+            0.0,
+            0.0,
+        )
+    };
+    actors.push(act!(sprite("meter_arrow.png"):
+        align(arrow_align_x, 0.5):
+        xy(arrow_x0 + arrow_dx, arrow_y):
+        rotationz(arrow_rot):
+        zoom(0.575):
+        z(122)
+    ));
 
     actors
 }

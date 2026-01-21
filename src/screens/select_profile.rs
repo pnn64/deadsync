@@ -447,6 +447,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 audio::play_sfx("assets/sounds/start.ogg");
                 state.exit_anim = true;
                 let _ = exit_anim_t(true);
+                profile::set_session_player_side(if state.p1_joined {
+                    profile::PlayerSide::P1
+                } else {
+                    profile::PlayerSide::P2
+                });
                 return ScreenAction::SelectProfile(active_choice(state));
             }
             ScreenAction::None
@@ -528,6 +533,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 audio::play_sfx("assets/sounds/start.ogg");
                 state.exit_anim = true;
                 let _ = exit_anim_t(true);
+                profile::set_session_player_side(if state.p1_joined {
+                    profile::PlayerSide::P1
+                } else {
+                    profile::PlayerSide::P2
+                });
                 return ScreenAction::SelectProfile(active_choice(state));
             }
             ScreenAction::None
