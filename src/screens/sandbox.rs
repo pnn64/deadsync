@@ -120,7 +120,6 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             }
             PadEvent::RawButton {
                 id,
-                button,
                 code,
                 uuid,
                 value,
@@ -130,13 +129,12 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
                 let code_u32 = code.into_u32();
                 let uuid_hex: String = uuid.iter().map(|b| format!("{:02X}", b)).collect();
                 format!(
-                    "Gamepad {} [uuid={}]: RAW BTN {{ button: {:?}, PadCode[0x{:08X}], value: {:.3}, pressed: {} }}",
-                    dev, uuid_hex, button, code_u32, value, pressed,
+                    "Gamepad {} [uuid={}]: RAW BTN {{ PadCode[0x{:08X}], value: {:.3}, pressed: {} }}",
+                    dev, uuid_hex, code_u32, value, pressed,
                 )
             }
             PadEvent::RawAxis {
                 id,
-                axis,
                 code,
                 uuid,
                 value,
@@ -145,8 +143,8 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
                 let code_u32 = code.into_u32();
                 let uuid_hex: String = uuid.iter().map(|b| format!("{:02X}", b)).collect();
                 format!(
-                    "Gamepad {} [uuid={}]: RAW AXIS {{ axis: {:?}, PadCode[0x{:08X}], value: {:.3} }}",
-                    dev, uuid_hex, axis, code_u32, value,
+                    "Gamepad {} [uuid={}]: RAW AXIS {{ PadCode[0x{:08X}], value: {:.3} }}",
+                    dev, uuid_hex, code_u32, value,
                 )
             }
         };
@@ -165,7 +163,7 @@ pub fn handle_gamepad_system_event(state: &mut State, ev: &GpSystemEvent) {
             id,
             vendor_id,
             product_id,
-            mapping,
+            backend,
         } => {
             let dev = usize::from(*id);
             let vid = vendor_id
@@ -175,11 +173,11 @@ pub fn handle_gamepad_system_event(state: &mut State, ev: &GpSystemEvent) {
                 .map(|p| format!("0x{:04X}", p))
                 .unwrap_or_else(|| "n/a".to_string());
             format!(
-                "[SYS] Gamepad {} CONNECTED: \"{}\" vid={} pid={} mapping={:?}",
-                dev, name, vid, pid, mapping,
+                "[SYS] Gamepad {} CONNECTED: \"{}\" vid={} pid={} backend={:?}",
+                dev, name, vid, pid, backend,
             )
         }
-        GpSystemEvent::Disconnected { name, id } => {
+        GpSystemEvent::Disconnected { name, id, .. } => {
             let dev = usize::from(*id);
             format!("[SYS] Gamepad {} DISCONNECTED: \"{}\"", dev, name)
         }

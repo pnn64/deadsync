@@ -2,7 +2,7 @@ use crate::assets::AssetManager;
 use crate::config::{self, DisplayMode};
 use crate::core::display;
 use crate::core::gfx::{self as renderer, BackendType, RenderList, create_backend};
-use crate::core::input::{self, InputEvent, VirtualAction};
+use crate::core::input::{self, InputEvent};
 use crate::core::space::{self as space, Metrics};
 use crate::game::chart::ChartData;
 use crate::game::parsing::simfile as song_loading;
@@ -28,7 +28,6 @@ use std::{error::Error, path::PathBuf, sync::Arc, time::Instant};
 
 use crate::ui::actors::Actor;
 /* -------------------- gamepad -------------------- */
-use crate::core::input::{self as gamepad};
 use crate::core::input::{GpSystemEvent, PadEvent};
 
 /* -------------------- user events -------------------- */
@@ -135,7 +134,6 @@ pub struct ScreensState {
 pub struct SessionState {
     preferred_difficulty_index: usize,
     session_start_time: Option<Instant>,
-    pending_select_profile_p2: bool,
 }
 
 /// Pure-ish container for the high-level game state.
@@ -189,7 +187,6 @@ impl SessionState {
         SessionState {
             preferred_difficulty_index,
             session_start_time: None,
-            pending_select_profile_p2: false,
         }
     }
 }
@@ -646,31 +643,7 @@ impl App {
     ) -> Result<(), Box<dyn Error>> {
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
-                let mut menu_ev = ev;
-                let p2_start = ev.action == VirtualAction::p2_start;
-                if p2_start {
-                    menu_ev.action = VirtualAction::p1_start;
-                }
-                let action = crate::screens::menu::handle_input(
-                    &mut self.state.screens.menu_state,
-                    &menu_ev,
-                );
-
-                if matches!(action, ScreenAction::Navigate(CurrentScreen::SelectProfile)) {
-                    let transitioning_to_sp = match self.state.shell.transition {
-                        TransitionState::Idle => true,
-                        TransitionState::ActorsFadeOut { target, .. }
-                        | TransitionState::FadingOut { target, .. } => {
-                            target == CurrentScreen::SelectProfile
-                        }
-                        _ => false,
-                    };
-                    if p2_start && transitioning_to_sp {
-                        self.state.session.pending_select_profile_p2 = true;
-                    }
-                }
-
-                action
+                crate::screens::menu::handle_input(&mut self.state.screens.menu_state, &ev)
             }
             CurrentScreen::SelectProfile => crate::screens::select_profile::handle_input(
                 &mut self.state.screens.select_profile_state,
@@ -1653,14 +1626,6 @@ impl App {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
             self.state.screens.select_profile_state = select_profile::init();
             self.state.screens.select_profile_state.active_color_index = current_color_index;
-            if self.state.session.pending_select_profile_p2 {
-                select_profile::set_joined(
-                    &mut self.state.screens.select_profile_state,
-                    false,
-                    true,
-                );
-                self.state.session.pending_select_profile_p2 = false;
-            }
         } else if target == CurrentScreen::SelectStyle {
             let current_color_index = self.state.screens.select_style_state.active_color_index;
             self.state.screens.select_style_state = select_style::init();
@@ -1926,13 +1891,37 @@ impl ApplicationHandler<UserEvent> for App {
                     );
                 }
                 let msg = match &ev {
-                    GpSystemEvent::Connected { name, id, .. } => {
-                        info!("Gamepad connected: {} (ID: {})", name, usize::from(*id));
-                        format!("Connected: {} (ID: {})", name, usize::from(*id))
+                    GpSystemEvent::Connected {
+                        name, id, backend, ..
+                    } => {
+                        info!(
+                            "Gamepad connected: {} (ID: {}) via {:?}",
+                            name,
+                            usize::from(*id),
+                            backend
+                        );
+                        format!(
+                            "Connected: {} (ID: {}) via {:?}",
+                            name,
+                            usize::from(*id),
+                            backend
+                        )
                     }
-                    GpSystemEvent::Disconnected { name, id } => {
-                        info!("Gamepad disconnected: {} (ID: {})", name, usize::from(*id));
-                        format!("Disconnected: {} (ID: {})", name, usize::from(*id))
+                    GpSystemEvent::Disconnected {
+                        name, id, backend, ..
+                    } => {
+                        info!(
+                            "Gamepad disconnected: {} (ID: {}) via {:?}",
+                            name,
+                            usize::from(*id),
+                            backend
+                        );
+                        format!(
+                            "Disconnected: {} (ID: {}) via {:?}",
+                            name,
+                            usize::from(*id),
+                            backend
+                        )
                     }
                 };
                 self.state.shell.gamepad_overlay_state = Some((msg, Instant::now()));
@@ -2093,14 +2082,6 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.state.screens.select_profile_state = select_profile::init();
                                 self.state.screens.select_profile_state.active_color_index =
                                     current_color_index;
-                                if self.state.session.pending_select_profile_p2 {
-                                    select_profile::set_joined(
-                                        &mut self.state.screens.select_profile_state,
-                                        false,
-                                        true,
-                                    );
-                                    self.state.session.pending_select_profile_p2 = false;
-                                }
                             } else if target_screen == CurrentScreen::SelectStyle {
                                 let current_color_index =
                                     self.state.screens.select_style_state.active_color_index;
@@ -2222,29 +2203,18 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     song_loading::scan_and_load_courses("courses", "songs");
     let event_loop: EventLoop<UserEvent> = EventLoop::<UserEvent>::with_user_event().build()?;
 
-    // Spawn background thread to pump gilrs and emit user events; decoupled from frame rate.
+    // Spawn background thread to pump pad input and emit user events; decoupled from frame rate.
     let proxy: EventLoopProxy<UserEvent> = event_loop.create_proxy();
     std::thread::spawn(move || {
-        let mut maybe_gilrs = gamepad::try_init();
-        if let Some(mut g) = maybe_gilrs.take() {
-            let mut active_id = None;
-            let mut gp_state = gamepad::GamepadState::default();
-            loop {
-                let (pad_events, sys_events) =
-                    gamepad::poll_and_collect(&mut g, &mut active_id, &mut gp_state);
-                let pad_empty = pad_events.is_empty();
-                let sys_empty = sys_events.is_empty();
-                for se in sys_events {
-                    let _ = proxy.send_event(UserEvent::GamepadSystem(se));
-                }
-                for pe in pad_events {
-                    let _ = proxy.send_event(UserEvent::Pad(pe));
-                }
-                if pad_empty && sys_empty {
-                    std::thread::sleep(std::time::Duration::from_millis(1));
-                }
-            }
-        }
+        let proxy_pad = proxy.clone();
+        input::run_pad_backend(
+            move |pe| {
+                let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+            },
+            move |se| {
+                let _ = proxy.send_event(UserEvent::GamepadSystem(se));
+            },
+        );
     });
 
     let mut app = App::new(backend_type, show_stats, color_index, config, profile_data);

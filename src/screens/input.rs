@@ -195,7 +195,6 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
         }
         PE::RawButton {
             id,
-            button,
             code,
             pressed,
             ..
@@ -203,16 +202,12 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             let dev = usize::from(*id);
             let code_u32 = code.into_u32();
             (
-                format!(
-                    "Gamepad {}: RawButton {:?} [0x{:08X}]",
-                    dev, button, code_u32
-                ),
+                format!("Gamepad {}: RawButton [0x{:08X}]", dev, code_u32),
                 Some(*pressed),
             )
         }
         PE::RawAxis {
             id,
-            axis,
             code,
             value,
             ..
@@ -221,10 +216,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             let code_u32 = code.into_u32();
             // Axis inputs are continuous; treat them as always \"pressed\" for display.
             (
-                format!(
-                    "Gamepad {}: RawAxis {:?} [0x{:08X}] ({:.3})",
-                    dev, axis, code_u32, value
-                ),
+                format!("Gamepad {}: RawAxis [0x{:08X}] ({:.3})", dev, code_u32, value),
                 None,
             )
         }
