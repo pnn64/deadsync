@@ -444,6 +444,19 @@ pub fn queue_input_edge(
     pressed: bool,
     _timestamp: Instant,
 ) {
+    let lane = if profile::get_session_play_style() == profile::PlayStyle::Single
+        && profile::get_session_player_side() == profile::PlayerSide::P2
+    {
+        match lane {
+            Lane::P2Left => Lane::Left,
+            Lane::P2Down => Lane::Down,
+            Lane::P2Up => Lane::Up,
+            Lane::P2Right => Lane::Right,
+            _ => lane,
+        }
+    } else {
+        lane
+    };
     if lane.index() >= state.num_cols {
         return;
     }
@@ -484,7 +497,7 @@ pub fn init(
     chart: Arc<ChartData>,
     active_color_index: i32,
     music_rate: f32,
-    scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
+    mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
 ) -> State {
     info!("Initializing Gameplay Screen...");
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
@@ -494,10 +507,19 @@ pub fn init(
     };
 
     let play_style = profile::get_session_play_style();
+    let player_side = profile::get_session_player_side();
     let (cols_per_player, num_players, num_cols) = match play_style {
         profile::PlayStyle::Single => (4, 1, 4),
         profile::PlayStyle::Double => (8, 1, 8),
         profile::PlayStyle::Versus => (4, 2, 8),
+    };
+    if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
+        scroll_speed[0] = scroll_speed[1];
+    }
+    let player_color_index = if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
+        active_color_index - 2
+    } else {
+        active_color_index
     };
 
     let style = Style {
@@ -827,7 +849,7 @@ pub fn init(
         song_completed_naturally: false,
         noteskin,
         active_color_index,
-        player_color: color::decorative_rgba(active_color_index),
+        player_color: color::decorative_rgba(player_color_index),
         scroll_speed,
         scroll_reference_bpm: reference_bpm,
         field_zoom,
@@ -1531,6 +1553,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         queue_input_edge(state, ev.source, lane, ev.pressed, ev.timestamp);
         return ScreenAction::None;
     }
+    let is_p2_single = profile::get_session_play_style() == profile::PlayStyle::Single
+        && profile::get_session_player_side() == profile::PlayerSide::P2;
     match ev.action {
         VirtualAction::p1_start => {
             if ev.pressed {
@@ -1541,7 +1565,25 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 state.hold_to_exit_start = None;
             }
         }
+        VirtualAction::p2_start if is_p2_single => {
+            if ev.pressed {
+                state.hold_to_exit_key = Some(KeyCode::Enter);
+                state.hold_to_exit_start = Some(ev.timestamp);
+            } else if state.hold_to_exit_key == Some(KeyCode::Enter) {
+                state.hold_to_exit_key = None;
+                state.hold_to_exit_start = None;
+            }
+        }
         VirtualAction::p1_back => {
+            if ev.pressed {
+                state.hold_to_exit_key = Some(KeyCode::Escape);
+                state.hold_to_exit_start = Some(ev.timestamp);
+            } else if state.hold_to_exit_key == Some(KeyCode::Escape) {
+                state.hold_to_exit_key = None;
+                state.hold_to_exit_start = None;
+            }
+        }
+        VirtualAction::p2_back if is_p2_single => {
             if ev.pressed {
                 state.hold_to_exit_key = Some(KeyCode::Escape);
                 state.hold_to_exit_start = Some(ev.timestamp);

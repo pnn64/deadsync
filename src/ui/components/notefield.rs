@@ -94,9 +94,15 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
     // scroll math share the exact same scaling as gameplay.
     let field_zoom = state.field_zoom;
 
-    let player_idx = match placement {
-        FieldPlacement::P1 => 0,
-        FieldPlacement::P2 => 1,
+    // In P2-only single-player, we still have a single player runtime (index 0),
+    // but need to place the notefield on the P2 side of the screen.
+    let player_idx = if state.num_players == 1 {
+        0
+    } else {
+        match placement {
+            FieldPlacement::P1 => 0,
+            FieldPlacement::P2 => 1,
+        }
     };
     if player_idx >= state.num_players {
         return (Vec::new(), screen_center_x());
@@ -113,14 +119,10 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
     let p = &state.players[player_idx];
 
     // NoteFieldOffsetX is stored as a non-negative magnitude; for a single P1-style field,
-    // positive values move the field left, mirroring Simply Love's use of a sign flip.
-    let offset_sign = if state.num_players == 1 {
-        -1.0
-    } else {
-        match placement {
-            FieldPlacement::P1 => -1.0,
-            FieldPlacement::P2 => 1.0,
-        }
+    // apply the player-side sign flip used by Simply Love (P1=-, P2=+).
+    let offset_sign = match placement {
+        FieldPlacement::P1 => -1.0,
+        FieldPlacement::P2 => 1.0,
     };
     let notefield_offset_x = offset_sign * (profile.note_field_offset_x.clamp(0, 50) as f32);
     let notefield_offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
@@ -134,7 +136,10 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
     } else if state.cols_per_player > 4 {
         screen_center_x()
     } else {
-        screen_center_x() - (clamped_width * 0.25)
+        match placement {
+            FieldPlacement::P1 => screen_center_x() - (clamped_width * 0.25),
+            FieldPlacement::P2 => screen_center_x() + (clamped_width * 0.25),
+        }
     };
     let playfield_center_x = base_playfield_center_x + notefield_offset_x;
     let receptor_y_normal = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + notefield_offset_y;

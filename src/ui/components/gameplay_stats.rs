@@ -10,11 +10,26 @@ use crate::ui::font;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-pub fn build(state: &State, asset_manager: &AssetManager, playfield_center_x: f32) -> Vec<Actor> {
+pub fn build(
+    state: &State,
+    asset_manager: &AssetManager,
+    playfield_center_x: f32,
+    player_side: profile::PlayerSide,
+) -> Vec<Actor> {
     let mut actors = Vec::new();
-    actors.extend(build_banner(state, playfield_center_x));
-    actors.extend(build_side_pane(state, asset_manager));
-    actors.extend(build_holds_mines_rolls_pane(state, asset_manager));
+    actors.extend(build_banner(state, playfield_center_x, player_side));
+    actors.extend(build_side_pane(
+        state,
+        asset_manager,
+        playfield_center_x,
+        player_side,
+    ));
+    actors.extend(build_holds_mines_rolls_pane(
+        state,
+        asset_manager,
+        playfield_center_x,
+        player_side,
+    ));
     actors
 }
 
@@ -104,12 +119,19 @@ fn format_game_time(s: f32, total_seconds: f32) -> String {
     }
 }
 
-fn build_banner(state: &State, playfield_center_x: f32) -> Vec<Actor> {
+fn build_banner(
+    state: &State,
+    playfield_center_x: f32,
+    player_side: profile::PlayerSide,
+) -> Vec<Actor> {
     let mut actors = Vec::new();
     if let Some(banner_path) = &state.song.banner_path {
         let banner_key = banner_path.to_string_lossy().into_owned();
         let wide = is_wide();
-        let sidepane_center_x = screen_width() * 0.75;
+        let sidepane_center_x = match player_side {
+            profile::PlayerSide::P1 => screen_width() * 0.75,
+            profile::PlayerSide::P2 => screen_width() * 0.25,
+        };
         let sidepane_center_y = screen_center_y() + 80.0;
         let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
         let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
@@ -124,6 +146,9 @@ fn build_banner(state: &State, playfield_center_x: f32) -> Vec<Actor> {
         if note_field_is_centered && wide {
             local_banner_x = 72.0;
         }
+        if player_side == profile::PlayerSide::P2 {
+            local_banner_x *= -1.0;
+        }
         let local_banner_y = -200.0;
         let banner_x = sidepane_center_x + (local_banner_x * banner_data_zoom);
         let banner_y = sidepane_center_y + (local_banner_y * banner_data_zoom);
@@ -137,19 +162,24 @@ fn build_banner(state: &State, playfield_center_x: f32) -> Vec<Actor> {
     actors
 }
 
-fn build_holds_mines_rolls_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+fn build_holds_mines_rolls_pane(
+    state: &State,
+    asset_manager: &AssetManager,
+    playfield_center_x: f32,
+    player_side: profile::PlayerSide,
+) -> Vec<Actor> {
     if !is_wide() {
         return vec![];
     }
     let p = &state.players[0];
     let mut actors = Vec::new();
 
-    let sidepane_center_x = screen_width() * 0.75;
+    let sidepane_center_x = match player_side {
+        profile::PlayerSide::P1 => screen_width() * 0.75,
+        profile::PlayerSide::P2 => screen_width() * 0.25,
+    };
     let sidepane_center_y = screen_center_y() + 80.0;
-    let logical_screen_width = screen_width();
-    let clamped_width = logical_screen_width.clamp(640.0, 854.0);
-    let nf_center_x = screen_center_x() - (clamped_width * 0.25);
-    let note_field_is_centered = (nf_center_x - screen_center_x()).abs() < 1.0;
+    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
     let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
     let banner_data_zoom = if note_field_is_centered && is_wide() && !is_ultrawide {
         let ar = screen_width() / screen_height();
@@ -158,7 +188,10 @@ fn build_holds_mines_rolls_pane(state: &State, asset_manager: &AssetManager) -> 
     } else {
         1.0
     };
-    let local_x = 155.0;
+    let local_x = match player_side {
+        profile::PlayerSide::P1 => 155.0,
+        profile::PlayerSide::P2 => -85.0,
+    };
     let local_y = -112.0;
     let frame_cx = sidepane_center_x + (local_x * banner_data_zoom);
     let frame_cy = sidepane_center_y + (local_y * banner_data_zoom);
@@ -202,7 +235,10 @@ fn build_holds_mines_rolls_pane(state: &State, asset_manager: &AssetManager) -> 
 
         for (i, (label_text, achieved, total)) in categories.iter().enumerate() {
             let item_y = (i as f32 - 1.0) * row_height;
-            let right_anchor_x = 0.0;
+            let right_anchor_x = match player_side {
+                profile::PlayerSide::P1 => 0.0,
+                profile::PlayerSide::P2 => 100.0 * frame_zoom,
+            };
             let mut cursor_x = right_anchor_x;
 
             let possible_str = format!("{:0width$}", *total as usize, width = digits_to_fmt);
@@ -269,18 +305,23 @@ fn build_holds_mines_rolls_pane(state: &State, asset_manager: &AssetManager) -> 
     actors
 }
 
-fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+fn build_side_pane(
+    state: &State,
+    asset_manager: &AssetManager,
+    playfield_center_x: f32,
+    player_side: profile::PlayerSide,
+) -> Vec<Actor> {
     if !is_wide() {
         return vec![];
     }
     let mut actors = Vec::new();
 
-    let sidepane_center_x = screen_width() * 0.75;
+    let sidepane_center_x = match player_side {
+        profile::PlayerSide::P1 => screen_width() * 0.75,
+        profile::PlayerSide::P2 => screen_width() * 0.25,
+    };
     let sidepane_center_y = screen_center_y() + 80.0;
-    let logical_screen_width = screen_width();
-    let clamped_width = logical_screen_width.clamp(640.0, 854.0);
-    let nf_center_x = screen_center_x() - (clamped_width * 0.25);
-    let note_field_is_centered = (nf_center_x - screen_center_x()).abs() < 1.0;
+    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
     let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
     let banner_data_zoom = if note_field_is_centered && is_wide() && !is_ultrawide {
         let ar = screen_width() / screen_height();
@@ -290,7 +331,11 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         1.0
     };
 
-    let judgments_local_x = -widescale(152.0, 204.0);
+    let x_sign = match player_side {
+        profile::PlayerSide::P1 => 1.0,
+        profile::PlayerSide::P2 => -1.0,
+    };
+    let judgments_local_x = -widescale(152.0, 204.0) * x_sign;
     let final_judgments_center_x = sidepane_center_x + (judgments_local_x * banner_data_zoom);
     let final_judgments_center_y = sidepane_center_y;
     let parent_local_zoom = 0.8;
@@ -319,9 +364,11 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         let digit_local_width = max_digit_w / final_text_base_zoom;
         let label_local_x_offset = base_label_local_x_offset + (extra_digits * LABEL_DIGIT_STEP);
-        let label_world_x = final_judgments_center_x + (label_local_x_offset * final_text_base_zoom);
+        let label_world_x =
+            final_judgments_center_x + (x_sign * label_local_x_offset * final_text_base_zoom);
         let numbers_local_x_offset = base_numbers_local_x_offset + (extra_digits * digit_local_width);
-        let numbers_cx = final_judgments_center_x + (numbers_local_x_offset * final_text_base_zoom);
+        let numbers_cx =
+            final_judgments_center_x + (x_sign * numbers_local_x_offset * final_text_base_zoom);
 
         if !show_fa_plus_window {
             // Standard ITG-style rows: Fantastic..Miss using aggregate grade counts.
@@ -342,26 +389,45 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         i < first_nonzero
                     };
                     let color = if is_dim { dim } else { bright };
-                    let index_from_right = digits - 1 - i;
-                    let cell_right_x = numbers_cx - (index_from_right as f32 * max_digit_w);
-
-                    actors.push(act!(text:
-                        font("wendy_screenevaluation"): settext(ch.to_string()):
-                        align(1.0, 0.5): xy(cell_right_x, world_y): zoom(numbers_zoom):
-                        diffuse(color[0], color[1], color[2], color[3]): z(71)
-                    ));
+                    if player_side == profile::PlayerSide::P1 {
+                        let index_from_right = digits - 1 - i;
+                        let cell_right_x = numbers_cx - (index_from_right as f32 * max_digit_w);
+                        actors.push(act!(text:
+                            font("wendy_screenevaluation"): settext(ch.to_string()):
+                            align(1.0, 0.5): xy(cell_right_x, world_y): zoom(numbers_zoom):
+                            diffuse(color[0], color[1], color[2], color[3]): z(71)
+                        ));
+                    } else {
+                        let cell_left_x = numbers_cx + (i as f32 * max_digit_w);
+                        actors.push(act!(text:
+                            font("wendy_screenevaluation"): settext(ch.to_string()):
+                            align(0.0, 0.5): xy(cell_left_x, world_y): zoom(numbers_zoom):
+                            diffuse(color[0], color[1], color[2], color[3]): z(71):
+                            horizalign(left)
+                        ));
+                    }
                 }
 
                 let label_world_y = world_y + (1.0 * final_text_base_zoom);
                 let label_zoom = final_text_base_zoom * 0.833;
 
-                actors.push(act!(text:
-                    font("miso"): settext(info.label): align(0.0, 0.5):
-                    xy(label_world_x, label_world_y): zoom(label_zoom):
-                    maxwidth(72.0 * final_text_base_zoom): horizalign(left):
-                    diffuse(bright[0], bright[1], bright[2], bright[3]):
-                    z(71)
-                ));
+                if player_side == profile::PlayerSide::P1 {
+                    actors.push(act!(text:
+                        font("miso"): settext(info.label): align(0.0, 0.5):
+                        xy(label_world_x, label_world_y): zoom(label_zoom):
+                        maxwidth(72.0 * final_text_base_zoom): horizalign(left):
+                        diffuse(bright[0], bright[1], bright[2], bright[3]):
+                        z(71)
+                    ));
+                } else {
+                    actors.push(act!(text:
+                        font("miso"): settext(info.label): align(1.0, 0.5):
+                        xy(label_world_x, label_world_y): zoom(label_zoom):
+                        maxwidth(72.0 * final_text_base_zoom): horizalign(right):
+                        diffuse(bright[0], bright[1], bright[2], bright[3]):
+                        z(71)
+                    ));
+                }
             }
         } else {
             // FA+ mode: split Fantastic into W0 (blue) and W1 (white) using per-note windows,
@@ -426,26 +492,45 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         i < first_nonzero
                     };
                     let color = if is_dim { dim } else { bright };
-                    let index_from_right = digits - 1 - i;
-                    let cell_right_x = numbers_cx - (index_from_right as f32 * max_digit_w);
-
-                    actors.push(act!(text:
-                        font("wendy_screenevaluation"): settext(ch.to_string()):
-                        align(1.0, 0.5): xy(cell_right_x, world_y): zoom(numbers_zoom):
-                        diffuse(color[0], color[1], color[2], color[3]): z(71)
-                    ));
+                    if player_side == profile::PlayerSide::P1 {
+                        let index_from_right = digits - 1 - i;
+                        let cell_right_x = numbers_cx - (index_from_right as f32 * max_digit_w);
+                        actors.push(act!(text:
+                            font("wendy_screenevaluation"): settext(ch.to_string()):
+                            align(1.0, 0.5): xy(cell_right_x, world_y): zoom(numbers_zoom):
+                            diffuse(color[0], color[1], color[2], color[3]): z(71)
+                        ));
+                    } else {
+                        let cell_left_x = numbers_cx + (i as f32 * max_digit_w);
+                        actors.push(act!(text:
+                            font("wendy_screenevaluation"): settext(ch.to_string()):
+                            align(0.0, 0.5): xy(cell_left_x, world_y): zoom(numbers_zoom):
+                            diffuse(color[0], color[1], color[2], color[3]): z(71):
+                            horizalign(left)
+                        ));
+                    }
                 }
 
                 let label_world_y = world_y + (1.0 * final_text_base_zoom);
                 let label_zoom = final_text_base_zoom * 0.833;
 
-                actors.push(act!(text:
-                    font("miso"): settext(label.to_string()): align(0.0, 0.5):
-                    xy(label_world_x, label_world_y): zoom(label_zoom):
-                    maxwidth(72.0 * final_text_base_zoom): horizalign(left):
-                    diffuse(bright[0], bright[1], bright[2], bright[3]):
-                    z(71)
-                ));
+                if player_side == profile::PlayerSide::P1 {
+                    actors.push(act!(text:
+                        font("miso"): settext(label.to_string()): align(0.0, 0.5):
+                        xy(label_world_x, label_world_y): zoom(label_zoom):
+                        maxwidth(72.0 * final_text_base_zoom): horizalign(left):
+                        diffuse(bright[0], bright[1], bright[2], bright[3]):
+                        z(71)
+                    ));
+                } else {
+                    actors.push(act!(text:
+                        font("miso"): settext(label.to_string()): align(1.0, 0.5):
+                        xy(label_world_x, label_world_y): zoom(label_zoom):
+                        maxwidth(72.0 * final_text_base_zoom): horizalign(right):
+                        diffuse(bright[0], bright[1], bright[2], bright[3]):
+                        z(71)
+                    ));
+                }
             }
         }
 
@@ -538,40 +623,78 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 label_offset
             };
 
-            actors.push(act!(text: font(font_name): settext(total_time_str):
-                align(0.0, 0.5): horizalign(left):
-                xy(numbers_left_x, y_pos_total):
-                z(71):
-                diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
-            ));
-            actors.push(act!(text: font(font_name): settext(" song"):
-                align(0.0, 0.5): horizalign(left):
-                xy(numbers_left_x + label_offset_total, y_pos_total + 1.0):
-                zoom(text_zoom): z(71):
-                diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
-            ));
+            let (time_x, label_dir) = if player_side == profile::PlayerSide::P1 {
+                (numbers_left_x, 1.0_f32)
+            } else {
+                let numbers_right_x = numbers_cx + numbers_block_width - 2.0;
+                (numbers_right_x, -1.0_f32)
+            };
+
+            if player_side == profile::PlayerSide::P1 {
+                actors.push(act!(text: font(font_name): settext(total_time_str):
+                    align(0.0, 0.5): horizalign(left):
+                    xy(time_x, y_pos_total):
+                    z(71):
+                    diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
+                ));
+                actors.push(act!(text: font(font_name): settext(" song"):
+                    align(0.0, 0.5): horizalign(left):
+                    xy(time_x + label_dir * label_offset_total, y_pos_total + 1.0):
+                    zoom(text_zoom): z(71):
+                    diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
+                ));
+            } else {
+                actors.push(act!(text: font(font_name): settext(total_time_str):
+                    align(1.0, 0.5): horizalign(right):
+                    xy(time_x, y_pos_total):
+                    z(71):
+                    diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
+                ));
+                actors.push(act!(text: font(font_name): settext(" song"):
+                    align(1.0, 0.5): horizalign(right):
+                    xy(time_x + label_dir * label_offset_total, y_pos_total + 1.0):
+                    zoom(text_zoom): z(71):
+                    diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
+                ));
+            }
 
             // --- Remaining Time Row ---
             let y_pos_remaining = sidepane_center_y + local_y - 7.0;
 
-            actors.push(act!(text: font(font_name): settext(remaining_time_str):
-                align(0.0, 0.5): horizalign(left):
-                xy(numbers_left_x, y_pos_remaining):
-                z(71):
-                diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
-            ));
             // Keep original spacing for <= 9:59, otherwise push label after the time width
             let label_offset_remaining = if remaining_width_px > baseline_width_px {
                 remaining_width_px + desired_gap_px
             } else {
                 label_offset
             };
-            actors.push(act!(text: font(font_name): settext(" remaining"):
-                align(0.0, 0.5): horizalign(left):
-                xy(numbers_left_x + label_offset_remaining, y_pos_remaining + 1.0):
-                zoom(text_zoom): z(71):
-                diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
-            ));
+
+            if player_side == profile::PlayerSide::P1 {
+                actors.push(act!(text: font(font_name): settext(remaining_time_str):
+                    align(0.0, 0.5): horizalign(left):
+                    xy(time_x, y_pos_remaining):
+                    z(71):
+                    diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
+                ));
+                actors.push(act!(text: font(font_name): settext(" remaining"):
+                    align(0.0, 0.5): horizalign(left):
+                    xy(time_x + label_dir * label_offset_remaining, y_pos_remaining + 1.0):
+                    zoom(text_zoom): z(71):
+                    diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
+                ));
+            } else {
+                actors.push(act!(text: font(font_name): settext(remaining_time_str):
+                    align(1.0, 0.5): horizalign(right):
+                    xy(time_x, y_pos_remaining):
+                    z(71):
+                    diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
+                ));
+                actors.push(act!(text: font(font_name): settext(" remaining"):
+                    align(1.0, 0.5): horizalign(right):
+                    xy(time_x + label_dir * label_offset_remaining, y_pos_remaining + 1.0):
+                    zoom(text_zoom): z(71):
+                    diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
+                ));
+            }
         }
     }));
 
@@ -582,7 +705,10 @@ fn build_side_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         // Positioned based on visual parity with Simply Love's Step Statistics pane
         // for Player 1, which is on the right side of the screen.
-        let peak_nps_x = screen_width() - 59.0;
+        let peak_nps_x = match player_side {
+            profile::PlayerSide::P1 => screen_width() - 59.0,
+            profile::PlayerSide::P2 => widescale(6.0, 130.0),
+        };
         let peak_nps_y = screen_center_y() + 126.0;
 
         actors.push(act!(text:

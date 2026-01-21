@@ -73,6 +73,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::new();
     let profile = profile::get();
     let play_style = profile::get_session_play_style();
+    let player_side = profile::get_session_player_side();
+    let is_p2_single =
+        play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2;
+    let player_color = if is_p2_single {
+        color::decorative_rgba(state.active_color_index - 2)
+    } else {
+        state.player_color
+    };
     // --- Background and Filter ---
     actors.push(build_background(state));
     let filter_alpha = match profile.background_filter {
@@ -115,7 +123,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             actors.extend(p2);
             (p1, p1_x)
         }
-        _ => notefield::build(state, &profile, notefield::FieldPlacement::P1),
+        _ => notefield::build(
+            state,
+            &profile,
+            if is_p2_single {
+                notefield::FieldPlacement::P2
+            } else {
+                notefield::FieldPlacement::P1
+            },
+        ),
     };
     actors.extend(notefield_actors);
     let difficulty_color = color::difficulty_rgba(&state.chart.difficulty, state.active_color_index);
@@ -140,6 +156,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 screen_center_x() + clamped_width / 2.75,
             ),
         ],
+        _ if is_p2_single => &[(
+            0,
+            screen_center_x() + widescale(292.5, 342.5),
+            screen_center_x() + clamped_width / 2.75,
+        )],
         _ => &[(
             0,
             screen_center_x() - widescale(292.5, 342.5),
@@ -270,7 +291,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 (state.current_music_time / state.song.total_length_seconds as f32).clamp(0.0, 1.0);
             frame_children.push(act!(quad:
                 align(0.0, 0.5): xy(2.0, h / 2.0): zoomto((w - 4.0) * progress, h - 4.0):
-                diffuse(state.player_color[0], state.player_color[1], state.player_color[2], 1.0): z(2)
+                diffuse(player_color[0], player_color[1], player_color[2], 1.0): z(2)
             ));
         }
         let full_title = state.song_full_title.clone();
@@ -298,6 +319,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 (0, screen_center_x() - widescale(238.0, 288.0)),
                 (1, screen_center_x() + widescale(238.0, 288.0)),
             ],
+            _ if is_p2_single => &[(0, screen_center_x() + widescale(238.0, 288.0))],
             _ => &[(0, screen_center_x() - widescale(238.0, 288.0))],
         };
 
@@ -317,7 +339,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let life_color = if is_hot {
                 [1.0, 1.0, 1.0, 1.0]
             } else {
-                state.player_color
+                player_color
             };
             let filled_width = w * life_for_render;
             // Never draw swoosh if dead OR nothing to fill.
@@ -368,7 +390,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         left_avatar: None,
     }));
     if state.num_cols <= 4 && play_style != profile::PlayStyle::Versus {
-        actors.extend(gameplay_stats::build(state, asset_manager, playfield_center_x));
+        actors.extend(gameplay_stats::build(
+            state,
+            asset_manager,
+            playfield_center_x,
+            player_side,
+        ));
     }
     actors
 }
