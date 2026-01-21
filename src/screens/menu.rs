@@ -40,6 +40,7 @@ pub struct State {
     pub selected_index: usize,
     pub active_color_index: i32,
     pub rainbow_mode: bool,
+    pub started_by_p2: bool,
     bg: heart_bg::State,
 }
 
@@ -48,6 +49,7 @@ pub fn init() -> State {
         selected_index: 0,
         active_color_index: color::DEFAULT_COLOR_INDEX, // was 0
         rainbow_mode: false,
+        started_by_p2: false,
         bg: heart_bg::State::new(),
     }
 }
@@ -277,8 +279,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
     match ev.action {
-        VirtualAction::p1_start => {
+        VirtualAction::p1_start | VirtualAction::p2_start => {
             crate::core::audio::play_sfx("assets/sounds/start.ogg");
+            state.started_by_p2 = matches!(ev.action, VirtualAction::p2_start);
             match state.selected_index {
                 0 => ScreenAction::Navigate(Screen::SelectProfile),
                 1 => ScreenAction::Navigate(Screen::Options),
@@ -286,15 +289,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 _ => ScreenAction::None,
             }
         }
-        VirtualAction::p1_back => ScreenAction::Exit,
-        VirtualAction::p1_up | VirtualAction::p1_menu_up => {
+        VirtualAction::p1_back | VirtualAction::p2_back => ScreenAction::Exit,
+        VirtualAction::p1_up | VirtualAction::p1_menu_up | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up => {
             let n = OPTION_COUNT as isize;
             let cur = state.selected_index as isize;
             state.selected_index = ((cur - 1 + n) % n) as usize;
             crate::core::audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
-        VirtualAction::p1_down | VirtualAction::p1_menu_down => {
+        VirtualAction::p1_down | VirtualAction::p1_menu_down | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down => {
             let n = OPTION_COUNT as isize;
             let cur = state.selected_index as isize;
             state.selected_index = ((cur + 1 + n) % n) as usize;

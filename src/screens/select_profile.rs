@@ -399,8 +399,18 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 state.p2_preview_noteskin =
                     preview_noteskin_for_choice(&state.choices, state.p2_selected_index);
                 audio::play_sfx("assets/sounds/start.ogg");
+                return ScreenAction::None;
             }
-            ScreenAction::None
+
+            audio::play_sfx("assets/sounds/start.ogg");
+            let choice = state
+                .choices
+                .get(state.p2_selected_index)
+                .map(|c| c.kind.clone())
+                .unwrap_or(ActiveProfile::Guest);
+            state.exit_anim = true;
+            let _ = exit_anim_t(true);
+            ScreenAction::SelectProfile(choice)
         }
         VirtualAction::p2_back | VirtualAction::p2_select => {
             if state.p2_joined {

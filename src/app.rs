@@ -1628,6 +1628,10 @@ impl App {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
             self.state.screens.select_profile_state = select_profile::init();
             self.state.screens.select_profile_state.active_color_index = current_color_index;
+            if prev == CurrentScreen::Menu {
+                let p2 = self.state.screens.menu_state.started_by_p2;
+                select_profile::set_joined(&mut self.state.screens.select_profile_state, !p2, p2);
+            }
         } else if target == CurrentScreen::SelectStyle {
             let current_color_index = self.state.screens.select_style_state.active_color_index;
             self.state.screens.select_style_state = select_style::init();
@@ -2096,6 +2100,14 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.state.screens.select_profile_state = select_profile::init();
                                 self.state.screens.select_profile_state.active_color_index =
                                     current_color_index;
+                                if prev == CurrentScreen::Menu {
+                                    let p2 = self.state.screens.menu_state.started_by_p2;
+                                    select_profile::set_joined(
+                                        &mut self.state.screens.select_profile_state,
+                                        !p2,
+                                        p2,
+                                    );
+                                }
                             } else if target_screen == CurrentScreen::SelectStyle {
                                 let current_color_index =
                                     self.state.screens.select_style_state.active_color_index;
