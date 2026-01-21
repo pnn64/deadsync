@@ -2114,12 +2114,19 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.state.screens.select_style_state = select_style::init();
                                 self.state.screens.select_style_state.active_color_index =
                                     current_color_index;
-                                self.state.screens.select_style_state.selected_index =
+                                let both_joined = select_profile::both_players_joined(
+                                    &self.state.screens.select_profile_state,
+                                );
+                                self.state.screens.select_style_state.selected_index = if both_joined
+                                {
+                                    1 // "2 Players"
+                                } else {
                                     match profile::get_session_play_style() {
                                         profile::PlayStyle::Single => 0,
                                         profile::PlayStyle::Versus => 1,
                                         profile::PlayStyle::Double => 2,
-                                    };
+                                    }
+                                };
                             } else if target_screen == CurrentScreen::Mappings {
                                 let color_index =
                                     self.state.screens.options_state.active_color_index;

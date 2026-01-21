@@ -308,6 +308,11 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
         preview_noteskin_for_choice(&state.choices, state.p2_selected_index);
 }
 
+#[inline(always)]
+pub fn both_players_joined(state: &State) -> bool {
+    state.p1_joined && state.p2_joined
+}
+
 pub fn update(state: &mut State, dt: f32) {
     const BPM: f32 = 120.0;
     let dt = dt.max(0.0);
