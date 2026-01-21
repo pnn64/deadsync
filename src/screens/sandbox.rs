@@ -94,7 +94,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     if pressed {
         // Include controller ID in the display for clarity when multiple are connected.
         let pad_str = match pad_event {
-            PadEvent::Dir { id, dir, pressed } => {
+            PadEvent::Dir { id, dir, pressed, .. } => {
                 format!(
                     "Gamepad {}: Dir {{ dir: {:?}, pressed: {} }}",
                     usize::from(*id),
@@ -102,7 +102,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
                     pressed
                 )
             }
-            PadEvent::Button { id, btn, pressed } => {
+            PadEvent::Button { id, btn, pressed, .. } => {
                 format!(
                     "Gamepad {}: Button {{ btn: {:?}, pressed: {} }}",
                     usize::from(*id),
@@ -110,7 +110,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
                     pressed
                 )
             }
-            PadEvent::Face { id, btn, pressed } => {
+            PadEvent::Face { id, btn, pressed, .. } => {
                 format!(
                     "Gamepad {}: Face {{ btn: {:?}, pressed: {} }}",
                     usize::from(*id),
@@ -124,6 +124,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
                 uuid,
                 value,
                 pressed,
+                ..
             } => {
                 let dev = usize::from(*id);
                 let code_u32 = code.into_u32();
@@ -138,6 +139,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
                 code,
                 uuid,
                 value,
+                ..
             } => {
                 let dev = usize::from(*id);
                 let code_u32 = code.into_u32();

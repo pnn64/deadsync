@@ -178,18 +178,18 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 
     // Determine a stable, human-readable label for this device element.
     let (label, pressed_opt) = match pad_event {
-        PE::Dir { id, dir, pressed } => {
+        PE::Dir { id, dir, pressed, .. } => {
             let dev = usize::from(*id);
             (format!("Gamepad {}: Dir::{:?}", dev, dir), Some(*pressed))
         }
-        PE::Button { id, btn, pressed } => {
+        PE::Button { id, btn, pressed, .. } => {
             let dev = usize::from(*id);
             (
                 format!("Gamepad {}: Button::{:?}", dev, btn),
                 Some(*pressed),
             )
         }
-        PE::Face { id, btn, pressed } => {
+        PE::Face { id, btn, pressed, .. } => {
             let dev = usize::from(*id);
             (format!("Gamepad {}: Face::{:?}", dev, btn), Some(*pressed))
         }

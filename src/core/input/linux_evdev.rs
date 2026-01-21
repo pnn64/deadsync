@@ -4,6 +4,7 @@ use std::ffi::c_void;
 use std::fs;
 use std::mem::{MaybeUninit, size_of};
 use std::os::unix::io::AsRawFd;
+use std::time::Instant;
 
 const POLLIN: i16 = 0x0001;
 
@@ -199,9 +200,11 @@ pub fn run(
                     if ev.value == 2 {
                         continue;
                     }
+                    let timestamp = Instant::now();
                     let pressed = ev.value != 0;
                     emit_pad(PadEvent::RawButton {
                         id: dev.id,
+                        timestamp,
                         code: PadCode(code_u32(ev.type_, ev.code)),
                         uuid: dev.uuid,
                         value: if pressed { 1.0 } else { 0.0 },
@@ -211,8 +214,10 @@ pub fn run(
                 }
 
                 if ev.type_ == EV_ABS {
+                    let timestamp = Instant::now();
                     emit_pad(PadEvent::RawAxis {
                         id: dev.id,
+                        timestamp,
                         code: PadCode(code_u32(ev.type_, ev.code)),
                         uuid: dev.uuid,
                         value: ev.value as f32,
@@ -239,6 +244,7 @@ pub fn run(
                         dev.dir[k] = want[k];
                         emit_pad(PadEvent::Dir {
                             id: dev.id,
+                            timestamp,
                             dir: dirs[k],
                             pressed: want[k],
                         });

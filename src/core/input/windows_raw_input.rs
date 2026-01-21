@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::ptr;
+use std::time::Instant;
 
 use windows::core::PCWSTR;
 use windows::Win32::Devices::HumanInterfaceDevice::*;
@@ -315,6 +316,7 @@ fn enumerate_existing(ctx: &mut Ctx) {
 fn emit_button_diff(
     emit_pad: &mut (dyn FnMut(PadEvent) + Send),
     dev: &Dev,
+    timestamp: Instant,
     now: &[u16],
 ) {
     let mut a = 0usize;
@@ -331,6 +333,7 @@ fn emit_button_diff(
             // Released.
             (emit_pad)(PadEvent::RawButton {
                 id: dev.id,
+                timestamp,
                 code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (pa as u32)),
                 uuid: dev.uuid,
                 value: 0.0,
@@ -341,6 +344,7 @@ fn emit_button_diff(
             // Pressed.
             (emit_pad)(PadEvent::RawButton {
                 id: dev.id,
+                timestamp,
                 code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (nb as u32)),
                 uuid: dev.uuid,
                 value: 1.0,
@@ -353,6 +357,7 @@ fn emit_button_diff(
         let u = dev.buttons_prev[a];
         (emit_pad)(PadEvent::RawButton {
             id: dev.id,
+            timestamp,
             code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (u as u32)),
             uuid: dev.uuid,
             value: 0.0,
@@ -364,6 +369,7 @@ fn emit_button_diff(
         let u = now[b];
         (emit_pad)(PadEvent::RawButton {
             id: dev.id,
+            timestamp,
             code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (u as u32)),
             uuid: dev.uuid,
             value: 1.0,
@@ -373,11 +379,12 @@ fn emit_button_diff(
     }
 }
 
-	    fn process_hid_report(
-	        emit_pad: &mut (dyn FnMut(PadEvent) + Send),
-	        dev: &mut Dev,
-	        report: &mut [u8],
-	    ) {
+		    fn process_hid_report(
+		        emit_pad: &mut (dyn FnMut(PadEvent) + Send),
+		        dev: &mut Dev,
+		        timestamp: Instant,
+		        report: &mut [u8],
+		    ) {
     if dev.max_buttons == 0 || dev.preparsed.is_empty() {
         return;
     }
@@ -409,9 +416,9 @@ fn emit_button_diff(
     }
     dev.buttons_now.sort_unstable();
 
-	        emit_button_diff(emit_pad, dev, &dev.buttons_now);
-	        std::mem::swap(&mut dev.buttons_prev, &mut dev.buttons_now);
-	        dev.buttons_now.clear();
+		        emit_button_diff(emit_pad, dev, timestamp, &dev.buttons_now);
+		        std::mem::swap(&mut dev.buttons_prev, &mut dev.buttons_now);
+		        dev.buttons_now.clear();
 
 	        // D-pad hat switch → PadDir edges (so dance pads / DPAD-only devices can bind directions).
 	        let mut hat: u32 = 0;
@@ -462,14 +469,15 @@ fn emit_button_diff(
 	            if dev.dir[i] == want[i] {
             continue;
         }
-        dev.dir[i] = want[i];
-        (emit_pad)(PadEvent::Dir {
-            id: dev.id,
-            dir: dirs[i],
-            pressed: want[i],
-        });
-    }
-}
+	        dev.dir[i] = want[i];
+	        (emit_pad)(PadEvent::Dir {
+	            id: dev.id,
+	            timestamp,
+	            dir: dirs[i],
+	            pressed: want[i],
+	        });
+	    }
+	}
 
 fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
     unsafe {
@@ -533,7 +541,8 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
                 break;
             }
             let report = &mut reports[start..end];
-            process_hid_report(ctx.emit_pad.as_mut(), dev, report);
+            let timestamp = Instant::now();
+            process_hid_report(ctx.emit_pad.as_mut(), dev, timestamp, report);
             idx += 1;
         }
     }

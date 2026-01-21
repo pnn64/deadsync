@@ -87,22 +87,26 @@ pub enum FaceBtn {
 pub enum PadEvent {
     Dir {
         id: PadId,
+        timestamp: Instant,
         dir: PadDir,
         pressed: bool,
     },
     Button {
         id: PadId,
+        timestamp: Instant,
         btn: PadButton,
         pressed: bool,
     },
     Face {
         id: PadId,
+        timestamp: Instant,
         btn: FaceBtn,
         pressed: bool,
     },
     /// Raw low-level button event with platform-specific code and device UUID.
     RawButton {
         id: PadId,
+        timestamp: Instant,
         code: PadCode,
         uuid: [u8; 16],
         value: f32,
@@ -111,6 +115,7 @@ pub enum PadEvent {
     /// Raw low-level axis event with platform-specific code and device UUID.
     RawAxis {
         id: PadId,
+        timestamp: Instant,
         code: PadCode,
         uuid: [u8; 16],
         value: f32,
@@ -333,7 +338,7 @@ impl Keymap {
     pub fn actions_for_pad_event(&self, ev: &PadEvent) -> Vec<(VirtualAction, bool)> {
         let mut out = Vec::with_capacity(2);
         match *ev {
-            PadEvent::Dir { id, dir, pressed } => {
+            PadEvent::Dir { id, dir, pressed, .. } => {
                 let dev = usize::from(id);
                 for (act, binds) in &self.map {
                     for b in binds {
@@ -353,7 +358,7 @@ impl Keymap {
                     }
                 }
             }
-            PadEvent::Button { id, btn, pressed } => {
+            PadEvent::Button { id, btn, pressed, .. } => {
                 let dev = usize::from(id);
                 for (act, binds) in &self.map {
                     for b in binds {
@@ -373,7 +378,7 @@ impl Keymap {
                     }
                 }
             }
-            PadEvent::Face { id, btn, pressed } => {
+            PadEvent::Face { id, btn, pressed, .. } => {
                 let dev = usize::from(id);
                 for (act, binds) in &self.map {
                     for b in binds {
@@ -480,7 +485,13 @@ pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
     if actions.is_empty() {
         return out;
     }
-    let timestamp = Instant::now();
+    let timestamp = match *ev {
+        PadEvent::Dir { timestamp, .. }
+        | PadEvent::Button { timestamp, .. }
+        | PadEvent::Face { timestamp, .. }
+        | PadEvent::RawButton { timestamp, .. }
+        | PadEvent::RawAxis { timestamp, .. } => timestamp,
+    };
     for (act, pressed) in actions {
         out.push(InputEvent {
             action: act,

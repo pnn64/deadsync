@@ -556,21 +556,21 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
                 uuid: None,
             }))
         }
-        PadEvent::Dir { id, dir, pressed } => {
+        PadEvent::Dir { id, dir, pressed, .. } => {
             if !pressed {
                 return;
             }
             let dev = usize::from(id);
             Some(InputBinding::PadDirOn { device: dev, dir })
         }
-        PadEvent::Button { id, btn, pressed } => {
+        PadEvent::Button { id, btn, pressed, .. } => {
             if !pressed {
                 return;
             }
             let dev = usize::from(id);
             Some(InputBinding::PadButtonOn { device: dev, btn })
         }
-        PadEvent::Face { id, btn, pressed } => {
+        PadEvent::Face { id, btn, pressed, .. } => {
             if !pressed {
                 return;
             }

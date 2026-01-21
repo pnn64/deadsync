@@ -2,6 +2,7 @@ use super::{PadDir, uuid_from_bytes, GpSystemEvent, PadBackend, PadCode, PadEven
 use std::collections::HashMap;
 use std::ffi::{c_char, c_void};
 use std::ptr;
+use std::time::Instant;
 
 type CFAllocatorRef = *const c_void;
 type CFRunLoopRef = *mut c_void;
@@ -170,6 +171,7 @@ extern "C" fn on_remove(_ctx: *mut c_void, _res: IOReturn, _sender: *mut c_void,
 extern "C" fn on_input(_ctx: *mut c_void, _res: IOReturn, _sender: *mut c_void, value: IOHIDValueRef) {
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
+        let timestamp = Instant::now();
         let elem = IOHIDValueGetElement(value);
         if elem.is_null() {
             return;
@@ -207,6 +209,7 @@ extern "C" fn on_input(_ctx: *mut c_void, _res: IOReturn, _sender: *mut c_void, 
                 dev.dir[i] = want[i];
                 (ctx.emit_pad)(PadEvent::Dir {
                     id: dev.id,
+                    timestamp,
                     dir: dirs[i],
                     pressed: want[i],
                 });
@@ -218,6 +221,7 @@ extern "C" fn on_input(_ctx: *mut c_void, _res: IOReturn, _sender: *mut c_void, 
             let pressed = v != 0;
             (ctx.emit_pad)(PadEvent::RawButton {
                 id: dev.id,
+                timestamp,
                 code: PadCode(code),
                 uuid: dev.uuid,
                 value: if pressed { 1.0 } else { 0.0 },
@@ -226,6 +230,7 @@ extern "C" fn on_input(_ctx: *mut c_void, _res: IOReturn, _sender: *mut c_void, 
         } else {
             (ctx.emit_pad)(PadEvent::RawAxis {
                 id: dev.id,
+                timestamp,
                 code: PadCode(code),
                 uuid: dev.uuid,
                 value: v as f32,
