@@ -28,12 +28,12 @@ use std::{error::Error, path::PathBuf, sync::Arc, time::Instant};
 
 use crate::ui::actors::Actor;
 /* -------------------- gamepad -------------------- */
-use crate::core::input::{GpSystemEvent, TimedPadEvent};
+use crate::core::input::{GpSystemEvent, PadEvent};
 
 /* -------------------- user events -------------------- */
 #[derive(Debug, Clone)]
 pub enum UserEvent {
-    Pad(TimedPadEvent),
+    Pad(PadEvent),
     GamepadSystem(GpSystemEvent),
 }
 
@@ -1451,12 +1451,12 @@ impl App {
     /* -------------------- pad event routing -------------------- */
 
     #[inline(always)]
-    fn handle_pad_event(&mut self, event_loop: &ActiveEventLoop, ev: &TimedPadEvent) {
+    fn handle_pad_event(&mut self, event_loop: &ActiveEventLoop, ev: PadEvent) {
         let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
         if is_transitioning || self.state.screens.current_screen == CurrentScreen::Init {
             return;
         }
-        for iev in input::map_pad_event(ev) {
+        for iev in input::map_pad_event(&ev) {
             if let Err(e) = self.route_input_event(event_loop, iev) {
                 error!("Failed to handle pad input: {}", e);
                 event_loop.exit();
@@ -1930,20 +1930,20 @@ impl ApplicationHandler<UserEvent> for App {
                 if self.state.screens.current_screen == CurrentScreen::Sandbox {
                     crate::screens::sandbox::handle_raw_pad_event(
                         &mut self.state.screens.sandbox_state,
-                        &ev.ev,
+                        &ev,
                     );
                 } else if self.state.screens.current_screen == CurrentScreen::Mappings {
                     crate::screens::mappings::handle_raw_pad_event(
                         &mut self.state.screens.mappings_state,
-                        &ev.ev,
+                        &ev,
                     );
                 } else if self.state.screens.current_screen == CurrentScreen::Input {
                     crate::screens::input::handle_raw_pad_event(
                         &mut self.state.screens.input_state,
-                        &ev.ev,
+                        &ev,
                     );
                 }
-                self.handle_pad_event(event_loop, &ev);
+                self.handle_pad_event(event_loop, ev);
             }
         }
     }
