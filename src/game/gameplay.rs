@@ -443,7 +443,7 @@ pub fn queue_input_edge(
     source: InputSource,
     lane: Lane,
     pressed: bool,
-    _timestamp: Instant,
+    timestamp: Instant,
 ) {
     if lane.index() >= state.num_cols {
         return;
@@ -458,7 +458,9 @@ pub fn queue_input_edge(
     };
     let lead_in = state.audio_lead_in_seconds.max(0.0);
     let anchor = -state.global_offset_seconds;
-    let stream_pos = audio::get_music_stream_position_seconds();
+    let now = Instant::now();
+    let dt = now.saturating_duration_since(timestamp).as_secs_f32();
+    let stream_pos = (audio::get_music_stream_position_seconds() - dt).max(0.0);
     let event_music_time = (stream_pos - lead_in) * rate + anchor * (1.0 - rate);
 
     state.pending_edges.push_back(InputEdge {

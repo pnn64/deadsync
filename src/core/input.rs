@@ -117,6 +117,12 @@ pub enum PadEvent {
     },
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct TimedPadEvent {
+    pub ev: PadEvent,
+    pub timestamp: Instant,
+}
+
 #[derive(Clone, Debug)]
 pub enum GpSystemEvent {
     Connected {
@@ -135,10 +141,10 @@ pub enum GpSystemEvent {
 
 /// Run the platform pad backend on the current thread.
 ///
-/// This is intended to be called from a dedicated thread which forwards `PadEvent` and
+/// This is intended to be called from a dedicated thread which forwards `TimedPadEvent` and
 /// `GpSystemEvent` into the winit `EventLoopProxy` (see `deadsync/src/app.rs`).
 pub fn run_pad_backend(
-    emit_pad: impl FnMut(PadEvent) + Send + 'static,
+    emit_pad: impl FnMut(TimedPadEvent) + Send + 'static,
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
 ) {
     #[cfg(windows)]
@@ -473,14 +479,14 @@ pub fn map_key_event(ev: &KeyEvent) -> Vec<InputEvent> {
 }
 
 #[inline(always)]
-pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
+pub fn map_pad_event(ev: &TimedPadEvent) -> Vec<InputEvent> {
     let mut out = Vec::with_capacity(2);
-    let mut actions = with_keymap(|km| km.actions_for_pad_event(ev));
+    let mut actions = with_keymap(|km| km.actions_for_pad_event(&ev.ev));
     dedup_menu_variants(&mut actions);
     if actions.is_empty() {
         return out;
     }
-    let timestamp = Instant::now();
+    let timestamp = ev.timestamp;
     for (act, pressed) in actions {
         out.push(InputEvent {
             action: act,
@@ -550,12 +556,15 @@ fn dedup_menu_variants(actions: &mut Vec<(VirtualAction, bool)>) {
 
 #[cfg(all(unix, not(target_os = "macos")))]
 mod linux_evdev {
-    use super::{PadDir, uuid_from_bytes, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId};
+    use super::{
+        GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, TimedPadEvent, uuid_from_bytes,
+    };
     use std::collections::HashSet;
     use std::ffi::c_void;
     use std::fs;
     use std::mem::{MaybeUninit, size_of};
     use std::os::unix::io::AsRawFd;
+    use std::time::Instant;
 
     const POLLIN: i16 = 0x0001;
 
@@ -648,7 +657,7 @@ mod linux_evdev {
     }
 
     pub fn run(
-        mut emit_pad: impl FnMut(PadEvent),
+        mut emit_pad: impl FnMut(TimedPadEvent),
         mut emit_sys: impl FnMut(GpSystemEvent),
     ) {
         let mut devs: Vec<Dev> = Vec::new();
@@ -744,6 +753,7 @@ mod linux_evdev {
                     if ev.type_ == EV_SYN {
                         continue;
                     }
+                    let ts = Instant::now();
 
                     if ev.type_ == EV_KEY {
                         // 0 = release, 1 = press, 2 = autorepeat
@@ -751,22 +761,28 @@ mod linux_evdev {
                             continue;
                         }
                         let pressed = ev.value != 0;
-                        emit_pad(PadEvent::RawButton {
-                            id: dev.id,
-                            code: PadCode(code_u32(ev.type_, ev.code)),
-                            uuid: dev.uuid,
-                            value: if pressed { 1.0 } else { 0.0 },
-                            pressed,
+                        emit_pad(TimedPadEvent {
+                            ev: PadEvent::RawButton {
+                                id: dev.id,
+                                code: PadCode(code_u32(ev.type_, ev.code)),
+                                uuid: dev.uuid,
+                                value: if pressed { 1.0 } else { 0.0 },
+                                pressed,
+                            },
+                            timestamp: ts,
                         });
                         continue;
                     }
 
                     if ev.type_ == EV_ABS {
-                        emit_pad(PadEvent::RawAxis {
-                            id: dev.id,
-                            code: PadCode(code_u32(ev.type_, ev.code)),
-                            uuid: dev.uuid,
-                            value: ev.value as f32,
+                        emit_pad(TimedPadEvent {
+                            ev: PadEvent::RawAxis {
+                                id: dev.id,
+                                code: PadCode(code_u32(ev.type_, ev.code)),
+                                uuid: dev.uuid,
+                                value: ev.value as f32,
+                            },
+                            timestamp: ts,
                         });
 
                         if ev.code == ABS_HAT0X {
@@ -788,10 +804,13 @@ mod linux_evdev {
                                 continue;
                             }
                             dev.dir[k] = want[k];
-                            emit_pad(PadEvent::Dir {
-                                id: dev.id,
-                                dir: dirs[k],
-                                pressed: want[k],
+                            emit_pad(TimedPadEvent {
+                                ev: PadEvent::Dir {
+                                    id: dev.id,
+                                    dir: dirs[k],
+                                    pressed: want[k],
+                                },
+                                timestamp: ts,
                             });
                         }
                     }
@@ -803,11 +822,14 @@ mod linux_evdev {
 
 #[cfg(windows)]
 mod windows_raw_input {
-    use super::{PadDir, uuid_from_bytes, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId};
+    use super::{
+        GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, TimedPadEvent, uuid_from_bytes,
+    };
     use std::collections::HashMap;
     use std::ffi::c_void;
     use std::mem::size_of;
     use std::ptr;
+    use std::time::Instant;
 
     use windows::core::PCWSTR;
     use windows::Win32::Devices::HumanInterfaceDevice::*;
@@ -842,7 +864,7 @@ mod windows_raw_input {
     }
 
     struct Ctx {
-        emit_pad: Box<dyn FnMut(PadEvent) + Send>,
+        emit_pad: Box<dyn FnMut(TimedPadEvent) + Send>,
         emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
         devices: HashMap<isize, Dev>,
         next_id: u32,
@@ -1030,9 +1052,10 @@ mod windows_raw_input {
 
     #[inline(always)]
     fn emit_button_diff(
-        emit_pad: &mut (dyn FnMut(PadEvent) + Send),
+        emit_pad: &mut (dyn FnMut(TimedPadEvent) + Send),
         dev: &Dev,
         now: &[u16],
+        timestamp: Instant,
     ) {
         let mut a = 0usize;
         let mut b = 0usize;
@@ -1046,54 +1069,67 @@ mod windows_raw_input {
             }
             if pa < nb {
                 // Released.
-                (emit_pad)(PadEvent::RawButton {
-                    id: dev.id,
-                    code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (pa as u32)),
-                    uuid: dev.uuid,
-                    value: 0.0,
-                    pressed: false,
+                (emit_pad)(TimedPadEvent {
+                    ev: PadEvent::RawButton {
+                        id: dev.id,
+                        code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (pa as u32)),
+                        uuid: dev.uuid,
+                        value: 0.0,
+                        pressed: false,
+                    },
+                    timestamp,
                 });
                 a += 1;
             } else {
                 // Pressed.
-                (emit_pad)(PadEvent::RawButton {
-                    id: dev.id,
-                    code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (nb as u32)),
-                    uuid: dev.uuid,
-                    value: 1.0,
-                    pressed: true,
+                (emit_pad)(TimedPadEvent {
+                    ev: PadEvent::RawButton {
+                        id: dev.id,
+                        code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (nb as u32)),
+                        uuid: dev.uuid,
+                        value: 1.0,
+                        pressed: true,
+                    },
+                    timestamp,
                 });
                 b += 1;
             }
         }
         while a < dev.buttons_prev.len() {
             let u = dev.buttons_prev[a];
-            (emit_pad)(PadEvent::RawButton {
-                id: dev.id,
-                code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (u as u32)),
-                uuid: dev.uuid,
-                value: 0.0,
-                pressed: false,
+            (emit_pad)(TimedPadEvent {
+                ev: PadEvent::RawButton {
+                    id: dev.id,
+                    code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (u as u32)),
+                    uuid: dev.uuid,
+                    value: 0.0,
+                    pressed: false,
+                },
+                timestamp,
             });
             a += 1;
         }
         while b < now.len() {
             let u = now[b];
-            (emit_pad)(PadEvent::RawButton {
-                id: dev.id,
-                code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (u as u32)),
-                uuid: dev.uuid,
-                value: 1.0,
-                pressed: true,
+            (emit_pad)(TimedPadEvent {
+                ev: PadEvent::RawButton {
+                    id: dev.id,
+                    code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (u as u32)),
+                    uuid: dev.uuid,
+                    value: 1.0,
+                    pressed: true,
+                },
+                timestamp,
             });
             b += 1;
         }
     }
 
     fn process_hid_report(
-        emit_pad: &mut (dyn FnMut(PadEvent) + Send),
+        emit_pad: &mut (dyn FnMut(TimedPadEvent) + Send),
         dev: &mut Dev,
         report: &mut [u8],
+        timestamp: Instant,
     ) {
         if dev.max_buttons == 0 || dev.preparsed.is_empty() {
             return;
@@ -1126,7 +1162,7 @@ mod windows_raw_input {
         }
         dev.buttons_now.sort_unstable();
 
-        emit_button_diff(emit_pad, dev, &dev.buttons_now);
+        emit_button_diff(emit_pad, dev, &dev.buttons_now, timestamp);
         std::mem::swap(&mut dev.buttons_prev, &mut dev.buttons_now);
         dev.buttons_now.clear();
 
@@ -1158,15 +1194,18 @@ mod windows_raw_input {
                 continue;
             }
             dev.dir[i] = want[i];
-            (emit_pad)(PadEvent::Dir {
-                id: dev.id,
-                dir: dirs[i],
-                pressed: want[i],
+            (emit_pad)(TimedPadEvent {
+                ev: PadEvent::Dir {
+                    id: dev.id,
+                    dir: dirs[i],
+                    pressed: want[i],
+                },
+                timestamp,
             });
         }
     }
 
-    fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
+    fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT, timestamp: Instant) {
         unsafe {
             let mut size: u32 = 0;
             let _ = GetRawInputData(hraw, RID_INPUT, None, &mut size, size_of::<RAWINPUTHEADER>() as u32);
@@ -1228,7 +1267,7 @@ mod windows_raw_input {
                     break;
                 }
                 let report = &mut reports[start..end];
-                process_hid_report(ctx.emit_pad.as_mut(), dev, report);
+                process_hid_report(ctx.emit_pad.as_mut(), dev, report, timestamp);
                 idx += 1;
             }
         }
@@ -1252,7 +1291,14 @@ mod windows_raw_input {
             }
             WM_INPUT => {
                 if !ctx_ptr.is_null() {
-                    unsafe { handle_wm_input(&mut *ctx_ptr, HRAWINPUT(lparam.0 as *mut c_void)) };
+                    let ts = Instant::now();
+                    unsafe {
+                        handle_wm_input(
+                            &mut *ctx_ptr,
+                            HRAWINPUT(lparam.0 as *mut c_void),
+                            ts,
+                        )
+                    };
                 }
                 LRESULT(0)
             }
@@ -1277,7 +1323,7 @@ mod windows_raw_input {
     }
 
     pub fn run(
-        emit_pad: impl FnMut(PadEvent) + Send + 'static,
+        emit_pad: impl FnMut(TimedPadEvent) + Send + 'static,
         emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
     ) {
         unsafe {
@@ -1366,10 +1412,13 @@ mod windows_raw_input {
 
 #[cfg(target_os = "macos")]
 mod macos_iohid {
-    use super::{PadDir, uuid_from_bytes, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId};
+    use super::{
+        GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, TimedPadEvent, uuid_from_bytes,
+    };
     use std::collections::HashMap;
     use std::ffi::{c_char, c_void};
     use std::ptr;
+    use std::time::Instant;
 
     type CFAllocatorRef = *const c_void;
     type CFRunLoopRef = *mut c_void;
@@ -1439,7 +1488,7 @@ mod macos_iohid {
     }
 
     struct Ctx {
-        emit_pad: Box<dyn FnMut(PadEvent) + Send>,
+        emit_pad: Box<dyn FnMut(TimedPadEvent) + Send>,
         emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
         next_id: u32,
         devs: HashMap<usize, Dev>,
@@ -1526,6 +1575,7 @@ mod macos_iohid {
     extern "C" fn on_input(_ctx: *mut c_void, _res: IOReturn, _sender: *mut c_void, value: IOHIDValueRef) {
         unsafe {
             let ctx = &mut *(_ctx as *mut Ctx);
+            let ts = Instant::now();
             let elem = IOHIDValueGetElement(value);
             if elem.is_null() {
                 return;
@@ -1561,10 +1611,13 @@ mod macos_iohid {
                         continue;
                     }
                     dev.dir[i] = want[i];
-                    (ctx.emit_pad)(PadEvent::Dir {
-                        id: dev.id,
-                        dir: dirs[i],
-                        pressed: want[i],
+                    (ctx.emit_pad)(TimedPadEvent {
+                        ev: PadEvent::Dir {
+                            id: dev.id,
+                            dir: dirs[i],
+                            pressed: want[i],
+                        },
+                        timestamp: ts,
                     });
                 }
                 return;
@@ -1572,26 +1625,32 @@ mod macos_iohid {
 
             if usage_page == 0x09 {
                 let pressed = v != 0;
-                (ctx.emit_pad)(PadEvent::RawButton {
-                    id: dev.id,
-                    code: PadCode(code),
-                    uuid: dev.uuid,
-                    value: if pressed { 1.0 } else { 0.0 },
-                    pressed,
+                (ctx.emit_pad)(TimedPadEvent {
+                    ev: PadEvent::RawButton {
+                        id: dev.id,
+                        code: PadCode(code),
+                        uuid: dev.uuid,
+                        value: if pressed { 1.0 } else { 0.0 },
+                        pressed,
+                    },
+                    timestamp: ts,
                 });
             } else {
-                (ctx.emit_pad)(PadEvent::RawAxis {
-                    id: dev.id,
-                    code: PadCode(code),
-                    uuid: dev.uuid,
-                    value: v as f32,
+                (ctx.emit_pad)(TimedPadEvent {
+                    ev: PadEvent::RawAxis {
+                        id: dev.id,
+                        code: PadCode(code),
+                        uuid: dev.uuid,
+                        value: v as f32,
+                    },
+                    timestamp: ts,
                 });
             }
         }
     }
 
     pub fn run(
-        emit_pad: impl FnMut(PadEvent) + Send + 'static,
+        emit_pad: impl FnMut(TimedPadEvent) + Send + 'static,
         emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
     ) {
         unsafe {
