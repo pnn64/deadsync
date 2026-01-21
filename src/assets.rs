@@ -660,8 +660,13 @@ impl AssetManager {
             } = font::parse(ini_path_str)?;
 
             if name == "miso" {
+                font.fallback_font_name = Some("game");
+                info!("Font 'miso' configured to use 'game' as fallback.");
+            }
+
+            if name == "game" {
                 font.fallback_font_name = Some("cjk");
-                info!("Font 'miso' configured to use 'cjk' as fallback.");
+                info!("Font 'game' configured to use 'cjk' as fallback.");
             }
 
             if name == "cjk" {

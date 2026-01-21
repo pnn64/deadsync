@@ -758,7 +758,8 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
     //   PadCode[0xDEADBEEF]#00112233AABBCCDDEEFF001122334455
     //   PadCode[0xDEADBEEF]@0#00112233AABBCCDDEEFF001122334455
     //
-    // where 0x... or decimal is gilrs::ev::Code::into_u32(), @N restricts to device index N,
+    // where 0x... or decimal is the `PadCode(u32)` shown in the Sandbox/Input screens,
+    // @N restricts to device index N,
     // and #... restricts to a 16-byte UUID (32 hex chars, no dashes).
     if let Some(rest) = t.strip_prefix("PadCode[") {
         if let Some(end) = rest.find(']') {

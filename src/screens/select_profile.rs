@@ -562,7 +562,14 @@ fn push_join_prompt(
     frame_h: f32,
     border_rgba: [f32; 4],
     inner_alpha: f32,
+    time: f32,
 ) {
+    // ITGmania diffuse_shift: period=1, color1=white, color2=gray.
+    // f = sin((t + 0.25) * 2π) / 2 + 0.5
+    let t = time.rem_euclid(1.0);
+    let f = ((t + 0.25) * std::f32::consts::PI * 2.0).sin() * 0.5 + 0.5;
+    let shade = 0.5 + 0.5 * f;
+
     out.push(act!(quad:
         align(0.5, 0.5):
         xy(cx, cy):
@@ -587,8 +594,8 @@ fn push_join_prompt(
         font("miso"):
         zoomtoheight(18.0):
         maxwidth(FRAME_W_JOIN - 20.0):
-        settext("Press START to join!"):
-        diffuse(1.0, 1.0, 1.0, inner_alpha):
+        settext("Press &START; to join!"):
+        diffuse(shade, shade, shade, inner_alpha):
         z(103)
     ));
 }
@@ -971,7 +978,15 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         }
         ui.extend(p1_ui);
     } else {
-        push_join_prompt(&mut ui, p1_cx, cy, frame_h, border_rgba, inner_alpha);
+        push_join_prompt(
+            &mut ui,
+            p1_cx,
+            cy,
+            frame_h,
+            border_rgba,
+            inner_alpha,
+            state.preview_time,
+        );
     }
 
     if state.p2_joined {
@@ -999,7 +1014,15 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         }
         ui.extend(p2_ui);
     } else {
-        push_join_prompt(&mut ui, p2_cx, cy, frame_h, border_rgba, inner_alpha);
+        push_join_prompt(
+            &mut ui,
+            p2_cx,
+            cy,
+            frame_h,
+            border_rgba,
+            inner_alpha,
+            state.preview_time,
+        );
     }
 
     for mut a in ui {

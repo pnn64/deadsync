@@ -1,6 +1,6 @@
 use crate::core::gfx::BlendMode;
 use crate::ui::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
-use crate::ui::{anim, runtime};
+use crate::ui::{anim, font, runtime};
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -669,6 +669,10 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
             // ignore sprite-only/text-irrelevant
             _ => {}
         }
+    }
+
+    if let std::borrow::Cow::Owned(s) = font::replace_markers(content.as_str()) {
+        content = TextContent::Owned(s);
     }
 
     if let Some(steps) = tw {

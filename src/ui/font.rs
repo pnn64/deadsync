@@ -9,6 +9,7 @@
 //! - No regex/glob/configparser/once_cell; pure std + image + log
 //! - VERBOSE TRACE logging for troubleshooting: enable with RUST_LOG=new_engine::core::font=trace
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
@@ -319,6 +320,136 @@ fn lookup_font_char_alias(spec: &str) -> Option<char> {
     font_char_alias_map()
         .get(&key.to_ascii_lowercase())
         .copied()
+}
+
+#[inline(always)]
+fn replace_entity_markers(text: &str) -> Cow<'_, str> {
+    if !text.as_bytes().contains(&b'&') {
+        return Cow::Borrowed(text);
+    }
+
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut i_offset = 0usize;
+
+    while i_offset < bytes.len() {
+        let i_start = bytes[i_offset..]
+            .iter()
+            .position(|&b| b == b'&')
+            .map_or(bytes.len(), |i| i_offset + i);
+
+        if i_start == bytes.len() {
+            out.push_str(&text[i_offset..]);
+            break;
+        }
+
+        out.push_str(&text[i_offset..i_start]);
+
+        let mut i_end: Option<usize> = None;
+        let mut j = i_start + 1;
+        while j < bytes.len() {
+            let b = bytes[j];
+            if b == b'&' {
+                break;
+            }
+            if b == b';' {
+                i_end = Some(j);
+                break;
+            }
+            j += 1;
+        }
+
+        let Some(i_end) = i_end else {
+            out.push('&');
+            i_offset = i_start + 1;
+            continue;
+        };
+
+        let elem = &text[i_start + 1..i_end];
+        if let Some(ch) = lookup_font_char_alias(elem) {
+            out.push(ch);
+        } else {
+            out.push_str(&text[i_start..=i_end]);
+        }
+        i_offset = i_end + 1;
+    }
+
+    Cow::Owned(out)
+}
+
+#[inline(always)]
+fn replace_unicode_markers(text: &str) -> Cow<'_, str> {
+    if !text.contains("&#") && !text.contains("&x") && !text.contains("&X") {
+        return Cow::Borrowed(text);
+    }
+
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0usize;
+
+    while i < bytes.len() {
+        if bytes[i] != b'&' {
+            let next = bytes[i..]
+                .iter()
+                .position(|&b| b == b'&')
+                .map_or(bytes.len(), |p| i + p);
+            out.push_str(&text[i..next]);
+            i = next;
+            continue;
+        }
+
+        if i + 2 >= bytes.len() {
+            out.push_str(&text[i..]);
+            break;
+        }
+
+        let (radix, start_digits) = match bytes[i + 1] {
+            b'#' => (10u32, i + 2),
+            b'x' | b'X' => (16u32, i + 2),
+            _ => {
+                out.push('&');
+                i += 1;
+                continue;
+            }
+        };
+
+        let mut j = start_digits;
+        while j < bytes.len()
+            && if radix == 16 {
+                bytes[j].is_ascii_hexdigit()
+            } else {
+                bytes[j].is_ascii_digit()
+            }
+        {
+            j += 1;
+        }
+
+        if j == start_digits || j >= bytes.len() || bytes[j] != b';' {
+            out.push('&');
+            i += 1;
+            continue;
+        }
+
+        let val = u32::from_str_radix(&text[start_digits..j], radix).unwrap_or(0);
+        out.push(char::from_u32(val).unwrap_or(char::REPLACEMENT_CHARACTER));
+        i = j + 1;
+    }
+
+    Cow::Owned(out)
+}
+
+/// Replace StepMania-style text markers:
+/// - `&NAME;` (FontCharAliases like `&START;`, `&MENULEFT;`)
+/// - `&#NNNN;` (decimal) and `&xNNNN;` (hex) Unicode markers
+pub fn replace_markers(text: &str) -> Cow<'_, str> {
+    let t = replace_entity_markers(text);
+    match t {
+        Cow::Borrowed(s) => replace_unicode_markers(s),
+        Cow::Owned(s) => match replace_unicode_markers(&s) {
+            Cow::Borrowed(_) => Cow::Owned(s),
+            Cow::Owned(s2) => Cow::Owned(s2),
+        },
+    }
 }
 
 /* ======================= TYPES ======================= */
