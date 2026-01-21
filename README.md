@@ -87,9 +87,9 @@ P1_Start=KeyCode::Enter
 P1_Back=KeyCode::Escape
 ```
 
-#### Gamepad (low-level codes)
+#### Gamepad / Pad (low-level codes)
 
-Gamepad bindings are based on gilrs’ low-level event codes. The recommended way to bind a button is:
+Gamepad/pad bindings are based on DeadSync’s `PadCode[...]` values emitted by the native input backend. The recommended way to bind a button is:
 
 - `PadCode[0xDEADBEEF]` — bind to any gamepad button with that raw code.
 - `PadCode[0xDEADBEEF]@0` — bind to that code, but only on gamepad `ID 0` (as shown in logs / sandbox).
@@ -98,7 +98,7 @@ To discover the codes for your device:
 
 1. Start the game and go to the **Sandbox** screen by pressing `F4`.
 2. Press buttons on your controller; you will see lines like:
-   - `Gamepad 0 [uuid=...]: RAW BTN { button: South, PadCode[0x00030030], ... }`
+   - `Gamepad 0 [uuid=...]: RAW BTN { PadCode[0x00030030], ... }`
 3. Copy the `PadCode[...]` part (and optionally the `@0` device index) into `deadsync.ini`.
 
 Example: bind P1 Start/Back to a specific button on gamepad 0:
