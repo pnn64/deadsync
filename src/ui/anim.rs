@@ -172,6 +172,13 @@ pub fn bouncebegin_p(x: f32) -> f32 {
     )
 }
 
+/// StepMania/ITGmania `bounceend` tween curve parameterization.
+/// Ported from `itgmania/Themes/_fallback/Scripts/02 Actor.lua`.
+#[inline(always)]
+pub fn bounceend_p(x: f32) -> f32 {
+    bezier_y_from_x(x, 0.0, 0.0, 1.0 / 3.0, 0.7, 0.58, 1.42, 1.0, 1.0)
+}
+
 /// Construct `ease(time, fEase)` — fEase in [-100, 100]; 0 = symmetric in–out.
 /// Positive fEase biases ease-out (fast early), negative biases ease-in.
 #[inline(always)]

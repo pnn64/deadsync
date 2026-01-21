@@ -22,6 +22,11 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 const EXIT_ANIM_DURATION: f32 = 0.5;
 const PLAYERFRAME_EXIT_ZOOM_OUT_DURATION: f32 = 0.35;
 
+// Simply Love:
+// PlayerFrame.lua: PlayerJoinedMessageCommand -> zoom(1.15):bounceend(0.175):zoom(1)
+const JOIN_PULSE_ZOOM_IN: f32 = 1.15;
+const JOIN_PULSE_DURATION: f32 = 0.175;
+
 pub fn exit_anim_duration() -> f32 {
     EXIT_ANIM_DURATION
 }
@@ -65,6 +70,14 @@ const MODS_ZOOM: f32 = 0.625; // SL: RecentMods zoom(0.625)
 const MODS_Y_OFF: f32 = 47.0; // SL: RecentMods xy(...,47)
 const TOTAL_SONGS_STATIC: &str = "123 Songs Played";
 
+const JOIN_TEXT: &str = "Press &START; to join!";
+const WAITING_TEXT: &str = "Waiting ...";
+const SELECTED_NAME_Y_OFF: f32 = 160.0; // SL: SelectedProfileText y(160)
+const SELECTED_NAME_ZOOM: f32 = 1.35; // SL: SelectedProfileText zoom(1.35)
+
+const SHAKE_STEP_DUR: f32 = 0.1; // SL: bounceend(0.1) x3
+const SHAKE_DUR: f32 = SHAKE_STEP_DUR * 3.0;
+
 #[derive(Clone)]
 struct Choice {
     kind: ActiveProfile,
@@ -80,6 +93,8 @@ pub struct State {
     pub active_color_index: i32,
     p1_joined: bool,
     p2_joined: bool,
+    p1_ready: bool,
+    p2_ready: bool,
     p1_selected_index: usize,
     p2_selected_index: usize,
     exit_anim: bool,
@@ -89,6 +104,10 @@ pub struct State {
     p2_preview_noteskin: Option<Noteskin>,
     preview_time: f32,
     preview_beat: f32,
+    p1_join_pulse_t: f32,
+    p2_join_pulse_t: f32,
+    p1_shake_t: f32,
+    p2_shake_t: f32,
 }
 
 fn load_noteskin(kind: profile::NoteSkin) -> Option<Noteskin> {
@@ -252,6 +271,8 @@ pub fn init() -> State {
         active_color_index,
         p1_joined: true,
         p2_joined: false,
+        p1_ready: false,
+        p2_ready: false,
         p1_selected_index: selected_index,
         p2_selected_index: selected_index,
         exit_anim: false,
@@ -261,6 +282,10 @@ pub fn init() -> State {
         p2_preview_noteskin: None,
         preview_time: 0.0,
         preview_beat: 0.0,
+        p1_join_pulse_t: JOIN_PULSE_DURATION,
+        p2_join_pulse_t: JOIN_PULSE_DURATION,
+        p1_shake_t: SHAKE_DUR,
+        p2_shake_t: SHAKE_DUR,
     };
     state.p1_preview_noteskin =
         preview_noteskin_for_choice(&state.choices, state.p1_selected_index);
@@ -272,6 +297,11 @@ pub fn init() -> State {
 pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
     state.p1_joined = p1_joined;
     state.p2_joined = p2_joined;
+    state.p1_ready = false;
+    state.p2_ready = false;
+    state.p1_join_pulse_t = JOIN_PULSE_DURATION;
+    state.p2_join_pulse_t = JOIN_PULSE_DURATION;
+
     state.p1_preview_noteskin =
         preview_noteskin_for_choice(&state.choices, state.p1_selected_index);
     state.p2_preview_noteskin =
@@ -280,8 +310,14 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
 
 pub fn update(state: &mut State, dt: f32) {
     const BPM: f32 = 120.0;
+    let dt = dt.max(0.0);
     state.preview_time += dt;
     state.preview_beat += dt * (BPM / 60.0);
+
+    state.p1_join_pulse_t = (state.p1_join_pulse_t + dt).min(JOIN_PULSE_DURATION);
+    state.p2_join_pulse_t = (state.p2_join_pulse_t + dt).min(JOIN_PULSE_DURATION);
+    state.p1_shake_t = (state.p1_shake_t + dt).min(SHAKE_DUR);
+    state.p2_shake_t = (state.p2_shake_t + dt).min(SHAKE_DUR);
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -307,14 +343,45 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     (vec![actor], TRANSITION_OUT_DURATION)
 }
 
+#[inline(always)]
+fn both_ready(state: &State) -> bool {
+    (state.p1_ready || !state.p1_joined) && (state.p2_ready || !state.p2_joined)
+}
+
+#[inline(always)]
+fn active_choice(state: &State) -> ActiveProfile {
+    if state.p1_joined {
+        state
+            .choices
+            .get(state.p1_selected_index)
+            .map(|c| c.kind.clone())
+            .unwrap_or(ActiveProfile::Guest)
+    } else {
+        state
+            .choices
+            .get(state.p2_selected_index)
+            .map(|c| c.kind.clone())
+            .unwrap_or(ActiveProfile::Guest)
+    }
+}
+
+fn trigger_invalid_choice(state: &mut State, is_p1: bool) {
+    if is_p1 {
+        state.p1_shake_t = 0.0;
+    } else {
+        state.p2_shake_t = 0.0;
+    }
+    audio::play_sfx("assets/sounds/boom.ogg");
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed {
+    if !ev.pressed || state.exit_anim {
         return ScreenAction::None;
     }
 
     match ev.action {
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
-            if !state.p1_joined {
+            if !state.p1_joined || state.p1_ready {
                 return ScreenAction::None;
             }
             if state.p1_selected_index > 0 {
@@ -326,7 +393,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
-            if !state.p1_joined {
+            if !state.p1_joined || state.p1_ready {
                 return ScreenAction::None;
             }
             if state.p1_selected_index + 1 < state.choices.len() {
@@ -340,25 +407,50 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_start => {
             if !state.p1_joined {
                 state.p1_joined = true;
+                state.p1_ready = false;
+                state.p1_join_pulse_t = 0.0;
                 state.p1_preview_noteskin =
                     preview_noteskin_for_choice(&state.choices, state.p1_selected_index);
                 audio::play_sfx("assets/sounds/start.ogg");
                 return ScreenAction::None;
             }
 
-            audio::play_sfx("assets/sounds/start.ogg");
-            let choice = state
-                .choices
-                .get(state.p1_selected_index)
-                .map(|c| c.kind.clone())
-                .unwrap_or(ActiveProfile::Guest);
-            state.exit_anim = true;
-            let _ = exit_anim_t(true);
-            ScreenAction::SelectProfile(choice)
+            if state.p1_ready {
+                return ScreenAction::None;
+            }
+
+            if state.p2_joined
+                && state.p2_ready
+                && state.choices.get(state.p1_selected_index).is_some_and(|c| {
+                    !matches!(&c.kind, ActiveProfile::Guest)
+                        && state
+                            .choices
+                            .get(state.p2_selected_index)
+                            .is_some_and(|o| o.kind == c.kind)
+                })
+            {
+                trigger_invalid_choice(state, true);
+                return ScreenAction::None;
+            }
+
+            state.p1_ready = true;
+            if both_ready(state) {
+                audio::play_sfx("assets/sounds/start.ogg");
+                state.exit_anim = true;
+                let _ = exit_anim_t(true);
+                return ScreenAction::SelectProfile(active_choice(state));
+            }
+            ScreenAction::None
         }
         VirtualAction::p1_back | VirtualAction::p1_select => {
+            if state.p1_joined && state.p1_ready {
+                state.p1_ready = false;
+                audio::play_sfx("assets/sounds/unjoin.ogg");
+                return ScreenAction::None;
+            }
             if state.p1_joined {
                 state.p1_joined = false;
+                state.p1_ready = false;
                 audio::play_sfx("assets/sounds/unjoin.ogg");
                 return ScreenAction::None;
             }
@@ -370,7 +462,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::Navigate(Screen::Menu)
         }
         VirtualAction::p2_up | VirtualAction::p2_menu_up => {
-            if !state.p2_joined {
+            if !state.p2_joined || state.p2_ready {
                 return ScreenAction::None;
             }
             if state.p2_selected_index > 0 {
@@ -382,7 +474,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p2_down | VirtualAction::p2_menu_down => {
-            if !state.p2_joined {
+            if !state.p2_joined || state.p2_ready {
                 return ScreenAction::None;
             }
             if state.p2_selected_index + 1 < state.choices.len() {
@@ -396,25 +488,50 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p2_start => {
             if !state.p2_joined {
                 state.p2_joined = true;
+                state.p2_ready = false;
+                state.p2_join_pulse_t = 0.0;
                 state.p2_preview_noteskin =
                     preview_noteskin_for_choice(&state.choices, state.p2_selected_index);
                 audio::play_sfx("assets/sounds/start.ogg");
                 return ScreenAction::None;
             }
 
-            audio::play_sfx("assets/sounds/start.ogg");
-            let choice = state
-                .choices
-                .get(state.p2_selected_index)
-                .map(|c| c.kind.clone())
-                .unwrap_or(ActiveProfile::Guest);
-            state.exit_anim = true;
-            let _ = exit_anim_t(true);
-            ScreenAction::SelectProfile(choice)
+            if state.p2_ready {
+                return ScreenAction::None;
+            }
+
+            if state.p1_joined
+                && state.p1_ready
+                && state.choices.get(state.p2_selected_index).is_some_and(|c| {
+                    !matches!(&c.kind, ActiveProfile::Guest)
+                        && state
+                            .choices
+                            .get(state.p1_selected_index)
+                            .is_some_and(|o| o.kind == c.kind)
+                })
+            {
+                trigger_invalid_choice(state, false);
+                return ScreenAction::None;
+            }
+
+            state.p2_ready = true;
+            if both_ready(state) {
+                audio::play_sfx("assets/sounds/start.ogg");
+                state.exit_anim = true;
+                let _ = exit_anim_t(true);
+                return ScreenAction::SelectProfile(active_choice(state));
+            }
+            ScreenAction::None
         }
         VirtualAction::p2_back | VirtualAction::p2_select => {
+            if state.p2_joined && state.p2_ready {
+                state.p2_ready = false;
+                audio::play_sfx("assets/sounds/unjoin.ogg");
+                return ScreenAction::None;
+            }
             if state.p2_joined {
                 state.p2_joined = false;
+                state.p2_ready = false;
                 audio::play_sfx("assets/sounds/unjoin.ogg");
                 return ScreenAction::None;
             }
@@ -475,6 +592,39 @@ fn exit_zoom(exit_t: f32) -> f32 {
         (exit_t / PLAYERFRAME_EXIT_ZOOM_OUT_DURATION).clamp(0.0, 1.0),
     );
     (1.0 - p).max(0.0)
+}
+
+#[inline(always)]
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
+
+#[inline(always)]
+fn join_pulse_zoom(join_t: f32) -> f32 {
+    if join_t >= JOIN_PULSE_DURATION {
+        return 1.0;
+    }
+    let p = crate::ui::anim::bounceend_p((join_t / JOIN_PULSE_DURATION).clamp(0.0, 1.0));
+    lerp(JOIN_PULSE_ZOOM_IN, 1.0, p).max(0.0)
+}
+
+#[inline(always)]
+fn shake_x(shake_t: f32) -> f32 {
+    if shake_t >= SHAKE_DUR {
+        return 0.0;
+    }
+    let p = crate::ui::anim::bounceend_p((shake_t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
+    if shake_t < SHAKE_STEP_DUR {
+        lerp(0.0, 5.0, p)
+    } else if shake_t < SHAKE_STEP_DUR * 2.0 {
+        let t = (shake_t - SHAKE_STEP_DUR).clamp(0.0, SHAKE_STEP_DUR);
+        let p = crate::ui::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
+        lerp(5.0, -5.0, p)
+    } else {
+        let t = (shake_t - SHAKE_STEP_DUR * 2.0).clamp(0.0, SHAKE_STEP_DUR);
+        let p = crate::ui::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
+        lerp(-5.0, 0.0, p)
+    }
 }
 
 #[inline(always)]
@@ -573,6 +723,7 @@ fn push_join_prompt(
     border_rgba: [f32; 4],
     inner_alpha: f32,
     time: f32,
+    text: &str,
 ) {
     // ITGmania diffuse_shift: period=1, color1=white, color2=gray.
     // f = sin((t + 0.25) * 2π) / 2 + 0.5
@@ -604,7 +755,7 @@ fn push_join_prompt(
         font("miso"):
         zoomtoheight(18.0):
         maxwidth(FRAME_W_JOIN - 20.0):
-        settext("Press &START; to join!"):
+        settext(text):
         diffuse(shade, shade, shade, inner_alpha):
         z(103)
     ));
@@ -718,7 +869,7 @@ fn push_scroller_frame(
     }
 
     let selected = choices.get(selected_index);
-    let selected_is_local = selected.is_some_and(|c| matches!(c.kind, ActiveProfile::Local { .. }));
+    let selected_is_local = selected.is_some_and(|c| matches!(&c.kind, ActiveProfile::Local { .. }));
 
     // Avatar slot (SL-style): show profile.png if present, else heart + text.
     let avatar_dim = INFO_W - INFO_PAD * 2.25;
@@ -726,7 +877,7 @@ fn push_scroller_frame(
     let avatar_y = frame_cy + AVATAR_Y_OFF;
 
     if let Some(choice) = selected {
-        let is_guest = matches!(choice.kind, ActiveProfile::Guest);
+        let is_guest = matches!(&choice.kind, ActiveProfile::Guest);
         let show_fallback = is_guest || choice.avatar_key.is_none();
         if show_fallback {
             let bg = color::rgba_hex(AVATAR_BG_HEX);
@@ -945,7 +1096,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let mut ui: Vec<Actor> = Vec::new();
     let inner_alpha = box_inner_alpha();
     let exit_t = exit_anim_t(state.exit_anim);
-    let frame_zoom = if state.exit_anim {
+    let exit_zoom = if state.exit_anim {
         exit_zoom(exit_t)
     } else {
         1.0
@@ -957,16 +1108,23 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     let frame_y0 = cy - frame_h * 0.5;
 
-    let p1_cx = cx - FRAME_CX_OFF;
-    let p2_cx = cx + FRAME_CX_OFF;
+    let p1_cx = cx - FRAME_CX_OFF + shake_x(state.p1_shake_t);
+    let p2_cx = cx + FRAME_CX_OFF + shake_x(state.p2_shake_t);
 
     let col_overlay = [0.0, 0.0, 0.0, 0.5];
     let border_rgba = [1.0, 1.0, 1.0, 1.0];
 
-    if state.p1_joined {
+    // P1: keep both frames alive (visibility via alpha) so tween state doesn't reset.
+    {
         let mut p1_ui: Vec<Actor> = Vec::new();
+
+        let show_scroller = state.p1_joined && !state.p1_ready;
+        let show_join = !state.p1_joined || state.p1_ready;
+        let show_selected_name = state.p1_joined && state.p1_ready;
+
+        let mut scroller_ui: Vec<Actor> = Vec::new();
         push_scroller_frame(
-            &mut p1_ui,
+            &mut scroller_ui,
             &state.choices,
             state.p1_selected_index,
             state.p1_preview_noteskin.as_ref(),
@@ -981,28 +1139,68 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             border_rgba,
             col_overlay,
         );
-        if state.exit_anim {
-            for a in &mut p1_ui {
-                apply_zoom_to_actor(a, [p1_cx, cy], frame_zoom);
-            }
+        for a in &mut scroller_ui {
+            apply_alpha_to_actor(a, if show_scroller { 1.0 } else { 0.0 });
         }
-        ui.extend(p1_ui);
-    } else {
+        p1_ui.extend(scroller_ui);
+
+        let mut join_ui: Vec<Actor> = Vec::new();
         push_join_prompt(
-            &mut ui,
+            &mut join_ui,
             p1_cx,
             cy,
             frame_h,
             border_rgba,
             inner_alpha,
             state.preview_time,
+            if state.p1_ready { WAITING_TEXT } else { JOIN_TEXT },
         );
+        for a in &mut join_ui {
+            apply_alpha_to_actor(a, if show_join { 1.0 } else { 0.0 });
+        }
+        p1_ui.extend(join_ui);
+
+        if show_selected_name {
+            let name = state
+                .choices
+                .get(state.p1_selected_index)
+                .map(|c| c.display_name.clone())
+                .unwrap_or_else(|| "[ GUEST ]".to_string());
+            let a = act!(text:
+                align(0.5, 0.5):
+                xy(p1_cx, cy + SELECTED_NAME_Y_OFF):
+                font("miso"):
+                zoom(SELECTED_NAME_ZOOM):
+                maxwidth(FRAME_W_SCROLLER):
+                settext(name):
+                diffuse(1.0, 1.0, 1.0, inner_alpha):
+                shadowlength(0.5):
+                z(106):
+                horizalign(center)
+            );
+            p1_ui.push(a);
+        }
+
+        let zoom = exit_zoom * join_pulse_zoom(state.p1_join_pulse_t);
+        if (zoom - 1.0).abs() > f32::EPSILON {
+            for a in &mut p1_ui {
+                apply_zoom_to_actor(a, [p1_cx, cy], zoom);
+            }
+        }
+        ui.extend(p1_ui);
     }
 
-    if state.p2_joined {
+    // P2
+    {
         let mut p2_ui: Vec<Actor> = Vec::new();
+
+        let show_scroller = state.p2_joined && !state.p2_ready;
+        let show_join = !state.p2_joined || state.p2_ready;
+        let show_selected_name = state.p2_joined && state.p2_ready;
+
+        let mut scroller_ui: Vec<Actor> = Vec::new();
         push_scroller_frame(
-            &mut p2_ui,
+            &mut scroller_ui,
             &state.choices,
             state.p2_selected_index,
             state.p2_preview_noteskin.as_ref(),
@@ -1017,22 +1215,55 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             border_rgba,
             col_overlay,
         );
-        if state.exit_anim {
-            for a in &mut p2_ui {
-                apply_zoom_to_actor(a, [p2_cx, cy], frame_zoom);
-            }
+        for a in &mut scroller_ui {
+            apply_alpha_to_actor(a, if show_scroller { 1.0 } else { 0.0 });
         }
-        ui.extend(p2_ui);
-    } else {
+        p2_ui.extend(scroller_ui);
+
+        let mut join_ui: Vec<Actor> = Vec::new();
         push_join_prompt(
-            &mut ui,
+            &mut join_ui,
             p2_cx,
             cy,
             frame_h,
             border_rgba,
             inner_alpha,
             state.preview_time,
+            if state.p2_ready { WAITING_TEXT } else { JOIN_TEXT },
         );
+        for a in &mut join_ui {
+            apply_alpha_to_actor(a, if show_join { 1.0 } else { 0.0 });
+        }
+        p2_ui.extend(join_ui);
+
+        if show_selected_name {
+            let name = state
+                .choices
+                .get(state.p2_selected_index)
+                .map(|c| c.display_name.clone())
+                .unwrap_or_else(|| "[ GUEST ]".to_string());
+            let a = act!(text:
+                align(0.5, 0.5):
+                xy(p2_cx, cy + SELECTED_NAME_Y_OFF):
+                font("miso"):
+                zoom(SELECTED_NAME_ZOOM):
+                maxwidth(FRAME_W_SCROLLER):
+                settext(name):
+                diffuse(1.0, 1.0, 1.0, inner_alpha):
+                shadowlength(0.5):
+                z(106):
+                horizalign(center)
+            );
+            p2_ui.push(a);
+        }
+
+        let zoom = exit_zoom * join_pulse_zoom(state.p2_join_pulse_t);
+        if (zoom - 1.0).abs() > f32::EPSILON {
+            for a in &mut p2_ui {
+                apply_zoom_to_actor(a, [p2_cx, cy], zoom);
+            }
+        }
+        ui.extend(p2_ui);
     }
 
     for mut a in ui {
