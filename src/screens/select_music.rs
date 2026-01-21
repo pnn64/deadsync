@@ -1152,7 +1152,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Step Artist & Steps
     let comp_h = screen_height() / 28.0;
-    let y_cen = (screen_center_y() - 9.0) - 0.5 * comp_h;
+    let y_cen =
+        (screen_center_y() - 9.0) - 0.5 * comp_h + if is_p2_single { 88.0 } else { 0.0 };
     let step_artist_x0 = if is_p2_single {
         screen_center_x() - 244.0
     } else if is_wide() {
@@ -1424,12 +1425,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
     let phase = (state.session_elapsed / (60.0 / bpm_val as f32)) * 6.28318;
     let (arrow_x0, arrow_dx, arrow_align_x, arrow_rot) = if is_p2_single {
-        (
-            screen_center_x() - 17.0,
-            1.5 - 1.5 * phase.cos(),
-            1.0,
-            180.0,
-        )
+        let x0 = lst_cx + 14.0 + 1.0;
+        (x0, 1.5 - 1.5 * phase.cos(), 0.0, 180.0)
     } else {
         (
             screen_center_x() - 53.0,
