@@ -1789,7 +1789,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let y_p2 = lst_cy + (slot_p2 as i32 - 2) as f32 * 30.0 + 1.0;
         actors.push(act!(sprite("meter_arrow.png"):
             align(0.0, 0.5):
-            xy(lst_cx + 14.0 + 1.0 + (1.5 - 1.5 * cos), y_p2):
+            xy(lst_cx + 8.0 + (1.5 - 1.5 * cos), y_p2):
             rotationz(180.0):
             zoom(0.575):
             z(122)
@@ -1798,7 +1798,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let arrow_slot = (sel_p1.saturating_sub(top_index)).min(VISIBLE_STEPS_SLOTS - 1);
         let arrow_y = lst_cy + (arrow_slot as i32 - 2) as f32 * 30.0 + 1.0;
         let (arrow_x0, arrow_dx, arrow_rot) = if is_p2_single {
-            let x0 = lst_cx + 14.0 + 1.0;
+            let x0 = lst_cx + 8.0;
             (x0, 1.5 - 1.5 * cos, 180.0)
         } else {
             (screen_center_x() - 53.0, -1.5 + 1.5 * cos, 0.0)
