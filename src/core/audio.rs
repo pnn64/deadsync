@@ -2,7 +2,6 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Sample, SampleFormat, StreamConfig};
 use lewton::inside_ogg::OggStreamReader;
 use log::{error, info, warn};
-use once_cell::sync::Lazy;
 use rubato::{
     Resampler, SincFixedOut, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
@@ -47,7 +46,7 @@ enum AudioCommand {
 }
 
 // Global engine (initialized once)
-static ENGINE: Lazy<AudioEngine> = Lazy::new(init_engine_and_thread);
+static ENGINE: std::sync::LazyLock<AudioEngine> = std::sync::LazyLock::new(init_engine_and_thread);
 
 struct AudioEngine {
     command_sender: Sender<AudioCommand>,
@@ -73,7 +72,7 @@ static MUSIC_TRACK_ACTIVE: AtomicBool = AtomicBool::new(false);
 // Last audio callback timing, used to interpolate the playback position
 // between callback invocations so that the reported stream time is
 // continuous instead of jumping in whole buffer increments.
-static LAST_CALLBACK_INSTANT: Lazy<Mutex<Option<Instant>>> = Lazy::new(|| Mutex::new(None));
+static LAST_CALLBACK_INSTANT: std::sync::LazyLock<Mutex<Option<Instant>>> = std::sync::LazyLock::new(|| Mutex::new(None));
 static LAST_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 
@@ -81,7 +80,7 @@ static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 
 /// Initializes the audio engine. Must be called once at startup.
 pub fn init() -> Result<(), String> {
-    Lazy::force(&ENGINE);
+    std::sync::LazyLock::force(&ENGINE);
     Ok(())
 }
 
@@ -95,11 +94,11 @@ pub fn play_sfx(path: &str) {
             match load_and_resample_sfx(path) {
                 Ok(data) => {
                     cache.insert(path.to_string(), data.clone());
-                    info!("Cached SFX: {}", path);
+                    info!("Cached SFX: {path}");
                     data
                 }
                 Err(e) => {
-                    warn!("Failed to load SFX '{}': {}", path, e);
+                    warn!("Failed to load SFX '{path}': {e}");
                     return;
                 }
             }
@@ -205,7 +204,7 @@ fn init_engine_and_thread() -> AudioEngine {
                 let name = dev.name().unwrap_or_else(|_| "<unknown>".to_string());
                 let is_default = name == device_name;
                 let tag = if is_default { " (default)" } else { "" };
-                info!("  Device {}: '{}'{}", idx, name, tag);
+                info!("  Device {idx}: '{name}'{tag}");
                 match dev.supported_output_configs() {
                     Ok(configs) => {
                         for cfg_range in configs {
@@ -213,17 +212,17 @@ fn init_engine_and_thread() -> AudioEngine {
                             let max = cfg_range.max_sample_rate().0;
                             let channels = cfg_range.channels();
                             let fmt = cfg_range.sample_format();
-                            info!("    - {:?}, {} ch, {}..{} Hz", fmt, channels, min, max);
+                            info!("    - {fmt:?}, {channels} ch, {min}..{max} Hz");
                         }
                     }
                     Err(e) => {
-                        warn!("    ! Failed to query supported output configs: {}", e);
+                        warn!("    ! Failed to query supported output configs: {e}");
                     }
                 }
             }
         }
         Err(e) => {
-            warn!("Failed to enumerate audio output devices: {}", e);
+            warn!("Failed to enumerate audio output devices: {e}");
         }
     }
 
@@ -268,8 +267,7 @@ fn init_engine_and_thread() -> AudioEngine {
     });
 
     info!(
-        "Audio engine initialized ({} Hz, {} ch).",
-        device_sample_rate, device_channels
+        "Audio engine initialized ({device_sample_rate} Hz, {device_channels} ch)."
     );
     AudioEngine {
         command_sender,
@@ -314,9 +312,9 @@ fn audio_manager_thread(
                     *guard = Some(cb_instant);
                 }
                 let config = crate::config::get();
-                let master_vol = (config.master_volume.clamp(0, 100) as f32) / 100.0;
-                let music_vol = (config.music_volume.clamp(0, 100) as f32) / 100.0;
-                let sfx_vol = (config.sfx_volume.clamp(0, 100) as f32) / 100.0;
+                let master_vol = f32::from(config.master_volume.clamp(0, 100)) / 100.0;
+                let music_vol = f32::from(config.music_volume.clamp(0, 100)) / 100.0;
+                let sfx_vol = f32::from(config.sfx_volume.clamp(0, 100)) / 100.0;
                 let final_music_vol = master_vol * music_vol;
                 let final_sfx_vol = master_vol * sfx_vol;
 
@@ -380,7 +378,7 @@ fn audio_manager_thread(
                     );
                 }
             },
-            |err| error!("Audio stream error: {}", err),
+            |err| error!("Audio stream error: {err}"),
             None,
         ),
         SampleFormat::U16 => device.build_output_stream(
@@ -395,9 +393,9 @@ fn audio_manager_thread(
                     *guard = Some(cb_instant);
                 }
                 let config = crate::config::get();
-                let master_vol = (config.master_volume.clamp(0, 100) as f32) / 100.0;
-                let music_vol = (config.music_volume.clamp(0, 100) as f32) / 100.0;
-                let sfx_vol = (config.sfx_volume.clamp(0, 100) as f32) / 100.0;
+                let master_vol = f32::from(config.master_volume.clamp(0, 100)) / 100.0;
+                let music_vol = f32::from(config.music_volume.clamp(0, 100)) / 100.0;
+                let sfx_vol = f32::from(config.sfx_volume.clamp(0, 100)) / 100.0;
                 let final_music_vol = master_vol * music_vol;
                 let final_sfx_vol = master_vol * sfx_vol;
 
@@ -456,7 +454,7 @@ fn audio_manager_thread(
                     );
                 }
             },
-            |err| error!("Audio stream error: {}", err),
+            |err| error!("Audio stream error: {err}"),
             None,
         ),
         SampleFormat::F32 => device.build_output_stream(
@@ -471,9 +469,9 @@ fn audio_manager_thread(
                     *guard = Some(cb_instant);
                 }
                 let config = crate::config::get();
-                let master_vol = (config.master_volume.clamp(0, 100) as f32) / 100.0;
-                let music_vol = (config.music_volume.clamp(0, 100) as f32) / 100.0;
-                let sfx_vol = (config.sfx_volume.clamp(0, 100) as f32) / 100.0;
+                let master_vol = f32::from(config.master_volume.clamp(0, 100)) / 100.0;
+                let music_vol = f32::from(config.music_volume.clamp(0, 100)) / 100.0;
+                let sfx_vol = f32::from(config.sfx_volume.clamp(0, 100)) / 100.0;
                 let final_music_vol = master_vol * music_vol;
                 let final_sfx_vol = master_vol * sfx_vol;
 
@@ -525,7 +523,7 @@ fn audio_manager_thread(
                     );
                 }
             },
-            |err| error!("Audio stream error: {}", err),
+            |err| error!("Audio stream error: {err}"),
             None,
         ),
         _ => unreachable!(),
@@ -598,7 +596,7 @@ fn spawn_music_decoder_thread(
         if let Err(e) =
             music_decoder_thread_loop(path, cut, looping, rate_bits_clone, ring, stop_signal_clone)
         {
-            error!("Music decoder thread failed: {}", e);
+            error!("Music decoder thread failed: {e}");
         }
     });
 
@@ -614,7 +612,7 @@ fn secs_to_frames(seconds: f64, sample_rate: u32) -> u64 {
     if !seconds.is_finite() {
         0
     } else {
-        (seconds.max(0.0) * sample_rate as f64).round() as u64
+        (seconds.max(0.0) * f64::from(sample_rate)).round() as u64
     }
 }
 
@@ -670,7 +668,7 @@ fn apply_fade_envelope(
     let frames_f = frames as f32;
     for frame in 0..frames {
         let t = frame as f32 / frames_f;
-        let mut volume = start_volume + (end_volume - start_volume) * t;
+        let mut volume = (end_volume - start_volume).mul_add(t, start_volume);
         volume = volume.clamp(0.0, 1.0);
         if (volume - 1.0).abs() < 0.0001 {
             continue;
@@ -678,7 +676,7 @@ fn apply_fade_envelope(
 
         for c in 0..channels {
             let idx = frame * channels + c;
-            let scaled = (samples[idx] as f32) * volume;
+            let scaled = f32::from(samples[idx]) * volume;
             samples[idx] = scaled.round().clamp(-32768.0, 32767.0) as i16;
         }
     }
@@ -715,7 +713,7 @@ fn music_decoder_thread_loop(
     if cut.start_sec < 0.0 {
         let silence_duration_sec = -cut.start_sec;
         let silence_samples =
-            (silence_duration_sec * out_hz as f64 * out_ch as f64).round() as usize;
+            (silence_duration_sec * f64::from(out_hz) * out_ch as f64).round() as usize;
         if silence_samples > 0 {
             let silence_buf = vec![0i16; silence_samples];
             let mut off = 0;
@@ -741,7 +739,7 @@ fn music_decoder_thread_loop(
         if !current_rate_f32.is_finite() || current_rate_f32 <= 0.0 {
             current_rate_f32 = 1.0;
         }
-        let mut ratio = (out_hz as f64 / in_hz as f64) / (current_rate_f32 as f64);
+        let mut ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
         let mut resampler = SincFixedOut::<f32>::new(
             ratio,
             1.0,
@@ -757,7 +755,7 @@ fn music_decoder_thread_loop(
         )?;
 
         // --- v1-style start & pre-roll ---
-        let start_frame_f = (cut.start_sec * in_hz as f64).max(0.0);
+        let start_frame_f = (cut.start_sec * f64::from(in_hz)).max(0.0);
         let start_floor = start_frame_f.floor() as u64;
 
         // Try to seek a little before start to fill FIR, else fall back to decode+drop
@@ -784,7 +782,7 @@ fn music_decoder_thread_loop(
 
         // Optional cut length in output frames
         let mut frames_left_out: Option<u64> = if cut.length_sec.is_finite() {
-            Some((cut.length_sec * out_hz as f64).round().max(0.0) as u64)
+            Some((cut.length_sec * f64::from(out_hz)).round().max(0.0) as u64)
         } else {
             None
         };
@@ -823,9 +821,8 @@ fn music_decoder_thread_loop(
                     out_tmp.truncate((*left as usize) * out_ch);
                     *left = 0;
                     return true;
-                } else {
-                    *left -= frames as u64;
                 }
+                *left -= frames as u64;
             }
             false
         }
@@ -842,7 +839,7 @@ fn music_decoder_thread_loop(
             for f in 0..frames {
                 let base = f * channels;
                 for c in 0..channels {
-                    planar[c].push(interleaved[base + c] as f32 / 32768.0);
+                    planar[c].push(f32::from(interleaved[base + c]) / 32768.0);
                 }
             }
         }
@@ -978,7 +975,7 @@ fn music_decoder_thread_loop(
                     desired_rate = 8.0;
                 }
                 current_rate_f32 = desired_rate;
-                ratio = (out_hz as f64 / in_hz as f64) / (current_rate_f32 as f64);
+                ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
                 resampler = SincFixedOut::<f32>::new(
                     ratio,
                     1.0,
@@ -1026,15 +1023,15 @@ fn music_decoder_thread_loop(
         }
 
         // --- Flush remainder ---
-        if !in_planar.iter().all(|v| v.is_empty()) {
+        if !in_planar.iter().all(std::vec::Vec::is_empty) {
             // Process the final short chunk using process_partial
             let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
-            let remain = in_planar.iter().map(|v| v.len()).min().unwrap_or(0);
-            for ch in in_planar.iter() {
+            let remain = in_planar.iter().map(std::vec::Vec::len).min().unwrap_or(0);
+            for ch in &in_planar {
                 input_slices.push(&ch[..remain]);
             }
             let out = resampler.process_partial(Some(&input_slices), None)?;
-            for ch in in_planar.iter_mut() {
+            for ch in &mut in_planar {
                 ch.clear();
             }
             if !out.is_empty() {
@@ -1120,11 +1117,11 @@ fn music_decoder_thread_loop(
             .and_then(|f| OggStreamReader::new(BufReader::new(f)).ok())
         {
             Some(new_reader) => {
-                info!("Looping music: restarted {:?}", path);
+                info!("Looping music: restarted {path:?}");
                 ogg = new_reader;
             }
             None => {
-                warn!("Could not reopen OGG stream for looping: {:?}", path);
+                warn!("Could not reopen OGG stream for looping: {path:?}");
                 break 'main_loop;
             }
         }
@@ -1144,7 +1141,7 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
     let out_hz = ENGINE.device_sample_rate;
 
     const OUT_FRAMES_PER_CALL: usize = 256;
-    let ratio = out_hz as f64 / in_hz as f64;
+    let ratio = f64::from(out_hz) / f64::from(in_hz);
     let iparams = SincInterpolationParameters {
         sinc_len: 256,
         f_cutoff: 0.95,
@@ -1155,8 +1152,7 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
     let mut resampler = SincFixedOut::<f32>::new(ratio, 1.0, iparams, OUT_FRAMES_PER_CALL, in_ch)?;
 
     info!(
-        "SFX decode: '{}' ({} ch @ {} Hz) -> output {} ch @ {} Hz (ratio {:.6}).",
-        path, in_ch, in_hz, out_ch, out_hz, ratio
+        "SFX decode: '{path}' ({in_ch} ch @ {in_hz} Hz) -> output {out_ch} ch @ {out_hz} Hz (ratio {ratio:.6})."
     );
 
     let mut resampled_data: Vec<i16> = Vec::new();
@@ -1171,7 +1167,7 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
         for f in 0..frames {
             let base = f * in_ch;
             for c in 0..in_ch {
-                in_planar[c].push(pkt[base + c] as f32 / 32768.0);
+                in_planar[c].push(f32::from(pkt[base + c]) / 32768.0);
             }
         }
         // Produce as many blocks as possible based on required input
@@ -1181,11 +1177,11 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
                 break;
             }
             let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
-            for ch in in_planar.iter() {
+            for ch in &in_planar {
                 input_slices.push(&ch[..need]);
             }
             let out = resampler.process(&input_slices, None)?;
-            for ch in in_planar.iter_mut() {
+            for ch in &mut in_planar {
                 ch.drain(0..need);
             }
             if out.is_empty() {
@@ -1204,10 +1200,10 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
     }
 
     // Flush any remaining samples
-    if !in_planar.iter().all(|v| v.is_empty()) {
-        let remain = in_planar.iter().map(|v| v.len()).min().unwrap_or(0);
+    if !in_planar.iter().all(std::vec::Vec::is_empty) {
+        let remain = in_planar.iter().map(std::vec::Vec::len).min().unwrap_or(0);
         let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
-        for ch in in_planar.iter() {
+        for ch in &in_planar {
             input_slices.push(&ch[..remain]);
         }
         let out = resampler.process_partial(Some(&input_slices), None)?;
@@ -1222,7 +1218,7 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
                 }
             }
         }
-        for ch in in_planar.iter_mut() {
+        for ch in &mut in_planar {
             ch.clear();
         }
     }
@@ -1246,7 +1242,7 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
 /* =========================== Internal primitives =========================== */
 
 mod internal {
-    use super::*;
+    use super::Arc;
     use std::cell::UnsafeCell;
     use std::sync::atomic::{AtomicUsize, Ordering};
 

@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::*;
+use crate::core::space::{screen_width, screen_height, screen_center_y, screen_center_x, widescale};
 use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::song::SongData;
 use crate::screens::{Screen, ScreenAction};
@@ -36,7 +36,7 @@ fn ease_out_cubic(t: f32) -> f32 {
         t
     };
     let u = 1.0 - clamped;
-    1.0 - u * u * u
+    (u * u).mul_add(-u, 1.0)
 }
 
 /* -------------------------- hold-to-scroll timing ------------------------- */
@@ -118,11 +118,11 @@ fn fmt_music_rate(rate: f32) -> String {
     let int_part = scaled / 100;
     let frac2 = (scaled % 100).abs();
     if frac2 == 0 {
-        format!("{}", int_part)
+        format!("{int_part}")
     } else if frac2 % 10 == 0 {
         format!("{}.{}", int_part, frac2 / 10)
     } else {
-        format!("{}.{:02}", int_part, frac2)
+        format!("{int_part}.{frac2:02}")
     }
 }
 
@@ -190,7 +190,7 @@ fn build_main_rows(
         "X" => format!("{:.2}x", speed_mod.value),
         "C" => format!("C{}", speed_mod.value as i32),
         "M" => format!("M{}", speed_mod.value as i32),
-        _ => "".to_string(),
+        _ => String::new(),
     };
     // Build Stepchart choices from the song's charts for the current play style, ordered
     // Beginner..Challenge, then Edit charts.
@@ -257,7 +257,7 @@ fn build_main_rows(
         },
         Row {
             name: "Mini".to_string(),
-            choices: (-100..=150).map(|v| format!("{}%", v)).collect(),
+            choices: (-100..=150).map(|v| format!("{v}%")).collect(),
             selected_choice_index: 0,
             help: vec!["Change the size of your arrows.".to_string()],
             choice_difficulty_indices: None,
@@ -392,13 +392,13 @@ fn build_main_rows(
         Row {
             name: {
                 let reference_bpm = reference_bpm_for_song(song);
-                let effective_bpm = (reference_bpm as f64) * session_music_rate as f64;
+                let effective_bpm = f64::from(reference_bpm) * f64::from(session_music_rate);
                 let bpm_str = if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
                     format!("{}", effective_bpm.round() as i32)
                 } else {
-                    format!("{:.1}", effective_bpm)
+                    format!("{effective_bpm:.1}")
                 };
-                format!("Music Rate\nbpm: {}", bpm_str)
+                format!("Music Rate\nbpm: {bpm_str}")
             },
             choices: vec![fmt_music_rate(session_music_rate.clamp(0.5, 3.0))],
             selected_choice_index: 0,
@@ -423,10 +423,10 @@ fn build_main_rows(
             choice_difficulty_indices: None,
         },
         Row {
-            name: "".to_string(),
+            name: String::new(),
             choices: vec!["Exit".to_string()],
             selected_choice_index: 0,
-            help: vec!["".to_string()],
+            help: vec![String::new()],
             choice_difficulty_indices: None,
         },
     ]
@@ -698,10 +698,10 @@ fn build_advanced_rows() -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
-            name: "".to_string(),
+            name: String::new(),
             choices: vec!["Exit".to_string()],
             selected_choice_index: 0,
-            help: vec!["".to_string()],
+            help: vec![String::new()],
             choice_difficulty_indices: None,
         },
     ]
@@ -833,10 +833,10 @@ fn build_uncommon_rows() -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
-            name: "".to_string(),
+            name: String::new(),
             choices: vec!["Exit".to_string()],
             selected_choice_index: 0,
-            help: vec!["".to_string()],
+            help: vec![String::new()],
             choice_difficulty_indices: None,
         },
     ]
@@ -936,7 +936,7 @@ fn apply_profile_defaults(rows: &mut [Row]) -> (u8, u8) {
     // Initialize Mini row from profile (range -100..150, stored as percent).
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Mini") {
         let val = profile.mini_percent.clamp(-100, 150);
-        let needle = format!("{}%", val);
+        let needle = format!("{val}%");
         if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
             row.selected_choice_index = idx;
         }
@@ -1160,7 +1160,7 @@ fn change_choice(state: &mut State, delta: isize) {
             "X" => format!("{:.2}x", speed_mod.value),
             "C" => format!("C{}", speed_mod.value as i32),
             "M" => format!("M{}", speed_mod.value as i32),
-            _ => "".to_string(),
+            _ => String::new(),
         };
         row.choices[0] = speed_mod_value_str;
         audio::play_sfx("assets/sounds/change_value.ogg");
@@ -1175,16 +1175,16 @@ fn change_choice(state: &mut State, delta: isize) {
 
         // Update the row title to show the new BPM using reference BPM
         let reference_bpm = reference_bpm_for_song(&state.song);
-        let effective_bpm = (reference_bpm as f64) * state.music_rate as f64;
+        let effective_bpm = f64::from(reference_bpm) * f64::from(state.music_rate);
 
         // Format BPM: show one decimal only if it doesn't round to a whole number
         let bpm_str = if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
             format!("{}", effective_bpm.round() as i32)
         } else {
-            format!("{:.1}", effective_bpm)
+            format!("{effective_bpm:.1}")
         };
 
-        row.name = format!("Music Rate\nbpm: {}", bpm_str);
+        row.name = format!("Music Rate\nbpm: {bpm_str}");
 
         audio::play_sfx("assets/sounds/change_value.ogg");
         // Update session music rate immediately so SelectMusic will match on return
@@ -1295,7 +1295,7 @@ fn change_choice(state: &mut State, delta: isize) {
                     && speed_mod_row.name == "Speed Mod"
                 {
                     speed_mod_row.choices[0] = match new_type {
-                        "X" => format!("{:.2}x", new_value),
+                        "X" => format!("{new_value:.2}x"),
                         "C" => format!("C{}", new_value as i32),
                         "M" => format!("M{}", new_value as i32),
                         _ => String::new(),
@@ -1468,10 +1468,10 @@ pub fn update(state: &mut State, dt: f32) {
             if total_rows > 0 {
                 match direction {
                     NavDirection::Up => {
-                        state.selected_row = (state.selected_row + total_rows - 1) % total_rows
+                        state.selected_row = (state.selected_row + total_rows - 1) % total_rows;
                     }
                     NavDirection::Down => {
-                        state.selected_row = (state.selected_row + 1) % total_rows
+                        state.selected_row = (state.selected_row + 1) % total_rows;
                     }
                     NavDirection::Left => {
                         change_choice(state, -1);
@@ -1521,7 +1521,7 @@ pub fn update(state: &mut State, dt: f32) {
         let help_top_y = help_box_bottom_y - help_box_h;
         let n_rows_f = visible_rows as f32;
         let mut row_gap = if n_rows_f > 0.0 {
-            (help_top_y - first_row_center_y - ((n_rows_f - 0.5) * frame_h)) / n_rows_f
+            (n_rows_f - 0.5).mul_add(-frame_h, help_top_y - first_row_center_y) / n_rows_f
         } else {
             0.0
         };
@@ -1542,7 +1542,7 @@ pub fn update(state: &mut State, dt: f32) {
         };
         let prev_idx = state.prev_selected_row;
         let i_prev_vis = (prev_idx as isize) - (offset_rows as isize);
-        let from_y = first_row_center_y + (i_prev_vis as f32) * (frame_h + row_gap);
+        let from_y = (i_prev_vis as f32).mul_add(frame_h + row_gap, first_row_center_y);
         state.cursor_row_anim_from_y = from_y;
         state.cursor_row_anim_t = 0.0;
         state.cursor_row_anim_from_row = Some(prev_idx);
@@ -1741,7 +1741,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match action {
         VirtualAction::p1_back if ev.pressed => return ScreenAction::Navigate(Screen::SelectMusic),
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
-            if state.rows.first().is_some() {
+            if !state.rows.is_empty() {
                 if ev.pressed {
                     let num_rows = state.rows.len();
                     state.selected_row = (state.selected_row + num_rows - 1) % num_rows;
@@ -1752,7 +1752,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
         }
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
-            if state.rows.first().is_some() {
+            if !state.rows.is_empty() {
                 if ev.pressed {
                     let num_rows = state.rows.len();
                     state.selected_row = (state.selected_row + 1) % num_rows;
@@ -1821,20 +1821,18 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         VirtualAction::p2_back if ev.pressed && show_p2 => return ScreenAction::Navigate(Screen::SelectMusic),
         VirtualAction::p2_up | VirtualAction::p2_menu_up if show_p2 => {
-            if state.rows.first().is_some() {
-                if ev.pressed {
+            if !state.rows.is_empty()
+                && ev.pressed {
                     let num_rows = state.rows.len();
                     state.selected_row = (state.selected_row + num_rows - 1) % num_rows;
                 }
-            }
         }
         VirtualAction::p2_down | VirtualAction::p2_menu_down if show_p2 => {
-            if state.rows.first().is_some() {
-                if ev.pressed {
+            if !state.rows.is_empty()
+                && ev.pressed {
                     let num_rows = state.rows.len();
                     state.selected_row = (state.selected_row + 1) % num_rows;
                 }
-            }
         }
         VirtualAction::p2_left | VirtualAction::p2_menu_left if show_p2 && ev.pressed => {
             if let Some(row) = state.rows.get(state.selected_row) {
@@ -1845,7 +1843,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         "C" | "M" => (2000.0, 5.0),
                         _ => (1.0, 0.1),
                     };
-                    speed_mod.value += -1.0 * increment;
+                    speed_mod.value += -increment;
                     speed_mod.value = (speed_mod.value / increment).round() * increment;
                     speed_mod.value = speed_mod.value.clamp(increment, upper);
                     audio::play_sfx("assets/sounds/change_value.ogg");
@@ -1968,11 +1966,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 && let Some(choice) = what_comes_next_row
                     .choices
                     .get(what_comes_next_row.selected_choice_index)
-            {
-                if choice == "Gameplay" {
+                && choice == "Gameplay" {
                     return ScreenAction::Navigate(Screen::Gameplay);
                 }
-            }
         }
         _ => {}
     }
@@ -2054,14 +2050,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Calculate effective BPM for display. For X-mod parity with gameplay, use reference BPM.
     let reference_bpm = reference_bpm_for_song(&state.song);
-    let effective_song_bpm = (reference_bpm as f64) * state.music_rate as f64;
+    let effective_song_bpm = f64::from(reference_bpm) * f64::from(state.music_rate);
 
     let speed_text = match speed_mod.mod_type.as_str() {
         "X" => {
             // For X-mod, show the effective BPM accounting for music rate
             // (e.g., "X390" for 3.25x on 120 BPM at 1.0x rate)
             let effective_bpm = (speed_mod.value * effective_song_bpm as f32).round() as i32;
-            format!("X{}", effective_bpm)
+            format!("X{effective_bpm}")
         }
         "C" => format!("C{}", speed_mod.value as i32),
         "M" => format!("M{}", speed_mod.value as i32),
@@ -2078,13 +2074,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             "X" => {
                 let effective_bpm =
                     (state.p2_speed_mod.value * effective_song_bpm as f32).round() as i32;
-                format!("X{}", effective_bpm)
+                format!("X{effective_bpm}")
             }
             "C" => format!("C{}", state.p2_speed_mod.value as i32),
             "M" => format!("M{}", state.p2_speed_mod.value as i32),
             _ => format!("{:.2}x", state.p2_speed_mod.value),
         };
-        let p2_x = screen_center_x() * 2.0 - speed_mod_x;
+        let p2_x = screen_center_x().mul_add(2.0, -speed_mod_x);
         actors.push(act!(text: font("wendy"): settext(p2_speed_text):
             align(0.5, 0.5): xy(p2_x, speed_mod_y): zoom(0.5):
             diffuse(speed_color[0], speed_color[1], speed_color[2], 1.0):
@@ -2124,7 +2120,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Use VISIBLE_ROWS for gap calculation
     let n_rows_f = VISIBLE_ROWS as f32;
     let mut row_gap = if n_rows_f > 0.0 {
-        (help_top_y - first_row_center_y - ((n_rows_f - 0.5) * frame_h)) / n_rows_f
+        (n_rows_f - 0.5).mul_add(-frame_h, help_top_y - first_row_center_y) / n_rows_f
     } else {
         0.0
     };
@@ -2201,7 +2197,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 x += *w + spacing;
             }
             let sel = r.selected_choice_index.min(widths.len().saturating_sub(1));
-            x_positions[sel] + widths[sel] * 0.5
+            widths[sel].mul_add(0.5, x_positions[sel])
         } else {
             // Single value rows: default to Speed Mod helper X, except Music Rate centered in items column
             let mut cx = speed_mod_x;
@@ -2252,7 +2248,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if item_idx >= total_rows {
             break;
         }
-        let current_row_y = first_row_center_y + (i_vis as f32) * (frame_h + row_gap);
+        let current_row_y = (i_vis as f32).mul_add(frame_h + row_gap, first_row_center_y);
         let is_active = item_idx == state.selected_row;
         let row = &state.rows[item_idx];
         let active_bg = color::rgba_hex("#333333");
@@ -2389,7 +2385,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let max_pad_x = widescale(22.0, 28.0);
                         let width_ref = widescale(180.0, 220.0);
                         let t = (draw_w / width_ref).clamp(0.0, 1.0);
-                        let mut pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
+                        let mut pad_x = (max_pad_x - min_pad_x).mul_add(t, min_pad_x);
                         let border_w = widescale(2.0, 2.5);
                         // Cap pad so the ring never invades adjacent inline item space
                         let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
@@ -2404,23 +2400,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             // If we have a previous row index, interpolate X from that row's cursor center
                             if let Some(from_row) = state.cursor_row_anim_from_row {
                                 let from_x = calc_row_center_x(from_row);
-                                center_x = from_x + (center_x - from_x) * t;
+                                center_x = (center_x - from_x).mul_add(t, from_x);
                             }
-                            center_y = state.cursor_row_anim_from_y + (current_row_y - state.cursor_row_anim_from_y) * t;
+                            center_y = (current_row_y - state.cursor_row_anim_from_y).mul_add(t, state.cursor_row_anim_from_y);
                         }
                         // Interpolate ring size between previous row and this row when vertically tweening
                         if state.cursor_row_anim_t < 1.0
                             && let Some(from_row) = state.cursor_row_anim_from_row {
                                 let (from_dw, from_dh) = calc_row_dims(from_row);
                                 let tsize = (from_dw / width_ref).clamp(0.0, 1.0);
-                                let mut pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * tsize;
+                                let mut pad_x_from = (max_pad_x - min_pad_x).mul_add(tsize, min_pad_x);
                                 let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
                                 if pad_x_from > max_pad_by_spacing { pad_x_from = max_pad_by_spacing; }
                                 let ring_w_from = from_dw + pad_x_from * 2.0;
                                 let ring_h_from = from_dh + pad_y * 2.0;
                                 let t = ease_out_cubic(state.cursor_row_anim_t);
-                                ring_w = ring_w_from + (ring_w - ring_w_from) * t;
-                                ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                                ring_w = (ring_w - ring_w_from).mul_add(t, ring_w_from);
+                                ring_h = (ring_h - ring_h_from).mul_add(t, ring_h_from);
                             }
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;
@@ -2580,7 +2576,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             if size_t_to > 1.0 {
                                 size_t_to = 1.0;
                             }
-                            let mut pad_x_to = min_pad_x + (max_pad_x - min_pad_x) * size_t_to;
+                            let mut pad_x_to = (max_pad_x - min_pad_x).mul_add(size_t_to, min_pad_x);
                             let border_w = widescale(2.0, 2.5);
                             // Cap pad so ring doesn't encroach neighbors
                             let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
@@ -2598,10 +2594,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 let t = ease_out_cubic(state.cursor_row_anim_t);
                                 if let Some(from_row) = state.cursor_row_anim_from_row {
                                     let from_x = calc_row_center_x(from_row);
-                                    center_x = from_x + (center_x - from_x) * t;
+                                    center_x = (center_x - from_x).mul_add(t, from_x);
                                 }
-                                center_y = state.cursor_row_anim_from_y
-                                    + (current_row_y - state.cursor_row_anim_from_y) * t;
+                                center_y = (current_row_y - state.cursor_row_anim_from_y).mul_add(t, state.cursor_row_anim_from_y);
                             }
                             if let Some(anim_row) = state.cursor_anim_row
                                 && anim_row == item_idx
@@ -2611,10 +2606,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     .cursor_anim_from_choice
                                     .min(widths.len().saturating_sub(1));
                                 let to_idx = sel_idx.min(widths.len().saturating_sub(1));
-                                let from_center_x = x_positions[from_idx] + widths[from_idx] * 0.5;
-                                let to_center_x = x_positions[to_idx] + widths[to_idx] * 0.5;
+                                let from_center_x = widths[from_idx].mul_add(0.5, x_positions[from_idx]);
+                                let to_center_x = widths[to_idx].mul_add(0.5, x_positions[to_idx]);
                                 let t = ease_out_cubic(state.cursor_anim_t);
-                                center_x = from_center_x + (to_center_x - from_center_x) * t;
+                                center_x = (to_center_x - from_center_x).mul_add(t, from_center_x);
                                 // Also interpolate ring size from previous choice to current choice
                                 let from_draw_w = widths[from_idx];
                                 let mut size_t_from = from_draw_w / width_ref;
@@ -2628,15 +2623,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     size_t_from = 1.0;
                                 }
                                 let mut pad_x_from =
-                                    min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                    (max_pad_x - min_pad_x).mul_add(size_t_from, min_pad_x);
                                 let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
                                 if pad_x_from > max_pad_by_spacing {
                                     pad_x_from = max_pad_by_spacing;
                                 }
                                 let ring_w_from = from_draw_w + pad_x_from * 2.0;
                                 let ring_h_from = text_h + pad_y * 2.0;
-                                ring_w = ring_w_from + (ring_w - ring_w_from) * t;
-                                ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                                ring_w = (ring_w - ring_w_from).mul_add(t, ring_w_from);
+                                ring_h = (ring_h - ring_h_from).mul_add(t, ring_h_from);
                             }
                             // If not horizontally tweening, but vertically tweening rows, interpolate size
                             if state.cursor_row_anim_t < 1.0
@@ -2656,7 +2651,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     size_t_from = 1.0;
                                 }
                                 let mut pad_x_from =
-                                    min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                    (max_pad_x - min_pad_x).mul_add(size_t_from, min_pad_x);
                                 let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
                                 if pad_x_from > max_pad_by_spacing {
                                     pad_x_from = max_pad_by_spacing;
@@ -2664,8 +2659,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 let ring_w_from = from_dw + pad_x_from * 2.0;
                                 let ring_h_from = from_dh + pad_y * 2.0;
                                 let t = ease_out_cubic(state.cursor_row_anim_t);
-                                ring_w = ring_w_from + (ring_w - ring_w_from) * t;
-                                ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                                ring_w = (ring_w - ring_w_from).mul_add(t, ring_w_from);
+                                ring_h = (ring_h - ring_h_from).mul_add(t, ring_h_from);
                             }
 
                             let left = center_x - ring_w * 0.5;
@@ -2777,7 +2772,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let max_pad_x = widescale(22.0, 28.0);
                         let width_ref = widescale(180.0, 220.0);
                         let t = (draw_w / width_ref).clamp(0.0, 1.0);
-                        let mut pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
+                        let mut pad_x = (max_pad_x - min_pad_x).mul_add(t, min_pad_x);
                         let border_w = widescale(2.0, 2.5);
                         // Cap pad for single-value rows too (consistency)
                         let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
@@ -2793,10 +2788,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let t = ease_out_cubic(state.cursor_row_anim_t);
                             if let Some(from_row) = state.cursor_row_anim_from_row {
                                 let from_x = calc_row_center_x(from_row);
-                                center_x = from_x + (center_x - from_x) * t;
+                                center_x = (center_x - from_x).mul_add(t, from_x);
                             }
-                            center_y = state.cursor_row_anim_from_y
-                                + (current_row_y - state.cursor_row_anim_from_y) * t;
+                            center_y = (current_row_y - state.cursor_row_anim_from_y).mul_add(t, state.cursor_row_anim_from_y);
                         }
                         // Interpolate ring size between previous row and this row when vertically tweening
                         if state.cursor_row_anim_t < 1.0
@@ -2804,12 +2798,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         {
                             let (from_dw, from_dh) = calc_row_dims(from_row);
                             let tsize = (from_dw / width_ref).clamp(0.0, 1.0);
-                            let pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * tsize;
+                            let pad_x_from = (max_pad_x - min_pad_x).mul_add(tsize, min_pad_x);
                             let ring_w_from = from_dw + pad_x_from * 2.0;
                             let ring_h_from = from_dh + pad_y * 2.0;
                             let t = ease_out_cubic(state.cursor_row_anim_t);
-                            ring_w = ring_w_from + (ring_w - ring_w_from) * t;
-                            ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                            ring_w = (ring_w - ring_w_from).mul_add(t, ring_w_from);
+                            ring_h = (ring_h - ring_h_from).mul_add(t, ring_h_from);
                         }
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;
@@ -2843,7 +2837,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         ));
                     }
                     if show_p2 && !row.name.starts_with("Music Rate") {
-                        let p2_choice_center_x = screen_center_x() * 2.0 - choice_center_x;
+                        let p2_choice_center_x = screen_center_x().mul_add(2.0, -choice_center_x);
                         let p2_text = if row.name == "Speed Mod" {
                             match state.p2_speed_mod.mod_type.as_str() {
                                 "X" => format!("{:.2}x", state.p2_speed_mod.value),
@@ -2896,7 +2890,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let max_pad_x = widescale(22.0, 28.0);
                             let width_ref = widescale(180.0, 220.0);
                             let t = (p2_draw_w / width_ref).clamp(0.0, 1.0);
-                            let mut pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
+                            let mut pad_x = (max_pad_x - min_pad_x).mul_add(t, min_pad_x);
                             let border_w = widescale(2.0, 2.5);
                             let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
                             if pad_x > max_pad_by_spacing {
@@ -2990,8 +2984,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             // width * 0.4 from the center, after applying our preview zoom.
                             let zoom = 0.225;
                             let tex_w = crate::assets::texture_dims(texture)
-                                .map(|meta| meta.w.max(1) as f32)
-                                .unwrap_or(128.0);
+                                .map_or(128.0, |meta| meta.w.max(1) as f32);
                             let center_offset = tex_w * zoom * 0.4;
 
                             actors.push(act!(sprite(texture):
@@ -3129,7 +3122,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 };
                 let visible_text: String = help_line.chars().take(visible_chars).collect();
 
-                let line_y = start_y + (i as f32 * line_spacing);
+                let line_y = (i as f32).mul_add(line_spacing, start_y);
                 actors.push(act!(text:
                     font("miso"): settext(visible_text):
                     align(0.0, 0.5):

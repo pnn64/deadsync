@@ -413,7 +413,7 @@ fn create_sprite_pipeline(
 }
 
 #[inline(always)]
-fn next_pow2_usize(x: usize) -> usize {
+const fn next_pow2_usize(x: usize) -> usize {
     let mut v = if x == 0 { 1 } else { x - 1 };
     v |= v >> 1;
     v |= v >> 2;
@@ -478,7 +478,7 @@ fn ensure_instance_ring_capacity(
             buffer: buf,
             memory: mem,
         });
-        state.instance_ring_ptr = mapped as *mut InstanceData;
+        state.instance_ring_ptr = mapped.cast::<InstanceData>();
         state.instance_capacity_instances = need_total_instances;
         state.per_frame_stride_instances = stride;
     } else if state.per_frame_stride_instances != stride {
@@ -635,13 +635,13 @@ pub fn create_texture(
 }
 
 #[inline(always)]
-unsafe fn bytes_of<T>(v: &T) -> &[u8] {
-    unsafe { std::slice::from_raw_parts((v as *const T) as *const u8, std::mem::size_of::<T>()) }
+const unsafe fn bytes_of<T>(v: &T) -> &[u8] {
+    unsafe { std::slice::from_raw_parts(std::ptr::from_ref::<T>(v) as *const u8, std::mem::size_of::<T>()) }
 }
 
-pub fn draw<'a>(
+pub fn draw(
     state: &mut State,
-    render_list: &RenderList<'a>,
+    render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
 ) -> Result<u32, Box<dyn Error>> {
     if !state.swapchain_valid || state.window_size.width == 0 || state.window_size.height == 0 {
@@ -653,8 +653,8 @@ pub fn draw<'a>(
         let center = [m[3][0], m[3][1]];
         let c0 = [m[0][0], m[0][1]];
         let c1 = [m[1][0], m[1][1]];
-        let sx = (c0[0] * c0[0] + c0[1] * c0[1]).sqrt().max(1e-12);
-        let sy = (c1[0] * c1[0] + c1[1] * c1[1]).sqrt().max(1e-12);
+        let sx = c0[0].hypot(c0[1]).max(1e-12);
+        let sy = c1[0].hypot(c1[1]).max(1e-12);
         let cos_t = c0[0] / sx;
         let sin_t = c0[1] / sx;
         (center, [sx, sy], [sin_t, cos_t])
@@ -744,10 +744,10 @@ pub fn draw<'a>(
                 .queue_present(state.queue, &present_info)
             {
                 Ok(suboptimal) if suboptimal || acquired_suboptimal => {
-                    recreate_swapchain_and_dependents(state)?
+                    recreate_swapchain_and_dependents(state)?;
                 }
                 Err(vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR) => {
-                    recreate_swapchain_and_dependents(state)?
+                    recreate_swapchain_and_dependents(state)?;
                 }
                 Ok(_) => {}
                 Err(e) => return Err(e.into()),
@@ -956,10 +956,10 @@ pub fn draw<'a>(
             .queue_present(state.queue, &present_info)
         {
             Ok(suboptimal) if suboptimal || acquired_suboptimal => {
-                recreate_swapchain_and_dependents(state)?
+                recreate_swapchain_and_dependents(state)?;
             }
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR) => {
-                recreate_swapchain_and_dependents(state)?
+                recreate_swapchain_and_dependents(state)?;
             }
             Ok(_) => {}
             Err(e) => return Err(e.into()),
@@ -1071,12 +1071,12 @@ pub fn cleanup(state: &mut State) {
 }
 
 pub fn resize(state: &mut State, width: u32, height: u32) {
-    info!("Vulkan resize requested to {}x{}", width, height);
+    info!("Vulkan resize requested to {width}x{height}");
     state.window_size = PhysicalSize::new(width, height);
     if width > 0 && height > 0 {
         state.projection = ortho_for_window(width, height);
         if let Err(e) = recreate_swapchain_and_dependents(state) {
-            error!("Failed to recreate swapchain: {}", e);
+            error!("Failed to recreate swapchain: {e}");
         }
     }
 }
@@ -1359,7 +1359,7 @@ fn create_buffer<T: Copy>(
     properties: vk::MemoryPropertyFlags,
     data: Option<&[T]>,
 ) -> Result<BufferResource, Box<dyn Error>> {
-    let buffer_size = (mem::size_of::<T>() * data.map_or(1, |d| d.len())) as vk::DeviceSize;
+    let buffer_size = (mem::size_of::<T>() * data.map_or(1, <[T]>::len)) as vk::DeviceSize;
 
     if let Some(slice) = data {
         let staging_usage = vk::BufferUsageFlags::TRANSFER_SRC;
@@ -1377,7 +1377,7 @@ fn create_buffer<T: Copy>(
         unsafe {
             let mapped =
                 device.map_memory(staging_memory, 0, buffer_size, vk::MemoryMapFlags::empty())?;
-            std::ptr::copy_nonoverlapping(slice.as_ptr(), mapped as *mut T, slice.len());
+            std::ptr::copy_nonoverlapping(slice.as_ptr(), mapped.cast::<T>(), slice.len());
             device.unmap_memory(staging_memory);
         }
 
@@ -1527,14 +1527,14 @@ unsafe extern "system" fn vulkan_debug_callback(
     _user_data: *mut ffi::c_void,
 ) -> vk::Bool32 {
     let message = unsafe { ffi::CStr::from_ptr((*p_callback_data).p_message) };
-    let severity = format!("{:?}", message_severity).to_lowercase();
-    let ty = format!("{:?}", message_type).to_lowercase();
+    let severity = format!("{message_severity:?}").to_lowercase();
+    let ty = format!("{message_type:?}").to_lowercase();
     let log_message = format!("[vulkan_{}_{}] {}", severity, ty, message.to_string_lossy());
 
     match message_severity {
-        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => error!("{}", log_message),
-        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => warn!("{}", log_message),
-        _ => debug!("{}", log_message),
+        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => error!("{log_message}"),
+        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => warn!("{log_message}"),
+        _ => debug!("{log_message}"),
     }
     vk::FALSE
 }
@@ -1670,7 +1670,7 @@ fn create_swapchain(
     let format = formats
         .iter()
         .find(|f| f.format == vk::Format::B8G8R8A8_UNORM)
-        .cloned()
+        .copied()
         .unwrap_or(formats[0]);
 
     let present_mode = if vsync_enabled {
@@ -1697,9 +1697,7 @@ fn create_swapchain(
     // Derive the swapchain extent, making sure we never create a swapchain
     // with a zero-sized surface (which is invalid and triggers validation errors
     // on some platforms when the window is minimized or not yet fully realized).
-    let mut extent = if capabilities.current_extent.width != u32::MAX {
-        capabilities.current_extent
-    } else {
+    let mut extent = if capabilities.current_extent.width == u32::MAX {
         vk::Extent2D {
             width: window_size.width.clamp(
                 capabilities.min_image_extent.width,
@@ -1710,6 +1708,8 @@ fn create_swapchain(
                 capabilities.max_image_extent.height,
             ),
         }
+    } else {
+        capabilities.current_extent
     };
 
     if extent.width == 0 || extent.height == 0 {

@@ -1,4 +1,3 @@
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::time::Instant;
@@ -14,7 +13,7 @@ pub struct PadId(pub u32);
 impl From<PadId> for usize {
     #[inline(always)]
     fn from(value: PadId) -> Self {
-        value.0 as usize
+        value.0 as Self
     }
 }
 
@@ -49,7 +48,7 @@ fn uuid_from_bytes(bytes: &[u8]) -> [u8; 16] {
     fn fnv64(mut h: u64, bytes: &[u8]) -> u64 {
         let mut i = 0;
         while i < bytes.len() {
-            h ^= bytes[i] as u64;
+            h ^= u64::from(bytes[i]);
             h = h.wrapping_mul(PRIME);
             i += 1;
         }
@@ -240,7 +239,7 @@ pub struct Keymap {
     map: HashMap<VirtualAction, Vec<InputBinding>>,
 }
 
-static KEYMAP: Lazy<RwLock<Keymap>> = Lazy::new(|| RwLock::new(Keymap::default()));
+static KEYMAP: std::sync::LazyLock<RwLock<Keymap>> = std::sync::LazyLock::new(|| RwLock::new(Keymap::default()));
 
 #[inline(always)]
 fn with_keymap<R>(f: impl FnOnce(&Keymap) -> R) -> R {
@@ -349,16 +348,14 @@ impl Keymap {
                                 if binding.code_u32 != code_u32 {
                                     continue;
                                 }
-                                if let Some(d_expected) = binding.device {
-                                    if d_expected != dev {
+                                if let Some(d_expected) = binding.device
+                                    && d_expected != dev {
                                         continue;
                                     }
-                                }
-                                if let Some(u_expected) = binding.uuid {
-                                    if u_expected != uuid {
+                                if let Some(u_expected) = binding.uuid
+                                    && u_expected != uuid {
                                         continue;
                                     }
-                                }
                                 out.push((*act, pressed));
                                 break;
                             }
@@ -437,7 +434,7 @@ pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
 }
 
 #[inline(always)]
-pub fn lane_from_action(act: VirtualAction) -> Option<Lane> {
+pub const fn lane_from_action(act: VirtualAction) -> Option<Lane> {
     match act {
         VirtualAction::p1_left => Some(Lane::Left),
         VirtualAction::p1_down => Some(Lane::Down),

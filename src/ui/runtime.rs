@@ -61,10 +61,10 @@ pub fn site_id(file: &'static str, line: u32, col: u32, extra: u64) -> u64 {
     // FNV-1a 64
     let mut h = 0xcbf29ce484222325u64;
     for &b in file.as_bytes() {
-        h ^= b as u64;
+        h ^= u64::from(b);
         h = h.wrapping_mul(0x100000001b3);
     }
-    h ^= ((line as u64) << 32) ^ (col as u64);
+    h ^= (u64::from(line) << 32) ^ u64::from(col);
     h = h.wrapping_mul(0x100000001b3);
     h ^= extra;
     h

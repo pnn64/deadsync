@@ -1,7 +1,6 @@
 use crate::core::gfx::BackendType;
 use crate::core::input::{GamepadCodeBinding, InputBinding, Keymap, PadDir, VirtualAction};
 use log::{info, warn};
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
@@ -78,10 +77,10 @@ pub enum FullscreenType {
 }
 
 impl FullscreenType {
-    fn as_str(&self) -> &'static str {
+    const fn as_str(&self) -> &'static str {
         match self {
-            FullscreenType::Exclusive => "Exclusive",
-            FullscreenType::Borderless => "Borderless",
+            Self::Exclusive => "Exclusive",
+            Self::Borderless => "Borderless",
         }
     }
 }
@@ -91,8 +90,8 @@ impl FromStr for FullscreenType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
-            "exclusive" => Ok(FullscreenType::Exclusive),
-            "borderless" => Ok(FullscreenType::Borderless),
+            "exclusive" => Ok(Self::Exclusive),
+            "borderless" => Ok(Self::Borderless),
             _ => Err(()),
         }
     }
@@ -172,7 +171,7 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn display_mode(&self) -> DisplayMode {
+    pub const fn display_mode(&self) -> DisplayMode {
         if self.windowed {
             DisplayMode::Windowed
         } else {
@@ -182,12 +181,12 @@ impl Config {
 }
 
 // Global, mutable configuration instance.
-static CONFIG: Lazy<Mutex<Config>> = Lazy::new(|| Mutex::new(Config::default()));
+static CONFIG: std::sync::LazyLock<Mutex<Config>> = std::sync::LazyLock::new(|| Mutex::new(Config::default()));
 
 // --- File I/O ---
 
 fn create_default_config_file() -> Result<(), std::io::Error> {
-    info!("'{}' not found, creating with default values.", CONFIG_PATH);
+    info!("'{CONFIG_PATH}' not found, creating with default values.");
     let default = Config::default();
 
     let mut content = String::new();
@@ -308,12 +307,12 @@ pub fn load() {
     if !std::path::Path::new(CONFIG_PATH).exists()
         && let Err(e) = create_default_config_file()
     {
-        warn!("Failed to create default config file: {}", e);
+        warn!("Failed to create default config file: {e}");
     }
 
     let mut conf = SimpleIni::new();
     match conf.load(CONFIG_PATH) {
-        Ok(_) => {
+        Ok(()) => {
             // This block populates the global CONFIG struct from the file,
             // using default values for any missing keys.
             {
@@ -385,8 +384,7 @@ pub fn load() {
                 cfg.master_volume = conf
                     .get("Options", "MasterVolume")
                     .and_then(|v| v.parse().ok())
-                    .map(|v: u8| v.clamp(0, 100))
-                    .unwrap_or(default.master_volume);
+                    .map_or(default.master_volume, |v: u8| v.clamp(0, 100));
                 cfg.menu_music = conf
                     .get("Options", "MenuMusic")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -394,13 +392,11 @@ pub fn load() {
                 cfg.music_volume = conf
                     .get("Options", "MusicVolume")
                     .and_then(|v| v.parse().ok())
-                    .map(|v: u8| v.clamp(0, 100))
-                    .unwrap_or(default.music_volume);
+                    .map_or(default.music_volume, |v: u8| v.clamp(0, 100));
                 cfg.sfx_volume = conf
                     .get("Options", "SFXVolume")
                     .and_then(|v| v.parse().ok())
-                    .map(|v: u8| v.clamp(0, 100))
-                    .unwrap_or(default.sfx_volume);
+                    .map_or(default.sfx_volume, |v: u8| v.clamp(0, 100));
                 cfg.audio_sample_rate_hz = conf
                     .get("Options", "AudioSampleRateHz")
                     .map(|v| v.trim().to_string())
@@ -455,7 +451,7 @@ pub fn load() {
                     .and_then(|v| v.parse().ok())
                     .unwrap_or(default.simply_love_color);
 
-                info!("Configuration loaded from '{}'.", CONFIG_PATH);
+                info!("Configuration loaded from '{CONFIG_PATH}'.");
             } // Lock on CONFIG is released here.
 
             // Load keymaps from the same INI and publish globally.
@@ -503,8 +499,7 @@ pub fn load() {
             if missing_opts {
                 save_without_keymaps();
                 info!(
-                    "'{}' updated with default values for any missing fields.",
-                    CONFIG_PATH
+                    "'{CONFIG_PATH}' updated with default values for any missing fields."
                 );
             } else {
                 info!("Configuration OK; no write needed.");
@@ -512,8 +507,7 @@ pub fn load() {
         }
         Err(e) => {
             warn!(
-                "Failed to load '{}': {}. Using default values.",
-                CONFIG_PATH, e
+                "Failed to load '{CONFIG_PATH}': {e}. Using default values."
             );
         }
     }
@@ -598,7 +592,7 @@ fn default_keymap_local() -> Keymap {
 
 #[inline(always)]
 fn parse_action_key_lower(k: &str) -> Option<VirtualAction> {
-    use VirtualAction::*;
+    use VirtualAction::{p1_up, p1_down, p1_left, p1_right, p1_start, p1_back, p1_menu_up, p1_menu_down, p1_menu_left, p1_menu_right, p1_select, p1_operator, p1_restart, p2_up, p2_down, p2_left, p2_right, p2_start, p2_back, p2_menu_up, p2_menu_down, p2_menu_left, p2_menu_right, p2_select, p2_operator, p2_restart};
     match k {
         "p1_up" => Some(p1_up),
         "p1_down" => Some(p1_down),
@@ -631,8 +625,8 @@ fn parse_action_key_lower(k: &str) -> Option<VirtualAction> {
 }
 
 #[inline(always)]
-fn action_to_ini_key(action: VirtualAction) -> &'static str {
-    use VirtualAction::*;
+const fn action_to_ini_key(action: VirtualAction) -> &'static str {
+    use VirtualAction::{p1_up, p1_down, p1_left, p1_right, p1_start, p1_back, p1_menu_up, p1_menu_down, p1_menu_left, p1_menu_right, p1_select, p1_operator, p1_restart, p2_up, p2_down, p2_left, p2_right, p2_start, p2_back, p2_menu_up, p2_menu_down, p2_menu_left, p2_menu_right, p2_select, p2_operator, p2_restart};
     match action {
         p1_up => "P1_Up",
         p1_down => "P1_Down",
@@ -666,22 +660,22 @@ fn action_to_ini_key(action: VirtualAction) -> &'static str {
 #[inline(always)]
 fn binding_to_token(binding: InputBinding) -> String {
     match binding {
-        InputBinding::Key(code) => format!("KeyCode::{:?}", code),
-        InputBinding::PadDir(dir) => format!("PadDir::{:?}", dir),
+        InputBinding::Key(code) => format!("KeyCode::{code:?}"),
+        InputBinding::PadDir(dir) => format!("PadDir::{dir:?}"),
         InputBinding::PadDirOn { device, dir } => {
-            format!("Pad{}::Dir::{:?}", device, dir)
+            format!("Pad{device}::Dir::{dir:?}")
         }
         InputBinding::GamepadCode(binding) => {
             let mut s = String::new();
             use std::fmt::Write;
             let _ = write!(&mut s, "PadCode[0x{:08X}]", binding.code_u32);
             if let Some(device) = binding.device {
-                let _ = write!(&mut s, "@{}", device);
+                let _ = write!(&mut s, "@{device}");
             }
             if let Some(uuid) = binding.uuid {
                 s.push('#');
                 for b in &uuid {
-                    let _ = write!(&mut s, "{:02X}", b);
+                    let _ = write!(&mut s, "{b:02X}");
                 }
             }
             s
@@ -762,8 +756,8 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
     // where 0x... or decimal is the `PadCode(u32)` shown in the Sandbox/Input screens,
     // @N restricts to device index N,
     // and #... restricts to a 16-byte UUID (32 hex chars, no dashes).
-    if let Some(rest) = t.strip_prefix("PadCode[") {
-        if let Some(end) = rest.find(']') {
+    if let Some(rest) = t.strip_prefix("PadCode[")
+        && let Some(end) = rest.find(']') {
             let code_str = &rest[..end];
             let mut tail = &rest[end + 1..];
 
@@ -815,12 +809,9 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
                         for i in 0..16 {
                             let start = i * 2;
                             let end = start + 2;
-                            match u8::from_str_radix(&hex_digits[start..end], 16) {
-                                Ok(b) => bytes[i] = b,
-                                Err(_) => {
-                                    ok = false;
-                                    break;
-                                }
+                            if let Ok(b) = u8::from_str_radix(&hex_digits[start..end], 16) { bytes[i] = b } else {
+                                ok = false;
+                                break;
                             }
                         }
                         if ok {
@@ -840,7 +831,6 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
                 uuid,
             }));
         }
-    }
 
     // Gamepad (any pad): PadDir::Up
     if let Some(rest) = t.strip_prefix("PadDir::") {
@@ -975,13 +965,11 @@ pub fn update_keymap_binding_unique_keyboard(
         if !bindings.is_empty() {
             let mut filtered: Vec<InputBinding> = Vec::with_capacity(bindings.len());
             for (slot_idx, b) in bindings.iter().enumerate() {
-                if slot_idx >= 1 {
-                    if let InputBinding::Key(code) = b {
-                        if *code == keycode {
+                if slot_idx >= 1
+                    && let InputBinding::Key(code) = b
+                        && *code == keycode {
                             continue;
                         }
-                    }
-                }
                 filtered.push(*b);
             }
             bindings = filtered;
@@ -1101,7 +1089,7 @@ fn save_without_keymaps() {
         None => "Auto".to_string(),
         Some(hz) => hz.to_string(),
     };
-    content.push_str(&format!("AudioSampleRateHz={}\n", audio_rate_str));
+    content.push_str(&format!("AudioSampleRateHz={audio_rate_str}\n"));
     content.push_str(&format!(
         "CacheSongs={}\n",
         if cfg.cachesongs { "1" } else { "0" }
@@ -1192,7 +1180,7 @@ fn save_without_keymaps() {
     content.push('\n');
 
     if let Err(e) = std::fs::write(CONFIG_PATH, content) {
-        warn!("Failed to save config file: {}", e);
+        warn!("Failed to save config file: {e}");
     }
 }
 

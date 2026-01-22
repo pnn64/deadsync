@@ -1,13 +1,13 @@
-//! StepMania bitmap font parser (Rust port — dependency-light, functional/procedural)
+//! `StepMania` bitmap font parser (Rust port — dependency-light, functional/procedural)
 //! - SM-parity defaults for metrics and width handling (fixes tight/overlapping glyphs)
 //! - Supports LINE, MAP U+XXXX / "..." / aliases (Unicode, ASCII, CP1252, numbers)
-//! - Honors TextureHints and loads -stroke textures for stroke-capable fonts
+//! - Honors `TextureHints` and loads -stroke textures for stroke-capable fonts
 //! - SM extra-pixels quirk (+1/+1, left forced even) to avoid stroke clipping
 //! - Canonical texture keys (assets-relative, forward slashes) so lookups match
-//! - Parses "(res WxH)" from sheet filenames and scales INI-authored metrics like StepMania
-//! - Applies inverse draw scale so on-screen size matches StepMania's authored size
-//! - No regex/glob/configparser/once_cell; pure std + image + log
-//! - VERBOSE TRACE logging for troubleshooting: enable with RUST_LOG=new_engine::core::font=trace
+//! - Parses "(res `WxH`)" from sheet filenames and scales INI-authored metrics like `StepMania`
+//! - Applies inverse draw scale so on-screen size matches `StepMania`'s authored size
+//! - No `regex/glob/configparser/once_cell`; pure std + image + log
+//! - VERBOSE TRACE logging for troubleshooting: enable with `RUST_LOG=new_engine::core::font=trace`
 
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -283,7 +283,7 @@ static FONT_CHAR_ALIAS_TABLE: &[(&str, AliasValue)] = &[
 
 static FONT_CHAR_ALIAS_MAP: OnceLock<HashMap<String, char>> = OnceLock::new();
 thread_local! {
-    static FONT_LOAD_STACK: RefCell<Vec<PathBuf>> = RefCell::new(Vec::new());
+    static FONT_LOAD_STACK: RefCell<Vec<PathBuf>> = const { RefCell::new(Vec::new()) };
 }
 
 #[inline(always)]
@@ -439,7 +439,7 @@ fn replace_unicode_markers(text: &str) -> Cow<'_, str> {
 }
 
 /// Replace StepMania-style text markers:
-/// - `&NAME;` (FontCharAliases like `&START;`, `&MENULEFT;`)
+/// - `&NAME;` (`FontCharAliases` like `&START;`, `&MENULEFT;`)
 /// - `&#NNNN;` (decimal) and `&xNNNN;` (hex) Unicode markers
 pub fn replace_markers(text: &str) -> Cow<'_, str> {
     let t = replace_entity_markers(text);
@@ -549,7 +549,7 @@ fn parse_section_header(raw: &str) -> Option<&str> {
     }
 }
 
-/// Parse key=value (trimmed key & value). Returns (key_lower, value_string).
+/// Parse key=value (trimmed key & value). Returns (`key_lower`, `value_string`).
 #[inline(always)]
 fn parse_kv_trimmed(raw: &str) -> Option<(String, String)> {
     let mut split = raw.splitn(2, '=');
@@ -582,7 +582,7 @@ fn parse_line_entry_raw(raw: &str) -> Option<(u32, &str)> {
         return None;
     }
     #[inline(always)]
-    fn low(b: u8) -> u8 {
+    const fn low(b: u8) -> u8 {
         b | 0x20
     } // ascii lowercase
     if !(low(bytes[i]) == b'l'
@@ -609,7 +609,7 @@ fn is_doubleres_in_name(name: &str) -> bool {
     // search for "doubleres" case-insensitively without allocation
     for w in b.windows(9) {
         #[inline(always)]
-        fn low(x: u8) -> u8 {
+        const fn low(x: u8) -> u8 {
             x | 0x20
         }
         if low(w[0]) == b'd'
@@ -777,7 +777,7 @@ fn parse_range_key(key: &str) -> Option<(String, Option<(u32, u32)>)> {
 #[inline(always)]
 fn parse_rgba_string(raw: &str) -> Option<[f32; 4]> {
     #[inline(always)]
-    fn hex_val(b: u8) -> Option<u8> {
+    const fn hex_val(b: u8) -> Option<u8> {
         match b {
             b'0'..=b'9' => Some(b - b'0'),
             b'a'..=b'f' => Some(10 + (b - b'a')),
@@ -859,10 +859,10 @@ fn parse_rgba_string(raw: &str) -> Option<[f32; 4]> {
     };
 
     Some([
-        (r as f32) / 255.0,
-        (g as f32) / 255.0,
-        (b as f32) / 255.0,
-        (a as f32) / 255.0,
+        f32::from(r) / 255.0,
+        f32::from(g) / 255.0,
+        f32::from(b) / 255.0,
+        f32::from(a) / 255.0,
     ])
 }
 
@@ -883,7 +883,7 @@ fn fmt_char(ch: char) -> String {
 
 /* ======================= STEPMania SHEET SCALE HELPERS ======================= */
 
-/// Parse "(res WxH)" from a filename or path (case-insensitive). Returns sheet base res.
+/// Parse "(res `WxH`)" from a filename or path (case-insensitive). Returns sheet base res.
 #[inline(always)]
 fn parse_base_res_from_filename(path_or_name: &str) -> Option<(u32, u32)> {
     let s = path_or_name.to_ascii_lowercase();
@@ -903,7 +903,7 @@ fn parse_base_res_from_filename(path_or_name: &str) -> Option<(u32, u32)> {
             let mut have_w = false;
             while k < bytes.len() && bytes[k].is_ascii_digit() {
                 have_w = true;
-                w = w.saturating_mul(10) + (bytes[k] - b'0') as u32;
+                w = w.saturating_mul(10) + u32::from(bytes[k] - b'0');
                 k += 1;
             }
             while k < bytes.len() && bytes[k].is_ascii_whitespace() {
@@ -922,7 +922,7 @@ fn parse_base_res_from_filename(path_or_name: &str) -> Option<(u32, u32)> {
             let mut have_h = false;
             while k < bytes.len() && bytes[k].is_ascii_digit() {
                 have_h = true;
-                h = h.saturating_mul(10) + (bytes[k] - b'0') as u32;
+                h = h.saturating_mul(10) + u32::from(bytes[k] - b'0');
                 k += 1;
             }
             while k < bytes.len() && bytes[k].is_ascii_whitespace() {
@@ -937,7 +937,7 @@ fn parse_base_res_from_filename(path_or_name: &str) -> Option<(u32, u32)> {
     None
 }
 
-/// Round-to-nearest with ties-to-even (banker's rounding), like C's lrint with FE_TONEAREST.
+/// Round-to-nearest with ties-to-even (banker's rounding), like C's lrint with `FE_TONEAREST`.
 #[inline(always)]
 #[must_use]
 fn round_half_to_even_i32(v: f32) -> i32 {
@@ -1142,8 +1142,7 @@ fn apply_charmap_range(
     let len = charmap.len() as u32;
     if map_offset >= len {
         warn!(
-            "range map offset {} exceeds charmap length {}; skipping.",
-            map_offset, len
+            "range map offset {map_offset} exceeds charmap length {len}; skipping."
         );
         return;
     }
@@ -1155,11 +1154,10 @@ fn apply_charmap_range(
 
     while idx < len && remaining > 0 {
         let cp = charmap[idx as usize];
-        if cp != M_SKIP_CODEPOINT {
-            if let Some(ch) = char::from_u32(cp) {
+        if cp != M_SKIP_CODEPOINT
+            && let Some(ch) = char::from_u32(cp) {
                 map.insert(ch, frame);
             }
-        }
         idx += 1;
         frame += 1;
         remaining -= 1;
@@ -1167,8 +1165,7 @@ fn apply_charmap_range(
 
     if remaining > 0 {
         warn!(
-            "range map overflow (offset={}, count={}, len={})",
-            map_offset, requested, len
+            "range map overflow (offset={map_offset}, count={requested}, len={len})"
         );
     }
 }
@@ -1195,47 +1192,40 @@ fn apply_range_mapping(
         }
         "ascii" => {
             let (map_offset, count) = hex_range
-                .map(|(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))))
-                .unwrap_or((0, None));
+                .map_or((0, None), |(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))));
             apply_charmap_range(map, MAP_ASCII, map_offset, first_frame, count);
         }
         "cp1252" => {
             let (map_offset, count) = hex_range
-                .map(|(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))))
-                .unwrap_or((0, None));
+                .map_or((0, None), |(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))));
             apply_charmap_range(map, MAP_CP1252, map_offset, first_frame, count);
         }
         "iso-8859-1" => {
             let (map_offset, count) = hex_range
-                .map(|(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))))
-                .unwrap_or((0, None));
+                .map_or((0, None), |(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))));
             apply_charmap_range(map, MAP_ISO_8859_1, map_offset, first_frame, count);
         }
         "iso-8859-2" => {
             let (map_offset, count) = hex_range
-                .map(|(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))))
-                .unwrap_or((0, None));
+                .map_or((0, None), |(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))));
             apply_charmap_range(map, MAP_ISO_8859_2, map_offset, first_frame, count);
         }
         "korean-jamo" => {
             let (map_offset, count) = hex_range
-                .map(|(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))))
-                .unwrap_or((0, None));
+                .map_or((0, None), |(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))));
             apply_charmap_range(map, MAP_KOREAN_JAMO, map_offset, first_frame, count);
         }
         "basic-japanese" => {
             let (map_offset, count) = hex_range
-                .map(|(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))))
-                .unwrap_or((0, None));
+                .map_or((0, None), |(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))));
             apply_charmap_range(map, MAP_BASIC_JAPANESE, map_offset, first_frame, count);
         }
         "numbers" => {
             let (map_offset, count) = hex_range
-                .map(|(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))))
-                .unwrap_or((0, None));
+                .map_or((0, None), |(start, end)| (start, Some(end.saturating_sub(start).saturating_add(1))));
             apply_charmap_range(map, MAP_NUMBERS, map_offset, first_frame, count);
         }
-        other => warn!("Unsupported codeset '{}' in RANGE; skipping.", other),
+        other => warn!("Unsupported codeset '{other}' in RANGE; skipping."),
     }
 }
 
@@ -1273,13 +1263,12 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
             // SM implicitly seeds "Common default" for top-level fonts.
             specs.push("Common default".to_string());
         }
-        if let Some(map) = ini_map_lower.get("main") {
-            if let Some(v) = map.get("import") {
-                for s in v.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        if let Some(map) = ini_map_lower.get("main")
+            && let Some(v) = map.get("import") {
+                for s in v.split(',').map(str::trim).filter(|s| !s.is_empty()) {
                     specs.push(s.to_string());
                 }
             }
-        }
         specs
     }
 
@@ -1341,8 +1330,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                 .and_then(|m| m.get("defaultstrokecolor"))
             {
                 warn!(
-                    "Font '{}' has invalid DefaultStrokeColor '{}'; using transparent.",
-                    ini_path_str, v
+                    "Font '{ini_path_str}' has invalid DefaultStrokeColor '{v}'; using transparent."
                 );
             }
             DEFAULT_STROKE_COLOR
@@ -1351,7 +1339,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
     let prefix = ini_path.file_stem().unwrap().to_str().unwrap();
     let texture_paths = list_texture_pages(font_dir, prefix)?;
     if texture_paths.is_empty() {
-        return Err(format!("No texture pages found for font '{}'", ini_path_str).into());
+        return Err(format!("No texture pages found for font '{ini_path_str}'").into());
     }
 
     // ---- NEW: import merge (before local pages)
@@ -1366,23 +1354,23 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                     // Merge textures
                     required_textures.extend(imported.required_textures.into_iter());
                     // Merge glyphs: imported -> base; local pages will override later
-                    for (ch, g) in imported.font.glyph_map.into_iter() {
+                    for (ch, g) in imported.font.glyph_map {
                         all_glyphs.insert(ch, g);
                     }
-                    for (k, v) in imported.font.stroke_texture_map.into_iter() {
+                    for (k, v) in imported.font.stroke_texture_map {
                         stroke_texture_map.insert(k, v);
                     }
-                    for (k, v) in imported.font.texture_hints_map.into_iter() {
+                    for (k, v) in imported.font.texture_hints_map {
                         texture_hints_map.insert(k, v);
                     }
-                    debug!("Imported font '{}' merged.", spec);
+                    debug!("Imported font '{spec}' merged.");
                 }
                 Err(e) => {
-                    warn!("Failed to import font '{}': {}", spec, e);
+                    warn!("Failed to import font '{spec}': {e}");
                 }
             }
         } else {
-            warn!("Import '{}' not found relative to '{}'", spec, ini_path_str);
+            warn!("Import '{spec}' not found relative to '{ini_path_str}'");
         }
     }
 
@@ -1394,7 +1382,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
         let page_name = get_page_name_from_path(tex_path);
         let tex_dims = image::image_dimensions(tex_path)?;
         let texture_key = assets::canonical_texture_key(tex_path);
-        required_textures.push(tex_path.to_path_buf());
+        required_textures.push(tex_path.clone());
 
         let (num_frames_wide, num_frames_high) = assets::parse_sprite_sheet_dims(&texture_key);
         let total_frames = (num_frames_wide * num_frames_high) as usize;
@@ -1438,7 +1426,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                     settings.advance_extra_pixels = n;
                 }
                 if let Some(v) = map.get("texturehints") {
-                    settings.texture_hints = v.to_string();
+                    settings.texture_hints = v.clone();
                 }
 
                 for (key, val) in map {
@@ -1472,8 +1460,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
         let frame_h_i = (authored_tex_h / num_frames_high) as i32;
 
         info!(
-            " Page '{}', Texture: '{}' -> Authored Grid: {}x{} (frame {}x{} px)",
-            page_name, texture_key, num_frames_wide, num_frames_high, frame_w_i, frame_h_i
+            " Page '{page_name}', Texture: '{texture_key}' -> Authored Grid: {num_frames_wide}x{num_frames_high} (frame {frame_w_i}x{frame_h_i} px)"
         );
 
         trace!(
@@ -1491,8 +1478,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
             settings.advance_extra_pixels
         );
         trace!(
-            " [{}] frames: {}x{} (frame_w={} frame_h={}), total_frames={}",
-            page_name, num_frames_wide, num_frames_high, frame_w_i, frame_h_i, total_frames
+            " [{page_name}] frames: {num_frames_wide}x{num_frames_high} (frame_w={frame_w_i} frame_h={frame_h_i}), total_frames={total_frames}"
         );
 
         if let Some(stroke_path) = find_stroke_texture_path(tex_path) {
@@ -1516,13 +1502,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                 stroke_texture_map.insert(texture_key.clone(), stroke_key.clone());
             } else {
                 warn!(
-                    "Font '{}' stroke mismatch for page '{}': main frame_w={} frames={} vs stroke frame_w={} frames={}. Using main.",
-                    ini_path_str,
-                    page_name,
-                    frame_w_i,
-                    total_frames,
-                    stroke_frame_w_i,
-                    stroke_total_frames
+                    "Font '{ini_path_str}' stroke mismatch for page '{page_name}': main frame_w={frame_w_i} frames={total_frames} vs stroke frame_w={stroke_frame_w_i} frames={stroke_total_frames}. Using main."
                 );
                 stroke_texture_map.insert(texture_key.clone(), texture_key.clone());
             }
@@ -1533,20 +1513,20 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
         }
 
         // vertical metrics (authored)
-        let line_spacing_authored = if settings.line_spacing != -1 {
-            settings.line_spacing
-        } else {
+        let line_spacing_authored = if settings.line_spacing == -1 {
             frame_h_i
+        } else {
+            settings.line_spacing
         };
         let baseline_authored = if settings.baseline != -1 {
             settings.baseline
         } else {
-            (frame_h_i as f32 * 0.5 + line_spacing_authored as f32 * 0.5) as i32
+            (frame_h_i as f32).mul_add(0.5, line_spacing_authored as f32 * 0.5) as i32
         };
         let top_authored = if settings.top != -1 {
             settings.top
         } else {
-            (frame_h_i as f32 * 0.5 - line_spacing_authored as f32 * 0.5) as i32
+            (frame_h_i as f32).mul_add(0.5, -(line_spacing_authored as f32 * 0.5)) as i32
         };
         let height_authored = baseline_authored - top_authored;
         let vshift_authored = -(baseline_authored as f32);
@@ -1556,18 +1536,13 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
         }
 
         trace!(
-            " VMetrics(authored): line_spacing={}, baseline={}, top={}, height={}, vshift={:.1}",
-            line_spacing_authored,
-            baseline_authored,
-            top_authored,
-            height_authored,
-            vshift_authored
+            " VMetrics(authored): line_spacing={line_spacing_authored}, baseline={baseline_authored}, top={top_authored}, height={height_authored}, vshift={vshift_authored:.1}"
         );
 
         // mapping char → frame (SM spill across row up to total_frames)
         let mut char_to_frame: HashMap<char, usize> = HashMap::new();
         for section_name in &sections_to_check {
-            let sec_lc = section_name.to_string();
+            let sec_lc = section_name.clone();
             if let Some(map) = ini_map_lower.get(&sec_lc) {
                 for (raw_key_lc, val_str) in map {
                     let key_lc = raw_key_lc.as_str();
@@ -1714,9 +1689,9 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
 
             let frame_left_px = col * actual_frame_w;
             let frame_top_px = row * actual_frame_h;
-            let tex_rect_left = frame_left_px + 0.5 * tex_chop_off - tex_extra_left;
+            let tex_rect_left = 0.5f32.mul_add(tex_chop_off, frame_left_px) - tex_extra_left;
             let tex_rect_right =
-                frame_left_px + actual_frame_w - 0.5 * tex_chop_off + tex_extra_right;
+                0.5f32.mul_add(-tex_chop_off, frame_left_px + actual_frame_w) + tex_extra_right;
             let tex_rect = [
                 tex_rect_left,
                 frame_top_px,
@@ -1788,11 +1763,9 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
         let adv = font
             .default_glyph
             .as_ref()
-            .map(|g| g.advance)
-            .unwrap_or(0.0);
+            .map_or(0.0, |g| g.advance);
         warn!(
-            "Font '{}' is missing SPACE (U+0020). Falling back to default glyph (advance {:.1}).",
-            ini_path_str, adv
+            "Font '{ini_path_str}' is missing SPACE (U+0020). Falling back to default glyph (advance {adv:.1})."
         );
     } else if let Some(g) = font.glyph_map.get(&' ') {
         trace!(
@@ -1840,7 +1813,7 @@ pub fn find_glyph<'a>(
     start_font.default_glyph.as_ref()
 }
 
-/// StepMania parity: calculates the logical width of a line by summing the integer advances.
+/// `StepMania` parity: calculates the logical width of a line by summing the integer advances.
 #[inline(always)]
 pub fn measure_line_width_logical(
     font: &Font,

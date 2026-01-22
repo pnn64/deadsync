@@ -102,8 +102,8 @@ impl State {
             let vx_px = -2.0 * UV_VEL[i][0] * speed_scale_px;
             let vy_px = -2.0 * UV_VEL[i][1] * speed_scale_px;
 
-            let start_x = (XY[i] + (i as f32) * (w * 0.1)) % w;
-            let start_y = (XY[i] * 0.5 + (i as f32) * (h * 0.1) * PHI) % h;
+            let start_x = (i as f32).mul_add(w * 0.1, XY[i]) % w;
+            let start_y = XY[i].mul_add(0.5, (i as f32) * (h * 0.1) * PHI) % h;
 
             let x_raw = start_x + vx_px * t;
             let y_raw = start_y + vy_px * t;

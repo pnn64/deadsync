@@ -1,6 +1,6 @@
 use crate::act;
 use crate::core::space::widescale;
-use crate::core::space::*;
+use crate::core::space::{screen_width, screen_center_x, screen_height, screen_center_y};
 use crate::game::scores;
 use crate::screens::select_music::MusicWheelEntry;
 use crate::ui::actors::{Actor, SizeSpec};
@@ -28,7 +28,7 @@ const SELECTION_ANIMATION_CYCLE_DURATION: f32 = 1.0;
 const LAMP_PULSE_PERIOD: f32 = 0.8;
 const LAMP_PULSE_LERP_TO_WHITE: f32 = 0.70;
 
-fn col_quint_lamp() -> [f32; 4] {
+const fn col_quint_lamp() -> [f32; 4] {
     // zmod quint color: color("1,0.2,0.406,1")
     [1.0, 0.2, 0.406, 1.0]
 }
@@ -55,10 +55,10 @@ fn lamp_judge_count_color(lamp_index: u8) -> [f32; 4] {
 // Helper from select_music.rs
 fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     [
-        a[0] + (b[0] - a[0]) * t,
-        a[1] + (b[1] - a[1]) * t,
-        a[2] + (b[2] - a[2]) * t,
-        a[3] + (b[3] - a[3]) * t,
+        (b[0] - a[0]).mul_add(t, a[0]),
+        (b[1] - a[1]).mul_add(t, a[1]),
+        (b[2] - a[2]).mul_add(t, a[2]),
+        (b[3] - a[3]).mul_add(t, a[3]),
     ]
 }
 
@@ -113,12 +113,12 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let anim_t_unscaled = (p.selection_animation_timer / SELECTION_ANIMATION_CYCLE_DURATION)
         * std::f32::consts::PI
         * 2.0;
-    let anim_t = (anim_t_unscaled.sin() + 1.0) / 2.0;
+    let anim_t = f32::midpoint(anim_t_unscaled.sin(), 1.0);
 
     let lamp_pulse_t_unscaled = (p.selection_animation_timer / LAMP_PULSE_PERIOD)
         * std::f32::consts::PI
         * 2.0;
-    let lamp_pulse_t = (lamp_pulse_t_unscaled.sin() + 1.0) / 2.0;
+    let lamp_pulse_t = f32::midpoint(lamp_pulse_t_unscaled.sin(), 1.0);
 
     let num_entries = p.entries.len();
 
@@ -130,7 +130,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
             if offset_from_center_f.abs() > WHEEL_DRAW_RADIUS {
                 continue;
             }
-            let y_center_item = center_y + offset_from_center_f * slot_spacing;
+            let y_center_item = offset_from_center_f.mul_add(slot_spacing, center_y);
             let is_selected_slot = i_slot == CENTER_WHEEL_SLOT_INDEX;
 
             // The selected_index from the state now freely increments/decrements. We use it as a base
@@ -313,8 +313,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         )
                     };
 
-                    if let Some(chart) = chart {
-                        if let Some(cached_score) = scores::get_cached_score(&chart.short_hash) {
+                    if let Some(chart) = chart
+                        && let Some(cached_score) = scores::get_cached_score(&chart.short_hash) {
                             let has_score = cached_score.grade != scores::Grade::Failed
                                 || cached_score.score_percent > 0.0;
                             if has_score {
@@ -389,7 +389,6 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 }
                             }
                         }
-                    }
                 }
 
                 slot_children.push(grade_actor);
@@ -423,7 +422,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
             if offset_from_center_f.abs() > WHEEL_DRAW_RADIUS {
                 continue;
             }
-            let y_center_item = center_y + offset_from_center_f * slot_spacing;
+            let y_center_item = offset_from_center_f.mul_add(slot_spacing, center_y);
 
             // Use pack header colors for the empty state
             let bg_col = col_pack_header_box();

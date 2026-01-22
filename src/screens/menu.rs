@@ -14,7 +14,7 @@ use crate::ui::components::{heart_bg, screen_bar};
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
 
-use crate::core::space::*;
+use crate::core::space::{screen_width, screen_height, screen_center_x};
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;
@@ -152,12 +152,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     };
     let num_courses = { get_course_cache().len() };
     let song_info_text = format!(
-        "{} songs in {} groups, {} courses",
-        num_songs, num_packs, num_courses
+        "{num_songs} songs in {num_packs} groups, {num_courses} courses"
     );
 
     // --- Create a single multi-line string and pass it to one text actor ---
-    let combined_text = format!("DeadSync {}\n{}", version, song_info_text);
+    let combined_text = format!("DeadSync {version}\n{song_info_text}");
 
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), info1_y_tl): zoom(0.8):
@@ -261,7 +260,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     // List of disabled/error services
     let line_height_offset = 18.0;
     for (i, service_text) in services_to_list.iter().enumerate() {
-        groovestats_actors.push(act!(text: font("miso"): settext(service_text.clone()): align(0.0, 0.0): xy(base_x, base_y + (line_height_offset * (i as f32 + 1.0) * frame_zoom)): zoom(frame_zoom): horizalign(left): z(200)));
+        groovestats_actors.push(act!(text: font("miso"): settext(service_text.clone()): align(0.0, 0.0): xy(base_x, (line_height_offset * (i as f32 + 1.0)).mul_add(frame_zoom, base_y)): zoom(frame_zoom): horizalign(left): z(200)));
     }
 
     for actor in &mut groovestats_actors {

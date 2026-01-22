@@ -1,5 +1,4 @@
 use log::{info, warn};
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -37,8 +36,8 @@ pub enum ConnectionStatus {
     Error(String),
 }
 
-static CONNECTION_STATUS: Lazy<Arc<Mutex<ConnectionStatus>>> =
-    Lazy::new(|| Arc::new(Mutex::new(ConnectionStatus::Pending)));
+static CONNECTION_STATUS: std::sync::LazyLock<Arc<Mutex<ConnectionStatus>>> =
+    std::sync::LazyLock::new(|| Arc::new(Mutex::new(ConnectionStatus::Pending)));
 
 pub fn get_status() -> ConnectionStatus {
     CONNECTION_STATUS.lock().unwrap().clone()
@@ -87,13 +86,13 @@ fn perform_check() {
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to parse GrooveStats response: {}", e);
+                    warn!("Failed to parse GrooveStats response: {e}");
                     set_status(ConnectionStatus::Error("Failed to Parse".into()));
                 }
             }
         }
         Err(e) => {
-            warn!("HTTP error to GrooveStats: {}", e);
+            warn!("HTTP error to GrooveStats: {e}");
             set_status(ConnectionStatus::Error(format!("HTTP error: {e}")));
         }
     }

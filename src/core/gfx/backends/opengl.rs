@@ -207,9 +207,9 @@ pub fn create_texture(
     }
 }
 
-pub fn draw<'a>(
+pub fn draw(
     state: &mut State,
-    render_list: &RenderList<'a>,
+    render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
 ) -> Result<u32, Box<dyn Error>> {
     let (width, height) = state.window_size;
@@ -393,7 +393,7 @@ fn create_opengl_context(
             let proc = display.get_proc_address(proc_name);
             if !proc.is_null() {
                 let f: SwapIntervalFn = unsafe { std::mem::transmute(proc) };
-                let interval = if vsync_enabled { 1 } else { 0 };
+                let interval = i32::from(vsync_enabled);
                 if f(interval) != 0 {
                     info!(
                         "Successfully set VSync to: {}",

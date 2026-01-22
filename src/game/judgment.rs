@@ -78,7 +78,7 @@ where
 pub const HOLD_SCORE_HELD: i32 = 5;
 pub const MINE_SCORE_HIT: i32 = -6;
 
-pub fn grade_points_for(grade: JudgeGrade) -> i32 {
+pub const fn grade_points_for(grade: JudgeGrade) -> i32 {
     match grade {
         JudgeGrade::Fantastic => 5,
         JudgeGrade::Excellent => 4,
@@ -134,7 +134,7 @@ pub fn calculate_itg_score_percent(
     }
 
     // Base ITG percent as a 0.0–1.0 ratio.
-    let mut percent = total_points as f64 / possible_grade_points as f64;
+    let mut percent = f64::from(total_points) / f64::from(possible_grade_points);
     if percent < 0.0 {
         percent = 0.0;
     }
@@ -172,13 +172,13 @@ const EX_WEIGHT_HIT_MINE: f64 = -1.0;
 
 /// Calculates FA+ EX score using the same algebra as SL:
 ///
-///   total_possible = total_steps * 3.5 + (total_holds + total_rolls)
-///   total_points   = W0*3.5 + W1*3 + W2*2 + W3 + holds_held - mines_hit
-///   ex_percent     = floor(total_points / total_possible * 10000) / 100
+///   `total_possible` = `total_steps` * 3.5 + (`total_holds` + `total_rolls`)
+///   `total_points`   = W0*3.5 + W1*3 + W2*2 + W3 + `holds_held` - `mines_hit`
+///   `ex_percent`     = `floor(total_points` / `total_possible` * 10000) / 100
 ///
 /// where W0..W3 are taken from the final per-row window counts used by the FA+
-/// pane, holds_held counts successful holds only (rolls are reported
-/// separately), and mines_hit is the number of mines actually hit.
+/// pane, `holds_held` counts successful holds only (rolls are reported
+/// separately), and `mines_hit` is the number of mines actually hit.
 ///
 /// This version respects `fail_time` to stop accumulating points if the player
 /// has failed the song.
@@ -223,11 +223,9 @@ pub fn calculate_ex_score_from_notes(
                     && !note.is_fake
                     && note.can_be_judged
                     && !matches!(note.note_type, NoteType::Mine)
-                {
-                    if let Some(j) = note.result.as_ref() {
+                    && let Some(j) = note.result.as_ref() {
                         row_judgments.push(j);
                     }
-                }
                 idx += 1;
             }
 
@@ -277,11 +275,10 @@ pub fn calculate_ex_score_from_notes(
 
         match note.note_type {
             NoteType::Hold => {
-                if let Some(h) = note.hold.as_ref() {
-                    if h.result == Some(HoldResult::Held) {
+                if let Some(h) = note.hold.as_ref()
+                    && h.result == Some(HoldResult::Held) {
                         holds_held = holds_held.saturating_add(1);
                     }
-                }
             }
             NoteType::Mine => {
                 if note.mine_result == Some(MineResult::Hit) {
@@ -292,28 +289,28 @@ pub fn calculate_ex_score_from_notes(
         }
     }
 
-    let total_steps_f = total_steps as f64;
-    let total_holds_f = holds_total as f64;
-    let total_rolls_f = rolls_total as f64;
+    let total_steps_f = f64::from(total_steps);
+    let total_holds_f = f64::from(holds_total);
+    let total_rolls_f = f64::from(rolls_total);
 
     let total_possible =
-        total_steps_f * EX_WEIGHT_W0 + (total_holds_f + total_rolls_f) * EX_WEIGHT_HELD;
+        total_steps_f.mul_add(EX_WEIGHT_W0, (total_holds_f + total_rolls_f) * EX_WEIGHT_HELD);
     if total_possible <= 0.0 {
         return 0.0;
     }
 
     // Spreadsheet-style EX points, ignoring rolls in the numerator:
     let mut total_points = 0.0_f64;
-    total_points += (windows.w0 as f64) * EX_WEIGHT_W0;
-    total_points += (windows.w1 as f64) * EX_WEIGHT_W1;
-    total_points += (windows.w2 as f64) * EX_WEIGHT_W2;
-    total_points += (windows.w3 as f64) * EX_WEIGHT_W3;
+    total_points += f64::from(windows.w0) * EX_WEIGHT_W0;
+    total_points += f64::from(windows.w1) * EX_WEIGHT_W1;
+    total_points += f64::from(windows.w2) * EX_WEIGHT_W2;
+    total_points += f64::from(windows.w3) * EX_WEIGHT_W3;
 
-    total_points += (holds_held as f64) * EX_WEIGHT_HELD;
+    total_points += f64::from(holds_held) * EX_WEIGHT_HELD;
 
     // Mines subtract if hit while alive.
     let mines_effective = mines_hit.min(mines_total);
-    total_points += (mines_effective as f64) * EX_WEIGHT_HIT_MINE;
+    total_points += f64::from(mines_effective) * EX_WEIGHT_HIT_MINE;
 
     let ratio = (total_points / total_possible).max(0.0);
     ((ratio * 10000.0).floor()) / 100.0

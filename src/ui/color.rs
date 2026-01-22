@@ -15,12 +15,12 @@ pub fn rgba_hex(s: &str) -> [f32; 4] {
         (nib(h) << 4) | nib(l)
     }
     #[inline(always)]
-    fn rep(n: u8) -> u8 {
+    const fn rep(n: u8) -> u8 {
         (n << 4) | n
     }
 
     let bytes = s.as_bytes();
-    let off = (bytes.first() == Some(&b'#')) as usize;
+    let off = usize::from(bytes.first() == Some(&b'#'));
     let n = bytes.len() - off;
     let b = &bytes[off..];
 
@@ -43,10 +43,10 @@ pub fn rgba_hex(s: &str) -> [f32; 4] {
     };
 
     [
-        (r as f32) / 255.0,
-        (g as f32) / 255.0,
-        (bl as f32) / 255.0,
-        (a as f32) / 255.0,
+        f32::from(r) / 255.0,
+        f32::from(g) / 255.0,
+        f32::from(bl) / 255.0,
+        f32::from(a) / 255.0,
     ]
 }
 
@@ -120,7 +120,7 @@ pub fn difficulty_rgba(difficulty_name: &str, active_color_index: i32) -> [f32; 
 }
 
 #[inline(always)]
-fn wrap(n: usize, i: i32) -> usize {
+const fn wrap(n: usize, i: i32) -> usize {
     (i.rem_euclid(n as i32)) as usize
 }
 
@@ -140,7 +140,7 @@ pub fn lighten_rgba(c: [f32; 4]) -> [f32; 4] {
     [c[0] * 1.25, c[1] * 1.25, c[2] * 1.25, c[3]]
 }
 
-/// Menu selected color rule: “current SIMPLY_LOVE minus 2”
+/// Menu selected color rule: “current `SIMPLY_LOVE` minus 2”
 #[inline(always)]
 pub fn menu_selected_rgba(active_idx: i32) -> [f32; 4] {
     simply_love_rgba(active_idx - 2)

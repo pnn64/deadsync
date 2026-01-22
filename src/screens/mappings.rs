@@ -4,7 +4,7 @@ use crate::core::audio;
 use crate::core::input::{
     GamepadCodeBinding, InputBinding, InputEvent, InputSource, PadEvent, VirtualAction, get_keymap,
 };
-use crate::core::space::*;
+use crate::core::space::{screen_width, screen_height, widescale};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
@@ -105,8 +105,8 @@ const MAPPING_LABELS: [&str; NUM_MAPPING_ROWS] = [
 
 /// Map each visual row to the underlying virtual actions for P1/P2.
 #[inline(always)]
-fn row_actions(row_idx: usize) -> (Option<VirtualAction>, Option<VirtualAction>) {
-    use VirtualAction::*;
+const fn row_actions(row_idx: usize) -> (Option<VirtualAction>, Option<VirtualAction>) {
+    use VirtualAction::{p1_menu_left, p2_menu_left, p1_menu_right, p2_menu_right, p1_menu_up, p2_menu_up, p1_menu_down, p2_menu_down, p1_start, p2_start, p1_select, p2_select, p1_back, p2_back, p1_restart, p2_restart, p1_operator, p2_operator, p1_left, p2_left, p1_right, p2_right, p1_up, p2_up, p1_down, p2_down};
     match row_idx {
         // Menu navigation
         0 => (Some(p1_menu_left), Some(p2_menu_left)),
@@ -146,7 +146,7 @@ fn ease_out_cubic(t: f32) -> f32 {
         t
     };
     let u = 1.0 - clamped;
-    1.0 - u * u * u
+    (u * u).mul_add(-u, 1.0)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -166,8 +166,8 @@ pub enum ActiveSlot {
 
 impl ActiveSlot {
     #[inline(always)]
-    pub fn next(self) -> Self {
-        use ActiveSlot::*;
+    pub const fn next(self) -> Self {
+        use ActiveSlot::{P1Primary, P1Secondary, P2Primary, P2Secondary};
         match self {
             P1Primary => P1Secondary,
             P1Secondary => P2Primary,
@@ -177,8 +177,8 @@ impl ActiveSlot {
     }
 
     #[inline(always)]
-    pub fn prev(self) -> Self {
-        use ActiveSlot::*;
+    pub const fn prev(self) -> Self {
+        use ActiveSlot::{P1Primary, P2Secondary, P1Secondary, P2Primary};
         match self {
             P1Primary => P2Secondary,
             P1Secondary => P1Primary,
@@ -191,7 +191,7 @@ impl ActiveSlot {
 pub struct State {
     pub active_color_index: i32,
     bg: heart_bg::State,
-    /// 0..NUM_MAPPING_ROWS-1 = mapping rows, NUM_MAPPING_ROWS = Exit.
+    /// 0..NUM_MAPPING_ROWS-1 = mapping rows, `NUM_MAPPING_ROWS` = Exit.
     selected_row: usize,
     prev_selected_row: usize,
     active_slot: ActiveSlot,
@@ -276,7 +276,7 @@ fn on_nav_release(state: &mut State, dir: NavDirection) {
 }
 
 #[inline(always)]
-fn total_rows() -> usize {
+const fn total_rows() -> usize {
     NUM_MAPPING_ROWS + 1 // + Exit row
 }
 
@@ -335,8 +335,8 @@ pub fn update(state: &mut State, dt: f32) {
         let avail_w = (content_right - content_left).max(0.0);
         let avail_h = (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
 
-        let total_w_base = SIDE_W_BASE * 2.0 + DESC_W_BASE * 0.8 + SIDE_GAP_BASE * 2.0;
-        let rows_h_base = (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
+        let total_w_base = SIDE_W_BASE.mul_add(2.0, DESC_W_BASE * 0.8) + SIDE_GAP_BASE * 2.0;
+        let rows_h_base = (VISIBLE_ROWS as f32).mul_add(ROW_H, ((VISIBLE_ROWS - 1) as f32) * ROW_GAP);
 
         let s_w = if total_w_base > 0.0 {
             avail_w / total_w_base
@@ -367,7 +367,7 @@ pub fn update(state: &mut State, dt: f32) {
         let prev_idx = state.prev_selected_row;
         let i_prev_vis = (prev_idx as isize) - (offset_rows as isize);
         let row_step = (ROW_H + ROW_GAP) * s;
-        let from_y_center = first_row_y + (i_prev_vis as f32) * row_step + 0.5 * ROW_H * s;
+        let from_y_center = (i_prev_vis as f32).mul_add(row_step, first_row_y) + 0.5 * ROW_H * s;
         state.cursor_row_anim_from_y = from_y_center;
         state.cursor_row_anim_t = 0.0;
         state.cursor_row_anim_from_row = Some(prev_idx);
@@ -426,7 +426,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAc
             return ScreenAction::None;
         }
         // Default/protected keys do nothing while capturing; remain locked.
-        if DEFAULT_PROTECTED_KEYS.iter().any(|k| *k == code) {
+        if DEFAULT_PROTECTED_KEYS.contains(&code) {
             return ScreenAction::None;
         }
 
@@ -722,24 +722,24 @@ fn slot_pulse_zoom_and_color(
         return (base_zoom, base_color);
     }
     // Zoom out (shrink) instead of in: scale from 1.0 down to ~0.8.
-    let scale = 1.0 - 0.20 * pulse;
+    let scale = 0.20f32.mul_add(-pulse, 1.0);
     let brighten = 0.35 * pulse;
     let mut color = base_color;
-    color[0] = base_color[0] + (col_white[0] - base_color[0]) * brighten;
-    color[1] = base_color[1] + (col_white[1] - base_color[1]) * brighten;
-    color[2] = base_color[2] + (col_white[2] - base_color[2]) * brighten;
+    color[0] = (col_white[0] - base_color[0]).mul_add(brighten, base_color[0]);
+    color[1] = (col_white[1] - base_color[1]).mul_add(brighten, base_color[1]);
+    color[2] = (col_white[2] - base_color[2]).mul_add(brighten, base_color[2]);
     (base_zoom * scale, color)
 }
 
 #[inline(always)]
 fn format_binding_for_display(binding: InputBinding) -> String {
     match binding {
-        InputBinding::Key(code) => format!("{:?}", code),
+        InputBinding::Key(code) => format!("{code:?}"),
         // Any-pad bindings
-        InputBinding::PadDir(dir) => format!("Dir {:?}", dir),
+        InputBinding::PadDir(dir) => format!("Dir {dir:?}"),
         // Device-specific bindings, aligned with "Pad N Btn 0x.." style.
         InputBinding::PadDirOn { device, dir } => {
-            format!("Pad {} Dir {:?}", device, dir)
+            format!("Pad {device} Dir {dir:?}")
         }
         InputBinding::GamepadCode(binding) => {
             let dev = binding.device.unwrap_or(0);
@@ -751,7 +751,7 @@ fn format_binding_for_display(binding: InputBinding) -> String {
             while hex.len() > 1 && hex.starts_with('0') {
                 hex.remove(0);
             }
-            let mut label = format!("Pad {} Btn 0x{}", dev, hex);
+            let mut label = format!("Pad {dev} Btn 0x{hex}");
             // Soft max-width to avoid overflowing the column; in practice the
             // cropped code is short so this rarely triggers.
             const MAX_LABEL_CHARS: usize = 18;
@@ -825,9 +825,9 @@ pub fn get_actors(
     let avail_h = (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
 
     // Base layout extents (unscaled).
-    let total_w_base = SIDE_W_BASE * 2.0 + DESC_W_BASE * 0.8 + SIDE_GAP_BASE * 2.0;
+    let total_w_base = SIDE_W_BASE.mul_add(2.0, DESC_W_BASE * 0.8) + SIDE_GAP_BASE * 2.0;
     // Only VISIBLE_ROWS participate in vertical fit; the list scrolls inside.
-    let rows_h_base = (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
+    let rows_h_base = (VISIBLE_ROWS as f32).mul_add(ROW_H, ((VISIBLE_ROWS - 1) as f32) * ROW_GAP);
 
     let s_w = if total_w_base > 0.0 {
         avail_w / total_w_base
@@ -877,8 +877,7 @@ pub fn get_actors(
     let desc_rows_h_base = if visible_mapping_rows == 0 {
         0.0
     } else {
-        (visible_mapping_rows as f32) * ROW_H
-            + ((visible_mapping_rows.saturating_sub(1)) as f32) * ROW_GAP
+        (visible_mapping_rows as f32).mul_add(ROW_H, ((visible_mapping_rows.saturating_sub(1)) as f32) * ROW_GAP)
     };
     let desc_h = desc_rows_h_base * s;
 
@@ -899,7 +898,7 @@ pub fn get_actors(
                 break;
             }
             let row_center_y =
-                first_row_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s + 0.5 * ROW_H * s;
+                ((i_vis as f32) * (ROW_H + ROW_GAP)).mul_add(s, first_row_y) + 0.5 * ROW_H * s;
             ui_actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(labels_center_x, row_center_y):
@@ -918,8 +917,8 @@ pub fn get_actors(
     // Wendy-style column headers above each side's three columns.
     // First line: "Player 1"/"Player 2" centered over each side.
     // Second line: "Primary"/"Secondary"/"Default" per column.
-    let header_sub_y = first_row_y - COLUMN_HEADER_OFFSET_PX * s;
-    let header_main_y = header_sub_y - PLAYER_HEADER_GAP_PX * s;
+    let header_sub_y = COLUMN_HEADER_OFFSET_PX.mul_add(-s, first_row_y);
+    let header_main_y = PLAYER_HEADER_GAP_PX.mul_add(-s, header_sub_y);
     let p1_primary_x = p1_side_x + col_w * 0.5;
     let p1_secondary_x = p1_side_x + col_w * 1.5;
     let p1_default_x = p1_side_x + col_w * 2.5;
@@ -1030,8 +1029,8 @@ pub fn get_actors(
         }
 
         let is_exit = row_idx == total - 1;
-        let row_y = first_row_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s;
-        let row_mid_y = row_y + 0.5 * ROW_H * s;
+        let row_y = ((i_vis as f32) * (ROW_H + ROW_GAP)).mul_add(s, first_row_y);
+        let row_mid_y = (0.5 * ROW_H).mul_add(s, row_y);
         let is_active = row_idx == state.selected_row;
 
         if !is_exit && row_idx >= NUM_MAPPING_ROWS {
@@ -1063,13 +1062,13 @@ pub fn get_actors(
             let default_bg_color = [0.0, 0.0, 0.0, 0.25];
             ui_actors.push(act!(quad:
                 align(0.0, 0.0):
-                xy(p1_side_x + 2.0 * col_w, row_y):
+                xy(2.0f32.mul_add(col_w, p1_side_x), row_y):
                 zoomto(col_w, ROW_H * s):
                 diffuse(default_bg_color[0], default_bg_color[1], default_bg_color[2], default_bg_color[3])
             ));
             ui_actors.push(act!(quad:
                 align(0.0, 0.0):
-                xy(p2_side_x + 2.0 * col_w, row_y):
+                xy(2.0f32.mul_add(col_w, p2_side_x), row_y):
                 zoomto(col_w, ROW_H * s):
                 diffuse(default_bg_color[0], default_bg_color[1], default_bg_color[2], default_bg_color[3])
             ));
@@ -1077,35 +1076,27 @@ pub fn get_actors(
             let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
             // Config order: first = Default, second = Primary, third = Secondary.
             let p1_primary_text = p1_act_opt
-                .and_then(|act| keymap.binding_at(act, 1))
-                .map(format_binding_for_display)
-                .unwrap_or_else(|| "------".to_string());
+                .and_then(|act| keymap.binding_at(act, 1)).map_or_else(|| "------".to_string(), format_binding_for_display);
             let p1_secondary_text = p1_act_opt
-                .and_then(|act| keymap.binding_at(act, 2))
-                .map(format_binding_for_display)
-                .unwrap_or_else(|| "------".to_string());
+                .and_then(|act| keymap.binding_at(act, 2)).map_or_else(|| "------".to_string(), format_binding_for_display);
             let p2_primary_text = p2_act_opt
-                .and_then(|act| keymap.binding_at(act, 1))
-                .map(format_binding_for_display)
-                .unwrap_or_else(|| "------".to_string());
+                .and_then(|act| keymap.binding_at(act, 1)).map_or_else(|| "------".to_string(), format_binding_for_display);
             let p2_secondary_text = p2_act_opt
-                .and_then(|act| keymap.binding_at(act, 2))
-                .map(format_binding_for_display)
-                .unwrap_or_else(|| "------".to_string());
+                .and_then(|act| keymap.binding_at(act, 2)).map_or_else(|| "------".to_string(), format_binding_for_display);
 
             let p1_default_text = p1_act_opt
                 .and_then(|act| keymap.first_key_binding(act))
-                .map(|code| format!("{:?}", code))
+                .map(|code| format!("{code:?}"))
                 .unwrap_or_else(|| "------".to_string());
             let p2_default_text = p2_act_opt
                 .and_then(|act| keymap.first_key_binding(act))
-                .map(|code| format!("{:?}", code))
+                .map(|code| format!("{code:?}"))
                 .unwrap_or_else(|| "------".to_string());
             let active_value_color = if is_active { col_white } else { col_gray };
 
             // Heartbeat-style pulse for the slot currently being captured.
             let pulse_opt = if state.capture_active && state.capture_row == Some(row_idx) {
-                let t = state.capture_pulse_t.sin() * 0.5 + 0.5;
+                let t = state.capture_pulse_t.sin().mul_add(0.5, 0.5);
                 Some(t.clamp(0.0, 1.0))
             } else {
                 None
@@ -1259,7 +1250,7 @@ pub fn get_actors(
                         let max_pad_x = widescale(22.0, 28.0);
                         let width_ref = widescale(180.0, 220.0);
                         let t = (draw_w / width_ref).clamp(0.0, 1.0);
-                        let mut pad_x = min_pad_x + (max_pad_x - min_pad_x) * t;
+                        let mut pad_x = (max_pad_x - min_pad_x).mul_add(t, min_pad_x);
                         // Ensure the ring does not invade adjacent inline column space.
                         let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
                         if pad_x > max_pad_by_spacing {
@@ -1279,15 +1270,15 @@ pub fn get_actors(
                         let t = ease_out_cubic(state.cursor_row_anim_t);
                         let from_x = slot_center_x_for_row(from_row, state.active_slot);
                         let from_y = state.cursor_row_anim_from_y;
-                        center_x = from_x + (center_x_target - from_x) * t;
-                        center_y = from_y + (row_mid_y - from_y) * t;
+                        center_x = (center_x_target - from_x).mul_add(t, from_x);
+                        center_y = (row_mid_y - from_y).mul_add(t, from_y);
                     }
                 } else if state.slot_anim_t < 1.0 {
                     // Horizontal tween within the current row when changing slots.
                     let t = ease_out_cubic(state.slot_anim_t);
                     let from_x = slot_center_x_for_row(row_idx, state.slot_anim_from);
                     let to_x = slot_center_x_for_row(row_idx, state.slot_anim_to);
-                    center_x = from_x + (to_x - from_x) * t;
+                    center_x = (to_x - from_x).mul_add(t, from_x);
                 }
 
                 let left = center_x - ring_w * 0.5;
@@ -1382,7 +1373,7 @@ pub fn get_actors(
                             size_t = 0.0;
                         }
                         size_t = size_t.clamp(0.0, 1.0);
-                        let mut pad_x = min_pad_x + (max_pad_x - min_pad_x) * size_t;
+                        let mut pad_x = (max_pad_x - min_pad_x).mul_add(size_t, min_pad_x);
                         let border_w = widescale(2.0, 2.5);
                         let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
                         if pad_x > max_pad_by_spacing {
@@ -1396,23 +1387,22 @@ pub fn get_actors(
 
                         // Diagonal tween from the previous row's cursor center
                         // (mapping slot or the previous Exit) to this Exit row.
-                        if state.cursor_row_anim_t < 1.0 {
-                            if let Some(from_row) = state.cursor_row_anim_from_row {
+                        if state.cursor_row_anim_t < 1.0
+                            && let Some(from_row) = state.cursor_row_anim_from_row {
                                 let t = ease_out_cubic(state.cursor_row_anim_t);
                                 let from_x = slot_center_x_for_row(from_row, state.active_slot);
                                 let from_y = state.cursor_row_anim_from_y;
-                                center_x = from_x + (exit_center_x - from_x) * t;
-                                center_y = from_y + (exit_y - from_y) * t;
+                                center_x = (exit_center_x - from_x).mul_add(t, from_x);
+                                center_y = (exit_y - from_y).mul_add(t, from_y);
 
                                 // Interpolate ring size from a mapping-sized
                                 // cursor to the Exit-sized cursor.
                                 let ring_w_from = col_w * 0.9;
                                 let ring_h_from = ROW_H * s * 0.9;
                                 let tsize = t;
-                                ring_w = ring_w_from + (ring_w - ring_w_from) * tsize;
-                                ring_h = ring_h_from + (ring_h - ring_h_from) * tsize;
+                                ring_w = (ring_w - ring_w_from).mul_add(tsize, ring_w_from);
+                                ring_h = (ring_h - ring_h_from).mul_add(tsize, ring_h_from);
                             }
-                        }
 
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;

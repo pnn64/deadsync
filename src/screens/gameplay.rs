@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::core::space::widescale;
-use crate::core::space::*;
+use crate::core::space::{screen_width, screen_height, screen_center_x, screen_center_y};
 use crate::game::judgment;
 use crate::game::profile;
 use crate::ui::actors::{Actor, SizeSpec};
@@ -218,7 +218,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 state.players[player_idx].mines_hit_for_score,
                 state.possible_grade_points,
             ) * 100.0) as f32;
-            (format!("{:.2}", score_percent), [1.0, 1.0, 1.0, 1.0])
+            (format!("{score_percent:.2}"), [1.0, 1.0, 1.0, 1.0])
         };
 
         actors.push(act!(text:
@@ -252,7 +252,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         // The BPM text is at y=0 relative to the frame's origin. Its final position is just the origin.
         let bpm_center_y = frame_origin_y;
         // The Rate text is at y=12 relative to the frame's origin. Its offset is scaled by the frame's zoom.
-        let rate_center_y = frame_origin_y + (12.0 * frame_zoom);
+        let rate_center_y = 12.0f64.mul_add(frame_zoom, frame_origin_y);
         let bpm_final_zoom = 1.0 * frame_zoom;
         let rate_final_zoom = 0.5 * frame_zoom;
         let bpm_x = screen_center_x();

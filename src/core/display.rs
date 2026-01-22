@@ -45,14 +45,14 @@ fn snapshot_displays() -> Vec<DisplaySnapshot> {
     match platform::displays() {
         Ok(list) => list,
         Err(err) => {
-            warn!("Falling back to default monitor names: {}", err);
+            warn!("Falling back to default monitor names: {err}");
             Vec::new()
         }
     }
 }
 
 #[inline(always)]
-fn names_match(lhs: &str, rhs: &str) -> bool {
+const fn names_match(lhs: &str, rhs: &str) -> bool {
     lhs.eq_ignore_ascii_case(rhs)
 }
 
@@ -85,8 +85,8 @@ pub fn friendly_monitor_names(monitors: &[MonitorHandle]) -> Vec<String> {
                 })
                 .map(|(i, _)| i);
 
-            if matched_idx.is_none() {
-                if let Some(name) = &mon_name {
+            if matched_idx.is_none()
+                && let Some(name) = &mon_name {
                     matched_idx = snapshots
                         .iter()
                         .enumerate()
@@ -97,7 +97,6 @@ pub fn friendly_monitor_names(monitors: &[MonitorHandle]) -> Vec<String> {
                         })
                         .map(|(i, _)| i);
                 }
-            }
 
             if matched_idx.is_none() && idx < snapshots.len() && !used[idx] {
                 matched_idx = Some(idx);
@@ -127,7 +126,7 @@ pub fn monitor_specs(monitors: &[MonitorHandle]) -> Vec<MonitorSpec> {
     monitors
         .iter()
         .cloned()
-        .zip(friendly_names.into_iter())
+        .zip(friendly_names)
         .map(|(monitor, name)| {
             let modes = monitor
                 .video_modes()
@@ -170,7 +169,7 @@ pub fn supported_refresh_rates(spec: Option<&MonitorSpec>, width: u32, height: u
     })
 }
 
-/// Resolve a monitor handle from the requested index, returning (handle, count, clamped_index).
+/// Resolve a monitor handle from the requested index, returning (handle, count, `clamped_index`).
 pub fn resolve_monitor(
     event_loop: &ActiveEventLoop,
     monitor_index: usize,
@@ -237,7 +236,7 @@ pub fn fullscreen_mode(
                         let sz = m.size();
                         sz.width == width && sz.height == height
                     })
-                    .max_by_key(|m| m.refresh_rate_millihertz());
+                    .max_by_key(winit::monitor::VideoModeHandle::refresh_rate_millihertz);
                 if let Some(mode) = best_mode {
                     info!(
                         "Fullscreen: using EXCLUSIVE {}x{} @ {} mHz",
@@ -248,8 +247,7 @@ pub fn fullscreen_mode(
                     Some(Fullscreen::Exclusive(mode))
                 } else {
                     warn!(
-                        "No exact EXCLUSIVE mode {}x{}; using BORDERLESS.",
-                        width, height
+                        "No exact EXCLUSIVE mode {width}x{height}; using BORDERLESS."
                     );
                     Some(Fullscreen::Borderless(Some(mon)))
                 }
@@ -300,7 +298,7 @@ mod platform {
         let mut path_count = 0;
         let mut mode_count = 0;
         unsafe {
-            if GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &mut path_count, &mut mode_count)
+            if GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &raw mut path_count, &raw mut mode_count)
                 .is_err()
             {
                 return None;
@@ -313,9 +311,9 @@ mod platform {
         unsafe {
             if QueryDisplayConfig(
                 QDC_ONLY_ACTIVE_PATHS,
-                &mut path_count,
+                &raw mut path_count,
                 paths.as_mut_ptr(),
-                &mut mode_count,
+                &raw mut mode_count,
                 modes.as_mut_ptr(),
                 None,
             )
@@ -337,7 +335,7 @@ mod platform {
             };
 
             unsafe {
-                if DisplayConfigGetDeviceInfo(&mut source.header) != 0 {
+                if DisplayConfigGetDeviceInfo(&raw mut source.header) != 0 {
                     continue;
                 }
             }
@@ -357,7 +355,7 @@ mod platform {
             };
 
             unsafe {
-                if DisplayConfigGetDeviceInfo(&mut target.header) != 0 {
+                if DisplayConfigGetDeviceInfo(&raw mut target.header) != 0 {
                     continue;
                 }
             }
@@ -380,7 +378,7 @@ mod platform {
             if !EnumDisplayDevicesW(
                 PCWSTR(monitor_info_ex.szDevice.as_ptr()),
                 0,
-                &mut display_device,
+                &raw mut display_device,
                 0,
             )
             .as_bool()
@@ -395,11 +393,11 @@ mod platform {
     fn monitor_snapshot(h_monitor: HMONITOR) -> Result<DisplaySnapshot, String> {
         let mut info_ex = MONITORINFOEXW::default();
         info_ex.monitorInfo.cbSize = mem::size_of::<MONITORINFOEXW>() as u32;
-        let ptr = &mut info_ex as *mut MONITORINFOEXW as *mut MONITORINFO;
+        let ptr = &raw mut info_ex as *mut MONITORINFO;
         unsafe {
             GetMonitorInfoW(h_monitor, ptr)
                 .ok()
-                .map_err(|e| format!("GetMonitorInfoW failed: {:?}", e))?;
+                .map_err(|e| format!("GetMonitorInfoW failed: {e:?}"))?;
         }
 
         let mut dev_mode = windows::Win32::Graphics::Gdi::DEVMODEW {
@@ -410,10 +408,10 @@ mod platform {
             EnumDisplaySettingsW(
                 PCWSTR(info_ex.szDevice.as_ptr()),
                 windows::Win32::Graphics::Gdi::ENUM_CURRENT_SETTINGS,
-                &mut dev_mode,
+                &raw mut dev_mode,
             )
             .ok()
-            .map_err(|e| format!("EnumDisplaySettingsW failed: {:?}", e))?;
+            .map_err(|e| format!("EnumDisplaySettingsW failed: {e:?}"))?;
         }
 
         let pos = unsafe { dev_mode.Anonymous1.Anonymous2.dmPosition };
@@ -423,7 +421,7 @@ mod platform {
         let name = utf16_to_string(&info_ex.szDevice);
         let friendly_name = friendly_name_from_config(&info_ex)
             .or_else(|| device_string(&info_ex))
-            .unwrap_or_else(|| format!("Unknown Display {:?}", h_monitor));
+            .unwrap_or_else(|| format!("Unknown Display {h_monitor:?}"));
 
         Ok(DisplaySnapshot {
             x: pos.x,
@@ -442,10 +440,10 @@ mod platform {
                 None,
                 None,
                 Some(monitor_enum_proc),
-                LPARAM(&mut handles as *mut _ as isize),
+                LPARAM(&raw mut handles as isize),
             )
             .ok()
-            .map_err(|e| format!("EnumDisplayMonitors failed: {:?}", e))?;
+            .map_err(|e| format!("EnumDisplayMonitors failed: {e:?}"))?;
         }
 
         let mut out = Vec::with_capacity(handles.len());

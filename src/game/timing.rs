@@ -46,7 +46,7 @@ impl TimingProfile {
         ];
         let fa_plus_window_s = Some(BASE_FA_PLUS_W0_S + TIMING_WINDOW_ADD_S);
         let mine_window_s = mine_window_s();
-        TimingProfile {
+        Self {
             windows_s,
             fa_plus_window_s,
             mine_window_s,
@@ -76,11 +76,11 @@ pub fn mine_window_s() -> f32 {
     BASE_MINE_S + TIMING_WINDOW_ADD_S
 }
 
-/// Classify a signed tap offset (seconds) into an ITG-style JudgeGrade and
-/// detailed TimingWindow (including FA+ W0 when enabled in the profile).
+/// Classify a signed tap offset (seconds) into an ITG-style `JudgeGrade` and
+/// detailed `TimingWindow` (including FA+ W0 when enabled in the profile).
 ///
-/// Callers should ensure |offset_s| is within the outer WayOff window; if it is
-/// not, the returned JudgeGrade will still be WayOff.
+/// Callers should ensure |`offset_s`| is within the outer `WayOff` window; if it is
+/// not, the returned `JudgeGrade` will still be `WayOff`.
 #[inline(always)]
 pub fn classify_offset_s(offset_s: f32, profile: &TimingProfile) -> (JudgeGrade, TimingWindow) {
     let abs = offset_s.abs();
@@ -113,7 +113,7 @@ pub fn beat_to_note_row(beat: f32) -> i32 {
     (beat * ROWS_PER_BEAT as f32).round() as i32
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpeedUnit {
     Beats,
     Seconds,
@@ -656,12 +656,12 @@ impl TimingData {
     fn beat0_offset_seconds(&self) -> f32 {
         self.beat_to_time.first().map_or(0.0, |p| p.time_sec)
     }
-    fn beat0_group_offset_seconds(&self) -> f32 {
+    const fn beat0_group_offset_seconds(&self) -> f32 {
         self.global_offset_sec
     }
 
     /// Update the global offset used for time⇄beat conversion, mirroring
-    /// ITGmania semantics while keeping precomputed data consistent.
+    /// `ITGmania` semantics while keeping precomputed data consistent.
     #[inline(always)]
     pub fn set_global_offset_seconds(&mut self, new_offset: f32) {
         let old = self.global_offset_sec;
@@ -803,7 +803,7 @@ impl TimingData {
         if args.elapsed_time == f32::MAX {
             args.elapsed_time = start.last_time;
         }
-        args.beat = note_row_to_beat(start.last_row) + (args.elapsed_time - start.last_time) * bps;
+        args.beat = (args.elapsed_time - start.last_time).mul_add(bps, note_row_to_beat(start.last_row));
         args.bps_out = bps;
     }
 
@@ -891,7 +891,7 @@ impl TimingData {
         let idx = self.scroll_prefix.partition_point(|p| p.beat <= beat);
         let i = idx.saturating_sub(1);
         let p = self.scroll_prefix[i];
-        p.cum_displayed + (beat - p.beat) * p.ratio
+        (beat - p.beat).mul_add(p.ratio, p.cum_displayed)
     }
 
     pub fn get_speed_multiplier(&self, beat: f32, time: f32) -> f32 {
@@ -921,7 +921,7 @@ impl TimingData {
             return rt.prev_ratio;
         }
         let progress = (time - rt.start_time) / (rt.end_time - rt.start_time);
-        rt.prev_ratio + (seg.ratio - rt.prev_ratio) * progress
+        (seg.ratio - rt.prev_ratio).mul_add(progress, rt.prev_ratio)
     }
 
     fn get_speed_segment_index_at_beat(&self, beat: f32) -> isize {
@@ -1215,11 +1215,10 @@ pub fn compute_window_counts(notes: &[Note]) -> WindowCounts {
 
         while idx < len && notes[idx].row_index == row_index {
             let note = &notes[idx];
-            if !note.is_fake && note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
-                if let Some(j) = note.result.as_ref() {
+            if !note.is_fake && note.can_be_judged && !matches!(note.note_type, NoteType::Mine)
+                && let Some(j) = note.result.as_ref() {
                     row_judgments.push(j);
                 }
-            }
             idx += 1;
         }
 

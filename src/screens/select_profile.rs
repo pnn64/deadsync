@@ -1,7 +1,7 @@
 use crate::act;
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::*;
+use crate::core::space::{screen_width, screen_height, screen_center_x, screen_center_y};
 use crate::game::parsing::noteskin::{self, Noteskin, Quantization, NUM_QUANTIZATIONS};
 use crate::game::profile::{self, ActiveProfile};
 use crate::game::scroll::ScrollSpeedSetting;
@@ -27,7 +27,7 @@ const PLAYERFRAME_EXIT_ZOOM_OUT_DURATION: f32 = 0.35;
 const JOIN_PULSE_ZOOM_IN: f32 = 1.15;
 const JOIN_PULSE_DURATION: f32 = 0.175;
 
-pub fn exit_anim_duration() -> f32 {
+pub const fn exit_anim_duration() -> f32 {
     EXIT_ANIM_DURATION
 }
 
@@ -203,7 +203,7 @@ fn build_choices() -> Vec<Choice> {
             if let Some(raw) = ini.get("PlayerOptions", "ScrollSpeed") {
                 let trimmed = raw.trim();
                 speed_mod = if let Ok(setting) = ScrollSpeedSetting::from_str(trimmed) {
-                    format!("{}", setting)
+                    format!("{setting}")
                 } else {
                     trimmed.to_string()
                 };
@@ -258,14 +258,13 @@ pub fn init() -> State {
     let active_color_index = crate::config::get().simply_love_color;
 
     let mut selected_index = 0usize;
-    if let ActiveProfile::Local { id } = active {
-        if let Some(i) = choices.iter().position(|c| match &c.kind {
+    if let ActiveProfile::Local { id } = active
+        && let Some(i) = choices.iter().position(|c| match &c.kind {
             ActiveProfile::Local { id: cid } => cid == &id,
             ActiveProfile::Guest => false,
         }) {
             selected_index = i;
         }
-    }
 
     let mut state = State {
         active_color_index,
@@ -309,7 +308,7 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
 }
 
 #[inline(always)]
-pub fn both_players_joined(state: &State) -> bool {
+pub const fn both_players_joined(state: &State) -> bool {
     state.p1_joined && state.p2_joined
 }
 
@@ -349,7 +348,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 }
 
 #[inline(always)]
-fn both_ready(state: &State) -> bool {
+const fn both_ready(state: &State) -> bool {
     (state.p1_ready || !state.p1_joined) && (state.p2_ready || !state.p2_joined)
 }
 
@@ -359,14 +358,12 @@ fn active_choice(state: &State) -> ActiveProfile {
         state
             .choices
             .get(state.p1_selected_index)
-            .map(|c| c.kind.clone())
-            .unwrap_or(ActiveProfile::Guest)
+            .map_or(ActiveProfile::Guest, |c| c.kind.clone())
     } else {
         state
             .choices
             .get(state.p2_selected_index)
-            .map(|c| c.kind.clone())
-            .unwrap_or(ActiveProfile::Guest)
+            .map_or(ActiveProfile::Guest, |c| c.kind.clone())
     }
 }
 
@@ -615,7 +612,7 @@ fn exit_zoom(exit_t: f32) -> f32 {
 
 #[inline(always)]
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    a + (b - a) * t
+    (b - a).mul_add(t, a)
 }
 
 #[inline(always)]
@@ -640,7 +637,7 @@ fn shake_x(shake_t: f32) -> f32 {
         let p = crate::ui::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
         lerp(5.0, -5.0, p)
     } else {
-        let t = (shake_t - SHAKE_STEP_DUR * 2.0).clamp(0.0, SHAKE_STEP_DUR);
+        let t = SHAKE_STEP_DUR.mul_add(-2.0, shake_t).clamp(0.0, SHAKE_STEP_DUR);
         let p = crate::ui::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
         lerp(-5.0, 0.0, p)
     }
@@ -648,7 +645,7 @@ fn shake_x(shake_t: f32) -> f32 {
 
 #[inline(always)]
 fn scale_about(v: f32, pivot: f32, zoom: f32) -> f32 {
-    pivot + (v - pivot) * zoom
+    (v - pivot).mul_add(zoom, pivot)
 }
 
 fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
@@ -680,16 +677,14 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
             scale[0] *= zoom;
             scale[1] *= zoom;
 
-            if !*max_w_pre_zoom {
-                if let Some(w) = max_width {
+            if !*max_w_pre_zoom
+                && let Some(w) = max_width {
                     *max_width = Some(*w * zoom);
                 }
-            }
-            if !*max_h_pre_zoom {
-                if let Some(h) = max_height {
+            if !*max_h_pre_zoom
+                && let Some(h) = max_height {
                     *max_height = Some(*h * zoom);
                 }
-            }
         }
         Actor::Frame {
             offset,
@@ -767,8 +762,8 @@ fn push_join_prompt(
     // ITGmania diffuse_shift: period=1, color1=white, color2=gray.
     // f = sin((t + 0.25) * 2π) / 2 + 0.5
     let t = time.rem_euclid(1.0);
-    let f = ((t + 0.25) * std::f32::consts::PI * 2.0).sin() * 0.5 + 0.5;
-    let shade = 0.5 + 0.5 * f;
+    let f = ((t + 0.25) * std::f32::consts::PI * 2.0).sin().mul_add(0.5, 0.5);
+    let shade = 0.5f32.mul_add(f, 0.5);
 
     out.push(act!(quad:
         align(0.5, 0.5):
@@ -858,8 +853,8 @@ fn push_scroller_frame(
 
     // Info pane background (semi-transparent black overlay).
     let info_x0 = frame_cx + INFO_X0_OFF;
-    let info_text_x = info_x0 + INFO_PAD * 1.25;
-    let info_max_w = INFO_W - INFO_PAD * 2.5;
+    let info_text_x = INFO_PAD.mul_add(1.25, info_x0);
+    let info_max_w = INFO_PAD.mul_add(-2.5, INFO_W);
 
     out.push(act!(quad:
         align(0.0, 0.0):
@@ -891,13 +886,13 @@ fn push_scroller_frame(
             continue;
         }
         let choice = &choices[idx_i as usize];
-        let y = frame_cy + d as f32 * ROW_H;
+        let y = (d as f32).mul_add(ROW_H, frame_cy);
 
         out.push(act!(text:
             align(0.5, 0.5):
             xy(scroller_cx, y):
             font("miso"):
-            maxwidth(SCROLLER_W - SCROLLER_TEXT_PAD_X * 2.0):
+            maxwidth(SCROLLER_TEXT_PAD_X.mul_add(-2.0, SCROLLER_W)):
             zoom(1.0):
             settext(choice.display_name.clone()):
             diffuse(1.0, 1.0, 1.0, inner_alpha):
@@ -911,7 +906,7 @@ fn push_scroller_frame(
     let selected_is_local = selected.is_some_and(|c| matches!(&c.kind, ActiveProfile::Local { .. }));
 
     // Avatar slot (SL-style): show profile.png if present, else heart + text.
-    let avatar_dim = INFO_W - INFO_PAD * 2.25;
+    let avatar_dim = INFO_PAD.mul_add(-2.25, INFO_W);
     let avatar_x = info_x0 + AVATAR_X_OFF;
     let avatar_y = frame_cy + AVATAR_Y_OFF;
 
@@ -974,7 +969,7 @@ fn push_scroller_frame(
     // Thin white line separating stats from mods (SL-style).
     out.push(act!(quad:
         align(0.0, 0.0):
-        xy(info_x0 + INFO_PAD * 1.25, frame_cy + INFO_LINE_Y_OFF):
+        xy(INFO_PAD.mul_add(1.25, info_x0), frame_cy + INFO_LINE_Y_OFF):
         zoomto(info_max_w, 1.0):
         diffuse(1.0, 1.0, 1.0, 0.5 * inner_alpha):
         z(103)
@@ -1005,7 +1000,7 @@ fn push_scroller_frame(
                     PREVIEW_SCALE
                 };
 
-                let ns_x = info_x0 + INFO_W * 0.13;
+                let ns_x = INFO_W.mul_add(0.13, info_x0);
                 let ns_y = preview_y - 10.0;
 
                 out.push(act!(sprite(note_slot.texture_key().to_string()):
@@ -1021,7 +1016,7 @@ fn push_scroller_frame(
         }
 
         let judgment_texture = selected
-            .map(|c| match c.judgment {
+            .and_then(|c| match c.judgment {
                 profile::JudgmentGraphic::Love => Some("judgements/Love 2x7 (doubleres).png"),
                 profile::JudgmentGraphic::LoveChroma => {
                     Some("judgements/Love Chroma 2x7 (doubleres).png")
@@ -1065,11 +1060,10 @@ fn push_scroller_frame(
                     Some("judgements/Wendy Chroma 2x7 (doubleres).png")
                 }
                 profile::JudgmentGraphic::None => None,
-            })
-            .unwrap_or(None);
+            });
 
         if let Some(texture) = judgment_texture {
-            let jd_x = info_x0 + INFO_W * 0.61;
+            let jd_x = INFO_W.mul_add(0.61, info_x0);
             let jd_y = preview_y - 10.0;
             out.push(act!(sprite(texture):
                 align(0.5, 0.5):
@@ -1154,7 +1148,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let cx = screen_center_x();
     let cy = screen_center_y();
 
-    let frame_y0 = cy - frame_h * 0.5;
+    let frame_y0 = frame_h.mul_add(-0.5, cy);
 
     // IMPORTANT: Apply shake as a post-transform, otherwise the changing X affects
     // act! tween site_ids (salt includes init.x) and restarts tweens every frame.
@@ -1215,9 +1209,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         if show_selected_name {
             let name = state
                 .choices
-                .get(state.p1_selected_index)
-                .map(|c| c.display_name.clone())
-                .unwrap_or_else(|| "[ GUEST ]".to_string());
+                .get(state.p1_selected_index).map_or_else(|| "[ GUEST ]".to_string(), |c| c.display_name.clone());
             let a = act!(text:
                 align(0.5, 0.5):
                 xy(p1_cx, cy + SELECTED_NAME_Y_OFF):
@@ -1296,9 +1288,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         if show_selected_name {
             let name = state
                 .choices
-                .get(state.p2_selected_index)
-                .map(|c| c.display_name.clone())
-                .unwrap_or_else(|| "[ GUEST ]".to_string());
+                .get(state.p2_selected_index).map_or_else(|| "[ GUEST ]".to_string(), |c| c.display_name.clone());
             let a = act!(text:
                 align(0.5, 0.5):
                 xy(p2_cx, cy + SELECTED_NAME_Y_OFF):

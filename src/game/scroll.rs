@@ -10,32 +10,32 @@ pub enum ScrollSpeedSetting {
 
 impl Default for ScrollSpeedSetting {
     fn default() -> Self {
-        ScrollSpeedSetting::CMod(600.0)
+        Self::CMod(600.0)
     }
 }
 
 impl fmt::Display for ScrollSpeedSetting {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ScrollSpeedSetting::CMod(bpm) => {
+            Self::CMod(bpm) => {
                 if (*bpm - bpm.round()).abs() < f32::EPSILON {
                     write!(f, "C{}", bpm.round() as i32)
                 } else {
-                    write!(f, "C{}", bpm)
+                    write!(f, "C{bpm}")
                 }
             }
-            ScrollSpeedSetting::XMod(multiplier) => {
+            Self::XMod(multiplier) => {
                 if (*multiplier - multiplier.round()).abs() < f32::EPSILON {
                     write!(f, "X{}", multiplier.round() as i32)
                 } else {
-                    write!(f, "X{:.2}", multiplier)
+                    write!(f, "X{multiplier:.2}")
                 }
             }
-            ScrollSpeedSetting::MMod(bpm) => {
+            Self::MMod(bpm) => {
                 if (*bpm - bpm.round()).abs() < f32::EPSILON {
                     write!(f, "M{}", bpm.round() as i32)
                 } else {
-                    write!(f, "M{}", bpm)
+                    write!(f, "M{bpm}")
                 }
             }
         }
@@ -65,30 +65,27 @@ impl FromStr for ScrollSpeedSetting {
             ("M", rest)
         } else {
             return Err(format!(
-                "ScrollSpeed '{}' must start with 'C', 'X', or 'M'",
-                trimmed
+                "ScrollSpeed '{trimmed}' must start with 'C', 'X', or 'M'"
             ));
         };
 
         let value: f32 = value_str
             .trim()
             .parse()
-            .map_err(|_| format!("ScrollSpeed '{}' is not a valid number", trimmed))?;
+            .map_err(|_| format!("ScrollSpeed '{trimmed}' is not a valid number"))?;
 
         if value <= 0.0 {
             return Err(format!(
-                "ScrollSpeed '{}' must be greater than zero",
-                trimmed
+                "ScrollSpeed '{trimmed}' must be greater than zero"
             ));
         }
 
         match variant {
-            "C" => Ok(ScrollSpeedSetting::CMod(value)),
-            "X" => Ok(ScrollSpeedSetting::XMod(value)),
-            "M" => Ok(ScrollSpeedSetting::MMod(value)),
+            "C" => Ok(Self::CMod(value)),
+            "X" => Ok(Self::XMod(value)),
+            "M" => Ok(Self::MMod(value)),
             _ => Err(format!(
-                "ScrollSpeed '{}' has an unsupported modifier",
-                trimmed
+                "ScrollSpeed '{trimmed}' has an unsupported modifier"
             )),
         }
     }
@@ -106,9 +103,9 @@ impl ScrollSpeedSetting {
         // Effective BPM is expressed per chart-second. Music rate scales beats per real second,
         // not this chart-time value. Keep X/M independent of rate here.
         match self {
-            ScrollSpeedSetting::CMod(bpm) => bpm,
-            ScrollSpeedSetting::XMod(multiplier) => current_chart_bpm * multiplier,
-            ScrollSpeedSetting::MMod(target_bpm) => {
+            Self::CMod(bpm) => bpm,
+            Self::XMod(multiplier) => current_chart_bpm * multiplier,
+            Self::MMod(target_bpm) => {
                 if reference_bpm > 0.0 {
                     current_chart_bpm * (target_bpm / reference_bpm)
                 } else {
@@ -124,8 +121,8 @@ impl ScrollSpeedSetting {
         // - XMod: multiplier only (rate is already implicit via d(beat)/dt)
         // - MMod: (target/reference) divided by rate to hold constant under rate
         match self {
-            ScrollSpeedSetting::XMod(multiplier) => multiplier,
-            ScrollSpeedSetting::MMod(target_bpm) => {
+            Self::XMod(multiplier) => multiplier,
+            Self::MMod(target_bpm) => {
                 let r = if music_rate.is_finite() && music_rate > 0.0 {
                     music_rate
                 } else {

@@ -1,5 +1,5 @@
 use crate::act;
-use crate::core::space::*;
+use crate::core::space::screen_center_x;
 use crate::ui::actors::Actor;
 
 // --- CONSTANTS TO MATCH THE LUA SCRIPT'S STATIC STATE ---
@@ -41,7 +41,7 @@ pub fn build_vertical_menu(p: MenuParams) -> Vec<Actor> {
         } else {
             p.normal_color
         };
-        let center_y = p.start_center_y + (i as f32) * p.row_spacing;
+        let center_y = (i as f32).mul_add(p.row_spacing, p.start_center_y);
 
         // Create a single, static text actor for each menu item.
         // The alpha is now taken directly from the color, ensuring it's visible.

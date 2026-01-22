@@ -1,6 +1,6 @@
 use crate::act;
 use crate::core::space::widescale;
-use crate::core::space::*;
+use crate::core::space::{screen_width, screen_height, screen_center_y, screen_center_x};
 use crate::screens::Screen;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -84,7 +84,7 @@ impl EvalPane {
     }
 
     #[inline(always)]
-    fn toggle(self) -> Self {
+    const fn toggle(self) -> Self {
         match self {
             Self::Standard => Self::FaPlus,
             Self::FaPlus => Self::Standard,
@@ -203,7 +203,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
 // This screen doesn't have any dynamic state updates yet, but we keep the function for consistency.
-pub fn update(_state: &mut State, _dt: f32) {
+pub const fn update(_state: &mut State, _dt: f32) {
     //
 }
 
@@ -240,9 +240,9 @@ fn format_session_time(seconds_total: f32) -> String {
     let seconds = seconds_total % 60;
 
     if hours > 0 {
-        format!("{}:{:02}:{:02}", hours, minutes, seconds)
+        format!("{hours}:{minutes:02}:{seconds:02}")
     } else {
-        format!("{:02}:{:02}", minutes, seconds)
+        format!("{minutes:02}:{seconds:02}")
     }
 }
 
@@ -350,7 +350,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
     let max_judgment_count = if !show_fa_plus_pane {
         JUDGMENT_ORDER
             .iter()
-            .map(|grade| score_info.judgment_counts.get(grade).cloned().unwrap_or(0))
+            .map(|grade| score_info.judgment_counts.get(grade).copied().unwrap_or(0))
             .max()
             .unwrap_or(0)
     } else {
@@ -365,7 +365,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
         let length = (max_judgment_count as f32).log10().floor() as i32 + 1;
         (
             -11.0 * (length - 4) as f32,
-            0.833 - 0.1 * (length - 4) as f32,
+            0.1f32.mul_add(-((length - 4) as f32), 0.833),
         )
     } else {
         (0.0, 0.833)
@@ -392,11 +392,11 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
         if !show_fa_plus_pane {
             for (i, grade) in JUDGMENT_ORDER.iter().enumerate() {
                 let info = JUDGMENT_INFO.get(grade).unwrap();
-                let count = score_info.judgment_counts.get(grade).cloned().unwrap_or(0);
+                let count = score_info.judgment_counts.get(grade).copied().unwrap_or(0);
                 
                 // Label
                 let label_local_x = 28.0 + label_shift_x;
-                let label_local_y = (i as f32 * 28.0) - 16.0;
+                let label_local_y = (i as f32).mul_add(28.0, -16.0);
                 actors.push(act!(text: font("miso"): settext(info.label):
                     align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
                     maxwidth(76.0): zoom(label_zoom): horizalign(right):
@@ -406,11 +406,11 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 // Number (digit by digit for dimming)
                 let bright_color = info.color;
                 let dim_color = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[i]);
-                let number_str = format!("{:0width$}", count, width = digits_to_fmt);
+                let number_str = format!("{count:0digits_to_fmt$}");
                 let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
                 
                 let number_local_x = 64.0;
-                let number_local_y = (i as f32 * 35.0) - 20.0;
+                let number_local_y = (i as f32).mul_add(35.0, -20.0);
                 let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
                 let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
                 
@@ -418,7 +418,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                     let is_dim = if count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
                     let color = if is_dim { dim_color } else { bright_color };
                     let index_from_right = digits_to_fmt - 1 - char_idx;
-                    let cell_right_x = number_base_x - (index_from_right as f32 * digit_width);
+                    let cell_right_x = (index_from_right as f32).mul_add(-digit_width, number_base_x);
                     
                     actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
                         align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
@@ -429,29 +429,17 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
         } else {
             let wc = score_info.window_counts;
             let fantastic_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Fantastic)
-                .map(|info| info.color)
-                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[0]));
+                .get(&JudgeGrade::Fantastic).map_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[0]), |info| info.color);
             let excellent_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Excellent)
-                .map(|info| info.color)
-                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[1]));
+                .get(&JudgeGrade::Excellent).map_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[1]), |info| info.color);
             let great_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Great)
-                .map(|info| info.color)
-                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[2]));
+                .get(&JudgeGrade::Great).map_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[2]), |info| info.color);
             let decent_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Decent)
-                .map(|info| info.color)
-                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[3]));
+                .get(&JudgeGrade::Decent).map_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[3]), |info| info.color);
             let wayoff_color = JUDGMENT_INFO
-                .get(&JudgeGrade::WayOff)
-                .map(|info| info.color)
-                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[4]));
+                .get(&JudgeGrade::WayOff).map_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[4]), |info| info.color);
             let miss_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Miss)
-                .map(|info| info.color)
-                .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[5]));
+                .get(&JudgeGrade::Miss).map_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[5]), |info| info.color);
 
             // Dim colors: reuse the standard evaluation dim palette for blue Fantastic
             // through Miss, and use a dedicated dim color for the white FA+ row.
@@ -480,7 +468,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 // Original Lua uses 1-based indexing: y = i*26 - 46.
                 // Our rows are 0-based, so use (i+1) here.
                 let label_local_x = 28.0 + label_shift_x;
-                let label_local_y = ((i as f32 + 1.0) * 26.0) - 46.0;
+                let label_local_y = (i as f32 + 1.0).mul_add(26.0, -46.0);
                 actors.push(act!(text: font("miso"): settext(label.to_string()):
                     align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
                     maxwidth(76.0): zoom(label_zoom): horizalign(right):
@@ -488,12 +476,12 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 ));
 
                 // Number
-                let number_str = format!("{:0width$}", count, width = digits_to_fmt);
+                let number_str = format!("{count:0digits_to_fmt$}");
                 let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
                 
                 // Numbers: match Simply Love Pane2 numbers using 32px spacing.
                 let number_local_x = 64.0;
-                let number_local_y = (i as f32 * 32.0) - 24.0;
+                let number_local_y = (i as f32).mul_add(32.0, -24.0);
                 let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
                 let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
                 
@@ -501,7 +489,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                     let is_dim = if *count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
                     let color = if is_dim { *dim_color } else { *bright_color };
                     let index_from_right = digits_to_fmt - 1 - char_idx;
-                    let cell_right_x = number_base_x - (index_from_right as f32 * digit_width);
+                    let cell_right_x = (index_from_right as f32).mul_add(-digit_width, number_base_x);
                     
                     actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
                         align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
@@ -523,9 +511,9 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
         let gray_color_achieved = color::rgba_hex("#444444");
         let white_color = [1.0, 1.0, 1.0, 1.0];
 
-        for (i, (label, achieved, possible)) in radar_categories.iter().cloned().enumerate() {
+        for (i, (label, achieved, possible)) in radar_categories.iter().copied().enumerate() {
             let label_local_x = -160.0;
-            let label_local_y = (i as f32 * 28.0) + 41.0;
+            let label_local_y = (i as f32).mul_add(28.0, 41.0);
             actors.push(act!(text: font("miso"): settext(label.to_string()):
                 align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y): horizalign(right): zoom(0.833): z(101)
             ));
@@ -533,14 +521,14 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
             let possible_clamped = possible.min(999);
             let achieved_clamped = achieved.min(999);
             
-            let number_local_y = (i as f32 * 35.0) + 53.0;
+            let number_local_y = (i as f32).mul_add(35.0, 53.0);
             let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
             
             // --- Group 1: "Achieved" Numbers (Anchored at -180, separated from Slash) ---
             // Matches Lua: x = { P1=-180 }, aligned right.
-            let achieved_anchor_x = numbers_frame_origin_x + (-180.0 * numbers_frame_zoom);
+            let achieved_anchor_x = (-180.0f32).mul_add(numbers_frame_zoom, numbers_frame_origin_x);
             
-            let achieved_str = format!("{:03}", achieved_clamped);
+            let achieved_str = format!("{achieved_clamped:03}");
             let first_nonzero_achieved = achieved_str.find(|c: char| c != '0').unwrap_or(achieved_str.len());
 
             for (char_idx_from_right, ch) in achieved_str.chars().rev().enumerate() {
@@ -551,7 +539,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                     idx_from_left < first_nonzero_achieved 
                 };
                 let color = if is_dim { gray_color_achieved } else { white_color };
-                let x_pos = achieved_anchor_x - (char_idx_from_right as f32 * digit_width);
+                let x_pos = (char_idx_from_right as f32).mul_add(-digit_width, achieved_anchor_x);
 
                 actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
                     align(1.0, 0.5): xy(x_pos, number_final_y): zoom(final_numbers_zoom):
@@ -561,11 +549,11 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
 
             // --- Group 2: "Slash + Possible" Numbers (Anchored at -114) ---
             // Matches Lua: x = { P1=-114 }, aligned right.
-            let possible_anchor_x = numbers_frame_origin_x + (-114.0 * numbers_frame_zoom);
+            let possible_anchor_x = (-114.0f32).mul_add(numbers_frame_zoom, numbers_frame_origin_x);
             let mut cursor_x = possible_anchor_x; 
 
             // 1. Draw "possible" number (right-most part)
-            let possible_str = format!("{:03}", possible_clamped);
+            let possible_str = format!("{possible_clamped:03}");
             let first_nonzero_possible = possible_str.find(|c: char| c != '0').unwrap_or(possible_str.len());
 
             for (char_idx_from_right, ch) in possible_str.chars().rev().enumerate() {
@@ -649,7 +637,7 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
         let color = color::rgba_hex(color::JUDGMENT_HEX[*grade_idx]);
         let window_ms = if i > 0 { timing_windows[i - 1] } else { 0.0 };
         let next_window_ms = timing_windows[i];
-        let mid_point_ms = (window_ms + next_window_ms) / 2.0_f32;
+        let mid_point_ms = f32::midpoint(window_ms, next_window_ms);
 
         // Scale position from ms to pane coordinates
         let x_offset = (mid_point_ms / worst_window) * (pane_width / 2.0_f32);
@@ -761,27 +749,19 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
 
     let max_error_text = state
         .score_info
-        .as_ref()
-        .map(|s| format!("{:.1}ms", s.timing.max_abs_ms))
-        .unwrap_or_else(|| "0.0ms".to_string());
+        .as_ref().map_or_else(|| "0.0ms".to_string(), |s| format!("{:.1}ms", s.timing.max_abs_ms));
 
     let stats = state.score_info.as_ref();
-    let mean_abs_text = stats
-        .map(|s| format!("{:.1}ms", s.timing.mean_abs_ms))
-        .unwrap_or_else(|| "0.0ms".to_string());
-    let mean_text = stats
-        .map(|s| format!("{:.1}ms", s.timing.mean_ms))
-        .unwrap_or_else(|| "0.0ms".to_string());
-    let stddev3_text = stats
-        .map(|s| format!("{:.1}ms", s.timing.stddev_ms * 3.0))
-        .unwrap_or_else(|| "0.0ms".to_string());
+    let mean_abs_text = stats.map_or_else(|| "0.0ms".to_string(), |s| format!("{:.1}ms", s.timing.mean_abs_ms));
+    let mean_text = stats.map_or_else(|| "0.0ms".to_string(), |s| format!("{:.1}ms", s.timing.mean_ms));
+    let stddev3_text = stats.map_or_else(|| "0.0ms".to_string(), |s| format!("{:.1}ms", s.timing.stddev_ms * 3.0));
 
     let labels_and_values = [
         ("mean abs error", 40.0, mean_abs_text),
         ("mean", 40.0 + (pane_width - 80.0_f32) / 3.0_f32, mean_text),
         (
             "std dev * 3",
-            40.0 + (pane_width - 80.0_f32) / 3.0_f32 * 2.0_f32,
+            ((pane_width - 80.0_f32) / 3.0_f32).mul_add(2.0_f32, 40.0),
             stddev3_text,
         ),
         ("max error", pane_width - 40.0, max_error_text),
@@ -914,7 +894,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // --- Lower Stats Pane Background ---
     {
-        let pane_width = (300.0 * 2.0) + 10.0;
+        let pane_width = 300.0f64.mul_add(2.0, 10.0);
         let pane_x_left = screen_center_x() - 305.0;
         let pane_y_top = screen_center_y() - 56.0;
         let pane_y_bottom = (screen_center_y() + 34.0) + 180.0;
@@ -942,7 +922,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_else(|| {
                 let banner_num = state.active_color_index.rem_euclid(12) + 1;
-                format!("banner{}.png", banner_num)
+                format!("banner{banner_num}.png")
             });
 
         let full_title = score_info
@@ -965,13 +945,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         // --- SongFeatures Group ---
         let bpm_text = {
-            let rate_f64 = score_info.music_rate as f64;
+            let rate_f64 = f64::from(score_info.music_rate);
             let min = (score_info.song.min_bpm * rate_f64).round() as i32;
             let max = (score_info.song.max_bpm * rate_f64).round() as i32;
             let base = if (score_info.song.min_bpm - score_info.song.max_bpm).abs() < 1e-6 {
-                format!("{} bpm", min)
+                format!("{min} bpm")
             } else {
-                format!("{} - {} bpm", min, max)
+                format!("{min} - {max} bpm")
             };
             if (score_info.music_rate - 1.0).abs() > 0.001 {
                 format!(
@@ -1002,7 +982,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let adjusted = base_seconds / rate;
             let seconds = adjusted.round() as i32;
             if seconds < 0 {
-                "".to_string()
+                String::new()
             } else if seconds >= 3600 {
                 format!(
                     "{}:{:02}:{:02}",
@@ -1052,7 +1032,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         let difficulty_color =
             color::difficulty_rgba(&score_info.chart.difficulty, state.active_color_index);
-        let difficulty_text = format!("Single / {}", difficulty_display_name);
+        let difficulty_text = format!("Single / {difficulty_display_name}");
         actors.push(act!(text: font("miso"): settext(difficulty_text): align(0.0, 0.5): xy(p1_frame_x - 115.0, cy - 65.0): zoom(0.7): z(101): diffuse(1.0, 1.0, 1.0, 1.0) ));
         actors.push(act!(quad: align(0.5, 0.5): xy(p1_frame_x - 134.5, cy - 71.0): zoomto(30.0, 30.0): z(101): diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0) ));
         actors.push(act!(text: font("wendy"): settext(score_info.chart.meter.to_string()): align(0.5, 0.5): xy(p1_frame_x - 134.5, cy - 71.0): zoom(0.4): z(102): diffuse(0.0, 0.0, 0.0, 1.0) ));
@@ -1133,7 +1113,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Normal ITG score (top line, white)
             children.push(act!(text:
                 font("wendy_white"):
-                settext(percent_text.clone()):
+                settext(percent_text):
                 align(1.0, 0.5):
                 // Keep ITG percent in the same position regardless of FA+ pane.
                 xy(1.5, 0.0):
@@ -1387,15 +1367,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             } else {
                                 1.0
                             };
-                            let total_display = if rate != 0.0 {
-                                base_total / rate
-                            } else {
+                            let total_display = if rate == 0.0 {
                                 base_total
-                            };
-                            let death_display = if rate != 0.0 {
-                                fail_time.max(0.0) / rate
                             } else {
+                                base_total / rate
+                            };
+                            let death_display = if rate == 0.0 {
                                 fail_time.max(0.0)
+                            } else {
+                                fail_time.max(0.0) / rate
                             };
                             let remaining = (total_display - death_display).max(0.0);
                             let remaining_str = format!("-{}", format_session_time(remaining));

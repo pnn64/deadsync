@@ -1,6 +1,6 @@
 use crate::act;
 use crate::core::gfx::BackendType;
-use crate::core::space::*;
+use crate::core::space::screen_width;
 use crate::ui::actors::Actor;
 
 /// Three-line stats: FPS, VPF, Backend — top-right, miso, white.

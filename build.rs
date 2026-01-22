@@ -91,7 +91,7 @@ fn compile_vulkan_shaders(compiler: &mut Compiler, out_dir: &Path) -> Result<(),
             Err(e) => {
                 // Pretty error with annotated source
                 let mut msg = String::new();
-                writeln!(&mut msg, "Shader compile failed: {}", src_name)?;
+                writeln!(&mut msg, "Shader compile failed: {src_name}")?;
                 for (i, line) in source.lines().enumerate() {
                     writeln!(&mut msg, "{:4} | {}", i + 1, line)?;
                 }
@@ -119,9 +119,7 @@ fn compile_vulkan_shaders(compiler: &mut Compiler, out_dir: &Path) -> Result<(),
 fn compute_target_dir() -> Result<PathBuf, Box<dyn Error>> {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
     let profile = std::env::var("PROFILE")?;
-    let base = std::env::var("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| manifest_dir.join("target"));
+    let base = std::env::var("CARGO_TARGET_DIR").map_or_else(|_| manifest_dir.join("target"), PathBuf::from);
     Ok(base.join(profile))
 }
 

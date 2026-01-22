@@ -1,6 +1,6 @@
 use crate::act;
 use crate::core::input::{InputEvent, PadEvent, VirtualAction, get_keymap};
-use crate::core::space::*;
+use crate::core::space::{screen_width, screen_height, screen_center_x, screen_center_y};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
@@ -85,7 +85,7 @@ pub fn init() -> State {
 
 /* ------------------------------- update ------------------------------- */
 
-pub fn update(_state: &mut State, _dt: f32) {
+pub const fn update(_state: &mut State, _dt: f32) {
     // No time-based animation yet; highlights are driven directly by input edges.
 }
 
@@ -116,8 +116,8 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 /* ------------------------------- input -------------------------------- */
 
-fn player_from_action(act: VirtualAction) -> Option<PlayerSlot> {
-    use VirtualAction::*;
+const fn player_from_action(act: VirtualAction) -> Option<PlayerSlot> {
+    use VirtualAction::{p1_up, p1_down, p1_left, p1_right, p1_menu_up, p1_menu_down, p1_menu_left, p1_menu_right, p1_start, p1_select, p1_back, p1_operator, p1_restart, p2_up, p2_down, p2_left, p2_right, p2_menu_up, p2_menu_down, p2_menu_left, p2_menu_right, p2_start, p2_select, p2_back, p2_operator, p2_restart};
     match act {
         p1_up | p1_down | p1_left | p1_right | p1_menu_up | p1_menu_down | p1_menu_left
         | p1_menu_right | p1_start | p1_select | p1_back | p1_operator | p1_restart => {
@@ -130,8 +130,8 @@ fn player_from_action(act: VirtualAction) -> Option<PlayerSlot> {
     }
 }
 
-fn logical_button_from_action(act: VirtualAction) -> Option<LogicalButton> {
-    use VirtualAction::*;
+const fn logical_button_from_action(act: VirtualAction) -> Option<LogicalButton> {
+    use VirtualAction::{p1_up, p2_up, p1_down, p2_down, p1_left, p2_left, p1_right, p2_right, p1_menu_left, p2_menu_left, p1_menu_right, p2_menu_right, p1_start, p2_start, p1_select, p2_select};
     match act {
         p1_up | p2_up => Some(LogicalButton::Up),
         p1_down | p2_down => Some(LogicalButton::Down),
@@ -160,14 +160,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
 
     // Update pad highlight state from virtual actions (for mapped inputs).
-    if let Some(player) = player_from_action(ev.action) {
-        if let Some(btn) = logical_button_from_action(ev.action) {
+    if let Some(player) = player_from_action(ev.action)
+        && let Some(btn) = logical_button_from_action(ev.action) {
             state
                 .pad_visual
                 .buttons_held
                 .insert((player, btn), ev.pressed);
         }
-    }
 
     ScreenAction::None
 }
@@ -180,7 +179,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     let (label, pressed_opt) = match pad_event {
         PE::Dir { id, dir, pressed, .. } => {
             let dev = usize::from(*id);
-            (format!("Gamepad {}: Dir::{:?}", dev, dir), Some(*pressed))
+            (format!("Gamepad {dev}: Dir::{dir:?}"), Some(*pressed))
         }
         PE::RawButton {
             id,
@@ -191,7 +190,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             let dev = usize::from(*id);
             let code_u32 = code.into_u32();
             (
-                format!("Gamepad {}: RawButton [0x{:08X}]", dev, code_u32),
+                format!("Gamepad {dev}: RawButton [0x{code_u32:08X}]"),
                 Some(*pressed),
             )
         }
@@ -205,7 +204,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             let code_u32 = code.into_u32();
             // Axis inputs are continuous; treat them as always \"pressed\" for display.
             (
-                format!("Gamepad {}: RawAxis [0x{:08X}] ({:.3})", dev, code_u32, value),
+                format!("Gamepad {dev}: RawAxis [0x{code_u32:08X}] ({value:.3})"),
                 None,
             )
         }
@@ -428,7 +427,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
                 font("miso"):
                 settext(line.clone()):
                 align(0.5, 0.0):
-                xy(cx, start_y + (i as f32 * line_h)):
+                xy(cx, (i as f32).mul_add(line_h, start_y)):
                 zoom(0.8):
                 horizalign(center)
             ));

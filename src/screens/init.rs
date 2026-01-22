@@ -1,6 +1,6 @@
 use crate::act;
 use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::*;
+use crate::core::space::{screen_width, screen_center_y, screen_center_x};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
@@ -33,7 +33,7 @@ pub const BAR_SQUISH_DURATION: f32 = 0.35;
 fn arrows_finished_at() -> f32 {
     // PRE_ROLL + unsquish end + last arrow fade in/out + tiny pad
     let unsquish_end = SQUISH_START_DELAY + SQUISH_IN_DURATION;
-    let last_delay = ARROW_BASE_DELAY + ARROW_STEP_DELAY * (ARROW_COUNT as f32);
+    let last_delay = ARROW_STEP_DELAY.mul_add(ARROW_COUNT as f32, ARROW_BASE_DELAY);
     PRE_ROLL + unsquish_end + last_delay + ARROW_FADE_IN + ARROW_FADE_OUT + 0.05
 }
 
@@ -72,7 +72,7 @@ pub fn init() -> State {
 
 /* -------------------------- input -> nav ----------------------- */
 
-pub fn handle_input(_: &mut State, ev: &InputEvent) -> ScreenAction {
+pub const fn handle_input(_: &mut State, ev: &InputEvent) -> ScreenAction {
     if ev.pressed {
         match ev.action {
             VirtualAction::p1_start | VirtualAction::p1_back => {
@@ -206,7 +206,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
 
         // absolute start for arrow i (global time)
         let arrow_start_time =
-            PRE_ROLL + unsquish_end + ARROW_BASE_DELAY + ARROW_STEP_DELAY * (i as f32);
+            ARROW_STEP_DELAY.mul_add(i as f32, PRE_ROLL + unsquish_end + ARROW_BASE_DELAY);
         // convert to remaining time from *current* elapsed so late frames still work perfectly
         let delay_from_now = remaining(arrow_start_time, state.elapsed);
 

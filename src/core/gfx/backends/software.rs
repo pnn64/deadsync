@@ -38,7 +38,7 @@ pub fn init(window: Arc<Window>, _vsync_enabled: bool) -> Result<State, Box<dyn 
     let projection = ortho_for_window(window_size.width, window_size.height);
 
     let context = softbuffer::Context::new(window.clone())?;
-    let surface = softbuffer::Surface::new(&context, window.clone())?;
+    let surface = softbuffer::Surface::new(&context, window)?;
 
     Ok(State {
         _context: context,
@@ -49,7 +49,7 @@ pub fn init(window: Arc<Window>, _vsync_enabled: bool) -> Result<State, Box<dyn 
     })
 }
 
-pub fn set_thread_hint(state: &mut State, threads: Option<usize>) {
+pub const fn set_thread_hint(state: &mut State, threads: Option<usize>) {
     state.thread_hint = threads;
 }
 
@@ -60,9 +60,9 @@ pub fn create_texture(image: &RgbaImage, sampler: SamplerDesc) -> Result<Texture
     })
 }
 
-pub fn draw<'a>(
+pub fn draw(
     state: &mut State,
-    render_list: &RenderList<'a>,
+    render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
 ) -> Result<u32, Box<dyn Error>> {
     let PhysicalSize { width, height } = state.window_size;
@@ -91,7 +91,7 @@ pub fn draw<'a>(
     let vertex_counter = AtomicU32::new(0);
 
     let threads_auto = thread::available_parallelism()
-        .map(|n| n.get())
+        .map(std::num::NonZero::get)
         .unwrap_or(1)
         .max(1);
 
@@ -103,7 +103,7 @@ pub fn draw<'a>(
     let use_parallel = threads > 1 && h >= 64 && render_list.objects.len() > 1;
 
     if use_parallel {
-        let rows_per = (h + threads - 1) / threads;
+        let rows_per = h.div_ceil(threads);
 
         thread::scope(|scope| {
             let mut remainder: &mut [u32] = &mut buffer;
@@ -228,10 +228,10 @@ fn pack_rgba(c: [f32; 4]) -> u32 {
         }
     }
 
-    let r = (clamp01(c[0]) * 255.0 + 0.5) as u32;
-    let g = (clamp01(c[1]) * 255.0 + 0.5) as u32;
-    let b = (clamp01(c[2]) * 255.0 + 0.5) as u32;
-    let a = (clamp01(c[3]) * 255.0 + 0.5) as u32;
+    let r = clamp01(c[0]).mul_add(255.0, 0.5) as u32;
+    let g = clamp01(c[1]).mul_add(255.0, 0.5) as u32;
+    let b = clamp01(c[2]).mul_add(255.0, 0.5) as u32;
+    let a = clamp01(c[3]).mul_add(255.0, 0.5) as u32;
 
     (a << 24) | (r << 16) | (g << 8) | b
 }
@@ -290,8 +290,8 @@ fn rasterize_sprite(
         let sy = ((1.0 - ndc_y) * 0.5) * (height as f32);
 
         let (u0, v0) = UV_BASE[i];
-        let u = u0 * uv_scale[0] + uv_offset[0];
-        let vv = v0 * uv_scale[1] + uv_offset[1];
+        let u = u0.mul_add(uv_scale[0], uv_offset[0]);
+        let vv = v0.mul_add(uv_scale[1], uv_offset[1]);
 
         v[i] = ScreenVertex {
             x: sx,
@@ -430,8 +430,8 @@ fn rasterize_triangle(
                 continue;
             }
 
-            let u = v0.u * w0 + v1.u * w1 + v2.u * w2;
-            let v = v0.v * w0 + v1.v * w1 + v2.v * w2;
+            let u = v0.u.mul_add(w0, v1.u * w1) + v2.u * w2;
+            let v = v0.v.mul_add(w0, v1.v * w1) + v2.v * w2;
 
             let u_norm = wrap_uv(u, sampler.wrap);
             let v_norm = wrap_uv(v, sampler.wrap);
@@ -446,10 +446,10 @@ fn rasterize_triangle(
                     continue;
                 }
                 (
-                    tex_data[idx] as f32 / 255.0,
-                    tex_data[idx + 1] as f32 / 255.0,
-                    tex_data[idx + 2] as f32 / 255.0,
-                    tex_data[idx + 3] as f32 / 255.0,
+                    f32::from(tex_data[idx]) / 255.0,
+                    f32::from(tex_data[idx + 1]) / 255.0,
+                    f32::from(tex_data[idx + 2]) / 255.0,
+                    f32::from(tex_data[idx + 3]) / 255.0,
                 )
             } else {
                 let x = u_norm * tex_w as f32 - 0.5;
@@ -475,31 +475,31 @@ fn rasterize_triangle(
                 }
 
                 let c00 = [
-                    tex_data[idx00] as f32 / 255.0,
-                    tex_data[idx00 + 1] as f32 / 255.0,
-                    tex_data[idx00 + 2] as f32 / 255.0,
-                    tex_data[idx00 + 3] as f32 / 255.0,
+                    f32::from(tex_data[idx00]) / 255.0,
+                    f32::from(tex_data[idx00 + 1]) / 255.0,
+                    f32::from(tex_data[idx00 + 2]) / 255.0,
+                    f32::from(tex_data[idx00 + 3]) / 255.0,
                 ];
                 let c10 = [
-                    tex_data[idx10] as f32 / 255.0,
-                    tex_data[idx10 + 1] as f32 / 255.0,
-                    tex_data[idx10 + 2] as f32 / 255.0,
-                    tex_data[idx10 + 3] as f32 / 255.0,
+                    f32::from(tex_data[idx10]) / 255.0,
+                    f32::from(tex_data[idx10 + 1]) / 255.0,
+                    f32::from(tex_data[idx10 + 2]) / 255.0,
+                    f32::from(tex_data[idx10 + 3]) / 255.0,
                 ];
                 let c01 = [
-                    tex_data[idx01] as f32 / 255.0,
-                    tex_data[idx01 + 1] as f32 / 255.0,
-                    tex_data[idx01 + 2] as f32 / 255.0,
-                    tex_data[idx01 + 3] as f32 / 255.0,
+                    f32::from(tex_data[idx01]) / 255.0,
+                    f32::from(tex_data[idx01 + 1]) / 255.0,
+                    f32::from(tex_data[idx01 + 2]) / 255.0,
+                    f32::from(tex_data[idx01 + 3]) / 255.0,
                 ];
                 let c11 = [
-                    tex_data[idx11] as f32 / 255.0,
-                    tex_data[idx11 + 1] as f32 / 255.0,
-                    tex_data[idx11 + 2] as f32 / 255.0,
-                    tex_data[idx11 + 3] as f32 / 255.0,
+                    f32::from(tex_data[idx11]) / 255.0,
+                    f32::from(tex_data[idx11 + 1]) / 255.0,
+                    f32::from(tex_data[idx11 + 2]) / 255.0,
+                    f32::from(tex_data[idx11 + 3]) / 255.0,
                 ];
 
-                let lerp = |a: f32, b: f32, t: f32| a + (b - a) * t;
+                let lerp = |a: f32, b: f32, t: f32| (b - a).mul_add(t, a);
                 let r0 = lerp(c00[0], c10[0], fx);
                 let g0 = lerp(c00[1], c10[1], fx);
                 let b0 = lerp(c00[2], c10[2], fx);
@@ -540,17 +540,17 @@ fn rasterize_triangle(
 
             let (out_r, out_g, out_b, out_a) = match blend {
                 BlendMode::Add => {
-                    let r = (dr + sr * sa).min(1.0);
-                    let g = (dg + sg * sa).min(1.0);
-                    let b = (db + sb * sa).min(1.0);
+                    let r = sr.mul_add(sa, dr).min(1.0);
+                    let g = sg.mul_add(sa, dg).min(1.0);
+                    let b = sb.mul_add(sa, db).min(1.0);
                     let a = (da + sa).min(1.0);
                     (r, g, b, a)
                 }
                 _ => {
                     let inv = 1.0 - sa;
-                    let r = sr * sa + dr * inv;
-                    let g = sg * sa + dg * inv;
-                    let b = sb * sa + db * inv;
+                    let r = sr.mul_add(sa, dr * inv);
+                    let g = sg.mul_add(sa, dg * inv);
+                    let b = sb.mul_add(sa, db * inv);
                     let a = sa + da * inv;
                     (r, g, b, a)
                 }
@@ -563,5 +563,5 @@ fn rasterize_triangle(
 
 #[inline(always)]
 fn edge_function(x0: f32, y0: f32, x1: f32, y1: f32, px: f32, py: f32) -> f32 {
-    (px - x0) * (y1 - y0) - (py - y0) * (x1 - x0)
+    (px - x0).mul_add(y1 - y0, -((py - y0) * (x1 - x0)))
 }

@@ -148,7 +148,7 @@ pub struct AppState {
 impl ShellState {
     fn new(cfg: &config::Config, show_overlay: bool) -> Self {
         let metrics = space::metrics_for_window(cfg.display_width, cfg.display_height);
-        ShellState {
+        Self {
             frame_count: 0,
             last_title_update: Instant::now(),
             last_frame_time: Instant::now(),
@@ -185,8 +185,8 @@ impl ShellState {
 }
 
 impl SessionState {
-    fn new(preferred_difficulty_index: usize) -> Self {
-        SessionState {
+    const fn new(preferred_difficulty_index: usize) -> Self {
+        Self {
             preferred_difficulty_index,
             session_start_time: None,
         }
@@ -230,7 +230,7 @@ impl ScreensState {
         let mut evaluation_state = evaluation::init(None);
         evaluation_state.active_color_index = color_index;
 
-        ScreensState {
+        Self {
             current_screen: CurrentScreen::Init,
             menu_state,
             gameplay_state: None,
@@ -256,11 +256,7 @@ impl ScreensState {
     ) -> Option<ScreenAction> {
         match self.current_screen {
             CurrentScreen::Gameplay => {
-                if let Some(gs) = &mut self.gameplay_state {
-                    Some(gameplay::update(gs, delta_time))
-                } else {
-                    None
-                }
+                self.gameplay_state.as_mut().map(|gs| gameplay::update(gs, delta_time))
             }
             CurrentScreen::Init => Some(init::update(&mut self.init_state, delta_time)),
             CurrentScreen::Options => options::update(&mut self.options_state, delta_time),
@@ -335,7 +331,7 @@ impl AppState {
         let session = SessionState::new(preferred);
         let screens = ScreensState::new(color_index, preferred);
 
-        AppState {
+        Self {
             shell,
             screens,
             session,
@@ -354,7 +350,7 @@ pub struct App {
 
 impl App {
     #[inline(always)]
-    fn is_actor_fade_screen(screen: CurrentScreen) -> bool {
+    const fn is_actor_fade_screen(screen: CurrentScreen) -> bool {
         matches!(
             screen,
             CurrentScreen::Menu
@@ -586,7 +582,7 @@ impl App {
     }
 
     fn start_actor_fade(&mut self, from: CurrentScreen, target: CurrentScreen) {
-        info!("Starting actor-only fade out to screen: {:?}", target);
+        info!("Starting actor-only fade out to screen: {target:?}");
         let duration = if from == CurrentScreen::Menu
             && (target == CurrentScreen::SelectProfile
                 || target == CurrentScreen::SelectColor
@@ -608,7 +604,7 @@ impl App {
     }
 
     fn start_global_fade(&mut self, target: CurrentScreen) {
-        info!("Starting global fade out to screen: {:?}", target);
+        info!("Starting global fade out to screen: {target:?}");
         let (_, out_duration) =
             self.get_out_transition_for_screen(self.state.screens.current_screen);
         self.state.shell.transition = TransitionState::FadingOut {
@@ -697,7 +693,7 @@ impl App {
                 }
             }
         };
-        if let ScreenAction::None = action {
+        if matches!(action, ScreenAction::None) {
             return Ok(());
         }
         self.handle_action(action, event_loop)
@@ -733,12 +729,12 @@ impl App {
             } => self.play_music_command(path, looped, volume),
             Command::StopMusic => self.stop_music_command(),
             Command::SetEvaluationGraphData(graph_request) => {
-                self.apply_evaluation_graph(graph_request)
+                self.apply_evaluation_graph(graph_request);
             }
             Command::SetDynamicBackground(path_opt) => self.apply_dynamic_background(path_opt),
             Command::UpdateScrollSpeed(setting) => profile::update_scroll_speed(setting),
             Command::UpdateSessionMusicRate(rate) => {
-                crate::game::profile::set_session_music_rate(rate)
+                crate::game::profile::set_session_music_rate(rate);
             }
             Command::UpdatePreferredDifficulty(idx) => {
                 self.state.session.preferred_difficulty_index = idx;
@@ -767,7 +763,7 @@ impl App {
                 self.asset_manager.destroy_dynamic_assets(backend);
                 let color_index = self.state.screens.select_music_state.active_color_index;
                 let banner_num = color_index.rem_euclid(12) + 1;
-                let key = format!("banner{}.png", banner_num);
+                let key = format!("banner{banner_num}.png");
                 self.state.screens.select_music_state.current_banner_key = key;
             }
         }
@@ -801,11 +797,11 @@ impl App {
     }
 
     fn spawn_grade_fetch(&self, hash: String) {
-        info!("Fetching online grade for chart hash: {}", hash);
+        info!("Fetching online grade for chart hash: {hash}");
         let profile = profile::get();
         std::thread::spawn(move || {
             if let Err(e) = scores::fetch_and_store_grade(profile, hash) {
-                warn!("Failed to fetch online grade: {}", e);
+                warn!("Failed to fetch online grade: {e}");
             }
         });
     }
@@ -1066,7 +1062,7 @@ impl App {
                     fullscreen_type,
                     window_width,
                     window_height,
-                    monitor_handle.clone(),
+                    monitor_handle,
                     event_loop,
                 );
                 window_attributes = window_attributes.with_fullscreen(fullscreen);
@@ -1079,7 +1075,7 @@ impl App {
                 } else if let Some(pos) = display::default_window_position(
                     window_width,
                     window_height,
-                    monitor_handle.clone(),
+                    monitor_handle,
                 ) {
                     window_attributes = window_attributes.with_position(pos);
                 }
@@ -1139,11 +1135,10 @@ impl App {
             if matches!(self.state.shell.display_mode, DisplayMode::Fullscreen(_)) {
                 window.set_fullscreen(None);
             }
-            if matches!(self.state.shell.display_mode, DisplayMode::Windowed) {
-                if let Ok(pos) = window.outer_position() {
+            if matches!(self.state.shell.display_mode, DisplayMode::Windowed)
+                && let Ok(pos) = window.outer_position() {
                     old_window_pos = Some(pos);
                 }
-            }
             window.set_visible(false);
         }
 
@@ -1162,7 +1157,7 @@ impl App {
         self.state.shell.last_frame_time = Instant::now();
 
         match self.init_graphics(event_loop) {
-            Ok(_) => {
+            Ok(()) => {
                 config::update_video_renderer(target);
                 options::sync_video_renderer(&mut self.state.screens.options_state, target);
                 crate::ui::runtime::clear_all();
@@ -1170,16 +1165,15 @@ impl App {
                 if let Some(window) = &self.window {
                     window.request_redraw();
                 }
-                info!("Switched renderer to {:?}", target);
+                info!("Switched renderer to {target:?}");
                 Ok(())
             }
             Err(e) => {
-                error!("Failed to switch renderer to {:?}: {}", target, e);
+                error!("Failed to switch renderer to {target:?}: {e}");
                 self.backend_type = previous_backend;
                 if let Err(restoration_err) = self.init_graphics(event_loop) {
                     error!(
-                        "Failed to restore previous renderer {:?}: {}",
-                        previous_backend, restoration_err
+                        "Failed to restore previous renderer {previous_backend:?}: {restoration_err}"
                     );
                 }
                 options::sync_video_renderer(
@@ -1243,7 +1237,7 @@ impl App {
                     } else if let Some(pos) = display::default_window_position(
                         self.state.shell.display_width,
                         self.state.shell.display_height,
-                        monitor_handle.clone(),
+                        monitor_handle,
                     ) {
                         window.set_outer_position(pos);
                     }
@@ -1253,7 +1247,7 @@ impl App {
                         fullscreen_type,
                         self.state.shell.display_width,
                         self.state.shell.display_height,
-                        monitor_handle.clone(),
+                        monitor_handle,
                         event_loop,
                     );
                     window.set_fullscreen(fullscreen);
@@ -1312,7 +1306,7 @@ impl App {
                         fullscreen_type,
                         width,
                         height,
-                        monitor_handle.clone(),
+                        monitor_handle,
                         event_loop,
                     );
                     window.set_fullscreen(fullscreen);
@@ -1367,7 +1361,7 @@ impl App {
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
-                    log::error!("Failed to handle Sandbox raw key action: {}", e);
+                    log::error!("Failed to handle Sandbox raw key action: {e}");
                 }
                 return;
             }
@@ -1378,7 +1372,7 @@ impl App {
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
-                    log::error!("Failed to handle Menu raw key action: {}", e);
+                    log::error!("Failed to handle Menu raw key action: {e}");
                 }
                 return;
             }
@@ -1387,11 +1381,10 @@ impl App {
                 &mut self.state.screens.mappings_state,
                 &key_event,
             );
-            if !matches!(action, ScreenAction::None) {
-                if let Err(e) = self.handle_action(action, event_loop) {
-                    log::error!("Failed to handle Mappings raw key action: {}", e);
+            if !matches!(action, ScreenAction::None)
+                && let Err(e) = self.handle_action(action, event_loop) {
+                    log::error!("Failed to handle Mappings raw key action: {e}");
                 }
-            }
             // On the Mappings screen, arrows/Enter/Escape are handled entirely
             // via raw keycodes; do not route through the virtual keymap.
             return;
@@ -1403,7 +1396,7 @@ impl App {
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
-                    log::error!("Failed to handle SelectMusic raw key action: {}", e);
+                    log::error!("Failed to handle SelectMusic raw key action: {e}");
                 }
                 return;
             }
@@ -1417,7 +1410,7 @@ impl App {
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
-                    log::error!("Failed to handle Gameplay raw key action: {}", e);
+                    log::error!("Failed to handle Gameplay raw key action: {e}");
                 }
                 return;
             }
@@ -1426,8 +1419,7 @@ impl App {
         let _event_timestamp = Instant::now();
 
         if key_event.state == winit::event::ElementState::Pressed
-            && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F3) =
-                key_event.physical_key
+            && key_event.physical_key == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F3)
         {
             self.state.shell.show_overlay = !self.state.shell.show_overlay;
             let show = self.state.shell.show_overlay;
@@ -1443,7 +1435,7 @@ impl App {
 
         for ev in input::map_key_event(&key_event) {
             if let Err(e) = self.route_input_event(event_loop, ev) {
-                log::error!("Failed to handle input: {}", e);
+                log::error!("Failed to handle input: {e}");
                 event_loop.exit();
                 return;
             }
@@ -1460,7 +1452,7 @@ impl App {
         }
         for iev in input::map_pad_event(&ev) {
             if let Err(e) = self.route_input_event(event_loop, iev) {
-                error!("Failed to handle pad input: {}", e);
+                error!("Failed to handle pad input: {e}");
                 event_loop.exit();
                 return;
             }
@@ -1555,7 +1547,7 @@ impl App {
 
                 if let Some(setting) = setting {
                     commands.push(Command::UpdateScrollSpeed(setting));
-                    info!("Saved scroll speed: {}", setting);
+                    info!("Saved scroll speed: {setting}");
                 } else {
                     warn!(
                         "Unsupported speed mod '{}' not saved to profile.",
@@ -1965,7 +1957,7 @@ impl ApplicationHandler<UserEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none() {
             if let Err(e) = self.init_graphics(event_loop) {
-                error!("Failed to initialize graphics: {}", e);
+                error!("Failed to initialize graphics: {e}");
                 event_loop.exit();
             }
             // After all initial loading is complete, start network checks.
@@ -1979,7 +1971,7 @@ impl ApplicationHandler<UserEvent> for App {
         window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        let Some(window) = self.window.as_ref().cloned() else {
+        let Some(window) = self.window.clone() else {
             return;
         };
         if window_id != window.id() {
@@ -2174,11 +2166,9 @@ impl ApplicationHandler<UserEvent> for App {
                             self.state
                                 .screens
                                 .step_idle(delta_time, now, &self.state.session)
-                        {
-                            if !matches!(action, ScreenAction::None) {
+                            && !matches!(action, ScreenAction::None) {
                                 let _ = self.handle_action(action, event_loop);
                             }
-                        }
                     }
                 }
 
@@ -2198,7 +2188,7 @@ impl ApplicationHandler<UserEvent> for App {
                     match backend.draw(&screen, &self.asset_manager.textures) {
                         Ok(vpf) => self.state.shell.current_frame_vpf = vpf,
                         Err(e) => {
-                            error!("Failed to draw frame: {}", e);
+                            error!("Failed to draw frame: {e}");
                             event_loop.exit();
                         }
                     }

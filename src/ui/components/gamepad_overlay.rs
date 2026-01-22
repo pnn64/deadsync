@@ -1,5 +1,5 @@
 use crate::act;
-use crate::core::space::*;
+use crate::core::space::{widescale, screen_center_x, screen_width};
 use crate::ui::actors::Actor;
 use crate::ui::color;
 

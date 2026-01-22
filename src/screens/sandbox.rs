@@ -1,6 +1,6 @@
 use crate::act;
 use crate::core::input::{GpSystemEvent, InputEvent, PadEvent, VirtualAction};
-use crate::core::space::*;
+use crate::core::space::{screen_width, screen_height, screen_center_x};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
@@ -72,7 +72,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAc
         ) {
             return ScreenAction::Navigate(Screen::Menu);
         }
-        let key_str = format!("Keyboard: KeyCode::{:?}", code);
+        let key_str = format!("Keyboard: KeyCode::{code:?}");
         state.last_inputs.push_front((key_str, Instant::now()));
         if state.last_inputs.len() > INPUT_LOG_MAX_ITEMS {
             state.last_inputs.pop_back();
@@ -110,10 +110,9 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             } => {
                 let dev = usize::from(*id);
                 let code_u32 = code.into_u32();
-                let uuid_hex: String = uuid.iter().map(|b| format!("{:02X}", b)).collect();
+                let uuid_hex: String = uuid.iter().map(|b| format!("{b:02X}")).collect();
                 format!(
-                    "Gamepad {} [uuid={}]: RAW BTN {{ PadCode[0x{:08X}], value: {:.3}, pressed: {} }}",
-                    dev, uuid_hex, code_u32, value, pressed,
+                    "Gamepad {dev} [uuid={uuid_hex}]: RAW BTN {{ PadCode[0x{code_u32:08X}], value: {value:.3}, pressed: {pressed} }}",
                 )
             }
             PadEvent::RawAxis {
@@ -125,10 +124,9 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             } => {
                 let dev = usize::from(*id);
                 let code_u32 = code.into_u32();
-                let uuid_hex: String = uuid.iter().map(|b| format!("{:02X}", b)).collect();
+                let uuid_hex: String = uuid.iter().map(|b| format!("{b:02X}")).collect();
                 format!(
-                    "Gamepad {} [uuid={}]: RAW AXIS {{ PadCode[0x{:08X}], value: {:.3} }}",
-                    dev, uuid_hex, code_u32, value,
+                    "Gamepad {dev} [uuid={uuid_hex}]: RAW AXIS {{ PadCode[0x{code_u32:08X}], value: {value:.3} }}",
                 )
             }
         };
@@ -152,19 +150,18 @@ pub fn handle_gamepad_system_event(state: &mut State, ev: &GpSystemEvent) {
         } => {
             let dev = usize::from(*id);
             let vid = vendor_id
-                .map(|v| format!("0x{:04X}", v))
+                .map(|v| format!("0x{v:04X}"))
                 .unwrap_or_else(|| "n/a".to_string());
             let pid = product_id
-                .map(|p| format!("0x{:04X}", p))
+                .map(|p| format!("0x{p:04X}"))
                 .unwrap_or_else(|| "n/a".to_string());
             format!(
-                "[SYS] Gamepad {} CONNECTED: \"{}\" vid={} pid={} backend={:?}",
-                dev, name, vid, pid, backend,
+                "[SYS] Gamepad {dev} CONNECTED: \"{name}\" vid={vid} pid={pid} backend={backend:?}",
             )
         }
         GpSystemEvent::Disconnected { name, id, .. } => {
             let dev = usize::from(*id);
-            format!("[SYS] Gamepad {} DISCONNECTED: \"{}\"", dev, name)
+            format!("[SYS] Gamepad {dev} DISCONNECTED: \"{name}\"")
         }
     };
     state.last_inputs.push_front((msg, now));
@@ -196,7 +193,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             font("miso"):
             settext(text.clone()):
             align(0.5, 0.0):
-            xy(screen_center_x(), start_y + (i as f32 * line_height)):
+            xy(screen_center_x(), (i as f32).mul_add(line_height, start_y)):
             zoom(0.8):
             horizalign(center):
             diffusealpha(alpha):

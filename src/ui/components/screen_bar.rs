@@ -1,6 +1,6 @@
 use crate::act;
 use crate::core::space;
-use crate::core::space::*;
+use crate::core::space::{screen_height, screen_center_x, screen_width};
 use crate::ui::actors::{self, Actor, Background, SizeSpec};
 use crate::ui::color;
 

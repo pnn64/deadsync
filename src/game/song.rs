@@ -1,5 +1,4 @@
 use crate::game::chart::ChartData;
-use once_cell::sync::Lazy;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -28,7 +27,7 @@ pub struct SongData {
     pub normalized_scrolls: String,
     pub normalized_fakes: String,
     /// Length of the music file in seconds (audio duration, including trailing silence).
-    /// Mirrors ITGmania's `Song::m_fMusicLengthSeconds` / `MusicLengthSeconds()` Lua.
+    /// Mirrors `ITGmania`'s `Song::m_fMusicLengthSeconds` / `MusicLengthSeconds()` Lua.
     pub music_length_seconds: f32,
     /// Length of the chart in seconds based on the last note/hold (`Song::GetLastSecond()` semantics).
     pub total_length_seconds: i32,
@@ -54,7 +53,7 @@ pub struct SongPack {
     pub songs: Vec<Arc<SongData>>,
 }
 
-static SONG_CACHE: Lazy<Mutex<Vec<SongPack>>> = Lazy::new(|| Mutex::new(Vec::new()));
+static SONG_CACHE: std::sync::LazyLock<Mutex<Vec<SongPack>>> = std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
 
 /// Provides safe, read-only access to the global song cache.
 pub fn get_song_cache() -> std::sync::MutexGuard<'static, Vec<SongPack>> {
@@ -94,7 +93,7 @@ impl SongData {
     }
 
     /// Formats the display BPM for the UI, prioritizing #DISPLAYBPM and cleaning up the format
-    /// to match ITGmania (e.g., "128" instead of "128.000000"). Falls back to the
+    /// to match `ITGmania` (e.g., "128" instead of "128.000000"). Falls back to the
     /// calculated min-max range if #DISPLAYBPM is absent or set to "*".
     pub fn formatted_display_bpm(&self) -> String {
         if !self.display_bpm.is_empty() && &self.display_bpm != "*" {
@@ -108,7 +107,7 @@ impl SongData {
                     let min_i = min.round() as i32;
                     let max_i = max.round() as i32;
                     if min_i == max_i {
-                        format!("{}", min_i)
+                        format!("{min_i}")
                     } else {
                         format!("{} - {}", min_i.min(max_i), min_i.max(max_i))
                     }
@@ -125,9 +124,9 @@ impl SongData {
             let min = self.min_bpm.round() as i32;
             let max = self.max_bpm.round() as i32;
             if (self.min_bpm - self.max_bpm).abs() < 1e-6 {
-                format!("{}", min)
+                format!("{min}")
             } else {
-                format!("{} - {}", min, max)
+                format!("{min} - {max}")
             }
         }
     }

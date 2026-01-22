@@ -6,11 +6,11 @@ use std::ptr;
 use std::time::Instant;
 
 use windows::core::PCWSTR;
-use windows::Win32::Devices::HumanInterfaceDevice::*;
-use windows::Win32::Foundation::*;
-use windows::Win32::System::LibraryLoader::*;
-use windows::Win32::UI::Input::*;
-use windows::Win32::UI::WindowsAndMessaging::*;
+use windows::Win32::Devices::HumanInterfaceDevice::{PHIDP_PREPARSED_DATA, HIDP_VALUE_CAPS, HidP_GetSpecificValueCaps, HidP_Input, HIDP_STATUS_SUCCESS, HIDP_CAPS, HidP_GetCaps, HidP_GetValueCaps, HidP_MaxUsageListLength, HidP_GetUsages, HidP_GetUsageValue};
+use windows::Win32::Foundation::{HANDLE, HWND, WPARAM, LPARAM, LRESULT, HINSTANCE};
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::UI::Input::{RIM_TYPEHID, GetRawInputDeviceInfoW, RIDI_DEVICENAME, RID_DEVICE_INFO_HID, RID_DEVICE_INFO, RIDI_DEVICEINFO, RIDI_PREPARSEDDATA, GetRawInputDeviceList, RAWINPUTDEVICELIST, HRAWINPUT, GetRawInputData, RID_INPUT, RAWINPUTHEADER, RAWINPUTDEVICE, RIDEV_DEVNOTIFY, RIDEV_INPUTSINK, RegisterRawInputDevices};
+use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrW, GWLP_USERDATA, WM_CREATE, CREATESTRUCTW, SetWindowLongPtrW, WM_INPUT, WM_INPUT_DEVICE_CHANGE, WM_DESTROY, PostQuitMessage, DefWindowProcW, WNDCLASSEXW, RegisterClassExW, CreateWindowExW, WINDOW_EX_STYLE, WINDOW_STYLE, HWND_MESSAGE, MSG, GetMessageW, TranslateMessage, DispatchMessageW};
 
 const USAGE_PAGE_GENERIC_DESKTOP: u16 = 0x01;
 const USAGE_JOYSTICK: u16 = 0x04;
@@ -72,7 +72,7 @@ impl Ctx {
 }
 
 #[inline(always)]
-fn is_controller_usage(usage_page: u16, usage: u16) -> bool {
+const fn is_controller_usage(usage_page: u16, usage: u16) -> bool {
     usage_page == USAGE_PAGE_GENERIC_DESKTOP
         && matches!(usage, USAGE_JOYSTICK | USAGE_GAMEPAD | USAGE_MULTI_AXIS)
 }
@@ -92,7 +92,7 @@ fn wide_to_string(mut v: Vec<u16>) -> String {
 fn get_device_name(h: HANDLE) -> Option<String> {
     unsafe {
         let mut size: u32 = 0;
-        let _ = GetRawInputDeviceInfoW(Some(h), RIDI_DEVICENAME, None, &mut size);
+        let _ = GetRawInputDeviceInfoW(Some(h), RIDI_DEVICENAME, None, &raw mut size);
         if size == 0 {
             return None;
         }
@@ -102,7 +102,7 @@ fn get_device_name(h: HANDLE) -> Option<String> {
             Some(h),
             RIDI_DEVICENAME,
             Some(buf.as_mut_ptr().cast::<c_void>()),
-            &mut size2,
+            &raw mut size2,
         );
         if rc == u32::MAX {
             return None;
@@ -120,7 +120,7 @@ fn get_device_info(h: HANDLE) -> Option<RID_DEVICE_INFO_HID> {
             Some(h),
             RIDI_DEVICEINFO,
             Some(ptr::addr_of_mut!(info).cast::<c_void>()),
-            &mut size,
+            &raw mut size,
         );
         if rc == u32::MAX {
             return None;
@@ -135,7 +135,7 @@ fn get_device_info(h: HANDLE) -> Option<RID_DEVICE_INFO_HID> {
 	    fn get_preparsed(h: HANDLE) -> Option<Vec<u8>> {
 	        unsafe {
 	            let mut size: u32 = 0;
-	            let _ = GetRawInputDeviceInfoW(Some(h), RIDI_PREPARSEDDATA, None, &mut size);
+	            let _ = GetRawInputDeviceInfoW(Some(h), RIDI_PREPARSEDDATA, None, &raw mut size);
 	            if size == 0 {
 	                return None;
         }
@@ -145,7 +145,7 @@ fn get_device_info(h: HANDLE) -> Option<RID_DEVICE_INFO_HID> {
             Some(h),
             RIDI_PREPARSEDDATA,
             Some(buf.as_mut_ptr().cast::<c_void>()),
-            &mut size2,
+            &raw mut size2,
         );
         if rc == u32::MAX {
             return None;
@@ -168,8 +168,8 @@ fn get_device_info(h: HANDLE) -> Option<RID_DEVICE_INFO_HID> {
 	                Some(USAGE_PAGE_GENERIC_DESKTOP),
 	                None,
 	                Some(USAGE_HAT_SWITCH),
-	                &mut cap,
-	                &mut len,
+	                &raw mut cap,
+	                &raw mut len,
 	                pd,
 	            );
 	            if status == HIDP_STATUS_SUCCESS && len != 0 {
@@ -177,7 +177,7 @@ fn get_device_info(h: HANDLE) -> Option<RID_DEVICE_INFO_HID> {
 	            }
 
 	            let mut hid_caps = HIDP_CAPS::default();
-	            let status = HidP_GetCaps(pd, &mut hid_caps);
+	            let status = HidP_GetCaps(pd, &raw mut hid_caps);
 	            if status != HIDP_STATUS_SUCCESS || hid_caps.NumberInputValueCaps == 0 {
 	                return None;
 	            }
@@ -185,7 +185,7 @@ fn get_device_info(h: HANDLE) -> Option<RID_DEVICE_INFO_HID> {
 	            let mut value_caps: Vec<HIDP_VALUE_CAPS> =
 	                vec![HIDP_VALUE_CAPS::default(); hid_caps.NumberInputValueCaps as usize];
 	            let mut value_len = hid_caps.NumberInputValueCaps;
-	            let status = HidP_GetValueCaps(HidP_Input, value_caps.as_mut_ptr(), &mut value_len, pd);
+	            let status = HidP_GetValueCaps(HidP_Input, value_caps.as_mut_ptr(), &raw mut value_len, pd);
 	            if status != HIDP_STATUS_SUCCESS || value_len == 0 {
 	                return None;
 	            }
@@ -222,7 +222,7 @@ fn get_device_info(h: HANDLE) -> Option<RID_DEVICE_INFO_HID> {
         return;
     }
 
-	        let name = get_device_name(h).unwrap_or_else(|| format!("RawInput:{:?}", h));
+	        let name = get_device_name(h).unwrap_or_else(|| format!("RawInput:{h:?}"));
 	        let uuid = uuid_from_bytes(name.as_bytes());
 
     let id = ctx
@@ -290,14 +290,14 @@ fn remove_device(ctx: &mut Ctx, h: HANDLE) {
 fn enumerate_existing(ctx: &mut Ctx) {
     unsafe {
         let mut count: u32 = 0;
-        let _ = GetRawInputDeviceList(None, &mut count, size_of::<RAWINPUTDEVICELIST>() as u32);
+        let _ = GetRawInputDeviceList(None, &raw mut count, size_of::<RAWINPUTDEVICELIST>() as u32);
         if count == 0 {
             return;
         }
         let mut list = vec![RAWINPUTDEVICELIST::default(); count as usize];
         let rc = GetRawInputDeviceList(
             Some(list.as_mut_ptr()),
-            &mut count,
+            &raw mut count,
             size_of::<RAWINPUTDEVICELIST>() as u32,
         );
         if rc == u32::MAX {
@@ -334,7 +334,7 @@ fn emit_button_diff(
             (emit_pad)(PadEvent::RawButton {
                 id: dev.id,
                 timestamp,
-                code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (pa as u32)),
+                code: PadCode((u32::from(USAGE_PAGE_BUTTON) << 16) | u32::from(pa)),
                 uuid: dev.uuid,
                 value: 0.0,
                 pressed: false,
@@ -345,7 +345,7 @@ fn emit_button_diff(
             (emit_pad)(PadEvent::RawButton {
                 id: dev.id,
                 timestamp,
-                code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (nb as u32)),
+                code: PadCode((u32::from(USAGE_PAGE_BUTTON) << 16) | u32::from(nb)),
                 uuid: dev.uuid,
                 value: 1.0,
                 pressed: true,
@@ -358,7 +358,7 @@ fn emit_button_diff(
         (emit_pad)(PadEvent::RawButton {
             id: dev.id,
             timestamp,
-            code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (u as u32)),
+            code: PadCode((u32::from(USAGE_PAGE_BUTTON) << 16) | u32::from(u)),
             uuid: dev.uuid,
             value: 0.0,
             pressed: false,
@@ -370,7 +370,7 @@ fn emit_button_diff(
         (emit_pad)(PadEvent::RawButton {
             id: dev.id,
             timestamp,
-            code: PadCode(((USAGE_PAGE_BUTTON as u32) << 16) | (u as u32)),
+            code: PadCode((u32::from(USAGE_PAGE_BUTTON) << 16) | u32::from(u)),
             uuid: dev.uuid,
             value: 1.0,
             pressed: true,
@@ -402,7 +402,7 @@ fn emit_button_diff(
             USAGE_PAGE_BUTTON,
             None,
             dev.buttons_now.as_mut_ptr(),
-            &mut len,
+            &raw mut len,
             PHIDP_PREPARSED_DATA(dev.preparsed.as_ptr() as isize),
             report,
         )
@@ -428,7 +428,7 @@ fn emit_button_diff(
             USAGE_PAGE_GENERIC_DESKTOP,
             None,
             USAGE_HAT_SWITCH,
-            &mut hat,
+            &raw mut hat,
             PHIDP_PREPARSED_DATA(dev.preparsed.as_ptr() as isize),
             report,
         )
@@ -452,7 +452,7 @@ fn emit_button_diff(
 	                hat0 = -1;
 	            } else if span == 8 {
 	                hat0 = idx;
-	            } else if span == 9 && dev.hat_min == 0 && dev.hat_max == 8 && idx >= 0 && idx <= 7 {
+	            } else if span == 9 && dev.hat_min == 0 && dev.hat_max == 8 && (0..=7).contains(&idx) {
 	                hat0 = idx;
 	            } else if span == 4 {
 	                hat0 = idx * 2;
@@ -460,9 +460,9 @@ fn emit_button_diff(
 	        }
 
 	        let want_up = matches!(hat0, 0 | 1 | 7);
-	        let want_right = matches!(hat0, 1 | 2 | 3);
-	        let want_down = matches!(hat0, 3 | 4 | 5);
-	        let want_left = matches!(hat0, 5 | 6 | 7);
+	        let want_right = matches!(hat0, 1..=3);
+	        let want_down = matches!(hat0, 3..=5);
+	        let want_left = matches!(hat0, 5..=7);
 	        let want = [want_up, want_down, want_left, want_right];
 	        let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
 	        for i in 0..4 {
@@ -482,7 +482,7 @@ fn emit_button_diff(
 fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
     unsafe {
         let mut size: u32 = 0;
-        let _ = GetRawInputData(hraw, RID_INPUT, None, &mut size, size_of::<RAWINPUTHEADER>() as u32);
+        let _ = GetRawInputData(hraw, RID_INPUT, None, &raw mut size, size_of::<RAWINPUTHEADER>() as u32);
         if size == 0 {
             return;
         }
@@ -494,7 +494,7 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
             hraw,
             RID_INPUT,
             Some(ctx.buf.as_mut_ptr().cast::<c_void>()),
-            &mut size2,
+            &raw mut size2,
             size_of::<RAWINPUTHEADER>() as u32,
         );
         if rc == u32::MAX {
@@ -559,7 +559,7 @@ unsafe extern "system" fn wndproc(
         WM_CREATE => {
             let cs = lparam.0 as *const CREATESTRUCTW;
             if !cs.is_null() {
-                let p = unsafe { (*cs).lpCreateParams } as *mut Ctx;
+                let p = unsafe { (*cs).lpCreateParams }.cast::<Ctx>();
                 unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, p as isize) };
             }
             LRESULT(0)
@@ -574,7 +574,7 @@ unsafe extern "system" fn wndproc(
             if !ctx_ptr.is_null() {
                 let ctx = unsafe { &mut *ctx_ptr };
                 let h = HANDLE(lparam.0 as *mut c_void);
-                match wparam.0 as usize {
+                match wparam.0 {
                     GIDC_ARRIVAL_U32 => add_device(ctx, h),
                     GIDC_REMOVAL_U32 => remove_device(ctx, h),
                     _ => {}
@@ -605,7 +605,7 @@ pub fn run(
             lpszClassName: PCWSTR(class_name.as_ptr()),
             ..Default::default()
         };
-        RegisterClassExW(&wc);
+        RegisterClassExW(&raw const wc);
 
         let mut ctx = Box::new(Ctx {
             emit_pad: Box::new(emit_pad),
@@ -629,7 +629,7 @@ pub fn run(
             Some(HWND_MESSAGE),
             None,
             Some(hinst),
-            Some(ptr::addr_of_mut!(*ctx).cast::<c_void>() as *const c_void),
+            Some(ptr::addr_of_mut!(*ctx).cast::<c_void>().cast_const()),
         );
 
         let hwnd = hwnd.unwrap_or_default();
@@ -667,12 +667,12 @@ pub fn run(
 
         let mut msg = MSG::default();
         loop {
-            let ok = GetMessageW(&mut msg, None, 0, 0);
+            let ok = GetMessageW(&raw mut msg, None, 0, 0);
             if ok.0 <= 0 {
                 break;
             }
-            let _ = TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+            let _ = TranslateMessage(&raw const msg);
+            DispatchMessageW(&raw const msg);
         }
 
         // Keep ctx alive forever (message loop runs until process exit).

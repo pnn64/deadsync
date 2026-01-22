@@ -2,7 +2,6 @@ use crate::core::network;
 use crate::game::profile::{self, Profile};
 use crate::game::song::get_song_cache;
 use log::{info, warn};
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::error::Error;
@@ -43,27 +42,27 @@ pub enum Grade {
 
 impl Grade {
     /// Converts a grade to the corresponding frame index on the "grades 1x19.png" spritesheet.
-    pub fn to_sprite_state(&self) -> u32 {
+    pub const fn to_sprite_state(&self) -> u32 {
         match self {
-            Grade::Quint => 0,
-            Grade::Tier01 => 1,
-            Grade::Tier02 => 2,
-            Grade::Tier03 => 3,
-            Grade::Tier04 => 4,
-            Grade::Tier05 => 5,
-            Grade::Tier06 => 6,
-            Grade::Tier07 => 7,
-            Grade::Tier08 => 8,
-            Grade::Tier09 => 9,
-            Grade::Tier10 => 10,
-            Grade::Tier11 => 11,
-            Grade::Tier12 => 12,
-            Grade::Tier13 => 13,
-            Grade::Tier14 => 14,
-            Grade::Tier15 => 15,
-            Grade::Tier16 => 16,
-            Grade::Tier17 => 17,
-            Grade::Failed => 18,
+            Self::Quint => 0,
+            Self::Tier01 => 1,
+            Self::Tier02 => 2,
+            Self::Tier03 => 3,
+            Self::Tier04 => 4,
+            Self::Tier05 => 5,
+            Self::Tier06 => 6,
+            Self::Tier07 => 7,
+            Self::Tier08 => 8,
+            Self::Tier09 => 9,
+            Self::Tier10 => 10,
+            Self::Tier11 => 11,
+            Self::Tier12 => 12,
+            Self::Tier13 => 13,
+            Self::Tier14 => 14,
+            Self::Tier15 => 15,
+            Self::Tier16 => 16,
+            Self::Tier17 => 17,
+            Self::Failed => 18,
         }
     }
 }
@@ -90,7 +89,7 @@ struct GradeCacheState {
     cache: HashMap<String, CachedScore>,
 }
 
-static GRADE_CACHE: Lazy<Mutex<GradeCacheState>> = Lazy::new(|| Mutex::new(GradeCacheState::default()));
+static GRADE_CACHE: std::sync::LazyLock<Mutex<GradeCacheState>> = std::sync::LazyLock::new(|| Mutex::new(GradeCacheState::default()));
 
 fn gs_scores_dir_for_profile(profile_id: &str) -> PathBuf {
     PathBuf::from("save/profiles")
@@ -135,7 +134,7 @@ pub fn get_cached_score(chart_hash: &str) -> Option<CachedScore> {
 }
 
 pub fn set_cached_score(chart_hash: String, score: CachedScore) {
-    info!("Caching score {:?} for chart hash {}", score, chart_hash);
+    info!("Caching score {score:?} for chart hash {chart_hash}");
     ensure_score_cache_loaded();
     GRADE_CACHE.lock().unwrap().cache.insert(chart_hash, score);
 }
@@ -161,7 +160,7 @@ struct GsScoreEntry {
     fetched_at_ms: i64,
 }
 
-fn grade_to_code(g: Grade) -> u8 {
+const fn grade_to_code(g: Grade) -> u8 {
     match g {
         Grade::Quint => 0,
         Grade::Tier01 => 1,
@@ -185,7 +184,7 @@ fn grade_to_code(g: Grade) -> u8 {
     }
 }
 
-fn grade_from_code(code: u8) -> Grade {
+const fn grade_from_code(code: u8) -> Grade {
     match code {
         0 => Grade::Quint,
         1 => Grade::Tier01,
@@ -307,7 +306,7 @@ fn load_all_entries_for_chart(chart_hash: &str, dir: &Path) -> Vec<GsScoreEntry>
     if !dir.is_dir() {
         return Vec::new();
     }
-    let prefix = format!("{}-", chart_hash);
+    let prefix = format!("{chart_hash}-");
     let Ok(read_dir) = fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -363,29 +362,27 @@ fn append_gs_score_on_disk(chart_hash: &str, score: CachedScore, username: &str)
     entries.push(new_entry.clone());
 
     if let Err(e) = fs::create_dir_all(&dir) {
-        warn!("Failed to create GrooveStats scores dir {:?}: {}", dir, e);
+        warn!("Failed to create GrooveStats scores dir {dir:?}: {e}");
         return;
     }
 
-    let file_name = format!("{}-{}.bin", chart_hash, fetched_at_ms);
+    let file_name = format!("{chart_hash}-{fetched_at_ms}.bin");
     let mut path = dir;
     path.push(file_name);
 
     match bincode::encode_to_vec(&new_entry, bincode::config::standard()) {
         Ok(buf) => {
             if let Err(e) = fs::write(&path, buf) {
-                warn!("Failed to write GrooveStats score file {:?}: {}", path, e);
+                warn!("Failed to write GrooveStats score file {path:?}: {e}");
             } else {
                 info!(
-                    "Stored GrooveStats score on disk for chart {} at {:?}",
-                    chart_hash, path
+                    "Stored GrooveStats score on disk for chart {chart_hash} at {path:?}"
                 );
             }
         }
         Err(e) => {
             warn!(
-                "Failed to encode GrooveStats score for chart {}: {}",
-                chart_hash, e
+                "Failed to encode GrooveStats score for chart {chart_hash}: {e}"
             );
         }
     }
@@ -409,8 +406,8 @@ struct GrooveScore {
     name: String,
     score: f64, // 0..10000
     /// Optional human-readable comment string (e.g., "189w, 33e, 2g, 1d, 3m, C690").
-    /// This is generated by Simply Love as part of GrooveStats score submission
-    /// and exposed via the `comments` field in GrooveStats' JSON.
+    /// This is generated by Simply Love as part of `GrooveStats` score submission
+    /// and exposed via the `comments` field in `GrooveStats`' JSON.
     #[serde(default)]
     comments: Option<String>,
 }
@@ -499,16 +496,13 @@ fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Op
         return Some(1);
     }
 
-    let comment = match comment {
-        Some(c) => c,
-        None => {
-            info!(
-                "GrooveStats lamp: hash={} score={:.4}% -> no lamp (no GrooveStats comment available)",
-                chart_hash,
-                score_percent * 100.0
-            );
-            return None;
-        }
+    let comment = if let Some(c) = comment { c } else {
+        info!(
+            "GrooveStats lamp: hash={} score={:.4}% -> no lamp (no GrooveStats comment available)",
+            chart_hash,
+            score_percent * 100.0
+        );
+        return None;
     };
     let counts = parse_comment_counts(comment);
 
@@ -517,17 +511,14 @@ fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Op
         return None;
     }
 
-    let stats = match find_chart_stats_for_hash(chart_hash) {
-        Some(s) => s,
-        None => {
-            info!(
-                "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> no lamp (chart stats not found for hash)",
-                chart_hash,
-                score_percent * 100.0,
-                comment
-            );
-            return None;
-        }
+    let stats = if let Some(s) = find_chart_stats_for_hash(chart_hash) { s } else {
+        info!(
+            "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> no lamp (chart stats not found for hash)",
+            chart_hash,
+            score_percent * 100.0,
+            comment
+        );
+        return None;
     };
     let taps_rows = stats.total_steps as i32;
     let holds = stats.holds as i32;
@@ -568,7 +559,7 @@ fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Op
     let dp_possible_max: i32 = (taps_rows * DP_W1 + dp_hold_roll).max(1);
     let dp_expect_no_hidden_errors: i32 = dp_taps + dp_hold_roll;
 
-    let dp_expect_frac = dp_expect_no_hidden_errors as f64 / dp_possible_max as f64;
+    let dp_expect_frac = f64::from(dp_expect_no_hidden_errors) / f64::from(dp_possible_max);
     let dp_diff = (score_percent - dp_expect_frac).abs();
     let dp_consistent = dp_diff <= 0.0005;
 

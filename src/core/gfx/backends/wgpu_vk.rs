@@ -41,7 +41,7 @@ struct PipelineSet {
 
 impl PipelineSet {
     #[inline(always)]
-    fn get(&self, mode: BlendMode) -> &wgpu::RenderPipeline {
+    const fn get(&self, mode: BlendMode) -> &wgpu::RenderPipeline {
         match mode {
             BlendMode::Alpha => &self.alpha,
             BlendMode::Add => &self.add,
@@ -319,9 +319,9 @@ pub fn create_texture(
     })
 }
 
-pub fn draw<'a>(
+pub fn draw(
     state: &mut State,
-    render_list: &RenderList<'a>,
+    render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
 ) -> Result<u32, Box<dyn Error>> {
     let (width, height) = state.window_size;
@@ -346,8 +346,8 @@ pub fn draw<'a>(
             let center = [m[3][0], m[3][1]];
             let c0 = [m[0][0], m[0][1]];
             let c1 = [m[1][0], m[1][1]];
-            let sx = (c0[0] * c0[0] + c0[1] * c0[1]).sqrt().max(1e-12);
-            let sy = (c1[0] * c1[0] + c1[1] * c1[1]).sqrt().max(1e-12);
+            let sx = c0[0].hypot(c0[1]).max(1e-12);
+            let sy = c1[0].hypot(c1[1]).max(1e-12);
             let cos_t = c0[0] / sx;
             let sin_t = c0[1] / sx;
             (center, [sx, sy], [sin_t, cos_t])
@@ -382,12 +382,11 @@ pub fn draw<'a>(
                 edge_fade: *edge_fade,
             });
 
-            if let Some(last) = runs.last_mut() {
-                if last.key == tex.id && last.blend == obj.blend {
+            if let Some(last) = runs.last_mut()
+                && last.key == tex.id && last.blend == obj.blend {
                     last.count += 1;
                     continue;
                 }
-            }
             runs.push(Run {
                 start,
                 count: 1,
@@ -437,10 +436,10 @@ pub fn draw<'a>(
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: render_list.clear_color[0] as f64,
-                        g: render_list.clear_color[1] as f64,
-                        b: render_list.clear_color[2] as f64,
-                        a: render_list.clear_color[3] as f64,
+                        r: f64::from(render_list.clear_color[0]),
+                        g: f64::from(render_list.clear_color[1]),
+                        b: f64::from(render_list.clear_color[2]),
+                        a: f64::from(render_list.clear_color[3]),
                     }),
                     store: wgpu::StoreOp::Store,
                 },
@@ -456,7 +455,7 @@ pub fn draw<'a>(
 
         let mut last_blend: Option<BlendMode> = None;
         let mut last_bind: Option<u64> = None;
-        for run in state.scratch_runs.iter() {
+        for run in &state.scratch_runs {
             if last_blend != Some(run.blend) {
                 pass.set_pipeline(state.pipelines.get(run.blend));
                 pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, cast_slice(&proj_array));
@@ -703,7 +702,7 @@ fn build_pipeline(
     })
 }
 
-fn vertex_layout() -> wgpu::VertexBufferLayout<'static> {
+const fn vertex_layout() -> wgpu::VertexBufferLayout<'static> {
     wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<Vertex>() as u64,
         step_mode: wgpu::VertexStepMode::Vertex,
@@ -711,7 +710,7 @@ fn vertex_layout() -> wgpu::VertexBufferLayout<'static> {
     }
 }
 
-fn instance_layout() -> wgpu::VertexBufferLayout<'static> {
+const fn instance_layout() -> wgpu::VertexBufferLayout<'static> {
     wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<InstanceRaw>() as u64,
         step_mode: wgpu::VertexStepMode::Instance,
@@ -735,13 +734,13 @@ const INSTANCE_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
 ];
 
 #[inline(always)]
-fn cast_slice<T>(data: &[T]) -> &[u8] {
-    let len = data.len() * mem::size_of::<T>();
-    unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, len) }
+const fn cast_slice<T>(data: &[T]) -> &[u8] {
+    let len = std::mem::size_of_val(data);
+    unsafe { std::slice::from_raw_parts(data.as_ptr().cast::<u8>(), len) }
 }
 
 #[inline(always)]
-fn wgpu_filter_mode(filter: SamplerFilter) -> wgpu::FilterMode {
+const fn wgpu_filter_mode(filter: SamplerFilter) -> wgpu::FilterMode {
     match filter {
         SamplerFilter::Linear => wgpu::FilterMode::Linear,
         SamplerFilter::Nearest => wgpu::FilterMode::Nearest,
@@ -749,7 +748,7 @@ fn wgpu_filter_mode(filter: SamplerFilter) -> wgpu::FilterMode {
 }
 
 #[inline(always)]
-fn wgpu_address_mode(wrap: SamplerWrap) -> wgpu::AddressMode {
+const fn wgpu_address_mode(wrap: SamplerWrap) -> wgpu::AddressMode {
     match wrap {
         SamplerWrap::Clamp => wgpu::AddressMode::ClampToEdge,
         SamplerWrap::Repeat => wgpu::AddressMode::Repeat,
@@ -786,7 +785,7 @@ fn get_sampler(state: &mut State, desc: SamplerDesc) -> wgpu::Sampler {
     sampler
 }
 
-const SHADER: &str = r#"
+const SHADER: &str = r"
 struct Proj {
     proj: mat4x4<f32>,
 };
@@ -852,4 +851,4 @@ fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
     color.a = color.a * fade;
     return color;
 }
-"#;
+";

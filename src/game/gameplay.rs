@@ -2,7 +2,7 @@ use crate::core::audio;
 use crate::core::input::{
     InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
-use crate::core::space::*;
+use crate::core::space::{screen_height, screen_center_y};
 use crate::game::chart::ChartData;
 use crate::game::judgment::{self, JudgeGrade, Judgment};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
@@ -103,7 +103,7 @@ fn compute_music_end_time(
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct RowEntry {
+pub struct RowEntry {
     row_index: usize,
     // Non-mine, non-fake, judgable notes on this row
     nonmine_note_indices: Vec<usize>,
@@ -386,7 +386,7 @@ fn player_for_col(state: &State, col: usize) -> usize {
 }
 
 #[inline(always)]
-fn player_col_range(state: &State, player: usize) -> (usize, usize) {
+const fn player_col_range(state: &State, player: usize) -> (usize, usize) {
     let start = player * state.cols_per_player;
     (start, start + state.cols_per_player)
 }
@@ -448,14 +448,10 @@ pub fn queue_input_edge(
     let player_side = profile::get_session_player_side();
     let lane = match (play_style, player_side, lane) {
         // Single-player: reject the "other side" entirely so only one set of bindings can play.
-        (profile::PlayStyle::Single, profile::PlayerSide::P1, Lane::P2Left)
-        | (profile::PlayStyle::Single, profile::PlayerSide::P1, Lane::P2Down)
-        | (profile::PlayStyle::Single, profile::PlayerSide::P1, Lane::P2Up)
-        | (profile::PlayStyle::Single, profile::PlayerSide::P1, Lane::P2Right) => return,
-        (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::Left)
-        | (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::Down)
-        | (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::Up)
-        | (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::Right) => return,
+        (profile::PlayStyle::Single, profile::PlayerSide::P1,
+Lane::P2Left | Lane::P2Down | Lane::P2Up | Lane::P2Right) => return,
+        (profile::PlayStyle::Single, profile::PlayerSide::P2,
+Lane::Left | Lane::Down | Lane::Up | Lane::Right) => return,
         // P2-only single: remap P2 lanes into the 4-col field.
         (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::P2Left) => Lane::Left,
         (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::P2Down) => Lane::Down,
@@ -477,7 +473,7 @@ pub fn queue_input_edge(
     let lead_in = state.audio_lead_in_seconds.max(0.0);
     let anchor = -state.global_offset_seconds;
     let stream_pos = audio::get_music_stream_position_seconds();
-    let event_music_time = (stream_pos - lead_in) * rate + anchor * (1.0 - rate);
+    let event_music_time = (stream_pos - lead_in).mul_add(rate, anchor * (1.0 - rate));
 
     state.pending_edges.push_back(InputEdge {
         lane,
@@ -670,8 +666,8 @@ pub fn init(
         rows.len() as u64
     };
     let possible_grade_points = (num_tap_rows * 5)
-        + (holds_total as u64 * judgment::HOLD_SCORE_HELD as u64)
-        + (rolls_total as u64 * judgment::HOLD_SCORE_HELD as u64);
+        + (u64::from(holds_total) * judgment::HOLD_SCORE_HELD as u64)
+        + (u64::from(rolls_total) * judgment::HOLD_SCORE_HELD as u64);
     let possible_grade_points = possible_grade_points as i32;
 
     info!("Parsed {} notes from chart data.", notes.len());
@@ -744,9 +740,9 @@ pub fn init(
         start_delay = 0.0;
     }
     if let Some(music_path) = &song.music_path {
-        info!("Starting music with a preroll delay of {:.2}s", start_delay);
+        info!("Starting music with a preroll delay of {start_delay:.2}s");
         let cut = audio::Cut {
-            start_sec: (-start_delay) as f64,
+            start_sec: f64::from(-start_delay),
             length_sec: f64::INFINITY,
             ..Default::default()
         };
@@ -894,7 +890,7 @@ fn update_itg_grade_totals(p: &mut PlayerRuntime) {
     );
 }
 
-fn grade_to_window(grade: JudgeGrade) -> Option<&'static str> {
+const fn grade_to_window(grade: JudgeGrade) -> Option<&'static str> {
     match grade {
         JudgeGrade::Fantastic => Some("W1"),
         JudgeGrade::Excellent => Some("W2"),
@@ -1265,7 +1261,9 @@ fn update_active_holds(
                             .unwrap_or(note_start_row);
                         current_row = current_row.clamp(note_start_row, hold.end_row_index);
                         let final_row = prev_row.max(current_row);
-                        if final_row != prev_row {
+                        if final_row == prev_row {
+                            hold.last_held_beat = prev_beat.clamp(note_start_beat, hold.end_beat);
+                        } else {
                             hold.last_held_row_index = final_row;
                             let mut new_beat = state
                                 .timing
@@ -1276,8 +1274,6 @@ fn update_active_holds(
                                 new_beat = prev_beat;
                             }
                             hold.last_held_beat = new_beat;
-                        } else {
-                            hold.last_held_beat = prev_beat.clamp(note_start_beat, hold.end_beat);
                         }
                     } else {
                         hold.last_held_beat = prev_beat.clamp(note_start_beat, hold.end_beat);
@@ -1669,8 +1665,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
 
     let direction = if delta_q > 0.0 { "earlier" } else { "later" };
     let msg = format!(
-        "Global Offset from {:+.3} to {:+.3} (notes {})",
-        start_q, new_q, direction
+        "Global Offset from {start_q:+.3} to {new_q:+.3} (notes {direction})"
     );
     state.sync_overlay_message = Some(msg);
     ScreenAction::None
@@ -1964,8 +1959,7 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
                 .noteskin
                 .as_ref()
                 .and_then(|ns| ns.tap_explosions.get(&active.window))
-                .map(|explosion| explosion.animation.duration())
-                .unwrap_or(0.0);
+                .map_or(0.0, |explosion| explosion.animation.duration());
             if lifetime <= 0.0 || active.elapsed >= lifetime {
                 *explosion = None;
             }
@@ -1996,7 +1990,7 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
     } else {
         1.0
     };
-    let cutoff_time = music_time_sec - mine_window * rate;
+    let cutoff_time = mine_window.mul_add(-rate, music_time_sec);
     for player in 0..state.num_players {
         let (note_start, note_end) = player_note_range(state, player);
         let mut cursor = state.next_mine_avoid_cursor[player].max(note_start);
@@ -2017,8 +2011,7 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
                 state.players[player].mines_avoided =
                     state.players[player].mines_avoided.saturating_add(1);
                 info!(
-                    "MINE AVOIDED: Row {}, Col {}, Time: {:.2}s",
-                    row_index, column, music_time_sec
+                    "MINE AVOIDED: Row {row_index}, Col {column}, Time: {music_time_sec:.2}s"
                 );
             }
             cursor += 1;
@@ -2136,8 +2129,7 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                         state.players[player].mines_avoided =
                             state.players[player].mines_avoided.saturating_add(1);
                         info!(
-                            "MINE AVOIDED: Row {}, Col {}, Time: {:.2}s",
-                            note_row_index, col_idx, music_time_sec
+                            "MINE AVOIDED: Row {note_row_index}, Col {col_idx}, Time: {music_time_sec:.2}s"
                         );
                     }
                 }
@@ -2174,7 +2166,7 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                 }
             }
             state.notes[note_index].result = Some(judgment);
-            info!("MISSED (pending): Row {}, Col {}", note_row_index, col_idx);
+            info!("MISSED (pending): Row {note_row_index}, Col {col_idx}");
         }
     }
 }
@@ -2190,7 +2182,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
     let song_offset_s = state.song.offset;
     let global_offset_s = state.global_offset_seconds;
     let lead_in_s = state.audio_lead_in_seconds.max(0.0);
-    let cutoff_time = music_time_sec - way_off_window * rate;
+    let cutoff_time = way_off_window.mul_add(-rate, music_time_sec);
     for player in 0..state.num_players {
         let (note_start, note_end) = player_note_range(state, player);
         let mut cursor = state.next_tap_miss_cursor[player].max(note_start);
@@ -2263,7 +2255,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                         }
                     }
                 }
-                info!("MISSED (time-based): Row {}", row);
+                info!("MISSED (time-based): Row {row}");
             }
             cursor += 1;
         }
@@ -2344,7 +2336,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         let cmod_zoomed = cmod_pps_zoomed[player];
         let cmod_raw = cmod_pps_raw[player];
 
-        let miss_cull_threshold = receptor_y - dir * state.draw_distance_after_targets;
+        let miss_cull_threshold = dir.mul_add(-state.draw_distance_after_targets, receptor_y);
         col_arrows.retain(|arrow| {
             let note = &state.notes[arrow.note_index];
             if matches!(note.note_type, NoteType::Mine) {
@@ -2353,17 +2345,14 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                         ScrollSpeedSetting::CMod(_) => {
                             let note_time_chart = state.note_time_cache[arrow.note_index];
                             let time_diff_real = (note_time_chart - music_time_sec) / rate;
-                            receptor_y + dir * time_diff_real * cmod_raw
+                            (dir * time_diff_real).mul_add(cmod_raw, receptor_y)
                         }
                         ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                             let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                             let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                            receptor_y
-                                + dir
+                            (dir
                                     * beat_diff_disp
-                                    * ScrollSpeedSetting::ARROW_SPACING
-                                    * beatmult
-                                    * state.field_zoom
+                                    * ScrollSpeedSetting::ARROW_SPACING * beatmult).mul_add(state.field_zoom, receptor_y)
                         }
                     };
                     return if dir < 0.0 {
@@ -2382,17 +2371,14 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                     ScrollSpeedSetting::CMod(_) => {
                         let note_time_chart = state.note_time_cache[arrow.note_index];
                         let time_diff_real = (note_time_chart - music_time_sec) / rate;
-                        receptor_y + dir * time_diff_real * cmod_raw
+                        (dir * time_diff_real).mul_add(cmod_raw, receptor_y)
                     }
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                         let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                         let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                        receptor_y
-                            + dir
+                        (dir
                                 * beat_diff_disp
-                                * ScrollSpeedSetting::ARROW_SPACING
-                                * beatmult
-                                * state.field_zoom
+                                * ScrollSpeedSetting::ARROW_SPACING * beatmult).mul_add(state.field_zoom, receptor_y)
                     }
                 };
                 return if dir < 0.0 {
@@ -2413,17 +2399,14 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                 ScrollSpeedSetting::CMod(_) => {
                     let note_time_chart = state.note_time_cache[arrow.note_index];
                     let time_diff_real = (note_time_chart - music_time_sec) / rate;
-                    receptor_y + dir * time_diff_real * cmod_zoomed
+                    (dir * time_diff_real).mul_add(cmod_zoomed, receptor_y)
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                     let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                    receptor_y
-                        + dir
+                    (dir
                             * beat_diff_disp
-                            * ScrollSpeedSetting::ARROW_SPACING
-                            * beatmult
-                            * state.field_zoom
+                            * ScrollSpeedSetting::ARROW_SPACING * beatmult).mul_add(state.field_zoom, receptor_y)
                 }
             };
             if dir < 0.0 {
@@ -2460,7 +2443,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     // between callbacks for smooth, continuous motion.
     let stream_pos = crate::core::audio::get_music_stream_position_seconds();
     let lead_in = state.audio_lead_in_seconds.max(0.0);
-    let music_time_sec = (stream_pos - lead_in) * rate + anchor * (1.0 - rate);
+    let music_time_sec = (stream_pos - lead_in).mul_add(rate, anchor * (1.0 - rate));
     state.current_music_time = music_time_sec;
 
     // Optimization: only record if time has advanced slightly to avoid duplicates
@@ -2557,7 +2540,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
 
     state.log_timer += delta_time;
     if state.log_timer >= 1.0 {
-        let active_arrows: usize = state.arrows.iter().map(|v| v.len()).sum();
+        let active_arrows: usize = state.arrows.iter().map(std::vec::Vec::len).sum();
         log::info!(
             "Beat: {:.2}, Time: {:.2}, Combo: {}, Misses: {}, Active Arrows: {}",
             state.current_beat,

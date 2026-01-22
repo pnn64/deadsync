@@ -112,8 +112,8 @@ impl TextureHints {
     }
 }
 
-static TEX_META: once_cell::sync::Lazy<RwLock<HashMap<String, TexMeta>>> =
-    once_cell::sync::Lazy::new(|| RwLock::new(HashMap::new()));
+static TEX_META: std::sync::LazyLock<RwLock<HashMap<String, TexMeta>>> =
+    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
 pub fn register_texture_dims(key: &str, w: u32, h: u32) {
     let mut m = TEX_META.write().unwrap();
@@ -134,7 +134,7 @@ pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
 fn append_noteskins_pngs(list: &mut Vec<(String, String)>, folder: &str) {
     let dir = Path::new("assets").join(folder);
     if let Ok(entries) = fs::read_dir(dir) {
-        let prefix = format!("{}/", folder);
+        let prefix = format!("{folder}/");
         for entry in entries.flatten() {
             let path = entry.path();
             if path
@@ -162,7 +162,7 @@ pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
             if !b.is_ascii_digit() {
                 return None;
             }
-            let digit = (b - b'0') as u32;
+            let digit = u32::from(b - b'0');
             value = value.checked_mul(10)?.checked_add(digit)?;
         }
         Some(value)
@@ -252,7 +252,7 @@ fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
 
     for pixel in image.pixels_mut() {
         let [r, g, b, a] = pixel.0;
-        let lum = ((r as u16 * 30 + g as u16 * 59 + b as u16 * 11) / 100) as u8;
+        let lum = ((u16::from(r) * 30 + u16::from(g) * 59 + u16::from(b) * 11) / 100) as u8;
         if hints.alphamap {
             pixel.0 = [255, 255, 255, lum];
         } else {
@@ -290,7 +290,7 @@ impl AssetManager {
         self.fonts.insert(name, font);
     }
 
-    pub fn fonts(&self) -> &HashMap<&'static str, Font> {
+    pub const fn fonts(&self) -> &HashMap<&'static str, Font> {
         &self.fonts
     }
 
@@ -588,13 +588,12 @@ impl AssetManager {
                 Ok((key, rgba)) => {
                     let texture = backend.create_texture(&rgba, SamplerDesc::default())?;
                     register_texture_dims(&key, rgba.width(), rgba.height());
-                    info!("Loaded texture: {}", key);
+                    info!("Loaded texture: {key}");
                     self.textures.insert(key, texture);
                 }
                 Err((key, msg)) => {
                     warn!(
-                        "Failed to load texture for key '{}': {}. Using fallback.",
-                        key, msg
+                        "Failed to load texture for key '{key}': {msg}. Using fallback."
                     );
                     let texture =
                         backend.create_texture(&fallback_image, SamplerDesc::default())?;
@@ -651,7 +650,7 @@ impl AssetManager {
                 "combo_work" => "assets/fonts/_combo/Work/Work.ini",
                 "combo_wendy_cursed" => "assets/fonts/_combo/Wendy (Cursed)/Wendy (Cursed).ini",
                 "wendy_white" => "assets/fonts/wendy/_wendy white.ini",
-                _ => return Err(format!("Unknown font name: {}", name).into()),
+                _ => return Err(format!("Unknown font name: {name}").into()),
             };
 
             let FontLoadData {
@@ -689,11 +688,11 @@ impl AssetManager {
                     let texture = backend.create_texture(&image_data, hints.sampler_desc())?;
                     register_texture_dims(&key, image_data.width(), image_data.height());
                     self.textures.insert(key.clone(), texture);
-                    info!("Loaded font texture: {}", key);
+                    info!("Loaded font texture: {key}");
                 }
             }
             self.register_font(name, font);
-            info!("Loaded font '{}' from '{}'", name, ini_path_str);
+            info!("Loaded font '{name}' from '{ini_path_str}'");
         }
         Ok(())
     }
@@ -747,8 +746,7 @@ impl AssetManager {
                         }
                         Err(e) => {
                             warn!(
-                                "Failed to create GPU texture for {:?}: {}. Using fallback.",
-                                path, e
+                                "Failed to create GPU texture for {path:?}: {e}. Using fallback."
                             );
                             "banner1.png".to_string()
                         }
@@ -756,8 +754,7 @@ impl AssetManager {
                 }
                 Err(e) => {
                     warn!(
-                        "Failed to open banner image {:?}: {}. Using fallback.",
-                        path, e
+                        "Failed to open banner image {path:?}: {e}. Using fallback."
                     );
                     "banner1.png".to_string()
                 }
@@ -791,8 +788,7 @@ impl AssetManager {
                     Some(img) => img,
                     None => {
                         warn!(
-                            "Failed to create RgbaImage from raw graph data for key '{}'.",
-                            key
+                            "Failed to create RgbaImage from raw graph data for key '{key}'."
                         );
                         return FALLBACK_KEY.to_string();
                     }
@@ -807,8 +803,7 @@ impl AssetManager {
                 }
                 Err(e) => {
                     warn!(
-                        "Failed to create GPU texture for density graph ('{}'): {}.",
-                        key, e
+                        "Failed to create GPU texture for density graph ('{key}'): {e}."
                     );
                     FALLBACK_KEY.to_string()
                 }
@@ -850,8 +845,7 @@ impl AssetManager {
                         }
                         Err(e) => {
                             warn!(
-                                "Failed to create GPU texture for background {:?}: {}. Using fallback.",
-                                path, e
+                                "Failed to create GPU texture for background {path:?}: {e}. Using fallback."
                             );
                             FALLBACK_KEY.to_string()
                         }
@@ -859,8 +853,7 @@ impl AssetManager {
                 }
                 Err(e) => {
                     warn!(
-                        "Failed to open background image {:?}: {}. Using fallback.",
-                        path, e
+                        "Failed to open background image {path:?}: {e}. Using fallback."
                     );
                     FALLBACK_KEY.to_string()
                 }
@@ -929,14 +922,13 @@ impl AssetManager {
                     }
                     Err(e) => {
                         warn!(
-                            "Failed to create GPU texture for image {:?}: {}. Skipping.",
-                            path, e
+                            "Failed to create GPU texture for image {path:?}: {e}. Skipping."
                         );
                     }
                 }
             }
             Err(e) => {
-                warn!("Failed to open image {:?}: {}. Skipping.", path, e);
+                warn!("Failed to open image {path:?}: {e}. Skipping.");
             }
         }
     }

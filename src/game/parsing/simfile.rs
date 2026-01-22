@@ -145,8 +145,8 @@ enum CachedSpeedUnit {
 impl From<SpeedUnit> for CachedSpeedUnit {
     fn from(unit: SpeedUnit) -> Self {
         match unit {
-            SpeedUnit::Beats => CachedSpeedUnit::Beats,
-            SpeedUnit::Seconds => CachedSpeedUnit::Seconds,
+            SpeedUnit::Beats => Self::Beats,
+            SpeedUnit::Seconds => Self::Seconds,
         }
     }
 }
@@ -154,8 +154,8 @@ impl From<SpeedUnit> for CachedSpeedUnit {
 impl From<CachedSpeedUnit> for SpeedUnit {
     fn from(unit: CachedSpeedUnit) -> Self {
         match unit {
-            CachedSpeedUnit::Beats => SpeedUnit::Beats,
-            CachedSpeedUnit::Seconds => SpeedUnit::Seconds,
+            CachedSpeedUnit::Beats => Self::Beats,
+            CachedSpeedUnit::Seconds => Self::Seconds,
         }
     }
 }
@@ -292,11 +292,11 @@ enum CachedNoteType {
 impl From<NoteType> for CachedNoteType {
     fn from(note_type: NoteType) -> Self {
         match note_type {
-            NoteType::Tap => CachedNoteType::Tap,
-            NoteType::Hold => CachedNoteType::Hold,
-            NoteType::Roll => CachedNoteType::Roll,
-            NoteType::Mine => CachedNoteType::Mine,
-            NoteType::Fake => CachedNoteType::Fake,
+            NoteType::Tap => Self::Tap,
+            NoteType::Hold => Self::Hold,
+            NoteType::Roll => Self::Roll,
+            NoteType::Mine => Self::Mine,
+            NoteType::Fake => Self::Fake,
         }
     }
 }
@@ -304,11 +304,11 @@ impl From<NoteType> for CachedNoteType {
 impl From<CachedNoteType> for NoteType {
     fn from(note_type: CachedNoteType) -> Self {
         match note_type {
-            CachedNoteType::Tap => NoteType::Tap,
-            CachedNoteType::Hold => NoteType::Hold,
-            CachedNoteType::Roll => NoteType::Roll,
-            CachedNoteType::Mine => NoteType::Mine,
-            CachedNoteType::Fake => NoteType::Fake,
+            CachedNoteType::Tap => Self::Tap,
+            CachedNoteType::Hold => Self::Hold,
+            CachedNoteType::Roll => Self::Roll,
+            CachedNoteType::Mine => Self::Mine,
+            CachedNoteType::Fake => Self::Fake,
         }
     }
 }
@@ -593,7 +593,7 @@ fn get_cache_path(simfile_path: &Path) -> Result<PathBuf, std::io::Error> {
     let path_hash = hasher.finish();
 
     let cache_dir = Path::new("cache/songs");
-    let file_name = format!("{:x}.bin", path_hash);
+    let file_name = format!("{path_hash:x}.bin");
     Ok(cache_dir.join(file_name))
 }
 
@@ -602,8 +602,7 @@ fn compute_song_cache_keys(path: &Path) -> SongCacheKeys {
         Ok(p) => Some(p),
         Err(e) => {
             warn!(
-                "Could not generate cache path for {:?}: {}. Caching disabled for this file.",
-                path, e
+                "Could not generate cache path for {path:?}: {e}. Caching disabled for this file."
             );
             None
         }
@@ -621,7 +620,7 @@ fn fmt_scan_time(d: Duration) -> String {
     }
     let total_s = ms as f64 / 1000.0;
     let m = (total_s / 60.0).floor() as u64;
-    let s = total_s - (m as f64 * 60.0);
+    let s = (m as f64).mul_add(-60.0, total_s);
     format!("{m}m{s:.1}s")
 }
 
@@ -635,8 +634,8 @@ fn itgmania_make_sort_bytes(s: &str) -> Vec<u8> {
     }
 
     if let Some(&b) = out.first() {
-        let is_alpha = (b'A'..=b'Z').contains(&b);
-        let is_digit = (b'0'..=b'9').contains(&b);
+        let is_alpha = b.is_ascii_uppercase();
+        let is_digit = b.is_ascii_digit();
         if !is_alpha && !is_digit {
             out.insert(0, b'~');
         }
@@ -728,7 +727,7 @@ fn hydrate_chart_timings(song: &mut SongData, global_offset_seconds: f32) {
 }
 
 /// Helper to load a song from cache OR parse it if needed.
-/// Returns (SongData, is_cache_hit).
+/// Returns (`SongData`, `is_cache_hit`).
 fn process_song(
     simfile_path: PathBuf,
     fastload: bool,
@@ -742,14 +741,12 @@ fn process_song(
     };
 
     // 1. Try Loading from Cache
-    if fastload {
-        if let Some(cp) = &cache_keys.cache_path {
-            if let Some(song_data) = load_song_from_cache(&simfile_path, cp, global_offset_seconds)
+    if fastload
+        && let Some(cp) = &cache_keys.cache_path
+            && let Some(song_data) = load_song_from_cache(&simfile_path, cp, global_offset_seconds)
             {
                 return Ok((song_data, true)); // is_hit = true
             }
-        }
-    }
 
     // 2. Parse from Source (Cache Miss)
     let song_data = parse_song_and_maybe_write_cache(
@@ -765,7 +762,7 @@ fn process_song(
 /// Scans the provided root directory (e.g., "songs/") for simfiles,
 /// parses them, and populates the global cache. This should be run once at startup.
 pub fn scan_and_load_songs(root_path_str: &'static str) {
-    info!("Starting simfile scan in '{}'...", root_path_str);
+    info!("Starting simfile scan in '{root_path_str}'...");
 
     let started = Instant::now();
     let config = crate::config::get();
@@ -774,7 +771,7 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
     let global_offset_seconds = config.global_offset_seconds;
 
     let avail_threads = std::thread::available_parallelism()
-        .map(|n| n.get())
+        .map(std::num::NonZero::get)
         .unwrap_or(1);
     let mut parse_threads = match config.song_parsing_threads {
         0 => avail_threads,
@@ -799,8 +796,7 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
     let root_path = Path::new(root_path_str);
     if !root_path.exists() || !root_path.is_dir() {
         warn!(
-            "Songs directory '{}' not found. No songs will be loaded.",
-            root_path_str
+            "Songs directory '{root_path_str}' not found. No songs will be loaded."
         );
         return;
     }
@@ -813,7 +809,7 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
     let packs = match rssp::pack::scan_songs_dir(root_path, rssp::pack::ScanOpt::default()) {
         Ok(p) => p,
         Err(e) => {
-            warn!("Could not scan songs dir '{}': {:?}", root_path_str, e);
+            warn!("Could not scan songs dir '{root_path_str}': {e:?}");
             return;
         }
     };
@@ -853,7 +849,7 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
                     }
                     Err(e) => {
                         *songs_failed += 1;
-                        warn!("Failed to load '{:?}': {}", simfile_path, e)
+                        warn!("Failed to load '{simfile_path:?}': {e}")
                     }
                 }
             }
@@ -925,7 +921,7 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
                         }
                         Err(e) => {
                             songs_failed += 1;
-                            warn!("Failed to load '{:?}': {}", simfile_path, e)
+                            warn!("Failed to load '{simfile_path:?}': {e}")
                         }
                     }
                     continue;
@@ -964,7 +960,7 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
                     }
                     Err(e) => {
                         songs_failed += 1;
-                        warn!("Failed to load '{:?}': {}", simfile_path, e)
+                        warn!("Failed to load '{simfile_path:?}': {e}")
                     }
                 }
             }
@@ -1084,7 +1080,7 @@ fn resolve_song_dir(
             }?;
             group_dirs.insert(key.clone(), path);
         }
-        group_dirs.get(&key).map(|p| p.as_path())
+        group_dirs.get(&key).map(std::path::PathBuf::as_path)
     }
 
     let song = song.trim();
@@ -1122,14 +1118,13 @@ fn resolve_song_dir(
 }
 
 pub fn scan_and_load_courses(courses_root_str: &'static str, songs_root_str: &'static str) {
-    info!("Starting course scan in '{}'...", courses_root_str);
+    info!("Starting course scan in '{courses_root_str}'...");
     let started = Instant::now();
 
     let courses_root = Path::new(courses_root_str);
     if !courses_root.is_dir() {
         warn!(
-            "Courses directory '{}' not found. No courses will be loaded.",
-            courses_root_str
+            "Courses directory '{courses_root_str}' not found. No courses will be loaded."
         );
         set_course_cache(Vec::new());
         return;
@@ -1138,8 +1133,7 @@ pub fn scan_and_load_courses(courses_root_str: &'static str, songs_root_str: &'s
     let songs_root = Path::new(songs_root_str);
     if !songs_root.is_dir() {
         warn!(
-            "Songs directory '{}' not found. No courses will be loaded.",
-            songs_root_str
+            "Songs directory '{songs_root_str}' not found. No courses will be loaded."
         );
         set_course_cache(Vec::new());
         return;
@@ -1325,10 +1319,10 @@ fn parse_song_and_maybe_write_cache(
         if let Ok(encoded) = bincode::encode_to_vec(&cached_song, bincode::config::standard()) {
             if let Ok(mut file) = fs::File::create(&cp) {
                 if file.write_all(&encoded).is_err() {
-                    warn!("Failed to write cache file for {:?}", cp);
+                    warn!("Failed to write cache file for {cp:?}");
                 }
             } else {
-                warn!("Failed to create cache file for {:?}", cp);
+                warn!("Failed to create cache file for {cp:?}");
             }
         }
     }
@@ -1340,7 +1334,7 @@ fn parse_song_and_maybe_write_cache(
 
 /// The original parsing logic, now separated to be called on a cache miss.
 fn parse_and_process_song_file(path: &Path, need_hash: bool) -> Result<(SongData, Option<u64>), String> {
-    let simfile_data = fs::read(path).map_err(|e| format!("Could not read file: {}", e))?;
+    let simfile_data = fs::read(path).map_err(|e| format!("Could not read file: {e}"))?;
     let content_hash = need_hash.then(|| {
         let mut hasher = XxHash64::with_seed(0);
         hasher.write(&simfile_data);
@@ -1406,10 +1400,10 @@ fn parse_and_process_song_file(path: &Path, need_hash: bool) -> Result<(SongData
         &summary.background_path,
     );
 
-    let music_path = if !summary.music_path.is_empty() {
-        Some(simfile_dir.join(summary.music_path))
-    } else {
+    let music_path = if summary.music_path.is_empty() {
         None
+    } else {
+        Some(simfile_dir.join(summary.music_path))
     };
 
     // Compute audio length (music file duration) in seconds, mirroring ITGmania's
@@ -1477,11 +1471,10 @@ fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
     let ext_is_ogg = path
         .extension()
         .and_then(|s| s.to_str())
-        .map(|ext| {
+        .is_some_and(|ext| {
             let ext_lower = ext.to_ascii_lowercase();
             ext_lower == "ogg" || ext_lower == "oga"
-        })
-        .unwrap_or(false);
+        });
     if !ext_is_ogg {
         return 0.0;
     }
@@ -1489,7 +1482,7 @@ fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
     match ogg_length_seconds(path) {
         Ok(sec) => sec,
         Err(e) => {
-            warn!("Failed to compute OGG length for {:?}: {}", path, e);
+            warn!("Failed to compute OGG length for {path:?}: {e}");
             0.0
         }
     }
@@ -1498,21 +1491,21 @@ fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
 /// Fast OGG length detection: use lewton only for headers (sample rate) and
 /// scan backwards through the file to find the last valid granule position.
 fn ogg_length_seconds(path: &Path) -> Result<f32, String> {
-    let file = fs::File::open(path).map_err(|e| format!("Cannot open file: {}", e))?;
+    let file = fs::File::open(path).map_err(|e| format!("Cannot open file: {e}"))?;
 
     // Safe wrapper around the unsafe memmap2 API.
-    let mmap = unsafe { Mmap::map(&file) }.map_err(|e| format!("Memory-map failed: {}", e))?;
+    let mmap = unsafe { Mmap::map(&file) }.map_err(|e| format!("Memory-map failed: {e}"))?;
 
     // Use lewton to get the sample rate from the header.
     let sample_rate_hz = {
         let cursor = Cursor::new(&mmap[..]);
         let reader = OggStreamReader::new(BufReader::new(cursor))
-            .map_err(|e| format!("lewton header error: {}", e))?;
+            .map_err(|e| format!("lewton header error: {e}"))?;
         let rate = reader.ident_hdr.audio_sample_rate;
         if rate == 0 {
             return Err("Invalid sample rate (0)".into());
         }
-        rate as f64
+        f64::from(rate)
     };
 
     let total_samples = find_last_granule_backwards(&mmap)?;

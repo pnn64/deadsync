@@ -1,7 +1,7 @@
 use crate::act;
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::*;
+use crate::core::space::{screen_width, screen_height, widescale, screen_center_x, screen_center_y};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
@@ -45,20 +45,20 @@ enum Choice {
 
 impl Choice {
     #[inline(always)]
-    const fn from_index(idx: usize) -> Choice {
+    const fn from_index(idx: usize) -> Self {
         match idx {
-            0 => Choice::Single,
-            1 => Choice::Versus,
-            _ => Choice::Double,
+            0 => Self::Single,
+            1 => Self::Versus,
+            _ => Self::Double,
         }
     }
 
     #[inline(always)]
     const fn label(self) -> &'static str {
         match self {
-            Choice::Single => "1 Player",
-            Choice::Versus => "2 Players",
-            Choice::Double => "Double",
+            Self::Single => "1 Player",
+            Self::Versus => "2 Players",
+            Self::Double => "Double",
         }
     }
 }
@@ -110,12 +110,11 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     if state.exit_requested {
-        if let Some(target) = state.exit_target {
-            if exit_anim_t(state.exit_chosen_anim) >= CHOICE_CHOSEN_ZOOM_OUT_DURATION {
+        if let Some(target) = state.exit_target
+            && exit_anim_t(state.exit_chosen_anim) >= CHOICE_CHOSEN_ZOOM_OUT_DURATION {
                 state.exit_target = None;
                 return Some(ScreenAction::Navigate(target));
             }
-        }
         return None;
     }
     let speed = (CHOICE_ZOOM_FOCUSED - CHOICE_ZOOM_UNFOCUSED) / CHOICE_ZOOM_TWEEN_DURATION;
@@ -201,7 +200,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 #[inline(always)]
 fn smoothstep(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
+    t * t * 2.0f32.mul_add(-t, 3.0)
 }
 
 #[inline(always)]
@@ -252,8 +251,8 @@ fn push_pad_tiles(
             };
             tint[3] *= alpha_mul;
 
-            let x = base_x + tile_step * (col as f32 - 1.0);
-            let y = base_y + tile_step * (row as f32 - 2.0);
+            let x = tile_step.mul_add(col as f32 - 1.0, base_x);
+            let y = tile_step.mul_add(row as f32 - 2.0, base_y);
 
             out.push(act!(sprite("rounded-square.png"):
                 xy(x, y):
@@ -371,7 +370,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             }
         }
 
-        let label_y = cy + 37.0 * zoom;
+        let label_y = 37.0f32.mul_add(zoom, cy);
         actors.push(act!(text:
             align(0.5, 0.0):
             xy(x, label_y):

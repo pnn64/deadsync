@@ -113,9 +113,9 @@ enum BackendImpl {
 pub struct Backend(BackendImpl);
 
 impl Backend {
-    pub fn draw<'a>(
+    pub fn draw(
         &mut self,
-        render_list: &RenderList<'a>,
+        render_list: &RenderList<'_>,
         textures: &HashMap<String, Texture>,
     ) -> Result<u32, Box<dyn Error>> {
         match &mut self.0 {
@@ -299,18 +299,18 @@ impl FromStr for BackendType {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "vulkan" => Ok(BackendType::Vulkan),
+            "vulkan" => Ok(Self::Vulkan),
             "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" | "vulkan (wgpu)" => {
-                Ok(BackendType::VulkanWgpu)
+                Ok(Self::VulkanWgpu)
             }
-            "opengl" => Ok(BackendType::OpenGL),
+            "opengl" => Ok(Self::OpenGL),
             "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => {
-                Ok(BackendType::OpenGLWgpu)
+                Ok(Self::OpenGLWgpu)
             }
-            "software" | "cpu" => Ok(BackendType::Software),
+            "software" | "cpu" => Ok(Self::Software),
             #[cfg(target_os = "windows")]
-            "directx" | "dx12" | "directx (wgpu)" => Ok(BackendType::DirectX),
-            _ => Err(format!("'{}' is not a valid video renderer", s)),
+            "directx" | "dx12" | "directx (wgpu)" => Ok(Self::DirectX),
+            _ => Err(format!("'{s}' is not a valid video renderer")),
         }
     }
 }

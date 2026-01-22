@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets;
-use crate::core::space::*;
+use crate::core::space::screen_center_x;
 use crate::ui::actors::Actor;
 
 /// Parameters to tweak the layout easily.
@@ -41,7 +41,7 @@ pub fn build_logo(params: LogoParams) -> Vec<Actor> {
     let center_x = screen_center_x();
     let logo_top_y = params.top_margin;
     // The dance banner will be centered vertically within the logo's final height.
-    let dance_center_y = logo_top_y + 0.5 * logo_h - params.banner_y_offset_inside;
+    let dance_center_y = 0.5f32.mul_add(logo_h, logo_top_y) - params.banner_y_offset_inside;
 
     vec![
         // The dance banner's width is constrained to the logo's width.

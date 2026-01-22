@@ -1,5 +1,5 @@
 use crate::act;
-use crate::core::space::*;
+use crate::core::space::{screen_width, screen_height, screen_center_x, screen_center_y};
 use crate::game::profile;
 // Screen navigation handled in app.rs
 use crate::ui::actors::Actor;
@@ -50,16 +50,16 @@ fn is_wide() -> bool {
 /* -------------------------------- state -------------------------------- */
 
 pub struct State {
-    /// Which color in DECORATIVE_HEX is focused (and previewed in the bg)
+    /// Which color in `DECORATIVE_HEX` is focused (and previewed in the bg)
     pub active_color_index: i32,
-    /// Smooth wheel offset (in “slots”); tweened toward active_color_index
+    /// Smooth wheel offset (in “slots”); tweened toward `active_color_index`
     pub scroll: f32,
     scroll_from: f32,
     scroll_to: f32,
     scroll_t: f32, // [0, SCROLL_TWEEN_DURATION]
     exit_requested: bool,
     bg: heart_bg::State,
-    /// Background fade: from -> to over BG_FADE_DURATION
+    /// Background fade: from -> to over `BG_FADE_DURATION`
     pub bg_from_index: i32,
     pub bg_to_index: i32,
     pub bg_fade_t: f32, // [0, BG_FADE_DURATION] ; >= dur means finished
@@ -81,7 +81,7 @@ pub fn init() -> State {
     }
 }
 
-pub fn snap_scroll_to_active(state: &mut State) {
+pub const fn snap_scroll_to_active(state: &mut State) {
     let s = state.active_color_index as f32;
     state.scroll = s;
     state.scroll_from = s;
@@ -89,13 +89,13 @@ pub fn snap_scroll_to_active(state: &mut State) {
     state.scroll_t = SCROLL_TWEEN_DURATION;
 }
 
-pub fn on_enter(state: &mut State) {
+pub const fn on_enter(state: &mut State) {
     state.exit_requested = false;
 }
 
 pub fn exit_anim_duration() -> f32 {
     let num_slots = if is_wide() { 11 } else { 7 };
-    WHEEL_OFF_STAGGER * (num_slots as f32) + WHEEL_OFF_FADE_DURATION
+    WHEEL_OFF_STAGGER.mul_add(num_slots as f32, WHEEL_OFF_FADE_DURATION)
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
@@ -255,7 +255,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         static STEPS_NARROW: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
 
         let num_slots = if wide { 11 } else { 7 };
-        let dur = WHEEL_OFF_STAGGER * (num_slots as f32) + WHEEL_OFF_FADE_DURATION;
+        let dur = WHEEL_OFF_STAGGER.mul_add(num_slots as f32, WHEEL_OFF_FADE_DURATION);
 
         let steps = if wide {
             STEPS_WIDE.get_or_init(|| vec![anim::linear(dur).x(dur).build()])
@@ -341,7 +341,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         let x_final = cx + if o >= 0.0 { x_off } else { -x_off };
 
         // Y forms a gentle bow
-        let y_off_final = 12.0 * o * o - 20.0;
+        let y_off_final = (12.0 * o).mul_add(o, -20.0);
 
         // inward tilt
         let rot_deg_final = -o * ROT_PER_SLOT_DEG;
@@ -405,7 +405,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
 #[inline(always)]
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    a + (b - a) * t
+    (b - a).mul_add(t, a)
 }
 
 #[inline(always)]

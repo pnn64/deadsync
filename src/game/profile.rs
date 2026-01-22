@@ -1,7 +1,6 @@
 pub use super::scroll::ScrollSpeedSetting;
 use crate::config::SimpleIni;
 use log::{info, warn};
-use once_cell::sync::Lazy;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -12,26 +11,26 @@ pub struct ScrollOption(u8);
 
 #[allow(non_upper_case_globals)]
 impl ScrollOption {
-    pub const Normal: ScrollOption = ScrollOption(0);
-    pub const Reverse: ScrollOption = ScrollOption(1 << 0);
-    pub const Split: ScrollOption = ScrollOption(1 << 1);
-    pub const Alternate: ScrollOption = ScrollOption(1 << 2);
-    pub const Cross: ScrollOption = ScrollOption(1 << 3);
-    pub const Centered: ScrollOption = ScrollOption(1 << 4);
+    pub const Normal: Self = Self(0);
+    pub const Reverse: Self = Self(1 << 0);
+    pub const Split: Self = Self(1 << 1);
+    pub const Alternate: Self = Self(1 << 2);
+    pub const Cross: Self = Self(1 << 3);
+    pub const Centered: Self = Self(1 << 4);
 
     #[inline(always)]
-    pub const fn empty() -> ScrollOption {
-        ScrollOption(0)
+    pub const fn empty() -> Self {
+        Self(0)
     }
 
     #[inline(always)]
-    pub const fn contains(self, flag: ScrollOption) -> bool {
+    pub const fn contains(self, flag: Self) -> bool {
         (self.0 & flag.0) != 0
     }
 
     #[inline(always)]
-    pub const fn union(self, other: ScrollOption) -> ScrollOption {
-        ScrollOption(self.0 | other.0)
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
     }
 
     #[inline(always)]
@@ -42,7 +41,7 @@ impl ScrollOption {
 
 impl Default for ScrollOption {
     fn default() -> Self {
-        ScrollOption::Normal
+        Self::Normal
     }
 }
 
@@ -57,20 +56,20 @@ impl FromStr for ScrollOption {
         let lower = raw.to_lowercase();
         // Support both legacy single values ("Reverse") and combined values
         // like "Reverse+Cross" or "Reverse Cross".
-        let mut result = ScrollOption::empty();
+        let mut result = Self::empty();
         for token in lower.split(|c: char| c == '+' || c == ',' || c.is_whitespace()) {
             if token.is_empty() {
                 continue;
             }
             let flag = match token {
-                "normal" => ScrollOption::Normal,
-                "reverse" => ScrollOption::Reverse,
-                "split" => ScrollOption::Split,
-                "alternate" => ScrollOption::Alternate,
-                "cross" => ScrollOption::Cross,
-                "centered" => ScrollOption::Centered,
+                "normal" => Self::Normal,
+                "reverse" => Self::Reverse,
+                "split" => Self::Split,
+                "alternate" => Self::Alternate,
+                "cross" => Self::Cross,
+                "centered" => Self::Centered,
                 other => {
-                    return Err(format!("'{}' is not a valid Scroll setting", other));
+                    return Err(format!("'{other}' is not a valid Scroll setting"));
                 }
             };
             // "Normal" means no flags; combining it with others is treated as just the others.
@@ -97,14 +96,14 @@ impl core::fmt::Display for ScrollOption {
                 write!(f, "+")?;
             }
             first = false;
-            write!(f, "{}", name)
+            write!(f, "{name}")
         };
 
-        write_flag("Reverse", self.contains(ScrollOption::Reverse), f)?;
-        write_flag("Split", self.contains(ScrollOption::Split), f)?;
-        write_flag("Alternate", self.contains(ScrollOption::Alternate), f)?;
-        write_flag("Cross", self.contains(ScrollOption::Cross), f)?;
-        write_flag("Centered", self.contains(ScrollOption::Centered), f)
+        write_flag("Reverse", self.contains(Self::Reverse), f)?;
+        write_flag("Split", self.contains(Self::Split), f)?;
+        write_flag("Alternate", self.contains(Self::Alternate), f)?;
+        write_flag("Cross", self.contains(Self::Cross), f)?;
+        write_flag("Centered", self.contains(Self::Centered), f)
     }
 }
 
@@ -149,7 +148,7 @@ impl FromStr for BackgroundFilter {
             "dark" => Ok(Self::Dark),
             "darker" => Ok(Self::Darker),
             "darkest" => Ok(Self::Darkest),
-            _ => Err(format!("'{}' is not a valid BackgroundFilter setting", s)),
+            _ => Err(format!("'{s}' is not a valid BackgroundFilter setting")),
         }
     }
 }
@@ -183,8 +182,7 @@ impl FromStr for HoldJudgmentGraphic {
             "itg2" => Ok(Self::ITG2),
             "none" => Ok(Self::None),
             other => Err(format!(
-                "'{}' is not a valid HoldJudgmentGraphic setting",
-                other
+                "'{other}' is not a valid HoldJudgmentGraphic setting"
             )),
         }
     }
@@ -258,8 +256,7 @@ impl FromStr for JudgmentGraphic {
             "wendychroma" => Ok(Self::WendyChroma),
             "none" => Ok(Self::None),
             other => Err(format!(
-                "'{}' is not a valid JudgmentGraphic setting",
-                other
+                "'{other}' is not a valid JudgmentGraphic setting"
             )),
         }
     }
@@ -310,7 +307,7 @@ impl FromStr for NoteSkin {
             "metal" => Ok(Self::Metal),
             "enchantment-v2" => Ok(Self::EnchantmentV2),
             "devcel-2024-v3" => Ok(Self::DevCel2024V3),
-            other => Err(format!("'{}' is not a valid NoteSkin setting", other)),
+            other => Err(format!("'{other}' is not a valid NoteSkin setting")),
         }
     }
 }
@@ -352,7 +349,7 @@ impl FromStr for ComboFont {
             "work" => Ok(Self::Work),
             "wendy (cursed)" | "wendy cursed" | "wendycursed" => Ok(Self::WendyCursed),
             "none" => Ok(Self::None),
-            other => Err(format!("'{}' is not a valid ComboFont setting", other)),
+            other => Err(format!("'{other}' is not a valid ComboFont setting")),
         }
     }
 }
@@ -417,9 +414,9 @@ impl Default for Profile {
         Self {
             display_name: "Player 1".to_string(),
             player_initials: "P1".to_string(),
-            groovestats_api_key: "".to_string(),
+            groovestats_api_key: String::new(),
             groovestats_is_pad_player: false,
-            groovestats_username: "".to_string(),
+            groovestats_username: String::new(),
             background_filter: BackgroundFilter::default(),
             hold_judgment_graphic: HoldJudgmentGraphic::default(),
             judgment_graphic: JudgmentGraphic::default(),
@@ -445,7 +442,7 @@ impl Default for Profile {
 }
 
 // Global static for the current profile.
-static PROFILE: Lazy<Mutex<Profile>> = Lazy::new(|| Mutex::new(Profile::default()));
+static PROFILE: std::sync::LazyLock<Mutex<Profile>> = std::sync::LazyLock::new(|| Mutex::new(Profile::default()));
 
 // --- Session-scoped state (not persisted) ---
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -465,8 +462,8 @@ pub enum PlayStyle {
 impl PlayStyle {
     pub const fn chart_type(self) -> &'static str {
         match self {
-            PlayStyle::Single | PlayStyle::Versus => "dance-single",
-            PlayStyle::Double => "dance-double",
+            Self::Single | Self::Versus => "dance-single",
+            Self::Double => "dance-double",
         }
     }
 }
@@ -486,7 +483,7 @@ struct SessionState {
     player_side: PlayerSide,
 }
 
-static SESSION: Lazy<Mutex<SessionState>> = Lazy::new(|| {
+static SESSION: std::sync::LazyLock<Mutex<SessionState>> = std::sync::LazyLock::new(|| {
     Mutex::new(SessionState {
         active_profile: ActiveProfile::Local {
             id: DEFAULT_PROFILE_ID.to_string(),
@@ -522,27 +519,19 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         content.push_str(&format!("Scroll = {}\n", default_profile.scroll_option));
         content.push_str(&format!(
             "ReverseScroll = {}\n",
-            if default_profile.reverse_scroll { 1 } else { 0 }
+            i32::from(default_profile.reverse_scroll)
         ));
         content.push_str(&format!(
             "ShowFaPlusWindow = {}\n",
-            if default_profile.show_fa_plus_window {
-                1
-            } else {
-                0
-            }
+            i32::from(default_profile.show_fa_plus_window)
         ));
         content.push_str(&format!(
             "ShowExScore = {}\n",
-            if default_profile.show_ex_score { 1 } else { 0 }
+            i32::from(default_profile.show_ex_score)
         ));
         content.push_str(&format!(
             "ShowFaPlusPane = {}\n",
-            if default_profile.show_fa_plus_pane {
-                1
-            } else {
-                0
-            }
+            i32::from(default_profile.show_fa_plus_pane)
         ));
         content.push_str(&format!(
             "HoldJudgmentGraphic = {}\n",
@@ -613,19 +602,19 @@ fn save_profile_ini() {
     content.push_str(&format!("Scroll={}\n", profile.scroll_option));
     content.push_str(&format!(
         "ReverseScroll={}\n",
-        if profile.reverse_scroll { 1 } else { 0 }
+        i32::from(profile.reverse_scroll)
     ));
     content.push_str(&format!(
         "ShowFaPlusWindow={}\n",
-        if profile.show_fa_plus_window { 1 } else { 0 }
+        i32::from(profile.show_fa_plus_window)
     ));
     content.push_str(&format!(
         "ShowExScore={}\n",
-        if profile.show_ex_score { 1 } else { 0 }
+        i32::from(profile.show_ex_score)
     ));
     content.push_str(&format!(
         "ShowFaPlusPane={}\n",
-        if profile.show_fa_plus_pane { 1 } else { 0 }
+        i32::from(profile.show_fa_plus_pane)
     ));
     content.push_str(&format!(
         "HoldJudgmentGraphic={}\n",
@@ -654,12 +643,12 @@ fn save_profile_ini() {
     // can reopen SelectMusic on the most recently played chart.
     content.push_str("[LastPlayed]\n");
     if let Some(path) = &profile.last_song_music_path {
-        content.push_str(&format!("MusicPath={}\n", path));
+        content.push_str(&format!("MusicPath={path}\n"));
     } else {
         content.push_str("MusicPath=\n");
     }
     if let Some(hash) = &profile.last_chart_hash {
-        content.push_str(&format!("ChartHash={}\n", hash));
+        content.push_str(&format!("ChartHash={hash}\n"));
     } else {
         content.push_str("ChartHash=\n");
     }
@@ -733,7 +722,7 @@ pub fn load() {
     if (!profile_ini.exists() || !groovestats_ini.exists())
         && let Err(e) = ensure_local_profile_files(&profile_id)
     {
-        warn!("Failed to create default profile files: {}", e);
+        warn!("Failed to create default profile files: {e}");
         // Proceed with default struct values and attempt to save them.
     }
 
@@ -817,27 +806,25 @@ pub fn load() {
             // Optional last-played section: if missing, fall back to defaults.
             profile.last_song_music_path = profile_conf
                 .get("LastPlayed", "MusicPath")
-                .map(|s| {
+                .and_then(|s| {
                     let trimmed = s.trim();
                     if trimmed.is_empty() {
                         None
                     } else {
                         Some(trimmed.to_string())
                     }
-                })
-                .unwrap_or(None);
+                });
 
             profile.last_chart_hash = profile_conf
                 .get("LastPlayed", "ChartHash")
-                .map(|s| {
+                .and_then(|s| {
                     let trimmed = s.trim();
                     if trimmed.is_empty() {
                         None
                     } else {
                         Some(trimmed.to_string())
                     }
-                })
-                .unwrap_or(None);
+                });
 
             let raw_last_diff = profile_conf
                 .get("LastPlayed", "DifficultyIndex")
@@ -864,7 +851,7 @@ pub fn load() {
                 .map_or(default_profile.groovestats_is_pad_player, |v| v != 0);
             profile.groovestats_username = gs_conf
                 .get("GrooveStats", "Username")
-                .unwrap_or(default_profile.groovestats_username.clone());
+                .unwrap_or(default_profile.groovestats_username);
         } else {
             warn!(
                 "Failed to load '{}', using default GrooveStats info.",
@@ -945,7 +932,7 @@ pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
         if !ft.is_dir() {
             continue;
         }
-        let Some(id) = entry.file_name().to_str().map(|s| s.to_string()) else {
+        let Some(id) = entry.file_name().to_str().map(std::string::ToString::to_string) else {
             continue;
         };
         if !is_profile_id(&id) {

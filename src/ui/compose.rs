@@ -527,8 +527,8 @@ fn place_rect(parent: SmRect, align: [f32; 2], offset: [f32; 2], size: [SizeSpec
     let ax = align[0];
     let ay = align[1];
     SmRect {
-        x: rx + offset[0] - ax * w,
-        y: ry + offset[1] - ay * h,
+        x: ax.mul_add(-w, rx + offset[0]),
+        y: ay.mul_add(-h, ry + offset[1]),
         w,
         h,
     }
@@ -640,8 +640,8 @@ fn push_sprite<'a>(
 
     // StepMania parity: crop shifts geometry toward the un-cropped side(s).
     // (This matches Sprite::DrawTexture(), which moves quad vertices instead of the actor.)
-    let center_x = base_center.x + (cl - cr) * base_size.x * 0.5;
-    let center_y = base_center.y + (cb - ct) * base_size.y * 0.5;
+    let center_x = ((cl - cr) * base_size.x).mul_add(0.5, base_center.x);
+    let center_y = ((cb - ct) * base_size.y).mul_add(0.5, base_center.y);
     let size_x = base_size.x * sx_crop;
     let size_y = base_size.y * sy_crop;
 
@@ -733,7 +733,7 @@ fn push_sprite<'a>(
 
 #[inline(always)]
 #[must_use]
-fn clamp_crop_fractions(l: f32, r: f32, t: f32, b: f32) -> (f32, f32, f32, f32) {
+const fn clamp_crop_fractions(l: f32, r: f32, t: f32, b: f32) -> (f32, f32, f32, f32) {
     (
         l.clamp(0.0, 1.0),
         r.clamp(0.0, 1.0),
@@ -770,7 +770,7 @@ fn lrint_ties_even(v: f32) -> f32 {
 
 #[inline(always)]
 #[must_use]
-fn quantize_up_even_i32(v: i32) -> i32 {
+const fn quantize_up_even_i32(v: i32) -> i32 {
     if v <= 0 {
         0
     } else if (v & 1) != 0 {
@@ -818,7 +818,7 @@ fn layout_text<'a>(
         .lines()
         .map(|line| {
             line.chars()
-                .map(|c| font::find_glyph(font, c, fonts).map_or(0, |glyph| advance_logical(glyph)))
+                .map(|c| font::find_glyph(font, c, fonts).map_or(0, advance_logical))
                 .sum()
         })
         .collect();
@@ -914,10 +914,10 @@ fn layout_text<'a>(
     let block_h_px = block_h_logical * sy;
 
     // 9) Place the block, compute baseline (unchanged)
-    let block_left_sm = parent.x + offset[0] - align[0] * block_w_px;
-    let block_top_sm = parent.y + offset[1] - align[1] * block_h_px;
-    let block_center_x = block_left_sm + 0.5 * block_w_px;
-    let block_center_y = block_top_sm + 0.5 * block_h_px;
+    let block_left_sm = align[0].mul_add(-block_w_px, parent.x + offset[0]);
+    let block_top_sm = align[1].mul_add(-block_h_px, parent.y + offset[1]);
+    let block_center_x = 0.5f32.mul_add(block_w_px, block_left_sm);
+    let block_center_y = 0.5f32.mul_add(block_h_px, block_top_sm);
 
     let mut pen_y_logical = lrint_ties_even(-(block_h_logical_i as f32) * 0.5) as i32;
     let line_padding = font.line_spacing - font.height;
@@ -929,13 +929,13 @@ fn layout_text<'a>(
             actors::TextAlign::Center => 0.5,
             actors::TextAlign::Right => 1.0,
         };
-        let start = -0.5 * block_w_logical + align_value * (block_w_logical - line_w_logical);
+        let start = (-0.5f32).mul_add(block_w_logical, align_value * (block_w_logical - line_w_logical));
         lrint_ties_even(start) as i32
     }
 
     #[inline(always)]
     fn logical_to_world(center: f32, logical: f32, scale: f32) -> f32 {
-        center + logical * scale
+        logical.mul_add(scale, center)
     }
 
     // Optimization: Use linear scan on simple vec instead of HashMap for texture dims cache
@@ -1030,8 +1030,8 @@ fn layout_text<'a>(
 fn sm_rect_to_world_center_size(rect: SmRect, m: &Metrics) -> (Vector2<f32>, Vector2<f32>) {
     (
         Vector2::new(
-            m.left + rect.x + 0.5 * rect.w,
-            m.top - (rect.y + 0.5 * rect.h),
+            0.5f32.mul_add(rect.w, m.left + rect.x),
+            m.top - 0.5f32.mul_add(rect.h, rect.y),
         ),
         Vector2::new(rect.w, rect.h),
     )

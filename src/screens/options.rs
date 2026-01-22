@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::core::display::{self, MonitorSpec};
 use crate::core::gfx::BackendType;
-use crate::core::space::*;
+use crate::core::space::{screen_width, screen_height, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::config::{self, DisplayMode, FullscreenType};
 use crate::core::audio;
@@ -50,13 +50,13 @@ fn ease_out_cubic(t: f32) -> f32 {
         t
     };
     let u = 1.0 - clamped;
-    1.0 - u * u * u
+    (u * u).mul_add(-u, 1.0)
 }
 
 #[inline(always)]
 fn format_ms(value: i32) -> String {
     // Positive values omit a '+' and compact to the Simply Love "Nms" style.
-    format!("{}ms", value)
+    format!("{value}ms")
 }
 
 #[inline(always)]
@@ -97,7 +97,7 @@ const DESC_H: f32 = (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) 
 const TEXT_LEFT_PAD: f32 = 40.66;
 /// Left margin for the heart icon (in content-space pixels).
 const HEART_LEFT_PAD: f32 = 13.0;
-/// Label text zoom, matched to the left column titles in player_options.rs.
+/// Label text zoom, matched to the left column titles in `player_options.rs`.
 const ITEM_TEXT_ZOOM: f32 = 0.88;
 /// Width of the System Options submenu label column (content-space pixels).
 const SUB_LABEL_COL_W: f32 = 142.5;
@@ -119,7 +119,7 @@ pub struct Item<'a> {
     help: &'a [&'a str],
 }
 
-/// Description pane layout (mirrors Simply Love's ScreenOptionsService overlay).
+/// Description pane layout (mirrors Simply Love's `ScreenOptionsService` overlay).
 /// Title and bullet list use separate top/side padding so they can be tuned independently.
 const DESC_TITLE_TOP_PAD_PX: f32 = 9.75; // padding from box top to title
 const DESC_TITLE_SIDE_PAD_PX: f32 = 7.5; // left/right padding for title text
@@ -614,7 +614,7 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
+const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
     match kind {
         SubmenuKind::System => SYSTEM_OPTIONS_ROWS,
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ROWS,
@@ -622,7 +622,7 @@ fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
     }
 }
 
-fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
+const fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
     match kind {
         SubmenuKind::System => SYSTEM_OPTIONS_ITEMS,
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ITEMS,
@@ -630,7 +630,7 @@ fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
     }
 }
 
-fn submenu_title(kind: SubmenuKind) -> &'static str {
+const fn submenu_title(kind: SubmenuKind) -> &'static str {
     match kind {
         SubmenuKind::System => "SYSTEM OPTIONS",
         SubmenuKind::Graphics => "GRAPHICS OPTIONS",
@@ -647,9 +647,7 @@ fn backend_to_renderer_choice_index(backend: BackendType) -> usize {
 
 fn renderer_choice_index_to_backend(idx: usize) -> BackendType {
     VIDEO_RENDERER_OPTIONS
-        .get(idx)
-        .map(|(backend, _)| *backend)
-        .unwrap_or_else(|| VIDEO_RENDERER_OPTIONS[0].0)
+        .get(idx).map_or_else(|| VIDEO_RENDERER_OPTIONS[0].0, |(backend, _)| *backend)
 }
 
 fn selected_video_renderer(state: &State) -> BackendType {
@@ -661,14 +659,14 @@ fn selected_video_renderer(state: &State) -> BackendType {
     renderer_choice_index_to_backend(choice_idx)
 }
 
-fn fullscreen_type_to_choice_index(fullscreen_type: FullscreenType) -> usize {
+const fn fullscreen_type_to_choice_index(fullscreen_type: FullscreenType) -> usize {
     match fullscreen_type {
         FullscreenType::Exclusive => 0,
         FullscreenType::Borderless => 1,
     }
 }
 
-fn choice_index_to_fullscreen_type(idx: usize) -> FullscreenType {
+const fn choice_index_to_fullscreen_type(idx: usize) -> FullscreenType {
     match idx {
         1 => FullscreenType::Borderless,
         _ => FullscreenType::Exclusive,
@@ -680,8 +678,7 @@ fn selected_fullscreen_type(state: &State) -> FullscreenType {
         .sub_choice_indices_graphics
         .get(FULLSCREEN_TYPE_ROW_INDEX)
         .copied()
-        .map(choice_index_to_fullscreen_type)
-        .unwrap_or(FullscreenType::Exclusive)
+        .map_or(FullscreenType::Exclusive, choice_index_to_fullscreen_type)
 }
 
 fn selected_display_mode(state: &State) -> DisplayMode {
@@ -718,11 +715,9 @@ fn ensure_display_mode_choices(state: &mut State) {
     if let Some(idx) = state
         .sub_choice_indices_graphics
         .get_mut(DISPLAY_MODE_ROW_INDEX)
-    {
-        if *idx >= state.display_mode_choices.len() {
+        && *idx >= state.display_mode_choices.len() {
             *idx = 0;
         }
-    }
     // Also re-run logic that depends on the selected monitor.
     let current_res = selected_resolution(state);
     rebuild_resolution_choices(state, current_res.0, current_res.1);
@@ -827,7 +822,7 @@ fn selected_resolution(state: &State) -> (u32, u32) {
         .resolution_choices
         .get(idx)
         .copied()
-        .or_else(|| state.resolution_choices.get(0).copied())
+        .or_else(|| state.resolution_choices.first().copied())
         .unwrap_or((state.display_width_at_load, state.display_height_at_load))
 }
 
@@ -928,8 +923,8 @@ fn row_choices<'a>(
     rows: &'a [SubRow<'a>],
     row_idx: usize,
 ) -> Vec<Cow<'a, str>> {
-    if let Some(row) = rows.get(row_idx) {
-        if matches!(kind, SubmenuKind::Graphics) {
+    if let Some(row) = rows.get(row_idx)
+        && matches!(kind, SubmenuKind::Graphics) {
             if row.label == "Display Mode" {
                 return state
                     .display_mode_choices
@@ -956,16 +951,15 @@ fn row_choices<'a>(
                             // Format nicely: 60000 -> "60 Hz", 59940 -> "59.94 Hz"
                             let hz = mhz as f32 / 1000.0;
                             if (hz.fract()).abs() < 0.01 {
-                                Cow::Owned(format!("{:.0}Hz", hz))
+                                Cow::Owned(format!("{hz:.0}Hz"))
                             } else {
-                                Cow::Owned(format!("{:.2}Hz", hz))
+                                Cow::Owned(format!("{hz:.2}Hz"))
                             }
                         }
                     })
                     .collect();
             }
         }
-    }
     rows.get(row_idx)
         .map(|row| row.choices.iter().map(|c| Cow::Borrowed(*c)).collect())
         .unwrap_or_default()
@@ -975,12 +969,11 @@ const SOUND_VOLUME_LEVELS: [u8; 6] = [0, 10, 25, 50, 75, 100];
 const SAMPLE_RATE_OPTIONS: [Option<u32>; 3] = [None, Some(44100), Some(48000)];
 
 fn set_choice_by_label(choice_indices: &mut Vec<usize>, rows: &[SubRow], label: &str, idx: usize) {
-    if let Some(pos) = rows.iter().position(|r| r.label == label) {
-        if let Some(slot) = choice_indices.get_mut(pos) {
+    if let Some(pos) = rows.iter().position(|r| r.label == label)
+        && let Some(slot) = choice_indices.get_mut(pos) {
             let max_idx = rows[pos].choices.len().saturating_sub(1);
             *slot = idx.min(max_idx);
         }
-    }
 }
 
 fn master_volume_choice_index(volume: u8) -> usize {
@@ -1120,13 +1113,13 @@ pub fn init() -> State {
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
         "Wait for VSync",
-        if cfg.vsync { 1 } else { 0 },
+        usize::from(cfg.vsync),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
         "Show Stats",
-        if cfg.show_stats { 1 } else { 0 },
+        usize::from(cfg.show_stats),
     );
 
     set_choice_by_label(
@@ -1145,18 +1138,18 @@ pub fn init() -> State {
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
         "Mine Sounds",
-        if cfg.mine_hit_sound { 1 } else { 0 },
+        usize::from(cfg.mine_hit_sound),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
         "RateMod Preserves Pitch",
-        if cfg.rate_mod_preserves_pitch { 1 } else { 0 },
+        usize::from(cfg.rate_mod_preserves_pitch),
     );
     state
 }
 
-fn submenu_choice_indices<'a>(state: &'a State, kind: SubmenuKind) -> &'a [usize] {
+fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {
     match kind {
         SubmenuKind::System => &state.sub_choice_indices_system,
         SubmenuKind::Graphics => &state.sub_choice_indices_graphics,
@@ -1164,7 +1157,7 @@ fn submenu_choice_indices<'a>(state: &'a State, kind: SubmenuKind) -> &'a [usize
     }
 }
 
-fn submenu_choice_indices_mut<'a>(state: &'a mut State, kind: SubmenuKind) -> &'a mut Vec<usize> {
+const fn submenu_choice_indices_mut(state: &mut State, kind: SubmenuKind) -> &mut Vec<usize> {
     match kind {
         SubmenuKind::System => &mut state.sub_choice_indices_system,
         SubmenuKind::Graphics => &mut state.sub_choice_indices_graphics,
@@ -1215,7 +1208,7 @@ pub fn sync_show_stats(state: &mut State, show: bool) {
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
         "Show Stats",
-        if show { 1 } else { 0 },
+        usize::from(show),
     );
 }
 
@@ -1341,26 +1334,22 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
                 let mut resolution_change: Option<(u32, u32)> = None;
                 let mut monitor_change: Option<usize> = None;
 
-                if let Some(renderer) = desired_renderer {
-                    if renderer != state.video_renderer_at_load {
+                if let Some(renderer) = desired_renderer
+                    && renderer != state.video_renderer_at_load {
                         renderer_change = Some(renderer);
                     }
-                }
-                if let Some(display_mode) = desired_display_mode {
-                    if display_mode != state.display_mode_at_load {
+                if let Some(display_mode) = desired_display_mode
+                    && display_mode != state.display_mode_at_load {
                         display_mode_change = Some(display_mode);
                     }
-                }
-                if let Some(monitor) = desired_monitor {
-                    if monitor != state.display_monitor_at_load {
+                if let Some(monitor) = desired_monitor
+                    && monitor != state.display_monitor_at_load {
                         monitor_change = Some(monitor);
                     }
-                }
-                if let Some((w, h)) = desired_resolution {
-                    if w != state.display_width_at_load || h != state.display_height_at_load {
+                if let Some((w, h)) = desired_resolution
+                    && (w != state.display_width_at_load || h != state.display_height_at_load) {
                         resolution_change = Some((w, h));
                     }
-                }
 
                 if renderer_change.is_some()
                     || display_mode_change.is_some()
@@ -1455,8 +1444,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
         let now = Instant::now();
         if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
             && now.duration_since(last_adjusted) >= NAV_REPEAT_SCROLL_INTERVAL
-        {
-            if matches!(state.view, OptionsView::Submenu(_)) {
+            && matches!(state.view, OptionsView::Submenu(_)) {
                 if pending_action.is_none() {
                     pending_action = apply_submenu_choice_delta(state, delta_lr);
                 } else {
@@ -1464,7 +1452,6 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
                 }
                 state.nav_lr_last_adjusted_at = Some(now);
             }
-        }
     }
 
     match state.view {
@@ -1484,8 +1471,8 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
                 let total_rows = submenu_rows(kind).len() + 1;
                 let offset_prev = scroll_offset(prev_idx, total_rows);
                 let prev_vis_idx = prev_idx.saturating_sub(offset_prev);
-                let from_y = list_y + (prev_vis_idx as f32) * (ROW_H + ROW_GAP) * s;
-                state.cursor_row_anim_from_y = from_y + 0.5 * ROW_H * s;
+                let from_y = ((prev_vis_idx as f32) * (ROW_H + ROW_GAP)).mul_add(s, list_y);
+                state.cursor_row_anim_from_y = (0.5 * ROW_H).mul_add(s, from_y);
                 state.cursor_row_anim_t = 0.0;
                 state.cursor_row_anim_from_row = Some(prev_idx);
 
@@ -1569,8 +1556,8 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
         return None;
     }
 
-    if let Some(row) = rows.get(row_index) {
-        if matches!(kind, SubmenuKind::Graphics) {
+    if let Some(row) = rows.get(row_index)
+        && matches!(kind, SubmenuKind::Graphics) {
             match row.label {
                 "Global Offset (ms)" => {
                     if adjust_ms_value(
@@ -1598,7 +1585,6 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
                 _ => {}
             }
         }
-    }
 
     let choices = row_choices(state, kind, rows, row_index);
     let num_choices = choices.len();
@@ -1673,9 +1659,8 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
     if let Some((choice_index, new_index)) = changed_choice {
         let is_language_row = rows
             .get(row_index)
-            .map(|r| r.label == "Language")
-            .unwrap_or(false);
-        let is_inline_row = rows.get(row_index).map(|r| r.inline).unwrap_or(true);
+            .is_some_and(|r| r.label == "Language");
+        let is_inline_row = rows.get(row_index).map_or(true, |r| r.inline);
         if is_inline_row && !is_language_row {
             state.cursor_anim_row = Some(row_index);
             state.cursor_anim_from_choice = choice_index;
@@ -1853,7 +1838,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 /// content rect = full screen minus top & bottom bars.
 /// We fit the (rows + separator + description) block inside that content rect,
 /// honoring LEFT, RIGHT and TOP margins in *screen pixels*.
-/// Returns (scale, origin_x, origin_y).
+/// Returns (scale, `origin_x`, `origin_y`).
 fn scaled_block_origin_with_margins() -> (f32, f32, f32) {
     let total_w = LIST_W + SEP_W + DESC_W;
     let total_h = DESC_H;
@@ -1888,7 +1873,7 @@ fn scaled_block_origin_with_margins() -> (f32, f32, f32) {
     // X origin:
     // Right-align inside [LEFT..(sw-RIGHT)] so the description box ends exactly
     // RIGHT_MARGIN_PX from the screen edge.
-    let ox = LEFT_MARGIN_PX + (avail_w - total_w * s).max(0.0);
+    let ox = LEFT_MARGIN_PX + total_w.mul_add(-s, avail_w).max(0.0);
 
     // Y origin is fixed under the top bar by the requested margin.
     let oy = content_top + FIRST_ROW_TOP_MARGIN_PX;
@@ -2036,7 +2021,7 @@ pub fn get_actors(
                     break;
                 }
 
-                let row_y = list_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s;
+                let row_y = ((i_vis as f32) * (ROW_H + ROW_GAP)).mul_add(s, list_y);
 
                 let is_active = item_idx == state.selected;
                 let is_exit = item_idx == total_items - 1;
@@ -2067,9 +2052,9 @@ pub fn get_actors(
                 ));
 
                 // Content placement inside row
-                let row_mid_y = row_y + 0.5 * ROW_H * s;
-                let heart_x = list_x + HEART_LEFT_PAD * s;
-                let text_x_base = list_x + TEXT_LEFT_PAD * s;
+                let row_mid_y = (0.5 * ROW_H).mul_add(s, row_y);
+                let heart_x = HEART_LEFT_PAD.mul_add(s, list_x);
+                let text_x_base = TEXT_LEFT_PAD.mul_add(s, list_x);
 
                 // Heart sprite (skip for Exit)
                 if !is_exit {
@@ -2132,20 +2117,20 @@ pub fn get_actors(
             let offset_rows = scroll_offset(state.sub_selected, total_rows);
 
             let label_bg_w = SUB_LABEL_COL_W * s;
-            let label_text_x = list_x + SUB_LABEL_TEXT_LEFT_PAD * s;
-            let label_text_max_w = (label_bg_w - SUB_LABEL_TEXT_LEFT_PAD * s).max(0.0);
+            let label_text_x = SUB_LABEL_TEXT_LEFT_PAD.mul_add(s, list_x);
+            let label_text_max_w = SUB_LABEL_TEXT_LEFT_PAD.mul_add(-s, label_bg_w).max(0.0);
 
             // Helper to compute the cursor center X for a given submenu row index.
             let calc_row_center_x = |row_idx: usize| -> f32 {
                 if row_idx >= total_rows {
-                    return list_x + list_w * 0.5;
+                    return list_w.mul_add(0.5, list_x);
                 }
                 if row_idx >= rows.len() {
                     // Exit row: center within the items column (row width minus label column),
                     // matching how single-value rows like Music Rate are centered in player_options.rs.
                     let item_col_left = list_x + label_bg_w;
                     let item_col_w = list_w - label_bg_w;
-                    return item_col_left + item_col_w * 0.5 + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
+                    return item_col_w.mul_add(0.5, item_col_left) + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
                 }
                 let row = &rows[row_idx];
                 // Non-inline rows behave as single-value rows: keep the cursor centered
@@ -2153,14 +2138,14 @@ pub fn get_actors(
                 if !row.inline {
                     let item_col_left = list_x + label_bg_w;
                     let item_col_w = list_w - label_bg_w;
-                    return item_col_left + item_col_w * 0.5 + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
+                    return item_col_w.mul_add(0.5, item_col_left) + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
                 }
                 let choices = row_choices(state, kind, rows, row_idx);
                 if choices.is_empty() {
-                    return list_x + list_w * 0.5;
+                    return list_w.mul_add(0.5, list_x);
                 }
                 let value_zoom = 0.835_f32;
-                let choice_inner_left = list_x + label_bg_w + SUB_INLINE_ITEMS_LEFT_PAD * s;
+                let choice_inner_left = SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
                 let mut widths: Vec<f32> = Vec::with_capacity(choices.len());
                 asset_manager.with_fonts(|all_fonts| {
                     asset_manager.with_font("miso", |metrics_font| {
@@ -2178,7 +2163,7 @@ pub fn get_actors(
                     });
                 });
                 if widths.is_empty() {
-                    return list_x + list_w * 0.5;
+                    return list_w.mul_add(0.5, list_x);
                 }
                 let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
                 let mut x = choice_inner_left;
@@ -2191,7 +2176,7 @@ pub fn get_actors(
                     .copied()
                     .unwrap_or(0)
                     .min(widths.len().saturating_sub(1));
-                x_positions[sel_idx] + widths[sel_idx] * 0.5
+                widths[sel_idx].mul_add(0.5, x_positions[sel_idx])
             };
 
             // Helper to compute draw_w/draw_h (text box) for the selected item of a submenu row.
@@ -2250,8 +2235,8 @@ pub fn get_actors(
                     break;
                 }
 
-                let row_y = list_y + (i_vis as f32) * (ROW_H + ROW_GAP) * s;
-                let row_mid_y = row_y + 0.5 * ROW_H * s;
+                let row_y = ((i_vis as f32) * (ROW_H + ROW_GAP)).mul_add(s, list_y);
+                let row_mid_y = (0.5 * ROW_H).mul_add(s, row_y);
 
                 let is_active = row_idx == state.sub_selected;
                 let is_exit = row_idx == total_rows - 1;
@@ -2345,7 +2330,7 @@ pub fn get_actors(
                             .min(choice_texts.len().saturating_sub(1));
                         let mut selected_left_x: Option<f32> = None;
 
-                        let choice_inner_left = list_x + label_bg_w + SUB_INLINE_ITEMS_LEFT_PAD * s;
+                        let choice_inner_left = SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
                         let mut x_positions: Vec<f32> = Vec::with_capacity(choice_texts.len());
                         if inline_row {
                             let mut x = choice_inner_left;
@@ -2379,8 +2364,7 @@ pub fn get_actors(
                             let choice_center_x = calc_row_center_x(row_idx);
                             let choice_text = choice_texts
                                 .get(selected_choice)
-                                .map(|c| c.as_ref())
-                                .unwrap_or("??");
+                                .map_or("??", std::convert::AsRef::as_ref);
                             let draw_w = widths.get(selected_choice).copied().unwrap_or(40.0);
                             selected_left_x = Some(choice_center_x - draw_w * 0.5);
                             ui_actors.push(act!(text:
@@ -2440,7 +2424,7 @@ pub fn get_actors(
                                         if !size_t_to.is_finite() { size_t_to = 0.0; }
                                         if size_t_to < 0.0 { size_t_to = 0.0; }
                                         if size_t_to > 1.0 { size_t_to = 1.0; }
-                                        let mut pad_x_to = min_pad_x + (max_pad_x - min_pad_x) * size_t_to;
+                                        let mut pad_x_to = (max_pad_x - min_pad_x).mul_add(size_t_to, min_pad_x);
                                         let border_w = widescale(2.0, 2.5);
                                         // Cap pad so ring doesn't encroach neighbors.
                                         let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
@@ -2456,33 +2440,32 @@ pub fn get_actors(
                                             let t = ease_out_cubic(state.cursor_row_anim_t);
                                             if let Some(from_row) = state.cursor_row_anim_from_row {
                                                 let from_x = calc_row_center_x(from_row);
-                                                center_x = from_x + (center_x - from_x) * t;
+                                                center_x = (center_x - from_x).mul_add(t, from_x);
                                             }
-                                            center_y = state.cursor_row_anim_from_y
-                                                + (row_mid_y - state.cursor_row_anim_from_y) * t;
+                                            center_y = (row_mid_y - state.cursor_row_anim_from_y).mul_add(t, state.cursor_row_anim_from_y);
                                         }
                                         // Horizontal tween between choices within a row.
                                         if inline_row && let Some(anim_row) = state.cursor_anim_row
                                             && anim_row == row_idx && state.cursor_anim_t < 1.0 {
                                                 let from_idx = state.cursor_anim_from_choice.min(widths.len().saturating_sub(1));
                                                 let to_idx = sel_idx.min(widths.len().saturating_sub(1));
-                                                let from_center_x = x_positions[from_idx] + widths[from_idx] * 0.5;
-                                                let to_center_x = x_positions[to_idx] + widths[to_idx] * 0.5;
+                                                let from_center_x = widths[from_idx].mul_add(0.5, x_positions[from_idx]);
+                                                let to_center_x = widths[to_idx].mul_add(0.5, x_positions[to_idx]);
                                                 let t = ease_out_cubic(state.cursor_anim_t);
-                                                center_x = from_center_x + (to_center_x - from_center_x) * t;
+                                                center_x = (to_center_x - from_center_x).mul_add(t, from_center_x);
                                                 // Also interpolate ring size from previous choice to current choice.
                                                 let from_draw_w = widths[from_idx];
                                                 let mut size_t_from = from_draw_w / width_ref;
                                                 if !size_t_from.is_finite() { size_t_from = 0.0; }
                                                 if size_t_from < 0.0 { size_t_from = 0.0; }
                                                 if size_t_from > 1.0 { size_t_from = 1.0; }
-                                                let mut pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                                let mut pad_x_from = (max_pad_x - min_pad_x).mul_add(size_t_from, min_pad_x);
                                                 let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
                                                 if pad_x_from > max_pad_by_spacing { pad_x_from = max_pad_by_spacing; }
                                                 let ring_w_from = from_draw_w + pad_x_from * 2.0;
                                                 let ring_h_from = text_h + pad_y * 2.0;
-                                                ring_w = ring_w_from + (ring_w - ring_w_from) * t;
-                                                ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                                                ring_w = (ring_w - ring_w_from).mul_add(t, ring_w_from);
+                                                ring_h = (ring_h - ring_h_from).mul_add(t, ring_h_from);
                                             }
                                         // If not horizontally tweening, but vertically tweening rows, interpolate size
                                         if state.cursor_row_anim_t < 1.0
@@ -2494,14 +2477,14 @@ pub fn get_actors(
                                                 if !size_t_from.is_finite() { size_t_from = 0.0; }
                                                 if size_t_from < 0.0 { size_t_from = 0.0; }
                                                 if size_t_from > 1.0 { size_t_from = 1.0; }
-                                                let mut pad_x_from = min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                                let mut pad_x_from = (max_pad_x - min_pad_x).mul_add(size_t_from, min_pad_x);
                                                 let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
                                                 if pad_x_from > max_pad_by_spacing { pad_x_from = max_pad_by_spacing; }
                                                 let ring_w_from = from_dw + pad_x_from * 2.0;
                                                 let ring_h_from = from_dh + pad_y * 2.0;
                                                 let t = ease_out_cubic(state.cursor_row_anim_t);
-                                                ring_w = ring_w_from + (ring_w - ring_w_from) * t;
-                                                ring_h = ring_h_from + (ring_h - ring_h_from) * t;
+                                                ring_w = (ring_w - ring_w_from).mul_add(t, ring_w_from);
+                                                ring_h = (ring_h - ring_h_from).mul_add(t, ring_h_from);
                                             }
 
                                         let left = center_x - ring_w * 0.5;
@@ -2589,7 +2572,7 @@ pub fn get_actors(
                                 if size_t > 1.0 {
                                     size_t = 1.0;
                                 }
-                                let mut pad_x = min_pad_x + (max_pad_x - min_pad_x) * size_t;
+                                let mut pad_x = (max_pad_x - min_pad_x).mul_add(size_t, min_pad_x);
                                 let border_w = widescale(2.0, 2.5);
                                 let max_pad_by_spacing =
                                     (INLINE_SPACING - border_w).max(min_pad_x);
@@ -2605,10 +2588,9 @@ pub fn get_actors(
                                     if let Some(from_row) = state.cursor_row_anim_from_row {
                                         // Interpolate X from previous row's cursor center to Exit center.
                                         let from_x = calc_row_center_x(from_row);
-                                        center_x = from_x + (center_x - from_x) * t;
+                                        center_x = (center_x - from_x).mul_add(t, from_x);
                                     }
-                                    center_y = state.cursor_row_anim_from_y
-                                        + (row_mid_y - state.cursor_row_anim_from_y) * t;
+                                    center_y = (row_mid_y - state.cursor_row_anim_from_y).mul_add(t, state.cursor_row_anim_from_y);
 
                                     // Interpolate ring size from previous row to Exit row.
                                     if let Some(from_row) = state.cursor_row_anim_from_row {
@@ -2627,7 +2609,7 @@ pub fn get_actors(
                                                 size_t_from = 1.0;
                                             }
                                             let mut pad_x_from =
-                                                min_pad_x + (max_pad_x - min_pad_x) * size_t_from;
+                                                (max_pad_x - min_pad_x).mul_add(size_t_from, min_pad_x);
                                             let max_pad_by_spacing =
                                                 (INLINE_SPACING - border_w).max(min_pad_x);
                                             if pad_x_from > max_pad_by_spacing {
@@ -2637,9 +2619,9 @@ pub fn get_actors(
                                             let ring_h_from = draw_h + pad_y * 2.0;
                                             let tsize = ease_out_cubic(state.cursor_row_anim_t);
                                             ring_w =
-                                                ring_w_from + (ring_w - ring_w_from) * tsize;
+                                                (ring_w - ring_w_from).mul_add(tsize, ring_w_from);
                                             ring_h =
-                                                ring_h_from + (ring_h - ring_h_from) * tsize;
+                                                (ring_h - ring_h_from).mul_add(tsize, ring_h_from);
                                         }
                                     }
                                 }
@@ -2703,7 +2685,7 @@ pub fn get_actors(
         // Match Simply Love's description box feel:
         // - explicit top/side padding for title and bullets so they can be tuned
         // - text zoom similar to other help text (player options, etc.)
-        let mut cursor_y = list_y + DESC_TITLE_TOP_PAD_PX * s;
+        let mut cursor_y = DESC_TITLE_TOP_PAD_PX.mul_add(s, list_y);
         let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
         let title_step_px = 20.0 * s; // approximate vertical advance for title line
 
@@ -2723,7 +2705,7 @@ pub fn get_actors(
         let wrapped_title = asset_manager
             .with_fonts(|all_fonts| {
                 asset_manager.with_font("miso", |miso_font| {
-                    let max_width_px = (DESC_W * s) - 2.0 * DESC_TITLE_SIDE_PAD_PX * s;
+                    let max_width_px = DESC_W.mul_add(s, -(2.0 * DESC_TITLE_SIDE_PAD_PX * s));
                     let mut out = String::new();
                     let mut is_first_output_line = true;
 
@@ -2820,7 +2802,7 @@ pub fn get_actors(
                 first = false;
             }
             let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
-            let bullet_x = desc_x + bullet_side_pad + DESC_BULLET_INDENT_PX * s;
+            let bullet_x = DESC_BULLET_INDENT_PX.mul_add(s, desc_x + bullet_side_pad);
             ui_actors.push(act!(text:
                 align(0.0, 0.0):
                 xy(bullet_x, cursor_y):

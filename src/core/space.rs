@@ -66,12 +66,12 @@ pub fn screen_height() -> f32 {
 // Top-left origin to match SM (SCREEN_LEFT/TOP = 0)
 #[allow(dead_code)]
 #[inline(always)]
-pub fn screen_left() -> f32 {
+pub const fn screen_left() -> f32 {
     0.0
 }
 #[allow(dead_code)]
 #[inline(always)]
-pub fn screen_top() -> f32 {
+pub const fn screen_top() -> f32 {
     0.0
 }
 #[allow(dead_code)]
