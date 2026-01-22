@@ -885,6 +885,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         center_text: None,
         right_text: None,
         left_avatar: None,
+        right_avatar: None,
     }));
 
     // Session Timer
@@ -1468,16 +1469,22 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         .avatar_texture_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
+    let player_side = profile::get_session_player_side();
+    let (footer_left, footer_right, left_avatar, right_avatar) = match player_side {
+        profile::PlayerSide::P1 => (Some(profile.display_name.as_str()), None, footer_avatar, None),
+        profile::PlayerSide::P2 => (None, Some(profile.display_name.as_str()), None, footer_avatar),
+    };
     actors.push(screen_bar::build(ScreenBarParams {
         title: "",
         title_placement: screen_bar::ScreenBarTitlePlacement::Center,
         position: screen_bar::ScreenBarPosition::Bottom,
         transparent: true,
         fg_color: [1.0; 4],
-        left_text: Some(&profile.display_name),
+        left_text: footer_left,
         center_text: None,
-        right_text: None,
-        left_avatar: footer_avatar,
+        right_text: footer_right,
+        left_avatar,
+        right_avatar,
     }));
 
     // --- Date/Time in footer (like ScreenEvaluation decorations) ---

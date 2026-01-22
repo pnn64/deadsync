@@ -977,6 +977,7 @@ fn format_chart_length(seconds: i32) -> String {
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     let profile = profile::get();
+    let side = crate::game::profile::get_session_player_side();
     let play_style = crate::game::profile::get_session_play_style();
     let is_p2_single = play_style == crate::game::profile::PlayStyle::Single
         && crate::game::profile::get_session_player_side() == crate::game::profile::PlayerSide::P2;
@@ -997,22 +998,38 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         center_text: None,
         right_text: None,
         left_avatar: None,
+        right_avatar: None,
     }));
 
     let footer_avatar = profile
         .avatar_texture_key
         .as_deref()
         .map(|k| AvatarParams { texture_key: k });
+    let (footer_left, footer_right, left_avatar, right_avatar) = match side {
+        crate::game::profile::PlayerSide::P1 => (
+            Some(profile.display_name.as_str()),
+            Some("PRESS START"),
+            footer_avatar,
+            None,
+        ),
+        crate::game::profile::PlayerSide::P2 => (
+            Some("PRESS START"),
+            Some(profile.display_name.as_str()),
+            None,
+            footer_avatar,
+        ),
+    };
     actors.push(screen_bar::build(ScreenBarParams {
         title: "EVENT MODE",
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,
         transparent: false,
         fg_color: [1.0; 4],
-        left_text: Some(&profile.display_name),
+        left_text: footer_left,
         center_text: None,
-        right_text: Some("PRESS START"),
-        left_avatar: footer_avatar,
+        right_text: footer_right,
+        left_avatar,
+        right_avatar,
     }));
 
     let preferred_idx = state

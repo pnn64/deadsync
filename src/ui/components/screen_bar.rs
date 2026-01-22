@@ -41,6 +41,7 @@ pub struct ScreenBarParams<'a> {
     pub right_text: Option<&'a str>,
 
     pub left_avatar: Option<AvatarParams<'a>>,
+    pub right_avatar: Option<AvatarParams<'a>>,
 
     pub fg_color: [f32; 4], // text color
 }
@@ -129,6 +130,14 @@ pub fn build(params: ScreenBarParams) -> Actor {
                 children.push(act!(sprite(avatar.texture_key):
                     align(0.0, 1.0):
                     xy(0.0, BAR_H):
+                    setsize(AVATAR_SIZE, AVATAR_SIZE):
+                    z(2)
+                ));
+            }
+            if let Some(avatar) = params.right_avatar {
+                children.push(act!(sprite(avatar.texture_key):
+                    align(1.0, 1.0):
+                    xy(screen_width(), BAR_H):
                     setsize(AVATAR_SIZE, AVATAR_SIZE):
                     z(2)
                 ));

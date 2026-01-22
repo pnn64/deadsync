@@ -197,6 +197,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         center_text: None,
         right_text: Some("PRESS START"),
         left_avatar: None,
+        right_avatar: None,
         fg_color: footer_fg,
     }));
 

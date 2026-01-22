@@ -268,6 +268,7 @@ fn push_pad_tiles(
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(128);
     let profile = crate::game::profile::get();
+    let side = crate::game::profile::get_session_player_side();
     let exit_t = exit_anim_t(state.exit_chosen_anim);
     let (chosen_p, other_alpha) = if state.exit_chosen_anim {
         (
@@ -294,22 +295,38 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         center_text: None,
         right_text: None,
         left_avatar: None,
+        right_avatar: None,
     }));
 
     let footer_avatar = profile
         .avatar_texture_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
+    let (footer_left, footer_right, left_avatar, right_avatar) = match side {
+        crate::game::profile::PlayerSide::P1 => (
+            Some(profile.display_name.as_str()),
+            Some("PRESS START"),
+            footer_avatar,
+            None,
+        ),
+        crate::game::profile::PlayerSide::P2 => (
+            Some("PRESS START"),
+            Some(profile.display_name.as_str()),
+            None,
+            footer_avatar,
+        ),
+    };
     actors.push(screen_bar::build(ScreenBarParams {
         title: "EVENT MODE",
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,
         transparent: false,
         fg_color: [1.0; 4],
-        left_text: Some(&profile.display_name),
+        left_text: footer_left,
         center_text: None,
-        right_text: Some("PRESS START"),
-        left_avatar: footer_avatar,
+        right_text: footer_right,
+        left_avatar,
+        right_avatar,
     }));
 
     let cx = screen_center_x();

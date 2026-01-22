@@ -1115,17 +1115,26 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         center_text: None,
         right_text: None,
         left_avatar: None,
+        right_avatar: None,
     }));
+
+    let (footer_left, footer_right) = match (state.p1_joined, state.p2_joined) {
+        (false, false) => (Some("PRESS START"), Some("PRESS START")),
+        (true, false) => (None, Some("NOT PRESENT")),
+        (false, true) => (Some("NOT PRESENT"), None),
+        (true, true) => (None, None),
+    };
     actors.push(screen_bar::build(ScreenBarParams {
         title: "EVENT MODE",
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,
         transparent: false,
         fg_color: fg,
-        left_text: None,
+        left_text: footer_left,
         center_text: None,
-        right_text: Some("PRESS START"),
+        right_text: footer_right,
         left_avatar: None,
+        right_avatar: None,
     }));
 
     if alpha_multiplier <= 0.0 {

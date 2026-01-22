@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.1.497"
+version = "0.1.498"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "Rust-based ITG engine with switchable Vulkan/OpenGL backends, designed for accurate sync and competitive performance."
@@ -85,3 +85,12 @@ shaderc = "0.10.1"
 
 [profile.release]
 debug-assertions = true
+
+[lints.clippy]
+correctness = "warn"
+complexity  = "warn"
+perf        = "warn"
+# Optional:
+all         = "warn"
+pedantic    = "warn"
+nursery     = "warn"

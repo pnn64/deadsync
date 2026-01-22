@@ -1,9 +1,10 @@
 use crate::act;
 use crate::core::space::*;
+use crate::game::profile;
 // Screen navigation handled in app.rs
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use crate::ui::components::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
+use crate::ui::components::screen_bar::{AvatarParams, ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::ui::components::{heart_bg, screen_bar};
 // Keyboard handling is centralized in app.rs via virtual actions
 use crate::core::input::{InputEvent, VirtualAction};
@@ -188,17 +189,40 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         center_text: None, // later: Some("01:23")
         right_text: None,  // later: Some("P1 • READY")
         left_avatar: None,
+        right_avatar: None,
         fg_color: FG,
     }));
+
+    let profile = profile::get();
+    let side = profile::get_session_player_side();
+    let footer_avatar = profile
+        .avatar_texture_key
+        .as_deref()
+        .map(|texture_key| AvatarParams { texture_key });
+    let (footer_left, footer_right, left_avatar, right_avatar) = match side {
+        profile::PlayerSide::P1 => (
+            Some(profile.display_name.as_str()),
+            Some("PRESS START"),
+            footer_avatar,
+            None,
+        ),
+        profile::PlayerSide::P2 => (
+            Some("PRESS START"),
+            Some(profile.display_name.as_str()),
+            None,
+            footer_avatar,
+        ),
+    };
     actors.push(screen_bar::build(screen_bar::ScreenBarParams {
         title: "EVENT MODE",
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,
         transparent: false,
-        left_text: None,
+        left_text: footer_left,
         center_text: None,
-        right_text: Some("NOT PRESENT"),
-        left_avatar: None,
+        right_text: footer_right,
+        left_avatar,
+        right_avatar,
         fg_color: FG,
     }));
 

@@ -249,6 +249,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         center_text: None,
         right_text: None,
         left_avatar: None,
+        right_avatar: None,
         fg_color: FG,
     }));
 

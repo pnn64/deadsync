@@ -10,7 +10,7 @@ use crate::ui::actors::Actor;
 use crate::ui::color;
 use crate::ui::components::heart_bg;
 use crate::ui::components::screen_bar::{
-    self, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
+    self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -1981,6 +1981,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
+    let profile = crate::game::profile::get();
+    let side = crate::game::profile::get_session_player_side();
     let play_style = crate::game::profile::get_session_play_style();
     let is_p2_single = play_style == crate::game::profile::PlayStyle::Single
         && crate::game::profile::get_session_player_side() == crate::game::profile::PlayerSide::P2;
@@ -2005,6 +2007,38 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         center_text: None,
         right_text: None,
         left_avatar: None,
+        right_avatar: None,
+    }));
+
+    let footer_avatar = profile
+        .avatar_texture_key
+        .as_deref()
+        .map(|texture_key| AvatarParams { texture_key });
+    let (footer_left, footer_right, left_avatar, right_avatar) = match side {
+        crate::game::profile::PlayerSide::P1 => (
+            Some(profile.display_name.as_str()),
+            Some("PRESS START"),
+            footer_avatar,
+            None,
+        ),
+        crate::game::profile::PlayerSide::P2 => (
+            Some("PRESS START"),
+            Some(profile.display_name.as_str()),
+            None,
+            footer_avatar,
+        ),
+    };
+    actors.push(screen_bar::build(ScreenBarParams {
+        title: "EVENT MODE",
+        title_placement: ScreenBarTitlePlacement::Center,
+        position: ScreenBarPosition::Bottom,
+        transparent: false,
+        fg_color: [1.0; 4],
+        left_text: footer_left,
+        center_text: None,
+        right_text: footer_right,
+        left_avatar,
+        right_avatar,
     }));
     // Speed Mod Helper Display (from overlay.lua)
     // Shows the effective scroll speed (e.g., "X390" for 3.25x on 120 BPM)
