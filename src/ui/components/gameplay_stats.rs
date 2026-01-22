@@ -33,6 +33,268 @@ pub fn build(
     actors
 }
 
+pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+    if !is_wide() {
+        return vec![];
+    }
+    // Simply Love shows centered step stats in 2P versus on widescreen, but not on ultrawide
+    // (ultrawide already has native per-player side panes).
+    let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
+    if is_ultrawide {
+        return vec![];
+    }
+    if state.num_players < 2 || state.players.len() < 2 {
+        return vec![];
+    }
+
+    let profile = profile::get();
+    let show_fa_plus_window = profile.show_fa_plus_window;
+    let center_x = screen_center_x();
+
+    let total_tapnotes = state.chart.stats.total_steps as f32;
+    let digits = if total_tapnotes > 0.0 {
+        (total_tapnotes.log10().floor() as usize + 1).max(4)
+    } else {
+        4
+    };
+
+    let group_zoom_y = 0.8_f32;
+    let group_zoom_x = if digits > 4 {
+        (group_zoom_y - 0.12 * (digits.saturating_sub(4) as f32)).max(0.1)
+    } else {
+        group_zoom_y
+    };
+    let numbers_zoom_y = group_zoom_y * 0.5;
+    let numbers_zoom_x = group_zoom_x * 0.5;
+    let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
+    let y_base = -280.0;
+
+    // Keep the background bar below the top HUD (song title/BPM), but let the
+    // digits sit above playfield elements if needed.
+    let z_bg = 80i16;
+    let z_fg = 110i16;
+
+    let mut actors = Vec::with_capacity(128);
+    // Center black column behind the counters (SL: VersusStepStatistics.lua).
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(screen_center_x(), screen_center_y()):
+        zoomto(150.0, screen_height()):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        z(z_bg)
+    ));
+
+    let notes_per_player = if state.num_players > 0 {
+        state.notes.len() / state.num_players
+    } else {
+        0
+    };
+
+    let fantastic_color = JUDGMENT_INFO
+        .get(&JudgeGrade::Fantastic)
+        .map(|info| info.color)
+        .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[0]));
+    let excellent_color = JUDGMENT_INFO
+        .get(&JudgeGrade::Excellent)
+        .map(|info| info.color)
+        .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[1]));
+    let great_color = JUDGMENT_INFO
+        .get(&JudgeGrade::Great)
+        .map(|info| info.color)
+        .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[2]));
+    let decent_color = JUDGMENT_INFO
+        .get(&JudgeGrade::Decent)
+        .map(|info| info.color)
+        .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[3]));
+    let wayoff_color = JUDGMENT_INFO
+        .get(&JudgeGrade::WayOff)
+        .map(|info| info.color)
+        .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[4]));
+    let miss_color = JUDGMENT_INFO
+        .get(&JudgeGrade::Miss)
+        .map(|info| info.color)
+        .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[5]));
+
+    let dim_fantastic = color::rgba_hex(color::JUDGMENT_DIM_HEX[0]);
+    let dim_excellent = color::rgba_hex(color::JUDGMENT_DIM_HEX[1]);
+    let dim_great = color::rgba_hex(color::JUDGMENT_DIM_HEX[2]);
+    let dim_decent = color::rgba_hex(color::JUDGMENT_DIM_HEX[3]);
+    let dim_wayoff = color::rgba_hex(color::JUDGMENT_DIM_HEX[4]);
+    let dim_miss = color::rgba_hex(color::JUDGMENT_DIM_HEX[5]);
+    let white_fa_color = color::rgba_hex(color::JUDGMENT_FA_PLUS_WHITE_HEX);
+    let dim_white_fa = color::rgba_hex(color::JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_HEX);
+
+    asset_manager.with_fonts(|all_fonts| {
+        asset_manager.with_font("wendy_screenevaluation", |f| {
+            let digit_w = (font::measure_line_width_logical(f, "0", all_fonts) as f32) * numbers_zoom_x;
+            if digit_w <= 0.0 {
+                return;
+            }
+
+            // Simply Love (VersusStepStatistics.lua) positions the two TapNoteJudgments actorframes at:
+            // P1: x=-64, P2: x=+66 (relative to center). TapNoteJudgments internally uses
+            // `PlayerNumber:Reverse()[player]` for halign, which is P1=0 (left), P2=1 (right),
+            // so both number blocks extend inward and sit inside the 150px black column.
+            let base_anchor_p1 = center_x - 64.0; // left edge for P1 block
+            let base_anchor_p2 = center_x + 66.0; // right edge for P2 block
+            let block_w = (digits as f32) * digit_w;
+            let bar_left = center_x - 75.0;
+            let bar_right = center_x + 75.0;
+            let margin = 4.0;
+            let anchor_p1 = base_anchor_p1.clamp(bar_left + margin, bar_right - margin - block_w);
+            let anchor_p2 = base_anchor_p2.clamp(bar_left + margin + block_w, bar_right - margin);
+
+            for player_idx in 0..2usize {
+                let is_p1 = player_idx == 0;
+                let group_y = 100.0;
+                let anchor_x = if is_p1 { anchor_p1 } else { anchor_p2 };
+                let group_origin_y = screen_center_y() + group_y;
+
+                if show_fa_plus_window && notes_per_player > 0 {
+                    let start = player_idx * notes_per_player;
+                    let end = (start + notes_per_player).min(state.notes.len());
+                    let wc = timing_stats::compute_window_counts(&state.notes[start..end]);
+                    let rows: [([f32; 4], [f32; 4], u32); 7] = [
+                        (fantastic_color, dim_fantastic, wc.w0),
+                        (white_fa_color, dim_white_fa, wc.w1),
+                        (excellent_color, dim_excellent, wc.w2),
+                        (great_color, dim_great, wc.w3),
+                        (decent_color, dim_decent, wc.w4),
+                        (wayoff_color, dim_wayoff, wc.w5),
+                        (miss_color, dim_miss, wc.miss),
+                    ];
+                    for (row_i, (bright, dim, count)) in rows.iter().enumerate() {
+                        let y = group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
+                        let s = format!("{:0width$}", count, width = digits);
+                        let first_nonzero = s.find(|c: char| c != '0').unwrap_or(s.len());
+
+                        for (i, ch) in s.chars().enumerate() {
+                            let is_dim = if *count == 0 {
+                                i < digits.saturating_sub(1)
+                            } else {
+                                i < first_nonzero
+                            };
+                            let c = if is_dim { *dim } else { *bright };
+                            if is_p1 {
+                                let x = anchor_x + (i as f32) * digit_w;
+                                let mut a = act!(text:
+                                    font("wendy_screenevaluation"): settext(ch.to_string()):
+                                    align(0.0, 0.5): xy(x, y):
+                                    zoom(numbers_zoom_y):
+                                    diffuse(c[0], c[1], c[2], c[3]):
+                                    z(z_fg):
+                                    horizalign(left)
+                                );
+                                if let Actor::Text { scale, .. } = &mut a {
+                                    scale[0] = numbers_zoom_x;
+                                    scale[1] = numbers_zoom_y;
+                                }
+                                actors.push(a);
+                            } else {
+                                let idx_from_right = digits.saturating_sub(1).saturating_sub(i);
+                                let x = anchor_x - (idx_from_right as f32) * digit_w;
+                                let mut a = act!(text:
+                                    font("wendy_screenevaluation"): settext(ch.to_string()):
+                                    align(1.0, 0.5): xy(x, y):
+                                    zoom(numbers_zoom_y):
+                                    diffuse(c[0], c[1], c[2], c[3]):
+                                    z(z_fg):
+                                    horizalign(right)
+                                );
+                                if let Actor::Text { scale, .. } = &mut a {
+                                    scale[0] = numbers_zoom_x;
+                                    scale[1] = numbers_zoom_y;
+                                }
+                                actors.push(a);
+                            }
+                        }
+                    }
+                } else {
+                    for (row_i, grade) in JUDGMENT_ORDER.iter().enumerate() {
+                        let count = *state.players[player_idx]
+                            .judgment_counts
+                            .get(grade)
+                            .unwrap_or(&0);
+                        let bright = match grade {
+                            JudgeGrade::Fantastic => fantastic_color,
+                            JudgeGrade::Excellent => excellent_color,
+                            JudgeGrade::Great => great_color,
+                            JudgeGrade::Decent => decent_color,
+                            JudgeGrade::WayOff => wayoff_color,
+                            JudgeGrade::Miss => miss_color,
+                        };
+                        let dim = match row_i {
+                            0 => dim_fantastic,
+                            1 => dim_excellent,
+                            2 => dim_great,
+                            3 => dim_decent,
+                            4 => dim_wayoff,
+                            _ => dim_miss,
+                        };
+                        let y = group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
+                        let s = format!("{:0width$}", count, width = digits);
+                        let first_nonzero = s.find(|c: char| c != '0').unwrap_or(s.len());
+
+                        for (i, ch) in s.chars().enumerate() {
+                            let is_dim = if count == 0 {
+                                i < digits.saturating_sub(1)
+                            } else {
+                                i < first_nonzero
+                            };
+                            let c = if is_dim { dim } else { bright };
+                            if is_p1 {
+                                let x = anchor_x + (i as f32) * digit_w;
+                                let mut a = act!(text:
+                                    font("wendy_screenevaluation"): settext(ch.to_string()):
+                                    align(0.0, 0.5): xy(x, y):
+                                    zoom(numbers_zoom_y):
+                                    diffuse(c[0], c[1], c[2], c[3]):
+                                    z(z_fg):
+                                    horizalign(left)
+                                );
+                                if let Actor::Text { scale, .. } = &mut a {
+                                    scale[0] = numbers_zoom_x;
+                                    scale[1] = numbers_zoom_y;
+                                }
+                                actors.push(a);
+                            } else {
+                                let idx_from_right = digits.saturating_sub(1).saturating_sub(i);
+                                let x = anchor_x - (idx_from_right as f32) * digit_w;
+                                let mut a = act!(text:
+                                    font("wendy_screenevaluation"): settext(ch.to_string()):
+                                    align(1.0, 0.5): xy(x, y):
+                                    zoom(numbers_zoom_y):
+                                    diffuse(c[0], c[1], c[2], c[3]):
+                                    z(z_fg):
+                                    horizalign(right)
+                                );
+                                if let Actor::Text { scale, .. } = &mut a {
+                                    scale[0] = numbers_zoom_x;
+                                    scale[1] = numbers_zoom_y;
+                                }
+                                actors.push(a);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
+
+    if let Some(banner_path) = &state.song.banner_path {
+        let key = banner_path.to_string_lossy().into_owned();
+        actors.push(act!(sprite(key):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y() + 70.0):
+            setsize(418.0, 164.0):
+            zoom(0.3):
+            z(z_fg)
+        ));
+    }
+
+    actors
+}
+
 // --- Statics for Judgment Counter Display ---
 
 static JUDGMENT_ORDER: [JudgeGrade; 6] = [
