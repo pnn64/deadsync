@@ -398,6 +398,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     } else if play_style == profile::PlayStyle::Versus {
         actors.extend(gameplay_stats::build_versus_step_stats(state, asset_manager));
+    } else if play_style == profile::PlayStyle::Double {
+        actors.extend(gameplay_stats::build_double_step_stats(
+            state,
+            asset_manager,
+            playfield_center_x,
+        ));
     }
     actors
 }

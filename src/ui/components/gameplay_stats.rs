@@ -295,6 +295,321 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
     actors
 }
 
+pub fn build_double_step_stats(
+    state: &State,
+    asset_manager: &AssetManager,
+    playfield_center_x: f32,
+) -> Vec<Actor> {
+    if !is_wide() {
+        return vec![];
+    }
+    let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
+    if is_ultrawide {
+        return vec![];
+    }
+    if state.cols_per_player <= 4 {
+        return vec![];
+    }
+
+    let Some(notefield_width) = notefield_width(state) else {
+        return vec![];
+    };
+
+    // Simply Love: StepStatistics/default.lua
+    // - StepStatsPane centered: x=_screen.cx, y=_screen.cy+80
+    // - BannerAndData is scaled when the notefield is centered (aspect 16:10..16:9)
+    let header_h = 80.0;
+    let pane_cx = screen_center_x();
+    let pane_cy = screen_center_y() + header_h;
+
+    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
+    let banner_data_zoom = if note_field_is_centered {
+        let ar = screen_width() / screen_height();
+        let t = ((ar - (16.0 / 10.0)) / ((16.0 / 9.0) - (16.0 / 10.0))).clamp(0.0, 1.0);
+        0.825 + (0.925 - 0.825) * t
+    } else {
+        1.0
+    };
+
+    let mut actors = Vec::with_capacity(256);
+
+    // DarkBackground.lua (double): two 200px-wide panels flanking the notefield.
+    let nf_half_w = notefield_width * 0.5;
+    let bg_y = screen_center_y();
+    let z_bg = -80i16;
+    actors.push(act!(quad:
+        align(1.0, 0.5):
+        xy(pane_cx - nf_half_w, bg_y):
+        zoomto(200.0, screen_height()):
+        diffuse(0.0, 0.0, 0.0, 0.95):
+        z(z_bg)
+    ));
+    actors.push(act!(quad:
+        align(0.0, 0.5):
+        xy(pane_cx + nf_half_w, bg_y):
+        zoomto(200.0, screen_height()):
+        diffuse(0.0, 0.0, 0.0, 0.95):
+        z(z_bg)
+    ));
+
+    // Banner.lua (double): xy(GetNotefieldWidth() - 140, -200)
+    if let Some(banner_path) = &state.song.banner_path {
+        let banner_key = banner_path.to_string_lossy().into_owned();
+        let banner_x = pane_cx + ((notefield_width - 140.0) * banner_data_zoom);
+        let banner_y = pane_cy + (-200.0 * banner_data_zoom);
+        actors.push(act!(sprite(banner_key):
+            align(0.5, 0.5): xy(banner_x, banner_y):
+            setsize(418.0, 164.0):
+            zoom(0.4 * banner_data_zoom):
+            z(-50)
+        ));
+    }
+
+    // TapNoteJudgments.lua (double): x(-GetNotefieldWidth() + 75), y(40), zoom(0.8)
+    {
+        let origin_x = pane_cx + ((-notefield_width + 75.0) * banner_data_zoom);
+        let origin_y = pane_cy + (40.0 * banner_data_zoom);
+        let base_zoom = 0.8 * banner_data_zoom;
+
+        let total_tapnotes = state.chart.stats.total_steps as f32;
+        let digits = if total_tapnotes > 0.0 {
+            (total_tapnotes.log10().floor() as usize + 1).max(4)
+        } else {
+            4
+        };
+        let profile = profile::get();
+        let show_fa_plus_window = profile.show_fa_plus_window;
+        let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
+        let y_base = -280.0;
+
+        asset_manager.with_fonts(|all_fonts| {
+            asset_manager.with_font("wendy_screenevaluation", |f| {
+                let numbers_zoom = base_zoom * 0.5;
+                let digit_w = (font::measure_line_width_logical(f, "0", all_fonts) as f32) * numbers_zoom;
+                if digit_w <= 0.0 {
+                    return;
+                }
+                let block_w = digit_w * digits as f32;
+                let numbers_left_x = origin_x + (1.4 * block_w);
+                let label_x = origin_x + ((80.0 + (digits.saturating_sub(4) as f32 * 16.0)) * base_zoom);
+                let label_zoom = base_zoom * 0.833;
+
+                let rows: Vec<(&str, [f32; 4], [f32; 4], u32)> = if !show_fa_plus_window {
+                    JUDGMENT_ORDER
+                        .iter()
+                        .enumerate()
+                        .map(|(i, grade)| {
+                            let info = JUDGMENT_INFO.get(grade).unwrap();
+                            let count = *state.players[0].judgment_counts.get(grade).unwrap_or(&0);
+                            let bright = info.color;
+                            let dim = color::rgba_hex(color::JUDGMENT_DIM_HEX[i]);
+                            (info.label, bright, dim, count)
+                        })
+                        .collect()
+                } else {
+                    let wc = timing_stats::compute_window_counts(&state.notes);
+                    let fantastic_color = JUDGMENT_INFO
+                        .get(&JudgeGrade::Fantastic)
+                        .map(|info| info.color)
+                        .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[0]));
+                    let excellent_color = JUDGMENT_INFO
+                        .get(&JudgeGrade::Excellent)
+                        .map(|info| info.color)
+                        .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[1]));
+                    let great_color = JUDGMENT_INFO
+                        .get(&JudgeGrade::Great)
+                        .map(|info| info.color)
+                        .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[2]));
+                    let decent_color = JUDGMENT_INFO
+                        .get(&JudgeGrade::Decent)
+                        .map(|info| info.color)
+                        .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[3]));
+                    let wayoff_color = JUDGMENT_INFO
+                        .get(&JudgeGrade::WayOff)
+                        .map(|info| info.color)
+                        .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[4]));
+                    let miss_color = JUDGMENT_INFO
+                        .get(&JudgeGrade::Miss)
+                        .map(|info| info.color)
+                        .unwrap_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[5]));
+
+                    let dim_fantastic = color::rgba_hex(color::JUDGMENT_DIM_HEX[0]);
+                    let dim_excellent = color::rgba_hex(color::JUDGMENT_DIM_HEX[1]);
+                    let dim_great = color::rgba_hex(color::JUDGMENT_DIM_HEX[2]);
+                    let dim_decent = color::rgba_hex(color::JUDGMENT_DIM_HEX[3]);
+                    let dim_wayoff = color::rgba_hex(color::JUDGMENT_DIM_HEX[4]);
+                    let dim_miss = color::rgba_hex(color::JUDGMENT_DIM_HEX[5]);
+                    let dim_white_fa = color::rgba_hex(color::JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_HEX);
+
+                    let white_fa_color = color::rgba_hex(color::JUDGMENT_FA_PLUS_WHITE_HEX);
+
+                    vec![
+                        ("FANTASTIC", fantastic_color, dim_fantastic, wc.w0),
+                        ("FANTASTIC", white_fa_color, dim_white_fa, wc.w1),
+                        ("EXCELLENT", excellent_color, dim_excellent, wc.w2),
+                        ("GREAT", great_color, dim_great, wc.w3),
+                        ("DECENT", decent_color, dim_decent, wc.w4),
+                        ("WAY OFF", wayoff_color, dim_wayoff, wc.w5),
+                        ("MISS", miss_color, dim_miss, wc.miss),
+                    ]
+                };
+
+                for (row_i, (label, bright, dim, count)) in rows.iter().enumerate() {
+                    let local_y = y_base + (row_i as f32 * row_height);
+                    let y_numbers = origin_y + (local_y * base_zoom);
+                    let y_label = origin_y + ((local_y + 1.0) * base_zoom);
+
+                    let s = format!("{:0width$}", count, width = digits);
+                    let first_nonzero = s.find(|c: char| c != '0').unwrap_or(s.len());
+
+                    for (i, ch) in s.chars().enumerate() {
+                        let is_dim = if *count == 0 { i < digits.saturating_sub(1) } else { i < first_nonzero };
+                        let c = if is_dim { *dim } else { *bright };
+                        let x = numbers_left_x + (i as f32) * digit_w;
+                        actors.push(act!(text:
+                            font("wendy_screenevaluation"): settext(ch.to_string()):
+                            align(0.0, 0.5): xy(x, y_numbers):
+                            zoom(numbers_zoom):
+                            diffuse(c[0], c[1], c[2], c[3]):
+                            z(71):
+                            horizalign(left)
+                        ));
+                    }
+
+                    actors.push(act!(text:
+                        font("miso"): settext(label.to_string()):
+                        align(1.0, 0.5): horizalign(right):
+                        xy(label_x, y_label):
+                        zoom(label_zoom):
+                        maxwidth(72.0 * base_zoom):
+                        diffuse(bright[0], bright[1], bright[2], bright[3]):
+                        z(71)
+                    ));
+                }
+            });
+        });
+    }
+
+    // HoldsMinesRolls.lua (double): x(-GetNotefieldWidth() + 212), y(-10), zoom(0.8)
+    {
+        let frame_cx = pane_cx + ((-notefield_width + 212.0) * banner_data_zoom);
+        let frame_cy = pane_cy + (-10.0 * banner_data_zoom);
+        let frame_zoom = 0.8 * banner_data_zoom;
+
+        actors.extend(build_holds_mines_rolls_pane_at(
+            state,
+            asset_manager,
+            frame_cx,
+            frame_cy,
+            frame_zoom,
+        ));
+    }
+
+    // Time.lua (double): x(-GetNotefieldWidth() + 150), y(75)
+    {
+        let base_x = pane_cx + ((-notefield_width + 150.0) * banner_data_zoom);
+        let base_y = pane_cy + (75.0 * banner_data_zoom);
+
+        let base_total = state.song.total_length_seconds.max(0) as f32;
+        let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+            state.music_rate
+        } else {
+            1.0
+        };
+        let total_display_seconds = if rate != 0.0 { base_total / rate } else { base_total };
+        let elapsed_display_seconds = if rate != 0.0 {
+            state.current_music_time.max(0.0) / rate
+        } else {
+            state.current_music_time.max(0.0)
+        };
+
+        let total_time_str = format_game_time(total_display_seconds, total_display_seconds);
+        let remaining_display_seconds = if let Some(fail_time) = state.players[0].fail_time {
+            let fail_disp = if rate != 0.0 { fail_time.max(0.0) / rate } else { fail_time.max(0.0) };
+            (total_display_seconds - fail_disp).max(0.0)
+        } else {
+            (total_display_seconds - elapsed_display_seconds).max(0.0)
+        };
+        let remaining_time_str = format_game_time(remaining_display_seconds, total_display_seconds);
+
+        let number_zoom = banner_data_zoom;
+        let label_zoom = 0.833 * number_zoom;
+        let total_w = asset_manager
+            .with_fonts(|all_fonts| {
+                asset_manager.with_font("miso", |f| {
+                    font::measure_line_width_logical(f, &total_time_str, all_fonts) as f32
+                })
+            })
+            .unwrap_or(0.0);
+
+        // Simply Love (Time.lua):
+        // label x = 32 + (total_width - 28) == total_width + 4
+        let label_x = base_x + (total_w + 4.0) * number_zoom;
+
+        // Remaining row (y=0)
+        actors.push(act!(text:
+            font("miso"):
+            settext(remaining_time_str):
+            align(-1.2, 0.5):
+            xy(base_x, base_y):
+            zoom(number_zoom):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(71)
+        ));
+        actors.push(act!(text:
+            font("miso"):
+            settext("remaining "):
+            align(1.0, 0.5):
+            horizalign(right):
+            xy(label_x, base_y + 1.0 * number_zoom):
+            zoom(label_zoom):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(71)
+        ));
+
+        // Total row (y=20)
+        actors.push(act!(text:
+            font("miso"):
+            settext(total_time_str):
+            align(-1.2, 0.5):
+            xy(base_x, base_y + (20.0 * number_zoom)):
+            zoom(number_zoom):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(71)
+        ));
+        actors.push(act!(text:
+            font("miso"):
+            settext("song "):
+            align(1.0, 0.5):
+            horizalign(right):
+            xy(label_x, base_y + (20.0 * number_zoom) + 1.0 * number_zoom):
+            zoom(label_zoom):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(71)
+        ));
+    }
+
+    // Peak NPS text (DensityGraph.lua drives this in SL).
+    {
+        let scaled_peak = (state.chart.max_nps as f32 * state.music_rate).max(0.0);
+        let peak_nps_text = format!("Peak NPS: {:.2}", scaled_peak);
+        let x = screen_center_x() - 134.0;
+        let y = screen_center_y() + 126.0;
+        actors.push(act!(text:
+            font("miso"):
+            settext(peak_nps_text):
+            align(1.0, 0.5):
+            xy(x, y):
+            zoom(0.9):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            horizalign(right):
+            z(200)
+        ));
+    }
+
+    actors
+}
+
 // --- Statics for Judgment Counter Display ---
 
 static JUDGMENT_ORDER: [JudgeGrade; 6] = [
@@ -422,6 +737,165 @@ fn build_banner(
         ));
     }
     actors
+}
+
+fn build_holds_mines_rolls_pane_at(
+    state: &State,
+    asset_manager: &AssetManager,
+    frame_cx: f32,
+    frame_cy: f32,
+    frame_zoom: f32,
+) -> Vec<Actor> {
+    let p = &state.players[0];
+    let mut actors = Vec::new();
+
+    let categories = [
+        ("holds", p.holds_held, state.holds_total),
+        ("mines", p.mines_avoided, state.mines_total),
+        ("rolls", p.rolls_held, state.rolls_total),
+    ];
+
+    let largest_count = categories
+        .iter()
+        .map(|(_, achieved, total)| (*achieved).max(*total))
+        .max()
+        .unwrap_or(0);
+    let digits_needed = if largest_count == 0 {
+        1
+    } else {
+        (largest_count as f32).log10().floor() as usize + 1
+    };
+    let digits_to_fmt = digits_needed.clamp(3, 4);
+    let row_height = 28.0 * frame_zoom;
+    let mut children = Vec::new();
+
+    asset_manager.with_fonts(|all_fonts| {
+        asset_manager.with_font("wendy_screenevaluation", |metrics_font| {
+            let value_zoom = 0.4 * frame_zoom;
+            let label_zoom = 0.833 * frame_zoom;
+            let gray = color::rgba_hex("#5A6166");
+            let white = [1.0, 1.0, 1.0, 1.0];
+
+            let digit_width =
+                font::measure_line_width_logical(metrics_font, "0", all_fonts) as f32 * value_zoom;
+            if digit_width <= 0.0 {
+                return;
+            }
+            let slash_width =
+                font::measure_line_width_logical(metrics_font, "/", all_fonts) as f32 * value_zoom;
+
+            const LOGICAL_CHAR_WIDTH_FOR_LABEL: f32 = 36.0;
+            let fixed_char_width_scaled_for_label = LOGICAL_CHAR_WIDTH_FOR_LABEL * value_zoom;
+
+            for (i, (label_text, achieved, total)) in categories.iter().enumerate() {
+                let item_y = (i as f32 - 1.0) * row_height;
+                let right_anchor_x = 0.0;
+                let mut cursor_x = right_anchor_x;
+
+                let possible_str = format!("{:0width$}", *total as usize, width = digits_to_fmt);
+                let achieved_str = format!("{:0width$}", *achieved as usize, width = digits_to_fmt);
+
+                let first_nonzero_possible =
+                    possible_str.find(|c: char| c != '0').unwrap_or(possible_str.len());
+                for (char_idx, ch) in possible_str.chars().rev().enumerate() {
+                    let is_dim = if *total == 0 {
+                        char_idx > 0
+                    } else {
+                        let original_index = digits_to_fmt - 1 - char_idx;
+                        original_index < first_nonzero_possible
+                    };
+                    let color = if is_dim { gray } else { white };
+                    let x_pos = cursor_x - (char_idx as f32 * digit_width);
+                    children.push(act!(text:
+                        font("wendy_screenevaluation"): settext(ch.to_string()):
+                        align(1.0, 0.5): xy(x_pos, item_y):
+                        zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
+                    ));
+                }
+                cursor_x -= possible_str.len() as f32 * digit_width;
+
+                children.push(act!(text:
+                    font("wendy_screenevaluation"): settext("/"):
+                    align(1.0, 0.5): xy(cursor_x, item_y):
+                    zoom(value_zoom): diffuse(gray[0], gray[1], gray[2], gray[3])
+                ));
+                cursor_x -= slash_width;
+
+                let achieved_block_right_x = cursor_x;
+                let first_nonzero_achieved =
+                    achieved_str.find(|c: char| c != '0').unwrap_or(achieved_str.len());
+                for (char_idx, ch) in achieved_str.chars().rev().enumerate() {
+                    let is_dim = if *achieved == 0 {
+                        char_idx > 0
+                    } else {
+                        let original_index = digits_to_fmt - 1 - char_idx;
+                        original_index < first_nonzero_achieved
+                    };
+                    let color = if is_dim { gray } else { white };
+                    let x_pos = achieved_block_right_x - (char_idx as f32 * digit_width);
+                    children.push(act!(text:
+                        font("wendy_screenevaluation"): settext(ch.to_string()):
+                        align(1.0, 0.5): xy(x_pos, item_y):
+                        zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
+                    ));
+                }
+
+                let total_value_width_for_label = (achieved_str.len() + 1 + possible_str.len())
+                    as f32
+                    * fixed_char_width_scaled_for_label;
+                let label_x = right_anchor_x - total_value_width_for_label - (10.0 * frame_zoom);
+
+                children.push(act!(text:
+                    font("miso"): settext(*label_text):
+                    align(1.0, 0.5): xy(label_x, item_y):
+                    zoom(label_zoom):
+                    horizalign(right):
+                    diffuse(white[0], white[1], white[2], white[3])
+                ));
+            }
+        });
+    });
+
+    actors.push(Actor::Frame {
+        align: [0.5, 0.5],
+        offset: [frame_cx, frame_cy],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        children,
+        background: None,
+        z: 70,
+    });
+    actors
+}
+
+fn notefield_width(state: &State) -> Option<f32> {
+    let ns = state.noteskin.as_ref()?;
+    let cols = state
+        .cols_per_player
+        .min(ns.column_xs.len())
+        .min(ns.receptor_off.len());
+    if cols == 0 {
+        return None;
+    }
+
+    let mut min_x = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    for x in ns.column_xs.iter().take(cols) {
+        let xf = *x as f32;
+        min_x = min_x.min(xf);
+        max_x = max_x.max(xf);
+    }
+
+    let target_arrow_px = 64.0 * state.field_zoom.max(0.0);
+    let size = ns.receptor_off[0].size();
+    let w = size[0].max(0) as f32;
+    let h = size[1].max(0) as f32;
+    let arrow_w = if h > 0.0 && target_arrow_px > 0.0 {
+        w * (target_arrow_px / h)
+    } else {
+        w * state.field_zoom.max(0.0)
+    };
+
+    Some(((max_x - min_x) * state.field_zoom.max(0.0)) + arrow_w)
 }
 
 fn build_holds_mines_rolls_pane(
