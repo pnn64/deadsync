@@ -267,9 +267,28 @@ pub struct AssetManager {
     pub textures: HashMap<String, GfxTexture>,
     fonts: HashMap<&'static str, Font>,
     current_dynamic_banner: Option<(String, PathBuf)>,
-    current_density_graph: Option<(String, String)>,
+    current_density_graph: [Option<String>; DensityGraphSlot::COUNT],
     current_dynamic_background: Option<(String, PathBuf)>,
     current_profile_avatar: Option<(String, PathBuf)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DensityGraphSlot {
+    SelectMusicP1,
+    SelectMusicP2,
+    Evaluation,
+}
+
+impl DensityGraphSlot {
+    pub const COUNT: usize = 3;
+
+    pub const fn ix(self) -> usize {
+        match self {
+            Self::SelectMusicP1 => 0,
+            Self::SelectMusicP2 => 1,
+            Self::Evaluation => 2,
+        }
+    }
 }
 
 impl AssetManager {
@@ -278,7 +297,7 @@ impl AssetManager {
             textures: HashMap::new(),
             fonts: HashMap::new(),
             current_dynamic_banner: None,
-            current_density_graph: None,
+            current_density_graph: std::array::from_fn(|_| None),
             current_dynamic_background: None,
             current_profile_avatar: None,
         }
@@ -701,20 +720,32 @@ impl AssetManager {
 
     pub fn destroy_dynamic_assets(&mut self, backend: &mut Backend) {
         if self.current_dynamic_banner.is_some()
-            || self.current_density_graph.is_some()
+            || self.current_density_graph.iter().any(|x| x.is_some())
             || self.current_dynamic_background.is_some()
         {
             backend.wait_for_idle(); // Wait for GPU to finish using old textures
             if let Some((key, _)) = self.current_dynamic_banner.take() {
                 self.textures.remove(&key);
             }
-            if let Some((key, _)) = self.current_density_graph.take() {
+            let mut removed_graph_keys: Vec<String> = Vec::new();
+            for slot in &mut self.current_density_graph {
+                if let Some(key) = slot.take()
+                    && !removed_graph_keys.iter().any(|k| k == &key)
+                {
+                    removed_graph_keys.push(key);
+                }
+            }
+            for key in removed_graph_keys {
                 self.textures.remove(&key);
             }
             if let Some((key, _)) = self.current_dynamic_background.take() {
                 self.textures.remove(&key);
             }
         }
+    }
+
+    pub fn destroy_dynamic_banner(&mut self, backend: &mut Backend) {
+        self.destroy_current_dynamic_banner(backend);
     }
 
     pub fn set_dynamic_banner(
@@ -768,6 +799,7 @@ impl AssetManager {
     pub fn set_density_graph(
         &mut self,
         backend: &mut Backend,
+        slot: DensityGraphSlot,
         data: Option<(String, rssp::graph::GraphImageData)>,
     ) -> String {
         const FALLBACK_KEY: &str = "__white";
@@ -775,13 +807,18 @@ impl AssetManager {
         if let Some((key, graph_data)) = data {
             if self
                 .current_density_graph
-                .as_ref()
-                .is_some_and(|(_, cache_key)| cache_key == &key)
+                .get(slot.ix())
+                .and_then(|x| x.as_deref())
+                .is_some_and(|cache_key| cache_key == key.as_str())
             {
-                return self.current_density_graph.as_ref().unwrap().0.clone();
+                return key;
             }
 
-            self.destroy_current_density_graph(backend);
+            self.destroy_current_density_graph(backend, slot);
+            if self.textures.contains_key(&key) {
+                self.current_density_graph[slot.ix()] = Some(key.clone());
+                return key;
+            }
 
             let rgba_image =
                 match RgbaImage::from_raw(graph_data.width, graph_data.height, graph_data.data) {
@@ -798,7 +835,7 @@ impl AssetManager {
                 Ok(texture) => {
                     self.textures.insert(key.clone(), texture);
                     register_texture_dims(&key, rgba_image.width(), rgba_image.height());
-                    self.current_density_graph = Some((key.clone(), key.clone()));
+                    self.current_density_graph[slot.ix()] = Some(key.clone());
                     key
                 }
                 Err(e) => {
@@ -809,7 +846,7 @@ impl AssetManager {
                 }
             }
         } else {
-            self.destroy_current_density_graph(backend);
+            self.destroy_current_density_graph(backend, slot);
             FALLBACK_KEY.to_string()
         }
     }
@@ -886,11 +923,19 @@ impl AssetManager {
         }
     }
 
-    fn destroy_current_density_graph(&mut self, backend: &mut Backend) {
-        if let Some((key, _)) = self.current_density_graph.take() {
-            backend.wait_for_idle();
-            self.textures.remove(&key);
+    fn destroy_current_density_graph(&mut self, backend: &mut Backend, slot: DensityGraphSlot) {
+        let Some(key) = self.current_density_graph[slot.ix()].take() else {
+            return;
+        };
+        if self
+            .current_density_graph
+            .iter()
+            .any(|k| k.as_deref() == Some(key.as_str()))
+        {
+            return;
         }
+        backend.wait_for_idle();
+        self.textures.remove(&key);
     }
 
     fn destroy_current_dynamic_background(&mut self, backend: &mut Backend) {

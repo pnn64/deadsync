@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::AssetManager;
+use crate::assets::{AssetManager, DensityGraphSlot};
 use crate::core::audio;
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
 use crate::core::space::{
@@ -19,7 +19,7 @@ use crate::ui::components::{heart_bg, music_wheel, pad_display};
 use crate::ui::font;
 use log::info;
 use rssp::bpm::parse_bpm_map;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
@@ -49,6 +49,18 @@ const MUSIC_WHEEL_SETTLE_MIN_SPEED: f32 = 0.2;
 const MUSIC_WHEEL_HOLD_SPIN_SPEED: f32 = 15.0;
 // ITGmania WheelBase::MoveSpecific(): if |offset| < 0.25 then one more move for spin-down.
 const MUSIC_WHEEL_STOP_SPINDOWN_THRESHOLD: f32 = 0.25;
+
+const CHORD_UP: u8 = 1 << 0;
+const CHORD_DOWN: u8 = 1 << 1;
+
+#[inline(always)]
+const fn chord_bit(dir: PadDir) -> u8 {
+    match dir {
+        PadDir::Up => CHORD_UP,
+        PadDir::Down => CHORD_DOWN,
+        _ => 0,
+    }
+}
 
 // --- Preview helpers ---
 fn sec_at_beat_from_bpms(normalized_bpms: &str, target_beat: f64) -> f64 {
@@ -242,13 +254,17 @@ pub struct State {
     pub selected_index: usize,
     pub selected_steps_index: usize,
     pub preferred_difficulty_index: usize,
+    pub p2_selected_steps_index: usize,
+    pub p2_preferred_difficulty_index: usize,
     pub active_color_index: i32,
     pub selection_animation_timer: f32,
     pub wheel_offset_from_selection: f32,
     pub current_banner_key: String,
     pub current_graph_key: String,
+    pub current_graph_key_p2: String,
     pub session_elapsed: f32,
     pub displayed_chart_data: Option<Arc<ChartData>>,
+    pub displayed_chart_data_p2: Option<Arc<ChartData>>,
 
     // Internal state
     all_entries: Vec<MusicWheelEntry>,
@@ -256,9 +272,13 @@ pub struct State {
     bg: heart_bg::State,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_chart_hash: Option<String>,
-    active_chord_keys: HashSet<KeyCode>,
-    last_steps_nav_key: Option<KeyCode>,
-    last_steps_nav_time: Option<Instant>,
+    last_requested_chart_hash_p2: Option<String>,
+    chord_mask_p1: u8,
+    chord_mask_p2: u8,
+    last_steps_nav_dir_p1: Option<PadDir>,
+    last_steps_nav_time_p1: Option<Instant>,
+    last_steps_nav_dir_p2: Option<PadDir>,
+    last_steps_nav_time_p2: Option<Instant>,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     currently_playing_preview_path: Option<PathBuf>,
@@ -442,6 +462,8 @@ pub fn init() -> State {
         selected_index: 0,
         selected_steps_index: initial_diff_index,
         preferred_difficulty_index: initial_diff_index,
+        p2_selected_steps_index: initial_diff_index,
+        p2_preferred_difficulty_index: initial_diff_index,
         active_color_index: color::DEFAULT_COLOR_INDEX,
         selection_animation_timer: 0.0,
         wheel_offset_from_selection: 0.0,
@@ -451,16 +473,22 @@ pub fn init() -> State {
         current_banner_key: "banner1.png".to_string(),
         last_requested_chart_hash: None,
         current_graph_key: "__white".to_string(),
-        active_chord_keys: HashSet::new(),
-        last_steps_nav_key: None,
-        last_steps_nav_time: None,
+        current_graph_key_p2: "__white".to_string(),
+        displayed_chart_data: None,
+        displayed_chart_data_p2: None,
+        last_requested_chart_hash_p2: None,
+        chord_mask_p1: 0,
+        chord_mask_p2: 0,
+        last_steps_nav_dir_p1: None,
+        last_steps_nav_time_p1: None,
+        last_steps_nav_dir_p2: None,
+        last_steps_nav_time_p2: None,
         nav_key_held_direction: None,
         nav_key_held_since: None,
         currently_playing_preview_path: None,
         session_elapsed: 0.0,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
-        displayed_chart_data: None,
         pack_song_counts,
     };
 
@@ -481,6 +509,8 @@ pub fn init() -> State {
                     if idx2 < color::FILE_DIFFICULTY_NAMES.len() {
                         state.preferred_difficulty_index = idx2;
                     }
+                    state.p2_selected_steps_index = state.selected_steps_index;
+                    state.p2_preferred_difficulty_index = state.preferred_difficulty_index;
                     state.prev_selected_index = state.selected_index;
                     return state;
                 }
@@ -500,6 +530,8 @@ pub fn init() -> State {
                 if let Some(idx2) = best_match_index {
                     state.selected_steps_index = idx2;
                 }
+                state.p2_selected_steps_index = state.selected_steps_index;
+                state.p2_preferred_difficulty_index = state.preferred_difficulty_index;
             }
         }
     }
@@ -591,16 +623,11 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
             PadDir::Up | PadDir::Down => {
                 if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
                     let is_up = matches!(dir, PadDir::Up);
-                    let kc = if is_up {
-                        KeyCode::ArrowUp
-                    } else {
-                        KeyCode::ArrowDown
-                    };
                     let now = Instant::now();
 
-                    if state.last_steps_nav_key == Some(kc)
+                    if state.last_steps_nav_dir_p1 == Some(dir)
                         && state
-                            .last_steps_nav_time
+                            .last_steps_nav_time_p1
                             .is_some_and(|t| now.duration_since(t) < DOUBLE_TAP_WINDOW)
                     {
                         let target_chart_type = profile::get_session_play_style().chart_type();
@@ -636,20 +663,17 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                             });
                         }
 
-                        state.last_steps_nav_key = None;
-                        state.last_steps_nav_time = None;
+                        state.last_steps_nav_dir_p1 = None;
+                        state.last_steps_nav_time_p1 = None;
                     } else {
-                        state.last_steps_nav_key = Some(kc);
-                        state.last_steps_nav_time = Some(now);
+                        state.last_steps_nav_dir_p1 = Some(dir);
+                        state.last_steps_nav_time_p1 = Some(now);
                     }
 
+                    state.chord_mask_p1 |= chord_bit(dir);
+
                     // Combo check
-                    let other_key = if is_up {
-                        KeyCode::ArrowDown
-                    } else {
-                        KeyCode::ArrowUp
-                    };
-                    if state.active_chord_keys.contains(&other_key) {
+                    if state.chord_mask_p1 & (CHORD_UP | CHORD_DOWN) == (CHORD_UP | CHORD_DOWN) {
                         if let Some(pack) = state.expanded_pack_name.take() {
                             info!("Up+Down combo: Collapsing pack '{}'.", pack);
                             rebuild_displayed_entries(state);
@@ -660,17 +684,16 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                             }
                         }
                     }
-                    state.active_chord_keys.insert(kc);
                 }
             }
         }
     } else {
         match dir {
             PadDir::Up => {
-                state.active_chord_keys.remove(&KeyCode::ArrowUp);
+                state.chord_mask_p1 &= !CHORD_UP;
             }
             PadDir::Down => {
-                state.active_chord_keys.remove(&KeyCode::ArrowDown);
+                state.chord_mask_p1 &= !CHORD_DOWN;
             }
             PadDir::Left => {
                 if state.nav_key_held_direction == Some(NavDirection::Left) {
@@ -704,6 +727,87 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                     state.nav_key_held_since = None;
                 }
             }
+        }
+    }
+    ScreenAction::None
+}
+
+fn handle_pad_dir_p2(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAction {
+    if !(matches!(dir, PadDir::Up | PadDir::Down)) {
+        return ScreenAction::None;
+    }
+    if pressed {
+        if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
+            let is_up = matches!(dir, PadDir::Up);
+            let now = Instant::now();
+
+            if state.last_steps_nav_dir_p2 == Some(dir)
+                && state
+                    .last_steps_nav_time_p2
+                    .is_some_and(|t| now.duration_since(t) < DOUBLE_TAP_WINDOW)
+            {
+                let target_chart_type = profile::get_session_play_style().chart_type();
+                let list_len = steps_len(song, target_chart_type);
+                let cur = state.p2_selected_steps_index.min(list_len.saturating_sub(1));
+
+                let mut new_idx = None;
+                if is_up {
+                    for i in (0..cur).rev() {
+                        if chart_for_steps_index(song, target_chart_type, i).is_some() {
+                            new_idx = Some(i);
+                            break;
+                        }
+                    }
+                } else {
+                    for i in (cur + 1)..list_len {
+                        if chart_for_steps_index(song, target_chart_type, i).is_some() {
+                            new_idx = Some(i);
+                            break;
+                        }
+                    }
+                }
+
+                if let Some(new_idx) = new_idx {
+                    state.p2_selected_steps_index = new_idx;
+                    if new_idx < color::FILE_DIFFICULTY_NAMES.len() {
+                        state.p2_preferred_difficulty_index = new_idx;
+                    }
+                    audio::play_sfx(if is_up {
+                        "assets/sounds/easier.ogg"
+                    } else {
+                        "assets/sounds/harder.ogg"
+                    });
+                }
+
+                state.last_steps_nav_dir_p2 = None;
+                state.last_steps_nav_time_p2 = None;
+            } else {
+                state.last_steps_nav_dir_p2 = Some(dir);
+                state.last_steps_nav_time_p2 = Some(now);
+            }
+
+            state.chord_mask_p2 |= chord_bit(dir);
+
+            // Combo check
+            if state.chord_mask_p2 & (CHORD_UP | CHORD_DOWN) == (CHORD_UP | CHORD_DOWN) {
+                if let Some(pack) = state.expanded_pack_name.take() {
+                    info!("Up+Down combo: Collapsing pack '{}'.", pack);
+                    rebuild_displayed_entries(state);
+                    if let Some(new_sel) = state.entries.iter().position(|e| {
+                        matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &pack)
+                    }) {
+                        state.selected_index = new_sel;
+                        state.prev_selected_index = new_sel;
+                        state.time_since_selection_change = 0.0;
+                    }
+                }
+            }
+        }
+    } else {
+        match dir {
+            PadDir::Up => state.chord_mask_p2 &= !CHORD_UP,
+            PadDir::Down => state.chord_mask_p2 &= !CHORD_DOWN,
+            _ => {}
         }
     }
     ScreenAction::None
@@ -758,6 +862,42 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    let play_style = crate::game::profile::get_session_play_style();
+    if play_style == crate::game::profile::PlayStyle::Versus {
+        return match ev.action {
+            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+                handle_pad_dir(state, PadDir::Left, ev.pressed)
+            }
+            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+                handle_pad_dir(state, PadDir::Right, ev.pressed)
+            }
+            VirtualAction::p1_up | VirtualAction::p1_menu_up => {
+                handle_pad_dir(state, PadDir::Up, ev.pressed)
+            }
+            VirtualAction::p1_down | VirtualAction::p1_menu_down => {
+                handle_pad_dir(state, PadDir::Down, ev.pressed)
+            }
+            VirtualAction::p1_start if ev.pressed => handle_confirm(state),
+            VirtualAction::p1_back if ev.pressed => ScreenAction::Navigate(Screen::Menu),
+
+            VirtualAction::p2_left | VirtualAction::p2_menu_left => {
+                handle_pad_dir(state, PadDir::Left, ev.pressed)
+            }
+            VirtualAction::p2_right | VirtualAction::p2_menu_right => {
+                handle_pad_dir(state, PadDir::Right, ev.pressed)
+            }
+            VirtualAction::p2_up | VirtualAction::p2_menu_up => {
+                handle_pad_dir_p2(state, PadDir::Up, ev.pressed)
+            }
+            VirtualAction::p2_down | VirtualAction::p2_menu_down => {
+                handle_pad_dir_p2(state, PadDir::Down, ev.pressed)
+            }
+            VirtualAction::p2_start if ev.pressed => handle_confirm(state),
+            VirtualAction::p2_back if ev.pressed => ScreenAction::Navigate(Screen::Menu),
+            _ => ScreenAction::None,
+        };
+    }
+
     match crate::game::profile::get_session_player_side() {
         crate::game::profile::PlayerSide::P2 => match ev.action {
             VirtualAction::p2_left | VirtualAction::p2_menu_left => {
@@ -825,6 +965,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             Some(MusicWheelEntry::PackHeader { .. })
         ) {
             state.displayed_chart_data = None;
+            state.displayed_chart_data_p2 = None;
         }
 
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
@@ -842,6 +983,22 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             }
             if let Some(b) = best {
                 state.selected_steps_index = b;
+            }
+
+            let pref2 = state.p2_preferred_difficulty_index;
+            let mut best2 = None;
+            let mut min2 = i32::MAX;
+            for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
+                if is_difficulty_playable(song, i) {
+                    let diff = (i as i32 - pref2 as i32).abs();
+                    if diff < min2 {
+                        min2 = diff;
+                        best2 = Some(i);
+                    }
+                }
+            }
+            if let Some(b) = best2 {
+                state.p2_selected_steps_index = b;
             }
         }
     }
@@ -890,16 +1047,36 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             }
         }
 
-        let chart_disp = selected_song.as_ref().and_then(|song| {
-            let target_chart_type = profile::get_session_play_style().chart_type();
+        let play_style = profile::get_session_play_style();
+        let target_chart_type = play_style.chart_type();
+
+        let chart_disp_p1 = selected_song.as_ref().and_then(|song| {
             chart_for_steps_index(song, target_chart_type, state.selected_steps_index).cloned()
         });
-        state.displayed_chart_data = chart_disp.clone().map(Arc::new);
+        let chart_disp_p2 = selected_song.as_ref().and_then(|song| {
+            chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index).cloned()
+        });
+        state.displayed_chart_data = chart_disp_p1.clone().map(Arc::new);
+        state.displayed_chart_data_p2 = chart_disp_p2.clone().map(Arc::new);
 
-        let new_hash = chart_disp.as_ref().map(|c| c.short_hash.clone());
-        if state.last_requested_chart_hash != new_hash {
-            state.last_requested_chart_hash = new_hash;
-            return ScreenAction::RequestDensityGraph(chart_disp);
+        let new_hash_p1 = chart_disp_p1.as_ref().map(|c| c.short_hash.clone());
+        if state.last_requested_chart_hash != new_hash_p1 {
+            state.last_requested_chart_hash = new_hash_p1;
+            return ScreenAction::RequestDensityGraph {
+                slot: DensityGraphSlot::SelectMusicP1,
+                chart_opt: chart_disp_p1,
+            };
+        }
+
+        if play_style == crate::game::profile::PlayStyle::Versus {
+            let new_hash_p2 = chart_disp_p2.as_ref().map(|c| c.short_hash.clone());
+            if state.last_requested_chart_hash_p2 != new_hash_p2 {
+                state.last_requested_chart_hash_p2 = new_hash_p2;
+                return ScreenAction::RequestDensityGraph {
+                    slot: DensityGraphSlot::SelectMusicP2,
+                    chart_opt: chart_disp_p2,
+                };
+            }
         }
     } else if state.currently_playing_preview_path.is_some() {
         state.currently_playing_preview_path = None;
@@ -930,6 +1107,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 pub fn trigger_immediate_refresh(state: &mut State) {
     state.time_since_selection_change = PREVIEW_DELAY_SECONDS;
     state.last_requested_chart_hash = None;
+    state.last_requested_chart_hash_p2 = None;
     state.last_requested_banner_path = None;
 }
 
@@ -945,9 +1123,14 @@ pub fn prime_displayed_chart_data(state: &mut State) {
             chart_for_steps_index(song, target_chart_type, state.selected_steps_index)
                 .cloned()
                 .map(Arc::new);
+        state.displayed_chart_data_p2 =
+            chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index)
+                .cloned()
+                .map(Arc::new);
         return;
     }
     state.displayed_chart_data = None;
+    state.displayed_chart_data_p2 = None;
 }
 
 // Fast non-allocating formatters where possible
@@ -981,6 +1164,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let play_style = crate::game::profile::get_session_play_style();
     let is_p2_single = play_style == crate::game::profile::PlayStyle::Single
         && crate::game::profile::get_session_player_side() == crate::game::profile::PlayerSide::P2;
+    let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
     let target_chart_type = play_style.chart_type();
 
     actors.extend(state.bg.build(heart_bg::Params {
@@ -1032,13 +1216,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         right_avatar,
     }));
 
-    let preferred_idx = state
+    let preferred_idx_p1 = state
         .preferred_difficulty_index
         .min(color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
-    let mut sel_col = color::difficulty_rgba(color::FILE_DIFFICULTY_NAMES[preferred_idx], state.active_color_index);
+    let mut sel_col_p1 =
+        color::difficulty_rgba(color::FILE_DIFFICULTY_NAMES[preferred_idx_p1], state.active_color_index);
+
+    let preferred_idx_p2 = state
+        .p2_preferred_difficulty_index
+        .min(color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
+    let mut sel_col_p2 =
+        color::difficulty_rgba(color::FILE_DIFFICULTY_NAMES[preferred_idx_p2], state.active_color_index);
     if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
         if let Some(chart) = chart_for_steps_index(song, target_chart_type, state.selected_steps_index) {
-            sel_col = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
+            sel_col_p1 = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
+        }
+        if let Some(chart) =
+            chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index)
+        {
+            sel_col_p2 = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
         }
     }
 
@@ -1144,17 +1340,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     });
 
     // Chart Stats & Graph
-    let immediate_chart = match entry_opt {
+    let immediate_chart_p1 = match entry_opt {
         Some(MusicWheelEntry::Song(s)) => {
             chart_for_steps_index(s, target_chart_type, state.selected_steps_index)
         }
         _ => None,
     };
 
-    let disp_chart = state.displayed_chart_data.as_deref();
+    let immediate_chart_p2 = match entry_opt {
+        Some(MusicWheelEntry::Song(s)) => {
+            chart_for_steps_index(s, target_chart_type, state.p2_selected_steps_index)
+        }
+        _ => None,
+    };
+
+    let disp_chart_p1 = state.displayed_chart_data.as_deref();
+    let disp_chart_p2 = state.displayed_chart_data_p2.as_deref();
 
     let (step_artist, steps, jumps, holds, mines, hands, rolls, meter) =
-        if let Some(c) = immediate_chart {
+        if let Some(c) = immediate_chart_p1 {
             (
                 if c.difficulty.eq_ignore_ascii_case("edit") && !c.description.trim().is_empty() {
                     c.description.as_str()
@@ -1186,6 +1390,33 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             )
         };
 
+    let (steps_p2, jumps_p2, holds_p2, mines_p2, hands_p2, rolls_p2, meter_p2) =
+        if let Some(c) = immediate_chart_p2 {
+            (
+                c.stats.total_steps.to_string(),
+                c.stats.jumps.to_string(),
+                c.stats.holds.to_string(),
+                c.mines_nonfake.to_string(),
+                c.stats.hands.to_string(),
+                c.stats.rolls.to_string(),
+                c.meter.to_string(),
+            )
+        } else {
+            (
+                "?".to_string(),
+                "?".to_string(),
+                "?".to_string(),
+                "?".to_string(),
+                "?".to_string(),
+                "?".to_string(),
+                if matches!(entry_opt, Some(MusicWheelEntry::Song(_))) {
+                    "?".to_string()
+                } else {
+                    "".to_string()
+                },
+            )
+        };
+
     // Step Artist & Steps
     let comp_h = screen_height() / 28.0;
     let y_cen =
@@ -1201,80 +1432,95 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let s_x = step_artist_x0 + 30.0;
     let a_x = step_artist_x0 + 75.0;
 
-    actors.push(act!(quad: align(0.5, 0.5): xy(q_cx, y_cen): setsize(175.0, comp_h): z(120): diffuse(sel_col[0], sel_col[1], sel_col[2], 1.0)));
+    actors.push(act!(quad: align(0.5, 0.5): xy(q_cx, y_cen): setsize(175.0, comp_h): z(120): diffuse(sel_col_p1[0], sel_col_p1[1], sel_col_p1[2], 1.0)));
     actors.push(act!(text: font("miso"): settext("STEPS"): align(0.0, 0.5): xy(s_x, y_cen): zoom(0.8): maxwidth(40.0): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
     actors.push(act!(text: font("miso"): settext(step_artist): align(0.0, 0.5): xy(a_x, y_cen): zoom(0.8): maxwidth(124.0): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
 
     // Density Graph
     let panel_w = if is_wide() { 286.0 } else { 276.0 };
-    let mut graph_kids = vec![
-        act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
-    ];
+    let chart_info_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
+    let build_breakdown_panel =
+        |graph_cy: f32, is_p2_layout: bool, graph_key: &String, chart: Option<&ChartData>| {
+        let mut graph_kids = vec![act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3]))];
 
-    if let Some(c) = disp_chart {
-        let peak = format!(
-            "Peak NPS: {:.1}",
-            if music_rate.is_finite() {
-                c.max_nps * music_rate as f64
-            } else {
-                c.max_nps
-            }
-        );
-        // Match Simply Love's minimization loop (0 -> 3) based on rendered width.
-        let bd_text = asset_manager
-            .with_fonts(|all_fonts| {
-                asset_manager.with_font("miso", |miso_font| -> Option<String> {
-                    let text_zoom = 0.8;
-                    let max_allowed_logical_width = panel_w / text_zoom;
-                    let fits = |text: &str| {
-                        (font::measure_line_width_logical(miso_font, text, all_fonts) as f32)
-                            <= max_allowed_logical_width
-                    };
+        if let Some(c) = chart {
+            let peak = format!(
+                "Peak NPS: {:.1}",
+                if music_rate.is_finite() {
+                    c.max_nps * music_rate as f64
+                } else {
+                    c.max_nps
+                }
+            );
+            // Match Simply Love's minimization loop (0 -> 3) based on rendered width.
+            let bd_text = asset_manager
+                .with_fonts(|all_fonts| {
+                    asset_manager.with_font("miso", |miso_font| -> Option<String> {
+                        let text_zoom = 0.8;
+                        let max_allowed_logical_width = panel_w / text_zoom;
+                        let fits = |text: &str| {
+                            (font::measure_line_width_logical(miso_font, text, all_fonts) as f32)
+                                <= max_allowed_logical_width
+                        };
 
-                    if fits(&c.detailed_breakdown) {
-                        Some(c.detailed_breakdown.clone())
-                    } else if fits(&c.partial_breakdown) {
-                        Some(c.partial_breakdown.clone())
-                    } else if fits(&c.simple_breakdown) {
-                        Some(c.simple_breakdown.clone())
-                    } else {
-                        Some(format!("{} Total", c.total_streams))
-                    }
+                        if fits(&c.detailed_breakdown) {
+                            Some(c.detailed_breakdown.clone())
+                        } else if fits(&c.partial_breakdown) {
+                            Some(c.partial_breakdown.clone())
+                        } else if fits(&c.simple_breakdown) {
+                            Some(c.simple_breakdown.clone())
+                        } else {
+                            Some(format!("{} Total", c.total_streams))
+                        }
+                    })
                 })
-            })
-            .flatten()
-            .unwrap_or_else(|| c.simple_breakdown.clone());
+                .flatten()
+                .unwrap_or_else(|| c.simple_breakdown.clone());
 
-        let peak_x = panel_w * 0.5 + if is_p2_single { -136.0 } else { 60.0 };
-        graph_kids.push(act!(sprite(state.current_graph_key.clone()): align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0)));
-        graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0)));
-        graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, 47.0): setsize(panel_w, 17.0): diffuse(0.0, 0.0, 0.0, 0.5)));
-        graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w)));
+            let peak_x = panel_w * 0.5 + if is_p2_layout { -136.0 } else { 60.0 };
+            graph_kids.push(
+                act!(sprite(graph_key.clone()): align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0)),
+            );
+            graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0)));
+            graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, 47.0): setsize(panel_w, 17.0): diffuse(0.0, 0.0, 0.0, 0.5)));
+            graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w)));
+        }
+
+        Actor::Frame {
+            align: [0.0, 0.0],
+            offset: [chart_info_cx - 0.5 * panel_w, graph_cy - 32.0],
+            size: [SizeSpec::Px(panel_w), SizeSpec::Px(64.0)],
+            background: None,
+            z: 51,
+            children: graph_kids,
+        }
+    };
+
+    if is_versus {
+        actors.push(build_breakdown_panel(
+            screen_center_y() + 23.0,
+            false,
+            &state.current_graph_key,
+            disp_chart_p1,
+        ));
+        actors.push(build_breakdown_panel(
+            screen_center_y() + 111.0,
+            true,
+            &state.current_graph_key_p2,
+            disp_chart_p2,
+        ));
+    } else {
+        let graph_cy = screen_center_y() + if is_p2_single { 111.0 } else { 23.0 };
+        actors.push(build_breakdown_panel(
+            graph_cy,
+            is_p2_single,
+            &state.current_graph_key,
+            disp_chart_p1,
+        ));
     }
 
-    let chart_info_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
-    let graph_cy = screen_center_y() + if is_p2_single { 111.0 } else { 23.0 };
-    actors.push(Actor::Frame {
-        align: [0.0, 0.0],
-        offset: [
-            chart_info_cx - 0.5 * panel_w,
-            graph_cy - 32.0,
-        ],
-        size: [SizeSpec::Px(panel_w), SizeSpec::Px(64.0)],
-        background: None,
-        z: 51,
-        children: graph_kids,
-    });
-
     // Pane Display
-    let pane_cx = if is_p2_single {
-        screen_width() * 0.75 + 5.0
-    } else {
-        screen_width() * 0.25 - 5.0
-    };
     let pane_top = screen_height() - 92.0;
-    actors.push(act!(quad: align(0.5, 0.0): xy(pane_cx, pane_top): setsize(screen_width() / 2.0 - 10.0, 60.0): z(120): diffuse(sel_col[0], sel_col[1], sel_col[2], 1.0)));
-
     let tz = widescale(0.8, 0.9);
     let cols = [
         widescale(-104.0, -133.0),
@@ -1284,108 +1530,171 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     ];
     let rows = [13.0, 31.0, 49.0];
 
-    // Stats Grid
-    let stats = [
-        ("Steps", &steps),
-        ("Mines", &mines),
-        ("Jumps", &jumps),
-        ("Hands", &hands),
-        ("Holds", &holds),
-        ("Rolls", &rolls),
-    ];
-    for (i, (lbl, val)) in stats.iter().enumerate() {
-        let (c, r) = (i % 2, i / 2);
-        actors.push(act!(text: font("miso"): settext(*val): align(1.0, 0.5): horizalign(right): xy(pane_cx + cols[c], pane_top + rows[r]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-        actors.push(act!(text: font("miso"): settext(*lbl): align(0.0, 0.5): xy(pane_cx + cols[c] + 3.0, pane_top + rows[r]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-    }
+    let build_pane = |pane_cx: f32,
+                      sel_col: [f32; 4],
+                      steps: &str,
+                      mines: &str,
+                      jumps: &str,
+                      hands: &str,
+                      holds: &str,
+                      rolls: &str,
+                      meter: &str,
+                      chart: Option<&ChartData>| {
+        let mut out = Vec::with_capacity(32);
 
-    // Scores
-    let (s_name, s_pct) = if let Some(c) = immediate_chart {
-        if let Some(sc) = scores::get_cached_score(&c.short_hash) {
-            if sc.grade != scores::Grade::Failed {
-                (
-                    profile.player_initials.clone(),
-                    format!("{:.2}%", sc.score_percent * 100.0),
-                )
+        out.push(act!(quad: align(0.5, 0.0): xy(pane_cx, pane_top): setsize(screen_width() / 2.0 - 10.0, 60.0): z(120): diffuse(sel_col[0], sel_col[1], sel_col[2], 1.0)));
+
+        // Stats Grid
+        let stats = [
+            ("Steps", steps),
+            ("Mines", mines),
+            ("Jumps", jumps),
+            ("Hands", hands),
+            ("Holds", holds),
+            ("Rolls", rolls),
+        ];
+        for (i, (lbl, val)) in stats.iter().enumerate() {
+            let (c, r) = (i % 2, i / 2);
+            out.push(act!(text: font("miso"): settext(*val): align(1.0, 0.5): horizalign(right): xy(pane_cx + cols[c], pane_top + rows[r]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+            out.push(act!(text: font("miso"): settext(*lbl): align(0.0, 0.5): xy(pane_cx + cols[c] + 3.0, pane_top + rows[r]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+        }
+
+        // Scores
+        let (s_name, s_pct) = if let Some(c) = chart {
+            if let Some(sc) = scores::get_cached_score(&c.short_hash) {
+                if sc.grade != scores::Grade::Failed {
+                    (
+                        profile.player_initials.clone(),
+                        format!("{:.2}%", sc.score_percent * 100.0),
+                    )
+                } else {
+                    ("----".to_string(), "??.??%".to_string())
+                }
             } else {
                 ("----".to_string(), "??.??%".to_string())
             }
         } else {
             ("----".to_string(), "??.??%".to_string())
+        };
+
+        for i in 0..2 {
+            out.push(act!(text: font("miso"): settext(&s_name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+            out.push(act!(text: font("miso"): settext(&s_pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
         }
-    } else {
-        ("----".to_string(), "??.??%".to_string())
+
+        // Difficulty Meter
+        let mut m_actor = act!(text: font("wendy"): settext(meter): align(1.0, 0.5): horizalign(right): xy(pane_cx + cols[3], pane_top + rows[1]): z(121): diffuse(0.0, 0.0, 0.0, 1.0));
+        if !is_wide() {
+            if let Actor::Text { max_width, .. } = &mut m_actor {
+                *max_width = Some(66.0);
+            }
+        }
+        out.push(m_actor);
+        out
     };
 
-    for i in 0..2 {
-        actors.push(act!(text: font("miso"): settext(&s_name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-        actors.push(act!(text: font("miso"): settext(&s_pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-    }
-
-    // Difficulty Meter
-    let mut m_actor = act!(text: font("wendy"): settext(meter): align(1.0, 0.5): horizalign(right): xy(pane_cx + cols[3], pane_top + rows[1]): z(121): diffuse(0.0, 0.0, 0.0, 1.0));
-    if !is_wide() {
-        if let Actor::Text { max_width, .. } = &mut m_actor {
-            *max_width = Some(66.0);
-        }
-    }
-    actors.push(m_actor);
-
-    // Pattern Info
-    let (cross, foot, side, jack, brack, stream) = if let Some(c) = disp_chart {
-        (
-            c.tech_counts.crossovers.to_string(),
-            c.tech_counts.footswitches.to_string(),
-            c.tech_counts.sideswitches.to_string(),
-            c.tech_counts.jacks.to_string(),
-            c.tech_counts.brackets.to_string(),
-            if c.total_measures > 0 {
-                format!(
-                    "{}/{} ({:.1}%)",
-                    c.total_streams,
-                    c.total_measures,
-                    (c.total_streams as f32 / c.total_measures as f32) * 100.0
-                )
-            } else {
-                "None (0.0%)".to_string()
-            },
-        )
+    if is_versus {
+        actors.extend(build_pane(
+            screen_width() * 0.25 - 5.0,
+            sel_col_p1,
+            &steps,
+            &mines,
+            &jumps,
+            &hands,
+            &holds,
+            &rolls,
+            &meter,
+            immediate_chart_p1,
+        ));
+        actors.extend(build_pane(
+            screen_width() * 0.75 + 5.0,
+            sel_col_p2,
+            &steps_p2,
+            &mines_p2,
+            &jumps_p2,
+            &hands_p2,
+            &holds_p2,
+            &rolls_p2,
+            &meter_p2,
+            immediate_chart_p2,
+        ));
     } else {
-        (
-            "0".to_string(),
-            "0".to_string(),
-            "0".to_string(),
-            "0".to_string(),
-            "0".to_string(),
-            "None (0.0%)".to_string(),
-        )
-    };
+        let pane_cx = if is_p2_single {
+            screen_width() * 0.75 + 5.0
+        } else {
+            screen_width() * 0.25 - 5.0
+        };
+        actors.extend(build_pane(
+            pane_cx,
+            sel_col_p1,
+            &steps,
+            &mines,
+            &jumps,
+            &hands,
+            &holds,
+            &rolls,
+            &meter,
+            immediate_chart_p1,
+        ));
+    }
 
-    let pat_cx = chart_info_cx;
-    let pat_cy = screen_center_y() + if is_p2_single { 23.0 } else { 111.0 };
-    actors.push(act!(quad: align(0.5, 0.5): xy(pat_cx, pat_cy): setsize(panel_w, 64.0): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
+    if !is_versus {
+        // Pattern Info
+        let (cross, foot, side, jack, brack, stream) = if let Some(c) = disp_chart_p1 {
+            (
+                c.tech_counts.crossovers.to_string(),
+                c.tech_counts.footswitches.to_string(),
+                c.tech_counts.sideswitches.to_string(),
+                c.tech_counts.jacks.to_string(),
+                c.tech_counts.brackets.to_string(),
+                if c.total_measures > 0 {
+                    format!(
+                        "{}/{} ({:.1}%)",
+                        c.total_streams,
+                        c.total_measures,
+                        (c.total_streams as f32 / c.total_measures as f32) * 100.0
+                    )
+                } else {
+                    "None (0.0%)".to_string()
+                },
+            )
+        } else {
+            (
+                "0".to_string(),
+                "0".to_string(),
+                "0".to_string(),
+                "0".to_string(),
+                "0".to_string(),
+                "None (0.0%)".to_string(),
+            )
+        };
 
-    let p_v_x = pat_cx - panel_w * 0.5 + 40.0;
-    let p_l_x = pat_cx - panel_w * 0.5 + 50.0;
-    let p_base_y = pat_cy - 19.0;
-    let items = [
-        (&cross, "Crossovers", 0, 0, None),
-        (&foot, "Footswitches", 1, 0, None),
-        (&side, "Sideswitches", 0, 1, None),
-        (&jack, "Jacks", 1, 1, None),
-        (&brack, "Brackets", 0, 2, None),
-        (&stream, "Total Stream", 1, 2, Some(100.0)),
-    ];
+        let pat_cx = chart_info_cx;
+        let pat_cy = screen_center_y() + if is_p2_single { 23.0 } else { 111.0 };
+        actors.push(act!(quad: align(0.5, 0.5): xy(pat_cx, pat_cy): setsize(panel_w, 64.0): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
 
-    for (val, lbl, c, r, mw) in items {
-        let y = p_base_y + r as f32 * 20.0;
-        let vx = p_v_x + c as f32 * 150.0;
-        let lx = p_l_x + c as f32 * 150.0;
-        match mw {
-            Some(w) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(w): zoom(0.8): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
-            None => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(0.8): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+        let p_v_x = pat_cx - panel_w * 0.5 + 40.0;
+        let p_l_x = pat_cx - panel_w * 0.5 + 50.0;
+        let p_base_y = pat_cy - 19.0;
+        let items = [
+            (&cross, "Crossovers", 0, 0, None),
+            (&foot, "Footswitches", 1, 0, None),
+            (&side, "Sideswitches", 0, 1, None),
+            (&jack, "Jacks", 1, 1, None),
+            (&brack, "Brackets", 0, 2, None),
+            (&stream, "Total Stream", 1, 2, Some(100.0)),
+        ];
+
+        for (val, lbl, c, r, mw) in items {
+            let y = p_base_y + r as f32 * 20.0;
+            let vx = p_v_x + c as f32 * 150.0;
+            let lx = p_l_x + c as f32 * 150.0;
+            match mw {
+                Some(w) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(w): zoom(0.8): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+                None => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(0.8): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+            }
+            actors.push(act!(text: font("miso"): settext(lbl): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(0.8): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
         }
-        actors.push(act!(text: font("miso"): settext(lbl): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(0.8): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
     }
 
     // Steps Display List
@@ -1394,7 +1703,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     actors.push(act!(quad: align(0.5, 0.5): xy(lst_cx, lst_cy): setsize(32.0, 152.0): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
 
     const VISIBLE_STEPS_SLOTS: usize = 5;
-    let (steps_charts, selected_steps_index) = match entry_opt {
+    let (steps_charts, sel_p1, sel_p2) = match entry_opt {
         Some(MusicWheelEntry::Song(song)) => {
             let mut v: Vec<Option<&ChartData>> =
                 Vec::with_capacity(color::FILE_DIFFICULTY_NAMES.len());
@@ -1410,17 +1719,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     .into_iter()
                     .map(Some),
             );
-            (v, state.selected_steps_index)
+            (v, state.selected_steps_index, state.p2_selected_steps_index)
         }
-        _ => (vec![None; color::FILE_DIFFICULTY_NAMES.len()], state.preferred_difficulty_index),
+        _ => (
+            vec![None; color::FILE_DIFFICULTY_NAMES.len()],
+            state.preferred_difficulty_index,
+            state.p2_preferred_difficulty_index,
+        ),
     };
     let list_len = steps_charts.len();
-    let selected_steps_index = selected_steps_index.min(list_len.saturating_sub(1));
+    let sel_p1 = sel_p1.min(list_len.saturating_sub(1));
+    let sel_p2 = sel_p2.min(list_len.saturating_sub(1));
+    let focus_sel = if is_versus { sel_p1.max(sel_p2) } else { sel_p1 };
     let top_index = if list_len > VISIBLE_STEPS_SLOTS {
         // Simply Love: keep Edit charts off-screen until you scroll past Expert.
         // Once you're in Edit charts, keep the selected chart in the bottom slot and
         // shift the other difficulties upward as you move deeper.
-        selected_steps_index
+        focus_sel
             .saturating_sub(VISIBLE_STEPS_SLOTS - 1)
             .min(list_len - VISIBLE_STEPS_SLOTS)
     } else {
@@ -1452,32 +1767,50 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }));
 
     // Bouncing Arrow
-    let arrow_slot = (selected_steps_index.saturating_sub(top_index)).min(VISIBLE_STEPS_SLOTS - 1);
-    let arrow_y = lst_cy + (arrow_slot as i32 - 2) as f32 * 30.0 + 1.0;
     let bpm_val = if let Some(MusicWheelEntry::Song(s)) = entry_opt {
         s.max_bpm.max(1.0)
     } else {
         150.0
     };
     let phase = (state.session_elapsed / (60.0 / bpm_val as f32)) * 6.28318;
-    let (arrow_x0, arrow_dx, arrow_align_x, arrow_rot) = if is_p2_single {
-        let x0 = lst_cx + 14.0 + 1.0;
-        (x0, 1.5 - 1.5 * phase.cos(), 0.0, 180.0)
+    let cos = phase.cos();
+    if is_versus {
+        let slot_p1 = (sel_p1.saturating_sub(top_index)).min(VISIBLE_STEPS_SLOTS - 1);
+        let y_p1 = lst_cy + (slot_p1 as i32 - 2) as f32 * 30.0 + 1.0;
+        actors.push(act!(sprite("meter_arrow.png"):
+            align(0.0, 0.5):
+            xy(screen_center_x() - 53.0 + (-1.5 + 1.5 * cos), y_p1):
+            rotationz(0.0):
+            zoom(0.575):
+            z(122)
+        ));
+
+        let slot_p2 = (sel_p2.saturating_sub(top_index)).min(VISIBLE_STEPS_SLOTS - 1);
+        let y_p2 = lst_cy + (slot_p2 as i32 - 2) as f32 * 30.0 + 1.0;
+        actors.push(act!(sprite("meter_arrow.png"):
+            align(0.0, 0.5):
+            xy(lst_cx + 14.0 + 1.0 + (1.5 - 1.5 * cos), y_p2):
+            rotationz(180.0):
+            zoom(0.575):
+            z(122)
+        ));
     } else {
-        (
-            screen_center_x() - 53.0,
-            -1.5 + 1.5 * phase.cos(),
-            0.0,
-            0.0,
-        )
-    };
-    actors.push(act!(sprite("meter_arrow.png"):
-        align(arrow_align_x, 0.5):
-        xy(arrow_x0 + arrow_dx, arrow_y):
-        rotationz(arrow_rot):
-        zoom(0.575):
-        z(122)
-    ));
+        let arrow_slot = (sel_p1.saturating_sub(top_index)).min(VISIBLE_STEPS_SLOTS - 1);
+        let arrow_y = lst_cy + (arrow_slot as i32 - 2) as f32 * 30.0 + 1.0;
+        let (arrow_x0, arrow_dx, arrow_rot) = if is_p2_single {
+            let x0 = lst_cx + 14.0 + 1.0;
+            (x0, 1.5 - 1.5 * cos, 180.0)
+        } else {
+            (screen_center_x() - 53.0, -1.5 + 1.5 * cos, 0.0)
+        };
+        actors.push(act!(sprite("meter_arrow.png"):
+            align(0.0, 0.5):
+            xy(arrow_x0 + arrow_dx, arrow_y):
+            rotationz(arrow_rot):
+            zoom(0.575):
+            z(122)
+        ));
+    }
 
     actors
 }

@@ -1,4 +1,4 @@
-use crate::assets::AssetManager;
+use crate::assets::{AssetManager, DensityGraphSlot};
 use crate::config::{self, DisplayMode};
 use crate::core::display;
 use crate::core::gfx::{self as renderer, BackendType, RenderList, create_backend};
@@ -41,7 +41,10 @@ pub enum UserEvent {
 enum Command {
     ExitNow,
     SetBanner(Option<PathBuf>),
-    SetDensityGraph(Option<ChartData>),
+    SetDensityGraph {
+        slot: DensityGraphSlot,
+        chart_opt: Option<ChartData>,
+    },
     FetchOnlineGrade(String),
     PlayMusic {
         path: PathBuf,
@@ -423,8 +426,8 @@ impl App {
                 Vec::new()
             }
             ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
-            ScreenAction::RequestDensityGraph(chart_opt) => {
-                vec![Command::SetDensityGraph(chart_opt)]
+            ScreenAction::RequestDensityGraph { slot, chart_opt } => {
+                vec![Command::SetDensityGraph { slot, chart_opt }]
             }
             ScreenAction::FetchOnlineGrade(hash) => vec![Command::FetchOnlineGrade(hash)],
             ScreenAction::ChangeGraphics {
@@ -720,7 +723,7 @@ impl App {
                 event_loop.exit();
             }
             Command::SetBanner(path_opt) => self.apply_banner(path_opt),
-            Command::SetDensityGraph(chart_opt) => self.apply_density_graph(chart_opt),
+            Command::SetDensityGraph { slot, chart_opt } => self.apply_density_graph(slot, chart_opt),
             Command::FetchOnlineGrade(hash) => self.spawn_grade_fetch(hash),
             Command::PlayMusic {
                 path,
@@ -760,7 +763,7 @@ impl App {
                 let key = self.asset_manager.set_dynamic_banner(backend, Some(path));
                 self.state.screens.select_music_state.current_banner_key = key;
             } else {
-                self.asset_manager.destroy_dynamic_assets(backend);
+                self.asset_manager.destroy_dynamic_banner(backend);
                 let color_index = self.state.screens.select_music_state.active_color_index;
                 let banner_num = color_index.rem_euclid(12) + 1;
                 let key = format!("banner{banner_num}.png");
@@ -769,7 +772,7 @@ impl App {
         }
     }
 
-    fn apply_density_graph(&mut self, chart_opt: Option<ChartData>) {
+    fn apply_density_graph(&mut self, slot: DensityGraphSlot, chart_opt: Option<ChartData>) {
         if let Some(backend) = self.backend.as_mut() {
             let graph_request = chart_opt.and_then(|chart| {
                 let graph_width = 1024;
@@ -791,8 +794,16 @@ impl App {
                 .map(|data| (chart.short_hash, data))
             });
 
-            let key = self.asset_manager.set_density_graph(backend, graph_request);
-            self.state.screens.select_music_state.current_graph_key = key;
+            let key = self.asset_manager.set_density_graph(backend, slot, graph_request);
+            match slot {
+                DensityGraphSlot::SelectMusicP1 => {
+                    self.state.screens.select_music_state.current_graph_key = key;
+                }
+                DensityGraphSlot::SelectMusicP2 => {
+                    self.state.screens.select_music_state.current_graph_key_p2 = key;
+                }
+                DensityGraphSlot::Evaluation => {}
+            }
         }
     }
 
@@ -821,9 +832,9 @@ impl App {
         if let Some(backend) = self.backend.as_mut() {
             let key = if let Some((key, data)) = graph_request {
                 self.asset_manager
-                    .set_density_graph(backend, Some((key, data)))
+                    .set_density_graph(backend, DensityGraphSlot::Evaluation, Some((key, data)))
             } else {
-                self.asset_manager.set_density_graph(backend, None)
+                self.asset_manager.set_density_graph(backend, DensityGraphSlot::Evaluation, None)
             };
             self.state
                 .screens
@@ -1326,12 +1337,17 @@ impl App {
 
     fn reset_dynamic_assets_after_renderer_switch(&mut self) {
         self.apply_banner(None);
-        self.apply_density_graph(None);
+        self.apply_density_graph(DensityGraphSlot::SelectMusicP1, None);
+        self.apply_density_graph(DensityGraphSlot::SelectMusicP2, None);
         self.apply_evaluation_graph(None);
         self.apply_dynamic_background(None);
 
         select_music::trigger_immediate_refresh(&mut self.state.screens.select_music_state);
         self.state.screens.select_music_state.current_graph_key = "__white".to_string();
+        self.state
+            .screens
+            .select_music_state
+            .current_graph_key_p2 = "__white".to_string();
     }
 
     /* -------------------- keyboard: map -> route -------------------- */
@@ -1869,7 +1885,35 @@ impl App {
                 }
                 _ => None,
             };
-            commands.push(Command::SetDensityGraph(chart_to_graph));
+            commands.push(Command::SetDensityGraph {
+                slot: DensityGraphSlot::SelectMusicP1,
+                chart_opt: chart_to_graph,
+            });
+
+            if profile::get_session_play_style() == profile::PlayStyle::Versus {
+                let chart_to_graph_p2 = match self
+                    .state
+                    .screens
+                    .select_music_state
+                    .entries
+                    .get(self.state.screens.select_music_state.selected_index)
+                {
+                    Some(select_music::MusicWheelEntry::Song(song)) => {
+                        let chart_type = profile::get_session_play_style().chart_type();
+                        select_music::chart_for_steps_index(
+                            song,
+                            chart_type,
+                            self.state.screens.select_music_state.p2_selected_steps_index,
+                        )
+                        .cloned()
+                    }
+                    _ => None,
+                };
+                commands.push(Command::SetDensityGraph {
+                    slot: DensityGraphSlot::SelectMusicP2,
+                    chart_opt: chart_to_graph_p2,
+                });
+            }
         }
         commands
     }
