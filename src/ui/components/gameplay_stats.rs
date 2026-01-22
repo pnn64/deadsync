@@ -493,7 +493,11 @@ pub fn build_double_step_stats(
     // HoldsMinesRolls.lua (double): x(-GetNotefieldWidth() + 212), y(-10), zoom(0.8)
     {
         let frame_cx = pane_cx + ((-notefield_width + 212.0) * banner_data_zoom);
-        let frame_cy = pane_cy + (-10.0 * banner_data_zoom);
+        // Our holds/mines/rolls builder positions the frame origin at the *middle* row (Mines),
+        // matching the non-double path where SL uses y=-140 and row2 is at y=28.
+        // For double, SL uses y=-10 and zoom=0.8, so the middle row sits at:
+        // -10 + (0.8 * 28) == 12.4
+        let frame_cy = pane_cy + ((-10.0 + 0.8 * 28.0) * banner_data_zoom);
         let frame_zoom = 0.8 * banner_data_zoom;
 
         actors.extend(build_holds_mines_rolls_pane_at(
@@ -593,7 +597,9 @@ pub fn build_double_step_stats(
     {
         let scaled_peak = (state.chart.max_nps as f32 * state.music_rate).max(0.0);
         let peak_nps_text = format!("Peak NPS: {:.2}", scaled_peak);
-        let x = screen_center_x() - 134.0;
+        // Simply Love computes this inside DensityGraph.lua with a funky halign() in double,
+        // but the visual intent is that the Peak NPS label lives in the right dark pane.
+        let x = pane_cx + nf_half_w + 96.0;
         let y = screen_center_y() + 126.0;
         actors.push(act!(text:
             font("miso"):
