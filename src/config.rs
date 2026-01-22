@@ -129,6 +129,7 @@ pub struct Config {
     pub simply_love_color: i32,
     pub global_offset_seconds: f32,
     pub master_volume: u8,
+    pub menu_music: bool,
     pub music_volume: u8,
     pub sfx_volume: u8,
     // None = auto (use device default sample rate)
@@ -158,6 +159,7 @@ impl Default for Config {
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             global_offset_seconds: -0.008,
             master_volume: 90,
+            menu_music: true,
             music_volume: 100,
             sfx_volume: 100,
             audio_sample_rate_hz: None,
@@ -213,6 +215,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         default.global_offset_seconds
     ));
     content.push_str(&format!("MasterVolume={}\n", default.master_volume));
+    content.push_str(&format!(
+        "MenuMusic={}\n",
+        if default.menu_music { "1" } else { "0" }
+    ));
     content.push_str(&format!(
         "MineHitSound={}\n",
         if default.mine_hit_sound { "1" } else { "0" }
@@ -381,6 +387,10 @@ pub fn load() {
                     .and_then(|v| v.parse().ok())
                     .map(|v: u8| v.clamp(0, 100))
                     .unwrap_or(default.master_volume);
+                cfg.menu_music = conf
+                    .get("Options", "MenuMusic")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.menu_music, |v| v != 0);
                 cfg.music_volume = conf
                     .get("Options", "MusicVolume")
                     .and_then(|v| v.parse().ok())
@@ -465,6 +475,7 @@ pub fn load() {
                         "FullscreenType",
                         "GlobalOffsetSeconds",
                         "MasterVolume",
+                        "MenuMusic",
                         "MineHitSound",
                         "MusicVolume",
                         "SongParsingThreads",
@@ -1110,6 +1121,10 @@ fn save_without_keymaps() {
         cfg.global_offset_seconds
     ));
     content.push_str(&format!("MasterVolume={}\n", cfg.master_volume));
+    content.push_str(&format!(
+        "MenuMusic={}\n",
+        if cfg.menu_music { "1" } else { "0" }
+    ));
     content.push_str(&format!(
         "MineHitSound={}\n",
         if cfg.mine_hit_sound { "1" } else { "0" }

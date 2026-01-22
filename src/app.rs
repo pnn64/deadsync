@@ -1512,14 +1512,11 @@ impl App {
         target: CurrentScreen,
     ) -> Vec<Command> {
         let mut commands = Vec::new();
-        let target_menu_music = matches!(
-            target,
-            CurrentScreen::SelectColor | CurrentScreen::SelectStyle
-        );
-        let prev_menu_music = matches!(
-            prev,
-            CurrentScreen::SelectColor | CurrentScreen::SelectStyle
-        );
+        let menu_music_enabled = config::get().menu_music;
+        let target_menu_music = menu_music_enabled
+            && matches!(target, CurrentScreen::SelectColor | CurrentScreen::SelectStyle);
+        let prev_menu_music =
+            menu_music_enabled && matches!(prev, CurrentScreen::SelectColor | CurrentScreen::SelectStyle);
 
         if target_menu_music {
             if !prev_menu_music {
@@ -2052,16 +2049,17 @@ impl ApplicationHandler<UserEvent> for App {
 
                             // SelectProfile/SelectColor/SelectStyle share the looping menu BGM.
                             // Keep SelectMusic preview playing when moving to/from PlayerOptions.
-                            let target_menu_music = matches!(
-                                target_screen,
-                                CurrentScreen::SelectColor
-                                    | CurrentScreen::SelectStyle
-                            );
-                            let prev_menu_music = matches!(
-                                prev,
-                                CurrentScreen::SelectColor
-                                    | CurrentScreen::SelectStyle
-                            );
+                            let menu_music_enabled = config::get().menu_music;
+                            let target_menu_music = menu_music_enabled
+                                && matches!(
+                                    target_screen,
+                                    CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+                                );
+                            let prev_menu_music = menu_music_enabled
+                                && matches!(
+                                    prev,
+                                    CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+                                );
                             let keep_preview = (prev == CurrentScreen::SelectMusic
                                 && target_screen == CurrentScreen::PlayerOptions)
                                 || (prev == CurrentScreen::PlayerOptions
