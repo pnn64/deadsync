@@ -92,6 +92,30 @@ pub enum Mod<'a> {
     ShadowColor([f32; 4]),
 }
 
+/* ===================== small hashing helpers ===================== */
+/* Fix for clippy::items_after_statements: no nested fn items mid-block */
+
+#[inline(always)]
+fn mix_u64(h: &mut u64, v: u64) {
+    *h ^= v.wrapping_mul(0x9E3779B97F4A7C15);
+    *h = h.rotate_left(27) ^ (*h >> 33);
+}
+
+#[inline(always)]
+fn f32b_u64(f: f32) -> u64 {
+    f.to_bits() as u64
+}
+
+#[inline(always)]
+fn hash_bytes64(bs: &[u8]) -> u64 {
+    let mut x = 0xcbf29ce484222325u64;
+    for &b in bs {
+        x ^= b as u64;
+        x = x.wrapping_mul(0x100000001b3);
+    }
+    x
+}
+
 /* ======================== SPRITE/QUAD CORE ======================== */
 
 #[inline(always)]
@@ -332,61 +356,45 @@ fn build_sprite_like<'a>(
         #[inline(always)]
         fn auto_salt(src: &SpriteSource, init: &anim::TweenState, steps: &[anim::Step]) -> u64 {
             let mut h = 0xcbf29ce484222325u64;
-            #[inline(always)]
-            fn mix(h: &mut u64, v: u64) {
-                *h ^= v.wrapping_mul(0x9E3779B97F4A7C15);
-                *h = h.rotate_left(27) ^ (*h >> 33);
-            }
-            #[inline(always)]
-            fn f32b(f: f32) -> u64 {
-                f.to_bits() as u64
-            }
-            #[inline(always)]
-            fn hash_bytes64(bs: &[u8]) -> u64 {
-                let mut x = 0xcbf29ce484222325u64;
-                for &b in bs {
-                    x ^= b as u64;
-                    x = x.wrapping_mul(0x100000001b3);
-                }
-                x
-            }
+
             match src {
                 SpriteSource::Texture(key) => {
-                    mix(&mut h, 0x54455854);
-                    mix(&mut h, hash_bytes64(key.as_bytes()));
+                    mix_u64(&mut h, 0x54455854);
+                    mix_u64(&mut h, hash_bytes64(key.as_bytes()));
                 }
                 SpriteSource::Solid => {
-                    mix(&mut h, 0x534F4C49);
+                    mix_u64(&mut h, 0x534F4C49);
                 }
             }
-            mix(&mut h, f32b(init.x));
-            mix(&mut h, f32b(init.y));
-            mix(&mut h, f32b(init.w));
-            mix(&mut h, f32b(init.h));
-            mix(&mut h, f32b(init.hx));
-            mix(&mut h, f32b(init.vy));
-            mix(&mut h, f32b(init.rot_z));
+
+            mix_u64(&mut h, f32b_u64(init.x));
+            mix_u64(&mut h, f32b_u64(init.y));
+            mix_u64(&mut h, f32b_u64(init.w));
+            mix_u64(&mut h, f32b_u64(init.h));
+            mix_u64(&mut h, f32b_u64(init.hx));
+            mix_u64(&mut h, f32b_u64(init.vy));
+            mix_u64(&mut h, f32b_u64(init.rot_z));
             for c in init.tint {
-                mix(&mut h, f32b(c));
+                mix_u64(&mut h, f32b_u64(c));
             }
             for c in init.glow {
-                mix(&mut h, f32b(c));
+                mix_u64(&mut h, f32b_u64(c));
             }
-            mix(&mut h, u64::from(init.visible));
-            mix(&mut h, u64::from(init.flip_x));
-            mix(&mut h, u64::from(init.flip_y));
-            mix(&mut h, f32b(init.fade_l));
-            mix(&mut h, f32b(init.fade_r));
-            mix(&mut h, f32b(init.fade_t));
-            mix(&mut h, f32b(init.fade_b));
-            mix(&mut h, f32b(init.crop_l));
-            mix(&mut h, f32b(init.crop_r));
-            mix(&mut h, f32b(init.crop_t));
-            mix(&mut h, f32b(init.crop_b));
-            mix(&mut h, f32b(init.scale[0]));
-            mix(&mut h, f32b(init.scale[1]));
+            mix_u64(&mut h, u64::from(init.visible));
+            mix_u64(&mut h, u64::from(init.flip_x));
+            mix_u64(&mut h, u64::from(init.flip_y));
+            mix_u64(&mut h, f32b_u64(init.fade_l));
+            mix_u64(&mut h, f32b_u64(init.fade_r));
+            mix_u64(&mut h, f32b_u64(init.fade_t));
+            mix_u64(&mut h, f32b_u64(init.fade_b));
+            mix_u64(&mut h, f32b_u64(init.crop_l));
+            mix_u64(&mut h, f32b_u64(init.crop_r));
+            mix_u64(&mut h, f32b_u64(init.crop_t));
+            mix_u64(&mut h, f32b_u64(init.crop_b));
+            mix_u64(&mut h, f32b_u64(init.scale[0]));
+            mix_u64(&mut h, f32b_u64(init.scale[1]));
             for s in steps {
-                mix(&mut h, s.fingerprint64());
+                mix_u64(&mut h, s.fingerprint64());
             }
             h
         }
@@ -687,8 +695,8 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
         // different text gets a different animation state.
         let salt = {
             let mut h = 0xcbf29ce484222325u64;
-            for b in content.as_str().as_bytes() {
-                h ^= *b as u64;
+            for &b in content.as_str().as_bytes() {
+                h ^= b as u64;
                 h = h.wrapping_mul(0x100000001b3);
             }
             h
@@ -1148,7 +1156,7 @@ macro_rules! __dsl_apply_one {
     // Text properties (SM-compatible)
     (font ($n:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{ $mods.push($crate::ui::dsl::Mod::Font($n)); }};
     (settext ($s:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::Content($crate::ui::actors::TextContent::from(($s))));
+        $mods.push($crate::ui::dsl::Mod::Content($crate::ui::actors::TextContent::from($s)));
     }};
     (horizalign ($dir:ident) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::TAlign($crate::__ui_textalign_from_ident!($dir)));

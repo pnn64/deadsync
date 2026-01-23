@@ -855,40 +855,46 @@ fn music_decoder_thread_loop(
             frames_emitted_total: &mut u64,
             fade_spec: Option<(u64, u64)>,
             frames_left_out: &mut Option<u64>,
-            push_block: &mut dyn FnMut(
-                &[i16],
-            )
-                -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
+            push_block: &mut dyn FnMut(&[i16]) -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
         ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
             let mut produced_any = false;
+
             loop {
                 let need = resampler.input_frames_next();
                 if in_planar.iter().any(|ch| ch.len() < need) {
                     break;
                 }
+
                 // Build slice-of-slices without copying
                 let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
                 for ch in in_planar.iter() {
                     input_slices.push(&ch[..need]);
                 }
+
                 let out = resampler.process(&input_slices, None)?;
+
                 // Drain consumed input
                 for ch in in_planar.iter_mut() {
                     ch.drain(0..need);
                 }
+
                 if out.is_empty() {
                     break;
                 }
+
                 let produced_frames = out[0].len();
                 out_tmp.clear();
                 out_tmp.reserve(produced_frames * out_ch);
-                for f in 0..produced_frames {
+
+                // Interleave without a needless range loop.
+                for (f, _) in out[0].iter().enumerate() {
                     for c in 0..out_ch {
                         let src = out[c % out.len()][f];
                         let s = (src * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
                         out_tmp.push(s);
                     }
                 }
+
                 // Preroll discard
                 if *preroll_out_frames > 0 {
                     let frames = out_tmp.len() / out_ch;
@@ -896,10 +902,10 @@ fn music_decoder_thread_loop(
                     let drop_samples = drop_frames * out_ch;
                     if drop_samples > 0 {
                         out_tmp.drain(0..drop_samples);
-                        *preroll_out_frames =
-                            (*preroll_out_frames).saturating_sub(drop_frames as u64);
+                        *preroll_out_frames = (*preroll_out_frames).saturating_sub(drop_frames as u64);
                     }
                 }
+
                 // Cut length cap
                 let mut finished = false;
                 if let Some(left) = frames_left_out {
@@ -915,6 +921,7 @@ fn music_decoder_thread_loop(
                         *left -= frames as u64;
                     }
                 }
+
                 if !out_tmp.is_empty() {
                     apply_fade_envelope(out_tmp, out_ch, *frames_emitted_total, fade_spec);
                     *frames_emitted_total =
@@ -922,10 +929,12 @@ fn music_decoder_thread_loop(
                     push_block(out_tmp)?;
                     produced_any = true;
                 }
+
                 if finished {
                     break;
                 }
             }
+
             Ok(produced_any)
         }
 
@@ -968,12 +977,7 @@ fn music_decoder_thread_loop(
             // Avoid very tiny thrash around last digit
             if (desired_rate - current_rate_f32).abs() > 0.0005 {
                 // Clamp to sane bounds
-                if desired_rate < 0.05 {
-                    desired_rate = 0.05;
-                }
-                if desired_rate > 8.0 {
-                    desired_rate = 8.0;
-                }
+                desired_rate = desired_rate.clamp(0.05, 8.0);
                 current_rate_f32 = desired_rate;
                 ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
                 resampler = SincFixedOut::<f32>::new(
@@ -1034,17 +1038,21 @@ fn music_decoder_thread_loop(
             for ch in &mut in_planar {
                 ch.clear();
             }
+
             if !out.is_empty() {
                 let produced_frames = out[0].len();
                 out_tmp.clear();
                 out_tmp.reserve(produced_frames * out_ch);
-                for f in 0..produced_frames {
+
+                // Interleave without a needless range loop.
+                for (f, _) in out[0].iter().enumerate() {
                     for c in 0..out_ch {
                         let v = out[c % out.len()][f];
                         let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
                         out_tmp.push(s);
                     }
                 }
+
                 if preroll_out_frames > 0 {
                     let frames = out_tmp.len() / out_ch;
                     let drop_frames = (preroll_out_frames as usize).min(frames);
@@ -1054,6 +1062,7 @@ fn music_decoder_thread_loop(
                         // No need to update preroll_out_frames after flush
                     }
                 }
+
                 if !out_tmp.is_empty() {
                     apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
                     // No need to update frames_emitted_total after flush
@@ -1079,13 +1088,16 @@ fn music_decoder_thread_loop(
             let produced_frames = out_tail[0].len();
             out_tmp.clear();
             out_tmp.reserve(produced_frames * out_ch);
-            for f in 0..produced_frames {
+
+            // Interleave without a needless range loop.
+            for (f, _) in out_tail[0].iter().enumerate() {
                 for c in 0..out_ch {
                     let v = out_tail[c % out_tail.len()][f];
                     let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
                     out_tmp.push(s);
                 }
             }
+
             let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
             if !out_tmp.is_empty() {
                 let mut off = 0;
@@ -1149,7 +1161,8 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
         oversampling_factor: 128,
         window: WindowFunction::BlackmanHarris2,
     };
-    let mut resampler = SincFixedOut::<f32>::new(ratio, 1.0, iparams, OUT_FRAMES_PER_CALL, in_ch)?;
+    let mut resampler =
+        SincFixedOut::<f32>::new(ratio, 1.0, iparams, OUT_FRAMES_PER_CALL, in_ch)?;
 
     info!(
         "SFX decode: '{path}' ({in_ch} ch @ {in_hz} Hz) -> output {out_ch} ch @ {out_hz} Hz (ratio {ratio:.6})."
@@ -1163,6 +1176,7 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
         if frames == 0 {
             continue;
         }
+
         // Push into planar
         for f in 0..frames {
             let base = f * in_ch;
@@ -1170,16 +1184,19 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
                 in_planar[c].push(f32::from(pkt[base + c]) / 32768.0);
             }
         }
+
         // Produce as many blocks as possible based on required input
         loop {
             let need = resampler.input_frames_next();
             if in_planar.iter().any(|ch| ch.len() < need) {
                 break;
             }
+
             let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
             for ch in &in_planar {
                 input_slices.push(&ch[..need]);
             }
+
             let out = resampler.process(&input_slices, None)?;
             for ch in &mut in_planar {
                 ch.drain(0..need);
@@ -1187,9 +1204,12 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
             if out.is_empty() {
                 break;
             }
+
             let produced_frames = out[0].len();
             resampled_data.reserve(produced_frames * out_ch);
-            for f in 0..produced_frames {
+
+            // Interleave without a needless range loop.
+            for (f, _) in out[0].iter().enumerate() {
                 for c in 0..out_ch {
                     let v = out[c % out.len()][f];
                     let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
@@ -1206,11 +1226,14 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
         for ch in &in_planar {
             input_slices.push(&ch[..remain]);
         }
+
         let out = resampler.process_partial(Some(&input_slices), None)?;
         if !out.is_empty() {
             let produced_frames = out[0].len();
             resampled_data.reserve(produced_frames * out_ch);
-            for f in 0..produced_frames {
+
+            // Interleave without a needless range loop.
+            for (f, _) in out[0].iter().enumerate() {
                 for c in 0..out_ch {
                     let v = out[c % out.len()][f];
                     let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
@@ -1218,16 +1241,20 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
                 }
             }
         }
+
         for ch in &mut in_planar {
             ch.clear();
         }
     }
+
     // Tail flush
     let out_tail = resampler.process_partial::<&[f32]>(None, None)?;
     if !out_tail.is_empty() {
         let produced_frames = out_tail[0].len();
         resampled_data.reserve(produced_frames * out_ch);
-        for f in 0..produced_frames {
+
+        // Interleave without a needless range loop.
+        for (f, _) in out_tail[0].iter().enumerate() {
             for c in 0..out_ch {
                 let v = out_tail[c % out_tail.len()][f];
                 let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;

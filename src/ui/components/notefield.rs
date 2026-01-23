@@ -271,7 +271,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
             let receptor_color = ns.receptor_pulse.color_for_beat(state.current_beat);
             actors.push(act!(sprite(receptor_slot.texture_key().to_string()):
                 align(0.5, 0.5):
-                xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
+                xy(playfield_center_x + col_x_offset, receptor_y_lane):
                 zoomto(receptor_size[0], receptor_size[1]):
                 zoom(bop_zoom):
                 diffuse(
@@ -313,7 +313,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 let final_rotation = base_rotation + receptor_rotation;
                 actors.push(act!(sprite(hold_slot.texture_key().to_string()):
                     align(0.5, 0.5):
-                    xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
+                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
                     zoomto(hold_size[0], hold_size[1]):
                     rotationz(-final_rotation):
                     customtexturerect(hold_uv[0], hold_uv[1], hold_uv[2], hold_uv[3]):
@@ -332,7 +332,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 let alpha = (glow_timer / RECEPTOR_GLOW_DURATION).powf(0.75);
                 actors.push(act!(sprite(glow_slot.texture_key().to_string()):
                     align(0.5, 0.5):
-                    xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
+                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
                     zoomto(glow_size[0] as f32, glow_size[1] as f32):
                     rotationz(-glow_slot.def.rotation_deg as f32):
                     customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
@@ -368,7 +368,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                     .unwrap_or(0);
                 actors.push(act!(sprite(slot.texture_key().to_string()):
                     align(0.5, 0.5):
-                    xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
+                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
                     zoomto(size[0], size[1]):
                     zoom(visual.zoom):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -387,7 +387,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 if glow_strength > f32::EPSILON {
                     actors.push(act!(sprite(slot.texture_key().to_string()):
                         align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
+                        xy(playfield_center_x + col_x_offset, receptor_y_lane):
                         zoomto(size[0], size[1]):
                         zoom(visual.zoom):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -425,7 +425,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 let final_rotation = base_rotation + rotation_progress;
                 actors.push(act!(sprite("hit_mine_explosion.png"):
                     align(0.5, 0.5):
-                    xy(playfield_center_x + col_x_offset as f32, receptor_y_lane):
+                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
                     zoomto(mine_explosion_size[0], mine_explosion_size[1]):
                     rotationz(-final_rotation):
                     diffuse(1.0, 1.0, 1.0, alpha):
@@ -608,7 +608,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
             if let Some(cap_slot) = tail_slot {
                 let cap_size = scale_sprite(cap_slot.size());
                 let cap_height = cap_size[1];
-                if cap_height > std::f32::EPSILON {
+                if cap_height > f32::EPSILON {
                     // Keep the body from poking through the bottom cap, but allow
                     // a tiny overlap so the seam stays hidden like ITGmania.
                     if head_is_top {
@@ -642,10 +642,10 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 let texture_size = body_slot.size();
                 let texture_width = texture_size[0].max(1) as f32;
                 let texture_height = texture_size[1].max(1) as f32;
-                if texture_width > std::f32::EPSILON && texture_height > std::f32::EPSILON {
+                if texture_width > f32::EPSILON && texture_height > f32::EPSILON {
                     let body_width = TARGET_ARROW_PIXEL_SIZE * field_zoom;
                     let scale = body_width / texture_width;
-                    let segment_height = (texture_height * scale).max(std::f32::EPSILON);
+                    let segment_height = (texture_height * scale).max(f32::EPSILON);
                     let body_uv = body_slot.uv_for_frame(0);
                     let u0 = body_uv[0];
                     let u1 = body_uv[2];
@@ -689,7 +689,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                     };
 
                     // Skip if hold has no effective length
-                    if hold_length > std::f32::EPSILON {
+                    if hold_length > f32::EPSILON {
                         // Calculate visible distances in forward space
                         let visible_top_distance = if eff_head_is_top {
                             (eff_body_top - eff_natural_top).clamp(0.0, hold_length)
@@ -744,7 +744,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                             let segment_top_eff = y_start.max(eff_body_top);
                             let segment_bottom_eff = y_end.min(eff_body_bottom);
 
-                            if segment_bottom_eff - segment_top_eff <= std::f32::EPSILON {
+                            if segment_bottom_eff - segment_top_eff <= f32::EPSILON {
                                 phase = next_phase;
                                 continue;
                             }
@@ -810,7 +810,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
 
                             actors.push(act!(sprite(body_slot.texture_key().to_string()):
                                 align(0.5, 0.5):
-                                xy(playfield_center_x + col_x_offset as f32, segment_center_screen):
+                                xy(playfield_center_x + col_x_offset, segment_center_screen):
                                 zoomto(body_width, segment_size_screen):
                                 rotationz(rotation):
                                 customtexturerect(u0, v0, u1, v1):
@@ -862,7 +862,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                     if !cap_adjacent_ok {
                         continue;
                     }
-                    if cap_height > std::f32::EPSILON {
+                    if cap_height > f32::EPSILON {
                         let mut cap_top = cap_center - cap_height * 0.5;
                         let mut cap_bottom = cap_center + cap_height * 0.5;
                         let v_span = v1 - v0;
@@ -870,9 +870,9 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                             let head_limit = top;
                             if head_limit > cap_top {
                                 let trimmed = (head_limit - cap_top).clamp(0.0, cap_height);
-                                if trimmed >= cap_height - std::f32::EPSILON {
+                                if trimmed >= cap_height - f32::EPSILON {
                                     cap_height = 0.0;
-                                } else if trimmed > std::f32::EPSILON {
+                                } else if trimmed > f32::EPSILON {
                                     let fraction = trimmed / cap_height;
                                     v0 += v_span * fraction;
                                     cap_top += trimmed;
@@ -884,9 +884,9 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                             let head_limit = bottom;
                             if head_limit < cap_bottom {
                                 let trimmed = (cap_bottom - head_limit).clamp(0.0, cap_height);
-                                if trimmed >= cap_height - std::f32::EPSILON {
+                                if trimmed >= cap_height - f32::EPSILON {
                                     cap_height = 0.0;
-                                } else if trimmed > std::f32::EPSILON {
+                                } else if trimmed > f32::EPSILON {
                                     let fraction = trimmed / cap_height;
                                     v1 -= v_span * fraction;
                                     cap_bottom -= trimmed;
@@ -896,10 +896,10 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                             }
                         }
                     }
-                    if cap_height > std::f32::EPSILON {
+                    if cap_height > f32::EPSILON {
                         actors.push(act!(sprite(cap_slot.texture_key().to_string()):
                             align(0.5, 0.5):
-                            xy(playfield_center_x + col_x_offset as f32, cap_center):
+                            xy(playfield_center_x + col_x_offset, cap_center):
                             zoomto(cap_width, cap_height):
                             customtexturerect(u0, v0, u1, v1):
                             diffuse(
@@ -925,7 +925,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                     let size = scale_sprite(note_slot.size());
                     actors.push(act!(sprite(note_slot.texture_key().to_string()):
                         align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset as f32, head_y):
+                        xy(playfield_center_x + col_x_offset, head_y):
                         zoomto(size[0], size[1]):
                         rotationz(-note_slot.def.rotation_deg as f32):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -1013,7 +1013,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                                 }
                                 actors.push(act!(sprite("circle.png"):
                                     align(0.5, 0.5):
-                                    xy(playfield_center_x + col_x_offset as f32, y_pos):
+                                    xy(playfield_center_x + col_x_offset, y_pos):
                                     zoomto(layer_width, layer_height):
                                     diffuse(color[0], color[1], color[2], 1.0):
                                     z(Z_TAP_NOTE - 2)
@@ -1028,7 +1028,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                             let rotation = base_rotation - time * 45.0;
                             actors.push(act!(sprite(slot.texture_key().to_string()):
                                 align(0.5, 0.5):
-                                xy(playfield_center_x + col_x_offset as f32, y_pos):
+                                xy(playfield_center_x + col_x_offset, y_pos):
                                 zoomto(width, height):
                                 rotationz(rotation):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -1044,7 +1044,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                         let rotation = base_rotation + time * 120.0;
                         actors.push(act!(sprite(slot.texture_key().to_string()):
                             align(0.5, 0.5):
-                            xy(playfield_center_x + col_x_offset as f32, y_pos):
+                            xy(playfield_center_x + col_x_offset, y_pos):
                             zoomto(size[0], size[1]):
                             rotationz(rotation):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -1062,7 +1062,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                     let note_size = scale_sprite(note_slot.size());
                     actors.push(act!(sprite(note_slot.texture_key().to_string()):
                         align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset as f32, y_pos):
+                        xy(playfield_center_x + col_x_offset, y_pos):
                         zoomto(note_size[0], note_size[1]):
                         rotationz(-note_slot.def.rotation_deg as f32):
                         customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):

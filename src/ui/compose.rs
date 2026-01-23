@@ -213,9 +213,9 @@ fn build_actor_recursive<'a>(
             );
 
             let layer = base_z.saturating_add(*z);
-            for i in before..out.len() {
-                out[i].z = layer;
-                out[i].order = {
+            for obj in out.iter_mut().skip(before) {
+                obj.z = layer;
+                obj.order = {
                     let o = *order_counter;
                     *order_counter += 1;
                     o
@@ -392,9 +392,9 @@ fn build_actor_recursive<'a>(
                             None,
                             total_elapsed,
                         );
-                        for i in before..out.len() {
-                            out[i].z = layer;
-                            out[i].order = {
+                        for obj in out.iter_mut().skip(before) {
+                            obj.z = layer;
+                            obj.order = {
                                 let o = *order_counter;
                                 *order_counter += 1;
                                 o
@@ -428,9 +428,9 @@ fn build_actor_recursive<'a>(
                             None,
                             total_elapsed,
                         );
-                        for i in before..out.len() {
-                            out[i].z = layer;
-                            out[i].order = {
+                        for obj in out.iter_mut().skip(before) {
+                            obj.z = layer;
+                            obj.order = {
                                 let o = *order_counter;
                                 *order_counter += 1;
                                 o
@@ -846,15 +846,14 @@ fn layout_text<'a>(
     };
 
     // 3) Fit scaling (zoomto...) preserves aspect ratio
-    use std::f32::INFINITY;
-    let s_w_fit = fit_width.map_or(INFINITY, |w| {
+    let s_w_fit = fit_width.map_or(f32::INFINITY, |w| {
         if block_w_logical_even > 0.0 {
             w / block_w_logical_even
         } else {
             1.0
         }
     });
-    let s_h_fit = fit_height.map_or(INFINITY, |h| {
+    let s_h_fit = fit_height.map_or(f32::INFINITY, |h| {
         if block_h_logical > 0.0 {
             h / block_h_logical
         } else {
@@ -923,13 +922,18 @@ fn layout_text<'a>(
     let line_padding = font.line_spacing - font.height;
 
     #[inline(always)]
-    fn start_x_logical(align: actors::TextAlign, block_w_logical: f32, line_w_logical: f32) -> i32 {
+    fn start_x_logical(
+        align: actors::TextAlign,
+        block_w_logical: f32,
+        line_w_logical: f32,
+    ) -> i32 {
         let align_value = match align {
             actors::TextAlign::Left => 0.0,
             actors::TextAlign::Center => 0.5,
             actors::TextAlign::Right => 1.0,
         };
-        let start = (-0.5f32).mul_add(block_w_logical, align_value * (block_w_logical - line_w_logical));
+        let start =
+            (-0.5f32).mul_add(block_w_logical, align_value * (block_w_logical - line_w_logical));
         lrint_ties_even(start) as i32
     }
 
@@ -959,7 +963,7 @@ fn layout_text<'a>(
             let quad_w = glyph.size[0] * sx;
             let quad_h = glyph.size[1] * sy;
 
-            let draw_quad = !(ch == ' ' && font.glyph_map.get(&ch).is_none());
+            let draw_quad = !(ch == ' ' && !font.glyph_map.contains_key(&ch));
             if draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
                 let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
                 let quad_y_logical = baseline_local_logical + glyph.offset[1];
@@ -991,7 +995,7 @@ fn layout_text<'a>(
                         let d = assets::texture_dims(key)
                             .map_or((1.0_f32, 1.0_f32), |meta| (meta.w as f32, meta.h as f32));
                         if dims_cache.len() < 8 {
-                             dims_cache.push((key, d));
+                            dims_cache.push((key, d));
                         }
                         d
                     }
