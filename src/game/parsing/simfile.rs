@@ -1343,7 +1343,7 @@ fn parse_and_process_song_file(path: &Path, need_hash: bool) -> Result<(SongData
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
     let options = AnalysisOptions::default(); // Use default parsing options
 
-    let summary = analyze(&simfile_data, extension, options)?;
+    let summary = analyze(&simfile_data, extension, &options)?;
     let charts: Vec<ChartData> = summary
         .charts
         .into_iter()
