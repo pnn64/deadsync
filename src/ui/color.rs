@@ -1,53 +1,78 @@
 /// Accepts "#rgb", "#rgba", "#rrggbb", "#rrggbbaa" (or without '#').
 /// Panics on invalid input; use only with trusted literals.
-pub fn rgba_hex(s: &str) -> [f32; 4] {
-    #[inline(always)]
-    fn nib(b: u8) -> u8 {
+/// Evaluated at COMPILE TIME if assigned to a const/static.
+pub const fn rgba_hex(s: &str) -> [f32; 4] {
+    let bytes = s.as_bytes();
+    
+    // Handle optional '#' by offsetting start index
+    let (bytes, len) = if !bytes.is_empty() && bytes[0] == b'#' {
+        let (_, rem) = bytes.split_at(1);
+        (rem, s.len() - 1)
+    } else {
+        (bytes, s.len())
+    };
+
+    // Const-safe hex char to u8
+    const fn val(b: u8) -> u8 {
         match b {
             b'0'..=b'9' => b - b'0',
             b'a'..=b'f' => 10 + (b - b'a'),
             b'A'..=b'F' => 10 + (b - b'A'),
-            _ => panic!("invalid hex digit"),
+            _ => panic!("invalid hex digit in color string"),
         }
     }
-    #[inline(always)]
-    fn byte2(h: u8, l: u8) -> u8 {
-        (nib(h) << 4) | nib(l)
+
+    // Combine two hex digits into a byte
+    const fn byte2(h: u8, l: u8) -> u8 {
+        (val(h) << 4) | val(l)
     }
-    #[inline(always)]
+
+    // Expand 4-bit color to 8-bit (e.g. F -> FF)
     const fn rep(n: u8) -> u8 {
-        (n << 4) | n
+        (val(n) << 4) | val(n)
     }
 
-    let bytes = s.as_bytes();
-    let off = usize::from(bytes.first() == Some(&b'#'));
-    let n = bytes.len() - off;
-    let b = &bytes[off..];
-
-    let (r, g, bl, a) = match n {
-        3 => (rep(b[0]), rep(b[1]), rep(b[2]), 0xFF),
-        4 => (rep(b[0]), rep(b[1]), rep(b[2]), rep(b[3])),
+    let (r, g, b, a) = match len {
+        3 => (rep(bytes[0]), rep(bytes[1]), rep(bytes[2]), 0xFF),
+        4 => (rep(bytes[0]), rep(bytes[1]), rep(bytes[2]), rep(bytes[3])),
         6 => (
-            byte2(b[0], b[1]),
-            byte2(b[2], b[3]),
-            byte2(b[4], b[5]),
+            byte2(bytes[0], bytes[1]),
+            byte2(bytes[2], bytes[3]),
+            byte2(bytes[4], bytes[5]),
             0xFF,
         ),
         8 => (
-            byte2(b[0], b[1]),
-            byte2(b[2], b[3]),
-            byte2(b[4], b[5]),
-            byte2(b[6], b[7]),
+            byte2(bytes[0], bytes[1]),
+            byte2(bytes[2], bytes[3]),
+            byte2(bytes[4], bytes[5]),
+            byte2(bytes[6], bytes[7]),
         ),
-        _ => panic!("hex must be 3/4/6/8 digits"),
+        _ => panic!("color hex string must be 3, 4, 6, or 8 digits"),
     };
 
     [
-        f32::from(r) / 255.0,
-        f32::from(g) / 255.0,
-        f32::from(bl) / 255.0,
-        f32::from(a) / 255.0,
+        r as f32 / 255.0,
+        g as f32 / 255.0,
+        b as f32 / 255.0,
+        a as f32 / 255.0,
     ]
+}
+
+#[macro_export]
+macro_rules! rgba {
+    ($hex:literal $(,)?) => {
+        $crate::ui::color::rgba_hex($hex)
+    };
+}
+
+#[macro_export]
+macro_rules! rgba_const {
+    ($name:ident, $hex:literal $(,)?) => {
+        const $name: [f32; 4] = $crate::ui::color::rgba_hex($hex);
+    };
+    ($vis:vis $name:ident, $hex:literal $(,)?) => {
+        $vis const $name: [f32; 4] = $crate::ui::color::rgba_hex($hex);
+    };
 }
 
 /* =========================== THEME PALETTES =========================== */
@@ -55,60 +80,56 @@ pub fn rgba_hex(s: &str) -> [f32; 4] {
 /// Start at #C1006F in the decorative palette.
 pub const DEFAULT_COLOR_INDEX: i32 = 2;
 
-/// Decorative / sprite tint palette (hearts, backgrounds, sprites)
-pub const DECORATIVE_HEX: [&str; 12] = [
-    "#FF3C23", "#FF003C", "#C1006F", "#8200A1", "#413AD0", "#0073FF", "#00ADC0", "#5CE087",
-    "#AEFA44", "#FFFF00", "#FFBE00", "#FF7D00",
-];
-
-/// Simply Love-ish UI accent palette (text highlights, etc.)
-pub const SIMPLY_LOVE_HEX: [&str; 12] = [
-    "#FF5D47", "#FF577E", "#FF47B3", "#DD57FF", "#8885ff", "#3D94FF", "#00B8CC", "#5CE087",
-    "#AEFA44", "#FFFF00", "#FFBE00", "#FF7D00",
-];
-
-/// Judgment colors for the statistics display, ordered from best to worst.
-pub const JUDGMENT_HEX: [&str; 6] = [
-    "#21CCE8", // Fantastic
-    "#E29C18", // Excellent
-    "#66C955", // Great
-    "#B45CFF", // Decent
-    "#C9855E", // Way Off
-    "#FF3030", // Miss
-];
-
-/// Dimmed judgment colors for leading zeros in stats displays.
-pub const JUDGMENT_DIM_HEX: [&str; 6] = [
-    "#0C4E59", "#593D09", "#2D5925", "#3F2059", "#593B29", "#591010",
-];
-
-/// Dimmed judgment colors for the evaluation screen stats.
-pub const JUDGMENT_DIM_EVAL_HEX: [&str; 6] = [
-    "#08363E", "#3C2906", "#1B3516", "#301844", "#352319", "#440C0C",
-];
-
-/// Undimmed white Fantastic color for FA+ (outer window).
-pub const JUDGMENT_FA_PLUS_WHITE_HEX: &str = "#FFFFFF";
-
-/// Dimmed white Fantastic color for FA+ eval pane.
-pub const JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_HEX: &str = "#444444";
-
-/// Dimmed white Fantastic color for FA+ gameplay side pane.
-pub const JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_HEX: &str = "#595959";
-
-/// Difficulty names as they appear in simfiles. Used for parsing and lookups.
 pub const FILE_DIFFICULTY_NAMES: [&str; 5] = ["Beginner", "Easy", "Medium", "Hard", "Challenge"];
-/// Difficulty names as they should be displayed in the UI.
-pub const DISPLAY_DIFFICULTY_NAMES: [&str; 5] = ["Beginner", "Easy", "Medium", "Hard", "Expert"];
+pub const DISPLAY_DIFFICULTY_NAMES: [&str; 5] = ["Beginner", "Easy", "Medium", "Hard", "Challenge"];
 
-/// Simply Love Edit chart color override.
-pub const EDIT_DIFFICULTY_HEX: &str = "#B4B7BA";
+/// Decorative / sprite tint palette (hearts, backgrounds, sprites)
+pub const DECORATIVE_RGBA: [[f32; 4]; 12] = [
+    rgba_hex("#FF3C23"), rgba_hex("#FF003C"), rgba_hex("#C1006F"), rgba_hex("#8200A1"), 
+    rgba_hex("#413AD0"), rgba_hex("#0073FF"), rgba_hex("#00ADC0"), rgba_hex("#5CE087"),
+    rgba_hex("#AEFA44"), rgba_hex("#FFFF00"), rgba_hex("#FFBE00"), rgba_hex("#FF7D00"),
+];
+
+/// Simply Love-ish UI accent palette
+pub const SIMPLY_LOVE_RGBA: [[f32; 4]; 12] = [
+    rgba_hex("#FF5D47"), rgba_hex("#FF577E"), rgba_hex("#FF47B3"), rgba_hex("#DD57FF"), 
+    rgba_hex("#8885ff"), rgba_hex("#3D94FF"), rgba_hex("#00B8CC"), rgba_hex("#5CE087"),
+    rgba_hex("#AEFA44"), rgba_hex("#FFFF00"), rgba_hex("#FFBE00"), rgba_hex("#FF7D00"),
+];
+
+/// Judgment colors
+pub const JUDGMENT_RGBA: [[f32; 4]; 6] = [
+    rgba_hex("#21CCE8"), // Fantastic
+    rgba_hex("#E29C18"), // Excellent
+    rgba_hex("#66C955"), // Great
+    rgba_hex("#B45CFF"), // Decent
+    rgba_hex("#C9855E"), // Way Off
+    rgba_hex("#FF3030"), // Miss
+];
+
+/// Dimmed judgment colors
+pub const JUDGMENT_DIM_RGBA: [[f32; 4]; 6] = [
+    rgba_hex("#0C4E59"), rgba_hex("#593D09"), rgba_hex("#2D5925"), 
+    rgba_hex("#3F2059"), rgba_hex("#593B29"), rgba_hex("#591010"),
+];
+
+/// Dimmed judgment colors for eval
+pub const JUDGMENT_DIM_EVAL_RGBA: [[f32; 4]; 6] = [
+    rgba_hex("#08363E"), rgba_hex("#3C2906"), rgba_hex("#1B3516"), 
+    rgba_hex("#301844"), rgba_hex("#352319"), rgba_hex("#440C0C"),
+];
+
+pub const JUDGMENT_FA_PLUS_WHITE_RGBA: [f32; 4] = rgba_hex("#FFFFFF");
+pub const JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA: [f32; 4] = rgba_hex("#444444");
+pub const JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA: [f32; 4] = rgba_hex("#595959");
+
+pub const EDIT_DIFFICULTY_RGBA: [f32; 4] = rgba_hex("#B4B7BA");
 
 /// Returns the Simply Love color for a given difficulty, based on an active theme color index.
 #[inline(always)]
 pub fn difficulty_rgba(difficulty_name: &str, active_color_index: i32) -> [f32; 4] {
     if difficulty_name.eq_ignore_ascii_case("edit") {
-        return rgba_hex(EDIT_DIFFICULTY_HEX);
+        return EDIT_DIFFICULTY_RGBA;
     }
     let difficulty_index = FILE_DIFFICULTY_NAMES
         .iter()
@@ -126,12 +147,12 @@ const fn wrap(n: usize, i: i32) -> usize {
 
 #[inline(always)]
 pub fn decorative_rgba(idx: i32) -> [f32; 4] {
-    rgba_hex(DECORATIVE_HEX[wrap(DECORATIVE_HEX.len(), idx)])
+    DECORATIVE_RGBA[wrap(DECORATIVE_RGBA.len(), idx)]
 }
 
 #[inline(always)]
 pub fn simply_love_rgba(idx: i32) -> [f32; 4] {
-    rgba_hex(SIMPLY_LOVE_HEX[wrap(SIMPLY_LOVE_HEX.len(), idx)])
+    SIMPLY_LOVE_RGBA[wrap(SIMPLY_LOVE_RGBA.len(), idx)]
 }
 
 /// Simply Love `LightenColor(c)` parity: multiplies RGB by 1.25, keeps alpha.

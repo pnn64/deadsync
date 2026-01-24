@@ -1,4 +1,5 @@
 use crate::act;
+use crate::rgba_const;
 use crate::assets::{AssetManager, DensityGraphSlot};
 use crate::core::audio;
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
@@ -21,7 +22,7 @@ use log::info;
 use rssp::bpm::parse_bpm_map;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
@@ -33,7 +34,7 @@ const TRANSITION_OUT_DURATION: f32 = 0.3;
 // --- THEME LAYOUT CONSTANTS ---
 const BANNER_NATIVE_WIDTH: f32 = 418.0;
 const BANNER_NATIVE_HEIGHT: f32 = 164.0;
-static UI_BOX_BG_COLOR: LazyLock<[f32; 4]> = LazyLock::new(|| color::rgba_hex("#1E282F"));
+rgba_const!(UI_BOX_BG_COLOR, "#1E282F");
 
 // --- Timing & Logic Constants ---
 // ITGmania WheelBase::Move() uses `m_TimeBeforeMovingBegins = 1/4.0f` before auto-scrolling.

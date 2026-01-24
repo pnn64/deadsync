@@ -50,7 +50,7 @@ fn is_wide() -> bool {
 /* -------------------------------- state -------------------------------- */
 
 pub struct State {
-    /// Which color in `DECORATIVE_HEX` is focused (and previewed in the bg)
+    /// Which color in `DECORATIVE_RGBA` is focused (and previewed in the bg)
     pub active_color_index: i32,
     /// Smooth wheel offset (in “slots”); tweened toward `active_color_index`
     pub scroll: f32,
@@ -491,7 +491,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     match nav {
         Some(-1) => {
-            let num_colors = color::DECORATIVE_HEX.len() as i32;
+            let num_colors = color::DECORATIVE_RGBA.len() as i32;
             // Mimic SM's `finishtweening()` before starting a new scroll.
             state.scroll = state.scroll_to;
             state.scroll_from = state.scroll;
@@ -518,7 +518,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         Some(1) => {
-            let num_colors = color::DECORATIVE_HEX.len() as i32;
+            let num_colors = color::DECORATIVE_RGBA.len() as i32;
             // Mimic SM's `finishtweening()` before starting a new scroll.
             state.scroll = state.scroll_to;
             state.scroll_from = state.scroll;

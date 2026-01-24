@@ -290,42 +290,42 @@ static JUDGMENT_INFO: LazyLock<HashMap<JudgeGrade, JudgmentDisplayInfo>> = LazyL
             JudgeGrade::Fantastic,
             JudgmentDisplayInfo {
                 label: "FANTASTIC",
-                color: color::rgba_hex(color::JUDGMENT_HEX[0]),
+                color: color::JUDGMENT_RGBA[0],
             },
         ),
         (
             JudgeGrade::Excellent,
             JudgmentDisplayInfo {
                 label: "EXCELLENT",
-                color: color::rgba_hex(color::JUDGMENT_HEX[1]),
+                color: color::JUDGMENT_RGBA[1],
             },
         ),
         (
             JudgeGrade::Great,
             JudgmentDisplayInfo {
                 label: "GREAT",
-                color: color::rgba_hex(color::JUDGMENT_HEX[2]),
+                color: color::JUDGMENT_RGBA[2],
             },
         ),
         (
             JudgeGrade::Decent,
             JudgmentDisplayInfo {
                 label: "DECENT",
-                color: color::rgba_hex(color::JUDGMENT_HEX[3]),
+                color: color::JUDGMENT_RGBA[3],
             },
         ),
         (
             JudgeGrade::WayOff,
             JudgmentDisplayInfo {
                 label: "WAY OFF",
-                color: color::rgba_hex(color::JUDGMENT_HEX[4]),
+                color: color::JUDGMENT_RGBA[4],
             },
         ),
         (
             JudgeGrade::Miss,
             JudgmentDisplayInfo {
                 label: "MISS",
-                color: color::rgba_hex(color::JUDGMENT_HEX[5]),
+                color: color::JUDGMENT_RGBA[5],
             },
         ),
     ])
@@ -403,11 +403,11 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                     diffuse(info.color[0], info.color[1], info.color[2], info.color[3]): z(101)
                 ));
         
-                // Number (digit by digit for dimming)
-                let bright_color = info.color;
-                let dim_color = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[i]);
-                let number_str = format!("{count:0digits_to_fmt$}");
-                let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
+	                // Number (digit by digit for dimming)
+	                let bright_color = info.color;
+	                let dim_color = color::JUDGMENT_DIM_EVAL_RGBA[i];
+	                let number_str = format!("{count:0digits_to_fmt$}");
+	                let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
                 
                 let number_local_x = 64.0;
                 let number_local_y = (i as f32).mul_add(35.0, -20.0);
@@ -426,32 +426,32 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                     ));
                 }
             }
-        } else {
-            let wc = score_info.window_counts;
-            let fantastic_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Fantastic).map_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[0]), |info| info.color);
-            let excellent_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Excellent).map_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[1]), |info| info.color);
-            let great_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Great).map_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[2]), |info| info.color);
-            let decent_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Decent).map_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[3]), |info| info.color);
-            let wayoff_color = JUDGMENT_INFO
-                .get(&JudgeGrade::WayOff).map_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[4]), |info| info.color);
-            let miss_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Miss).map_or_else(|| color::rgba_hex(color::JUDGMENT_HEX[5]), |info| info.color);
+	        } else {
+	            let wc = score_info.window_counts;
+	            let fantastic_color = JUDGMENT_INFO
+	                .get(&JudgeGrade::Fantastic).map_or_else(|| color::JUDGMENT_RGBA[0], |info| info.color);
+	            let excellent_color = JUDGMENT_INFO
+	                .get(&JudgeGrade::Excellent).map_or_else(|| color::JUDGMENT_RGBA[1], |info| info.color);
+	            let great_color = JUDGMENT_INFO
+	                .get(&JudgeGrade::Great).map_or_else(|| color::JUDGMENT_RGBA[2], |info| info.color);
+	            let decent_color = JUDGMENT_INFO
+	                .get(&JudgeGrade::Decent).map_or_else(|| color::JUDGMENT_RGBA[3], |info| info.color);
+	            let wayoff_color = JUDGMENT_INFO
+	                .get(&JudgeGrade::WayOff).map_or_else(|| color::JUDGMENT_RGBA[4], |info| info.color);
+	            let miss_color = JUDGMENT_INFO
+	                .get(&JudgeGrade::Miss).map_or_else(|| color::JUDGMENT_RGBA[5], |info| info.color);
 
-            // Dim colors: reuse the standard evaluation dim palette for blue Fantastic
-            // through Miss, and use a dedicated dim color for the white FA+ row.
-            let dim_fantastic = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[0]);
-            let dim_excellent  = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[1]);
-            let dim_great      = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[2]);
-            let dim_decent     = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[3]);
-            let dim_wayoff     = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[4]);
-            let dim_miss       = color::rgba_hex(color::JUDGMENT_DIM_EVAL_HEX[5]);
-            // White Fantastic (FA+ outer window) bright/dim colors.
-            let white_fa_color = color::rgba_hex(color::JUDGMENT_FA_PLUS_WHITE_HEX);
-            let dim_white_fa   = color::rgba_hex(color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_HEX);
+	            // Dim colors: reuse the standard evaluation dim palette for blue Fantastic
+	            // through Miss, and use a dedicated dim color for the white FA+ row.
+	            let dim_fantastic = color::JUDGMENT_DIM_EVAL_RGBA[0];
+	            let dim_excellent = color::JUDGMENT_DIM_EVAL_RGBA[1];
+	            let dim_great = color::JUDGMENT_DIM_EVAL_RGBA[2];
+	            let dim_decent = color::JUDGMENT_DIM_EVAL_RGBA[3];
+	            let dim_wayoff = color::JUDGMENT_DIM_EVAL_RGBA[4];
+	            let dim_miss = color::JUDGMENT_DIM_EVAL_RGBA[5];
+	            // White Fantastic (FA+ outer window) bright/dim colors.
+	            let white_fa_color = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
+	            let dim_white_fa = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
 
             let rows: [(&str, [f32; 4], [f32; 4], u32); 7] = [
                 ("FANTASTIC", fantastic_color, dim_fantastic, wc.w0),
@@ -507,8 +507,8 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
             ("rolls", score_info.rolls_held, score_info.rolls_total),
         ];
 
-        let gray_color_possible = color::rgba_hex("#5A6166");
-        let gray_color_achieved = color::rgba_hex("#444444");
+        const GRAY_POSSIBLE: [f32; 4] = color::rgba_hex("#5A6166");
+        const GRAY_ACHIEVED: [f32; 4] = color::rgba_hex("#444444");
         let white_color = [1.0, 1.0, 1.0, 1.0];
 
         for (i, (label, achieved, possible)) in radar_categories.iter().copied().enumerate() {
@@ -538,7 +538,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                     let idx_from_left = 2 - char_idx_from_right;
                     idx_from_left < first_nonzero_achieved 
                 };
-                let color = if is_dim { gray_color_achieved } else { white_color };
+                let color = if is_dim { GRAY_ACHIEVED } else { white_color };
                 let x_pos = (char_idx_from_right as f32).mul_add(-digit_width, achieved_anchor_x);
 
                 actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
@@ -563,7 +563,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                     let idx_from_left = 2 - char_idx_from_right;
                     idx_from_left < first_nonzero_possible
                 };
-                let color = if is_dim { gray_color_possible } else { white_color };
+                let color = if is_dim { GRAY_POSSIBLE } else { white_color };
                 
                 actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
                     align(1.0, 0.5): xy(cursor_x, number_final_y): zoom(final_numbers_zoom):
@@ -576,7 +576,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
             // Moved 1px to the right for visual parity
             actors.push(act!(text: font("wendy_screenevaluation"): settext("/"):
                 align(1.0, 0.5): xy(cursor_x + 0.5, number_final_y): zoom(final_numbers_zoom):
-                diffuse(gray_color_possible[0], gray_color_possible[1], gray_color_possible[2], gray_color_possible[3]): z(101)
+                diffuse(GRAY_POSSIBLE[0], GRAY_POSSIBLE[1], GRAY_POSSIBLE[2], GRAY_POSSIBLE[3]): z(101)
             ));
         }
     }));
@@ -595,18 +595,18 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
     let frame_y = screen_center_y() - 56.0;
 
     let mut children = Vec::new();
-    let bar_bg_color = color::rgba_hex("#101519");
+    const BAR_BG_COLOR: [f32; 4] = color::rgba_hex("#101519");
 
     // Top and Bottom bars
     children.push(act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
         setsize(pane_width, topbar_height):
-        diffuse(bar_bg_color[0], bar_bg_color[1], bar_bg_color[2], 1.0)
+        diffuse(BAR_BG_COLOR[0], BAR_BG_COLOR[1], BAR_BG_COLOR[2], 1.0)
     ));
     children.push(act!(quad:
         align(0.0, 1.0): xy(0.0, pane_height):
         setsize(pane_width, bottombar_height):
-        diffuse(bar_bg_color[0], bar_bg_color[1], bar_bg_color[2], 1.0)
+        diffuse(BAR_BG_COLOR[0], BAR_BG_COLOR[1], BAR_BG_COLOR[2], 1.0)
     ));
 
     // Center line of graph area
@@ -633,11 +633,11 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
     let timing_windows: [f32; 5] = crate::game::timing::effective_windows_ms(); // ms, with +1.5ms
     let worst_window = timing_windows[timing_windows.len() - 1];
 
-    for (i, (label, grade_idx)) in judgment_labels.iter().enumerate() {
-        let color = color::rgba_hex(color::JUDGMENT_HEX[*grade_idx]);
-        let window_ms = if i > 0 { timing_windows[i - 1] } else { 0.0 };
-        let next_window_ms = timing_windows[i];
-        let mid_point_ms = f32::midpoint(window_ms, next_window_ms);
+	    for (i, (label, grade_idx)) in judgment_labels.iter().enumerate() {
+	        let color = color::JUDGMENT_RGBA[*grade_idx];
+	        let window_ms = if i > 0 { timing_windows[i - 1] } else { 0.0 };
+	        let next_window_ms = timing_windows[i];
+	        let mid_point_ms = f32::midpoint(window_ms, next_window_ms);
 
         // Scale position from ms to pane coordinates
         let x_offset = (mid_point_ms / worst_window) * (pane_width / 2.0_f32);
@@ -698,19 +698,19 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
             )
         };
 
-        let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
-            if abs_ms <= timing_windows[0] {
-                color::rgba_hex(color::JUDGMENT_HEX[0])
-            } else if abs_ms <= timing_windows[1] {
-                color::rgba_hex(color::JUDGMENT_HEX[1])
-            } else if abs_ms <= timing_windows[2] {
-                color::rgba_hex(color::JUDGMENT_HEX[2])
-            } else if abs_ms <= timing_windows[3] {
-                color::rgba_hex(color::JUDGMENT_HEX[3])
-            } else {
-                color::rgba_hex(color::JUDGMENT_HEX[4])
-            }
-        };
+	        let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
+	            if abs_ms <= timing_windows[0] {
+	                color::JUDGMENT_RGBA[0]
+	            } else if abs_ms <= timing_windows[1] {
+	                color::JUDGMENT_RGBA[1]
+	            } else if abs_ms <= timing_windows[2] {
+	                color::JUDGMENT_RGBA[2]
+	            } else if abs_ms <= timing_windows[3] {
+	                color::JUDGMENT_RGBA[3]
+	            } else {
+	                color::JUDGMENT_RGBA[4]
+	            }
+	        };
 
         let mut draw_bin = |bin_idx: i32, y_val: f32| {
             if y_val <= 0.0 {
@@ -1122,7 +1122,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
 
             // EX score (bottom line, Fantastic blue / turquoise), smaller than ITG score
-            let ex_color = color::rgba_hex(color::JUDGMENT_HEX[0]);
+	            let ex_color = color::JUDGMENT_RGBA[0];
             // "EX" label to the left of the numeric EX score.
             children.push(act!(text:
                 font("wendy_white"):
@@ -1226,20 +1226,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let dur = (last - first).max(0.001_f32);
                         let worst = si.histogram.worst_window_ms.max(1.0_f32);
 
-                        let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
-                            let tw = crate::game::timing::effective_windows_ms();
-                            if abs_ms <= tw[0] {
-                                color::rgba_hex(color::JUDGMENT_HEX[0])
-                            } else if abs_ms <= tw[1] {
-                                color::rgba_hex(color::JUDGMENT_HEX[1])
-                            } else if abs_ms <= tw[2] {
-                                color::rgba_hex(color::JUDGMENT_HEX[2])
-                            } else if abs_ms <= tw[3] {
-                                color::rgba_hex(color::JUDGMENT_HEX[3])
-                            } else {
-                                color::rgba_hex(color::JUDGMENT_HEX[4])
-                            }
-                        };
+	                        let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
+	                            let tw = crate::game::timing::effective_windows_ms();
+	                            if abs_ms <= tw[0] {
+	                                color::JUDGMENT_RGBA[0]
+	                            } else if abs_ms <= tw[1] {
+	                                color::JUDGMENT_RGBA[1]
+	                            } else if abs_ms <= tw[2] {
+	                                color::JUDGMENT_RGBA[2]
+	                            } else if abs_ms <= tw[3] {
+	                                color::JUDGMENT_RGBA[3]
+	                            } else {
+	                                color::JUDGMENT_RGBA[4]
+	                            }
+	                        };
 
                         for sp in &si.scatter {
                             // For non-miss offsets, shift x by the offset amount (align to actual tap time).

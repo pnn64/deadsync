@@ -208,7 +208,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             );
             (
                 format!("{:.2}", ex_percent.max(0.0)),
-                color::rgba_hex(color::JUDGMENT_HEX[0]),
+                color::JUDGMENT_RGBA[0],
             )
         } else {
             let score_percent = (judgment::calculate_itg_score_percent(

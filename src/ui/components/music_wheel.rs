@@ -9,10 +9,12 @@ use std::collections::HashMap;
 
 // --- Colors ---
 fn col_music_wheel_box() -> [f32; 4] {
-    color::rgba_hex("#0a141b")
+    const C: [f32; 4] = color::rgba_hex("#0a141b");
+    C
 }
 fn col_pack_header_box() -> [f32; 4] {
-    color::rgba_hex("#4c565d")
+    const C: [f32; 4] = color::rgba_hex("#4c565d");
+    C
 }
 
 // --- Layout Constants ---
@@ -34,20 +36,22 @@ const fn col_quint_lamp() -> [f32; 4] {
 }
 fn col_clear_lamp() -> [f32; 4] {
     // zmod clear lamp
-    color::rgba_hex("#0000CC")
+    const C: [f32; 4] = color::rgba_hex("#0000CC");
+    C
 }
 fn col_fail_lamp() -> [f32; 4] {
     // zmod fail lamp
-    color::rgba_hex("#990000")
+    const C: [f32; 4] = color::rgba_hex("#990000");
+    C
 }
 
 fn lamp_judge_count_color(lamp_index: u8) -> [f32; 4] {
     // zmod uses SL.JudgmentColors["FA+"][lamp+1] for the single-digit overlay.
     match lamp_index {
-        1 => color::rgba_hex(color::JUDGMENT_FA_PLUS_WHITE_HEX),
-        2 => color::rgba_hex(color::JUDGMENT_HEX[1]),
-        3 => color::rgba_hex(color::JUDGMENT_HEX[2]),
-        4 => color::rgba_hex(color::JUDGMENT_HEX[3]),
+        1 => color::JUDGMENT_FA_PLUS_WHITE_RGBA,
+        2 => color::JUDGMENT_RGBA[1],
+        3 => color::JUDGMENT_RGBA[2],
+        4 => color::JUDGMENT_RGBA[3],
         _ => [1.0; 4],
     }
 }
@@ -336,13 +340,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 let (lamp_color, lamp_pulsing, lamp_index) =
                                     match cached_score.lamp_index {
                                         Some(0) => (col_quint_lamp(), true, Some(0u8)),
-                                        Some(idx @ 1..=4) => {
-                                            let color_index = (idx - 1) as usize;
-                                            let base = color::rgba_hex(
-                                                color::JUDGMENT_HEX[color_index.min(5)],
-                                            );
-                                            (base, true, Some(idx))
-                                        }
+	                                        Some(idx @ 1..=4) => {
+	                                            let color_index = (idx - 1) as usize;
+	                                            let base = color::JUDGMENT_RGBA[color_index.min(5)];
+	                                            (base, true, Some(idx))
+	                                        }
                                         Some(_) => (col_clear_lamp(), false, None),
                                         None if cached_score.grade == scores::Grade::Failed => {
                                             (col_fail_lamp(), false, None)
