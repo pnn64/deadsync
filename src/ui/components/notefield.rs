@@ -192,7 +192,8 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 [width * scale, target_explosion_px]
             }
         };
-        let current_time = state.current_music_time;
+        let current_time = state.current_music_time_visible[player_idx];
+        let current_beat = state.current_beat_visible[player_idx];
         // Precompute per-frame values used for converting beat/time to Y positions
         let (rate, cmod_pps_opt, curr_disp_beat, beatmod_multiplier) = match scroll_speed {
             ScrollSpeedSetting::CMod(c_bpm) => {
@@ -205,10 +206,10 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 (rate, Some(pps), 0.0, 0.0)
             }
             ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                let curr_disp = state.timing.get_displayed_beat(state.current_beat);
+                let curr_disp = state.timing.get_displayed_beat(state.current_beat_visible[player_idx]);
                 let speed_multiplier = state
                     .timing
-                    .get_speed_multiplier(state.current_beat, state.current_music_time);
+                    .get_speed_multiplier(state.current_beat_visible[player_idx], current_time);
                 let player_multiplier =
                     scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
                 let final_multiplier = player_multiplier * speed_multiplier;
@@ -264,11 +265,10 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 1.0
             };
             let receptor_slot = &ns.receptor_off[i];
-            let receptor_frame =
-                receptor_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
+            let receptor_frame = receptor_slot.frame_index(state.total_elapsed_in_screen, current_beat);
             let receptor_uv = receptor_slot.uv_for_frame(receptor_frame);
             let receptor_size = scale_sprite(receptor_slot.size());
-            let receptor_color = ns.receptor_pulse.color_for_beat(state.current_beat);
+            let receptor_color = ns.receptor_pulse.color_for_beat(current_beat);
             actors.push(act!(sprite(receptor_slot.texture_key().to_string()):
                 align(0.5, 0.5):
                 xy(playfield_center_x + col_x_offset, receptor_y_lane):
@@ -325,8 +325,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
             if glow_timer > 0.0
                 && let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref())
             {
-                let glow_frame =
-                    glow_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
+                let glow_frame = glow_slot.frame_index(state.total_elapsed_in_screen, current_beat);
                 let glow_uv = glow_slot.uv_for_frame(glow_frame);
                 let glow_size = glow_slot.size();
                 let alpha = (glow_timer / RECEPTOR_GLOW_DURATION).powf(0.75);
@@ -920,7 +919,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
             {
                 let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 if let Some(note_slot) = ns.notes.get(note_idx) {
-                    let frame = note_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
+                    let frame = note_slot.frame_index(state.total_elapsed_in_screen, current_beat);
                     let uv = note_slot.uv_for_frame(frame);
                     let size = scale_sprite(note_slot.size());
                     actors.push(act!(sprite(note_slot.texture_key().to_string()):
@@ -985,7 +984,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                         .or_else(|| frame_slot.map(|slot| -slot.def.rotation_deg as f32))
                         .unwrap_or(0.0);
                     let time = state.total_elapsed_in_screen;
-                    let beat = state.current_beat;
+                    let beat = current_beat;
                     let circle_reference = frame_slot
                         .map(|slot| scale_sprite(slot.size()))
                         .or_else(|| fill_slot.map(|slot| scale_sprite(slot.size())))
@@ -999,7 +998,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                             .get(col_idx)
                             .and_then(|colors| colors.as_deref());
                         if let Some(fill_state) =
-                            fill_gradient.and_then(|colors| mine_fill_state(colors, state.current_beat))
+                            fill_gradient.and_then(|colors| mine_fill_state(colors, current_beat))
                         {
                             let width = circle_reference[0] * MINE_CORE_SIZE_RATIO;
                             let height = circle_reference[1] * MINE_CORE_SIZE_RATIO;
@@ -1057,7 +1056,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 let note_idx = col_idx * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 if let Some(note_slot) = ns.notes.get(note_idx) {
                     let note_frame =
-                        note_slot.frame_index(state.total_elapsed_in_screen, state.current_beat);
+                        note_slot.frame_index(state.total_elapsed_in_screen, current_beat);
                     let note_uv = note_slot.uv_for_frame(note_frame);
                     let note_size = scale_sprite(note_slot.size());
                     actors.push(act!(sprite(note_slot.texture_key().to_string()):

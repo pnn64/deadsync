@@ -127,6 +127,7 @@ pub struct Config {
     pub song_parsing_threads: u8,
     pub simply_love_color: i32,
     pub global_offset_seconds: f32,
+    pub visual_delay_seconds: f32,
     pub master_volume: u8,
     pub menu_music: bool,
     pub music_volume: u8,
@@ -157,6 +158,7 @@ impl Default for Config {
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             global_offset_seconds: -0.008,
+            visual_delay_seconds: 0.0,
             master_volume: 90,
             menu_music: true,
             music_volume: 100,
@@ -212,6 +214,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "GlobalOffsetSeconds={}\n",
         default.global_offset_seconds
+    ));
+    content.push_str(&format!(
+        "VisualDelaySeconds={}\n",
+        default.visual_delay_seconds
     ));
     content.push_str(&format!("MasterVolume={}\n", default.master_volume));
     content.push_str(&format!(
@@ -381,6 +387,10 @@ pub fn load() {
                     .get("Options", "GlobalOffsetSeconds")
                     .and_then(|v| v.parse().ok())
                     .unwrap_or(default.global_offset_seconds);
+                cfg.visual_delay_seconds = conf
+                    .get("Options", "VisualDelaySeconds")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(default.visual_delay_seconds);
                 cfg.master_volume = conf
                     .get("Options", "MasterVolume")
                     .and_then(|v| v.parse().ok())
@@ -482,6 +492,7 @@ pub fn load() {
                         "SoftwareRendererThreads",
                         "TranslatedTitles",
                         "VideoRenderer",
+                        "VisualDelaySeconds",
                         "Vsync",
                         "Windowed",
                     ];
@@ -1108,6 +1119,10 @@ fn save_without_keymaps() {
         "GlobalOffsetSeconds={}\n",
         cfg.global_offset_seconds
     ));
+    content.push_str(&format!(
+        "VisualDelaySeconds={}\n",
+        cfg.visual_delay_seconds
+    ));
     content.push_str(&format!("MasterVolume={}\n", cfg.master_volume));
     content.push_str(&format!(
         "MenuMusic={}\n",
@@ -1276,6 +1291,19 @@ pub fn update_global_offset(offset: f32) {
             return;
         }
         cfg.global_offset_seconds = offset;
+    }
+    save_without_keymaps();
+}
+
+#[allow(dead_code)]
+pub fn update_visual_delay_seconds(delay: f32) {
+    let clamped = delay.clamp(-1.0, 1.0);
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if (cfg.visual_delay_seconds - clamped).abs() < f32::EPSILON {
+            return;
+        }
+        cfg.visual_delay_seconds = clamped;
     }
     save_without_keymaps();
 }

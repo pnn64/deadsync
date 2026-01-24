@@ -381,8 +381,8 @@ fn build_main_rows(
         },
         Row {
             name: "Visual Delay".to_string(),
-            choices: vec!["0ms".to_string()],
-            selected_choice_index: 0,
+            choices: (-100..=100).map(|v| format!("{v}ms")).collect(),
+            selected_choice_index: 100,
             help: vec![
                 "Player specific visual delay. Negative values shifts the arrows".to_string(),
                 "upwards, while positive values move them down.".to_string(),
@@ -957,6 +957,14 @@ fn apply_profile_defaults(rows: &mut [Row]) -> (u8, u8) {
             row.selected_choice_index = idx;
         }
     }
+    // Initialize Visual Delay from profile (-100..100ms)
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Visual Delay") {
+        let val = profile.visual_delay_ms.clamp(-100, 100);
+        let needle = format!("{val}ms");
+        if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
+            row.selected_choice_index = idx;
+        }
+    }
     // Initialize FA+ Options row from profile (three independent toggles).
     if let Some(row) = rows.iter_mut().find(|r| r.name == "FA+ Options") {
         // Cursor always starts on the first option; toggled state is reflected visually.
@@ -1330,6 +1338,12 @@ fn change_choice(state: &mut State, delta: isize) {
                     && let Ok(raw) = choice.parse::<i32>()
                 {
                     crate::game::profile::update_notefield_offset_y(raw);
+                }
+            } else if row.name == "Visual Delay" {
+                if let Some(choice) = row.choices.get(row.selected_choice_index)
+                    && let Ok(raw) = choice.trim_end_matches("ms").parse::<i32>()
+                {
+                    crate::game::profile::update_visual_delay_ms(raw);
                 }
             } else if row.name == "Judgment Font" {
                 // Persist tap judgment font selection to the profile

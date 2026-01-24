@@ -1080,7 +1080,10 @@ pub fn init() -> State {
             let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
             ms.clamp(GLOBAL_OFFSET_MIN_MS, GLOBAL_OFFSET_MAX_MS)
         },
-        visual_delay_ms: 0,
+        visual_delay_ms: {
+            let ms = (cfg.visual_delay_seconds * 1000.0).round() as i32;
+            ms.clamp(VISUAL_DELAY_MIN_MS, VISUAL_DELAY_MAX_MS)
+        },
         video_renderer_at_load: cfg.video_renderer,
         display_mode_at_load: cfg.display_mode(),
         display_monitor_at_load: cfg.display_monitor,
@@ -1578,6 +1581,7 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
                         VISUAL_DELAY_MIN_MS,
                         VISUAL_DELAY_MAX_MS,
                     ) {
+                        config::update_visual_delay_seconds(state.visual_delay_ms as f32 / 1000.0);
                         audio::play_sfx("assets/sounds/change_value.ogg");
                     }
                     return None;

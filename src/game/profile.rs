@@ -401,6 +401,9 @@ pub struct Profile {
     // Y is applied directly to the notefield and related HUD,
     // positive values move everything down.
     pub note_field_offset_y: i32,
+    // Per-player visual delay (Simply Love semantics). Stored in milliseconds.
+    // Negative values shift arrows upwards; positive values shift them down.
+    pub visual_delay_ms: i32,
     // Persisted "last played" selection so that SelectMusic can
     // reopen on the last song+difficulty the player actually played.
     // Stored as a serialized music file path and a raw difficulty index.
@@ -433,6 +436,7 @@ impl Default for Profile {
             mini_percent: 0,
             note_field_offset_x: 0,
             note_field_offset_y: 0,
+            visual_delay_ms: 0,
             last_song_music_path: None,
             last_chart_hash: None,
             // Mirror FILE_DIFFICULTY_NAMES[2] ("Medium") as the default.
@@ -552,6 +556,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             "NoteFieldOffsetY = {}\n",
             default_profile.note_field_offset_y
         ));
+        content.push_str(&format!(
+            "VisualDelayMs = {}\n",
+            default_profile.visual_delay_ms
+        ));
         content.push('\n');
 
         content.push_str("[userprofile]\n");
@@ -632,6 +640,7 @@ fn save_profile_ini() {
         "NoteFieldOffsetY={}\n",
         profile.note_field_offset_y
     ));
+    content.push_str(&format!("VisualDelayMs={}\n", profile.visual_delay_ms));
     content.push('\n');
 
     content.push_str("[userprofile]\n");
@@ -771,6 +780,11 @@ pub fn load() {
                 .get("PlayerOptions", "NoteFieldOffsetY")
                 .and_then(|s| s.parse::<i32>().ok())
                 .unwrap_or(default_profile.note_field_offset_y);
+            profile.visual_delay_ms = profile_conf
+                .get("PlayerOptions", "VisualDelayMs")
+                .or_else(|| profile_conf.get("PlayerOptions", "VisualDelay"))
+                .and_then(|s| s.trim_end_matches("ms").parse::<i32>().ok())
+                .unwrap_or(default_profile.visual_delay_ms);
             profile.show_fa_plus_window = profile_conf
                 .get("PlayerOptions", "ShowFaPlusWindow")
                 .and_then(|s| s.parse::<u8>().ok())
@@ -1137,6 +1151,19 @@ pub fn update_mini_percent(percent: i32) {
             return;
         }
         profile.mini_percent = clamped;
+    }
+    save_profile_ini();
+}
+
+pub fn update_visual_delay_ms(ms: i32) {
+    // Mirror Simply Love's range: -100ms to +100ms.
+    let clamped = ms.clamp(-100, 100);
+    {
+        let mut profile = PROFILE.lock().unwrap();
+        if profile.visual_delay_ms == clamped {
+            return;
+        }
+        profile.visual_delay_ms = clamped;
     }
     save_profile_ini();
 }

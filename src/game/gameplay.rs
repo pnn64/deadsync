@@ -313,6 +313,10 @@ pub struct State {
     pub play_mine_sounds: bool,
     pub global_offset_seconds: f32,
     pub initial_global_offset_seconds: f32,
+    pub global_visual_delay_seconds: f32,
+    pub player_visual_delay_seconds: [f32; MAX_PLAYERS],
+    pub current_music_time_visible: [f32; MAX_PLAYERS],
+    pub current_beat_visible: [f32; MAX_PLAYERS],
     pub next_tap_miss_cursor: [usize; MAX_PLAYERS],
     pub next_mine_avoid_cursor: [usize; MAX_PLAYERS],
     pub row_entries: Vec<RowEntry>,
@@ -810,6 +814,19 @@ pub fn init(
         }
     });
 
+    let global_visual_delay_seconds = config.visual_delay_seconds;
+    let player_visual_delay_seconds: [f32; MAX_PLAYERS] = std::array::from_fn(|_| {
+        let ms = prof.visual_delay_ms.clamp(-100, 100);
+        ms as f32 / 1000.0
+    });
+    let init_music_time = -start_delay;
+    let current_music_time_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        init_music_time - global_visual_delay_seconds - player_visual_delay_seconds[player]
+    });
+    let current_beat_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        timing.get_beat_for_time(current_music_time_visible[player])
+    });
+
     State {
         song,
         song_full_title,
@@ -837,6 +854,10 @@ pub fn init(
         play_mine_sounds: config.mine_hit_sound,
         global_offset_seconds: config.global_offset_seconds,
         initial_global_offset_seconds: config.global_offset_seconds,
+        global_visual_delay_seconds,
+        player_visual_delay_seconds,
+        current_music_time_visible,
+        current_beat_visible,
         next_tap_miss_cursor: note_range_start,
         next_mine_avoid_cursor: note_range_start,
         row_entries,
@@ -2022,17 +2043,13 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
 
 #[inline(always)]
 fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
-    let speed_multiplier = state
-        .timing
-        .get_speed_multiplier(state.current_beat, state.current_music_time);
-    let current_displayed_beat = state.timing.get_displayed_beat(state.current_beat);
-
     for player in 0..state.num_players {
         let (note_start, note_end) = player_note_range(state, player);
         let mut cursor = state.note_spawn_cursor[player].max(note_start);
+        let spawn_time = music_time_sec.max(state.current_music_time_visible[player]);
         match state.scroll_speed[player] {
             ScrollSpeedSetting::CMod(_) => {
-                let lookahead_time = music_time_sec + state.scroll_travel_time[player];
+                let lookahead_time = spawn_time + state.scroll_travel_time[player];
                 let lookahead_beat = state.timing.get_beat_for_time(lookahead_time);
                 while cursor < note_end && state.notes[cursor].beat < lookahead_beat {
                     let note = &state.notes[cursor];
@@ -2047,6 +2064,11 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
                 }
             }
             ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                let spawn_beat = state.timing.get_beat_for_time(spawn_time);
+                let current_displayed_beat = state.timing.get_displayed_beat(spawn_beat);
+                let speed_multiplier = state
+                    .timing
+                    .get_speed_multiplier(spawn_beat, spawn_time);
                 let player_multiplier = state.scroll_speed[player]
                     .beat_multiplier(state.scroll_reference_bpm, state.music_rate);
                 let final_multiplier = player_multiplier * speed_multiplier;
@@ -2267,17 +2289,23 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
 fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     let receptor_y_normal = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER;
     let receptor_y_reverse = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE;
-    let curr_disp_beat = state.timing.get_displayed_beat(state.current_beat);
-    let speed_multiplier = state
-        .timing
-        .get_speed_multiplier(state.current_beat, state.current_music_time);
-    let beatmod_multiplier: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
-        match state.scroll_speed[player] {
-            ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => state.scroll_speed[player]
-                .beat_multiplier(state.scroll_reference_bpm, state.music_rate)
-                * speed_multiplier,
-            ScrollSpeedSetting::CMod(_) => 0.0,
-        }
+    let player_cull_time: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        music_time_sec.min(state.current_music_time_visible[player])
+    });
+    let player_cull_beat: [f32; MAX_PLAYERS] =
+        std::array::from_fn(|player| state.timing.get_beat_for_time(player_cull_time[player]));
+    let player_curr_disp_beat: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        state.timing.get_displayed_beat(player_cull_beat[player])
+    });
+    let player_speed_multiplier: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        state.timing.get_speed_multiplier(player_cull_beat[player], player_cull_time[player])
+    });
+
+    let beatmod_multiplier: [f32; MAX_PLAYERS] = std::array::from_fn(|player| match state.scroll_speed[player] {
+        ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => state.scroll_speed[player]
+            .beat_multiplier(state.scroll_reference_bpm, state.music_rate)
+            * player_speed_multiplier[player],
+        ScrollSpeedSetting::CMod(_) => 0.0,
     });
     let cmod_pps_zoomed: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         match state.scroll_speed[player] {
@@ -2331,6 +2359,8 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         } else {
             (col_idx / cols_per_player).min(num_players.saturating_sub(1))
         };
+        let cull_time = player_cull_time[player];
+        let curr_disp_beat = player_curr_disp_beat[player];
         let scroll_speed = state.scroll_speed[player];
         let beatmult = beatmod_multiplier[player];
         let cmod_zoomed = cmod_pps_zoomed[player];
@@ -2344,7 +2374,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                     let y_pos = match scroll_speed {
                         ScrollSpeedSetting::CMod(_) => {
                             let note_time_chart = state.note_time_cache[arrow.note_index];
-                            let time_diff_real = (note_time_chart - music_time_sec) / rate;
+                            let time_diff_real = (note_time_chart - cull_time) / rate;
                             (dir * time_diff_real).mul_add(cmod_raw, receptor_y)
                         }
                         ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
@@ -2370,7 +2400,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                 let y_pos = match scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
                         let note_time_chart = state.note_time_cache[arrow.note_index];
-                        let time_diff_real = (note_time_chart - music_time_sec) / rate;
+                        let time_diff_real = (note_time_chart - cull_time) / rate;
                         (dir * time_diff_real).mul_add(cmod_raw, receptor_y)
                     }
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
@@ -2398,7 +2428,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
             let y_pos = match scroll_speed {
                 ScrollSpeedSetting::CMod(_) => {
                     let note_time_chart = state.note_time_cache[arrow.note_index];
-                    let time_diff_real = (note_time_chart - music_time_sec) / rate;
+                    let time_diff_real = (note_time_chart - cull_time) / rate;
                     (dir * time_diff_real).mul_add(cmod_zoomed, receptor_y)
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
@@ -2461,6 +2491,13 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     state.current_beat = beat_info.beat;
     state.is_in_freeze = beat_info.is_in_freeze;
     state.is_in_delay = beat_info.is_in_delay;
+
+    for player in 0..state.num_players {
+        let delay = state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
+        let visible_time = music_time_sec - delay;
+        state.current_music_time_visible[player] = visible_time;
+        state.current_beat_visible[player] = state.timing.get_beat_for_time(visible_time);
+    }
 
     let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);
     for player in 0..state.num_players {
