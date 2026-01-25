@@ -1,14 +1,16 @@
 use crate::act;
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::{screen_width, screen_height, screen_center_x, screen_center_y};
-use crate::game::parsing::noteskin::{self, Noteskin, Quantization, NUM_QUANTIZATIONS};
+use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::profile::{self, ActiveProfile};
 use crate::game::scroll::ScrollSpeedSetting;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{self, Actor};
 use crate::ui::color;
-use crate::ui::components::screen_bar::{ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement};
+use crate::ui::components::screen_bar::{
+    ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
+};
 use crate::ui::components::{heart_bg, screen_bar};
 use std::path::Path;
 use std::str::FromStr;
@@ -244,7 +246,9 @@ fn build_choices() -> Vec<Choice> {
             kind: ActiveProfile::Local { id: p.id },
             display_name: p.display_name,
             speed_mod,
-            avatar_key: p.avatar_path.map(|path| path.to_string_lossy().into_owned()),
+            avatar_key: p
+                .avatar_path
+                .map(|path| path.to_string_lossy().into_owned()),
             scroll_option,
             noteskin,
             judgment,
@@ -263,9 +267,10 @@ pub fn init() -> State {
         && let Some(i) = choices.iter().position(|c| match &c.kind {
             ActiveProfile::Local { id: cid } => cid == &id,
             ActiveProfile::Guest => false,
-        }) {
-            selected_index = i;
-        }
+        })
+    {
+        selected_index = i;
+    }
 
     let mut state = State {
         active_color_index,
@@ -643,7 +648,9 @@ fn shake_x(shake_t: f32) -> f32 {
         let p = crate::ui::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
         lerp(5.0, -5.0, p)
     } else {
-        let t = SHAKE_STEP_DUR.mul_add(-2.0, shake_t).clamp(0.0, SHAKE_STEP_DUR);
+        let t = SHAKE_STEP_DUR
+            .mul_add(-2.0, shake_t)
+            .clamp(0.0, SHAKE_STEP_DUR);
         let p = crate::ui::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
         lerp(-5.0, 0.0, p)
     }
@@ -657,7 +664,10 @@ fn scale_about(v: f32, pivot: f32, zoom: f32) -> f32 {
 fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
     match actor {
         Actor::Sprite {
-            offset, size, scale, ..
+            offset,
+            size,
+            scale,
+            ..
         } => {
             offset[0] = scale_about(offset[0], pivot[0], zoom);
             offset[1] = scale_about(offset[1], pivot[1], zoom);
@@ -691,14 +701,12 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                 r[3] *= zoom;
             }
 
-            if !*max_w_pre_zoom
-                && let Some(w) = max_width {
-                    *max_width = Some(*w * zoom);
-                }
-            if !*max_h_pre_zoom
-                && let Some(h) = max_height {
-                    *max_height = Some(*h * zoom);
-                }
+            if !*max_w_pre_zoom && let Some(w) = max_width {
+                *max_width = Some(*w * zoom);
+            }
+            if !*max_h_pre_zoom && let Some(h) = max_height {
+                *max_height = Some(*h * zoom);
+            }
         }
         Actor::Frame {
             offset,
@@ -793,7 +801,9 @@ fn push_join_prompt(
     // ITGmania diffuse_shift: period=1, color1=white, color2=gray.
     // f = sin((t + 0.25) * 2π) / 2 + 0.5
     let t = time.rem_euclid(1.0);
-    let f = ((t + 0.25) * std::f32::consts::PI * 2.0).sin().mul_add(0.5, 0.5);
+    let f = ((t + 0.25) * std::f32::consts::PI * 2.0)
+        .sin()
+        .mul_add(0.5, 0.5);
     let shade = 0.5f32.mul_add(f, 0.5);
 
     out.push(act!(quad:
@@ -942,7 +952,8 @@ fn push_scroller_frame(
     }
 
     let selected = choices.get(selected_index);
-    let selected_is_local = selected.is_some_and(|c| matches!(&c.kind, ActiveProfile::Local { .. }));
+    let selected_is_local =
+        selected.is_some_and(|c| matches!(&c.kind, ActiveProfile::Local { .. }));
 
     // Avatar slot (SL-style): show profile.png if present, else heart + text.
     let avatar_dim = INFO_PAD.mul_add(-2.25, INFO_W);
@@ -1054,52 +1065,39 @@ fn push_scroller_frame(
             }
         }
 
-        let judgment_texture = selected
-            .and_then(|c| match c.judgment {
-                profile::JudgmentGraphic::Love => Some("judgements/Love 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::LoveChroma => {
-                    Some("judgements/Love Chroma 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Rainbowmatic => {
-                    Some("judgements/Rainbowmatic 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::GrooveNights => {
-                    Some("judgements/GrooveNights 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Emoticon => {
-                    Some("judgements/Emoticon 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Censored => {
-                    Some("judgements/Censored 1x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Chromatic => {
-                    Some("judgements/Chromatic 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::ITG2 => Some("judgements/ITG2 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::Bebas => Some("judgements/Bebas 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::Code => Some("judgements/Code 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::ComicSans => {
-                    Some("judgements/Comic Sans 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Focus => Some("judgements/Focus 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::Grammar => {
-                    Some("judgements/Grammar 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Miso => Some("judgements/Miso 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::Papyrus => {
-                    Some("judgements/Papyrus 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Roboto => Some("judgements/Roboto 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::Shift => Some("judgements/Shift 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::Tactics => {
-                    Some("judgements/Tactics 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::Wendy => Some("judgements/Wendy 2x7 (doubleres).png"),
-                profile::JudgmentGraphic::WendyChroma => {
-                    Some("judgements/Wendy Chroma 2x7 (doubleres).png")
-                }
-                profile::JudgmentGraphic::None => None,
-            });
+        let judgment_texture = selected.and_then(|c| match c.judgment {
+            profile::JudgmentGraphic::Love => Some("judgements/Love 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::LoveChroma => {
+                Some("judgements/Love Chroma 2x7 (doubleres).png")
+            }
+            profile::JudgmentGraphic::Rainbowmatic => {
+                Some("judgements/Rainbowmatic 2x7 (doubleres).png")
+            }
+            profile::JudgmentGraphic::GrooveNights => {
+                Some("judgements/GrooveNights 2x7 (doubleres).png")
+            }
+            profile::JudgmentGraphic::Emoticon => Some("judgements/Emoticon 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::Censored => Some("judgements/Censored 1x7 (doubleres).png"),
+            profile::JudgmentGraphic::Chromatic => Some("judgements/Chromatic 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::ITG2 => Some("judgements/ITG2 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::Bebas => Some("judgements/Bebas 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::Code => Some("judgements/Code 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::ComicSans => {
+                Some("judgements/Comic Sans 2x7 (doubleres).png")
+            }
+            profile::JudgmentGraphic::Focus => Some("judgements/Focus 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::Grammar => Some("judgements/Grammar 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::Miso => Some("judgements/Miso 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::Papyrus => Some("judgements/Papyrus 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::Roboto => Some("judgements/Roboto 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::Shift => Some("judgements/Shift 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::Tactics => Some("judgements/Tactics 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::Wendy => Some("judgements/Wendy 2x7 (doubleres).png"),
+            profile::JudgmentGraphic::WendyChroma => {
+                Some("judgements/Wendy Chroma 2x7 (doubleres).png")
+            }
+            profile::JudgmentGraphic::None => None,
+        });
 
         if let Some(texture) = judgment_texture {
             let jd_x = INFO_W.mul_add(0.61, info_x0);
@@ -1238,7 +1236,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             border_rgba,
             inner_alpha,
             state.preview_time,
-            if state.p1_ready { WAITING_TEXT } else { JOIN_TEXT },
+            if state.p1_ready {
+                WAITING_TEXT
+            } else {
+                JOIN_TEXT
+            },
         );
         for a in &mut join_ui {
             apply_alpha_to_actor(a, if show_join { 1.0 } else { 0.0 });
@@ -1248,7 +1250,8 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         if show_selected_name {
             let name = state
                 .choices
-                .get(state.p1_selected_index).map_or_else(|| "[ GUEST ]".to_string(), |c| c.display_name.clone());
+                .get(state.p1_selected_index)
+                .map_or_else(|| "[ GUEST ]".to_string(), |c| c.display_name.clone());
             let a = act!(text:
                 align(0.5, 0.5):
                 xy(p1_cx, cy + SELECTED_NAME_Y_OFF):
@@ -1317,7 +1320,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             border_rgba,
             inner_alpha,
             state.preview_time,
-            if state.p2_ready { WAITING_TEXT } else { JOIN_TEXT },
+            if state.p2_ready {
+                WAITING_TEXT
+            } else {
+                JOIN_TEXT
+            },
         );
         for a in &mut join_ui {
             apply_alpha_to_actor(a, if show_join { 1.0 } else { 0.0 });
@@ -1327,7 +1334,8 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         if show_selected_name {
             let name = state
                 .choices
-                .get(state.p2_selected_index).map_or_else(|| "[ GUEST ]".to_string(), |c| c.display_name.clone());
+                .get(state.p2_selected_index)
+                .map_or_else(|| "[ GUEST ]".to_string(), |c| c.display_name.clone());
             let a = act!(text:
                 align(0.5, 0.5):
                 xy(p2_cx, cy + SELECTED_NAME_Y_OFF):

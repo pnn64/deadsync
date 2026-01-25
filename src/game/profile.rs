@@ -255,9 +255,7 @@ impl FromStr for JudgmentGraphic {
             "wendy chroma" => Ok(Self::WendyChroma),
             "wendychroma" => Ok(Self::WendyChroma),
             "none" => Ok(Self::None),
-            other => Err(format!(
-                "'{other}' is not a valid JudgmentGraphic setting"
-            )),
+            other => Err(format!("'{other}' is not a valid JudgmentGraphic setting")),
         }
     }
 }
@@ -861,9 +859,8 @@ fn load_for_side(side: PlayerSide) {
             profile.reverse_scroll = profile.scroll_option.contains(ScrollOption::Reverse);
 
             // Optional last-played section: if missing, fall back to defaults.
-            profile.last_song_music_path = profile_conf
-                .get("LastPlayed", "MusicPath")
-                .and_then(|s| {
+            profile.last_song_music_path =
+                profile_conf.get("LastPlayed", "MusicPath").and_then(|s| {
                     let trimmed = s.trim();
                     if trimmed.is_empty() {
                         None
@@ -872,16 +869,14 @@ fn load_for_side(side: PlayerSide) {
                     }
                 });
 
-            profile.last_chart_hash = profile_conf
-                .get("LastPlayed", "ChartHash")
-                .and_then(|s| {
-                    let trimmed = s.trim();
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed.to_string())
-                    }
-                });
+            profile.last_chart_hash = profile_conf.get("LastPlayed", "ChartHash").and_then(|s| {
+                let trimmed = s.trim();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed.to_string())
+                }
+            });
 
             let raw_last_diff = profile_conf
                 .get("LastPlayed", "DifficultyIndex")
@@ -1013,7 +1008,11 @@ pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
         if !ft.is_dir() {
             continue;
         }
-        let Some(id) = entry.file_name().to_str().map(std::string::ToString::to_string) else {
+        let Some(id) = entry
+            .file_name()
+            .to_str()
+            .map(std::string::ToString::to_string)
+        else {
             continue;
         };
         if !is_profile_id(&id) {
@@ -1089,8 +1088,7 @@ pub fn is_session_side_guest(side: PlayerSide) -> bool {
 }
 
 pub fn set_session_joined(p1: bool, p2: bool) {
-    let mask =
-        (u8::from(p1) * SESSION_JOINED_MASK_P1) | (u8::from(p2) * SESSION_JOINED_MASK_P2);
+    let mask = (u8::from(p1) * SESSION_JOINED_MASK_P1) | (u8::from(p2) * SESSION_JOINED_MASK_P2);
     SESSION.lock().unwrap().joined_mask = mask;
 }
 

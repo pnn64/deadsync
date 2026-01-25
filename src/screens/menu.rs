@@ -14,7 +14,7 @@ use crate::ui::components::{heart_bg, screen_bar};
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
 
-use crate::core::space::{screen_width, screen_height, screen_center_x};
+use crate::core::space::{screen_center_x, screen_height, screen_width};
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;
@@ -151,9 +151,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         (num_packs, num_songs)
     };
     let num_courses = { get_course_cache().len() };
-    let song_info_text = format!(
-        "{num_songs} songs in {num_packs} groups, {num_courses} courses"
-    );
+    let song_info_text = format!("{num_songs} songs in {num_packs} groups, {num_courses} courses");
 
     // --- Create a single multi-line string and pass it to one text actor ---
     let combined_text = format!("DeadSync {version}\n{song_info_text}");
@@ -290,7 +288,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
         }
         VirtualAction::p1_back | VirtualAction::p2_back => ScreenAction::Exit,
-        VirtualAction::p1_up | VirtualAction::p1_menu_up | VirtualAction::p2_up
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p2_up
         | VirtualAction::p2_menu_up => {
             let n = OPTION_COUNT as isize;
             let cur = state.selected_index as isize;
@@ -298,7 +298,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             crate::core::audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
-        VirtualAction::p1_down | VirtualAction::p1_menu_down | VirtualAction::p2_down
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p2_down
         | VirtualAction::p2_menu_down => {
             let n = OPTION_COUNT as isize;
             let cur = state.selected_index as isize;

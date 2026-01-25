@@ -3,7 +3,7 @@
 /// Evaluated at COMPILE TIME if assigned to a const/static.
 pub const fn rgba_hex(s: &str) -> [f32; 4] {
     let bytes = s.as_bytes();
-    
+
     // Handle optional '#' by offsetting start index
     let (bytes, len) = if !bytes.is_empty() && bytes[0] == b'#' {
         let (_, rem) = bytes.split_at(1);
@@ -85,16 +85,34 @@ pub const DISPLAY_DIFFICULTY_NAMES: [&str; 5] = ["Beginner", "Easy", "Medium", "
 
 /// Decorative / sprite tint palette (hearts, backgrounds, sprites)
 pub const DECORATIVE_RGBA: [[f32; 4]; 12] = [
-    rgba_hex("#FF3C23"), rgba_hex("#FF003C"), rgba_hex("#C1006F"), rgba_hex("#8200A1"), 
-    rgba_hex("#413AD0"), rgba_hex("#0073FF"), rgba_hex("#00ADC0"), rgba_hex("#5CE087"),
-    rgba_hex("#AEFA44"), rgba_hex("#FFFF00"), rgba_hex("#FFBE00"), rgba_hex("#FF7D00"),
+    rgba_hex("#FF3C23"),
+    rgba_hex("#FF003C"),
+    rgba_hex("#C1006F"),
+    rgba_hex("#8200A1"),
+    rgba_hex("#413AD0"),
+    rgba_hex("#0073FF"),
+    rgba_hex("#00ADC0"),
+    rgba_hex("#5CE087"),
+    rgba_hex("#AEFA44"),
+    rgba_hex("#FFFF00"),
+    rgba_hex("#FFBE00"),
+    rgba_hex("#FF7D00"),
 ];
 
 /// Simply Love-ish UI accent palette
 pub const SIMPLY_LOVE_RGBA: [[f32; 4]; 12] = [
-    rgba_hex("#FF5D47"), rgba_hex("#FF577E"), rgba_hex("#FF47B3"), rgba_hex("#DD57FF"), 
-    rgba_hex("#8885ff"), rgba_hex("#3D94FF"), rgba_hex("#00B8CC"), rgba_hex("#5CE087"),
-    rgba_hex("#AEFA44"), rgba_hex("#FFFF00"), rgba_hex("#FFBE00"), rgba_hex("#FF7D00"),
+    rgba_hex("#FF5D47"),
+    rgba_hex("#FF577E"),
+    rgba_hex("#FF47B3"),
+    rgba_hex("#DD57FF"),
+    rgba_hex("#8885ff"),
+    rgba_hex("#3D94FF"),
+    rgba_hex("#00B8CC"),
+    rgba_hex("#5CE087"),
+    rgba_hex("#AEFA44"),
+    rgba_hex("#FFFF00"),
+    rgba_hex("#FFBE00"),
+    rgba_hex("#FF7D00"),
 ];
 
 /// Judgment colors
@@ -109,14 +127,22 @@ pub const JUDGMENT_RGBA: [[f32; 4]; 6] = [
 
 /// Dimmed judgment colors
 pub const JUDGMENT_DIM_RGBA: [[f32; 4]; 6] = [
-    rgba_hex("#0C4E59"), rgba_hex("#593D09"), rgba_hex("#2D5925"), 
-    rgba_hex("#3F2059"), rgba_hex("#593B29"), rgba_hex("#591010"),
+    rgba_hex("#0C4E59"),
+    rgba_hex("#593D09"),
+    rgba_hex("#2D5925"),
+    rgba_hex("#3F2059"),
+    rgba_hex("#593B29"),
+    rgba_hex("#591010"),
 ];
 
 /// Dimmed judgment colors for eval
 pub const JUDGMENT_DIM_EVAL_RGBA: [[f32; 4]; 6] = [
-    rgba_hex("#08363E"), rgba_hex("#3C2906"), rgba_hex("#1B3516"), 
-    rgba_hex("#301844"), rgba_hex("#352319"), rgba_hex("#440C0C"),
+    rgba_hex("#08363E"),
+    rgba_hex("#3C2906"),
+    rgba_hex("#1B3516"),
+    rgba_hex("#301844"),
+    rgba_hex("#352319"),
+    rgba_hex("#440C0C"),
 ];
 
 pub const JUDGMENT_FA_PLUS_WHITE_RGBA: [f32; 4] = rgba_hex("#FFFFFF");

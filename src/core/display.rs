@@ -86,17 +86,18 @@ pub fn friendly_monitor_names(monitors: &[MonitorHandle]) -> Vec<String> {
                 .map(|(i, _)| i);
 
             if matched_idx.is_none()
-                && let Some(name) = &mon_name {
-                    matched_idx = snapshots
-                        .iter()
-                        .enumerate()
-                        .find(|(snap_idx, snap)| {
-                            !used[*snap_idx]
-                                && (names_match(&snap.name, name)
-                                    || names_match(&snap.friendly_name, name))
-                        })
-                        .map(|(i, _)| i);
-                }
+                && let Some(name) = &mon_name
+            {
+                matched_idx = snapshots
+                    .iter()
+                    .enumerate()
+                    .find(|(snap_idx, snap)| {
+                        !used[*snap_idx]
+                            && (names_match(&snap.name, name)
+                                || names_match(&snap.friendly_name, name))
+                    })
+                    .map(|(i, _)| i);
+            }
 
             if matched_idx.is_none() && idx < snapshots.len() && !used[idx] {
                 matched_idx = Some(idx);
@@ -246,9 +247,7 @@ pub fn fullscreen_mode(
                     );
                     Some(Fullscreen::Exclusive(mode))
                 } else {
-                    warn!(
-                        "No exact EXCLUSIVE mode {width}x{height}; using BORDERLESS."
-                    );
+                    warn!("No exact EXCLUSIVE mode {width}x{height}; using BORDERLESS.");
                     Some(Fullscreen::Borderless(Some(mon)))
                 }
             } else {
@@ -298,8 +297,12 @@ mod platform {
         let mut path_count = 0;
         let mut mode_count = 0;
         unsafe {
-            if GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &raw mut path_count, &raw mut mode_count)
-                .is_err()
+            if GetDisplayConfigBufferSizes(
+                QDC_ONLY_ACTIVE_PATHS,
+                &raw mut path_count,
+                &raw mut mode_count,
+            )
+            .is_err()
             {
                 return None;
             }

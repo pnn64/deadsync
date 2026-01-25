@@ -1,5 +1,4 @@
 use crate::act;
-use crate::rgba_const;
 use crate::assets::{AssetManager, DensityGraphSlot};
 use crate::core::audio;
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
@@ -10,6 +9,7 @@ use crate::game::chart::ChartData;
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
+use crate::rgba_const;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -338,7 +338,9 @@ pub(crate) fn chart_for_steps_index<'a>(
     }
 
     let edit_index = steps_index - color::FILE_DIFFICULTY_NAMES.len();
-    edit_charts_sorted(song, chart_type).get(edit_index).copied()
+    edit_charts_sorted(song, chart_type)
+        .get(edit_index)
+        .copied()
 }
 
 pub(crate) fn steps_index_for_chart_hash(
@@ -749,7 +751,9 @@ fn handle_pad_dir_p2(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAct
             {
                 let target_chart_type = profile::get_session_play_style().chart_type();
                 let list_len = steps_len(song, target_chart_type);
-                let cur = state.p2_selected_steps_index.min(list_len.saturating_sub(1));
+                let cur = state
+                    .p2_selected_steps_index
+                    .min(list_len.saturating_sub(1));
 
                 let mut new_idx = None;
                 if is_up {
@@ -794,9 +798,9 @@ fn handle_pad_dir_p2(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAct
                 if let Some(pack) = state.expanded_pack_name.take() {
                     info!("Up+Down combo: Collapsing pack '{}'.", pack);
                     rebuild_displayed_entries(state);
-                    if let Some(new_sel) = state.entries.iter().position(|e| {
-                        matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &pack)
-                    }) {
+                    if let Some(new_sel) = state.entries.iter().position(
+                        |e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &pack),
+                    ) {
                         state.selected_index = new_sel;
                         state.prev_selected_index = new_sel;
                         state.time_since_selection_change = 0.0;
@@ -832,9 +836,9 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
                 state.expanded_pack_name = Some(target.clone());
             }
             rebuild_displayed_entries(state);
-            if let Some(new_sel) = state.entries.iter().position(|e| {
-                matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &target)
-            }) {
+            if let Some(new_sel) = state.entries.iter().position(
+                |e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &target),
+            ) {
                 state.selected_index = new_sel;
             } else {
                 state.selected_index = 0;
@@ -854,7 +858,9 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
     if let winit::keyboard::PhysicalKey::Code(KeyCode::F7) = key.physical_key {
         let target_chart_type = profile::get_session_play_style().chart_type();
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-            if let Some(chart) = chart_for_steps_index(song, target_chart_type, state.selected_steps_index) {
+            if let Some(chart) =
+                chart_for_steps_index(song, target_chart_type, state.selected_steps_index)
+            {
                 return ScreenAction::FetchOnlineGrade(chart.short_hash.clone());
             }
         }
@@ -1245,16 +1251,22 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let preferred_idx_p1 = state
         .preferred_difficulty_index
         .min(color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
-    let mut sel_col_p1 =
-        color::difficulty_rgba(color::FILE_DIFFICULTY_NAMES[preferred_idx_p1], state.active_color_index);
+    let mut sel_col_p1 = color::difficulty_rgba(
+        color::FILE_DIFFICULTY_NAMES[preferred_idx_p1],
+        state.active_color_index,
+    );
 
     let preferred_idx_p2 = state
         .p2_preferred_difficulty_index
         .min(color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
-    let mut sel_col_p2 =
-        color::difficulty_rgba(color::FILE_DIFFICULTY_NAMES[preferred_idx_p2], state.active_color_index);
+    let mut sel_col_p2 = color::difficulty_rgba(
+        color::FILE_DIFFICULTY_NAMES[preferred_idx_p2],
+        state.active_color_index,
+    );
     if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-        if let Some(chart) = chart_for_steps_index(song, target_chart_type, state.selected_steps_index) {
+        if let Some(chart) =
+            chart_for_steps_index(song, target_chart_type, state.selected_steps_index)
+        {
             sel_col_p1 = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
         }
         if let Some(chart) =
@@ -1473,7 +1485,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             screen_center_x() - 345.5
         };
         push_step_artist(base_y, x0_p1, sel_col_p1, step_artist);
-        push_step_artist(base_y + 88.0, screen_center_x() - 244.0, sel_col_p2, step_artist_p2);
+        push_step_artist(
+            base_y + 88.0,
+            screen_center_x() - 244.0,
+            sel_col_p2,
+            step_artist_p2,
+        );
     } else {
         let y_cen = base_y + if is_p2_single { 88.0 } else { 0.0 };
         let step_artist_x0 = if is_p2_single {
@@ -1489,9 +1506,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Density Graph
     let panel_w = if is_wide() { 286.0 } else { 276.0 };
     let chart_info_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
-    let build_breakdown_panel =
-        |graph_cy: f32, is_p2_layout: bool, graph_key: &String, chart: Option<&ChartData>| {
-        let mut graph_kids = vec![act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3]))];
+    let build_breakdown_panel = |graph_cy: f32,
+                                 is_p2_layout: bool,
+                                 graph_key: &String,
+                                 chart: Option<&ChartData>| {
+        let mut graph_kids = vec![
+            act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
+        ];
 
         if let Some(c) = chart {
             let peak = format!(
@@ -1788,7 +1809,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let list_len = steps_charts.len();
     let sel_p1 = sel_p1.min(list_len.saturating_sub(1));
     let sel_p2 = sel_p2.min(list_len.saturating_sub(1));
-    let focus_sel = if is_versus { sel_p1.max(sel_p2) } else { sel_p1 };
+    let focus_sel = if is_versus {
+        sel_p1.max(sel_p2)
+    } else {
+        sel_p1
+    };
     let top_index = if list_len > VISIBLE_STEPS_SLOTS {
         // Simply Love: keep Edit charts off-screen until you scroll past Expert.
         // Once you're in Edit charts, keep the selected chart in the bottom slot and

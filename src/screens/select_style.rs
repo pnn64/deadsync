@@ -1,7 +1,9 @@
 use crate::act;
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::{screen_width, screen_height, widescale, screen_center_x, screen_center_y};
+use crate::core::space::{
+    screen_center_x, screen_center_y, screen_height, screen_width, widescale,
+};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
@@ -111,10 +113,11 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     if state.exit_requested {
         if let Some(target) = state.exit_target
-            && exit_anim_t(state.exit_chosen_anim) >= CHOICE_CHOSEN_ZOOM_OUT_DURATION {
-                state.exit_target = None;
-                return Some(ScreenAction::Navigate(target));
-            }
+            && exit_anim_t(state.exit_chosen_anim) >= CHOICE_CHOSEN_ZOOM_OUT_DURATION
+        {
+            state.exit_target = None;
+            return Some(ScreenAction::Navigate(target));
+        }
         return None;
     }
     let speed = (CHOICE_ZOOM_FOCUSED - CHOICE_ZOOM_UNFOCUSED) / CHOICE_ZOOM_TWEEN_DURATION;
@@ -176,7 +179,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         Some(0) => {
             state.exit_requested = true;
             state.exit_chosen_anim = true;
-            state.exit_target = Some(Screen::SelectMusic);
+            state.exit_target = Some(Screen::ProfileLoad);
             let _ = exit_anim_t(true);
             let choice = Choice::from_index(state.selected_index);
             crate::game::profile::set_session_play_style(match choice {
@@ -384,7 +387,15 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
                 let right = color::decorative_rgba(state.active_color_index + 2);
                 let off = dual_pad_off * zoom;
                 push_pad_tiles(&mut actors, x - off, cy, zoom, alpha, left, PAD_UNUSED_RGBA);
-                push_pad_tiles(&mut actors, x + off, cy, zoom, alpha, right, PAD_UNUSED_RGBA);
+                push_pad_tiles(
+                    &mut actors,
+                    x + off,
+                    cy,
+                    zoom,
+                    alpha,
+                    right,
+                    PAD_UNUSED_RGBA,
+                );
             }
             Choice::Double => {
                 let used = color::decorative_rgba(state.active_color_index + 1);

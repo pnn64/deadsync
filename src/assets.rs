@@ -611,9 +611,7 @@ impl AssetManager {
                     self.textures.insert(key, texture);
                 }
                 Err((key, msg)) => {
-                    warn!(
-                        "Failed to load texture for key '{key}': {msg}. Using fallback."
-                    );
+                    warn!("Failed to load texture for key '{key}': {msg}. Using fallback.");
                     let texture =
                         backend.create_texture(&fallback_image, SamplerDesc::default())?;
                     register_texture_dims(&key, fallback_image.width(), fallback_image.height());
@@ -784,9 +782,7 @@ impl AssetManager {
                     }
                 }
                 Err(e) => {
-                    warn!(
-                        "Failed to open banner image {path:?}: {e}. Using fallback."
-                    );
+                    warn!("Failed to open banner image {path:?}: {e}. Using fallback.");
                     "banner1.png".to_string()
                 }
             }
@@ -824,9 +820,7 @@ impl AssetManager {
                 match RgbaImage::from_raw(graph_data.width, graph_data.height, graph_data.data) {
                     Some(img) => img,
                     None => {
-                        warn!(
-                            "Failed to create RgbaImage from raw graph data for key '{key}'."
-                        );
+                        warn!("Failed to create RgbaImage from raw graph data for key '{key}'.");
                         return FALLBACK_KEY.to_string();
                     }
                 };
@@ -839,9 +833,7 @@ impl AssetManager {
                     key
                 }
                 Err(e) => {
-                    warn!(
-                        "Failed to create GPU texture for density graph ('{key}'): {e}."
-                    );
+                    warn!("Failed to create GPU texture for density graph ('{key}'): {e}.");
                     FALLBACK_KEY.to_string()
                 }
             }
@@ -889,9 +881,7 @@ impl AssetManager {
                     }
                 }
                 Err(e) => {
-                    warn!(
-                        "Failed to open background image {path:?}: {e}. Using fallback."
-                    );
+                    warn!("Failed to open background image {path:?}: {e}. Using fallback.");
                     FALLBACK_KEY.to_string()
                 }
             }
@@ -960,7 +950,11 @@ impl AssetManager {
         }
     }
 
-    fn destroy_current_profile_avatar_for_side(&mut self, backend: &mut Backend, side: profile::PlayerSide) {
+    fn destroy_current_profile_avatar_for_side(
+        &mut self,
+        backend: &mut Backend,
+        side: profile::PlayerSide,
+    ) {
         let _ = backend;
         let ix = match side {
             profile::PlayerSide::P1 => 0,
@@ -985,9 +979,7 @@ impl AssetManager {
                         register_texture_dims(&key, rgba.width(), rgba.height());
                     }
                     Err(e) => {
-                        warn!(
-                            "Failed to create GPU texture for image {path:?}: {e}. Skipping."
-                        );
+                        warn!("Failed to create GPU texture for image {path:?}: {e}. Skipping.");
                     }
                 }
             }

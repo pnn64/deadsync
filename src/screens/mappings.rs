@@ -4,7 +4,7 @@ use crate::core::audio;
 use crate::core::input::{
     GamepadCodeBinding, InputBinding, InputEvent, InputSource, PadEvent, VirtualAction, get_keymap,
 };
-use crate::core::space::{screen_width, screen_height, widescale};
+use crate::core::space::{screen_height, screen_width, widescale};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
@@ -106,7 +106,12 @@ const MAPPING_LABELS: [&str; NUM_MAPPING_ROWS] = [
 /// Map each visual row to the underlying virtual actions for P1/P2.
 #[inline(always)]
 const fn row_actions(row_idx: usize) -> (Option<VirtualAction>, Option<VirtualAction>) {
-    use VirtualAction::{p1_menu_left, p2_menu_left, p1_menu_right, p2_menu_right, p1_menu_up, p2_menu_up, p1_menu_down, p2_menu_down, p1_start, p2_start, p1_select, p2_select, p1_back, p2_back, p1_restart, p2_restart, p1_operator, p2_operator, p1_left, p2_left, p1_right, p2_right, p1_up, p2_up, p1_down, p2_down};
+    use VirtualAction::{
+        p1_back, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
+        p1_operator, p1_restart, p1_right, p1_select, p1_start, p1_up, p2_back, p2_down, p2_left,
+        p2_menu_down, p2_menu_left, p2_menu_right, p2_menu_up, p2_operator, p2_restart, p2_right,
+        p2_select, p2_start, p2_up,
+    };
     match row_idx {
         // Menu navigation
         0 => (Some(p1_menu_left), Some(p2_menu_left)),
@@ -178,7 +183,7 @@ impl ActiveSlot {
 
     #[inline(always)]
     pub const fn prev(self) -> Self {
-        use ActiveSlot::{P1Primary, P2Secondary, P1Secondary, P2Primary};
+        use ActiveSlot::{P1Primary, P1Secondary, P2Primary, P2Secondary};
         match self {
             P1Primary => P2Secondary,
             P1Secondary => P1Primary,
@@ -336,7 +341,8 @@ pub fn update(state: &mut State, dt: f32) {
         let avail_h = (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
 
         let total_w_base = SIDE_W_BASE.mul_add(2.0, DESC_W_BASE * 0.8) + SIDE_GAP_BASE * 2.0;
-        let rows_h_base = (VISIBLE_ROWS as f32).mul_add(ROW_H, ((VISIBLE_ROWS - 1) as f32) * ROW_GAP);
+        let rows_h_base =
+            (VISIBLE_ROWS as f32).mul_add(ROW_H, ((VISIBLE_ROWS - 1) as f32) * ROW_GAP);
 
         let s_w = if total_w_base > 0.0 {
             avail_w / total_w_base
@@ -556,7 +562,9 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
                 uuid: None,
             }))
         }
-        PadEvent::Dir { id, dir, pressed, .. } => {
+        PadEvent::Dir {
+            id, dir, pressed, ..
+        } => {
             if !pressed {
                 return;
             }
@@ -877,7 +885,10 @@ pub fn get_actors(
     let desc_rows_h_base = if visible_mapping_rows == 0 {
         0.0
     } else {
-        (visible_mapping_rows as f32).mul_add(ROW_H, ((visible_mapping_rows.saturating_sub(1)) as f32) * ROW_GAP)
+        (visible_mapping_rows as f32).mul_add(
+            ROW_H,
+            ((visible_mapping_rows.saturating_sub(1)) as f32) * ROW_GAP,
+        )
     };
     let desc_h = desc_rows_h_base * s;
 
@@ -1076,13 +1087,17 @@ pub fn get_actors(
             let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
             // Config order: first = Default, second = Primary, third = Secondary.
             let p1_primary_text = p1_act_opt
-                .and_then(|act| keymap.binding_at(act, 1)).map_or_else(|| "------".to_string(), format_binding_for_display);
+                .and_then(|act| keymap.binding_at(act, 1))
+                .map_or_else(|| "------".to_string(), format_binding_for_display);
             let p1_secondary_text = p1_act_opt
-                .and_then(|act| keymap.binding_at(act, 2)).map_or_else(|| "------".to_string(), format_binding_for_display);
+                .and_then(|act| keymap.binding_at(act, 2))
+                .map_or_else(|| "------".to_string(), format_binding_for_display);
             let p2_primary_text = p2_act_opt
-                .and_then(|act| keymap.binding_at(act, 1)).map_or_else(|| "------".to_string(), format_binding_for_display);
+                .and_then(|act| keymap.binding_at(act, 1))
+                .map_or_else(|| "------".to_string(), format_binding_for_display);
             let p2_secondary_text = p2_act_opt
-                .and_then(|act| keymap.binding_at(act, 2)).map_or_else(|| "------".to_string(), format_binding_for_display);
+                .and_then(|act| keymap.binding_at(act, 2))
+                .map_or_else(|| "------".to_string(), format_binding_for_display);
 
             let p1_default_text = p1_act_opt
                 .and_then(|act| keymap.first_key_binding(act))
@@ -1388,21 +1403,22 @@ pub fn get_actors(
                         // Diagonal tween from the previous row's cursor center
                         // (mapping slot or the previous Exit) to this Exit row.
                         if state.cursor_row_anim_t < 1.0
-                            && let Some(from_row) = state.cursor_row_anim_from_row {
-                                let t = ease_out_cubic(state.cursor_row_anim_t);
-                                let from_x = slot_center_x_for_row(from_row, state.active_slot);
-                                let from_y = state.cursor_row_anim_from_y;
-                                center_x = (exit_center_x - from_x).mul_add(t, from_x);
-                                center_y = (exit_y - from_y).mul_add(t, from_y);
+                            && let Some(from_row) = state.cursor_row_anim_from_row
+                        {
+                            let t = ease_out_cubic(state.cursor_row_anim_t);
+                            let from_x = slot_center_x_for_row(from_row, state.active_slot);
+                            let from_y = state.cursor_row_anim_from_y;
+                            center_x = (exit_center_x - from_x).mul_add(t, from_x);
+                            center_y = (exit_y - from_y).mul_add(t, from_y);
 
-                                // Interpolate ring size from a mapping-sized
-                                // cursor to the Exit-sized cursor.
-                                let ring_w_from = col_w * 0.9;
-                                let ring_h_from = ROW_H * s * 0.9;
-                                let tsize = t;
-                                ring_w = (ring_w - ring_w_from).mul_add(tsize, ring_w_from);
-                                ring_h = (ring_h - ring_h_from).mul_add(tsize, ring_h_from);
-                            }
+                            // Interpolate ring size from a mapping-sized
+                            // cursor to the Exit-sized cursor.
+                            let ring_w_from = col_w * 0.9;
+                            let ring_h_from = ROW_H * s * 0.9;
+                            let tsize = t;
+                            ring_w = (ring_w - ring_w_from).mul_add(tsize, ring_w_from);
+                            ring_h = (ring_h - ring_h_from).mul_add(tsize, ring_h_from);
+                        }
 
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;

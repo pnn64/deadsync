@@ -2,7 +2,7 @@ use crate::core::audio;
 use crate::core::input::{
     InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
-use crate::core::space::{screen_height, screen_center_y};
+use crate::core::space::{screen_center_y, screen_height};
 use crate::game::chart::ChartData;
 use crate::game::judgment::{self, JudgeGrade, Judgment};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
@@ -204,7 +204,10 @@ pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
 }
 
 #[inline(always)]
-fn compute_column_scroll_dirs(scroll_option: profile::ScrollOption, num_cols: usize) -> [f32; MAX_COLS] {
+fn compute_column_scroll_dirs(
+    scroll_option: profile::ScrollOption,
+    num_cols: usize,
+) -> [f32; MAX_COLS] {
     use profile::ScrollOption;
     let mut dirs = [1.0_f32; MAX_COLS];
     let n = num_cols.min(MAX_COLS);
@@ -481,10 +484,16 @@ pub fn queue_input_edge(
     let player_side = profile::get_session_player_side();
     let lane = match (play_style, player_side, lane) {
         // Single-player: reject the "other side" entirely so only one set of bindings can play.
-        (profile::PlayStyle::Single, profile::PlayerSide::P1,
-Lane::P2Left | Lane::P2Down | Lane::P2Up | Lane::P2Right) => return,
-        (profile::PlayStyle::Single, profile::PlayerSide::P2,
-Lane::Left | Lane::Down | Lane::Up | Lane::Right) => return,
+        (
+            profile::PlayStyle::Single,
+            profile::PlayerSide::P1,
+            Lane::P2Left | Lane::P2Down | Lane::P2Up | Lane::P2Right,
+        ) => return,
+        (
+            profile::PlayStyle::Single,
+            profile::PlayerSide::P2,
+            Lane::Left | Lane::Down | Lane::Up | Lane::Right,
+        ) => return,
         // P2-only single: remap P2 lanes into the 4-col field.
         (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::P2Left) => Lane::Left,
         (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::P2Down) => Lane::Down,
@@ -555,11 +564,12 @@ pub fn init(
         player_profiles[0] = player_profiles[1].clone();
         charts[0] = charts[1].clone();
     }
-    let player_color_index = if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
-        active_color_index - 2
-    } else {
-        active_color_index
-    };
+    let player_color_index =
+        if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
+            active_color_index - 2
+        } else {
+            active_color_index
+        };
 
     let style = Style {
         num_cols: cols_per_player,
@@ -603,8 +613,7 @@ pub fn init(
         if player >= num_players {
             return 1.0;
         }
-        let mini_value =
-            (player_profiles[player].mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
+        let mini_value = (player_profiles[player].mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
         let mut z = 1.0 - mini_value * 0.5;
         if z.abs() < 0.01 {
             z = 0.01;
@@ -679,8 +688,9 @@ pub fn init(
             }
 
             let hold = match (note_type, parsed.tail_row_index) {
-                (NoteType::Hold | NoteType::Roll, Some(tail_row)) => {
-                    timing_player.get_beat_for_row(tail_row).map(|end_beat| HoldData {
+                (NoteType::Hold | NoteType::Roll, Some(tail_row)) => timing_player
+                    .get_beat_for_row(tail_row)
+                    .map(|end_beat| HoldData {
                         end_row_index: tail_row,
                         end_beat,
                         result: None,
@@ -689,8 +699,7 @@ pub fn init(
                         let_go_starting_life: 0.0,
                         last_held_row_index: row_index,
                         last_held_beat: beat,
-                    })
-                }
+                    }),
                 _ => None,
             };
 
@@ -1080,7 +1089,11 @@ fn handle_mine_hit(
     let mut updated_scoring = false;
 
     state.arrows[column].remove(arrow_list_index);
-    apply_life_change(&mut state.players[player], state.current_music_time, LifeChange::HIT_MINE);
+    apply_life_change(
+        &mut state.players[player],
+        state.current_music_time,
+        LifeChange::HIT_MINE,
+    );
     if !is_state_dead(state, player) {
         state.players[player].mines_hit_for_score =
             state.players[player].mines_hit_for_score.saturating_add(1);
@@ -1199,7 +1212,11 @@ fn hit_mine_timebased(
     {
         state.arrows[column].remove(pos);
     }
-    apply_life_change(&mut state.players[player], state.current_music_time, LifeChange::HIT_MINE);
+    apply_life_change(
+        &mut state.players[player],
+        state.current_music_time,
+        LifeChange::HIT_MINE,
+    );
     if !is_state_dead(state, player) {
         state.players[player].mines_hit_for_score =
             state.players[player].mines_hit_for_score.saturating_add(1);
@@ -1252,7 +1269,11 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
         result: HoldResult::LetGo,
         triggered_at: Instant::now(),
     });
-    apply_life_change(&mut state.players[player], state.current_music_time, LifeChange::LET_GO);
+    apply_life_change(
+        &mut state.players[player],
+        state.current_music_time,
+        LifeChange::LET_GO,
+    );
     if !is_state_dead(state, player) {
         update_itg_grade_totals(&mut state.players[player]);
     }
@@ -1304,7 +1325,11 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
         }
         _ => {}
     }
-    apply_life_change(&mut state.players[player], state.current_music_time, LifeChange::HELD);
+    apply_life_change(
+        &mut state.players[player],
+        state.current_music_time,
+        LifeChange::HELD,
+    );
     if updated_scoring {
         update_itg_grade_totals(&mut state.players[player]);
     }
@@ -1367,8 +1392,9 @@ fn update_active_holds(
                     let prev_row = hold.last_held_row_index;
                     let prev_beat = hold.last_held_beat;
                     if pressed {
-                        let mut current_row =
-                            timing.get_row_for_beat(current_beat).unwrap_or(note_start_row);
+                        let mut current_row = timing
+                            .get_row_for_beat(current_beat)
+                            .unwrap_or(note_start_row);
                         current_row = current_row.clamp(note_start_row, hold.end_row_index);
                         let final_row = prev_row.max(current_row);
                         if final_row == prev_row {
@@ -1796,9 +1822,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
     }
 
     let direction = if delta_q > 0.0 { "earlier" } else { "later" };
-    let msg = format!(
-        "Global Offset from {start_q:+.3} to {new_q:+.3} (notes {direction})"
-    );
+    let msg = format!("Global Offset from {start_q:+.3} to {new_q:+.3} (notes {direction})");
     state.sync_overlay_message = Some(msg);
     ScreenAction::None
 }
@@ -2075,14 +2099,16 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
         *timer = (*timer - delta_time).max(0.0);
     }
     for player in 0..state.num_players {
-        state.players[player].combo_milestones.retain_mut(|milestone| {
-            milestone.elapsed += delta_time;
-            let max_duration = match milestone.kind {
-                ComboMilestoneKind::Hundred => COMBO_HUNDRED_MILESTONE_DURATION,
-                ComboMilestoneKind::Thousand => COMBO_THOUSAND_MILESTONE_DURATION,
-            };
-            milestone.elapsed < max_duration
-        });
+        state.players[player]
+            .combo_milestones
+            .retain_mut(|milestone| {
+                milestone.elapsed += delta_time;
+                let max_duration = match milestone.kind {
+                    ComboMilestoneKind::Hundred => COMBO_HUNDRED_MILESTONE_DURATION,
+                    ComboMilestoneKind::Thousand => COMBO_THOUSAND_MILESTONE_DURATION,
+                };
+                milestone.elapsed < max_duration
+            });
     }
     let num_players = state.num_players;
     let cols_per_player = state.cols_per_player;
@@ -2094,9 +2120,7 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
             } else {
                 (col / cols_per_player).min(num_players.saturating_sub(1))
             };
-            let lifetime = state
-                .noteskin
-                [player]
+            let lifetime = state.noteskin[player]
                 .as_ref()
                 .and_then(|ns| ns.tap_explosions.get(&active.window))
                 .map_or(0.0, |explosion| explosion.animation.duration());
@@ -2150,9 +2174,7 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
                 state.notes[cursor].mine_result = Some(MineResult::Avoided);
                 state.players[player].mines_avoided =
                     state.players[player].mines_avoided.saturating_add(1);
-                info!(
-                    "MINE AVOIDED: Row {row_index}, Col {column}, Time: {music_time_sec:.2}s"
-                );
+                info!("MINE AVOIDED: Row {row_index}, Col {column}, Time: {music_time_sec:.2}s");
             }
             cursor += 1;
         }
@@ -2430,9 +2452,8 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     });
     let receptor_y_centered: [f32; MAX_PLAYERS] =
         std::array::from_fn(|player| screen_center_y() + player_offset_y[player]);
-    let player_cull_time: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
-        music_time_sec.min(state.current_music_time_visible[player])
-    });
+    let player_cull_time: [f32; MAX_PLAYERS] =
+        std::array::from_fn(|player| music_time_sec.min(state.current_music_time_visible[player]));
     let player_cull_beat: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         state.timing_players[player].get_beat_for_time(player_cull_time[player])
     });
@@ -2440,27 +2461,31 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         state.timing_players[player].get_displayed_beat(player_cull_beat[player])
     });
     let player_speed_multiplier: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
-        state.timing_players[player].get_speed_multiplier(player_cull_beat[player], player_cull_time[player])
+        state.timing_players[player]
+            .get_speed_multiplier(player_cull_beat[player], player_cull_time[player])
     });
 
-    let beatmod_multiplier: [f32; MAX_PLAYERS] = std::array::from_fn(|player| match state.scroll_speed[player] {
-        ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => state.scroll_speed[player]
-            .beat_multiplier(state.scroll_reference_bpm, state.music_rate)
-            * player_speed_multiplier[player],
-        ScrollSpeedSetting::CMod(_) => 0.0,
-    });
-    let cmod_pps_zoomed: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
-        match state.scroll_speed[player] {
+    let beatmod_multiplier: [f32; MAX_PLAYERS] =
+        std::array::from_fn(|player| match state.scroll_speed[player] {
+            ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                state.scroll_speed[player]
+                    .beat_multiplier(state.scroll_reference_bpm, state.music_rate)
+                    * player_speed_multiplier[player]
+            }
+            ScrollSpeedSetting::CMod(_) => 0.0,
+        });
+    let cmod_pps_zoomed: [f32; MAX_PLAYERS] =
+        std::array::from_fn(|player| match state.scroll_speed[player] {
             ScrollSpeedSetting::CMod(c_bpm) => {
                 (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING * state.field_zoom[player]
             }
             _ => 0.0,
-        }
-    });
-    let cmod_pps_raw: [f32; MAX_PLAYERS] = std::array::from_fn(|player| match state.scroll_speed[player] {
-        ScrollSpeedSetting::CMod(c_bpm) => (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING,
-        _ => 0.0,
-    });
+        });
+    let cmod_pps_raw: [f32; MAX_PLAYERS] =
+        std::array::from_fn(|player| match state.scroll_speed[player] {
+            ScrollSpeedSetting::CMod(c_bpm) => (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING,
+            _ => 0.0,
+        });
     let column_dirs = state.column_scroll_dirs;
 
     // Centered receptors ignore Reverse for positioning (but not direction).
@@ -2519,9 +2544,8 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                         ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                             let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                             let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                            (dir
-                                    * beat_diff_disp
-                                    * ScrollSpeedSetting::ARROW_SPACING * beatmult).mul_add(state.field_zoom[player], receptor_y)
+                            (dir * beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmult)
+                                .mul_add(state.field_zoom[player], receptor_y)
                         }
                     };
                     return if dir < 0.0 {
@@ -2545,9 +2569,8 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                         let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                         let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                        (dir
-                                * beat_diff_disp
-                                * ScrollSpeedSetting::ARROW_SPACING * beatmult).mul_add(state.field_zoom[player], receptor_y)
+                        (dir * beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmult)
+                            .mul_add(state.field_zoom[player], receptor_y)
                     }
                 };
                 return if dir < 0.0 {
@@ -2573,9 +2596,8 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
                     let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                    (dir
-                            * beat_diff_disp
-                            * ScrollSpeedSetting::ARROW_SPACING * beatmult).mul_add(state.field_zoom[player], receptor_y)
+                    (dir * beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmult)
+                        .mul_add(state.field_zoom[player], receptor_y)
                 }
             };
             if dir < 0.0 {
@@ -2638,7 +2660,8 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         let delay = state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
         let visible_time = music_time_sec - delay;
         state.current_music_time_visible[player] = visible_time;
-        state.current_beat_visible[player] = state.timing_players[player].get_beat_for_time(visible_time);
+        state.current_beat_visible[player] =
+            state.timing_players[player].get_beat_for_time(visible_time);
     }
 
     let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);

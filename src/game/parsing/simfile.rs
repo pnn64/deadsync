@@ -666,7 +666,11 @@ impl ItgmaniaSongTitleKey {
             song.translit_subtitle.as_str()
         };
 
-        let mut path_fold = song.simfile_path.to_string_lossy().into_owned().into_bytes();
+        let mut path_fold = song
+            .simfile_path
+            .to_string_lossy()
+            .into_owned()
+            .into_bytes();
         path_fold.make_ascii_lowercase();
 
         Self {
@@ -743,10 +747,10 @@ fn process_song(
     // 1. Try Loading from Cache
     if fastload
         && let Some(cp) = &cache_keys.cache_path
-            && let Some(song_data) = load_song_from_cache(&simfile_path, cp, global_offset_seconds)
-            {
-                return Ok((song_data, true)); // is_hit = true
-            }
+        && let Some(song_data) = load_song_from_cache(&simfile_path, cp, global_offset_seconds)
+    {
+        return Ok((song_data, true)); // is_hit = true
+    }
 
     // 2. Parse from Source (Cache Miss)
     let song_data = parse_song_and_maybe_write_cache(
@@ -795,9 +799,7 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
 
     let root_path = Path::new(root_path_str);
     if !root_path.exists() || !root_path.is_dir() {
-        warn!(
-            "Songs directory '{root_path_str}' not found. No songs will be loaded."
-        );
+        warn!("Songs directory '{root_path_str}' not found. No songs will be loaded.");
         return;
     }
 
@@ -1123,18 +1125,14 @@ pub fn scan_and_load_courses(courses_root_str: &'static str, songs_root_str: &'s
 
     let courses_root = Path::new(courses_root_str);
     if !courses_root.is_dir() {
-        warn!(
-            "Courses directory '{courses_root_str}' not found. No courses will be loaded."
-        );
+        warn!("Courses directory '{courses_root_str}' not found. No courses will be loaded.");
         set_course_cache(Vec::new());
         return;
     }
 
     let songs_root = Path::new(songs_root_str);
     if !songs_root.is_dir() {
-        warn!(
-            "Songs directory '{songs_root_str}' not found. No courses will be loaded."
-        );
+        warn!("Songs directory '{songs_root_str}' not found. No courses will be loaded.");
         set_course_cache(Vec::new());
         return;
     }
@@ -1174,12 +1172,9 @@ pub fn scan_and_load_courses(courses_root_str: &'static str, songs_root_str: &'s
                 break;
             };
 
-            let Some(song_dir) = resolve_song_dir(
-                songs_root,
-                &mut group_dirs,
-                group.as_deref(),
-                song,
-            ) else {
+            let Some(song_dir) =
+                resolve_song_dir(songs_root, &mut group_dirs, group.as_deref(), song)
+            else {
                 warn!(
                     "Course '{}' entry {} references missing song '{}{}'.",
                     course.name,
@@ -1333,7 +1328,10 @@ fn parse_song_and_maybe_write_cache(
 }
 
 /// The original parsing logic, now separated to be called on a cache miss.
-fn parse_and_process_song_file(path: &Path, need_hash: bool) -> Result<(SongData, Option<u64>), String> {
+fn parse_and_process_song_file(
+    path: &Path,
+    need_hash: bool,
+) -> Result<(SongData, Option<u64>), String> {
     let simfile_data = fs::read(path).map_err(|e| format!("Could not read file: {e}"))?;
     let content_hash = need_hash.then(|| {
         let mut hasher = XxHash64::with_seed(0);
@@ -1424,41 +1422,44 @@ fn parse_and_process_song_file(path: &Path, need_hash: bool) -> Result<(SongData
         music_length_seconds = chart_length_seconds;
     }
 
-    Ok((SongData {
-        simfile_path: path.to_path_buf(),
-        title: summary.title_str,
-        subtitle: summary.subtitle_str,
-        translit_title: summary.titletranslit_str,
-        translit_subtitle: summary.subtitletranslit_str,
-        artist: summary.artist_str,
-        banner_path, // Keep original logic for banner
-        background_path: background_path_opt,
-        display_bpm: summary.display_bpm_str,
-        offset: summary.offset as f32,
-        sample_start: if summary.sample_start > 0.0 {
-            Some(summary.sample_start as f32)
-        } else {
-            None
+    Ok((
+        SongData {
+            simfile_path: path.to_path_buf(),
+            title: summary.title_str,
+            subtitle: summary.subtitle_str,
+            translit_title: summary.titletranslit_str,
+            translit_subtitle: summary.subtitletranslit_str,
+            artist: summary.artist_str,
+            banner_path, // Keep original logic for banner
+            background_path: background_path_opt,
+            display_bpm: summary.display_bpm_str,
+            offset: summary.offset as f32,
+            sample_start: if summary.sample_start > 0.0 {
+                Some(summary.sample_start as f32)
+            } else {
+                None
+            },
+            sample_length: if summary.sample_length > 0.0 {
+                Some(summary.sample_length as f32)
+            } else {
+                None
+            },
+            min_bpm: summary.min_bpm,
+            max_bpm: summary.max_bpm,
+            normalized_bpms: summary.normalized_bpms,
+            normalized_stops: summary.normalized_stops,
+            normalized_delays: summary.normalized_delays,
+            normalized_warps: summary.normalized_warps,
+            normalized_speeds: summary.normalized_speeds,
+            normalized_scrolls: summary.normalized_scrolls,
+            normalized_fakes: summary.normalized_fakes,
+            music_path,
+            music_length_seconds,
+            total_length_seconds: summary.total_length,
+            charts,
         },
-        sample_length: if summary.sample_length > 0.0 {
-            Some(summary.sample_length as f32)
-        } else {
-            None
-        },
-        min_bpm: summary.min_bpm,
-        max_bpm: summary.max_bpm,
-        normalized_bpms: summary.normalized_bpms,
-        normalized_stops: summary.normalized_stops,
-        normalized_delays: summary.normalized_delays,
-        normalized_warps: summary.normalized_warps,
-        normalized_speeds: summary.normalized_speeds,
-        normalized_scrolls: summary.normalized_scrolls,
-        normalized_fakes: summary.normalized_fakes,
-        music_path,
-        music_length_seconds,
-        total_length_seconds: summary.total_length,
-        charts,
-    }, content_hash))
+        content_hash,
+    ))
 }
 
 /// Computes the length of the music file in seconds, if it is a readable OGG file.

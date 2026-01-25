@@ -6,6 +6,7 @@ pub mod mappings;
 pub mod menu;
 pub mod options;
 pub mod player_options;
+pub mod profile_load;
 pub mod sandbox;
 pub mod select_color;
 pub mod select_music;
@@ -23,7 +24,10 @@ pub enum ScreenAction {
     None,
     Navigate(Screen),
     Exit,
-    SelectProfiles { p1: ActiveProfile, p2: ActiveProfile },
+    SelectProfiles {
+        p1: ActiveProfile,
+        p2: ActiveProfile,
+    },
     RequestBanner(Option<PathBuf>),
     RequestDensityGraph {
         slot: DensityGraphSlot,
@@ -50,6 +54,7 @@ pub enum Screen {
     SelectProfile,
     SelectColor,
     SelectStyle,
+    ProfileLoad,
     SelectMusic,
     Sandbox,
     Evaluation,

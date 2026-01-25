@@ -402,10 +402,12 @@ pub fn draw(
         });
 
         if let Some(last) = runs.last_mut()
-            && last.key == tex.id && last.blend == obj.blend {
-                last.count += 1;
-                continue;
-            }
+            && last.key == tex.id
+            && last.blend == obj.blend
+        {
+            last.count += 1;
+            continue;
+        }
         runs.push(Run {
             start,
             count: 1,

@@ -803,7 +803,8 @@ impl TimingData {
         if args.elapsed_time == f32::MAX {
             args.elapsed_time = start.last_time;
         }
-        args.beat = (args.elapsed_time - start.last_time).mul_add(bps, note_row_to_beat(start.last_row));
+        args.beat =
+            (args.elapsed_time - start.last_time).mul_add(bps, note_row_to_beat(start.last_row));
         args.bps_out = bps;
     }
 
@@ -1215,10 +1216,13 @@ pub fn compute_window_counts(notes: &[Note]) -> WindowCounts {
 
         while idx < len && notes[idx].row_index == row_index {
             let note = &notes[idx];
-            if !note.is_fake && note.can_be_judged && !matches!(note.note_type, NoteType::Mine)
-                && let Some(j) = note.result.as_ref() {
-                    row_judgments.push(j);
-                }
+            if !note.is_fake
+                && note.can_be_judged
+                && !matches!(note.note_type, NoteType::Mine)
+                && let Some(j) = note.result.as_ref()
+            {
+                row_judgments.push(j);
+            }
             idx += 1;
         }
 

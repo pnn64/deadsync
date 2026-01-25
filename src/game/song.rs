@@ -53,7 +53,8 @@ pub struct SongPack {
     pub songs: Vec<Arc<SongData>>,
 }
 
-static SONG_CACHE: std::sync::LazyLock<Mutex<Vec<SongPack>>> = std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
+static SONG_CACHE: std::sync::LazyLock<Mutex<Vec<SongPack>>> =
+    std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
 
 /// Provides safe, read-only access to the global song cache.
 pub fn get_song_cache() -> std::sync::MutexGuard<'static, Vec<SongPack>> {

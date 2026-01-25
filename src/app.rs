@@ -9,8 +9,8 @@ use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting};
 use crate::screens::{
     Screen as CurrentScreen, ScreenAction, evaluation, gameplay, init, input as input_screen,
-    mappings, menu, options, player_options, sandbox, select_color, select_music, select_profile,
-    select_style,
+    mappings, menu, options, player_options, profile_load, sandbox, select_color, select_music,
+    select_profile, select_style,
 };
 use crate::ui::color;
 use winit::{
@@ -133,6 +133,7 @@ pub struct ScreensState {
     select_profile_state: select_profile::State,
     select_color_state: select_color::State,
     select_style_state: select_style::State,
+    profile_load_state: profile_load::State,
     select_music_state: select_music::State,
     sandbox_state: sandbox::State,
     evaluation_state: evaluation::State,
@@ -222,6 +223,9 @@ impl ScreensState {
         let mut select_style_state = select_style::init();
         select_style_state.active_color_index = color_index;
 
+        let mut profile_load_state = profile_load::init();
+        profile_load_state.active_color_index = color_index;
+
         let mut options_state = options::init();
         options_state.active_color_index = color_index;
 
@@ -249,6 +253,7 @@ impl ScreensState {
             select_profile_state,
             select_color_state,
             select_style_state,
+            profile_load_state,
             select_music_state,
             sandbox_state: sandbox::init(),
             evaluation_state,
@@ -262,9 +267,10 @@ impl ScreensState {
         session: &SessionState,
     ) -> Option<ScreenAction> {
         match self.current_screen {
-            CurrentScreen::Gameplay => {
-                self.gameplay_state.as_mut().map(|gs| gameplay::update(gs, delta_time))
-            }
+            CurrentScreen::Gameplay => self
+                .gameplay_state
+                .as_mut()
+                .map(|gs| gameplay::update(gs, delta_time)),
             CurrentScreen::Init => Some(init::update(&mut self.init_state, delta_time)),
             CurrentScreen::Options => options::update(&mut self.options_state, delta_time),
             CurrentScreen::Mappings => {
@@ -295,6 +301,35 @@ impl ScreensState {
             }
             CurrentScreen::SelectStyle => {
                 select_style::update(&mut self.select_style_state, delta_time)
+            }
+            CurrentScreen::ProfileLoad => {
+                let action = profile_load::update(&mut self.profile_load_state, delta_time);
+                if matches!(
+                    action,
+                    Some(ScreenAction::Navigate(CurrentScreen::SelectMusic))
+                ) && let Some(sm) =
+                    profile_load::take_prepared_select_music(&mut self.profile_load_state)
+                {
+                    self.select_music_state = sm;
+                    self.select_music_state.active_color_index =
+                        self.profile_load_state.active_color_index;
+
+                    let preferred = session.preferred_difficulty_index;
+                    self.select_music_state.selected_steps_index = preferred;
+                    self.select_music_state.preferred_difficulty_index = preferred;
+
+                    let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
+                    let p2_pref = profile::get_for_side(profile::PlayerSide::P2)
+                        .last_difficulty_index
+                        .min(max_diff_index);
+                    self.select_music_state.p2_selected_steps_index = p2_pref;
+                    self.select_music_state.p2_preferred_difficulty_index = p2_pref;
+
+                    // Treat the initial selection as already "settled" so preview/graphs can start
+                    // immediately after the transition, matching ITG/Simply Love behavior.
+                    select_music::trigger_immediate_refresh(&mut self.select_music_state);
+                }
+                action
             }
             CurrentScreen::Evaluation => {
                 if let Some(start) = session.session_start_time {
@@ -438,13 +473,23 @@ impl App {
                 };
                 self.state.session.preferred_difficulty_index = preferred_active;
 
-                let current_color_index = self.state.screens.select_profile_state.active_color_index;
+                let current_color_index =
+                    self.state.screens.select_profile_state.active_color_index;
                 self.state.screens.select_music_state = select_music::init();
                 self.state.screens.select_music_state.active_color_index = current_color_index;
-                self.state.screens.select_music_state.preferred_difficulty_index = preferred_active;
+                self.state
+                    .screens
+                    .select_music_state
+                    .preferred_difficulty_index = preferred_active;
                 self.state.screens.select_music_state.selected_steps_index = preferred_active;
-                self.state.screens.select_music_state.p2_preferred_difficulty_index = preferred_p2;
-                self.state.screens.select_music_state.p2_selected_steps_index = preferred_p2;
+                self.state
+                    .screens
+                    .select_music_state
+                    .p2_preferred_difficulty_index = preferred_p2;
+                self.state
+                    .screens
+                    .select_music_state
+                    .p2_selected_steps_index = preferred_p2;
 
                 self.handle_navigation_action(CurrentScreen::SelectColor);
                 Vec::new()
@@ -788,6 +833,10 @@ impl App {
                 &mut self.state.screens.select_style_state,
                 &ev,
             ),
+            CurrentScreen::ProfileLoad => crate::screens::profile_load::handle_input(
+                &mut self.state.screens.profile_load_state,
+                &ev,
+            ),
             CurrentScreen::Options => {
                 crate::screens::options::handle_input(&mut self.state.screens.options_state, &ev)
             }
@@ -853,7 +902,9 @@ impl App {
                 event_loop.exit();
             }
             Command::SetBanner(path_opt) => self.apply_banner(path_opt),
-            Command::SetDensityGraph { slot, chart_opt } => self.apply_density_graph(slot, chart_opt),
+            Command::SetDensityGraph { slot, chart_opt } => {
+                self.apply_density_graph(slot, chart_opt)
+            }
             Command::FetchOnlineGrade(hash) => self.spawn_grade_fetch(hash),
             Command::PlayMusic {
                 path,
@@ -928,7 +979,9 @@ impl App {
                 .map(|data| (chart.short_hash, data))
             });
 
-            let key = self.asset_manager.set_density_graph(backend, slot, graph_request);
+            let key = self
+                .asset_manager
+                .set_density_graph(backend, slot, graph_request);
             match slot {
                 DensityGraphSlot::SelectMusicP1 => {
                     self.state.screens.select_music_state.current_graph_key = key;
@@ -965,10 +1018,14 @@ impl App {
     ) {
         if let Some(backend) = self.backend.as_mut() {
             let key = if let Some((key, data)) = graph_request {
-                self.asset_manager
-                    .set_density_graph(backend, DensityGraphSlot::Evaluation, Some((key, data)))
+                self.asset_manager.set_density_graph(
+                    backend,
+                    DensityGraphSlot::Evaluation,
+                    Some((key, data)),
+                )
             } else {
-                self.asset_manager.set_density_graph(backend, DensityGraphSlot::Evaluation, None)
+                self.asset_manager
+                    .set_density_graph(backend, DensityGraphSlot::Evaluation, None)
             };
             self.state
                 .screens
@@ -1013,9 +1070,9 @@ impl App {
                 TransitionState::ActorsFadeIn { elapsed } => {
                     screen_alpha_multiplier = (elapsed / MENU_ACTORS_FADE_DURATION).clamp(0.0, 1.0);
                 }
-                    TransitionState::ActorsFadeOut {
-                        elapsed, duration, ..
-                    } => {
+                TransitionState::ActorsFadeOut {
+                    elapsed, duration, ..
+                } => {
                     screen_alpha_multiplier = 1.0 - (elapsed / duration).clamp(0.0, 1.0);
                 }
                 _ => {}
@@ -1061,6 +1118,9 @@ impl App {
             ),
             CurrentScreen::SelectStyle => {
                 select_style::get_actors(&self.state.screens.select_style_state)
+            }
+            CurrentScreen::ProfileLoad => {
+                profile_load::get_actors(&self.state.screens.profile_load_state)
             }
             CurrentScreen::SelectMusic => select_music::get_actors(
                 &self.state.screens.select_music_state,
@@ -1131,6 +1191,7 @@ impl App {
             CurrentScreen::SelectProfile => select_profile::out_transition(),
             CurrentScreen::SelectColor => select_color::out_transition(),
             CurrentScreen::SelectStyle => select_style::out_transition(),
+            CurrentScreen::ProfileLoad => profile_load::out_transition(),
             CurrentScreen::SelectMusic => select_music::out_transition(),
             CurrentScreen::Sandbox => sandbox::out_transition(),
             CurrentScreen::Init => init::out_transition(),
@@ -1149,6 +1210,7 @@ impl App {
             CurrentScreen::SelectProfile => select_profile::in_transition(),
             CurrentScreen::SelectColor => select_color::in_transition(),
             CurrentScreen::SelectStyle => select_style::in_transition(),
+            CurrentScreen::ProfileLoad => profile_load::in_transition(),
             CurrentScreen::SelectMusic => select_music::in_transition(),
             CurrentScreen::Sandbox => sandbox::in_transition(),
             CurrentScreen::Evaluation => evaluation::in_transition(),
@@ -1217,11 +1279,9 @@ impl App {
                     .with_inner_size(PhysicalSize::new(window_width, window_height));
                 if let Some(pos) = self.state.shell.pending_window_position.take() {
                     window_attributes = window_attributes.with_position(pos);
-                } else if let Some(pos) = display::default_window_position(
-                    window_width,
-                    window_height,
-                    monitor_handle,
-                ) {
+                } else if let Some(pos) =
+                    display::default_window_position(window_width, window_height, monitor_handle)
+                {
                     window_attributes = window_attributes.with_position(pos);
                 }
             }
@@ -1281,9 +1341,10 @@ impl App {
                 window.set_fullscreen(None);
             }
             if matches!(self.state.shell.display_mode, DisplayMode::Windowed)
-                && let Ok(pos) = window.outer_position() {
-                    old_window_pos = Some(pos);
-                }
+                && let Ok(pos) = window.outer_position()
+            {
+                old_window_pos = Some(pos);
+            }
             window.set_visible(false);
         }
 
@@ -1478,10 +1539,7 @@ impl App {
 
         select_music::trigger_immediate_refresh(&mut self.state.screens.select_music_state);
         self.state.screens.select_music_state.current_graph_key = "__white".to_string();
-        self.state
-            .screens
-            .select_music_state
-            .current_graph_key_p2 = "__white".to_string();
+        self.state.screens.select_music_state.current_graph_key_p2 = "__white".to_string();
     }
 
     /* -------------------- keyboard: map -> route -------------------- */
@@ -1532,9 +1590,10 @@ impl App {
                 &key_event,
             );
             if !matches!(action, ScreenAction::None)
-                && let Err(e) = self.handle_action(action, event_loop) {
-                    log::error!("Failed to handle Mappings raw key action: {e}");
-                }
+                && let Err(e) = self.handle_action(action, event_loop)
+            {
+                log::error!("Failed to handle Mappings raw key action: {e}");
+            }
             // On the Mappings screen, arrows/Enter/Escape are handled entirely
             // via raw keycodes; do not route through the virtual keymap.
             return;
@@ -1569,7 +1628,8 @@ impl App {
         let _event_timestamp = Instant::now();
 
         if key_event.state == winit::event::ElementState::Pressed
-            && key_event.physical_key == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F3)
+            && key_event.physical_key
+                == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F3)
         {
             self.state.shell.show_overlay = !self.state.shell.show_overlay;
             let show = self.state.shell.show_overlay;
@@ -1656,9 +1716,15 @@ impl App {
         let mut commands = Vec::new();
         let menu_music_enabled = config::get().menu_music;
         let target_menu_music = menu_music_enabled
-            && matches!(target, CurrentScreen::SelectColor | CurrentScreen::SelectStyle);
-        let prev_menu_music =
-            menu_music_enabled && matches!(prev, CurrentScreen::SelectColor | CurrentScreen::SelectStyle);
+            && matches!(
+                target,
+                CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+            );
+        let prev_menu_music = menu_music_enabled
+            && matches!(
+                prev,
+                CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+            );
 
         if target_menu_music {
             if !prev_menu_music {
@@ -1690,26 +1756,27 @@ impl App {
             {
                 let play_style = profile::get_session_play_style();
                 let player_side = profile::get_session_player_side();
-                let update_scroll_speed = |commands: &mut Vec<Command>,
-                                          side: profile::PlayerSide,
-                                          speed_mod: &player_options::SpeedMod| {
-                    let setting = match speed_mod.mod_type.as_str() {
-                        "C" => Some(ScrollSpeedSetting::CMod(speed_mod.value)),
-                        "X" => Some(ScrollSpeedSetting::XMod(speed_mod.value)),
-                        "M" => Some(ScrollSpeedSetting::MMod(speed_mod.value)),
-                        _ => None,
-                    };
+                let update_scroll_speed =
+                    |commands: &mut Vec<Command>,
+                     side: profile::PlayerSide,
+                     speed_mod: &player_options::SpeedMod| {
+                        let setting = match speed_mod.mod_type.as_str() {
+                            "C" => Some(ScrollSpeedSetting::CMod(speed_mod.value)),
+                            "X" => Some(ScrollSpeedSetting::XMod(speed_mod.value)),
+                            "M" => Some(ScrollSpeedSetting::MMod(speed_mod.value)),
+                            _ => None,
+                        };
 
-                    if let Some(setting) = setting {
-                        commands.push(Command::UpdateScrollSpeed { side, setting });
-                        info!("Saved scroll speed ({side:?}): {setting}");
-                    } else {
-                        warn!(
-                            "Unsupported speed mod '{}' not saved to profile.",
-                            speed_mod.mod_type
-                        );
-                    }
-                };
+                        if let Some(setting) = setting {
+                            commands.push(Command::UpdateScrollSpeed { side, setting });
+                            info!("Saved scroll speed ({side:?}): {setting}");
+                        } else {
+                            warn!(
+                                "Unsupported speed mod '{}' not saved to profile.",
+                                speed_mod.mod_type
+                            );
+                        }
+                    };
 
                 match play_style {
                     profile::PlayStyle::Versus => {
@@ -1782,6 +1849,7 @@ impl App {
             self.state.screens.menu_state.active_color_index = idx;
             self.state.screens.select_profile_state.active_color_index = idx;
             self.state.screens.select_style_state.active_color_index = idx;
+            self.state.screens.profile_load_state.active_color_index = idx;
             self.state.screens.select_music_state.active_color_index = idx;
             self.state.screens.options_state.active_color_index = idx;
             self.state.screens.input_state.active_color_index = idx;
@@ -1822,6 +1890,11 @@ impl App {
             } else {
                 0 // "1 Player"
             };
+        } else if target == CurrentScreen::ProfileLoad {
+            let current_color_index = self.state.screens.select_style_state.active_color_index;
+            self.state.screens.profile_load_state = profile_load::init();
+            self.state.screens.profile_load_state.active_color_index = current_color_index;
+            profile_load::on_enter(&mut self.state.screens.profile_load_state);
         } else if target == CurrentScreen::PlayerOptions {
             let (song_arc, chart_steps_index, preferred_difficulty_index) = {
                 let sm_state = &self.state.screens.select_music_state;
@@ -1833,7 +1906,10 @@ impl App {
                 let play_style = profile::get_session_play_style();
                 let (steps, pref) = match play_style {
                     profile::PlayStyle::Versus => (
-                        [sm_state.selected_steps_index, sm_state.p2_selected_steps_index],
+                        [
+                            sm_state.selected_steps_index,
+                            sm_state.p2_selected_steps_index,
+                        ],
                         [
                             sm_state.preferred_difficulty_index,
                             sm_state.p2_preferred_difficulty_index,
@@ -1844,11 +1920,7 @@ impl App {
                         [sm_state.preferred_difficulty_index; 2],
                     ),
                 };
-                (
-                    song.clone(),
-                    steps,
-                    pref,
-                )
+                (song.clone(), steps, pref)
             };
 
             let color_index = self.state.screens.select_music_state.active_color_index;
@@ -1889,7 +1961,10 @@ impl App {
                         )
                         .expect("No chart found for P2 selected stepchart");
                         (
-                            [Arc::new(chart_ref_p1.clone()), Arc::new(chart_ref_p2.clone())],
+                            [
+                                Arc::new(chart_ref_p1.clone()),
+                                Arc::new(chart_ref_p2.clone()),
+                            ],
                             chart_ref_p1,
                             0usize,
                         )
@@ -1912,16 +1987,25 @@ impl App {
 
                 // Keep SelectMusic's current stepchart in sync with what we're about to play.
                 if play_style == profile::PlayStyle::Versus {
-                    self.state.screens.select_music_state.preferred_difficulty_index =
-                        po_state.chart_difficulty_index[0];
+                    self.state
+                        .screens
+                        .select_music_state
+                        .preferred_difficulty_index = po_state.chart_difficulty_index[0];
                     self.state.screens.select_music_state.selected_steps_index =
                         po_state.chart_steps_index[0];
-                    self.state.screens.select_music_state.p2_preferred_difficulty_index =
-                        po_state.chart_difficulty_index[1];
-                    self.state.screens.select_music_state.p2_selected_steps_index =
-                        po_state.chart_steps_index[1];
+                    self.state
+                        .screens
+                        .select_music_state
+                        .p2_preferred_difficulty_index = po_state.chart_difficulty_index[1];
+                    self.state
+                        .screens
+                        .select_music_state
+                        .p2_selected_steps_index = po_state.chart_steps_index[1];
                 } else {
-                    self.state.screens.select_music_state.preferred_difficulty_index =
+                    self.state
+                        .screens
+                        .select_music_state
+                        .preferred_difficulty_index =
                         po_state.chart_difficulty_index[last_played_idx];
                     self.state.screens.select_music_state.selected_steps_index =
                         po_state.chart_steps_index[last_played_idx];
@@ -2039,12 +2123,18 @@ impl App {
                             profile::PlayStyle::Versus => {
                                 self.state.screens.select_music_state.selected_steps_index =
                                     po.chart_steps_index[0];
-                                self.state.screens.select_music_state.p2_selected_steps_index =
-                                    po.chart_steps_index[1];
-                                self.state.screens.select_music_state.preferred_difficulty_index =
-                                    po.chart_difficulty_index[0];
-                                self.state.screens.select_music_state.p2_preferred_difficulty_index =
-                                    po.chart_difficulty_index[1];
+                                self.state
+                                    .screens
+                                    .select_music_state
+                                    .p2_selected_steps_index = po.chart_steps_index[1];
+                                self.state
+                                    .screens
+                                    .select_music_state
+                                    .preferred_difficulty_index = po.chart_difficulty_index[0];
+                                self.state
+                                    .screens
+                                    .select_music_state
+                                    .p2_preferred_difficulty_index = po.chart_difficulty_index[1];
                             }
                             profile::PlayStyle::Single | profile::PlayStyle::Double => {
                                 let side = profile::get_session_player_side();
@@ -2054,13 +2144,16 @@ impl App {
                                 };
                                 self.state.screens.select_music_state.selected_steps_index =
                                     po.chart_steps_index[idx];
-                                self.state.screens.select_music_state.preferred_difficulty_index =
-                                    po.chart_difficulty_index[idx];
+                                self.state
+                                    .screens
+                                    .select_music_state
+                                    .preferred_difficulty_index = po.chart_difficulty_index[idx];
                             }
                         }
                     }
 
-                    let desired_steps_index = self.state.screens.select_music_state.selected_steps_index;
+                    let desired_steps_index =
+                        self.state.screens.select_music_state.selected_steps_index;
 
                     if let Some(select_music::MusicWheelEntry::Song(song)) = self
                         .state
@@ -2103,6 +2196,12 @@ impl App {
                         &mut self.state.screens.select_music_state,
                     );
                 }
+                CurrentScreen::ProfileLoad => {
+                    // SelectMusic state is prepared asynchronously while ProfileLoad is displayed.
+                    select_music::trigger_immediate_refresh(
+                        &mut self.state.screens.select_music_state,
+                    );
+                }
                 _ => {
                     let current_color_index =
                         self.state.screens.select_music_state.active_color_index;
@@ -2110,15 +2209,23 @@ impl App {
                     self.state.screens.select_music_state.active_color_index = current_color_index;
                     let preferred = self.state.session.preferred_difficulty_index;
                     self.state.screens.select_music_state.selected_steps_index = preferred;
-                    self.state.screens.select_music_state.preferred_difficulty_index = preferred;
+                    self.state
+                        .screens
+                        .select_music_state
+                        .preferred_difficulty_index = preferred;
 
-                    let max_diff_index =
-                        color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
+                    let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
                     let p2_pref = profile::get_for_side(profile::PlayerSide::P2)
                         .last_difficulty_index
                         .min(max_diff_index);
-                    self.state.screens.select_music_state.p2_selected_steps_index = p2_pref;
-                    self.state.screens.select_music_state.p2_preferred_difficulty_index = p2_pref;
+                    self.state
+                        .screens
+                        .select_music_state
+                        .p2_selected_steps_index = p2_pref;
+                    self.state
+                        .screens
+                        .select_music_state
+                        .p2_preferred_difficulty_index = p2_pref;
 
                     // Treat the initial selection as already "settled" so preview/graphs can start
                     // immediately after the transition, matching ITG/Simply Love behavior.
@@ -2185,7 +2292,10 @@ impl App {
                         select_music::chart_for_steps_index(
                             song,
                             chart_type,
-                            self.state.screens.select_music_state.p2_selected_steps_index,
+                            self.state
+                                .screens
+                                .select_music_state
+                                .p2_selected_steps_index,
                         )
                         .cloned()
                     }
@@ -2452,6 +2562,7 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.state.screens.menu_state.active_color_index = idx;
                                 self.state.screens.select_profile_state.active_color_index = idx;
                                 self.state.screens.select_style_state.active_color_index = idx;
+                                self.state.screens.profile_load_state.active_color_index = idx;
                                 self.state.screens.select_music_state.active_color_index = idx;
                                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                                     gs.active_color_index = idx;
@@ -2464,11 +2575,12 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.update_options_monitor_specs(event_loop);
                             }
 
-                            self.state.shell.transition = if Self::is_actor_fade_screen(target_screen) {
-                                TransitionState::ActorsFadeIn { elapsed: 0.0 }
-                            } else {
-                                TransitionState::Idle
-                            };
+                            self.state.shell.transition =
+                                if Self::is_actor_fade_screen(target_screen) {
+                                    TransitionState::ActorsFadeIn { elapsed: 0.0 }
+                                } else {
+                                    TransitionState::Idle
+                                };
                             crate::ui::runtime::clear_all();
                         }
                     }
@@ -2489,9 +2601,10 @@ impl ApplicationHandler<UserEvent> for App {
                             self.state
                                 .screens
                                 .step_idle(delta_time, now, &self.state.session)
-                            && !matches!(action, ScreenAction::None) {
-                                let _ = self.handle_action(action, event_loop);
-                            }
+                            && !matches!(action, ScreenAction::None)
+                        {
+                            let _ = self.handle_action(action, event_loop);
+                        }
                     }
                 }
 

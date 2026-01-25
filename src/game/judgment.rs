@@ -223,9 +223,10 @@ pub fn calculate_ex_score_from_notes(
                     && !note.is_fake
                     && note.can_be_judged
                     && !matches!(note.note_type, NoteType::Mine)
-                    && let Some(j) = note.result.as_ref() {
-                        row_judgments.push(j);
-                    }
+                    && let Some(j) = note.result.as_ref()
+                {
+                    row_judgments.push(j);
+                }
                 idx += 1;
             }
 
@@ -276,9 +277,10 @@ pub fn calculate_ex_score_from_notes(
         match note.note_type {
             NoteType::Hold => {
                 if let Some(h) = note.hold.as_ref()
-                    && h.result == Some(HoldResult::Held) {
-                        holds_held = holds_held.saturating_add(1);
-                    }
+                    && h.result == Some(HoldResult::Held)
+                {
+                    holds_held = holds_held.saturating_add(1);
+                }
             }
             NoteType::Mine => {
                 if note.mine_result == Some(MineResult::Hit) {
@@ -293,8 +295,10 @@ pub fn calculate_ex_score_from_notes(
     let total_holds_f = f64::from(holds_total);
     let total_rolls_f = f64::from(rolls_total);
 
-    let total_possible =
-        total_steps_f.mul_add(EX_WEIGHT_W0, (total_holds_f + total_rolls_f) * EX_WEIGHT_HELD);
+    let total_possible = total_steps_f.mul_add(
+        EX_WEIGHT_W0,
+        (total_holds_f + total_rolls_f) * EX_WEIGHT_HELD,
+    );
     if total_possible <= 0.0 {
         return 0.0;
     }

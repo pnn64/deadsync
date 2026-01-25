@@ -1,16 +1,16 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::core::space::widescale;
-use crate::core::space::{screen_width, screen_height, screen_center_x, screen_center_y};
+use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::judgment;
 use crate::game::profile;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
-use crate::ui::components::{gameplay_stats, notefield};
 use crate::ui::components::screen_bar::{self, AvatarParams, ScreenBarParams};
+use crate::ui::components::{gameplay_stats, notefield};
 
-use crate::game::gameplay::{TRANSITION_IN_DURATION, TRANSITION_OUT_DURATION};
 pub use crate::game::gameplay::{State, init, update};
+use crate::game::gameplay::{TRANSITION_IN_DURATION, TRANSITION_OUT_DURATION};
 
 // --- TRANSITIONS ---
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -217,8 +217,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     for &(player_idx, diff_x, score_x) in players {
         let chart = &state.charts[player_idx];
-        let difficulty_color =
-            color::difficulty_rgba(&chart.difficulty, state.active_color_index);
+        let difficulty_color = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
         let meter_text = chart.meter.to_string();
 
         // Difficulty Box
@@ -380,7 +379,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             actors.push(act!(quad: align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w, h): diffuse(0.0, 0.0, 0.0, 1.0): z(91) ));
 
             // Latch-to-zero for rendering the very frame we die.
-            let dead = state.players[player_idx].is_failing || state.players[player_idx].life <= 0.0;
+            let dead =
+                state.players[player_idx].is_failing || state.players[player_idx].life <= 0.0;
             let life_for_render = if dead {
                 0.0
             } else {
@@ -472,7 +472,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     let (footer_left, footer_right, left_avatar, right_avatar) =
         if play_style == profile::PlayStyle::Versus {
-            (p1_footer_text, p2_footer_text, p1_footer_avatar, p2_footer_avatar)
+            (
+                p1_footer_text,
+                p2_footer_text,
+                p1_footer_avatar,
+                p2_footer_avatar,
+            )
         } else {
             match player_side {
                 profile::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
@@ -499,7 +504,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             player_side,
         ));
     } else if play_style == profile::PlayStyle::Versus {
-        actors.extend(gameplay_stats::build_versus_step_stats(state, asset_manager));
+        actors.extend(gameplay_stats::build_versus_step_stats(
+            state,
+            asset_manager,
+        ));
     } else if play_style == profile::PlayStyle::Double {
         actors.extend(gameplay_stats::build_double_step_stats(
             state,

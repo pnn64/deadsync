@@ -72,7 +72,8 @@ static MUSIC_TRACK_ACTIVE: AtomicBool = AtomicBool::new(false);
 // Last audio callback timing, used to interpolate the playback position
 // between callback invocations so that the reported stream time is
 // continuous instead of jumping in whole buffer increments.
-static LAST_CALLBACK_INSTANT: std::sync::LazyLock<Mutex<Option<Instant>>> = std::sync::LazyLock::new(|| Mutex::new(None));
+static LAST_CALLBACK_INSTANT: std::sync::LazyLock<Mutex<Option<Instant>>> =
+    std::sync::LazyLock::new(|| Mutex::new(None));
 static LAST_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 
@@ -266,9 +267,7 @@ fn init_engine_and_thread() -> AudioEngine {
         );
     });
 
-    info!(
-        "Audio engine initialized ({device_sample_rate} Hz, {device_channels} ch)."
-    );
+    info!("Audio engine initialized ({device_sample_rate} Hz, {device_channels} ch).");
     AudioEngine {
         command_sender,
         sfx_cache: Mutex::new(HashMap::new()),
@@ -855,7 +854,10 @@ fn music_decoder_thread_loop(
             frames_emitted_total: &mut u64,
             fade_spec: Option<(u64, u64)>,
             frames_left_out: &mut Option<u64>,
-            push_block: &mut dyn FnMut(&[i16]) -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
+            push_block: &mut dyn FnMut(
+                &[i16],
+            )
+                -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
         ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
             let mut produced_any = false;
 
@@ -902,7 +904,8 @@ fn music_decoder_thread_loop(
                     let drop_samples = drop_frames * out_ch;
                     if drop_samples > 0 {
                         out_tmp.drain(0..drop_samples);
-                        *preroll_out_frames = (*preroll_out_frames).saturating_sub(drop_frames as u64);
+                        *preroll_out_frames =
+                            (*preroll_out_frames).saturating_sub(drop_frames as u64);
                     }
                 }
 
@@ -1161,8 +1164,7 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
         oversampling_factor: 128,
         window: WindowFunction::BlackmanHarris2,
     };
-    let mut resampler =
-        SincFixedOut::<f32>::new(ratio, 1.0, iparams, OUT_FRAMES_PER_CALL, in_ch)?;
+    let mut resampler = SincFixedOut::<f32>::new(ratio, 1.0, iparams, OUT_FRAMES_PER_CALL, in_ch)?;
 
     info!(
         "SFX decode: '{path}' ({in_ch} ch @ {in_hz} Hz) -> output {out_ch} ch @ {out_hz} Hz (ratio {ratio:.6})."

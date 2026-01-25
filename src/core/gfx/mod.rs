@@ -300,13 +300,9 @@ impl FromStr for BackendType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "vulkan" => Ok(Self::Vulkan),
-            "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" | "vulkan (wgpu)" => {
-                Ok(Self::VulkanWgpu)
-            }
+            "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" | "vulkan (wgpu)" => Ok(Self::VulkanWgpu),
             "opengl" => Ok(Self::OpenGL),
-            "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => {
-                Ok(Self::OpenGLWgpu)
-            }
+            "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => Ok(Self::OpenGLWgpu),
             "software" | "cpu" => Ok(Self::Software),
             #[cfg(target_os = "windows")]
             "directx" | "dx12" | "directx (wgpu)" => Ok(Self::DirectX),

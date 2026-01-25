@@ -159,17 +159,7 @@ fn bezier_y_from_x(
 /// Ported from `itgmania/Themes/_fallback/Scripts/02 Actor.lua`.
 #[inline(always)]
 pub fn bouncebegin_p(x: f32) -> f32 {
-    bezier_y_from_x(
-        x,
-        0.0,
-        0.0,
-        0.42,
-        -0.42,
-        2.0 / 3.0,
-        0.3,
-        1.0,
-        1.0,
-    )
+    bezier_y_from_x(x, 0.0, 0.0, 0.42, -0.42, 2.0 / 3.0, 0.3, 1.0, 1.0)
 }
 
 /// StepMania/ITGmania `bounceend` tween curve parameterization.

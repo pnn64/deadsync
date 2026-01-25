@@ -2,7 +2,9 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::{screen_width, screen_height, screen_center_y, screen_center_x, widescale};
+use crate::core::space::{
+    screen_center_x, screen_center_y, screen_height, screen_width, widescale,
+};
 use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::song::SongData;
 use crate::screens::{Screen, ScreenAction};
@@ -104,9 +106,7 @@ fn compute_visible_rows(
 
     let mut len = 0usize;
     for i in 0..total_rows_i {
-        let is_hidden = i < first_start
-            || (i >= first_end && i < second_start)
-            || i >= second_end;
+        let is_hidden = i < first_start || (i >= first_end && i < second_start) || i >= second_end;
         if is_hidden {
             continue;
         }
@@ -322,18 +322,28 @@ fn build_main_rows(
     // Fallback if none found (defensive; SelectMusic filters songs by play style).
     if stepchart_choices.is_empty() {
         stepchart_choices.push("(Current)".to_string());
-        let base_pref = preferred_difficulty_index[session_persisted_player_idx()]
-            .min(crate::ui::color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
+        let base_pref = preferred_difficulty_index[session_persisted_player_idx()].min(
+            crate::ui::color::FILE_DIFFICULTY_NAMES
+                .len()
+                .saturating_sub(1),
+        );
         stepchart_choice_indices.push(base_pref);
     }
     let initial_stepchart_choice_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
         let steps_idx = chart_steps_index[player_idx];
-        let pref_idx = preferred_difficulty_index[player_idx]
-            .min(crate::ui::color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
+        let pref_idx = preferred_difficulty_index[player_idx].min(
+            crate::ui::color::FILE_DIFFICULTY_NAMES
+                .len()
+                .saturating_sub(1),
+        );
         stepchart_choice_indices
             .iter()
             .position(|&idx| idx == steps_idx)
-            .or_else(|| stepchart_choice_indices.iter().position(|&idx| idx == pref_idx))
+            .or_else(|| {
+                stepchart_choice_indices
+                    .iter()
+                    .position(|&idx| idx == pref_idx)
+            })
             .unwrap_or(0)
     });
     vec![
@@ -1179,8 +1189,11 @@ pub fn init(
     };
     let chart_difficulty_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
         let steps_idx = chart_steps_index[player_idx];
-        let mut diff_idx = preferred_difficulty_index[player_idx]
-            .min(crate::ui::color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
+        let mut diff_idx = preferred_difficulty_index[player_idx].min(
+            crate::ui::color::FILE_DIFFICULTY_NAMES
+                .len()
+                .saturating_sub(1),
+        );
         if steps_idx < crate::ui::color::FILE_DIFFICULTY_NAMES.len() {
             diff_idx = steps_idx;
         }
@@ -1214,22 +1227,22 @@ pub fn init(
     let noteskin_paths: [&'static str; PLAYER_SLOTS] = std::array::from_fn(|i| {
         let p = &player_profiles[i];
         match (p.noteskin, cols_per_player) {
-        (crate::game::profile::NoteSkin::Cel, 8) => "assets/noteskins/cel/dance-double.txt",
-        (crate::game::profile::NoteSkin::Cel, _) => "assets/noteskins/cel/dance-single.txt",
-        (crate::game::profile::NoteSkin::Metal, 8) => "assets/noteskins/metal/dance-double.txt",
-        (crate::game::profile::NoteSkin::Metal, _) => "assets/noteskins/metal/dance-single.txt",
-        (crate::game::profile::NoteSkin::EnchantmentV2, 8) => {
-            "assets/noteskins/enchantment-v2/dance-double.txt"
-        }
-        (crate::game::profile::NoteSkin::EnchantmentV2, _) => {
-            "assets/noteskins/enchantment-v2/dance-single.txt"
-        }
-        (crate::game::profile::NoteSkin::DevCel2024V3, 8) => {
-            "assets/noteskins/devcel-2024-v3/dance-double.txt"
-        }
-        (crate::game::profile::NoteSkin::DevCel2024V3, _) => {
-            "assets/noteskins/devcel-2024-v3/dance-single.txt"
-        }
+            (crate::game::profile::NoteSkin::Cel, 8) => "assets/noteskins/cel/dance-double.txt",
+            (crate::game::profile::NoteSkin::Cel, _) => "assets/noteskins/cel/dance-single.txt",
+            (crate::game::profile::NoteSkin::Metal, 8) => "assets/noteskins/metal/dance-double.txt",
+            (crate::game::profile::NoteSkin::Metal, _) => "assets/noteskins/metal/dance-single.txt",
+            (crate::game::profile::NoteSkin::EnchantmentV2, 8) => {
+                "assets/noteskins/enchantment-v2/dance-double.txt"
+            }
+            (crate::game::profile::NoteSkin::EnchantmentV2, _) => {
+                "assets/noteskins/enchantment-v2/dance-single.txt"
+            }
+            (crate::game::profile::NoteSkin::DevCel2024V3, 8) => {
+                "assets/noteskins/devcel-2024-v3/dance-double.txt"
+            }
+            (crate::game::profile::NoteSkin::DevCel2024V3, _) => {
+                "assets/noteskins/devcel-2024-v3/dance-single.txt"
+            }
         }
     });
     let fallback_noteskin_path = if cols_per_player == 8 {
@@ -1323,10 +1336,12 @@ fn session_persisted_player_idx() -> usize {
     let side = crate::game::profile::get_session_player_side();
     match play_style {
         crate::game::profile::PlayStyle::Versus => P1,
-        crate::game::profile::PlayStyle::Single | crate::game::profile::PlayStyle::Double => match side {
-            crate::game::profile::PlayerSide::P1 => P1,
-            crate::game::profile::PlayerSide::P2 => P2,
-        },
+        crate::game::profile::PlayStyle::Single | crate::game::profile::PlayStyle::Double => {
+            match side {
+                crate::game::profile::PlayerSide::P1 => P1,
+                crate::game::profile::PlayerSide::P2 => P2,
+            }
+        }
     }
 }
 
@@ -1420,8 +1435,8 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
 
     let play_style = crate::game::profile::get_session_play_style();
     let persisted_idx = session_persisted_player_idx();
-    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
-        || player_idx == persisted_idx;
+    let should_persist =
+        play_style == crate::game::profile::PlayStyle::Versus || player_idx == persisted_idx;
     let persist_side = if player_idx == P1 {
         crate::game::profile::PlayerSide::P1
     } else {
@@ -1623,12 +1638,8 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         let path_str = match (setting, cols_per_player) {
             (crate::game::profile::NoteSkin::Cel, 8) => "assets/noteskins/cel/dance-double.txt",
             (crate::game::profile::NoteSkin::Cel, _) => "assets/noteskins/cel/dance-single.txt",
-            (crate::game::profile::NoteSkin::Metal, 8) => {
-                "assets/noteskins/metal/dance-double.txt"
-            }
-            (crate::game::profile::NoteSkin::Metal, _) => {
-                "assets/noteskins/metal/dance-single.txt"
-            }
+            (crate::game::profile::NoteSkin::Metal, 8) => "assets/noteskins/metal/dance-double.txt",
+            (crate::game::profile::NoteSkin::Metal, _) => "assets/noteskins/metal/dance-single.txt",
             (crate::game::profile::NoteSkin::EnchantmentV2, 8) => {
                 "assets/noteskins/enchantment-v2/dance-double.txt"
             }
@@ -1906,8 +1917,8 @@ fn toggle_scroll_row(state: &mut State, player_idx: usize) {
     state.player_profiles[idx].scroll_option = setting;
     state.player_profiles[idx].reverse_scroll = setting.contains(ScrollOption::Reverse);
     let play_style = crate::game::profile::get_session_play_style();
-    let should_persist =
-        play_style == crate::game::profile::PlayStyle::Versus || idx == session_persisted_player_idx();
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || idx == session_persisted_player_idx();
     if should_persist {
         let side = if idx == P1 {
             crate::game::profile::PlayerSide::P1
@@ -1954,8 +1965,8 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     state.player_profiles[idx].show_ex_score = ex_enabled;
     state.player_profiles[idx].show_fa_plus_pane = pane_enabled;
     let play_style = crate::game::profile::get_session_play_style();
-    let should_persist =
-        play_style == crate::game::profile::PlayStyle::Versus || idx == session_persisted_player_idx();
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || idx == session_persisted_player_idx();
     if should_persist {
         let side = if idx == P1 {
             crate::game::profile::PlayerSide::P1
@@ -2000,7 +2011,13 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     state.help_anim_time = [0.0; PLAYER_SLOTS];
 }
 
-fn handle_nav_event(state: &mut State, active: [bool; PLAYER_SLOTS], player_idx: usize, dir: NavDirection, pressed: bool) {
+fn handle_nav_event(
+    state: &mut State,
+    active: [bool; PLAYER_SLOTS],
+    player_idx: usize,
+    dir: NavDirection,
+    pressed: bool,
+) {
     if !active[player_idx] || state.rows.is_empty() {
         return;
     }
@@ -2023,7 +2040,11 @@ fn handle_nav_event(state: &mut State, active: [bool; PLAYER_SLOTS], player_idx:
     }
 }
 
-fn handle_start_event(state: &mut State, active: [bool; PLAYER_SLOTS], player_idx: usize) -> Option<ScreenAction> {
+fn handle_start_event(
+    state: &mut State,
+    active: [bool; PLAYER_SLOTS],
+    player_idx: usize,
+) -> Option<ScreenAction> {
     if !active[player_idx] {
         return None;
     }
@@ -2051,7 +2072,9 @@ fn handle_start_event(state: &mut State, active: [bool; PLAYER_SLOTS], player_id
         if let Some(choice) = what_comes_next_row.choices.get(choice_idx) {
             match choice.as_str() {
                 "Gameplay" => return Some(ScreenAction::Navigate(Screen::Gameplay)),
-                "Choose a Different Song" => return Some(ScreenAction::Navigate(Screen::SelectMusic)),
+                "Choose a Different Song" => {
+                    return Some(ScreenAction::Navigate(Screen::SelectMusic));
+                }
                 "Advanced Modifiers" => switch_to_pane(state, OptionsPane::Advanced),
                 "Uncommon Modifiers" => switch_to_pane(state, OptionsPane::Uncommon),
                 "Main Modifiers" => switch_to_pane(state, OptionsPane::Main),
@@ -2733,9 +2756,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     if !active[player_idx] {
                         continue;
                     }
-                    let idx = row
-                        .selected_choice_index[player_idx]
-                        .min(widths.len().saturating_sub(1));
+                    let idx =
+                        row.selected_choice_index[player_idx].min(widths.len().saturating_sub(1));
                     if let Some(sel_x) = x_positions.get(idx).copied() {
                         let draw_w = widths.get(idx).copied().unwrap_or(40.0);
                         let underline_w = draw_w.ceil();
@@ -2765,9 +2787,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     if !active[player_idx] || state.selected_row[player_idx] != item_idx {
                         continue;
                     }
-                    let sel_idx = row
-                        .selected_choice_index[player_idx]
-                        .min(widths.len().saturating_sub(1));
+                    let sel_idx =
+                        row.selected_choice_index[player_idx].min(widths.len().saturating_sub(1));
                     let Some(target_left_x) = x_positions.get(sel_idx).copied() else {
                         continue;
                     };
@@ -2800,12 +2821,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     if state.cursor_anim_row[player_idx] == Some(item_idx)
                         && state.cursor_anim_t[player_idx] < 1.0
                     {
-                        let from_idx = state
-                            .cursor_anim_from_choice[player_idx]
+                        let from_idx = state.cursor_anim_from_choice[player_idx]
                             .min(widths.len().saturating_sub(1));
                         let to_idx = sel_idx.min(widths.len().saturating_sub(1));
-                        let from_center_x =
-                            widths[from_idx].mul_add(0.5, x_positions[from_idx]);
+                        let from_center_x = widths[from_idx].mul_add(0.5, x_positions[from_idx]);
                         let to_center_x = widths[to_idx].mul_add(0.5, x_positions[to_idx]);
                         let t = ease_out_cubic(state.cursor_anim_t[player_idx]);
                         center_x = (to_center_x - from_center_x).mul_add(t, from_center_x);
@@ -2905,8 +2924,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else if primary_player_idx == P2 {
                 choice_center_x = screen_center_x().mul_add(2.0, -choice_center_x);
             }
-            let choice_text_idx = row
-                .selected_choice_index[primary_player_idx]
+            let choice_text_idx = row.selected_choice_index[primary_player_idx]
                 .min(row.choices.len().saturating_sub(1));
             let choice_text = row
                 .choices

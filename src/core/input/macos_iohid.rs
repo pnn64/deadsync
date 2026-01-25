@@ -1,4 +1,4 @@
-use super::{PadDir, uuid_from_bytes, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId};
+use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
 use std::collections::HashMap;
 use std::ffi::{c_char, c_void};
 use std::ptr;
@@ -20,7 +20,11 @@ type IOReturn = i32;
 unsafe extern "C" {
     fn CFRunLoopGetCurrent() -> CFRunLoopRef;
     fn CFRunLoopRun();
-    fn CFStringCreateWithCString(alloc: CFAllocatorRef, cstr: *const c_char, encoding: u32) -> CFStringRef;
+    fn CFStringCreateWithCString(
+        alloc: CFAllocatorRef,
+        cstr: *const c_char,
+        encoding: u32,
+    ) -> CFStringRef;
     fn CFRelease(cf: CFTypeRef);
     fn CFSetGetCount(the_set: CFTypeRef) -> CFIndex;
     fn CFSetGetValues(the_set: CFTypeRef, values: *mut CFTypeRef);
@@ -33,10 +37,26 @@ unsafe extern "C" {
 unsafe extern "C" {
     fn IOHIDManagerCreate(alloc: CFAllocatorRef, options: u32) -> IOHIDManagerRef;
     fn IOHIDManagerSetDeviceMatching(manager: IOHIDManagerRef, matching: CFTypeRef);
-    fn IOHIDManagerRegisterDeviceMatchingCallback(manager: IOHIDManagerRef, callback: extern "C" fn(*mut c_void, IOReturn, *mut c_void, IOHIDDeviceRef), context: *mut c_void);
-    fn IOHIDManagerRegisterDeviceRemovalCallback(manager: IOHIDManagerRef, callback: extern "C" fn(*mut c_void, IOReturn, *mut c_void, IOHIDDeviceRef), context: *mut c_void);
-    fn IOHIDManagerRegisterInputValueCallback(manager: IOHIDManagerRef, callback: extern "C" fn(*mut c_void, IOReturn, *mut c_void, IOHIDValueRef), context: *mut c_void);
-    fn IOHIDManagerScheduleWithRunLoop(manager: IOHIDManagerRef, run_loop: CFRunLoopRef, mode: CFStringRef);
+    fn IOHIDManagerRegisterDeviceMatchingCallback(
+        manager: IOHIDManagerRef,
+        callback: extern "C" fn(*mut c_void, IOReturn, *mut c_void, IOHIDDeviceRef),
+        context: *mut c_void,
+    );
+    fn IOHIDManagerRegisterDeviceRemovalCallback(
+        manager: IOHIDManagerRef,
+        callback: extern "C" fn(*mut c_void, IOReturn, *mut c_void, IOHIDDeviceRef),
+        context: *mut c_void,
+    );
+    fn IOHIDManagerRegisterInputValueCallback(
+        manager: IOHIDManagerRef,
+        callback: extern "C" fn(*mut c_void, IOReturn, *mut c_void, IOHIDValueRef),
+        context: *mut c_void,
+    );
+    fn IOHIDManagerScheduleWithRunLoop(
+        manager: IOHIDManagerRef,
+        run_loop: CFRunLoopRef,
+        mode: CFStringRef,
+    );
     fn IOHIDManagerOpen(manager: IOHIDManagerRef, options: u32) -> IOReturn;
     fn IOHIDManagerCopyDevices(manager: IOHIDManagerRef) -> CFTypeRef;
 
@@ -90,7 +110,12 @@ struct Ctx {
     key_location_id: CFStringRef,
 }
 
-extern "C" fn on_match(_ctx: *mut c_void, _res: IOReturn, _sender: *mut c_void, device: IOHIDDeviceRef) {
+extern "C" fn on_match(
+    _ctx: *mut c_void,
+    _res: IOReturn,
+    _sender: *mut c_void,
+    device: IOHIDDeviceRef,
+) {
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
         let key = device as usize;
@@ -109,8 +134,10 @@ extern "C" fn on_match(_ctx: *mut c_void, _res: IOReturn, _sender: *mut c_void, 
             return;
         }
 
-        let vendor_id = cfnum_i32(IOHIDDeviceGetProperty(device, ctx.key_vendor_id)).map(|x| x as u16);
-        let product_id = cfnum_i32(IOHIDDeviceGetProperty(device, ctx.key_product_id)).map(|x| x as u16);
+        let vendor_id =
+            cfnum_i32(IOHIDDeviceGetProperty(device, ctx.key_vendor_id)).map(|x| x as u16);
+        let product_id =
+            cfnum_i32(IOHIDDeviceGetProperty(device, ctx.key_product_id)).map(|x| x as u16);
         let location_id = cfnum_i32(IOHIDDeviceGetProperty(device, ctx.key_location_id));
 
         let name = format!(
@@ -120,16 +147,12 @@ extern "C" fn on_match(_ctx: *mut c_void, _res: IOReturn, _sender: *mut c_void, 
             location_id.unwrap_or(-1),
         );
         let uuid = uuid_from_bytes(name.as_bytes());
-        let id = ctx
-            .id_by_uuid
-            .get(&uuid)
-            .copied()
-            .unwrap_or_else(|| {
-                let id = PadId(ctx.next_id);
-                ctx.next_id += 1;
-                ctx.id_by_uuid.insert(uuid, id);
-                id
-            });
+        let id = ctx.id_by_uuid.get(&uuid).copied().unwrap_or_else(|| {
+            let id = PadId(ctx.next_id);
+            ctx.next_id += 1;
+            ctx.id_by_uuid.insert(uuid, id);
+            id
+        });
 
         let dev = Dev {
             id,
@@ -153,7 +176,12 @@ extern "C" fn on_match(_ctx: *mut c_void, _res: IOReturn, _sender: *mut c_void, 
     }
 }
 
-extern "C" fn on_remove(_ctx: *mut c_void, _res: IOReturn, _sender: *mut c_void, device: IOHIDDeviceRef) {
+extern "C" fn on_remove(
+    _ctx: *mut c_void,
+    _res: IOReturn,
+    _sender: *mut c_void,
+    device: IOHIDDeviceRef,
+) {
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
         let key = device as usize;
@@ -168,7 +196,12 @@ extern "C" fn on_remove(_ctx: *mut c_void, _res: IOReturn, _sender: *mut c_void,
     }
 }
 
-extern "C" fn on_input(_ctx: *mut c_void, _res: IOReturn, _sender: *mut c_void, value: IOHIDValueRef) {
+extern "C" fn on_input(
+    _ctx: *mut c_void,
+    _res: IOReturn,
+    _sender: *mut c_void,
+    value: IOHIDValueRef,
+) {
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
         let timestamp = Instant::now();

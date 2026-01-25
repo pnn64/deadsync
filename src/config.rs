@@ -183,7 +183,8 @@ impl Config {
 }
 
 // Global, mutable configuration instance.
-static CONFIG: std::sync::LazyLock<Mutex<Config>> = std::sync::LazyLock::new(|| Mutex::new(Config::default()));
+static CONFIG: std::sync::LazyLock<Mutex<Config>> =
+    std::sync::LazyLock::new(|| Mutex::new(Config::default()));
 
 // --- File I/O ---
 
@@ -469,33 +470,33 @@ pub fn load() {
             crate::core::input::set_keymap(km);
 
             // Only write [Options]/[Theme] if any of those keys are missing.
-                let missing_opts = {
-                    let has = |sec: &str, key: &str| conf.get(sec, key).is_some();
-                    let mut miss = false;
-                    let options_keys = [
-                        "AudioSampleRateHz",
-                        "CacheSongs",
-                        "DisplayHeight",
-                        "DisplayWidth",
-                        "FastLoad",
-                        "FullscreenType",
-                        "GlobalOffsetSeconds",
-                        "MasterVolume",
-                        "MenuMusic",
-                        "MineHitSound",
-                        "MusicVolume",
-                        "SongParsingThreads",
-                        "RateModPreservesPitch",
-                        "ShowStats",
-                        "SmoothHistogram",
-                        "SFXVolume",
-                        "SoftwareRendererThreads",
-                        "TranslatedTitles",
-                        "VideoRenderer",
-                        "VisualDelaySeconds",
-                        "Vsync",
-                        "Windowed",
-                    ];
+            let missing_opts = {
+                let has = |sec: &str, key: &str| conf.get(sec, key).is_some();
+                let mut miss = false;
+                let options_keys = [
+                    "AudioSampleRateHz",
+                    "CacheSongs",
+                    "DisplayHeight",
+                    "DisplayWidth",
+                    "FastLoad",
+                    "FullscreenType",
+                    "GlobalOffsetSeconds",
+                    "MasterVolume",
+                    "MenuMusic",
+                    "MineHitSound",
+                    "MusicVolume",
+                    "SongParsingThreads",
+                    "RateModPreservesPitch",
+                    "ShowStats",
+                    "SmoothHistogram",
+                    "SFXVolume",
+                    "SoftwareRendererThreads",
+                    "TranslatedTitles",
+                    "VideoRenderer",
+                    "VisualDelaySeconds",
+                    "Vsync",
+                    "Windowed",
+                ];
                 for k in options_keys {
                     if !has("Options", k) {
                         miss = true;
@@ -509,17 +510,13 @@ pub fn load() {
             };
             if missing_opts {
                 save_without_keymaps();
-                info!(
-                    "'{CONFIG_PATH}' updated with default values for any missing fields."
-                );
+                info!("'{CONFIG_PATH}' updated with default values for any missing fields.");
             } else {
                 info!("Configuration OK; no write needed.");
             }
         }
         Err(e) => {
-            warn!(
-                "Failed to load '{CONFIG_PATH}': {e}. Using default values."
-            );
+            warn!("Failed to load '{CONFIG_PATH}': {e}. Using default values.");
         }
     }
 }
@@ -603,7 +600,12 @@ fn default_keymap_local() -> Keymap {
 
 #[inline(always)]
 fn parse_action_key_lower(k: &str) -> Option<VirtualAction> {
-    use VirtualAction::{p1_up, p1_down, p1_left, p1_right, p1_start, p1_back, p1_menu_up, p1_menu_down, p1_menu_left, p1_menu_right, p1_select, p1_operator, p1_restart, p2_up, p2_down, p2_left, p2_right, p2_start, p2_back, p2_menu_up, p2_menu_down, p2_menu_left, p2_menu_right, p2_select, p2_operator, p2_restart};
+    use VirtualAction::{
+        p1_back, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
+        p1_operator, p1_restart, p1_right, p1_select, p1_start, p1_up, p2_back, p2_down, p2_left,
+        p2_menu_down, p2_menu_left, p2_menu_right, p2_menu_up, p2_operator, p2_restart, p2_right,
+        p2_select, p2_start, p2_up,
+    };
     match k {
         "p1_up" => Some(p1_up),
         "p1_down" => Some(p1_down),
@@ -637,7 +639,12 @@ fn parse_action_key_lower(k: &str) -> Option<VirtualAction> {
 
 #[inline(always)]
 const fn action_to_ini_key(action: VirtualAction) -> &'static str {
-    use VirtualAction::{p1_up, p1_down, p1_left, p1_right, p1_start, p1_back, p1_menu_up, p1_menu_down, p1_menu_left, p1_menu_right, p1_select, p1_operator, p1_restart, p2_up, p2_down, p2_left, p2_right, p2_start, p2_back, p2_menu_up, p2_menu_down, p2_menu_left, p2_menu_right, p2_select, p2_operator, p2_restart};
+    use VirtualAction::{
+        p1_back, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
+        p1_operator, p1_restart, p1_right, p1_select, p1_start, p1_up, p2_back, p2_down, p2_left,
+        p2_menu_down, p2_menu_left, p2_menu_right, p2_menu_up, p2_operator, p2_restart, p2_right,
+        p2_select, p2_start, p2_up,
+    };
     match action {
         p1_up => "P1_Up",
         p1_down => "P1_Down",
@@ -768,80 +775,83 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
     // @N restricts to device index N,
     // and #... restricts to a 16-byte UUID (32 hex chars, no dashes).
     if let Some(rest) = t.strip_prefix("PadCode[")
-        && let Some(end) = rest.find(']') {
-            let code_str = &rest[..end];
-            let mut tail = &rest[end + 1..];
+        && let Some(end) = rest.find(']')
+    {
+        let code_str = &rest[..end];
+        let mut tail = &rest[end + 1..];
 
-            let code_u32 = if let Some(hex) = code_str
-                .strip_prefix("0x")
-                .or_else(|| code_str.strip_prefix("0X"))
-            {
-                u32::from_str_radix(hex, 16).ok()?
-            } else {
-                u32::from_str(code_str).ok()?
-            };
+        let code_u32 = if let Some(hex) = code_str
+            .strip_prefix("0x")
+            .or_else(|| code_str.strip_prefix("0X"))
+        {
+            u32::from_str_radix(hex, 16).ok()?
+        } else {
+            u32::from_str(code_str).ok()?
+        };
 
-            let mut device: Option<usize> = None;
-            let mut uuid: Option<[u8; 16]> = None;
+        let mut device: Option<usize> = None;
+        let mut uuid: Option<[u8; 16]> = None;
 
-            // Parse optional @device and #uuid, in any order.
-            loop {
-                if let Some(rest2) = tail.strip_prefix('@') {
-                    let mut digits = String::new();
-                    for ch in rest2.chars() {
-                        if ch.is_ascii_digit() {
-                            digits.push(ch);
-                        } else {
-                            break;
-                        }
-                    }
-                    if digits.is_empty() {
+        // Parse optional @device and #uuid, in any order.
+        loop {
+            if let Some(rest2) = tail.strip_prefix('@') {
+                let mut digits = String::new();
+                for ch in rest2.chars() {
+                    if ch.is_ascii_digit() {
+                        digits.push(ch);
+                    } else {
                         break;
                     }
-                    if let Ok(dev_idx) = usize::from_str(&digits) {
-                        device = Some(dev_idx);
-                    }
-                    tail = &rest2[digits.len()..];
-                    continue;
                 }
+                if digits.is_empty() {
+                    break;
+                }
+                if let Ok(dev_idx) = usize::from_str(&digits) {
+                    device = Some(dev_idx);
+                }
+                tail = &rest2[digits.len()..];
+                continue;
+            }
 
-                if let Some(rest2) = tail.strip_prefix('#') {
-                    let mut hex_digits = String::new();
-                    for ch in rest2.chars() {
-                        if ch.is_ascii_hexdigit() {
-                            hex_digits.push(ch);
+            if let Some(rest2) = tail.strip_prefix('#') {
+                let mut hex_digits = String::new();
+                for ch in rest2.chars() {
+                    if ch.is_ascii_hexdigit() {
+                        hex_digits.push(ch);
+                    } else {
+                        break;
+                    }
+                }
+                if hex_digits.len() == 32 {
+                    let mut bytes = [0u8; 16];
+                    let mut ok = true;
+                    for i in 0..16 {
+                        let start = i * 2;
+                        let end = start + 2;
+                        if let Ok(b) = u8::from_str_radix(&hex_digits[start..end], 16) {
+                            bytes[i] = b
                         } else {
+                            ok = false;
                             break;
                         }
                     }
-                    if hex_digits.len() == 32 {
-                        let mut bytes = [0u8; 16];
-                        let mut ok = true;
-                        for i in 0..16 {
-                            let start = i * 2;
-                            let end = start + 2;
-                            if let Ok(b) = u8::from_str_radix(&hex_digits[start..end], 16) { bytes[i] = b } else {
-                                ok = false;
-                                break;
-                            }
-                        }
-                        if ok {
-                            uuid = Some(bytes);
-                        }
+                    if ok {
+                        uuid = Some(bytes);
                     }
-                    tail = &rest2[hex_digits.len()..];
-                    continue;
                 }
-
-                break;
+                tail = &rest2[hex_digits.len()..];
+                continue;
             }
 
-            return Some(InputBinding::GamepadCode(GamepadCodeBinding {
-                code_u32,
-                device,
-                uuid,
-            }));
+            break;
         }
+
+        return Some(InputBinding::GamepadCode(GamepadCodeBinding {
+            code_u32,
+            device,
+            uuid,
+        }));
+    }
 
     // Gamepad (any pad): PadDir::Up
     if let Some(rest) = t.strip_prefix("PadDir::") {
@@ -978,9 +988,10 @@ pub fn update_keymap_binding_unique_keyboard(
             for (slot_idx, b) in bindings.iter().enumerate() {
                 if slot_idx >= 1
                     && let InputBinding::Key(code) = b
-                        && *code == keycode {
-                            continue;
-                        }
+                    && *code == keycode
+                {
+                    continue;
+                }
                 filtered.push(*b);
             }
             bindings = filtered;

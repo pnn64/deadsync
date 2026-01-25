@@ -636,7 +636,12 @@ pub fn create_texture(
 
 #[inline(always)]
 const unsafe fn bytes_of<T>(v: &T) -> &[u8] {
-    unsafe { std::slice::from_raw_parts(std::ptr::from_ref::<T>(v) as *const u8, std::mem::size_of::<T>()) }
+    unsafe {
+        std::slice::from_raw_parts(
+            std::ptr::from_ref::<T>(v) as *const u8,
+            std::mem::size_of::<T>(),
+        )
+    }
 }
 
 pub fn draw(

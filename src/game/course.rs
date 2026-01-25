@@ -3,7 +3,8 @@ use std::sync::Mutex;
 
 pub type CourseData = (PathBuf, rssp::course::CourseFile);
 
-static COURSE_CACHE: std::sync::LazyLock<Mutex<Vec<CourseData>>> = std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
+static COURSE_CACHE: std::sync::LazyLock<Mutex<Vec<CourseData>>> =
+    std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
 
 pub fn get_course_cache() -> std::sync::MutexGuard<'static, Vec<CourseData>> {
     COURSE_CACHE.lock().unwrap()

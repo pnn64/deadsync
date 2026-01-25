@@ -120,7 +120,8 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
 
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font("wendy_screenevaluation", |f| {
-            let digit_w = (font::measure_line_width_logical(f, "0", all_fonts) as f32) * numbers_zoom_x;
+            let digit_w =
+                (font::measure_line_width_logical(f, "0", all_fonts) as f32) * numbers_zoom_x;
             if digit_w <= 0.0 {
                 return;
             }
@@ -160,7 +161,8 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                         (miss_color, dim_miss, wc.miss),
                     ];
                     for (row_i, (bright, dim, count)) in rows.iter().enumerate() {
-                        let y = group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
+                        let y =
+                            group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
                         let s = format!("{:0width$}", count, width = digits);
                         let first_nonzero = s.find(|c: char| c != '0').unwrap_or(s.len());
 
@@ -227,7 +229,8 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                             4 => dim_wayoff,
                             _ => dim_miss,
                         };
-                        let y = group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
+                        let y =
+                            group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
                         let s = format!("{:0width$}", count, width = digits);
                         let first_nonzero = s.find(|c: char| c != '0').unwrap_or(s.len());
 
@@ -380,63 +383,65 @@ pub fn build_double_step_stats(
         asset_manager.with_fonts(|all_fonts| {
             asset_manager.with_font("wendy_screenevaluation", |f| {
                 let numbers_zoom = base_zoom * 0.5;
-                let digit_w = (font::measure_line_width_logical(f, "0", all_fonts) as f32) * numbers_zoom;
+                let digit_w =
+                    (font::measure_line_width_logical(f, "0", all_fonts) as f32) * numbers_zoom;
                 if digit_w <= 0.0 {
                     return;
                 }
                 let block_w = digit_w * digits as f32;
                 let numbers_left_x = origin_x + (1.4 * block_w);
-                let label_x = origin_x + ((80.0 + (digits.saturating_sub(4) as f32 * 16.0)) * base_zoom);
+                let label_x =
+                    origin_x + ((80.0 + (digits.saturating_sub(4) as f32 * 16.0)) * base_zoom);
                 let label_zoom = base_zoom * 0.833;
 
                 let rows: Vec<(&str, [f32; 4], [f32; 4], u32)> = if !show_fa_plus_window {
                     JUDGMENT_ORDER
                         .iter()
-	                        .enumerate()
-	                        .map(|(i, grade)| {
-	                            let info = JUDGMENT_INFO.get(grade).unwrap();
-	                            let count = *state.players[0].judgment_counts.get(grade).unwrap_or(&0);
-	                            let bright = info.color;
-	                            let dim = color::JUDGMENT_DIM_RGBA[i];
-	                            (info.label, bright, dim, count)
-	                        })
-	                        .collect()
-	                } else {
+                        .enumerate()
+                        .map(|(i, grade)| {
+                            let info = JUDGMENT_INFO.get(grade).unwrap();
+                            let count = *state.players[0].judgment_counts.get(grade).unwrap_or(&0);
+                            let bright = info.color;
+                            let dim = color::JUDGMENT_DIM_RGBA[i];
+                            (info.label, bright, dim, count)
+                        })
+                        .collect()
+                } else {
                     let wc = timing_stats::compute_window_counts(&state.notes);
-	                    let fantastic_color = JUDGMENT_INFO
-	                        .get(&JudgeGrade::Fantastic)
-	                        .map(|info| info.color)
-	                        .unwrap_or_else(|| color::JUDGMENT_RGBA[0]);
-	                    let excellent_color = JUDGMENT_INFO
-	                        .get(&JudgeGrade::Excellent)
-	                        .map(|info| info.color)
-	                        .unwrap_or_else(|| color::JUDGMENT_RGBA[1]);
-	                    let great_color = JUDGMENT_INFO
-	                        .get(&JudgeGrade::Great)
-	                        .map(|info| info.color)
-	                        .unwrap_or_else(|| color::JUDGMENT_RGBA[2]);
-	                    let decent_color = JUDGMENT_INFO
-	                        .get(&JudgeGrade::Decent)
-	                        .map(|info| info.color)
-	                        .unwrap_or_else(|| color::JUDGMENT_RGBA[3]);
-	                    let wayoff_color = JUDGMENT_INFO
-	                        .get(&JudgeGrade::WayOff)
-	                        .map(|info| info.color)
-	                        .unwrap_or_else(|| color::JUDGMENT_RGBA[4]);
-	                    let miss_color = JUDGMENT_INFO
-	                        .get(&JudgeGrade::Miss)
-	                        .map(|info| info.color)
-	                        .unwrap_or_else(|| color::JUDGMENT_RGBA[5]);
+                    let fantastic_color = JUDGMENT_INFO
+                        .get(&JudgeGrade::Fantastic)
+                        .map(|info| info.color)
+                        .unwrap_or_else(|| color::JUDGMENT_RGBA[0]);
+                    let excellent_color = JUDGMENT_INFO
+                        .get(&JudgeGrade::Excellent)
+                        .map(|info| info.color)
+                        .unwrap_or_else(|| color::JUDGMENT_RGBA[1]);
+                    let great_color = JUDGMENT_INFO
+                        .get(&JudgeGrade::Great)
+                        .map(|info| info.color)
+                        .unwrap_or_else(|| color::JUDGMENT_RGBA[2]);
+                    let decent_color = JUDGMENT_INFO
+                        .get(&JudgeGrade::Decent)
+                        .map(|info| info.color)
+                        .unwrap_or_else(|| color::JUDGMENT_RGBA[3]);
+                    let wayoff_color = JUDGMENT_INFO
+                        .get(&JudgeGrade::WayOff)
+                        .map(|info| info.color)
+                        .unwrap_or_else(|| color::JUDGMENT_RGBA[4]);
+                    let miss_color = JUDGMENT_INFO
+                        .get(&JudgeGrade::Miss)
+                        .map(|info| info.color)
+                        .unwrap_or_else(|| color::JUDGMENT_RGBA[5]);
 
-	                    let dim_fantastic = color::JUDGMENT_DIM_RGBA[0];
-	                    let dim_excellent = color::JUDGMENT_DIM_RGBA[1];
-	                    let dim_great = color::JUDGMENT_DIM_RGBA[2];
-	                    let dim_decent = color::JUDGMENT_DIM_RGBA[3];
-	                    let dim_wayoff = color::JUDGMENT_DIM_RGBA[4];
-	                    let dim_miss = color::JUDGMENT_DIM_RGBA[5];
-	                    let dim_white_fa = color::JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA;
+                    let dim_fantastic = color::JUDGMENT_DIM_RGBA[0];
+                    let dim_excellent = color::JUDGMENT_DIM_RGBA[1];
+                    let dim_great = color::JUDGMENT_DIM_RGBA[2];
+                    let dim_decent = color::JUDGMENT_DIM_RGBA[3];
+                    let dim_wayoff = color::JUDGMENT_DIM_RGBA[4];
+                    let dim_miss = color::JUDGMENT_DIM_RGBA[5];
+                    let dim_white_fa = color::JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA;
 
-	                    let white_fa_color = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
+                    let white_fa_color = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
 
                     vec![
                         ("FANTASTIC", fantastic_color, dim_fantastic, wc.w0),
@@ -458,7 +463,11 @@ pub fn build_double_step_stats(
                     let first_nonzero = s.find(|c: char| c != '0').unwrap_or(s.len());
 
                     for (i, ch) in s.chars().enumerate() {
-                        let is_dim = if *count == 0 { i < digits.saturating_sub(1) } else { i < first_nonzero };
+                        let is_dim = if *count == 0 {
+                            i < digits.saturating_sub(1)
+                        } else {
+                            i < first_nonzero
+                        };
                         let c = if is_dim { *dim } else { *bright };
                         let x = numbers_left_x + (i as f32) * digit_w;
                         actors.push(act!(text:
@@ -515,7 +524,11 @@ pub fn build_double_step_stats(
         } else {
             1.0
         };
-        let total_display_seconds = if rate != 0.0 { base_total / rate } else { base_total };
+        let total_display_seconds = if rate != 0.0 {
+            base_total / rate
+        } else {
+            base_total
+        };
         let elapsed_display_seconds = if rate != 0.0 {
             state.current_music_time.max(0.0) / rate
         } else {
@@ -524,7 +537,11 @@ pub fn build_double_step_stats(
 
         let total_time_str = format_game_time(total_display_seconds, total_display_seconds);
         let remaining_display_seconds = if let Some(fail_time) = state.players[0].fail_time {
-            let fail_disp = if rate != 0.0 { fail_time.max(0.0) / rate } else { fail_time.max(0.0) };
+            let fail_disp = if rate != 0.0 {
+                fail_time.max(0.0) / rate
+            } else {
+                fail_time.max(0.0)
+            };
             (total_display_seconds - fail_disp).max(0.0)
         } else {
             (total_display_seconds - elapsed_display_seconds).max(0.0)
@@ -796,8 +813,9 @@ fn build_holds_mines_rolls_pane_at(
                 let possible_str = format!("{:0width$}", *total as usize, width = digits_to_fmt);
                 let achieved_str = format!("{:0width$}", *achieved as usize, width = digits_to_fmt);
 
-                let first_nonzero_possible =
-                    possible_str.find(|c: char| c != '0').unwrap_or(possible_str.len());
+                let first_nonzero_possible = possible_str
+                    .find(|c: char| c != '0')
+                    .unwrap_or(possible_str.len());
                 for (char_idx, ch) in possible_str.chars().rev().enumerate() {
                     let is_dim = if *total == 0 {
                         char_idx > 0
@@ -823,8 +841,9 @@ fn build_holds_mines_rolls_pane_at(
                 cursor_x -= slash_width;
 
                 let achieved_block_right_x = cursor_x;
-                let first_nonzero_achieved =
-                    achieved_str.find(|c: char| c != '0').unwrap_or(achieved_str.len());
+                let first_nonzero_achieved = achieved_str
+                    .find(|c: char| c != '0')
+                    .unwrap_or(achieved_str.len());
                 for (char_idx, ch) in achieved_str.chars().rev().enumerate() {
                     let is_dim = if *achieved == 0 {
                         char_idx > 0

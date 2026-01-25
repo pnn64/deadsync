@@ -80,7 +80,11 @@ fn mine_fill_state(colors: &[[f32; 4]], beat: f32) -> Option<MineFillState> {
     Some(MineFillState { layers })
 }
 
-pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacement) -> (Vec<Actor>, f32) {
+pub fn build(
+    state: &State,
+    profile: &profile::Profile,
+    placement: FieldPlacement,
+) -> (Vec<Actor>, f32) {
     let mut actors = Vec::new();
     let hold_judgment_texture: Option<&str> = match profile.hold_judgment_graphic {
         profile::HoldJudgmentGraphic::Love => Some("hold_judgements/Love 1x2 (doubleres).png"),
@@ -207,8 +211,8 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
             }
             ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                 let curr_disp = timing.get_displayed_beat(state.current_beat_visible[player_idx]);
-                let speed_multiplier =
-                    timing.get_speed_multiplier(state.current_beat_visible[player_idx], current_time);
+                let speed_multiplier = timing
+                    .get_speed_multiplier(state.current_beat_visible[player_idx], current_time);
                 let player_multiplier =
                     scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
                 let final_multiplier = player_multiplier * speed_multiplier;
@@ -264,7 +268,8 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 1.0
             };
             let receptor_slot = &ns.receptor_off[i];
-            let receptor_frame = receptor_slot.frame_index(state.total_elapsed_in_screen, current_beat);
+            let receptor_frame =
+                receptor_slot.frame_index(state.total_elapsed_in_screen, current_beat);
             let receptor_uv = receptor_slot.uv_for_frame(receptor_frame);
             let receptor_size = scale_sprite(receptor_slot.size());
             let receptor_color = ns.receptor_pulse.color_for_beat(current_beat);
@@ -435,8 +440,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
         // Only consider notes that are currently in or near the lookahead window.
         let notes_len = state.notes.len();
         let (note_start, note_end) = state.note_ranges[player_idx];
-        let min_visible_index = state
-            .arrows[col_start..col_end]
+        let min_visible_index = state.arrows[col_start..col_end]
             .iter()
             .filter_map(|v| v.first())
             .map(|a| a.note_index)
@@ -713,7 +717,8 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                             visible_bottom_distance / segment_height + phase_offset;
                         let mut emitted = 0;
 
-                        while phase + SEGMENT_PHASE_EPS < phase_end_adjusted && emitted < max_segments
+                        while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
+                            && emitted < max_segments
                         {
                             let mut next_phase = (phase.floor() + 1.0).min(phase_end_adjusted);
                             if next_phase - phase < SEGMENT_PHASE_EPS {
@@ -745,7 +750,8 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                             let segment_size_eff = segment_bottom_eff - segment_top_eff;
                             let portion = (segment_size_eff / segment_height).clamp(0.0, 1.0);
 
-                            let is_last_segment = (eff_body_bottom - segment_bottom_eff).abs() <= 0.5
+                            let is_last_segment = (eff_body_bottom - segment_bottom_eff).abs()
+                                <= 0.5
                                 || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
 
                             if is_last_segment {
@@ -953,16 +959,15 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                     }
                 };
                 let delta = (y_pos - receptor_y_lane) * dir;
-                if delta < -state.draw_distance_after_targets || delta > state.draw_distance_before_targets {
+                if delta < -state.draw_distance_after_targets
+                    || delta > state.draw_distance_before_targets
+                {
                     continue;
                 }
                 let col_x_offset = ns.column_xs[col_idx] as f32 * field_zoom;
                 if matches!(arrow.note_type, NoteType::Mine) {
                     let fill_slot = ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
-                    let frame_slot = ns
-                        .mine_frames
-                        .get(col_idx)
-                        .and_then(|slot| slot.as_ref());
+                    let frame_slot = ns.mine_frames.get(col_idx).and_then(|slot| slot.as_ref());
                     if fill_slot.is_none() && frame_slot.is_none() {
                         continue;
                     }
@@ -1129,7 +1134,8 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 ComboMilestoneKind::Thousand => {
                     let elapsed = milestone.elapsed;
                     if elapsed <= COMBO_THOUSAND_MILESTONE_DURATION {
-                        let progress = (elapsed / COMBO_THOUSAND_MILESTONE_DURATION).clamp(0.0, 1.0);
+                        let progress =
+                            (elapsed / COMBO_THOUSAND_MILESTONE_DURATION).clamp(0.0, 1.0);
                         let zoom = 0.25 + (3.0 - 0.25) * progress;
                         let alpha = (0.7 * (1.0 - progress)).max(0.0);
                         let x_offset = 100.0 * progress;
@@ -1308,7 +1314,9 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                     profile::JudgmentGraphic::WendyChroma => {
                         "judgements/Wendy Chroma 2x7 (doubleres).png"
                     }
-                    profile::JudgmentGraphic::None => unreachable!("JudgmentGraphic::None is filtered above"),
+                    profile::JudgmentGraphic::None => {
+                        unreachable!("JudgmentGraphic::None is filtered above")
+                    }
                 };
                 let judgment_y = if is_centered {
                     receptor_y_centered + 95.0
@@ -1359,9 +1367,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 // appears just above the receptors instead of near screen center.
                 receptor_y_lane - HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR
             };
-            let column_offset = state
-                .noteskin
-                [player_idx]
+            let column_offset = state.noteskin[player_idx]
                 .as_ref()
                 .and_then(|ns| ns.column_xs.get(i))
                 .map(|&x| x as f32)

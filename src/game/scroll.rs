@@ -75,9 +75,7 @@ impl FromStr for ScrollSpeedSetting {
             .map_err(|_| format!("ScrollSpeed '{trimmed}' is not a valid number"))?;
 
         if value <= 0.0 {
-            return Err(format!(
-                "ScrollSpeed '{trimmed}' must be greater than zero"
-            ));
+            return Err(format!("ScrollSpeed '{trimmed}' must be greater than zero"));
         }
 
         match variant {

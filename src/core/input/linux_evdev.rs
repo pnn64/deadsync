@@ -1,4 +1,4 @@
-use super::{PadDir, uuid_from_bytes, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId};
+use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
 use std::collections::HashSet;
 use std::ffi::c_void;
 use std::fs;
@@ -96,10 +96,7 @@ fn wanted_event_nodes() -> HashSet<String> {
     out
 }
 
-pub fn run(
-    mut emit_pad: impl FnMut(PadEvent),
-    mut emit_sys: impl FnMut(GpSystemEvent),
-) {
+pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystemEvent)) {
     let mut devs: Vec<Dev> = Vec::new();
 
     let wanted = wanted_event_nodes();

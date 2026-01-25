@@ -1,6 +1,6 @@
 use crate::act;
 use crate::core::input::{InputEvent, PadEvent, VirtualAction, get_keymap};
-use crate::core::space::{screen_width, screen_height, screen_center_x, screen_center_y};
+use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
@@ -117,7 +117,12 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 /* ------------------------------- input -------------------------------- */
 
 const fn player_from_action(act: VirtualAction) -> Option<PlayerSlot> {
-    use VirtualAction::{p1_up, p1_down, p1_left, p1_right, p1_menu_up, p1_menu_down, p1_menu_left, p1_menu_right, p1_start, p1_select, p1_back, p1_operator, p1_restart, p2_up, p2_down, p2_left, p2_right, p2_menu_up, p2_menu_down, p2_menu_left, p2_menu_right, p2_start, p2_select, p2_back, p2_operator, p2_restart};
+    use VirtualAction::{
+        p1_back, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
+        p1_operator, p1_restart, p1_right, p1_select, p1_start, p1_up, p2_back, p2_down, p2_left,
+        p2_menu_down, p2_menu_left, p2_menu_right, p2_menu_up, p2_operator, p2_restart, p2_right,
+        p2_select, p2_start, p2_up,
+    };
     match act {
         p1_up | p1_down | p1_left | p1_right | p1_menu_up | p1_menu_down | p1_menu_left
         | p1_menu_right | p1_start | p1_select | p1_back | p1_operator | p1_restart => {
@@ -131,7 +136,10 @@ const fn player_from_action(act: VirtualAction) -> Option<PlayerSlot> {
 }
 
 const fn logical_button_from_action(act: VirtualAction) -> Option<LogicalButton> {
-    use VirtualAction::{p1_up, p2_up, p1_down, p2_down, p1_left, p2_left, p1_right, p2_right, p1_menu_left, p2_menu_left, p1_menu_right, p2_menu_right, p1_start, p2_start, p1_select, p2_select};
+    use VirtualAction::{
+        p1_down, p1_left, p1_menu_left, p1_menu_right, p1_right, p1_select, p1_start, p1_up,
+        p2_down, p2_left, p2_menu_left, p2_menu_right, p2_right, p2_select, p2_start, p2_up,
+    };
     match act {
         p1_up | p2_up => Some(LogicalButton::Up),
         p1_down | p2_down => Some(LogicalButton::Down),
@@ -161,12 +169,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     // Update pad highlight state from virtual actions (for mapped inputs).
     if let Some(player) = player_from_action(ev.action)
-        && let Some(btn) = logical_button_from_action(ev.action) {
-            state
-                .pad_visual
-                .buttons_held
-                .insert((player, btn), ev.pressed);
-        }
+        && let Some(btn) = logical_button_from_action(ev.action)
+    {
+        state
+            .pad_visual
+            .buttons_held
+            .insert((player, btn), ev.pressed);
+    }
 
     ScreenAction::None
 }
@@ -177,15 +186,14 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 
     // Determine a stable, human-readable label for this device element.
     let (label, pressed_opt) = match pad_event {
-        PE::Dir { id, dir, pressed, .. } => {
+        PE::Dir {
+            id, dir, pressed, ..
+        } => {
             let dev = usize::from(*id);
             (format!("Gamepad {dev}: Dir::{dir:?}"), Some(*pressed))
         }
         PE::RawButton {
-            id,
-            code,
-            pressed,
-            ..
+            id, code, pressed, ..
         } => {
             let dev = usize::from(*id);
             let code_u32 = code.into_u32();
@@ -195,10 +203,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             )
         }
         PE::RawAxis {
-            id,
-            code,
-            value,
-            ..
+            id, code, value, ..
         } => {
             let dev = usize::from(*id);
             let code_u32 = code.into_u32();

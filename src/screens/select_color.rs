@@ -1,5 +1,5 @@
 use crate::act;
-use crate::core::space::{screen_width, screen_height, screen_center_x, screen_center_y};
+use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 // Screen navigation handled in app.rs
 use crate::ui::actors::Actor;
@@ -210,12 +210,26 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let p2_guest = profile::is_session_side_guest(profile::PlayerSide::P2);
 
     let (footer_left, left_avatar) = if p1_joined {
-        (Some(if p1_guest { "INSERT CARD" } else { p1_profile.display_name.as_str() }), if p1_guest { None } else { p1_avatar })
+        (
+            Some(if p1_guest {
+                "INSERT CARD"
+            } else {
+                p1_profile.display_name.as_str()
+            }),
+            if p1_guest { None } else { p1_avatar },
+        )
     } else {
         (Some("PRESS START"), None)
     };
     let (footer_right, right_avatar) = if p2_joined {
-        (Some(if p2_guest { "INSERT CARD" } else { p2_profile.display_name.as_str() }), if p2_guest { None } else { p2_avatar })
+        (
+            Some(if p2_guest {
+                "INSERT CARD"
+            } else {
+                p2_profile.display_name.as_str()
+            }),
+            if p2_guest { None } else { p2_avatar },
+        )
     } else {
         (Some("PRESS START"), None)
     };
@@ -275,7 +289,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             file!(),
             line!(),
             column!(),
-            if wide { 0x53434F4C45584954u64 } else { 0x53434F4C45584954u64 ^ 1 }, // "SCOLEXIT"
+            if wide {
+                0x53434F4C45584954u64
+            } else {
+                0x53434F4C45584954u64 ^ 1
+            }, // "SCOLEXIT"
         );
         runtime::materialize(sid, init, steps).x.max(0.0)
     }

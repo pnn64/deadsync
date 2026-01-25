@@ -11,7 +11,9 @@ static GLOBAL_T0: OnceLock<Instant> = OnceLock::new();
 // ---- Constants ----
 const COLOR_ADD: [i32; 10] = [-1, 0, 0, -1, -1, -1, 0, 0, 0, 0];
 const DIFFUSE_ALPHA: [f32; 10] = [0.05, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1];
-const XY: [f32; 10] = [0.0, 40.0, 80.0, 120.0, 200.0, 280.0, 360.0, 400.0, 480.0, 560.0];
+const XY: [f32; 10] = [
+    0.0, 40.0, 80.0, 120.0, 200.0, 280.0, 360.0, 400.0, 480.0, 560.0,
+];
 
 // UV velocities (screen px/sec scale)
 const UV_VEL: [[f32; 2]; 10] = [

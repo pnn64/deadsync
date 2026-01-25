@@ -89,7 +89,8 @@ struct GradeCacheState {
     cache: HashMap<String, CachedScore>,
 }
 
-static GRADE_CACHE: std::sync::LazyLock<Mutex<GradeCacheState>> = std::sync::LazyLock::new(|| Mutex::new(GradeCacheState::default()));
+static GRADE_CACHE: std::sync::LazyLock<Mutex<GradeCacheState>> =
+    std::sync::LazyLock::new(|| Mutex::new(GradeCacheState::default()));
 
 fn gs_scores_dir_for_profile(profile_id: &str) -> PathBuf {
     PathBuf::from("save/profiles")
@@ -125,12 +126,7 @@ fn ensure_score_cache_loaded() {
 
 pub fn get_cached_score(chart_hash: &str) -> Option<CachedScore> {
     ensure_score_cache_loaded();
-    GRADE_CACHE
-        .lock()
-        .unwrap()
-        .cache
-        .get(chart_hash)
-        .copied()
+    GRADE_CACHE.lock().unwrap().cache.get(chart_hash).copied()
 }
 
 pub fn set_cached_score(chart_hash: String, score: CachedScore) {
@@ -375,15 +371,11 @@ fn append_gs_score_on_disk(chart_hash: &str, score: CachedScore, username: &str)
             if let Err(e) = fs::write(&path, buf) {
                 warn!("Failed to write GrooveStats score file {path:?}: {e}");
             } else {
-                info!(
-                    "Stored GrooveStats score on disk for chart {chart_hash} at {path:?}"
-                );
+                info!("Stored GrooveStats score on disk for chart {chart_hash} at {path:?}");
             }
         }
         Err(e) => {
-            warn!(
-                "Failed to encode GrooveStats score for chart {chart_hash}: {e}"
-            );
+            warn!("Failed to encode GrooveStats score for chart {chart_hash}: {e}");
         }
     }
 }
@@ -496,7 +488,9 @@ fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Op
         return Some(1);
     }
 
-    let comment = if let Some(c) = comment { c } else {
+    let comment = if let Some(c) = comment {
+        c
+    } else {
         info!(
             "GrooveStats lamp: hash={} score={:.4}% -> no lamp (no GrooveStats comment available)",
             chart_hash,
@@ -511,7 +505,9 @@ fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Op
         return None;
     }
 
-    let stats = if let Some(s) = find_chart_stats_for_hash(chart_hash) { s } else {
+    let stats = if let Some(s) = find_chart_stats_for_hash(chart_hash) {
+        s
+    } else {
         info!(
             "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> no lamp (chart stats not found for hash)",
             chart_hash,
@@ -794,8 +790,11 @@ pub fn fetch_and_store_grade(
 
     if let Some(score_data) = player_score {
         let grade = score_to_grade(score_data.score);
-        let lamp_index =
-            compute_lamp_index(score_data.score, score_data.comments.as_deref(), &chart_hash);
+        let lamp_index = compute_lamp_index(
+            score_data.score,
+            score_data.comments.as_deref(),
+            &chart_hash,
+        );
         let lamp_judge_count = compute_lamp_judge_count(lamp_index, score_data.comments.as_deref());
         let cached_score = CachedScore {
             grade,

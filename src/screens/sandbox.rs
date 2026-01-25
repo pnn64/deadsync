@@ -1,6 +1,6 @@
 use crate::act;
 use crate::core::input::{GpSystemEvent, InputEvent, PadEvent, VirtualAction};
-use crate::core::space::{screen_width, screen_height, screen_center_x};
+use crate::core::space::{screen_center_x, screen_height, screen_width};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
@@ -92,7 +92,9 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     if pressed {
         // Include controller ID in the display for clarity when multiple are connected.
         let pad_str = match pad_event {
-            PadEvent::Dir { id, dir, pressed, .. } => {
+            PadEvent::Dir {
+                id, dir, pressed, ..
+            } => {
                 format!(
                     "Gamepad {}: Dir {{ dir: {:?}, pressed: {} }}",
                     usize::from(*id),

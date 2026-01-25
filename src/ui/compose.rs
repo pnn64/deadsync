@@ -933,18 +933,16 @@ fn layout_text<'a>(
     let line_padding = font.line_spacing - font.height;
 
     #[inline(always)]
-    fn start_x_logical(
-        align: actors::TextAlign,
-        block_w_logical: f32,
-        line_w_logical: f32,
-    ) -> i32 {
+    fn start_x_logical(align: actors::TextAlign, block_w_logical: f32, line_w_logical: f32) -> i32 {
         let align_value = match align {
             actors::TextAlign::Left => 0.0,
             actors::TextAlign::Center => 0.5,
             actors::TextAlign::Right => 1.0,
         };
-        let start =
-            (-0.5f32).mul_add(block_w_logical, align_value * (block_w_logical - line_w_logical));
+        let start = (-0.5f32).mul_add(
+            block_w_logical,
+            align_value * (block_w_logical - line_w_logical),
+        );
         lrint_ties_even(start) as i32
     }
 
@@ -991,10 +989,8 @@ fn layout_text<'a>(
                 // c2 = [0, 0, 1, 0]
                 // c3 = [tx, ty, 0, 1]
                 let transform = Matrix4::new(
-                    quad_w, 0.0, 0.0, 0.0,
-                    0.0, quad_h, 0.0, 0.0,
-                    0.0, 0.0, 1.0, 0.0,
-                    center_x, center_y, 0.0, 1.0,
+                    quad_w, 0.0, 0.0, 0.0, 0.0, quad_h, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, center_x,
+                    center_y, 0.0, 1.0,
                 );
 
                 // Inline atlas_dims with linear scan
@@ -1093,7 +1089,9 @@ fn clip_objects_to_world_rect(objects: &mut Vec<RenderObject<'_>>, clip: WorldRe
 
 fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect) -> bool {
     let renderer::ObjectType::Sprite {
-        uv_scale, uv_offset, ..
+        uv_scale,
+        uv_offset,
+        ..
     } = &mut obj.object_type;
 
     let eps = 1e-6;

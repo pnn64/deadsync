@@ -1,6 +1,6 @@
 use crate::act;
 use crate::core::space::widescale;
-use crate::core::space::{screen_width, screen_center_x, screen_height, screen_center_y};
+use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::scores;
 use crate::screens::select_music::MusicWheelEntry;
 use crate::ui::actors::{Actor, SizeSpec};
@@ -119,9 +119,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
         * 2.0;
     let anim_t = f32::midpoint(anim_t_unscaled.sin(), 1.0);
 
-    let lamp_pulse_t_unscaled = (p.selection_animation_timer / LAMP_PULSE_PERIOD)
-        * std::f32::consts::PI
-        * 2.0;
+    let lamp_pulse_t_unscaled =
+        (p.selection_animation_timer / LAMP_PULSE_PERIOD) * std::f32::consts::PI * 2.0;
     let lamp_pulse_t = f32::midpoint(lamp_pulse_t_unscaled.sin(), 1.0);
 
     let num_entries = p.entries.len();
@@ -129,8 +128,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     if num_entries > 0 {
         for i_slot in 0..NUM_WHEEL_SLOTS {
             let offset_from_center = i_slot as isize - CENTER_WHEEL_SLOT_INDEX as isize;
-            let offset_from_center_f =
-                offset_from_center as f32 + p.position_offset_from_selection;
+            let offset_from_center_f = offset_from_center as f32 + p.position_offset_from_selection;
             if offset_from_center_f.abs() > WHEEL_DRAW_RADIUS {
                 continue;
             }
@@ -318,79 +316,77 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     };
 
                     if let Some(chart) = chart
-                        && let Some(cached_score) = scores::get_cached_score(&chart.short_hash) {
-                            let has_score = cached_score.grade != scores::Grade::Failed
-                                || cached_score.score_percent > 0.0;
-                            if has_score {
-                                if let Actor::Sprite { visible, cell, .. } = &mut grade_actor {
-                                    *visible = true;
-                                    *cell = Some((cached_score.grade.to_sprite_state(), u32::MAX));
-                                }
+                        && let Some(cached_score) = scores::get_cached_score(&chart.short_hash)
+                    {
+                        let has_score = cached_score.grade != scores::Grade::Failed
+                            || cached_score.score_percent > 0.0;
+                        if has_score {
+                            if let Actor::Sprite { visible, cell, .. } = &mut grade_actor {
+                                *visible = true;
+                                *cell = Some((cached_score.grade.to_sprite_state(), u32::MAX));
+                            }
 
-                                // Position and size mirror Simply Love/zmod's lamp quad.
-                                let lamp_x = grade_x - widescale(13.0, 20.0);
-                                let lamp_w = widescale(5.0, 6.0);
-                                let lamp_h = 31.0;
+                            // Position and size mirror Simply Love/zmod's lamp quad.
+                            let lamp_x = grade_x - widescale(13.0, 20.0);
+                            let lamp_w = widescale(5.0, 6.0);
+                            let lamp_h = 31.0;
 
-                                // zmod: show a clear/fail lamp if no StageAward-like lamp exists.
-                                // In deadsync today, that means:
-                                // - `lamp_index=Some(..)` => FC lamp tier (pulse)
-                                // - `lamp_index=None`     => clear lamp (solid) for any non-FC score
-                                // - `grade=Failed`        => fail lamp (solid) if a real fail score exists
-                                let (lamp_color, lamp_pulsing, lamp_index) =
-                                    match cached_score.lamp_index {
-                                        Some(0) => (col_quint_lamp(), true, Some(0u8)),
-	                                        Some(idx @ 1..=4) => {
-	                                            let color_index = (idx - 1) as usize;
-	                                            let base = color::JUDGMENT_RGBA[color_index.min(5)];
-	                                            (base, true, Some(idx))
-	                                        }
-                                        Some(_) => (col_clear_lamp(), false, None),
-                                        None if cached_score.grade == scores::Grade::Failed => {
-                                            (col_fail_lamp(), false, None)
-                                        }
-                                        None => (col_clear_lamp(), false, None),
-                                    };
-
-                                let lamp_color_final = if lamp_pulsing {
-                                    let lamp_color2 = lerp_color(
-                                        [1.0; 4],
-                                        lamp_color,
-                                        LAMP_PULSE_LERP_TO_WHITE,
-                                    );
-                                    lerp_color(lamp_color, lamp_color2, lamp_pulse_t)
-                                } else {
-                                    lamp_color
+                            // zmod: show a clear/fail lamp if no StageAward-like lamp exists.
+                            // In deadsync today, that means:
+                            // - `lamp_index=Some(..)` => FC lamp tier (pulse)
+                            // - `lamp_index=None`     => clear lamp (solid) for any non-FC score
+                            // - `grade=Failed`        => fail lamp (solid) if a real fail score exists
+                            let (lamp_color, lamp_pulsing, lamp_index) =
+                                match cached_score.lamp_index {
+                                    Some(0) => (col_quint_lamp(), true, Some(0u8)),
+                                    Some(idx @ 1..=4) => {
+                                        let color_index = (idx - 1) as usize;
+                                        let base = color::JUDGMENT_RGBA[color_index.min(5)];
+                                        (base, true, Some(idx))
+                                    }
+                                    Some(_) => (col_clear_lamp(), false, None),
+                                    None if cached_score.grade == scores::Grade::Failed => {
+                                        (col_fail_lamp(), false, None)
+                                    }
+                                    None => (col_clear_lamp(), false, None),
                                 };
 
-                                lamp_actor = Some(act!(quad:
-                                    align(0.5, 0.5):
-                                    xy(lamp_x, grade_y):
-                                    zoomto(lamp_w, lamp_h):
-                                    diffuse(lamp_color_final[0], lamp_color_final[1], lamp_color_final[2], lamp_color_final[3]):
-                                    z(2)
-                                ));
+                            let lamp_color_final = if lamp_pulsing {
+                                let lamp_color2 =
+                                    lerp_color([1.0; 4], lamp_color, LAMP_PULSE_LERP_TO_WHITE);
+                                lerp_color(lamp_color, lamp_color2, lamp_pulse_t)
+                            } else {
+                                lamp_color
+                            };
 
-                                if let Some(lamp_index) = lamp_index
-                                    && let Some(count) = cached_score.lamp_judge_count
-                                    && count < 10
-                                {
-                                    let judge_x = grade_x - widescale(7.0, 13.0);
-                                    let judge_y = grade_y + 10.0;
-                                    let judge_col = lamp_judge_count_color(lamp_index);
-                                    judge_actor = Some(act!(text:
-                                        font("wendy_screenevaluation"):
-                                        settext(format!("{}", count)):
-                                        align(0.5, 0.5):
-                                        horizalign(center):
-                                        xy(judge_x, judge_y):
-                                        zoom(0.15):
-                                        diffuse(judge_col[0], judge_col[1], judge_col[2], judge_col[3]):
-                                        z(10)
-                                    ));
-                                }
+                            lamp_actor = Some(act!(quad:
+                                align(0.5, 0.5):
+                                xy(lamp_x, grade_y):
+                                zoomto(lamp_w, lamp_h):
+                                diffuse(lamp_color_final[0], lamp_color_final[1], lamp_color_final[2], lamp_color_final[3]):
+                                z(2)
+                            ));
+
+                            if let Some(lamp_index) = lamp_index
+                                && let Some(count) = cached_score.lamp_judge_count
+                                && count < 10
+                            {
+                                let judge_x = grade_x - widescale(7.0, 13.0);
+                                let judge_y = grade_y + 10.0;
+                                let judge_col = lamp_judge_count_color(lamp_index);
+                                judge_actor = Some(act!(text:
+                                    font("wendy_screenevaluation"):
+                                    settext(format!("{}", count)):
+                                    align(0.5, 0.5):
+                                    horizalign(center):
+                                    xy(judge_x, judge_y):
+                                    zoom(0.15):
+                                    diffuse(judge_col[0], judge_col[1], judge_col[2], judge_col[3]):
+                                    z(10)
+                                ));
                             }
                         }
+                    }
                 }
 
                 slot_children.push(grade_actor);
@@ -419,8 +415,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 
         for i_slot in 0..NUM_WHEEL_SLOTS {
             let offset_from_center = i_slot as isize - CENTER_WHEEL_SLOT_INDEX as isize;
-            let offset_from_center_f =
-                offset_from_center as f32 + p.position_offset_from_selection;
+            let offset_from_center_f = offset_from_center as f32 + p.position_offset_from_selection;
             if offset_from_center_f.abs() > WHEEL_DRAW_RADIUS {
                 continue;
             }

@@ -257,11 +257,14 @@ impl GlowEffect {
             return [0.0, 0.0, 0.0, 0.0];
         }
 
-        let percent_between = ((phase + 0.25) * std::f32::consts::TAU).sin().mul_add(0.5, 0.5);
+        let percent_between = ((phase + 0.25) * std::f32::consts::TAU)
+            .sin()
+            .mul_add(0.5, 0.5);
 
         let mut color = [0.0; 4];
         for i in 0..4 {
-            color[i] = self.color1[i].mul_add(percent_between, self.color2[i] * (1.0 - percent_between));
+            color[i] =
+                self.color1[i].mul_add(percent_between, self.color2[i] * (1.0 - percent_between));
         }
         color[3] *= base_alpha;
         color
@@ -355,8 +358,8 @@ impl ExplosionAnimation {
             if let Some(target_color) = segment.end_color {
                 let mut interpolated = current.color;
                 for i in 0..4 {
-                    interpolated[i] =
-                        (target_color[i] - segment.start.color[i]).mul_add(eased, segment.start.color[i]);
+                    interpolated[i] = (target_color[i] - segment.start.color[i])
+                        .mul_add(eased, segment.start.color[i]);
                 }
                 color = interpolated;
             }
@@ -477,7 +480,8 @@ impl ReceptorPulse {
 
         let mut color = [0.0; 4];
         for i in 0..4 {
-            color[i] = self.effect_color1[i].mul_add(percent, self.effect_color2[i] * (1.0 - percent));
+            color[i] =
+                self.effect_color1[i].mul_add(percent, self.effect_color2[i] * (1.0 - percent));
         }
         color
     }
@@ -530,9 +534,7 @@ fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
     let mut sample_height = height as u32;
 
     if src_x >= image.width() || src_y >= image.height() {
-        warn!(
-            "Mine fill region ({src_x}, {src_y}) is outside of texture {texture_key}"
-        );
+        warn!("Mine fill region ({src_x}, {src_y}) is outside of texture {texture_key}");
         return None;
     }
 
@@ -544,9 +546,7 @@ fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
     }
 
     if sample_width == 0 || sample_height == 0 {
-        warn!(
-            "Mine fill region has zero sample size for texture {texture_key}"
-        );
+        warn!("Mine fill region has zero sample size for texture {texture_key}");
         return None;
     }
 
@@ -756,9 +756,7 @@ impl NoteskinBuilder {
                     None => match default_source {
                         Some(src) => src.clone(),
                         None => {
-                            warn!(
-                                "Noteskin missing texture assignment for component '{tag}'"
-                            );
+                            warn!("Noteskin missing texture assignment for component '{tag}'");
                             return None;
                         }
                     },
@@ -1168,12 +1166,9 @@ fn parse_note_sheet(
     let players = parse_index(props.get("player"), style.num_players as u32);
     let cols = parse_index(props.get("col"), style.num_cols as u32);
 
-    let frame_size = source.frame_size().unwrap_or_else(|| {
-        builder
-            .defaults
-            .get("Note")
-            .map_or([0, 0], |d| d.size)
-    });
+    let frame_size = source
+        .frame_size()
+        .unwrap_or_else(|| builder.defaults.get("Note").map_or([0, 0], |d| d.size));
 
     for p in &players {
         if (*p as usize) >= style.num_players {
@@ -1212,20 +1207,19 @@ fn parse_mine_sheet(
         None => return,
     };
 
-    let layer = props
-        .get("layer").map_or_else(|| "fill".to_string(), |s| s.trim_matches('"').to_ascii_lowercase());
+    let layer = props.get("layer").map_or_else(
+        || "fill".to_string(),
+        |s| s.trim_matches('"').to_ascii_lowercase(),
+    );
 
     let (slots, default_key, default_tag) = match layer.as_str() {
         "frame" | "overlay" | "ring" => (&mut builder.mine_frames, "Mine-frame", "Mine-frame"),
         _ => (&mut builder.mines, "Mine", "Mine"),
     };
 
-    let frame_size = source.frame_size().unwrap_or_else(|| {
-        builder
-            .defaults
-            .get(default_tag)
-            .map_or([0, 0], |d| d.size)
-    });
+    let frame_size = source
+        .frame_size()
+        .unwrap_or_else(|| builder.defaults.get(default_tag).map_or([0, 0], |d| d.size));
 
     builder
         .default_sources
@@ -1263,7 +1257,8 @@ fn parse_receptor_sheet(
     };
 
     let default_state = props
-        .get("state").map_or_else(|| "off".to_string(), |s| s.to_ascii_lowercase());
+        .get("state")
+        .map_or_else(|| "off".to_string(), |s| s.to_ascii_lowercase());
     let source = match build_sheet_source(noteskin_dir, texture, props, 20.0) {
         Some(src) => src,
         None => return,
@@ -1369,9 +1364,7 @@ fn parse_hold_component(
         if let Some(source) = build_sheet_source(noteskin_dir, texture, props, 30.0) {
             slot.set_source(source);
         } else {
-            warn!(
-                "Failed to load texture '{texture}' for {default_key} component"
-            );
+            warn!("Failed to load texture '{texture}' for {default_key} component");
         }
     } else if slot.source.is_none()
         && let Some(source) = builder.default_sources.get(&default_key)
@@ -1460,9 +1453,7 @@ fn parse_explosion_command(builder: &mut NoteskinBuilder, props: &HashMap<&str, 
     };
 
     let Some(commands) = props.get("commands").map(|s| s.trim().trim_matches('"')) else {
-        warn!(
-            "ExplosionCommand missing commands attribute for window '{window}'"
-        );
+        warn!("ExplosionCommand missing commands attribute for window '{window}'");
         return;
     };
 
@@ -1547,9 +1538,7 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                             initial_locked = true;
                         }
                     } else {
-                        warn!(
-                            "Failed to parse duration '{arg}' for explosion command '{command}'"
-                        );
+                        warn!("Failed to parse duration '{arg}' for explosion command '{command}'");
                     }
                 } else {
                     warn!("Explosion command '{command}' missing duration argument");
@@ -1570,9 +1559,7 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                             }
                         }
                     } else {
-                        warn!(
-                            "Failed to parse diffusealpha value '{arg}' in explosion commands"
-                        );
+                        warn!("Failed to parse diffusealpha value '{arg}' in explosion commands");
                     }
                 }
             }
@@ -1597,7 +1584,9 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                     let mut parsed = [0.0f32; 4];
                     let mut ok = true;
                     for i in 0..3 {
-                        if let Ok(v) = args[i].parse::<f32>() { parsed[i] = v } else {
+                        if let Ok(v) = args[i].parse::<f32>() {
+                            parsed[i] = v
+                        } else {
                             warn!(
                                 "Failed to parse diffuse component '{}' in explosion commands",
                                 args[i]
@@ -1777,7 +1766,8 @@ fn parse_sprite_rule(
 
     let rows = props
         .get("row")
-        .and_then(|s| s.parse().ok()).map_or_else(|| (0..=192).collect(), |r| vec![r]);
+        .and_then(|s| s.parse().ok())
+        .map_or_else(|| (0..=192).collect(), |r| vec![r]);
     let cols = parse_index(props.get("col"), style.num_cols as u32);
     let players = parse_index(props.get("player"), style.num_players as u32);
 

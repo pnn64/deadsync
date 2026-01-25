@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::core::display::{self, MonitorSpec};
 use crate::core::gfx::BackendType;
-use crate::core::space::{screen_width, screen_height, widescale};
+use crate::core::space::{screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::config::{self, DisplayMode, FullscreenType};
 use crate::core::audio;
@@ -647,7 +647,8 @@ fn backend_to_renderer_choice_index(backend: BackendType) -> usize {
 
 fn renderer_choice_index_to_backend(idx: usize) -> BackendType {
     VIDEO_RENDERER_OPTIONS
-        .get(idx).map_or_else(|| VIDEO_RENDERER_OPTIONS[0].0, |(backend, _)| *backend)
+        .get(idx)
+        .map_or_else(|| VIDEO_RENDERER_OPTIONS[0].0, |(backend, _)| *backend)
 }
 
 fn selected_video_renderer(state: &State) -> BackendType {
@@ -715,9 +716,10 @@ fn ensure_display_mode_choices(state: &mut State) {
     if let Some(idx) = state
         .sub_choice_indices_graphics
         .get_mut(DISPLAY_MODE_ROW_INDEX)
-        && *idx >= state.display_mode_choices.len() {
-            *idx = 0;
-        }
+        && *idx >= state.display_mode_choices.len()
+    {
+        *idx = 0;
+    }
     // Also re-run logic that depends on the selected monitor.
     let current_res = selected_resolution(state);
     rebuild_resolution_choices(state, current_res.0, current_res.1);
@@ -924,42 +926,43 @@ fn row_choices<'a>(
     row_idx: usize,
 ) -> Vec<Cow<'a, str>> {
     if let Some(row) = rows.get(row_idx)
-        && matches!(kind, SubmenuKind::Graphics) {
-            if row.label == "Display Mode" {
-                return state
-                    .display_mode_choices
-                    .iter()
-                    .cloned()
-                    .map(Cow::Owned)
-                    .collect();
-            }
-            if row.label == "Display Resolution" {
-                return state
-                    .resolution_choices
-                    .iter()
-                    .map(|&(w, h)| Cow::Owned(format!("{w}x{h}")))
-                    .collect();
-            }
-            if row.label == "Refresh Rate" {
-                return state
-                    .refresh_rate_choices
-                    .iter()
-                    .map(|&mhz| {
-                        if mhz == 0 {
-                            Cow::Borrowed("Default")
-                        } else {
-                            // Format nicely: 60000 -> "60 Hz", 59940 -> "59.94 Hz"
-                            let hz = mhz as f32 / 1000.0;
-                            if (hz.fract()).abs() < 0.01 {
-                                Cow::Owned(format!("{hz:.0}Hz"))
-                            } else {
-                                Cow::Owned(format!("{hz:.2}Hz"))
-                            }
-                        }
-                    })
-                    .collect();
-            }
+        && matches!(kind, SubmenuKind::Graphics)
+    {
+        if row.label == "Display Mode" {
+            return state
+                .display_mode_choices
+                .iter()
+                .cloned()
+                .map(Cow::Owned)
+                .collect();
         }
+        if row.label == "Display Resolution" {
+            return state
+                .resolution_choices
+                .iter()
+                .map(|&(w, h)| Cow::Owned(format!("{w}x{h}")))
+                .collect();
+        }
+        if row.label == "Refresh Rate" {
+            return state
+                .refresh_rate_choices
+                .iter()
+                .map(|&mhz| {
+                    if mhz == 0 {
+                        Cow::Borrowed("Default")
+                    } else {
+                        // Format nicely: 60000 -> "60 Hz", 59940 -> "59.94 Hz"
+                        let hz = mhz as f32 / 1000.0;
+                        if (hz.fract()).abs() < 0.01 {
+                            Cow::Owned(format!("{hz:.0}Hz"))
+                        } else {
+                            Cow::Owned(format!("{hz:.2}Hz"))
+                        }
+                    }
+                })
+                .collect();
+        }
+    }
     rows.get(row_idx)
         .map(|row| row.choices.iter().map(|c| Cow::Borrowed(*c)).collect())
         .unwrap_or_default()
@@ -970,10 +973,11 @@ const SAMPLE_RATE_OPTIONS: [Option<u32>; 3] = [None, Some(44100), Some(48000)];
 
 fn set_choice_by_label(choice_indices: &mut Vec<usize>, rows: &[SubRow], label: &str, idx: usize) {
     if let Some(pos) = rows.iter().position(|r| r.label == label)
-        && let Some(slot) = choice_indices.get_mut(pos) {
-            let max_idx = rows[pos].choices.len().saturating_sub(1);
-            *slot = idx.min(max_idx);
-        }
+        && let Some(slot) = choice_indices.get_mut(pos)
+    {
+        let max_idx = rows[pos].choices.len().saturating_sub(1);
+        *slot = idx.min(max_idx);
+    }
 }
 
 fn master_volume_choice_index(volume: u8) -> usize {
@@ -1338,21 +1342,25 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
                 let mut monitor_change: Option<usize> = None;
 
                 if let Some(renderer) = desired_renderer
-                    && renderer != state.video_renderer_at_load {
-                        renderer_change = Some(renderer);
-                    }
+                    && renderer != state.video_renderer_at_load
+                {
+                    renderer_change = Some(renderer);
+                }
                 if let Some(display_mode) = desired_display_mode
-                    && display_mode != state.display_mode_at_load {
-                        display_mode_change = Some(display_mode);
-                    }
+                    && display_mode != state.display_mode_at_load
+                {
+                    display_mode_change = Some(display_mode);
+                }
                 if let Some(monitor) = desired_monitor
-                    && monitor != state.display_monitor_at_load {
-                        monitor_change = Some(monitor);
-                    }
+                    && monitor != state.display_monitor_at_load
+                {
+                    monitor_change = Some(monitor);
+                }
                 if let Some((w, h)) = desired_resolution
-                    && (w != state.display_width_at_load || h != state.display_height_at_load) {
-                        resolution_change = Some((w, h));
-                    }
+                    && (w != state.display_width_at_load || h != state.display_height_at_load)
+                {
+                    resolution_change = Some((w, h));
+                }
 
                 if renderer_change.is_some()
                     || display_mode_change.is_some()
@@ -1447,14 +1455,15 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
         let now = Instant::now();
         if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
             && now.duration_since(last_adjusted) >= NAV_REPEAT_SCROLL_INTERVAL
-            && matches!(state.view, OptionsView::Submenu(_)) {
-                if pending_action.is_none() {
-                    pending_action = apply_submenu_choice_delta(state, delta_lr);
-                } else {
-                    apply_submenu_choice_delta(state, delta_lr);
-                }
-                state.nav_lr_last_adjusted_at = Some(now);
+            && matches!(state.view, OptionsView::Submenu(_))
+        {
+            if pending_action.is_none() {
+                pending_action = apply_submenu_choice_delta(state, delta_lr);
+            } else {
+                apply_submenu_choice_delta(state, delta_lr);
             }
+            state.nav_lr_last_adjusted_at = Some(now);
+        }
     }
 
     match state.view {
@@ -1560,35 +1569,36 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
     }
 
     if let Some(row) = rows.get(row_index)
-        && matches!(kind, SubmenuKind::Graphics) {
-            match row.label {
-                "Global Offset (ms)" => {
-                    if adjust_ms_value(
-                        &mut state.global_offset_ms,
-                        delta,
-                        GLOBAL_OFFSET_MIN_MS,
-                        GLOBAL_OFFSET_MAX_MS,
-                    ) {
-                        config::update_global_offset(state.global_offset_ms as f32 / 1000.0);
-                        audio::play_sfx("assets/sounds/change_value.ogg");
-                    }
-                    return None;
+        && matches!(kind, SubmenuKind::Graphics)
+    {
+        match row.label {
+            "Global Offset (ms)" => {
+                if adjust_ms_value(
+                    &mut state.global_offset_ms,
+                    delta,
+                    GLOBAL_OFFSET_MIN_MS,
+                    GLOBAL_OFFSET_MAX_MS,
+                ) {
+                    config::update_global_offset(state.global_offset_ms as f32 / 1000.0);
+                    audio::play_sfx("assets/sounds/change_value.ogg");
                 }
-                "Visual Delay (ms)" => {
-                    if adjust_ms_value(
-                        &mut state.visual_delay_ms,
-                        delta,
-                        VISUAL_DELAY_MIN_MS,
-                        VISUAL_DELAY_MAX_MS,
-                    ) {
-                        config::update_visual_delay_seconds(state.visual_delay_ms as f32 / 1000.0);
-                        audio::play_sfx("assets/sounds/change_value.ogg");
-                    }
-                    return None;
-                }
-                _ => {}
+                return None;
             }
+            "Visual Delay (ms)" => {
+                if adjust_ms_value(
+                    &mut state.visual_delay_ms,
+                    delta,
+                    VISUAL_DELAY_MIN_MS,
+                    VISUAL_DELAY_MAX_MS,
+                ) {
+                    config::update_visual_delay_seconds(state.visual_delay_ms as f32 / 1000.0);
+                    audio::play_sfx("assets/sounds/change_value.ogg");
+                }
+                return None;
+            }
+            _ => {}
         }
+    }
 
     let choices = row_choices(state, kind, rows, row_index);
     let num_choices = choices.len();
@@ -1661,9 +1671,7 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
     // Begin cursor animation when changing inline options, but treat the Language row
     // as a single-value row (no horizontal tween; value changes in-place).
     if let Some((choice_index, new_index)) = changed_choice {
-        let is_language_row = rows
-            .get(row_index)
-            .is_some_and(|r| r.label == "Language");
+        let is_language_row = rows.get(row_index).is_some_and(|r| r.label == "Language");
         let is_inline_row = rows.get(row_index).map_or(true, |r| r.inline);
         if is_inline_row && !is_language_row {
             state.cursor_anim_row = Some(row_index);
@@ -2134,7 +2142,8 @@ pub fn get_actors(
                     // matching how single-value rows like Music Rate are centered in player_options.rs.
                     let item_col_left = list_x + label_bg_w;
                     let item_col_w = list_w - label_bg_w;
-                    return item_col_w.mul_add(0.5, item_col_left) + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
+                    return item_col_w.mul_add(0.5, item_col_left)
+                        + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
                 }
                 let row = &rows[row_idx];
                 // Non-inline rows behave as single-value rows: keep the cursor centered
@@ -2142,7 +2151,8 @@ pub fn get_actors(
                 if !row.inline {
                     let item_col_left = list_x + label_bg_w;
                     let item_col_w = list_w - label_bg_w;
-                    return item_col_w.mul_add(0.5, item_col_left) + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
+                    return item_col_w.mul_add(0.5, item_col_left)
+                        + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
                 }
                 let choices = row_choices(state, kind, rows, row_idx);
                 if choices.is_empty() {
@@ -2334,7 +2344,8 @@ pub fn get_actors(
                             .min(choice_texts.len().saturating_sub(1));
                         let mut selected_left_x: Option<f32> = None;
 
-                        let choice_inner_left = SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
+                        let choice_inner_left =
+                            SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
                         let mut x_positions: Vec<f32> = Vec::with_capacity(choice_texts.len());
                         if inline_row {
                             let mut x = choice_inner_left;

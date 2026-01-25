@@ -1,6 +1,6 @@
 use crate::act;
 use crate::core::space::widescale;
-use crate::core::space::{screen_width, screen_height, screen_center_y, screen_center_x};
+use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::screens::Screen;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -627,11 +627,11 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
     let timing_windows: [f32; 5] = crate::game::timing::effective_windows_ms(); // ms, with +1.5ms
     let worst_window = timing_windows[timing_windows.len() - 1];
 
-	    for (i, (label, grade_idx)) in judgment_labels.iter().enumerate() {
-	        let color = color::JUDGMENT_RGBA[*grade_idx];
-	        let window_ms = if i > 0 { timing_windows[i - 1] } else { 0.0 };
-	        let next_window_ms = timing_windows[i];
-	        let mid_point_ms = f32::midpoint(window_ms, next_window_ms);
+    for (i, (label, grade_idx)) in judgment_labels.iter().enumerate() {
+        let color = color::JUDGMENT_RGBA[*grade_idx];
+        let window_ms = if i > 0 { timing_windows[i - 1] } else { 0.0 };
+        let next_window_ms = timing_windows[i];
+        let mid_point_ms = f32::midpoint(window_ms, next_window_ms);
 
         // Scale position from ms to pane coordinates
         let x_offset = (mid_point_ms / worst_window) * (pane_width / 2.0_f32);
@@ -692,19 +692,19 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
             )
         };
 
-	        let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
-	            if abs_ms <= timing_windows[0] {
-	                color::JUDGMENT_RGBA[0]
-	            } else if abs_ms <= timing_windows[1] {
-	                color::JUDGMENT_RGBA[1]
-	            } else if abs_ms <= timing_windows[2] {
-	                color::JUDGMENT_RGBA[2]
-	            } else if abs_ms <= timing_windows[3] {
-	                color::JUDGMENT_RGBA[3]
-	            } else {
-	                color::JUDGMENT_RGBA[4]
-	            }
-	        };
+        let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
+            if abs_ms <= timing_windows[0] {
+                color::JUDGMENT_RGBA[0]
+            } else if abs_ms <= timing_windows[1] {
+                color::JUDGMENT_RGBA[1]
+            } else if abs_ms <= timing_windows[2] {
+                color::JUDGMENT_RGBA[2]
+            } else if abs_ms <= timing_windows[3] {
+                color::JUDGMENT_RGBA[3]
+            } else {
+                color::JUDGMENT_RGBA[4]
+            }
+        };
 
         let mut draw_bin = |bin_idx: i32, y_val: f32| {
             if y_val <= 0.0 {
@@ -741,14 +741,24 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
     let label_zoom = 0.575;
     let value_zoom = 0.8;
 
-    let max_error_text = state
-        .score_info
-        .as_ref().map_or_else(|| "0.0ms".to_string(), |s| format!("{:.1}ms", s.timing.max_abs_ms));
+    let max_error_text = state.score_info.as_ref().map_or_else(
+        || "0.0ms".to_string(),
+        |s| format!("{:.1}ms", s.timing.max_abs_ms),
+    );
 
     let stats = state.score_info.as_ref();
-    let mean_abs_text = stats.map_or_else(|| "0.0ms".to_string(), |s| format!("{:.1}ms", s.timing.mean_abs_ms));
-    let mean_text = stats.map_or_else(|| "0.0ms".to_string(), |s| format!("{:.1}ms", s.timing.mean_ms));
-    let stddev3_text = stats.map_or_else(|| "0.0ms".to_string(), |s| format!("{:.1}ms", s.timing.stddev_ms * 3.0));
+    let mean_abs_text = stats.map_or_else(
+        || "0.0ms".to_string(),
+        |s| format!("{:.1}ms", s.timing.mean_abs_ms),
+    );
+    let mean_text = stats.map_or_else(
+        || "0.0ms".to_string(),
+        |s| format!("{:.1}ms", s.timing.mean_ms),
+    );
+    let stddev3_text = stats.map_or_else(
+        || "0.0ms".to_string(),
+        |s| format!("{:.1}ms", s.timing.stddev_ms * 3.0),
+    );
 
     let labels_and_values = [
         ("mean abs error", 40.0, mean_abs_text),
@@ -1012,8 +1022,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Difficulty Text and Meter Block
     {
-        let difficulty_display_name = if score_info.chart.difficulty.eq_ignore_ascii_case("edit")
-        {
+        let difficulty_display_name = if score_info.chart.difficulty.eq_ignore_ascii_case("edit") {
             "Edit"
         } else {
             let difficulty_index = color::FILE_DIFFICULTY_NAMES
@@ -1032,14 +1041,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     // Step Artist (or Edit description)
-    let step_artist_text =
-        if score_info.chart.difficulty.eq_ignore_ascii_case("edit")
-            && !score_info.chart.description.trim().is_empty()
-        {
-            score_info.chart.description.clone()
-        } else {
-            score_info.chart.step_artist.clone()
-        };
+    let step_artist_text = if score_info.chart.difficulty.eq_ignore_ascii_case("edit")
+        && !score_info.chart.description.trim().is_empty()
+    {
+        score_info.chart.description.clone()
+    } else {
+        score_info.chart.step_artist.clone()
+    };
     actors.push(act!(text: font("miso"): settext(step_artist_text): align(0.0, 0.5): xy(p1_frame_x - 115.0, cy - 81.0): zoom(0.7): z(101): diffuse(1.0, 1.0, 1.0, 1.0) ));
 
     // --- Breakdown Text (under grade) ---
@@ -1115,7 +1123,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
 
             // EX score (bottom line, Fantastic blue / turquoise), smaller than ITG score
-	            let ex_color = color::JUDGMENT_RGBA[0];
+            let ex_color = color::JUDGMENT_RGBA[0];
             // "EX" label to the left of the numeric EX score.
             children.push(act!(text:
                 font("wendy_white"):
@@ -1219,20 +1227,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let dur = (last - first).max(0.001_f32);
                         let worst = si.histogram.worst_window_ms.max(1.0_f32);
 
-	                        let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
-	                            let tw = crate::game::timing::effective_windows_ms();
-	                            if abs_ms <= tw[0] {
-	                                color::JUDGMENT_RGBA[0]
-	                            } else if abs_ms <= tw[1] {
-	                                color::JUDGMENT_RGBA[1]
-	                            } else if abs_ms <= tw[2] {
-	                                color::JUDGMENT_RGBA[2]
-	                            } else if abs_ms <= tw[3] {
-	                                color::JUDGMENT_RGBA[3]
-	                            } else {
-	                                color::JUDGMENT_RGBA[4]
-	                            }
-	                        };
+                        let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
+                            let tw = crate::game::timing::effective_windows_ms();
+                            if abs_ms <= tw[0] {
+                                color::JUDGMENT_RGBA[0]
+                            } else if abs_ms <= tw[1] {
+                                color::JUDGMENT_RGBA[1]
+                            } else if abs_ms <= tw[2] {
+                                color::JUDGMENT_RGBA[2]
+                            } else if abs_ms <= tw[3] {
+                                color::JUDGMENT_RGBA[3]
+                            } else {
+                                color::JUDGMENT_RGBA[4]
+                            }
+                        };
 
                         for sp in &si.scatter {
                             // For non-miss offsets, shift x by the offset amount (align to actual tap time).
@@ -1484,7 +1492,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     let (footer_left, footer_right, left_avatar, right_avatar) =
         if play_style == profile::PlayStyle::Versus {
-            (p1_footer_text, p2_footer_text, p1_footer_avatar, p2_footer_avatar)
+            (
+                p1_footer_text,
+                p2_footer_text,
+                p1_footer_avatar,
+                p2_footer_avatar,
+            )
         } else {
             match player_side {
                 profile::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),

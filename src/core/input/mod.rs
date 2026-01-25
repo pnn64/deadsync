@@ -239,7 +239,8 @@ pub struct Keymap {
     map: HashMap<VirtualAction, Vec<InputBinding>>,
 }
 
-static KEYMAP: std::sync::LazyLock<RwLock<Keymap>> = std::sync::LazyLock::new(|| RwLock::new(Keymap::default()));
+static KEYMAP: std::sync::LazyLock<RwLock<Keymap>> =
+    std::sync::LazyLock::new(|| RwLock::new(Keymap::default()));
 
 #[inline(always)]
 fn with_keymap<R>(f: impl FnOnce(&Keymap) -> R) -> R {
@@ -312,7 +313,9 @@ impl Keymap {
     pub fn actions_for_pad_event(&self, ev: &PadEvent) -> Vec<(VirtualAction, bool)> {
         let mut out = Vec::with_capacity(2);
         match *ev {
-            PadEvent::Dir { id, dir, pressed, .. } => {
+            PadEvent::Dir {
+                id, dir, pressed, ..
+            } => {
                 let dev = usize::from(id);
                 for (act, binds) in &self.map {
                     for b in binds {
@@ -349,13 +352,15 @@ impl Keymap {
                                     continue;
                                 }
                                 if let Some(d_expected) = binding.device
-                                    && d_expected != dev {
-                                        continue;
-                                    }
+                                    && d_expected != dev
+                                {
+                                    continue;
+                                }
                                 if let Some(u_expected) = binding.uuid
-                                    && u_expected != uuid {
-                                        continue;
-                                    }
+                                    && u_expected != uuid
+                                {
+                                    continue;
+                                }
                                 out.push((*act, pressed));
                                 break;
                             }
@@ -491,7 +496,7 @@ fn dedup_menu_variants(actions: &mut Vec<(VirtualAction, bool)>) {
 
 #[cfg(all(unix, not(target_os = "macos")))]
 mod linux_evdev;
-#[cfg(windows)]
-mod windows_raw_input;
 #[cfg(target_os = "macos")]
 mod macos_iohid;
+#[cfg(windows)]
+mod windows_raw_input;
