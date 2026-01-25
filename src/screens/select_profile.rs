@@ -670,12 +670,20 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
             max_height,
             max_w_pre_zoom,
             max_h_pre_zoom,
+            clip,
             ..
         } => {
             offset[0] = scale_about(offset[0], pivot[0], zoom);
             offset[1] = scale_about(offset[1], pivot[1], zoom);
             scale[0] *= zoom;
             scale[1] *= zoom;
+
+            if let Some(r) = clip.as_mut() {
+                r[0] = scale_about(r[0], pivot[0], zoom);
+                r[1] = scale_about(r[1], pivot[1], zoom);
+                r[2] *= zoom;
+                r[3] *= zoom;
+            }
 
             if !*max_w_pre_zoom
                 && let Some(w) = max_width {
@@ -717,9 +725,13 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
             offset[0] += dx;
             offset[1] += dy;
         }
-        Actor::Text { offset, .. } => {
+        Actor::Text { offset, clip, .. } => {
             offset[0] += dx;
             offset[1] += dy;
+            if let Some(r) = clip.as_mut() {
+                r[0] += dx;
+                r[1] += dy;
+            }
         }
         // Frame children are already in the frame's coordinate space; shifting the
         // frame moves the whole subtree in compose.
@@ -728,6 +740,19 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
             offset[1] += dy;
         }
         Actor::Shadow { child, .. } => apply_offset_to_actor(child, dx, dy),
+    }
+}
+
+fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
+    match actor {
+        Actor::Text { clip, .. } => *clip = Some(rect),
+        Actor::Frame { children, .. } => {
+            for child in children {
+                apply_clip_rect_to_actor(child, rect);
+            }
+        }
+        Actor::Shadow { child, .. } => apply_clip_rect_to_actor(child, rect),
+        Actor::Sprite { .. } => {}
     }
 }
 
@@ -879,6 +904,12 @@ fn push_scroller_frame(
     ));
 
     // Scroller rows.
+    let scroller_clip = [
+        SCROLLER_W.mul_add(-0.5, scroller_cx),
+        frame_y0,
+        SCROLLER_W,
+        frame_h,
+    ];
     let rows_half = ROWS_VISIBLE / 2;
     for d in -rows_half..=rows_half {
         let idx_i = selected_index as i32 + d;
@@ -888,7 +919,7 @@ fn push_scroller_frame(
         let choice = &choices[idx_i as usize];
         let y = (d as f32).mul_add(ROW_H, frame_cy);
 
-        out.push(act!(text:
+        let mut row = act!(text:
             align(0.5, 0.5):
             xy(scroller_cx, y):
             font("miso"):
@@ -899,7 +930,9 @@ fn push_scroller_frame(
             shadowlength(0.5):
             z(103):
             horizalign(center)
-        ));
+        );
+        apply_clip_rect_to_actor(&mut row, scroller_clip);
+        out.push(row);
     }
 
     let selected = choices.get(selected_index);

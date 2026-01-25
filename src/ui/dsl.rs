@@ -731,6 +731,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
         max_height: max_h,
         max_w_pre_zoom,
         max_h_pre_zoom,
+        clip: None,
         blend,
     };
 

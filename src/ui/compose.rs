@@ -286,6 +286,7 @@ fn build_actor_recursive<'a>(
             // NEW:
             max_w_pre_zoom,
             max_h_pre_zoom,
+            clip,
             blend,
             glow: _,
         } => {
@@ -309,6 +310,16 @@ fn build_actor_recursive<'a>(
                     *align_text,
                     m,
                 );
+                if let Some([x, y, w, h]) = *clip {
+                    let clip_sm = SmRect {
+                        x: parent.x + x,
+                        y: parent.y + y,
+                        w,
+                        h,
+                    };
+                    let clip_world = sm_rect_to_world_edges(clip_sm, m);
+                    clip_objects_to_world_rect(&mut objects, clip_world);
+                }
                 let layer = base_z.saturating_add(*z);
                 let mut stroke_rgba = stroke_color.unwrap_or(fm.default_stroke_color);
                 stroke_rgba[3] *= color[3];
@@ -1039,4 +1050,113 @@ fn sm_rect_to_world_center_size(rect: SmRect, m: &Metrics) -> (Vector2<f32>, Vec
         ),
         Vector2::new(rect.w, rect.h),
     )
+}
+
+#[derive(Clone, Copy, Debug)]
+struct WorldRect {
+    left: f32,
+    right: f32,
+    bottom: f32,
+    top: f32,
+}
+
+#[inline(always)]
+fn sm_rect_to_world_edges(rect: SmRect, m: &Metrics) -> WorldRect {
+    let left = m.left + rect.x;
+    let right = rect.w.mul_add(1.0, left);
+
+    let top = m.top - rect.y;
+    let bottom = top - rect.h;
+
+    WorldRect {
+        left,
+        right,
+        bottom,
+        top,
+    }
+}
+
+fn clip_objects_to_world_rect(objects: &mut Vec<RenderObject<'_>>, clip: WorldRect) {
+    if clip.left >= clip.right || clip.bottom >= clip.top {
+        objects.clear();
+        return;
+    }
+
+    let mut out = Vec::with_capacity(objects.len());
+    for mut obj in objects.drain(..) {
+        if clip_sprite_object_to_world_rect(&mut obj, clip) {
+            out.push(obj);
+        }
+    }
+    *objects = out;
+}
+
+fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect) -> bool {
+    let renderer::ObjectType::Sprite {
+        uv_scale, uv_offset, ..
+    } = &mut obj.object_type;
+
+    let eps = 1e-6;
+    let t = &obj.transform;
+    if t.x.y.abs() > eps || t.y.x.abs() > eps || t.x.z.abs() > eps || t.y.z.abs() > eps {
+        return true;
+    }
+
+    let w = t.x.x;
+    let h = t.y.y;
+    if w <= eps || h <= eps {
+        return false;
+    }
+
+    let cx = t.w.x;
+    let cy = t.w.y;
+
+    let half_w = w * 0.5;
+    let half_h = h * 0.5;
+
+    let left = cx - half_w;
+    let right = cx + half_w;
+    let bottom = cy - half_h;
+    let top = cy + half_h;
+
+    let inter_left = left.max(clip.left);
+    let inter_right = right.min(clip.right);
+    let inter_bottom = bottom.max(clip.bottom);
+    let inter_top = top.min(clip.top);
+    if inter_left >= inter_right || inter_bottom >= inter_top {
+        return false;
+    }
+
+    let inv_w = 1.0 / w;
+    let inv_h = 1.0 / h;
+
+    let cl = ((inter_left - left) * inv_w).clamp(0.0, 1.0);
+    let cr = ((right - inter_right) * inv_w).clamp(0.0, 1.0);
+    let cb = ((inter_bottom - bottom) * inv_h).clamp(0.0, 1.0);
+    let ct = ((top - inter_top) * inv_h).clamp(0.0, 1.0);
+
+    let sx_crop = (1.0 - cl - cr).max(0.0);
+    let sy_crop = (1.0 - ct - cb).max(0.0);
+    if sx_crop <= eps || sy_crop <= eps {
+        return false;
+    }
+
+    uv_offset[0] += uv_scale[0] * cl;
+    uv_offset[1] += uv_scale[1] * ct;
+    uv_scale[0] *= sx_crop;
+    uv_scale[1] *= sy_crop;
+
+    let center_x = ((cl - cr) * w).mul_add(0.5, cx);
+    let center_y = ((cb - ct) * h).mul_add(0.5, cy);
+    let new_w = w * sx_crop;
+    let new_h = h * sy_crop;
+
+    obj.transform = Matrix4::new(
+        new_w, 0.0, 0.0, 0.0, //
+        0.0, new_h, 0.0, 0.0, //
+        0.0, 0.0, 1.0, 0.0, //
+        center_x, center_y, 0.0, 1.0,
+    );
+
+    true
 }

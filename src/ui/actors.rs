@@ -85,6 +85,8 @@ pub enum Actor {
         max_height: Option<f32>,
         max_w_pre_zoom: bool,
         max_h_pre_zoom: bool,
+        /// Clip rect in parent TL space: [x, y, w, h].
+        clip: Option<[f32; 4]>,
         blend: BlendMode,
     },
 
