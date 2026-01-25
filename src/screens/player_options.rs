@@ -2230,13 +2230,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
         let r = &state.rows[row_idx];
         if r.name.is_empty() {
-            // Exit row aligns with Speed Mod helper
-            let cx = speed_mod_x;
-            return if player_idx == P2 {
-                screen_center_x().mul_add(2.0, -cx)
-            } else {
-                cx
-            };
+            // Exit row is shared (OptionRowExit).
+            return speed_mod_x;
         }
         let is_inline = r.name == "Perspective"
             || r.name == "Background Filter"
@@ -2487,48 +2482,60 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         // Cap pad so the ring never invades adjacent inline item space
                         let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
                         if pad_x > max_pad_by_spacing { pad_x = max_pad_by_spacing; }
-                        let mut ring_w = draw_w + pad_x * 2.0;
-                        let mut ring_h = draw_h + pad_y * 2.0;
-                        let mut center_x = choice_center_x; // Align with single-value line
-                        // Vertical tween for row transitions
-                        let mut center_y = current_row_y;
-                        if state.cursor_row_anim_t[P1] < 1.0 {
-                            let t = ease_out_cubic(state.cursor_row_anim_t[P1]);
-                            // If we have a previous row index, interpolate X from that row's cursor center
-                            if let Some(from_row) = state.cursor_row_anim_from_row[P1] {
-                                let from_x = calc_row_center_x(from_row, P1);
-                                center_x = (center_x - from_x).mul_add(t, from_x);
+                        let ring_w = draw_w + pad_x * 2.0;
+                        let ring_h = draw_h + pad_y * 2.0;
+
+                        for player_idx in 0..PLAYER_SLOTS {
+                            if !active[player_idx] || state.selected_row[player_idx] != item_idx {
+                                continue;
                             }
-                            center_y = (current_row_y - state.cursor_row_anim_from_y[P1]).mul_add(
-                                t,
-                                state.cursor_row_anim_from_y[P1],
-                            );
-                        }
-                        // Interpolate ring size between previous row and this row when vertically tweening
-                        if state.cursor_row_anim_t[P1] < 1.0
-                            && let Some(from_row) = state.cursor_row_anim_from_row[P1] {
-                                let (from_dw, from_dh) = calc_row_dims(from_row, P1);
+                            let mut center_x = choice_center_x;
+                            let mut center_y = current_row_y;
+
+                            // Vertical tween for row transitions.
+                            if state.cursor_row_anim_t[player_idx] < 1.0 {
+                                let t = ease_out_cubic(state.cursor_row_anim_t[player_idx]);
+                                if let Some(from_row) = state.cursor_row_anim_from_row[player_idx] {
+                                    let from_x = calc_row_center_x(from_row, player_idx);
+                                    center_x = (center_x - from_x).mul_add(t, from_x);
+                                }
+                                center_y = (current_row_y - state.cursor_row_anim_from_y[player_idx])
+                                    .mul_add(t, state.cursor_row_anim_from_y[player_idx]);
+                            }
+
+                            // Interpolate ring size between previous row and this row when vertically tweening.
+                            let (mut ring_w, mut ring_h) = (ring_w, ring_h);
+                            if state.cursor_row_anim_t[player_idx] < 1.0
+                                && let Some(from_row) = state.cursor_row_anim_from_row[player_idx]
+                            {
+                                let (from_dw, from_dh) = calc_row_dims(from_row, player_idx);
                                 let tsize = (from_dw / width_ref).clamp(0.0, 1.0);
-                                let mut pad_x_from = (max_pad_x - min_pad_x).mul_add(tsize, min_pad_x);
+                                let mut pad_x_from =
+                                    (max_pad_x - min_pad_x).mul_add(tsize, min_pad_x);
                                 let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
-                                if pad_x_from > max_pad_by_spacing { pad_x_from = max_pad_by_spacing; }
+                                if pad_x_from > max_pad_by_spacing {
+                                    pad_x_from = max_pad_by_spacing;
+                                }
                                 let ring_w_from = from_dw + pad_x_from * 2.0;
                                 let ring_h_from = from_dh + pad_y * 2.0;
-                                let t = ease_out_cubic(state.cursor_row_anim_t[P1]);
+                                let t = ease_out_cubic(state.cursor_row_anim_t[player_idx]);
                                 ring_w = (ring_w - ring_w_from).mul_add(t, ring_w_from);
                                 ring_h = (ring_h - ring_h_from).mul_add(t, ring_h_from);
                             }
-                        let left = center_x - ring_w * 0.5;
-                        let right = center_x + ring_w * 0.5;
-                        let top = center_y - ring_h * 0.5;
-                        let bottom = center_y + ring_h * 0.5;
-                        let mut ring_color = color::decorative_rgba(state.active_color_index);
-                        ring_color[3] = 1.0;
-                        // Top, Bottom, Left, Right borders
-                        actors.push(act!(quad: align(0.5, 0.5): xy(center_x, top + border_w * 0.5): zoomto(ring_w, border_w): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
-                        actors.push(act!(quad: align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5): zoomto(ring_w, border_w): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
-                        actors.push(act!(quad: align(0.5, 0.5): xy(left + border_w * 0.5, center_y): zoomto(border_w, ring_h): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
-                        actors.push(act!(quad: align(0.5, 0.5): xy(right - border_w * 0.5, center_y): zoomto(border_w, ring_h): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
+
+                            let left = center_x - ring_w * 0.5;
+                            let right = center_x + ring_w * 0.5;
+                            let top = center_y - ring_h * 0.5;
+                            let bottom = center_y + ring_h * 0.5;
+                            let mut ring_color =
+                                color::decorative_rgba(player_color_index(player_idx));
+                            ring_color[3] = 1.0;
+
+                            actors.push(act!(quad: align(0.5, 0.5): xy(center_x, top + border_w * 0.5): zoomto(ring_w, border_w): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
+                            actors.push(act!(quad: align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5): zoomto(ring_w, border_w): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
+                            actors.push(act!(quad: align(0.5, 0.5): xy(left + border_w * 0.5, center_y): zoomto(border_w, ring_h): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
+                            actors.push(act!(quad: align(0.5, 0.5): xy(right - border_w * 0.5, center_y): zoomto(border_w, ring_h): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
+                        }
                     });
                 });
             }
