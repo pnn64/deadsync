@@ -1443,9 +1443,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     if is_versus {
         let x0_p1 = if is_wide() {
-            screen_center_x() - 356.0
+            screen_center_x() - 355.5
         } else {
-            screen_center_x() - 346.0
+            screen_center_x() - 345.5
         };
         push_step_artist(base_y, x0_p1, sel_col_p1, step_artist);
         push_step_artist(base_y + 88.0, screen_center_x() - 244.0, sel_col_p2, step_artist_p2);
@@ -1454,9 +1454,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let step_artist_x0 = if is_p2_single {
             screen_center_x() - 244.0
         } else if is_wide() {
-            screen_center_x() - 356.0
+            screen_center_x() - 355.5
         } else {
-            screen_center_x() - 346.0
+            screen_center_x() - 345.5
         };
         push_step_artist(y_cen, step_artist_x0, sel_col_p1, step_artist);
     }
