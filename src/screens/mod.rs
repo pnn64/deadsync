@@ -23,7 +23,7 @@ pub enum ScreenAction {
     None,
     Navigate(Screen),
     Exit,
-    SelectProfile(ActiveProfile),
+    SelectProfiles { p1: ActiveProfile, p2: ActiveProfile },
     RequestBanner(Option<PathBuf>),
     RequestDensityGraph {
         slot: DensityGraphSlot,

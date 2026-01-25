@@ -54,10 +54,14 @@ enum Command {
     StopMusic,
     SetEvaluationGraphData(Option<(String, rssp::graph::GraphImageData)>),
     SetDynamicBackground(Option<PathBuf>),
-    UpdateScrollSpeed(ScrollSpeedSetting),
+    UpdateScrollSpeed {
+        side: profile::PlayerSide,
+        setting: ScrollSpeedSetting,
+    },
     UpdateSessionMusicRate(f32),
     UpdatePreferredDifficulty(usize),
     UpdateLastPlayed {
+        side: profile::PlayerSide,
         music_path: Option<PathBuf>,
         chart_hash: Option<String>,
         difficulty_index: usize,
@@ -399,28 +403,43 @@ impl App {
                 Vec::new()
             }
             ScreenAction::Exit => self.handle_exit_action(),
-            ScreenAction::SelectProfile(selected) => {
-                let profile_data = profile::set_active_profile(selected);
+            ScreenAction::SelectProfiles { p1, p2 } => {
+                let profile_data = profile::set_active_profiles(p1, p2);
                 if let Some(backend) = self.backend.as_mut() {
-                    self.asset_manager
-                        .set_profile_avatar(backend, profile_data.avatar_path.clone());
+                    self.asset_manager.set_profile_avatar_for_side(
+                        backend,
+                        profile::PlayerSide::P1,
+                        profile_data[0].avatar_path.clone(),
+                    );
+                    self.asset_manager.set_profile_avatar_for_side(
+                        backend,
+                        profile::PlayerSide::P2,
+                        profile_data[1].avatar_path.clone(),
+                    );
                 }
 
                 let max_diff_index = crate::ui::color::FILE_DIFFICULTY_NAMES
                     .len()
                     .saturating_sub(1);
-                let preferred = if max_diff_index == 0 {
+                let preferred_p1 = if max_diff_index == 0 {
                     0
                 } else {
-                    cmp::min(profile_data.last_difficulty_index, max_diff_index)
+                    cmp::min(profile_data[0].last_difficulty_index, max_diff_index)
                 };
-                self.state.session.preferred_difficulty_index = preferred;
+                let preferred_p2 = if max_diff_index == 0 {
+                    0
+                } else {
+                    cmp::min(profile_data[1].last_difficulty_index, max_diff_index)
+                };
+                self.state.session.preferred_difficulty_index = preferred_p1;
 
                 let current_color_index = self.state.screens.select_profile_state.active_color_index;
                 self.state.screens.select_music_state = select_music::init();
                 self.state.screens.select_music_state.active_color_index = current_color_index;
-                self.state.screens.select_music_state.preferred_difficulty_index = preferred;
-                self.state.screens.select_music_state.selected_steps_index = preferred;
+                self.state.screens.select_music_state.preferred_difficulty_index = preferred_p1;
+                self.state.screens.select_music_state.selected_steps_index = preferred_p1;
+                self.state.screens.select_music_state.p2_preferred_difficulty_index = preferred_p2;
+                self.state.screens.select_music_state.p2_selected_steps_index = preferred_p2;
 
                 self.handle_navigation_action(CurrentScreen::SelectColor);
                 Vec::new()
@@ -735,7 +754,9 @@ impl App {
                 self.apply_evaluation_graph(graph_request);
             }
             Command::SetDynamicBackground(path_opt) => self.apply_dynamic_background(path_opt),
-            Command::UpdateScrollSpeed(setting) => profile::update_scroll_speed(setting),
+            Command::UpdateScrollSpeed { side, setting } => {
+                profile::update_scroll_speed_for_side(side, setting);
+            }
             Command::UpdateSessionMusicRate(rate) => {
                 crate::game::profile::set_session_music_rate(rate);
             }
@@ -743,11 +764,13 @@ impl App {
                 self.state.session.preferred_difficulty_index = idx;
             }
             Command::UpdateLastPlayed {
+                side,
                 music_path,
                 chart_hash,
                 difficulty_index,
             } => {
-                profile::update_last_played(
+                profile::update_last_played_for_side(
+                    side,
                     music_path.as_deref(),
                     chart_hash.as_deref(),
                     difficulty_index,
@@ -1556,35 +1579,66 @@ impl App {
             {
                 let play_style = profile::get_session_play_style();
                 let player_side = profile::get_session_player_side();
-                let persisted_idx = match play_style {
-                    profile::PlayStyle::Versus => 0,
-                    profile::PlayStyle::Single | profile::PlayStyle::Double => match player_side {
-                        profile::PlayerSide::P1 => 0,
-                        profile::PlayerSide::P2 => 1,
-                    },
-                };
-                let speed_mod = &po_state.speed_mod[persisted_idx];
-                let setting = match speed_mod.mod_type.as_str() {
-                    "C" => Some(ScrollSpeedSetting::CMod(speed_mod.value)),
-                    "X" => Some(ScrollSpeedSetting::XMod(speed_mod.value)),
-                    "M" => Some(ScrollSpeedSetting::MMod(speed_mod.value)),
-                    _ => None,
+                let update_scroll_speed = |commands: &mut Vec<Command>,
+                                          side: profile::PlayerSide,
+                                          speed_mod: &player_options::SpeedMod| {
+                    let setting = match speed_mod.mod_type.as_str() {
+                        "C" => Some(ScrollSpeedSetting::CMod(speed_mod.value)),
+                        "X" => Some(ScrollSpeedSetting::XMod(speed_mod.value)),
+                        "M" => Some(ScrollSpeedSetting::MMod(speed_mod.value)),
+                        _ => None,
+                    };
+
+                    if let Some(setting) = setting {
+                        commands.push(Command::UpdateScrollSpeed { side, setting });
+                        info!("Saved scroll speed ({side:?}): {setting}");
+                    } else {
+                        warn!(
+                            "Unsupported speed mod '{}' not saved to profile.",
+                            speed_mod.mod_type
+                        );
+                    }
                 };
 
-                if let Some(setting) = setting {
-                    commands.push(Command::UpdateScrollSpeed(setting));
-                    info!("Saved scroll speed: {setting}");
-                } else {
-                    warn!(
-                        "Unsupported speed mod '{}' not saved to profile.",
-                        speed_mod.mod_type
-                    );
+                match play_style {
+                    profile::PlayStyle::Versus => {
+                        update_scroll_speed(
+                            &mut commands,
+                            profile::PlayerSide::P1,
+                            &po_state.speed_mod[0],
+                        );
+                        update_scroll_speed(
+                            &mut commands,
+                            profile::PlayerSide::P2,
+                            &po_state.speed_mod[1],
+                        );
+                    }
+                    profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                        let persisted_idx = match player_side {
+                            profile::PlayerSide::P1 => 0,
+                            profile::PlayerSide::P2 => 1,
+                        };
+                        update_scroll_speed(
+                            &mut commands,
+                            player_side,
+                            &po_state.speed_mod[persisted_idx],
+                        );
+                    }
                 }
 
                 commands.push(Command::UpdateSessionMusicRate(po_state.music_rate));
                 info!("Session music rate set to {:.2}x", po_state.music_rate);
 
-                let preferred_idx = po_state.chart_difficulty_index[persisted_idx];
+                let preferred_idx = match play_style {
+                    profile::PlayStyle::Versus => po_state.chart_difficulty_index[0],
+                    profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                        let persisted_idx = match player_side {
+                            profile::PlayerSide::P1 => 0,
+                            profile::PlayerSide::P2 => 1,
+                        };
+                        po_state.chart_difficulty_index[persisted_idx]
+                    }
+                };
                 self.state.session.preferred_difficulty_index = preferred_idx;
                 commands.push(Command::UpdatePreferredDifficulty(preferred_idx));
                 info!(
@@ -1650,12 +1704,13 @@ impl App {
             let current_color_index = self.state.screens.select_style_state.active_color_index;
             self.state.screens.select_style_state = select_style::init();
             self.state.screens.select_style_state.active_color_index = current_color_index;
-            self.state.screens.select_style_state.selected_index =
-                match profile::get_session_play_style() {
-                    profile::PlayStyle::Single => 0,
-                    profile::PlayStyle::Versus => 1,
-                    profile::PlayStyle::Double => 2,
-                };
+            let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+            let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+            self.state.screens.select_style_state.selected_index = if p1_joined && p2_joined {
+                1 // "2 Players"
+            } else {
+                0 // "1 Player"
+            };
         } else if target == CurrentScreen::PlayerOptions {
             let (song_arc, chart_steps_index, preferred_difficulty_index) = {
                 let sm_state = &self.state.screens.select_music_state;
@@ -1761,11 +1816,30 @@ impl App {
                         po_state.chart_steps_index[last_played_idx];
                 }
 
-                commands.push(Command::UpdateLastPlayed {
-                    music_path: song_arc.music_path.clone(),
-                    chart_hash: Some(last_played_chart_ref.short_hash.clone()),
-                    difficulty_index: po_state.chart_difficulty_index[last_played_idx],
-                });
+                match play_style {
+                    profile::PlayStyle::Versus => {
+                        commands.push(Command::UpdateLastPlayed {
+                            side: profile::PlayerSide::P1,
+                            music_path: song_arc.music_path.clone(),
+                            chart_hash: Some(charts[0].short_hash.clone()),
+                            difficulty_index: po_state.chart_difficulty_index[0],
+                        });
+                        commands.push(Command::UpdateLastPlayed {
+                            side: profile::PlayerSide::P2,
+                            music_path: song_arc.music_path.clone(),
+                            chart_hash: Some(charts[1].short_hash.clone()),
+                            difficulty_index: po_state.chart_difficulty_index[1],
+                        });
+                    }
+                    profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                        commands.push(Command::UpdateLastPlayed {
+                            side: player_side,
+                            music_path: song_arc.music_path.clone(),
+                            chart_hash: Some(last_played_chart_ref.short_hash.clone()),
+                            difficulty_index: po_state.chart_difficulty_index[last_played_idx],
+                        });
+                    }
+                }
 
                 let to_scroll_speed = |m: &player_options::SpeedMod| match m.mod_type.as_str() {
                     "X" => crate::game::scroll::ScrollSpeedSetting::XMod(m.value),
@@ -2242,19 +2316,16 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.state.screens.select_style_state = select_style::init();
                                 self.state.screens.select_style_state.active_color_index =
                                     current_color_index;
-                                let both_joined = select_profile::both_players_joined(
-                                    &self.state.screens.select_profile_state,
-                                );
-                                self.state.screens.select_style_state.selected_index = if both_joined
-                                {
-                                    1 // "2 Players"
-                                } else {
-                                    match profile::get_session_play_style() {
-                                        profile::PlayStyle::Single => 0,
-                                        profile::PlayStyle::Versus => 1,
-                                        profile::PlayStyle::Double => 2,
-                                    }
-                                };
+                                let p1_joined =
+                                    profile::is_session_side_joined(profile::PlayerSide::P1);
+                                let p2_joined =
+                                    profile::is_session_side_joined(profile::PlayerSide::P2);
+                                self.state.screens.select_style_state.selected_index =
+                                    if p1_joined && p2_joined {
+                                        1 // "2 Players"
+                                    } else {
+                                        0 // "1 Player"
+                                    };
                             } else if target_screen == CurrentScreen::Mappings {
                                 let color_index =
                                     self.state.screens.options_state.active_color_index;

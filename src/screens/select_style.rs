@@ -266,8 +266,6 @@ fn push_pad_tiles(
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(128);
-    let profile = crate::game::profile::get();
-    let side = crate::game::profile::get_session_player_side();
     let exit_t = exit_anim_t(state.exit_chosen_anim);
     let (chosen_p, other_alpha) = if state.exit_chosen_anim {
         (
@@ -297,23 +295,31 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         right_avatar: None,
     }));
 
-    let footer_avatar = profile
+    let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
+    let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
+    let p1_avatar = p1_profile
         .avatar_texture_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
-    let (footer_left, footer_right, left_avatar, right_avatar) = match side {
-        crate::game::profile::PlayerSide::P1 => (
-            Some(profile.display_name.as_str()),
-            Some("PRESS START"),
-            footer_avatar,
-            None,
-        ),
-        crate::game::profile::PlayerSide::P2 => (
-            Some("PRESS START"),
-            Some(profile.display_name.as_str()),
-            None,
-            footer_avatar,
-        ),
+    let p2_avatar = p2_profile
+        .avatar_texture_key
+        .as_deref()
+        .map(|texture_key| AvatarParams { texture_key });
+
+    let p1_joined =
+        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P1);
+    let p2_joined =
+        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P2);
+
+    let (footer_left, left_avatar) = if p1_joined {
+        (Some(p1_profile.display_name.as_str()), p1_avatar)
+    } else {
+        (Some("PRESS START"), None)
+    };
+    let (footer_right, right_avatar) = if p2_joined {
+        (Some(p2_profile.display_name.as_str()), p2_avatar)
+    } else {
+        (Some("PRESS START"), None)
     };
     actors.push(screen_bar::build(ScreenBarParams {
         title: "EVENT MODE",

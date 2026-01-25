@@ -71,7 +71,6 @@ fn build_background(state: &State) -> Actor {
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::new();
-    let profile = profile::get();
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
     let is_p2_single =
@@ -430,14 +429,40 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         }
     }
-    let footer_avatar = profile
+    let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
+    let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
+    let p1_avatar = p1_profile
         .avatar_texture_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
-    let (footer_left, footer_right, left_avatar, right_avatar) = match player_side {
-        profile::PlayerSide::P1 => (Some(profile.display_name.as_str()), None, footer_avatar, None),
-        profile::PlayerSide::P2 => (None, Some(profile.display_name.as_str()), None, footer_avatar),
+    let p2_avatar = p2_profile
+        .avatar_texture_key
+        .as_deref()
+        .map(|texture_key| AvatarParams { texture_key });
+
+    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+
+    let (p1_footer_text, p1_footer_avatar) = if p1_joined {
+        (Some(p1_profile.display_name.as_str()), p1_avatar)
+    } else {
+        (None, None)
     };
+    let (p2_footer_text, p2_footer_avatar) = if p2_joined {
+        (Some(p2_profile.display_name.as_str()), p2_avatar)
+    } else {
+        (None, None)
+    };
+
+    let (footer_left, footer_right, left_avatar, right_avatar) =
+        if play_style == profile::PlayStyle::Versus {
+            (p1_footer_text, p2_footer_text, p1_footer_avatar, p2_footer_avatar)
+        } else {
+            match player_side {
+                profile::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
+                profile::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
+            }
+        };
     actors.push(screen_bar::build(ScreenBarParams {
         title: "",
         title_placement: screen_bar::ScreenBarTitlePlacement::Center,

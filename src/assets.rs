@@ -269,7 +269,7 @@ pub struct AssetManager {
     current_dynamic_banner: Option<(String, PathBuf)>,
     current_density_graph: [Option<String>; DensityGraphSlot::COUNT],
     current_dynamic_background: Option<(String, PathBuf)>,
-    current_profile_avatar: Option<(String, PathBuf)>,
+    current_profile_avatars: [Option<(String, PathBuf)>; 2],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -299,7 +299,7 @@ impl AssetManager {
             current_dynamic_banner: None,
             current_density_graph: std::array::from_fn(|_| None),
             current_dynamic_background: None,
-            current_profile_avatar: None,
+            current_profile_avatars: std::array::from_fn(|_| None),
         }
     }
 
@@ -902,17 +902,32 @@ impl AssetManager {
     }
 
     pub fn set_profile_avatar(&mut self, backend: &mut Backend, path_opt: Option<PathBuf>) {
+        let side = profile::get_session_player_side();
+        self.set_profile_avatar_for_side(backend, side, path_opt);
+    }
+
+    pub fn set_profile_avatar_for_side(
+        &mut self,
+        backend: &mut Backend,
+        side: profile::PlayerSide,
+        path_opt: Option<PathBuf>,
+    ) {
+        let ix = match side {
+            profile::PlayerSide::P1 => 0,
+            profile::PlayerSide::P2 => 1,
+        };
+
         if let Some(path) = path_opt {
             let key = path.to_string_lossy().into_owned();
             self.ensure_texture_from_path(backend, &path);
-            self.current_profile_avatar = Some((key.clone(), path));
+            self.current_profile_avatars[ix] = Some((key.clone(), path));
             if self.textures.contains_key(&key) {
-                profile::set_avatar_texture_key(Some(key));
+                profile::set_avatar_texture_key_for_side(side, Some(key));
             } else {
-                profile::set_avatar_texture_key(None);
+                profile::set_avatar_texture_key_for_side(side, None);
             }
         } else {
-            self.destroy_current_profile_avatar(backend);
+            self.destroy_current_profile_avatar_for_side(backend, side);
         }
     }
 
@@ -945,10 +960,14 @@ impl AssetManager {
         }
     }
 
-    fn destroy_current_profile_avatar(&mut self, backend: &mut Backend) {
+    fn destroy_current_profile_avatar_for_side(&mut self, backend: &mut Backend, side: profile::PlayerSide) {
         let _ = backend;
-        self.current_profile_avatar = None;
-        profile::set_avatar_texture_key(None);
+        let ix = match side {
+            profile::PlayerSide::P1 => 0,
+            profile::PlayerSide::P2 => 1,
+        };
+        self.current_profile_avatars[ix] = None;
+        profile::set_avatar_texture_key_for_side(side, None);
     }
 
     fn ensure_texture_from_path(&mut self, backend: &mut Backend, path: &Path) {

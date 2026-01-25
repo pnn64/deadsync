@@ -193,25 +193,29 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         fg_color: FG,
     }));
 
-    let profile = profile::get();
-    let side = profile::get_session_player_side();
-    let footer_avatar = profile
+    let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
+    let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
+    let p1_avatar = p1_profile
         .avatar_texture_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
-    let (footer_left, footer_right, left_avatar, right_avatar) = match side {
-        profile::PlayerSide::P1 => (
-            Some(profile.display_name.as_str()),
-            Some("PRESS START"),
-            footer_avatar,
-            None,
-        ),
-        profile::PlayerSide::P2 => (
-            Some("PRESS START"),
-            Some(profile.display_name.as_str()),
-            None,
-            footer_avatar,
-        ),
+    let p2_avatar = p2_profile
+        .avatar_texture_key
+        .as_deref()
+        .map(|texture_key| AvatarParams { texture_key });
+
+    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+
+    let (footer_left, left_avatar) = if p1_joined {
+        (Some(p1_profile.display_name.as_str()), p1_avatar)
+    } else {
+        (Some("PRESS START"), None)
+    };
+    let (footer_right, right_avatar) = if p2_joined {
+        (Some(p2_profile.display_name.as_str()), p2_avatar)
+    } else {
+        (Some("PRESS START"), None)
     };
     actors.push(screen_bar::build(screen_bar::ScreenBarParams {
         title: "EVENT MODE",

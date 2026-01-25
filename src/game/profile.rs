@@ -445,8 +445,19 @@ impl Default for Profile {
     }
 }
 
-// Global static for the current profile.
-static PROFILE: std::sync::LazyLock<Mutex<Profile>> = std::sync::LazyLock::new(|| Mutex::new(Profile::default()));
+const PLAYER_SLOTS: usize = 2;
+
+#[inline(always)]
+const fn side_ix(side: PlayerSide) -> usize {
+    match side {
+        PlayerSide::P1 => 0,
+        PlayerSide::P2 => 1,
+    }
+}
+
+// Global statics for the loaded player profiles.
+static PROFILES: std::sync::LazyLock<Mutex<[Profile; PLAYER_SLOTS]>> =
+    std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| Profile::default())));
 
 // --- Session-scoped state (not persisted) ---
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -479,9 +490,21 @@ pub enum PlayerSide {
     P2,
 }
 
+const SESSION_JOINED_MASK_P1: u8 = 1 << 0;
+const SESSION_JOINED_MASK_P2: u8 = 1 << 1;
+
+#[inline(always)]
+const fn side_joined_mask(side: PlayerSide) -> u8 {
+    match side {
+        PlayerSide::P1 => SESSION_JOINED_MASK_P1,
+        PlayerSide::P2 => SESSION_JOINED_MASK_P2,
+    }
+}
+
 #[derive(Debug)]
 struct SessionState {
-    active_profile: ActiveProfile,
+    active_profiles: [ActiveProfile; PLAYER_SLOTS],
+    joined_mask: u8,
     music_rate: f32,
     play_style: PlayStyle,
     player_side: PlayerSide,
@@ -489,9 +512,13 @@ struct SessionState {
 
 static SESSION: std::sync::LazyLock<Mutex<SessionState>> = std::sync::LazyLock::new(|| {
     Mutex::new(SessionState {
-        active_profile: ActiveProfile::Local {
-            id: DEFAULT_PROFILE_ID.to_string(),
-        },
+        active_profiles: [
+            ActiveProfile::Local {
+                id: DEFAULT_PROFILE_ID.to_string(),
+            },
+            ActiveProfile::Guest,
+        ],
+        joined_mask: SESSION_JOINED_MASK_P1,
         music_rate: 1.0,
         play_style: PlayStyle::Single,
         player_side: PlayerSide::P1,
@@ -589,10 +616,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn save_profile_ini() {
+fn save_profile_ini_for_side(side: PlayerSide) {
     let profile_id = {
         let session = SESSION.lock().unwrap();
-        match &session.active_profile {
+        match &session.active_profiles[side_ix(side)] {
             ActiveProfile::Local { id } => Some(id.clone()),
             ActiveProfile::Guest => None,
         }
@@ -601,7 +628,7 @@ fn save_profile_ini() {
         return;
     };
 
-    let profile = PROFILE.lock().unwrap();
+    let profile = PROFILES.lock().unwrap()[side_ix(side)].clone();
     let mut content = String::new();
 
     content.push_str("[PlayerOptions]\n");
@@ -673,10 +700,10 @@ fn save_profile_ini() {
     }
 }
 
-fn save_groovestats_ini() {
+fn save_groovestats_ini_for_side(side: PlayerSide) {
     let profile_id = {
         let session = SESSION.lock().unwrap();
-        match &session.active_profile {
+        match &session.active_profiles[side_ix(side)] {
             ActiveProfile::Local { id } => Some(id.clone()),
             ActiveProfile::Guest => None,
         }
@@ -685,7 +712,7 @@ fn save_groovestats_ini() {
         return;
     };
 
-    let profile = PROFILE.lock().unwrap();
+    let profile = PROFILES.lock().unwrap()[side_ix(side)].clone();
     let mut content = String::new();
 
     content.push_str("[GrooveStats]\n");
@@ -707,22 +734,22 @@ fn save_groovestats_ini() {
     }
 }
 
-pub fn load() {
+fn load_for_side(side: PlayerSide) {
     let profile_id = {
         let session = SESSION.lock().unwrap();
-        match &session.active_profile {
+        match &session.active_profiles[side_ix(side)] {
             ActiveProfile::Local { id } => Some(id.clone()),
             ActiveProfile::Guest => None,
         }
     };
 
     let Some(profile_id) = profile_id else {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
         let mut guest = Profile::default();
         guest.display_name = "[ GUEST ]".to_string();
         guest.avatar_path = None;
         guest.avatar_texture_key = None;
-        *profile = guest;
+        profiles[side_ix(side)] = guest;
         return;
     };
 
@@ -736,7 +763,8 @@ pub fn load() {
     }
 
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         let default_profile = Profile::default();
 
         // Load profile.ini
@@ -882,44 +910,68 @@ pub fn load() {
         profile.avatar_texture_key = None;
     } // Lock is released here.
 
-    save_profile_ini();
-    save_groovestats_ini();
+    save_profile_ini_for_side(side);
+    save_groovestats_ini_for_side(side);
     info!("Profile configuration files updated with default values for any missing fields.");
+}
+
+pub fn load() {
+    load_for_side(PlayerSide::P1);
+    load_for_side(PlayerSide::P2);
 }
 
 /// Returns a copy of the currently loaded profile data.
 pub fn get() -> Profile {
-    PROFILE.lock().unwrap().clone()
+    get_for_side(get_session_player_side())
 }
 
-pub fn set_avatar_texture_key(key: Option<String>) {
-    let mut profile = PROFILE.lock().unwrap();
-    profile.avatar_texture_key = key;
+pub fn get_for_side(side: PlayerSide) -> Profile {
+    PROFILES.lock().unwrap()[side_ix(side)].clone()
+}
+
+pub fn set_avatar_texture_key_for_side(side: PlayerSide, key: Option<String>) {
+    let mut profiles = PROFILES.lock().unwrap();
+    profiles[side_ix(side)].avatar_texture_key = key;
 }
 
 // --- Session helpers ---
 pub fn get_active_profile() -> ActiveProfile {
-    SESSION.lock().unwrap().active_profile.clone()
+    get_active_profile_for_side(get_session_player_side())
+}
+
+pub fn get_active_profile_for_side(side: PlayerSide) -> ActiveProfile {
+    SESSION.lock().unwrap().active_profiles[side_ix(side)].clone()
 }
 
 pub fn active_local_profile_id() -> Option<String> {
+    active_local_profile_id_for_side(get_session_player_side())
+}
+
+pub fn active_local_profile_id_for_side(side: PlayerSide) -> Option<String> {
     let session = SESSION.lock().unwrap();
-    match &session.active_profile {
+    match &session.active_profiles[side_ix(side)] {
         ActiveProfile::Local { id } => Some(id.clone()),
         ActiveProfile::Guest => None,
     }
 }
 
-pub fn set_active_profile(profile: ActiveProfile) -> Profile {
+pub fn set_active_profile_for_side(side: PlayerSide, profile: ActiveProfile) -> Profile {
     {
         let mut session = SESSION.lock().unwrap();
-        if session.active_profile == profile {
-            return get();
+        let slot = &mut session.active_profiles[side_ix(side)];
+        if *slot == profile {
+            return get_for_side(side);
         }
-        session.active_profile = profile;
+        *slot = profile;
     }
-    load();
-    get()
+    load_for_side(side);
+    get_for_side(side)
+}
+
+pub fn set_active_profiles(p1: ActiveProfile, p2: ActiveProfile) -> [Profile; PLAYER_SLOTS] {
+    let _ = set_active_profile_for_side(PlayerSide::P1, p1);
+    let _ = set_active_profile_for_side(PlayerSide::P2, p2);
+    [get_for_side(PlayerSide::P1), get_for_side(PlayerSide::P2)]
 }
 
 pub struct LocalProfileSummary {
@@ -1012,13 +1064,28 @@ pub fn set_session_player_side(side: PlayerSide) {
     SESSION.lock().unwrap().player_side = side;
 }
 
-/// Persist the last played song and difficulty to the on-disk profile.
-/// The caller is responsible for clamping difficulty indices to a valid range.
-pub fn update_last_played(music_path: Option<&Path>, chart_hash: Option<&str>, difficulty_index: usize) {
+pub fn is_session_side_joined(side: PlayerSide) -> bool {
+    let mask = SESSION.lock().unwrap().joined_mask;
+    mask & side_joined_mask(side) != 0
+}
+
+pub fn set_session_joined(p1: bool, p2: bool) {
+    let mask =
+        (u8::from(p1) * SESSION_JOINED_MASK_P1) | (u8::from(p2) * SESSION_JOINED_MASK_P2);
+    SESSION.lock().unwrap().joined_mask = mask;
+}
+
+pub fn update_last_played_for_side(
+    side: PlayerSide,
+    music_path: Option<&Path>,
+    chart_hash: Option<&str>,
+    difficulty_index: usize,
+) {
     let new_path = music_path.map(|p| p.to_string_lossy().into_owned());
     let new_hash = chart_hash.map(str::to_string);
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         let mut changed = false;
         if profile.last_song_music_path != new_path {
             profile.last_song_music_path = new_path;
@@ -1036,67 +1103,73 @@ pub fn update_last_played(music_path: Option<&Path>, chart_hash: Option<&str>, d
             return;
         }
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_scroll_speed(setting: ScrollSpeedSetting) {
+pub fn update_scroll_speed_for_side(side: PlayerSide, setting: ScrollSpeedSetting) {
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         if profile.scroll_speed == setting {
             return;
         }
         profile.scroll_speed = setting;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_background_filter(setting: BackgroundFilter) {
+pub fn update_background_filter_for_side(side: PlayerSide, setting: BackgroundFilter) {
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         if profile.background_filter == setting {
             return;
         }
         profile.background_filter = setting;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_hold_judgment_graphic(setting: HoldJudgmentGraphic) {
+pub fn update_hold_judgment_graphic_for_side(side: PlayerSide, setting: HoldJudgmentGraphic) {
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         if profile.hold_judgment_graphic == setting {
             return;
         }
         profile.hold_judgment_graphic = setting;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_judgment_graphic(setting: JudgmentGraphic) {
+pub fn update_judgment_graphic_for_side(side: PlayerSide, setting: JudgmentGraphic) {
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         if profile.judgment_graphic == setting {
             return;
         }
         profile.judgment_graphic = setting;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_combo_font(setting: ComboFont) {
+pub fn update_combo_font_for_side(side: PlayerSide, setting: ComboFont) {
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         if profile.combo_font == setting {
             return;
         }
         profile.combo_font = setting;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_scroll_option(setting: ScrollOption) {
+pub fn update_scroll_option_for_side(side: PlayerSide, setting: ScrollOption) {
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         let reverse_enabled = setting.contains(ScrollOption::Reverse);
         if profile.scroll_option == setting && profile.reverse_scroll == reverse_enabled {
             return;
@@ -1104,99 +1177,107 @@ pub fn update_scroll_option(setting: ScrollOption) {
         profile.scroll_option = setting;
         profile.reverse_scroll = reverse_enabled;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_noteskin(setting: NoteSkin) {
+pub fn update_noteskin_for_side(side: PlayerSide, setting: NoteSkin) {
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         if profile.noteskin == setting {
             return;
         }
         profile.noteskin = setting;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_notefield_offset_x(offset: i32) {
+pub fn update_notefield_offset_x_for_side(side: PlayerSide, offset: i32) {
     let clamped = offset.clamp(0, 50);
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         if profile.note_field_offset_x == clamped {
             return;
         }
         profile.note_field_offset_x = clamped;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_notefield_offset_y(offset: i32) {
+pub fn update_notefield_offset_y_for_side(side: PlayerSide, offset: i32) {
     let clamped = offset.clamp(-50, 50);
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         if profile.note_field_offset_y == clamped {
             return;
         }
         profile.note_field_offset_y = clamped;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_mini_percent(percent: i32) {
+pub fn update_mini_percent_for_side(side: PlayerSide, percent: i32) {
     // Mirror Simply Love's range: -100% to +150%.
     let clamped = percent.clamp(-100, 150);
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         if profile.mini_percent == clamped {
             return;
         }
         profile.mini_percent = clamped;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_visual_delay_ms(ms: i32) {
+pub fn update_visual_delay_ms_for_side(side: PlayerSide, ms: i32) {
     // Mirror Simply Love's range: -100ms to +100ms.
     let clamped = ms.clamp(-100, 100);
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         if profile.visual_delay_ms == clamped {
             return;
         }
         profile.visual_delay_ms = clamped;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_show_fa_plus_window(enabled: bool) {
+pub fn update_show_fa_plus_window_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         if profile.show_fa_plus_window == enabled {
             return;
         }
         profile.show_fa_plus_window = enabled;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_show_ex_score(enabled: bool) {
+pub fn update_show_ex_score_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         if profile.show_ex_score == enabled {
             return;
         }
         profile.show_ex_score = enabled;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }
 
-pub fn update_show_fa_plus_pane(enabled: bool) {
+pub fn update_show_fa_plus_pane_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profile = PROFILE.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
         if profile.show_fa_plus_pane == enabled {
             return;
         }
         profile.show_fa_plus_pane = enabled;
     }
-    save_profile_ini();
+    save_profile_ini_for_side(side);
 }

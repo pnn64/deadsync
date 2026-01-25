@@ -1146,8 +1146,10 @@ pub fn init(
     active_color_index: i32,
 ) -> State {
     let session_music_rate = crate::game::profile::get_session_music_rate();
-    let base_profile = crate::game::profile::get();
-    let speed_mod_p1 = match base_profile.scroll_speed {
+    let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
+    let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
+
+    let speed_mod_p1 = match p1_profile.scroll_speed {
         crate::game::scroll::ScrollSpeedSetting::CMod(bpm) => SpeedMod {
             mod_type: "C".to_string(),
             value: bpm,
@@ -1161,7 +1163,20 @@ pub fn init(
             value: bpm,
         },
     };
-    let speed_mod_p2 = speed_mod_p1.clone();
+    let speed_mod_p2 = match p2_profile.scroll_speed {
+        crate::game::scroll::ScrollSpeedSetting::CMod(bpm) => SpeedMod {
+            mod_type: "C".to_string(),
+            value: bpm,
+        },
+        crate::game::scroll::ScrollSpeedSetting::XMod(mult) => SpeedMod {
+            mod_type: "X".to_string(),
+            value: mult,
+        },
+        crate::game::scroll::ScrollSpeedSetting::MMod(bpm) => SpeedMod {
+            mod_type: "M".to_string(),
+            value: bpm,
+        },
+    };
     let chart_difficulty_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
         let steps_idx = chart_steps_index[player_idx];
         let mut diff_idx = preferred_difficulty_index[player_idx]
@@ -1180,7 +1195,7 @@ pub fn init(
         session_music_rate,
         OptionsPane::Main,
     );
-    let player_profiles = [base_profile.clone(), base_profile.clone()];
+    let player_profiles = [p1_profile.clone(), p2_profile.clone()];
     let (scroll_active_mask_p1, fa_plus_active_mask_p1) =
         apply_profile_defaults(&mut rows, &player_profiles[P1], P1);
     let (scroll_active_mask_p2, fa_plus_active_mask_p2) =
@@ -1403,8 +1418,15 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         return;
     }
 
+    let play_style = crate::game::profile::get_session_play_style();
     let persisted_idx = session_persisted_player_idx();
-    let should_persist = player_idx == persisted_idx;
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || player_idx == persisted_idx;
+    let persist_side = if player_idx == P1 {
+        crate::game::profile::PlayerSide::P1
+    } else {
+        crate::game::profile::PlayerSide::P2
+    };
 
     let row = &mut state.rows[row_index];
     let num_choices = row.choices.len();
@@ -1480,7 +1502,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         };
         state.player_profiles[player_idx].background_filter = setting;
         if should_persist {
-            crate::game::profile::update_background_filter(setting);
+            crate::game::profile::update_background_filter_for_side(persist_side, setting);
         }
     } else if row_name == "Mini" {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx]) {
@@ -1488,7 +1510,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
             if let Ok(val) = trimmed.parse::<i32>() {
                 state.player_profiles[player_idx].mini_percent = val;
                 if should_persist {
-                    crate::game::profile::update_mini_percent(val);
+                    crate::game::profile::update_mini_percent_for_side(persist_side, val);
                 }
             }
         }
@@ -1498,7 +1520,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         {
             state.player_profiles[player_idx].note_field_offset_x = raw;
             if should_persist {
-                crate::game::profile::update_notefield_offset_x(raw);
+                crate::game::profile::update_notefield_offset_x_for_side(persist_side, raw);
             }
         }
     } else if row_name == "NoteField Offset Y" {
@@ -1507,7 +1529,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         {
             state.player_profiles[player_idx].note_field_offset_y = raw;
             if should_persist {
-                crate::game::profile::update_notefield_offset_y(raw);
+                crate::game::profile::update_notefield_offset_y_for_side(persist_side, raw);
             }
         }
     } else if row_name == "Visual Delay" {
@@ -1516,7 +1538,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         {
             state.player_profiles[player_idx].visual_delay_ms = raw;
             if should_persist {
-                crate::game::profile::update_visual_delay_ms(raw);
+                crate::game::profile::update_visual_delay_ms_for_side(persist_side, raw);
             }
         }
     } else if row_name == "Judgment Font" {
@@ -1546,7 +1568,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         };
         state.player_profiles[player_idx].judgment_graphic = setting;
         if should_persist {
-            crate::game::profile::update_judgment_graphic(setting);
+            crate::game::profile::update_judgment_graphic_for_side(persist_side, setting);
         }
     } else if row_name == "Combo Font" {
         let setting = match row.selected_choice_index[player_idx] {
@@ -1562,7 +1584,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         };
         state.player_profiles[player_idx].combo_font = setting;
         if should_persist {
-            crate::game::profile::update_combo_font(setting);
+            crate::game::profile::update_combo_font_for_side(persist_side, setting);
         }
     } else if row_name == "Hold Judgment" {
         let setting = match row.selected_choice_index[player_idx] {
@@ -1574,7 +1596,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         };
         state.player_profiles[player_idx].hold_judgment_graphic = setting;
         if should_persist {
-            crate::game::profile::update_hold_judgment_graphic(setting);
+            crate::game::profile::update_hold_judgment_graphic_for_side(persist_side, setting);
         }
     } else if row_name == "NoteSkin" {
         let setting = match row.selected_choice_index[player_idx] {
@@ -1586,7 +1608,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         };
         state.player_profiles[player_idx].noteskin = setting;
         if should_persist {
-            crate::game::profile::update_noteskin(setting);
+            crate::game::profile::update_noteskin_for_side(persist_side, setting);
         }
 
         let play_style = crate::game::profile::get_session_play_style();
@@ -1883,8 +1905,16 @@ fn toggle_scroll_row(state: &mut State, player_idx: usize) {
     }
     state.player_profiles[idx].scroll_option = setting;
     state.player_profiles[idx].reverse_scroll = setting.contains(ScrollOption::Reverse);
-    if idx == session_persisted_player_idx() {
-        crate::game::profile::update_scroll_option(setting);
+    let play_style = crate::game::profile::get_session_play_style();
+    let should_persist =
+        play_style == crate::game::profile::PlayStyle::Versus || idx == session_persisted_player_idx();
+    if should_persist {
+        let side = if idx == P1 {
+            crate::game::profile::PlayerSide::P1
+        } else {
+            crate::game::profile::PlayerSide::P2
+        };
+        crate::game::profile::update_scroll_option_for_side(side, setting);
     }
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
@@ -1923,10 +1953,18 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     state.player_profiles[idx].show_fa_plus_window = window_enabled;
     state.player_profiles[idx].show_ex_score = ex_enabled;
     state.player_profiles[idx].show_fa_plus_pane = pane_enabled;
-    if idx == session_persisted_player_idx() {
-        crate::game::profile::update_show_fa_plus_window(window_enabled);
-        crate::game::profile::update_show_ex_score(ex_enabled);
-        crate::game::profile::update_show_fa_plus_pane(pane_enabled);
+    let play_style = crate::game::profile::get_session_play_style();
+    let should_persist =
+        play_style == crate::game::profile::PlayStyle::Versus || idx == session_persisted_player_idx();
+    if should_persist {
+        let side = if idx == P1 {
+            crate::game::profile::PlayerSide::P1
+        } else {
+            crate::game::profile::PlayerSide::P2
+        };
+        crate::game::profile::update_show_fa_plus_window_for_side(side, window_enabled);
+        crate::game::profile::update_show_ex_score_for_side(side, ex_enabled);
+        crate::game::profile::update_show_fa_plus_pane_for_side(side, pane_enabled);
     }
 
     audio::play_sfx("assets/sounds/change_value.ogg");
@@ -2074,8 +2112,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
-    let profile = crate::game::profile::get();
-    let side = crate::game::profile::get_session_player_side();
     let play_style = crate::game::profile::get_session_play_style();
     let show_p2 = play_style == crate::game::profile::PlayStyle::Versus;
     let active = session_active_players();
@@ -2097,23 +2133,31 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         right_avatar: None,
     }));
 
-    let footer_avatar = profile
+    let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
+    let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
+    let p1_avatar = p1_profile
         .avatar_texture_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
-    let (footer_left, footer_right, left_avatar, right_avatar) = match side {
-        crate::game::profile::PlayerSide::P1 => (
-            Some(profile.display_name.as_str()),
-            Some("PRESS START"),
-            footer_avatar,
-            None,
-        ),
-        crate::game::profile::PlayerSide::P2 => (
-            Some("PRESS START"),
-            Some(profile.display_name.as_str()),
-            None,
-            footer_avatar,
-        ),
+    let p2_avatar = p2_profile
+        .avatar_texture_key
+        .as_deref()
+        .map(|texture_key| AvatarParams { texture_key });
+
+    let p1_joined =
+        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P1);
+    let p2_joined =
+        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P2);
+
+    let (footer_left, left_avatar) = if p1_joined {
+        (Some(p1_profile.display_name.as_str()), p1_avatar)
+    } else {
+        (Some("PRESS START"), None)
+    };
+    let (footer_right, right_avatar) = if p2_joined {
+        (Some(p2_profile.display_name.as_str()), p2_avatar)
+    } else {
+        (Some("PRESS START"), None)
     };
     actors.push(screen_bar::build(ScreenBarParams {
         title: "EVENT MODE",

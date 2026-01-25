@@ -307,11 +307,6 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
         preview_noteskin_for_choice(&state.choices, state.p2_selected_index);
 }
 
-#[inline(always)]
-pub const fn both_players_joined(state: &State) -> bool {
-    state.p1_joined && state.p2_joined
-}
-
 pub fn update(state: &mut State, dt: f32) {
     const BPM: f32 = 120.0;
     let dt = dt.max(0.0);
@@ -353,18 +348,24 @@ const fn both_ready(state: &State) -> bool {
 }
 
 #[inline(always)]
-fn active_choice(state: &State) -> ActiveProfile {
-    if state.p1_joined {
+fn active_choices(state: &State) -> (ActiveProfile, ActiveProfile) {
+    let p1 = if state.p1_joined {
         state
             .choices
             .get(state.p1_selected_index)
             .map_or(ActiveProfile::Guest, |c| c.kind.clone())
     } else {
+        ActiveProfile::Guest
+    };
+    let p2 = if state.p2_joined {
         state
             .choices
             .get(state.p2_selected_index)
             .map_or(ActiveProfile::Guest, |c| c.kind.clone())
-    }
+    } else {
+        ActiveProfile::Guest
+    };
+    (p1, p2)
 }
 
 fn trigger_invalid_choice(state: &mut State, is_p1: bool) {
@@ -449,7 +450,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 } else {
                     profile::PlayerSide::P2
                 });
-                return ScreenAction::SelectProfile(active_choice(state));
+                profile::set_session_joined(state.p1_joined, state.p2_joined);
+                let (p1, p2) = active_choices(state);
+                return ScreenAction::SelectProfiles { p1, p2 };
             }
             ScreenAction::None
         }
@@ -535,7 +538,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 } else {
                     profile::PlayerSide::P2
                 });
-                return ScreenAction::SelectProfile(active_choice(state));
+                profile::set_session_joined(state.p1_joined, state.p2_joined);
+                let (p1, p2) = active_choices(state);
+                return ScreenAction::SelectProfiles { p1, p2 };
             }
             ScreenAction::None
         }

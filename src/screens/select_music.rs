@@ -1160,11 +1160,10 @@ fn format_chart_length(seconds: i32) -> String {
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
-    let profile = profile::get();
     let side = crate::game::profile::get_session_player_side();
     let play_style = crate::game::profile::get_session_play_style();
     let is_p2_single = play_style == crate::game::profile::PlayStyle::Single
-        && crate::game::profile::get_session_player_side() == crate::game::profile::PlayerSide::P2;
+        && side == crate::game::profile::PlayerSide::P2;
     let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
     let target_chart_type = play_style.chart_type();
 
@@ -1186,23 +1185,31 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         right_avatar: None,
     }));
 
-    let footer_avatar = profile
+    let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
+    let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
+    let p1_avatar = p1_profile
         .avatar_texture_key
         .as_deref()
         .map(|k| AvatarParams { texture_key: k });
-    let (footer_left, footer_right, left_avatar, right_avatar) = match side {
-        crate::game::profile::PlayerSide::P1 => (
-            Some(profile.display_name.as_str()),
-            Some("PRESS START"),
-            footer_avatar,
-            None,
-        ),
-        crate::game::profile::PlayerSide::P2 => (
-            Some("PRESS START"),
-            Some(profile.display_name.as_str()),
-            None,
-            footer_avatar,
-        ),
+    let p2_avatar = p2_profile
+        .avatar_texture_key
+        .as_deref()
+        .map(|k| AvatarParams { texture_key: k });
+
+    let p1_joined =
+        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P1);
+    let p2_joined =
+        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P2);
+
+    let (footer_left, left_avatar) = if p1_joined {
+        (Some(p1_profile.display_name.as_str()), p1_avatar)
+    } else {
+        (Some("PRESS START"), None)
+    };
+    let (footer_right, right_avatar) = if p2_joined {
+        (Some(p2_profile.display_name.as_str()), p2_avatar)
+    } else {
+        (Some("PRESS START"), None)
     };
     actors.push(screen_bar::build(ScreenBarParams {
         title: "EVENT MODE",
@@ -1557,6 +1564,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     let build_pane = |pane_cx: f32,
                       sel_col: [f32; 4],
+                      player_initials: &str,
                       steps: &str,
                       mines: &str,
                       jumps: &str,
@@ -1589,7 +1597,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if let Some(sc) = scores::get_cached_score(&c.short_hash) {
                 if sc.grade != scores::Grade::Failed {
                     (
-                        profile.player_initials.clone(),
+                        player_initials.to_string(),
                         format!("{:.2}%", sc.score_percent * 100.0),
                     )
                 } else {
@@ -1622,6 +1630,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.extend(build_pane(
             screen_width() * 0.25 - 5.0,
             sel_col_p1,
+            p1_profile.player_initials.as_str(),
             &steps,
             &mines,
             &jumps,
@@ -1634,6 +1643,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.extend(build_pane(
             screen_width() * 0.75 + 5.0,
             sel_col_p2,
+            p2_profile.player_initials.as_str(),
             &steps_p2,
             &mines_p2,
             &jumps_p2,
@@ -1652,6 +1662,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.extend(build_pane(
             pane_cx,
             sel_col_p1,
+            if is_p2_single {
+                p2_profile.player_initials.as_str()
+            } else {
+                p1_profile.player_initials.as_str()
+            },
             &steps,
             &mines,
             &jumps,
