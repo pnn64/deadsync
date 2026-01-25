@@ -1554,10 +1554,20 @@ impl App {
             if prev == CurrentScreen::PlayerOptions
                 && let Some(po_state) = &self.state.screens.player_options_state
             {
-                let setting = match po_state.speed_mod.mod_type.as_str() {
-                    "C" => Some(ScrollSpeedSetting::CMod(po_state.speed_mod.value)),
-                    "X" => Some(ScrollSpeedSetting::XMod(po_state.speed_mod.value)),
-                    "M" => Some(ScrollSpeedSetting::MMod(po_state.speed_mod.value)),
+                let play_style = profile::get_session_play_style();
+                let player_side = profile::get_session_player_side();
+                let persisted_idx = match play_style {
+                    profile::PlayStyle::Versus => 0,
+                    profile::PlayStyle::Single | profile::PlayStyle::Double => match player_side {
+                        profile::PlayerSide::P1 => 0,
+                        profile::PlayerSide::P2 => 1,
+                    },
+                };
+                let speed_mod = &po_state.speed_mod[persisted_idx];
+                let setting = match speed_mod.mod_type.as_str() {
+                    "C" => Some(ScrollSpeedSetting::CMod(speed_mod.value)),
+                    "X" => Some(ScrollSpeedSetting::XMod(speed_mod.value)),
+                    "M" => Some(ScrollSpeedSetting::MMod(speed_mod.value)),
                     _ => None,
                 };
 
@@ -1567,7 +1577,7 @@ impl App {
                 } else {
                     warn!(
                         "Unsupported speed mod '{}' not saved to profile.",
-                        po_state.speed_mod.mod_type
+                        speed_mod.mod_type
                     );
                 }
 
@@ -1708,12 +1718,19 @@ impl App {
                     _ => crate::game::scroll::ScrollSpeedSetting::default(),
                 };
                 let scroll_speeds = [
-                    to_scroll_speed(&po_state.speed_mod),
-                    to_scroll_speed(&po_state.p2_speed_mod),
+                    to_scroll_speed(&po_state.speed_mod[0]),
+                    to_scroll_speed(&po_state.speed_mod[1]),
                 ];
 
                 let color_index = po_state.active_color_index;
-                let gs = gameplay::init(song_arc, chart, color_index, po_state.music_rate, scroll_speeds);
+                let gs = gameplay::init(
+                    song_arc,
+                    chart,
+                    color_index,
+                    po_state.music_rate,
+                    scroll_speeds,
+                    po_state.player_profiles,
+                );
 
                 commands.push(Command::SetDynamicBackground(
                     gs.song.background_path.clone(),

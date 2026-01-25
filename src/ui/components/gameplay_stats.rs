@@ -47,8 +47,6 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
         return vec![];
     }
 
-    let profile = profile::get();
-    let show_fa_plus_window = profile.show_fa_plus_window;
     let center_x = screen_center_x();
 
     let total_tapnotes = state.chart.stats.total_steps as f32;
@@ -66,7 +64,6 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
     };
     let numbers_zoom_y = group_zoom_y * 0.5;
     let numbers_zoom_x = group_zoom_x * 0.5;
-    let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
     let y_base = -280.0;
 
     // Keep the background bar below the top HUD (song title/BPM), but let the
@@ -149,6 +146,9 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                 let group_y = 100.0;
                 let anchor_x = if is_p1 { anchor_p1 } else { anchor_p2 };
                 let group_origin_y = screen_center_y() + group_y;
+
+                let show_fa_plus_window = state.player_profiles[player_idx].show_fa_plus_window;
+                let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
 
                 if show_fa_plus_window && notes_per_player > 0 {
                     let start = player_idx * notes_per_player;
@@ -377,8 +377,7 @@ pub fn build_double_step_stats(
         } else {
             4
         };
-        let profile = profile::get();
-        let show_fa_plus_window = profile.show_fa_plus_window;
+        let show_fa_plus_window = state.player_profiles[0].show_fa_plus_window;
         let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
         let y_base = -280.0;
 
@@ -874,7 +873,8 @@ fn build_holds_mines_rolls_pane_at(
 }
 
 fn notefield_width(state: &State) -> Option<f32> {
-    let ns = state.noteskin.as_ref()?;
+    let ns = state.noteskin[0].as_ref()?;
+    let field_zoom = state.field_zoom[0];
     let cols = state
         .cols_per_player
         .min(ns.column_xs.len())
@@ -891,17 +891,17 @@ fn notefield_width(state: &State) -> Option<f32> {
         max_x = max_x.max(xf);
     }
 
-    let target_arrow_px = 64.0 * state.field_zoom.max(0.0);
+    let target_arrow_px = 64.0 * field_zoom.max(0.0);
     let size = ns.receptor_off[0].size();
     let w = size[0].max(0) as f32;
     let h = size[1].max(0) as f32;
     let arrow_w = if h > 0.0 && target_arrow_px > 0.0 {
         w * (target_arrow_px / h)
     } else {
-        w * state.field_zoom.max(0.0)
+        w * field_zoom.max(0.0)
     };
 
-    Some(((max_x - min_x) * state.field_zoom.max(0.0)) + arrow_w)
+    Some(((max_x - min_x) * field_zoom.max(0.0)) + arrow_w)
 }
 
 fn build_holds_mines_rolls_pane(
@@ -1094,8 +1094,11 @@ fn build_side_pane(
     const LABEL_DIGIT_STEP: f32 = 16.0;
     const NUMBER_TO_LABEL_GAP: f32 = 8.0;
     let base_numbers_local_x_offset = base_label_local_x_offset - NUMBER_TO_LABEL_GAP;
-    let profile = profile::get();
-    let show_fa_plus_window = profile.show_fa_plus_window;
+    let player_idx = match (state.num_players, player_side) {
+        (2, profile::PlayerSide::P2) => 1,
+        _ => 0,
+    };
+    let show_fa_plus_window = state.player_profiles[player_idx].show_fa_plus_window;
     let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
     let y_base = -280.0;
 

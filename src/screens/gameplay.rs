@@ -83,20 +83,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
     // --- Background and Filter ---
     actors.push(build_background(state));
-    let filter_alpha = match profile.background_filter {
-        crate::game::profile::BackgroundFilter::Off => 0.0,
-        crate::game::profile::BackgroundFilter::Dark => 0.5,
-        crate::game::profile::BackgroundFilter::Darker => 0.75,
-        crate::game::profile::BackgroundFilter::Darkest => 0.95,
-    };
-    if filter_alpha > 0.0 {
-        actors.push(act!(quad:
-            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
-            zoomto(screen_width(), screen_height()):
-            diffuse(0.0, 0.0, 0.0, filter_alpha):
-            z(-99) // Draw just above the background
-        ));
-    }
 
     // Global offset adjustment overlay (centered text with subtle shadow).
     if let Some(msg) = &state.sync_overlay_message {
@@ -116,24 +102,93 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
 
-    let (notefield_actors, playfield_center_x) = match play_style {
-        profile::PlayStyle::Versus => {
-            let (p1, p1_x) = notefield::build(state, &profile, notefield::FieldPlacement::P1);
-            let (p2, _) = notefield::build(state, &profile, notefield::FieldPlacement::P2);
-            actors.extend(p2);
-            (p1, p1_x)
+    let notefield_width = |player_idx: usize| -> f32 {
+        let Some(ns) = state.noteskin[player_idx].as_ref() else {
+            return 256.0;
+        };
+        let cols = state
+            .cols_per_player
+            .min(ns.column_xs.len())
+            .min(ns.receptor_off.len());
+        if cols == 0 {
+            return 256.0;
         }
-        _ => notefield::build(
-            state,
-            &profile,
-            if is_p2_single {
+        let mut min_x = f32::INFINITY;
+        let mut max_x = f32::NEG_INFINITY;
+        for x in ns.column_xs.iter().take(cols) {
+            let xf = *x as f32;
+            min_x = min_x.min(xf);
+            max_x = max_x.max(xf);
+        }
+        let field_zoom = state.field_zoom[player_idx].max(0.0);
+        let target_arrow_px = 64.0 * field_zoom;
+        let size = ns.receptor_off[0].size();
+        let w = size[0].max(0) as f32;
+        let h = size[1].max(0) as f32;
+        let arrow_w = if h > 0.0 && target_arrow_px > 0.0 {
+            w * (target_arrow_px / h)
+        } else {
+            w * field_zoom
+        };
+        ((max_x - min_x) * field_zoom) + arrow_w
+    };
+
+    let (p1_actors, p2_actors, playfield_center_x, per_player_fields): (
+        Vec<Actor>,
+        Option<Vec<Actor>>,
+        f32,
+        [(usize, f32); 2],
+    ) = match play_style {
+        profile::PlayStyle::Versus => {
+            let (p1, p1_x) = notefield::build(
+                state,
+                &state.player_profiles[0],
+                notefield::FieldPlacement::P1,
+            );
+            let (p2, p2_x) = notefield::build(
+                state,
+                &state.player_profiles[1],
+                notefield::FieldPlacement::P2,
+            );
+            (p1, Some(p2), p1_x, [(0, p1_x), (1, p2_x)])
+        }
+        _ => {
+            let placement = if is_p2_single {
                 notefield::FieldPlacement::P2
             } else {
                 notefield::FieldPlacement::P1
-            },
-        ),
+            };
+            let (nf, nf_x) = notefield::build(state, &state.player_profiles[0], placement);
+            (nf, None, nf_x, [(0, nf_x), (usize::MAX, 0.0)])
+        }
     };
-    actors.extend(notefield_actors);
+
+    // Background filter per-player (Simply Love parity): draw behind each notefield, not full-screen.
+    for &(player_idx, field_x) in &per_player_fields {
+        if player_idx == usize::MAX || player_idx >= state.num_players {
+            continue;
+        }
+        let filter_alpha = match state.player_profiles[player_idx].background_filter {
+            crate::game::profile::BackgroundFilter::Off => 0.0,
+            crate::game::profile::BackgroundFilter::Dark => 0.5,
+            crate::game::profile::BackgroundFilter::Darker => 0.75,
+            crate::game::profile::BackgroundFilter::Darkest => 0.95,
+        };
+        if filter_alpha <= 0.0 {
+            continue;
+        }
+        actors.push(act!(quad:
+            align(0.5, 0.5): xy(field_x, screen_center_y()):
+            zoomto(notefield_width(player_idx), screen_height()):
+            diffuse(0.0, 0.0, 0.0, filter_alpha):
+            z(-99)
+        ));
+    }
+
+    if let Some(p2_actors) = p2_actors {
+        actors.extend(p2_actors);
+    }
+    actors.extend(p1_actors);
     let difficulty_color = color::difficulty_rgba(&state.chart.difficulty, state.active_color_index);
     let meter_text = state.chart.meter.to_string();
     let notes_per_player = if state.num_players > 0 {
@@ -191,7 +246,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         // Score Display
         let score_y = 56.0;
-        let (score_text, score_color) = if profile.show_ex_score {
+        let (score_text, score_color) = if state.player_profiles[player_idx].show_ex_score {
             let mines_disabled = false;
             let start = player_idx * notes_per_player;
             let end = start + notes_per_player;

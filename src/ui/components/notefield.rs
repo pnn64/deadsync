@@ -90,10 +90,6 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
     };
 
     // --- Playfield Positioning (1:1 with Simply Love) ---
-    // Use the cached field_zoom from gameplay state so visual layout and
-    // scroll math share the exact same scaling as gameplay.
-    let field_zoom = state.field_zoom;
-
     // In P2-only single-player, we still have a single player runtime (index 0),
     // but need to place the notefield on the P2 side of the screen.
     let player_idx = if state.num_players == 1 {
@@ -107,6 +103,9 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
     if player_idx >= state.num_players {
         return (Vec::new(), screen_center_x());
     }
+    // Use the cached field_zoom from gameplay state so visual layout and
+    // scroll math share the exact same scaling as gameplay.
+    let field_zoom = state.field_zoom[player_idx];
     let scroll_speed = state.scroll_speed[player_idx];
     let col_start = player_idx * state.cols_per_player;
     let col_end = (col_start + state.cols_per_player)
@@ -169,7 +168,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
         }
     });
 
-    if let Some(ns) = &state.noteskin {
+    if let Some(ns) = &state.noteskin[player_idx] {
         let target_arrow_px = TARGET_ARROW_PIXEL_SIZE * field_zoom;
         let target_explosion_px = TARGET_EXPLOSION_PIXEL_SIZE * field_zoom;
         let scale_sprite = |size: [i32; 2]| -> [f32; 2] {
@@ -1074,7 +1073,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
     // Combo Milestone Explosions (100 / 1000 combo)
     if !p.combo_milestones.is_empty() {
         let combo_center_x = playfield_center_x;
-        let combo_center_y = if state.reverse_scroll {
+        let combo_center_y = if state.reverse_scroll[player_idx] {
             screen_center_y() - COMBO_OFFSET_FROM_CENTER
         } else {
             screen_center_y() + COMBO_OFFSET_FROM_CENTER
@@ -1167,7 +1166,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
     if p.miss_combo >= SHOW_COMBO_AT {
         let combo_y = if is_centered {
             receptor_y_centered + 155.0
-        } else if state.reverse_scroll {
+        } else if state.reverse_scroll[player_idx] {
             screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
         } else {
             screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
@@ -1194,7 +1193,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
     } else if p.combo >= SHOW_COMBO_AT {
         let combo_y = if is_centered {
             receptor_y_centered + 155.0
-        } else if state.reverse_scroll {
+        } else if state.reverse_scroll[player_idx] {
             screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
         } else {
             screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
@@ -1325,7 +1324,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 };
                 let judgment_y = if is_centered {
                     receptor_y_centered + 95.0
-                } else if state.reverse_scroll {
+                } else if state.reverse_scroll[player_idx] {
                     screen_center_y() + TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
                 } else {
                     screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
@@ -1374,6 +1373,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
             };
             let column_offset = state
                 .noteskin
+                [player_idx]
                 .as_ref()
                 .and_then(|ns| ns.column_xs.get(i))
                 .map(|&x| x as f32)

@@ -335,17 +335,18 @@ pub struct State {
     pub possible_grade_points: i32,
     pub song_completed_naturally: bool,
 
-    pub noteskin: Option<Noteskin>,
+    pub player_profiles: [profile::Profile; MAX_PLAYERS],
+    pub noteskin: [Option<Noteskin>; MAX_PLAYERS],
     pub active_color_index: i32,
     pub player_color: [f32; 4],
     pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
     pub scroll_reference_bpm: f32,
-    pub field_zoom: f32,
+    pub field_zoom: [f32; MAX_PLAYERS],
     pub scroll_pixels_per_second: [f32; MAX_PLAYERS],
     pub scroll_travel_time: [f32; MAX_PLAYERS],
     pub draw_distance_before_targets: f32,
     pub draw_distance_after_targets: f32,
-    pub reverse_scroll: bool,
+    pub reverse_scroll: [bool; MAX_PLAYERS],
     pub column_scroll_dirs: [f32; MAX_COLS],
     pub receptor_glow_timers: [f32; MAX_COLS],
     pub receptor_bop_timers: [f32; MAX_COLS],
@@ -504,6 +505,7 @@ pub fn init(
     active_color_index: i32,
     music_rate: f32,
     mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
+    mut player_profiles: [profile::Profile; MAX_PLAYERS],
 ) -> State {
     info!("Initializing Gameplay Screen...");
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
@@ -521,6 +523,7 @@ pub fn init(
     };
     if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
         scroll_speed[0] = scroll_speed[1];
+        player_profiles[0] = player_profiles[1].clone();
     }
     let player_color_index = if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
         active_color_index - 2
@@ -533,39 +536,51 @@ pub fn init(
         num_players: 1,
     };
 
-    let prof = profile::get();
-    let noteskin_path = match (prof.noteskin, cols_per_player) {
-        (crate::game::profile::NoteSkin::Cel, 8) => "assets/noteskins/cel/dance-double.txt",
-        (crate::game::profile::NoteSkin::Cel, _) => "assets/noteskins/cel/dance-single.txt",
-        (crate::game::profile::NoteSkin::Metal, 8) => "assets/noteskins/metal/dance-double.txt",
-        (crate::game::profile::NoteSkin::Metal, _) => "assets/noteskins/metal/dance-single.txt",
-        (crate::game::profile::NoteSkin::EnchantmentV2, 8) => {
-            "assets/noteskins/enchantment-v2/dance-double.txt"
-        }
-        (crate::game::profile::NoteSkin::EnchantmentV2, _) => {
-            "assets/noteskins/enchantment-v2/dance-single.txt"
-        }
-        (crate::game::profile::NoteSkin::DevCel2024V3, 8) => {
-            "assets/noteskins/devcel-2024-v3/dance-double.txt"
-        }
-        (crate::game::profile::NoteSkin::DevCel2024V3, _) => {
-            "assets/noteskins/devcel-2024-v3/dance-single.txt"
-        }
-    };
     let fallback_cel_path = if cols_per_player == 8 {
         "assets/noteskins/cel/dance-double.txt"
     } else {
         "assets/noteskins/cel/dance-single.txt"
     };
-    let noteskin = noteskin::load(Path::new(noteskin_path), &style)
-        .ok()
-        .or_else(|| noteskin::load(Path::new(fallback_cel_path), &style).ok());
+    let noteskin: [Option<Noteskin>; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            return None;
+        }
+        let prof = &player_profiles[player];
+        let noteskin_path = match (prof.noteskin, cols_per_player) {
+            (crate::game::profile::NoteSkin::Cel, 8) => "assets/noteskins/cel/dance-double.txt",
+            (crate::game::profile::NoteSkin::Cel, _) => "assets/noteskins/cel/dance-single.txt",
+            (crate::game::profile::NoteSkin::Metal, 8) => "assets/noteskins/metal/dance-double.txt",
+            (crate::game::profile::NoteSkin::Metal, _) => "assets/noteskins/metal/dance-single.txt",
+            (crate::game::profile::NoteSkin::EnchantmentV2, 8) => {
+                "assets/noteskins/enchantment-v2/dance-double.txt"
+            }
+            (crate::game::profile::NoteSkin::EnchantmentV2, _) => {
+                "assets/noteskins/enchantment-v2/dance-single.txt"
+            }
+            (crate::game::profile::NoteSkin::DevCel2024V3, 8) => {
+                "assets/noteskins/devcel-2024-v3/dance-double.txt"
+            }
+            (crate::game::profile::NoteSkin::DevCel2024V3, _) => {
+                "assets/noteskins/devcel-2024-v3/dance-single.txt"
+            }
+        };
+        noteskin::load(Path::new(noteskin_path), &style)
+            .ok()
+            .or_else(|| noteskin::load(Path::new(fallback_cel_path), &style).ok())
+    });
 
-    let mini_value = (prof.mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
-    let mut field_zoom = 1.0 - mini_value * 0.5;
-    if field_zoom.abs() < 0.01 {
-        field_zoom = 0.01;
-    }
+    let field_zoom: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            return 1.0;
+        }
+        let mini_value =
+            (player_profiles[player].mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
+        let mut z = 1.0 - mini_value * 0.5;
+        if z.abs() < 0.01 {
+            z = 0.01;
+        }
+        z
+    });
 
     let config = crate::config::get();
     let song_full_title: Arc<str> = Arc::from(song.display_full_title(config.translated_titles));
@@ -755,9 +770,11 @@ pub fn init(
 
     let initial_bpm = timing.get_bpm_for_beat(first_note_beat);
 
-    let centered = prof
-        .scroll_option
-        .contains(profile::ScrollOption::Centered);
+    let centered = (0..num_players).any(|player| {
+        player_profiles[player]
+            .scroll_option
+            .contains(profile::ScrollOption::Centered)
+    });
 
     let mut reference_bpm =
         get_reference_bpm_from_display_tag(&song.display_bpm).unwrap_or_else(|| {
@@ -804,7 +821,16 @@ pub fn init(
     let music_end_time =
         compute_music_end_time(&notes, &note_time_cache, &hold_end_time_cache, rate);
     let notes_len = notes.len();
-    let column_scroll_dirs = compute_column_scroll_dirs(prof.scroll_option, num_cols);
+    let mut column_scroll_dirs = [1.0_f32; MAX_COLS];
+    for player in 0..num_players {
+        let start = player * cols_per_player;
+        let end = (start + cols_per_player).min(num_cols).min(MAX_COLS);
+        let local_dirs =
+            compute_column_scroll_dirs(player_profiles[player].scroll_option, cols_per_player);
+        for col in start..end {
+            column_scroll_dirs[col] = local_dirs[col - start];
+        }
+    }
 
     let note_range_start: [usize; MAX_PLAYERS] = std::array::from_fn(|player| {
         if num_players <= 1 {
@@ -815,8 +841,11 @@ pub fn init(
     });
 
     let global_visual_delay_seconds = config.visual_delay_seconds;
-    let player_visual_delay_seconds: [f32; MAX_PLAYERS] = std::array::from_fn(|_| {
-        let ms = prof.visual_delay_ms.clamp(-100, 100);
+    let player_visual_delay_seconds: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            return 0.0;
+        }
+        let ms = player_profiles[player].visual_delay_ms.clamp(-100, 100);
         ms as f32 / 1000.0
     });
     let init_music_time = -start_delay;
@@ -825,6 +854,12 @@ pub fn init(
     });
     let current_beat_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         timing.get_beat_for_time(current_music_time_visible[player])
+    });
+    let reverse_scroll: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            return false;
+        }
+        player_profiles[player].reverse_scroll
     });
 
     State {
@@ -870,6 +905,7 @@ pub fn init(
         is_in_delay: false,
         possible_grade_points,
         song_completed_naturally: false,
+        player_profiles,
         noteskin,
         active_color_index,
         player_color: color::decorative_rgba(player_color_index),
@@ -880,7 +916,7 @@ pub fn init(
         scroll_travel_time: travel_time,
         draw_distance_before_targets,
         draw_distance_after_targets,
-        reverse_scroll: prof.reverse_scroll,
+        reverse_scroll,
         column_scroll_dirs,
         receptor_glow_timers: [0.0; MAX_COLS],
         receptor_bop_timers: [0.0; MAX_COLS],
@@ -926,7 +962,8 @@ fn trigger_tap_explosion(state: &mut State, column: usize, grade: JudgeGrade) {
     let Some(window_key) = grade_to_window(grade) else {
         return;
     };
-    let spawn_window = state.noteskin.as_ref().and_then(|ns| {
+    let player = player_for_col(state, column);
+    let spawn_window = state.noteskin[player].as_ref().and_then(|ns| {
         if ns.tap_explosions.contains_key(window_key) {
             Some(window_key.to_string())
         } else {
@@ -1973,11 +2010,19 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
             milestone.elapsed < max_duration
         });
     }
-    for explosion in &mut state.tap_explosions {
+    let num_players = state.num_players;
+    let cols_per_player = state.cols_per_player;
+    for (col, explosion) in state.tap_explosions.iter_mut().enumerate() {
         if let Some(active) = explosion {
             active.elapsed += delta_time;
+            let player = if num_players <= 1 || cols_per_player == 0 {
+                0
+            } else {
+                (col / cols_per_player).min(num_players.saturating_sub(1))
+            };
             let lifetime = state
                 .noteskin
+                [player]
                 .as_ref()
                 .and_then(|ns| ns.tap_explosions.get(&active.window))
                 .map_or(0.0, |explosion| explosion.animation.duration());
@@ -2075,7 +2120,7 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
                 if final_multiplier > 0.0 {
                     let pixels_per_beat = ScrollSpeedSetting::ARROW_SPACING
                         * final_multiplier
-                        * state.field_zoom;
+                        * state.field_zoom[player];
                     let lookahead_in_displayed_beats =
                         state.draw_distance_before_targets / pixels_per_beat;
                     let target_displayed_beat =
@@ -2287,8 +2332,31 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
 
 #[inline(always)]
 fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
-    let receptor_y_normal = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER;
-    let receptor_y_reverse = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE;
+    let num_players = state.num_players;
+    let cols_per_player = state.cols_per_player;
+    let player_offset_y: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            0.0
+        } else {
+            state.player_profiles[player]
+                .note_field_offset_y
+                .clamp(-50, 50) as f32
+        }
+    });
+    let player_is_centered: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
+        player < num_players
+            && state.player_profiles[player]
+                .scroll_option
+                .contains(profile::ScrollOption::Centered)
+    });
+    let receptor_y_normal: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + player_offset_y[player]
+    });
+    let receptor_y_reverse: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE + player_offset_y[player]
+    });
+    let receptor_y_centered: [f32; MAX_PLAYERS] =
+        std::array::from_fn(|player| screen_center_y() + player_offset_y[player]);
     let player_cull_time: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         music_time_sec.min(state.current_music_time_visible[player])
     });
@@ -2310,7 +2378,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     let cmod_pps_zoomed: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         match state.scroll_speed[player] {
             ScrollSpeedSetting::CMod(c_bpm) => {
-                (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING * state.field_zoom
+                (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING * state.field_zoom[player]
             }
             _ => 0.0,
         }
@@ -2319,27 +2387,26 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         ScrollSpeedSetting::CMod(c_bpm) => (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING,
         _ => 0.0,
     });
-
-    let profile = profile::get();
-    let is_centered = profile
-        .scroll_option
-        .contains(profile::ScrollOption::Centered);
     let column_dirs = state.column_scroll_dirs;
 
     // Centered receptors ignore Reverse for positioning (but not direction).
     // Apply notefield offset here too for consistency.
-    let receptor_y_centered = screen_center_y() + profile.note_field_offset_y as f32;
     let num_cols = state.num_cols;
     let column_receptor_ys: [f32; MAX_COLS] = std::array::from_fn(|i| {
         if i >= num_cols {
-            return receptor_y_normal;
+            return receptor_y_normal[0];
         }
-        if is_centered {
-            receptor_y_centered
-        } else if column_dirs[i] >= 0.0 {
-            receptor_y_normal
+        let player = if num_players <= 1 || cols_per_player == 0 {
+            0
         } else {
-            receptor_y_reverse
+            (i / cols_per_player).min(num_players.saturating_sub(1))
+        };
+        if player_is_centered[player] {
+            receptor_y_centered[player]
+        } else if column_dirs[i] >= 0.0 {
+            receptor_y_normal[player]
+        } else {
+            receptor_y_reverse[player]
         }
     });
 
@@ -2348,8 +2415,6 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     } else {
         1.0
     };
-    let num_players = state.num_players;
-    let cols_per_player = state.cols_per_player;
 
     for (col_idx, col_arrows) in state.arrows.iter_mut().enumerate() {
         let dir = column_dirs[col_idx];
@@ -2382,7 +2447,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                             let beat_diff_disp = note_disp_beat - curr_disp_beat;
                             (dir
                                     * beat_diff_disp
-                                    * ScrollSpeedSetting::ARROW_SPACING * beatmult).mul_add(state.field_zoom, receptor_y)
+                                    * ScrollSpeedSetting::ARROW_SPACING * beatmult).mul_add(state.field_zoom[player], receptor_y)
                         }
                     };
                     return if dir < 0.0 {
@@ -2408,7 +2473,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                         let beat_diff_disp = note_disp_beat - curr_disp_beat;
                         (dir
                                 * beat_diff_disp
-                                * ScrollSpeedSetting::ARROW_SPACING * beatmult).mul_add(state.field_zoom, receptor_y)
+                                * ScrollSpeedSetting::ARROW_SPACING * beatmult).mul_add(state.field_zoom[player], receptor_y)
                     }
                 };
                 return if dir < 0.0 {
@@ -2436,7 +2501,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                     let beat_diff_disp = note_disp_beat - curr_disp_beat;
                     (dir
                             * beat_diff_disp
-                            * ScrollSpeedSetting::ARROW_SPACING * beatmult).mul_add(state.field_zoom, receptor_y)
+                            * ScrollSpeedSetting::ARROW_SPACING * beatmult).mul_add(state.field_zoom[player], receptor_y)
                 }
             };
             if dir < 0.0 {
@@ -2520,9 +2585,11 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     state.draw_distance_before_targets = draw_distance_before_targets;
 
     // Dynamic update of draw distance logic based on profile
-    let is_centered = profile::get()
-        .scroll_option
-        .contains(profile::ScrollOption::Centered);
+    let is_centered = (0..state.num_players).any(|player| {
+        state.player_profiles[player]
+            .scroll_option
+            .contains(profile::ScrollOption::Centered)
+    });
     state.draw_distance_after_targets = if is_centered {
         screen_height() * 0.6
     } else {
