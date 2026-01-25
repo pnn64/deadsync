@@ -1391,6 +1391,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             )
         };
 
+    let step_artist_p2 = if let Some(c) = immediate_chart_p2 {
+        if c.difficulty.eq_ignore_ascii_case("edit") && !c.description.trim().is_empty() {
+            c.description.as_str()
+        } else {
+            c.step_artist.as_str()
+        }
+    } else {
+        ""
+    };
+
     let (steps_p2, jumps_p2, holds_p2, mines_p2, hands_p2, rolls_p2, meter_p2) =
         if let Some(c) = immediate_chart_p2 {
             (
@@ -1420,22 +1430,36 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Step Artist & Steps
     let comp_h = screen_height() / 28.0;
-    let y_cen =
-        (screen_center_y() - 9.0) - 0.5 * comp_h + if is_p2_single { 88.0 } else { 0.0 };
-    let step_artist_x0 = if is_p2_single {
-        screen_center_x() - 244.0
-    } else if is_wide() {
-        screen_center_x() - 356.0
-    } else {
-        screen_center_x() - 346.0
-    };
-    let q_cx = step_artist_x0 + 113.0;
-    let s_x = step_artist_x0 + 30.0;
-    let a_x = step_artist_x0 + 75.0;
+    let base_y = (screen_center_y() - 9.0) - 0.5 * comp_h;
+    let mut push_step_artist = |y_cen: f32, x0: f32, sel_col: [f32; 4], step_artist: &str| {
+        let q_cx = x0 + 113.0;
+        let s_x = x0 + 30.0;
+        let a_x = x0 + 75.0;
 
-    actors.push(act!(quad: align(0.5, 0.5): xy(q_cx, y_cen): setsize(175.0, comp_h): z(120): diffuse(sel_col_p1[0], sel_col_p1[1], sel_col_p1[2], 1.0)));
-    actors.push(act!(text: font("miso"): settext("STEPS"): align(0.0, 0.5): xy(s_x, y_cen): zoom(0.8): maxwidth(40.0): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-    actors.push(act!(text: font("miso"): settext(step_artist): align(0.0, 0.5): xy(a_x, y_cen): zoom(0.8): maxwidth(124.0): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+        actors.push(act!(quad: align(0.5, 0.5): xy(q_cx, y_cen): setsize(175.0, comp_h): z(120): diffuse(sel_col[0], sel_col[1], sel_col[2], 1.0)));
+        actors.push(act!(text: font("miso"): settext("STEPS"): align(0.0, 0.5): xy(s_x, y_cen): zoom(0.8): maxwidth(40.0): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+        actors.push(act!(text: font("miso"): settext(step_artist): align(0.0, 0.5): xy(a_x, y_cen): zoom(0.8): maxwidth(124.0): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+    };
+
+    if is_versus {
+        let x0_p1 = if is_wide() {
+            screen_center_x() - 356.0
+        } else {
+            screen_center_x() - 346.0
+        };
+        push_step_artist(base_y, x0_p1, sel_col_p1, step_artist);
+        push_step_artist(base_y + 88.0, screen_center_x() - 244.0, sel_col_p2, step_artist_p2);
+    } else {
+        let y_cen = base_y + if is_p2_single { 88.0 } else { 0.0 };
+        let step_artist_x0 = if is_p2_single {
+            screen_center_x() - 244.0
+        } else if is_wide() {
+            screen_center_x() - 356.0
+        } else {
+            screen_center_x() - 346.0
+        };
+        push_step_artist(y_cen, step_artist_x0, sel_col_p1, step_artist);
+    }
 
     // Density Graph
     let panel_w = if is_wide() { 286.0 } else { 276.0 };
