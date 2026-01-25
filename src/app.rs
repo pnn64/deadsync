@@ -1584,10 +1584,9 @@ impl App {
                 commands.push(Command::UpdateSessionMusicRate(po_state.music_rate));
                 info!("Session music rate set to {:.2}x", po_state.music_rate);
 
-                self.state.session.preferred_difficulty_index = po_state.chart_difficulty_index;
-                commands.push(Command::UpdatePreferredDifficulty(
-                    po_state.chart_difficulty_index,
-                ));
+                let preferred_idx = po_state.chart_difficulty_index[persisted_idx];
+                self.state.session.preferred_difficulty_index = preferred_idx;
+                commands.push(Command::UpdatePreferredDifficulty(preferred_idx));
                 info!(
                     "Updated preferred difficulty index to {} from PlayerOptions",
                     self.state.session.preferred_difficulty_index
@@ -1665,10 +1664,24 @@ impl App {
                     select_music::MusicWheelEntry::Song(s) => s,
                     _ => panic!("Cannot open player options on a pack header"),
                 };
+                let play_style = profile::get_session_play_style();
+                let (steps, pref) = match play_style {
+                    profile::PlayStyle::Versus => (
+                        [sm_state.selected_steps_index, sm_state.p2_selected_steps_index],
+                        [
+                            sm_state.preferred_difficulty_index,
+                            sm_state.p2_preferred_difficulty_index,
+                        ],
+                    ),
+                    profile::PlayStyle::Single | profile::PlayStyle::Double => (
+                        [sm_state.selected_steps_index; 2],
+                        [sm_state.preferred_difficulty_index; 2],
+                    ),
+                };
                 (
                     song.clone(),
-                    sm_state.selected_steps_index,
-                    sm_state.preferred_difficulty_index,
+                    steps,
+                    pref,
                 )
             };
 
@@ -1691,24 +1704,67 @@ impl App {
         if target == CurrentScreen::Gameplay {
             if let Some(po_state) = self.state.screens.player_options_state.take() {
                 let song_arc = po_state.song;
-                let target_chart_type = profile::get_session_play_style().chart_type();
-                let chart_ref = select_music::chart_for_steps_index(
-                    &song_arc,
-                    target_chart_type,
-                    po_state.chart_steps_index,
-                )
-                .expect("No chart found for selected stepchart");
-                let chart = Arc::new(chart_ref.clone());
+                let play_style = profile::get_session_play_style();
+                let player_side = profile::get_session_player_side();
+                let target_chart_type = play_style.chart_type();
+
+                let (charts, last_played_chart_ref, last_played_idx) = match play_style {
+                    profile::PlayStyle::Versus => {
+                        let chart_ref_p1 = select_music::chart_for_steps_index(
+                            &song_arc,
+                            target_chart_type,
+                            po_state.chart_steps_index[0],
+                        )
+                        .expect("No chart found for P1 selected stepchart");
+                        let chart_ref_p2 = select_music::chart_for_steps_index(
+                            &song_arc,
+                            target_chart_type,
+                            po_state.chart_steps_index[1],
+                        )
+                        .expect("No chart found for P2 selected stepchart");
+                        (
+                            [Arc::new(chart_ref_p1.clone()), Arc::new(chart_ref_p2.clone())],
+                            chart_ref_p1,
+                            0usize,
+                        )
+                    }
+                    profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                        let idx = match player_side {
+                            profile::PlayerSide::P1 => 0,
+                            profile::PlayerSide::P2 => 1,
+                        };
+                        let chart_ref = select_music::chart_for_steps_index(
+                            &song_arc,
+                            target_chart_type,
+                            po_state.chart_steps_index[idx],
+                        )
+                        .expect("No chart found for selected stepchart");
+                        let chart = Arc::new(chart_ref.clone());
+                        ([chart.clone(), chart], chart_ref, idx)
+                    }
+                };
 
                 // Keep SelectMusic's current stepchart in sync with what we're about to play.
-                self.state.screens.select_music_state.preferred_difficulty_index =
-                    po_state.chart_difficulty_index;
-                self.state.screens.select_music_state.selected_steps_index = po_state.chart_steps_index;
+                if play_style == profile::PlayStyle::Versus {
+                    self.state.screens.select_music_state.preferred_difficulty_index =
+                        po_state.chart_difficulty_index[0];
+                    self.state.screens.select_music_state.selected_steps_index =
+                        po_state.chart_steps_index[0];
+                    self.state.screens.select_music_state.p2_preferred_difficulty_index =
+                        po_state.chart_difficulty_index[1];
+                    self.state.screens.select_music_state.p2_selected_steps_index =
+                        po_state.chart_steps_index[1];
+                } else {
+                    self.state.screens.select_music_state.preferred_difficulty_index =
+                        po_state.chart_difficulty_index[last_played_idx];
+                    self.state.screens.select_music_state.selected_steps_index =
+                        po_state.chart_steps_index[last_played_idx];
+                }
 
                 commands.push(Command::UpdateLastPlayed {
                     music_path: song_arc.music_path.clone(),
-                    chart_hash: Some(chart_ref.short_hash.clone()),
-                    difficulty_index: po_state.chart_difficulty_index,
+                    chart_hash: Some(last_played_chart_ref.short_hash.clone()),
+                    difficulty_index: po_state.chart_difficulty_index[last_played_idx],
                 });
 
                 let to_scroll_speed = |m: &player_options::SpeedMod| match m.mod_type.as_str() {
@@ -1725,7 +1781,7 @@ impl App {
                 let color_index = po_state.active_color_index;
                 let gs = gameplay::init(
                     song_arc,
-                    chart,
+                    charts,
                     color_index,
                     po_state.music_rate,
                     scroll_speeds,
@@ -1792,13 +1848,34 @@ impl App {
                         .select_music_state
                         .preferred_difficulty_index = preferred;
 
-                    let desired_steps_index = self
-                        .state
-                        .screens
-                        .player_options_state
-                        .as_ref()
-                        .map_or(preferred, |po| po.chart_steps_index);
-                    self.state.screens.select_music_state.selected_steps_index = desired_steps_index;
+                    if let Some(po) = self.state.screens.player_options_state.as_ref() {
+                        let play_style = profile::get_session_play_style();
+                        match play_style {
+                            profile::PlayStyle::Versus => {
+                                self.state.screens.select_music_state.selected_steps_index =
+                                    po.chart_steps_index[0];
+                                self.state.screens.select_music_state.p2_selected_steps_index =
+                                    po.chart_steps_index[1];
+                                self.state.screens.select_music_state.preferred_difficulty_index =
+                                    po.chart_difficulty_index[0];
+                                self.state.screens.select_music_state.p2_preferred_difficulty_index =
+                                    po.chart_difficulty_index[1];
+                            }
+                            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                                let side = profile::get_session_player_side();
+                                let idx = match side {
+                                    profile::PlayerSide::P1 => 0,
+                                    profile::PlayerSide::P2 => 1,
+                                };
+                                self.state.screens.select_music_state.selected_steps_index =
+                                    po.chart_steps_index[idx];
+                                self.state.screens.select_music_state.preferred_difficulty_index =
+                                    po.chart_difficulty_index[idx];
+                            }
+                        }
+                    }
+
+                    let desired_steps_index = self.state.screens.select_music_state.selected_steps_index;
 
                     if let Some(select_music::MusicWheelEntry::Song(song)) = self
                         .state

@@ -49,7 +49,10 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
 
     let center_x = screen_center_x();
 
-    let total_tapnotes = state.chart.stats.total_steps as f32;
+    let total_tapnotes = state.charts[0]
+        .stats
+        .total_steps
+        .max(state.charts[1].stats.total_steps) as f32;
     let digits = if total_tapnotes > 0.0 {
         (total_tapnotes.log10().floor() as usize + 1).max(4)
     } else {
@@ -80,12 +83,6 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
         diffuse(0.0, 0.0, 0.0, 1.0):
         z(z_bg)
     ));
-
-    let notes_per_player = if state.num_players > 0 {
-        state.notes.len() / state.num_players
-    } else {
-        0
-    };
 
     let fantastic_color = JUDGMENT_INFO
         .get(&JudgeGrade::Fantastic)
@@ -150,9 +147,8 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                 let show_fa_plus_window = state.player_profiles[player_idx].show_fa_plus_window;
                 let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
 
-                if show_fa_plus_window && notes_per_player > 0 {
-                    let start = player_idx * notes_per_player;
-                    let end = (start + notes_per_player).min(state.notes.len());
+                let (start, end) = state.note_ranges[player_idx];
+                if show_fa_plus_window && end > start {
                     let wc = timing_stats::compute_window_counts(&state.notes[start..end]);
                     let rows: [([f32; 4], [f32; 4], u32); 7] = [
                         (fantastic_color, dim_fantastic, wc.w0),
@@ -371,7 +367,7 @@ pub fn build_double_step_stats(
         let origin_y = pane_cy + (40.0 * banner_data_zoom);
         let base_zoom = 0.8 * banner_data_zoom;
 
-        let total_tapnotes = state.chart.stats.total_steps as f32;
+        let total_tapnotes = state.charts[0].stats.total_steps as f32;
         let digits = if total_tapnotes > 0.0 {
             (total_tapnotes.log10().floor() as usize + 1).max(4)
         } else {
@@ -594,7 +590,7 @@ pub fn build_double_step_stats(
 
     // Peak NPS text (DensityGraph.lua drives this in SL).
     {
-        let scaled_peak = (state.chart.max_nps as f32 * state.music_rate).max(0.0);
+        let scaled_peak = (state.charts[0].max_nps as f32 * state.music_rate).max(0.0);
         let peak_nps_text = format!("Peak NPS: {:.2}", scaled_peak);
         // Simply Love computes this inside DensityGraph.lua with a funky halign() in double,
         // but the visual intent is that the Peak NPS label lives in the right dark pane.
@@ -755,9 +751,9 @@ fn build_holds_mines_rolls_pane_at(
     let mut actors = Vec::new();
 
     let categories = [
-        ("holds", p.holds_held, state.holds_total),
-        ("mines", p.mines_avoided, state.mines_total),
-        ("rolls", p.rolls_held, state.rolls_total),
+        ("holds", p.holds_held, state.holds_total[0]),
+        ("mines", p.mines_avoided, state.mines_total[0]),
+        ("rolls", p.rolls_held, state.rolls_total[0]),
     ];
 
     let largest_count = categories
@@ -940,9 +936,9 @@ fn build_holds_mines_rolls_pane(
     let frame_zoom = banner_data_zoom;
 
     let categories = [
-        ("holds", p.holds_held, state.holds_total),
-        ("mines", p.mines_avoided, state.mines_total),
-        ("rolls", p.rolls_held, state.rolls_total),
+        ("holds", p.holds_held, state.holds_total[0]),
+        ("mines", p.mines_avoided, state.mines_total[0]),
+        ("rolls", p.rolls_held, state.rolls_total[0]),
     ];
 
     let largest_count = categories
@@ -1077,13 +1073,17 @@ fn build_side_pane(
         profile::PlayerSide::P1 => 1.0,
         profile::PlayerSide::P2 => -1.0,
     };
+    let player_idx = match (state.num_players, player_side) {
+        (2, profile::PlayerSide::P2) => 1,
+        _ => 0,
+    };
     let judgments_local_x = -widescale(152.0, 204.0) * x_sign;
     let final_judgments_center_x = sidepane_center_x + (judgments_local_x * banner_data_zoom);
     let final_judgments_center_y = sidepane_center_y;
     let parent_local_zoom = 0.8;
     let final_text_base_zoom = banner_data_zoom * parent_local_zoom;
 
-    let total_tapnotes = state.chart.stats.total_steps as f32;
+    let total_tapnotes = state.charts[player_idx].stats.total_steps as f32;
     let digits = if total_tapnotes > 0.0 {
         (total_tapnotes.log10().floor() as usize + 1).max(4)
     } else {
@@ -1094,10 +1094,6 @@ fn build_side_pane(
     const LABEL_DIGIT_STEP: f32 = 16.0;
     const NUMBER_TO_LABEL_GAP: f32 = 8.0;
     let base_numbers_local_x_offset = base_label_local_x_offset - NUMBER_TO_LABEL_GAP;
-    let player_idx = match (state.num_players, player_side) {
-        (2, profile::PlayerSide::P2) => 1,
-        _ => 0,
-    };
     let show_fa_plus_window = state.player_profiles[player_idx].show_fa_plus_window;
     let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
     let y_base = -280.0;
@@ -1445,7 +1441,7 @@ fn build_side_pane(
 
     // --- Peak NPS Display (as seen in Simply Love's Step Statistics) ---
     if is_wide() {
-        let scaled_peak = (state.chart.max_nps as f32 * state.music_rate).max(0.0);
+        let scaled_peak = (state.charts[0].max_nps as f32 * state.music_rate).max(0.0);
         let peak_nps_text = format!("Peak NPS: {:.2}", scaled_peak);
 
         // Positioned based on visual parity with Simply Love's Step Statistics pane

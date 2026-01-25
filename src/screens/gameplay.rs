@@ -189,13 +189,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.extend(p2_actors);
     }
     actors.extend(p1_actors);
-    let difficulty_color = color::difficulty_rgba(&state.chart.difficulty, state.active_color_index);
-    let meter_text = state.chart.meter.to_string();
-    let notes_per_player = if state.num_players > 0 {
-        state.notes.len() / state.num_players
-    } else {
-        state.notes.len()
-    };
     let clamped_width = screen_width().clamp(640.0, 854.0);
 
     let players: &[(usize, f32, f32)] = match play_style {
@@ -224,6 +217,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
 
     for &(player_idx, diff_x, score_x) in players {
+        let chart = &state.charts[player_idx];
+        let difficulty_color =
+            color::difficulty_rgba(&chart.difficulty, state.active_color_index);
+        let meter_text = chart.meter.to_string();
+
         // Difficulty Box
         let y = 56.0;
         actors.push(Actor::Frame {
@@ -248,16 +246,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let score_y = 56.0;
         let (score_text, score_color) = if state.player_profiles[player_idx].show_ex_score {
             let mines_disabled = false;
-            let start = player_idx * notes_per_player;
-            let end = start + notes_per_player;
+            let (start, end) = state.note_ranges[player_idx];
             let ex_percent = judgment::calculate_ex_score_from_notes(
                 &state.notes[start..end],
                 &state.note_time_cache[start..end],
                 &state.hold_end_time_cache[start..end],
-                state.chart.stats.total_steps,
-                state.holds_total,
-                state.rolls_total,
-                state.mines_total,
+                chart.stats.total_steps,
+                state.holds_total[player_idx],
+                state.rolls_total[player_idx],
+                state.mines_total[player_idx],
                 state.players[player_idx].fail_time,
                 mines_disabled,
             );
@@ -271,7 +268,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 state.players[player_idx].holds_held_for_score,
                 state.players[player_idx].rolls_held_for_score,
                 state.players[player_idx].mines_hit_for_score,
-                state.possible_grade_points,
+                state.possible_grade_points[player_idx],
             ) * 100.0) as f32;
             (format!("{score_percent:.2}"), [1.0, 1.0, 1.0, 1.0])
         };

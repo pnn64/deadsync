@@ -102,6 +102,34 @@ fn compute_music_end_time(
     last_step_seconds + POST_SONG_DISPLAY_SECONDS
 }
 
+#[inline(always)]
+fn compute_possible_grade_points(
+    notes: &[Note],
+    note_range: (usize, usize),
+    holds_total: u32,
+    rolls_total: u32,
+) -> i32 {
+    let (start, end) = note_range;
+    if start >= end {
+        return 0;
+    }
+
+    let mut rows: Vec<usize> = Vec::with_capacity(end - start);
+    for n in &notes[start..end] {
+        if n.can_be_judged && !matches!(n.note_type, NoteType::Mine) {
+            rows.push(n.row_index);
+        }
+    }
+    rows.sort_unstable();
+    rows.dedup();
+
+    let num_tap_rows = rows.len() as u64;
+    let pts = (num_tap_rows * 5)
+        + (u64::from(holds_total) * judgment::HOLD_SCORE_HELD as u64)
+        + (u64::from(rolls_total) * judgment::HOLD_SCORE_HELD as u64);
+    pts as i32
+}
+
 #[derive(Clone, Debug)]
 pub struct RowEntry {
     row_index: usize,
@@ -290,7 +318,7 @@ pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
     pub background_texture_key: String,
-    pub chart: Arc<ChartData>,
+    pub charts: [Arc<ChartData>; MAX_PLAYERS],
     pub num_cols: usize,
     pub cols_per_player: usize,
     pub num_players: usize,
@@ -298,6 +326,7 @@ pub struct State {
     pub beat_info_cache: BeatInfoCache,
     pub timing_profile: TimingProfile,
     pub notes: Vec<Note>,
+    pub note_ranges: [(usize, usize); MAX_PLAYERS],
     pub audio_lead_in_seconds: f32,
     pub current_beat: f32,
     pub current_music_time: f32,
@@ -332,7 +361,7 @@ pub struct State {
     pub is_in_freeze: bool,
     pub is_in_delay: bool,
 
-    pub possible_grade_points: i32,
+    pub possible_grade_points: [i32; MAX_PLAYERS],
     pub song_completed_naturally: bool,
 
     pub player_profiles: [profile::Profile; MAX_PLAYERS],
@@ -354,9 +383,9 @@ pub struct State {
     pub mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
     pub active_holds: [Option<ActiveHold>; MAX_COLS],
 
-    pub holds_total: u32,
-    pub rolls_total: u32,
-    pub mines_total: u32,
+    pub holds_total: [u32; MAX_PLAYERS],
+    pub rolls_total: [u32; MAX_PLAYERS],
+    pub mines_total: [u32; MAX_PLAYERS],
 
     pub total_elapsed_in_screen: f32,
 
@@ -398,19 +427,10 @@ const fn player_col_range(state: &State, player: usize) -> (usize, usize) {
 
 #[inline(always)]
 fn player_note_range(state: &State, player: usize) -> (usize, usize) {
-    let num_players = state.num_players.max(1);
-    let total = state.notes.len();
-    if num_players <= 1 {
-        return (0, total);
+    if player >= state.num_players {
+        return (0, 0);
     }
-    let per = total / num_players;
-    let start = per.saturating_mul(player);
-    let end = if player + 1 >= num_players {
-        total
-    } else {
-        start.saturating_add(per).min(total)
-    };
-    (start, end)
+    state.note_ranges[player]
 }
 
 fn apply_life_change(p: &mut PlayerRuntime, current_music_time: f32, delta: f32) {
@@ -501,7 +521,7 @@ fn get_reference_bpm_from_display_tag(display_bpm_str: &str) -> Option<f32> {
 
 pub fn init(
     song: Arc<SongData>,
-    chart: Arc<ChartData>,
+    charts: [Arc<ChartData>; MAX_PLAYERS],
     active_color_index: i32,
     music_rate: f32,
     mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -521,9 +541,11 @@ pub fn init(
         profile::PlayStyle::Double => (8, 1, 8),
         profile::PlayStyle::Versus => (4, 2, 8),
     };
+    let mut charts = charts;
     if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
         scroll_speed[0] = scroll_speed[1];
         player_profiles[0] = player_profiles[1].clone();
+        charts[0] = charts[1].clone();
     }
     let player_color_index = if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
         active_color_index - 2
@@ -584,110 +606,111 @@ pub fn init(
 
     let config = crate::config::get();
     let song_full_title: Arc<str> = Arc::from(song.display_full_title(config.translated_titles));
-    let mut timing = chart.timing.clone();
+    let mut timing = charts[0].timing.clone();
     timing.set_global_offset_seconds(config.global_offset_seconds);
     let timing = Arc::new(timing);
     let beat_info_cache = BeatInfoCache::new(&timing);
 
-    let parsed_notes = &chart.parsed_notes;
-    let mut notes: Vec<Note> = Vec::with_capacity(parsed_notes.len() * num_players);
-    let mut holds_total: u32 = 0;
-    let mut rolls_total: u32 = 0;
-    let mut mines_total: u32 = 0;
-    let mut max_row_index = 0;
+    let notes_cap: usize = (0..num_players)
+        .map(|player| charts[player].parsed_notes.len())
+        .sum();
+    let mut notes: Vec<Note> = Vec::with_capacity(notes_cap);
+    let mut note_ranges = [(0usize, 0usize); MAX_PLAYERS];
+    let mut holds_total: [u32; MAX_PLAYERS] = [0; MAX_PLAYERS];
+    let mut rolls_total: [u32; MAX_PLAYERS] = [0; MAX_PLAYERS];
+    let mut mines_total: [u32; MAX_PLAYERS] = [0; MAX_PLAYERS];
+    let mut max_row_index = 0usize;
 
-    for parsed in parsed_notes {
-        let row_index = parsed.row_index;
-        if row_index > max_row_index {
-            max_row_index = row_index;
-        }
+    for player in 0..num_players {
+        let parsed_notes = &charts[player].parsed_notes;
+        let start = notes.len();
+        let col_offset = player.saturating_mul(cols_per_player);
+        for parsed in parsed_notes {
+            let row_index = parsed.row_index;
+            max_row_index = max_row_index.max(row_index);
 
-        let Some(beat) = timing.get_beat_for_row(row_index) else {
-            continue;
-        };
-        let explicit_fake_tap = matches!(parsed.note_type, NoteType::Fake);
-        let fake_by_segment = timing.is_fake_at_beat(beat);
-        let is_fake = explicit_fake_tap || fake_by_segment;
-        let note_type = if explicit_fake_tap {
-            NoteType::Tap
-        } else {
-            parsed.note_type
-        };
+            let Some(beat) = timing.get_beat_for_row(row_index) else {
+                continue;
+            };
+            let explicit_fake_tap = matches!(parsed.note_type, NoteType::Fake);
+            let fake_by_segment = timing.is_fake_at_beat(beat);
+            let is_fake = explicit_fake_tap || fake_by_segment;
+            let note_type = if explicit_fake_tap {
+                NoteType::Tap
+            } else {
+                parsed.note_type
+            };
 
-        // Pre-calculate judgability to avoid binary searches during gameplay
-        let judgable_by_timing = timing.is_judgable_at_beat(beat);
-        let can_be_judged = !is_fake && judgable_by_timing;
+            // Pre-calculate judgability to avoid binary searches during gameplay
+            let judgable_by_timing = timing.is_judgable_at_beat(beat);
+            let can_be_judged = !is_fake && judgable_by_timing;
 
-        if can_be_judged {
-            match note_type {
-                NoteType::Hold => {
-                    holds_total = holds_total.saturating_add(1);
+            if can_be_judged {
+                match note_type {
+                    NoteType::Hold => {
+                        holds_total[player] = holds_total[player].saturating_add(1);
+                    }
+                    NoteType::Roll => {
+                        rolls_total[player] = rolls_total[player].saturating_add(1);
+                    }
+                    NoteType::Mine => {
+                        mines_total[player] = mines_total[player].saturating_add(1);
+                    }
+                    NoteType::Tap => {}
+                    NoteType::Fake => {}
                 }
-                NoteType::Roll => {
-                    rolls_total = rolls_total.saturating_add(1);
-                }
-                NoteType::Mine => {
-                    mines_total = mines_total.saturating_add(1);
-                }
-                NoteType::Tap => {}
-                NoteType::Fake => {}
             }
+
+            let hold = match (note_type, parsed.tail_row_index) {
+                (NoteType::Hold | NoteType::Roll, Some(tail_row)) => {
+                    timing.get_beat_for_row(tail_row).map(|end_beat| HoldData {
+                        end_row_index: tail_row,
+                        end_beat,
+                        result: None,
+                        life: INITIAL_HOLD_LIFE,
+                        let_go_started_at: None,
+                        let_go_starting_life: 0.0,
+                        last_held_row_index: row_index,
+                        last_held_beat: beat,
+                    })
+                }
+                _ => None,
+            };
+
+            let quantization_idx = quantization_index_from_beat(beat);
+            notes.push(Note {
+                beat,
+                quantization_idx,
+                column: parsed.column.saturating_add(col_offset),
+                note_type,
+                row_index,
+                result: None,
+                hold,
+                mine_result: None,
+                is_fake,
+                can_be_judged,
+            });
         }
-
-        let hold = match (note_type, parsed.tail_row_index) {
-            (NoteType::Hold | NoteType::Roll, Some(tail_row)) => {
-                timing.get_beat_for_row(tail_row).map(|end_beat| HoldData {
-                    end_row_index: tail_row,
-                    end_beat,
-                    result: None,
-                    life: INITIAL_HOLD_LIFE,
-                    let_go_started_at: None,
-                    let_go_starting_life: 0.0,
-                    last_held_row_index: row_index,
-                    last_held_beat: beat,
-                })
-            }
-            _ => None,
-        };
-
-        let quantization_idx = quantization_index_from_beat(beat);
-
-        notes.push(Note {
-            beat,
-            quantization_idx,
-            column: parsed.column,
-            note_type,
-            row_index,
-            result: None,
-            hold,
-            mine_result: None,
-            is_fake,
-            can_be_judged,
-        });
+        let end = notes.len();
+        note_ranges[player] = (start, end);
     }
 
-    if play_style == profile::PlayStyle::Versus {
-        let mut p2_notes = notes.clone();
-        for note in &mut p2_notes {
-            note.column = note.column.saturating_add(cols_per_player);
-        }
-        notes.extend(p2_notes);
+    let mut possible_grade_points = [0i32; MAX_PLAYERS];
+    for player in 0..num_players {
+        possible_grade_points[player] = compute_possible_grade_points(
+            &notes,
+            note_ranges[player],
+            holds_total[player],
+            rolls_total[player],
+        );
     }
-
-    let num_tap_rows = {
-        use std::collections::HashSet;
-        let mut rows: HashSet<usize> = HashSet::new();
-        for n in &notes {
-            if !matches!(n.note_type, NoteType::Mine) && n.can_be_judged {
-                rows.insert(n.row_index);
-            }
-        }
-        rows.len() as u64
-    };
-    let possible_grade_points = (num_tap_rows * 5)
-        + (u64::from(holds_total) * judgment::HOLD_SCORE_HELD as u64)
-        + (u64::from(rolls_total) * judgment::HOLD_SCORE_HELD as u64);
-    let possible_grade_points = possible_grade_points as i32;
+    if num_players == 1 {
+        possible_grade_points[1] = possible_grade_points[0];
+        holds_total[1] = holds_total[0];
+        rolls_total[1] = rolls_total[0];
+        mines_total[1] = mines_total[0];
+        note_ranges[1] = note_ranges[0];
+    }
 
     info!("Parsed {} notes from chart data.", notes.len());
 
@@ -743,7 +766,11 @@ pub fn init(
         }
     }
 
-    let first_note_beat = notes.first().map_or(0.0, |n| n.beat);
+    let first_note_beat = notes
+        .iter()
+        .map(|n| n.beat)
+        .reduce(f32::min)
+        .unwrap_or(0.0);
     let first_second = timing.get_time_for_beat(first_note_beat);
     // ITGmania's ScreenGameplay::StartPlayingSong uses theme metrics
     // MinSecondsToStep / MinSecondsToMusic. Simply Love scales both by
@@ -832,13 +859,8 @@ pub fn init(
         }
     }
 
-    let note_range_start: [usize; MAX_PLAYERS] = std::array::from_fn(|player| {
-        if num_players <= 1 {
-            0
-        } else {
-            (notes_len / num_players).saturating_mul(player)
-        }
-    });
+    let note_range_start: [usize; MAX_PLAYERS] =
+        std::array::from_fn(|player| note_ranges[player].0);
 
     let global_visual_delay_seconds = config.visual_delay_seconds;
     let player_visual_delay_seconds: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
@@ -865,7 +887,7 @@ pub fn init(
     State {
         song,
         song_full_title,
-        chart,
+        charts,
         background_texture_key: "__white".to_string(),
         num_cols,
         cols_per_player,
@@ -874,6 +896,7 @@ pub fn init(
         beat_info_cache,
         timing_profile,
         notes,
+        note_ranges,
         audio_lead_in_seconds: start_delay,
         current_beat: 0.0,
         current_music_time: -start_delay,

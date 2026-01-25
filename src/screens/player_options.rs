@@ -26,6 +26,100 @@ const CURSOR_TWEEN_SECONDS: f32 = 0.1;
 // Spacing between inline items in OptionRows (pixels at current zoom)
 const INLINE_SPACING: f32 = 15.75;
 
+// Match Simply Love / ScreenOptions defaults.
+const VISIBLE_ROWS: usize = 10;
+const ROW_START_OFFSET: f32 = -164.0;
+const ROW_HEIGHT: f32 = 33.0;
+const TITLE_BG_WIDTH: f32 = 127.0;
+
+#[inline(always)]
+fn compute_visible_rows(
+    total_rows: usize,
+    selected_row: [usize; PLAYER_SLOTS],
+    active: [bool; PLAYER_SLOTS],
+) -> ([usize; VISIBLE_ROWS], usize) {
+    let mut out = [usize::MAX; VISIBLE_ROWS];
+    if total_rows == 0 {
+        return (out, 0);
+    }
+    if total_rows <= VISIBLE_ROWS {
+        for i in 0..total_rows {
+            out[i] = i;
+        }
+        return (out, total_rows);
+    }
+
+    // Mirror ITGmania ScreenOptions::PositionRows() semantics.
+    let p1_choice = if active[P1] { selected_row[P1] } else { selected_row[P2] };
+    let p2_choice = if active[P2] { selected_row[P2] } else { selected_row[P1] };
+    let p1_choice = p1_choice.min(total_rows - 1);
+    let p2_choice = p2_choice.min(total_rows - 1);
+
+    let half = VISIBLE_ROWS / 2;
+    let (mut first_start, mut first_end, mut second_start, mut second_end) = if !(active[P1]
+        && active[P2])
+    {
+        // Single cursor: show one contiguous window centered on the active player.
+        let start = p1_choice.saturating_sub(half);
+        let end = start + VISIBLE_ROWS;
+        (start, end, end, end)
+    } else {
+        // Two cursors: show two 5-row windows (top/bottom), skipping middle rows if needed.
+        let earliest = p1_choice.min(p2_choice);
+        let first_start = earliest.saturating_sub(half / 2);
+        let first_end = first_start + half;
+
+        let latest = p1_choice.max(p2_choice);
+        let mut second_start = latest.saturating_sub(half / 2);
+        if second_start < first_end {
+            second_start = first_end;
+        }
+        let second_end = second_start + half;
+        (first_start, first_end, second_start, second_end)
+    };
+
+    first_end = first_end.min(total_rows);
+    second_end = second_end.min(total_rows);
+    if first_end < first_start {
+        first_end = first_start;
+    }
+    if second_end < second_start {
+        second_end = second_start;
+    }
+
+    // If fewer than VISIBLE_ROWS can be shown, fill space intelligently.
+    loop {
+        let sum = (first_end - first_start) + (second_end - second_start);
+        if sum >= total_rows || sum >= VISIBLE_ROWS {
+            break;
+        }
+        if second_start > first_end {
+            second_start -= 1;
+        } else if first_start > 0 {
+            first_start -= 1;
+        } else if second_end < total_rows {
+            second_end += 1;
+        } else {
+            break;
+        }
+    }
+
+    let mut len = 0usize;
+    for i in 0..total_rows {
+        let is_visible =
+            (i >= first_start && i < first_end) || (i >= second_start && i < second_end);
+        if !is_visible {
+            continue;
+        }
+        if len >= VISIBLE_ROWS {
+            break;
+        }
+        out[len] = i;
+        len += 1;
+    }
+    (out, len)
+}
+
 #[inline(always)]
 fn ease_out_cubic(t: f32) -> f32 {
     let clamped = if t < 0.0 {
@@ -78,8 +172,8 @@ pub struct SpeedMod {
 
 pub struct State {
     pub song: Arc<SongData>,
-    pub chart_steps_index: usize,
-    pub chart_difficulty_index: usize,
+    pub chart_steps_index: [usize; PLAYER_SLOTS],
+    pub chart_difficulty_index: [usize; PLAYER_SLOTS],
     pub rows: Vec<Row>,
     pub selected_row: [usize; PLAYER_SLOTS],
     pub prev_selected_row: [usize; PLAYER_SLOTS],
@@ -187,8 +281,8 @@ fn what_comes_next_choices(pane: OptionsPane) -> Vec<String> {
 fn build_main_rows(
     song: &SongData,
     speed_mod: &SpeedMod,
-    chart_steps_index: usize,
-    preferred_difficulty_index: usize,
+    chart_steps_index: [usize; PLAYER_SLOTS],
+    preferred_difficulty_index: [usize; PLAYER_SLOTS],
     session_music_rate: f32,
 ) -> Vec<Row> {
     let speed_mod_value_str = match speed_mod.mod_type.as_str() {
@@ -228,14 +322,20 @@ fn build_main_rows(
     // Fallback if none found (defensive; SelectMusic filters songs by play style).
     if stepchart_choices.is_empty() {
         stepchart_choices.push("(Current)".to_string());
-        stepchart_choice_indices
-            .push(preferred_difficulty_index.min(crate::ui::color::FILE_DIFFICULTY_NAMES.len() - 1));
+        let base_pref = preferred_difficulty_index[session_persisted_player_idx()]
+            .min(crate::ui::color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
+        stepchart_choice_indices.push(base_pref);
     }
-    let initial_stepchart_choice_index = stepchart_choice_indices
-        .iter()
-        .position(|&idx| idx == chart_steps_index)
-        .or_else(|| stepchart_choice_indices.iter().position(|&idx| idx == preferred_difficulty_index))
-        .unwrap_or(0);
+    let initial_stepchart_choice_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
+        let steps_idx = chart_steps_index[player_idx];
+        let pref_idx = preferred_difficulty_index[player_idx]
+            .min(crate::ui::color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
+        stepchart_choice_indices
+            .iter()
+            .position(|&idx| idx == steps_idx)
+            .or_else(|| stepchart_choice_indices.iter().position(|&idx| idx == pref_idx))
+            .unwrap_or(0)
+    });
     vec![
         Row {
             name: "Type of Speed Mod".to_string(),
@@ -413,7 +513,7 @@ fn build_main_rows(
         Row {
             name: "Stepchart".to_string(),
             choices: stepchart_choices,
-            selected_choice_index: [initial_stepchart_choice_index; PLAYER_SLOTS],
+            selected_choice_index: initial_stepchart_choice_index,
             help: vec!["Choose the stepchart you wish to play.".to_string()],
             choice_difficulty_indices: Some(stepchart_choice_indices),
         },
@@ -850,8 +950,8 @@ fn build_uncommon_rows() -> Vec<Row> {
 fn build_rows(
     song: &SongData,
     speed_mod: &SpeedMod,
-    chart_steps_index: usize,
-    preferred_difficulty_index: usize,
+    chart_steps_index: [usize; PLAYER_SLOTS],
+    preferred_difficulty_index: [usize; PLAYER_SLOTS],
     session_music_rate: f32,
     pane: OptionsPane,
 ) -> Vec<Row> {
@@ -1041,8 +1141,8 @@ fn apply_profile_defaults(
 
 pub fn init(
     song: Arc<SongData>,
-    chart_steps_index: usize,
-    preferred_difficulty_index: usize,
+    chart_steps_index: [usize; PLAYER_SLOTS],
+    preferred_difficulty_index: [usize; PLAYER_SLOTS],
     active_color_index: i32,
 ) -> State {
     let session_music_rate = crate::game::profile::get_session_music_rate();
@@ -1062,17 +1162,21 @@ pub fn init(
         },
     };
     let speed_mod_p2 = speed_mod_p1.clone();
-    let mut chart_difficulty_index = preferred_difficulty_index
-        .min(crate::ui::color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
-    if chart_steps_index < crate::ui::color::FILE_DIFFICULTY_NAMES.len() {
-        chart_difficulty_index = chart_steps_index;
-    }
+    let chart_difficulty_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
+        let steps_idx = chart_steps_index[player_idx];
+        let mut diff_idx = preferred_difficulty_index[player_idx]
+            .min(crate::ui::color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
+        if steps_idx < crate::ui::color::FILE_DIFFICULTY_NAMES.len() {
+            diff_idx = steps_idx;
+        }
+        diff_idx
+    });
 
     let mut rows = build_rows(
         &song,
         &speed_mod_p1,
         chart_steps_index,
-        chart_difficulty_index,
+        preferred_difficulty_index,
         session_music_rate,
         OptionsPane::Main,
     );
@@ -1213,7 +1317,7 @@ fn session_persisted_player_idx() -> usize {
 
 #[inline(always)]
 fn row_is_shared(row_name: &str) -> bool {
-    row_name.is_empty() || row_name == "Stepchart" || row_name == "What comes next?" || row_name.starts_with("Music Rate")
+    row_name.is_empty() || row_name == "What comes next?" || row_name.starts_with("Music Rate")
 }
 
 #[inline(always)]
@@ -1527,11 +1631,11 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
             .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok());
     } else if row_name == "Stepchart" {
         if let Some(diff_indices) = &row.choice_difficulty_indices
-            && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index[P1])
+            && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index[player_idx])
         {
-            state.chart_steps_index = difficulty_idx;
+            state.chart_steps_index[player_idx] = difficulty_idx;
             if difficulty_idx < crate::ui::color::FILE_DIFFICULTY_NAMES.len() {
-                state.chart_difficulty_index = difficulty_idx;
+                state.chart_difficulty_index[player_idx] = difficulty_idx;
             }
         }
     }
@@ -1636,13 +1740,12 @@ pub fn update(state: &mut State, dt: f32) {
     // Start vertical cursor tween and reset help reveal when a player changes rows.
     let total_rows = state.rows.len();
     // constants must mirror get_actors()
-    let frame_h = 33.0_f32; // ROW_HEIGHT
-    let visible_rows = 10_usize; // VISIBLE_ROWS
-    let first_row_center_y = screen_center_y() + (-164.0); // ROW_START_OFFSET
+    let frame_h = ROW_HEIGHT;
+    let first_row_center_y = screen_center_y() + ROW_START_OFFSET;
     let help_box_h = 40.0_f32;
     let help_box_bottom_y = screen_height() - 36.0;
     let help_top_y = help_box_bottom_y - help_box_h;
-    let n_rows_f = visible_rows as f32;
+    let n_rows_f = VISIBLE_ROWS as f32;
     let mut row_gap = if n_rows_f > 0.0 {
         (n_rows_f - 0.5).mul_add(-frame_h, help_top_y - first_row_center_y) / n_rows_f
     } else {
@@ -1652,42 +1755,15 @@ pub fn update(state: &mut State, dt: f32) {
         row_gap = 0.0;
     }
 
-    // Keep one shared scroll window for both cursors.
-    let max_offset = total_rows.saturating_sub(visible_rows);
-    let offset_rows = if total_rows <= visible_rows {
-        0
-    } else {
-        // Prefer keeping both cursors visible when possible.
-        let mut min_row = usize::MAX;
-        let mut max_row = 0usize;
-        let mut active_count = 0usize;
-        for player_idx in 0..PLAYER_SLOTS {
-            if !active[player_idx] {
-                continue;
-            }
-            active_count += 1;
-            let r = state.selected_row[player_idx];
-            min_row = min_row.min(r);
-            max_row = max_row.max(r);
-        }
-        if active_count <= 1 {
-            let r = state.selected_row[state.scroll_focus_player.min(PLAYER_SLOTS - 1)];
-            r.saturating_sub(5).min(max_offset)
-        } else if max_row.saturating_sub(min_row) < visible_rows {
-            let center = (min_row + max_row) / 2;
-            let mut offset = center.saturating_sub(5).min(max_offset);
-            if offset > min_row {
-                offset = min_row;
-            }
-            if max_row >= offset + visible_rows {
-                offset = max_row.saturating_sub(visible_rows - 1);
-            }
-            offset.min(max_offset)
-        } else {
-            let focus = state.scroll_focus_player.min(PLAYER_SLOTS - 1);
-            let r = state.selected_row[focus];
-            r.saturating_sub(5).min(max_offset)
-        }
+    let (visible_row_ids, visible_len) =
+        compute_visible_rows(total_rows, state.selected_row, active);
+    let row_y_for = |row_idx: usize| -> f32 {
+        let pos = visible_row_ids
+            .iter()
+            .take(visible_len)
+            .position(|&i| i == row_idx)
+            .unwrap_or(0);
+        (pos as f32).mul_add(frame_h + row_gap, first_row_center_y)
     };
 
     for player_idx in 0..PLAYER_SLOTS {
@@ -1704,8 +1780,7 @@ pub fn update(state: &mut State, dt: f32) {
         }
 
         let prev_idx = state.prev_selected_row[player_idx];
-        let i_prev_vis = (prev_idx as isize) - (offset_rows as isize);
-        let from_y = (i_prev_vis as f32).mul_add(frame_h + row_gap, first_row_center_y);
+        let from_y = row_y_for(prev_idx);
         state.cursor_row_anim_from_y[player_idx] = from_y;
         state.cursor_row_anim_t[player_idx] = 0.0;
         state.cursor_row_anim_from_row[player_idx] = Some(prev_idx);
@@ -2112,47 +2187,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let help_box_w = widescale(614.0, 792.0);
     let help_box_x = widescale(13.0, 30.666);
     let help_box_bottom_y = screen_height() - 36.0;
-    // --- Row Layout Constants & Scrolling ---
-    const VISIBLE_ROWS: usize = 10;
-    const ANCHOR_ROW: usize = 5; // Keep selection on the 5th visible row
-    const ROW_START_OFFSET: f32 = -164.0;
-    const ROW_HEIGHT: f32 = 33.0;
-    const TITLE_BG_WIDTH: f32 = 127.0;
     let total_rows = state.rows.len();
-    let max_offset = total_rows.saturating_sub(VISIBLE_ROWS);
-    let offset_rows = if total_rows <= VISIBLE_ROWS {
-        0
-    } else {
-        let mut min_row = usize::MAX;
-        let mut max_row = 0usize;
-        let mut active_count = 0usize;
-        for player_idx in 0..PLAYER_SLOTS {
-            if !active[player_idx] {
-                continue;
-            }
-            active_count += 1;
-            let r = state.selected_row[player_idx];
-            min_row = min_row.min(r);
-            max_row = max_row.max(r);
-        }
-        if active_count <= 1 {
-            let focus = state.scroll_focus_player.min(PLAYER_SLOTS - 1);
-            state.selected_row[focus].saturating_sub(ANCHOR_ROW).min(max_offset)
-        } else if max_row.saturating_sub(min_row) < VISIBLE_ROWS {
-            let center = (min_row + max_row) / 2;
-            let mut offset = center.saturating_sub(ANCHOR_ROW).min(max_offset);
-            if offset > min_row {
-                offset = min_row;
-            }
-            if max_row >= offset + VISIBLE_ROWS {
-                offset = max_row.saturating_sub(VISIBLE_ROWS - 1);
-            }
-            offset.min(max_offset)
-        } else {
-            let focus = state.scroll_focus_player.min(PLAYER_SLOTS - 1);
-            state.selected_row[focus].saturating_sub(ANCHOR_ROW).min(max_offset)
-        }
-    };
+    let (visible_row_ids, visible_len) =
+        compute_visible_rows(total_rows, state.selected_row, active);
     let frame_h = ROW_HEIGHT;
     // Compute dynamic row gap so the space between the last visible
     // row and the help box equals all other inter-row gaps.
@@ -2302,10 +2339,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         (out_w, out_h)
     };
 
-    for i_vis in 0..VISIBLE_ROWS {
-        let item_idx = offset_rows + i_vis;
-        if item_idx >= total_rows {
-            break;
+    for i_vis in 0..visible_len {
+        let item_idx = visible_row_ids[i_vis];
+        if item_idx == usize::MAX || item_idx >= total_rows {
+            continue;
         }
         let current_row_y = (i_vis as f32).mul_add(frame_h + row_gap, first_row_center_y);
         let is_active = (active[P1] && item_idx == state.selected_row[P1])

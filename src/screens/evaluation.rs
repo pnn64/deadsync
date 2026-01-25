@@ -104,13 +104,7 @@ pub struct State {
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     let score_info = gameplay_results.map(|gs| {
         let player_idx = 0;
-        let notes_per_player = if gs.num_players > 0 {
-            gs.notes.len() / gs.num_players
-        } else {
-            gs.notes.len()
-        };
-        let start = player_idx * notes_per_player;
-        let end = start + notes_per_player;
+        let (start, end) = gs.note_ranges[player_idx];
         let notes = &gs.notes[start..end];
         let note_times = &gs.note_time_cache[start..end];
         let hold_end_times = &gs.hold_end_time_cache[start..end];
@@ -130,7 +124,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             p.holds_held_for_score,
             p.rolls_held_for_score,
             p.mines_hit_for_score,
-            gs.possible_grade_points,
+            gs.possible_grade_points[player_idx],
         );
 
         let grade = if p.is_failing || !gs.song_completed_naturally {
@@ -150,28 +144,28 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             notes,
             note_times,
             hold_end_times,
-            gs.chart.stats.total_steps,
-            gs.holds_total,
-            gs.rolls_total,
-            gs.mines_total,
+            gs.charts[player_idx].stats.total_steps,
+            gs.holds_total[player_idx],
+            gs.rolls_total[player_idx],
+            gs.mines_total[player_idx],
             p.fail_time,
             mines_disabled,
         );
 
         ScoreInfo {
             song: gs.song.clone(),
-            chart: gs.chart.clone(),
+            chart: gs.charts[player_idx].clone(),
             judgment_counts: p.judgment_counts.clone(),
             score_percent,
             grade,
             speed_mod: gs.scroll_speed[0],
             hands_achieved: p.hands_achieved,
             holds_held: p.holds_held,
-            holds_total: gs.holds_total,
+            holds_total: gs.holds_total[player_idx],
             rolls_held: p.rolls_held,
-            rolls_total: gs.rolls_total,
+            rolls_total: gs.rolls_total[player_idx],
             mines_avoided: p.mines_avoided,
-            mines_total: gs.mines_total,
+            mines_total: gs.mines_total[player_idx],
             timing: stats,
             scatter,
             histogram,
