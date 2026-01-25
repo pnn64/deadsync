@@ -180,11 +180,12 @@ fn build_choices() -> Vec<Choice> {
 
     let default_profile = crate::game::profile::Profile::default();
     let default_speed_mod = format!("{}", default_profile.scroll_speed);
+    let guest_speed_mod = format!("{}", crate::game::profile::GUEST_SCROLL_SPEED);
     let default_scroll_option = default_profile.scroll_option;
     out.push(Choice {
         kind: ActiveProfile::Guest,
         display_name: "[ GUEST ]".to_string(),
-        speed_mod: default_speed_mod.clone(),
+        speed_mod: guest_speed_mod,
         avatar_key: None,
         scroll_option: default_scroll_option,
         noteskin: profile::NoteSkin::default(),

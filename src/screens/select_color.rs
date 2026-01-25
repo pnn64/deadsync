@@ -206,14 +206,16 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
     let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    let p1_guest = profile::is_session_side_guest(profile::PlayerSide::P1);
+    let p2_guest = profile::is_session_side_guest(profile::PlayerSide::P2);
 
     let (footer_left, left_avatar) = if p1_joined {
-        (Some(p1_profile.display_name.as_str()), p1_avatar)
+        (Some(if p1_guest { "INSERT CARD" } else { p1_profile.display_name.as_str() }), if p1_guest { None } else { p1_avatar })
     } else {
         (Some("PRESS START"), None)
     };
     let (footer_right, right_avatar) = if p2_joined {
-        (Some(p2_profile.display_name.as_str()), p2_avatar)
+        (Some(if p2_guest { "INSERT CARD" } else { p2_profile.display_name.as_str() }), if p2_guest { None } else { p2_avatar })
     } else {
         (Some("PRESS START"), None)
     };

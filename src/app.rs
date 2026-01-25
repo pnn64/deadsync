@@ -431,13 +431,18 @@ impl App {
                 } else {
                     cmp::min(profile_data[1].last_difficulty_index, max_diff_index)
                 };
-                self.state.session.preferred_difficulty_index = preferred_p1;
+                let side = profile::get_session_player_side();
+                let preferred_active = match side {
+                    profile::PlayerSide::P1 => preferred_p1,
+                    profile::PlayerSide::P2 => preferred_p2,
+                };
+                self.state.session.preferred_difficulty_index = preferred_active;
 
                 let current_color_index = self.state.screens.select_profile_state.active_color_index;
                 self.state.screens.select_music_state = select_music::init();
                 self.state.screens.select_music_state.active_color_index = current_color_index;
-                self.state.screens.select_music_state.preferred_difficulty_index = preferred_p1;
-                self.state.screens.select_music_state.selected_steps_index = preferred_p1;
+                self.state.screens.select_music_state.preferred_difficulty_index = preferred_active;
+                self.state.screens.select_music_state.selected_steps_index = preferred_active;
                 self.state.screens.select_music_state.p2_preferred_difficulty_index = preferred_p2;
                 self.state.screens.select_music_state.p2_selected_steps_index = preferred_p2;
 
@@ -656,11 +661,117 @@ impl App {
         }
     }
 
+    fn apply_select_music_join(&mut self, join_side: profile::PlayerSide) {
+        let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
+        let p1_pref = profile::get_for_side(profile::PlayerSide::P1)
+            .last_difficulty_index
+            .min(max_diff_index);
+        let p2_pref = profile::get_for_side(profile::PlayerSide::P2)
+            .last_difficulty_index
+            .min(max_diff_index);
+
+        let side = profile::get_session_player_side();
+        let sm = &mut self.state.screens.select_music_state;
+        if side == profile::PlayerSide::P2 && join_side == profile::PlayerSide::P1 {
+            sm.p2_selected_steps_index = sm.selected_steps_index;
+            sm.p2_preferred_difficulty_index = sm.preferred_difficulty_index;
+            sm.selected_steps_index = p1_pref;
+            sm.preferred_difficulty_index = p1_pref;
+        } else {
+            sm.p2_selected_steps_index = p2_pref;
+            sm.p2_preferred_difficulty_index = p2_pref;
+        }
+
+        if let Some(select_music::MusicWheelEntry::Song(song)) =
+            sm.entries.get(sm.selected_index).cloned()
+        {
+            let best_playable = |preferred: usize| {
+                let mut best = None;
+                let mut min_diff = i32::MAX;
+                for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
+                    if select_music::is_difficulty_playable(&song, i) {
+                        let diff = (i as i32 - preferred as i32).abs();
+                        if diff < min_diff {
+                            min_diff = diff;
+                            best = Some(i);
+                        }
+                    }
+                }
+                best
+            };
+
+            if let Some(idx) = best_playable(sm.preferred_difficulty_index) {
+                sm.selected_steps_index = idx;
+            }
+            if let Some(idx) = best_playable(sm.p2_preferred_difficulty_index) {
+                sm.p2_selected_steps_index = idx;
+            }
+        }
+
+        self.state.session.preferred_difficulty_index = sm.preferred_difficulty_index;
+        select_music::trigger_immediate_refresh(sm);
+        select_music::prime_displayed_chart_data(sm);
+    }
+
+    fn try_handle_late_join(&mut self, ev: &InputEvent) -> bool {
+        if !ev.pressed {
+            return false;
+        }
+        let join_side = match ev.action {
+            input::VirtualAction::p1_start => profile::PlayerSide::P1,
+            input::VirtualAction::p2_start => profile::PlayerSide::P2,
+            _ => return false,
+        };
+
+        let screen = self.state.screens.current_screen;
+        if !matches!(
+            screen,
+            CurrentScreen::SelectColor | CurrentScreen::SelectStyle | CurrentScreen::SelectMusic
+        ) {
+            return false;
+        }
+
+        if profile::get_session_play_style() == profile::PlayStyle::Double {
+            return false;
+        }
+
+        let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+        let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+        if p1_joined && p2_joined {
+            return false;
+        }
+        if (join_side == profile::PlayerSide::P1 && p1_joined)
+            || (join_side == profile::PlayerSide::P2 && p2_joined)
+        {
+            return false;
+        }
+        if !(p1_joined || p2_joined) {
+            return false;
+        }
+
+        profile::set_session_joined(true, true);
+        profile::set_session_play_style(profile::PlayStyle::Versus);
+        let _ = profile::set_active_profile_for_side(join_side, profile::ActiveProfile::Guest);
+
+        if screen == CurrentScreen::SelectStyle {
+            self.state.screens.select_style_state.selected_index = 1;
+        }
+        if screen == CurrentScreen::SelectMusic {
+            self.apply_select_music_join(join_side);
+        }
+
+        crate::core::audio::play_sfx("assets/sounds/start.ogg");
+        true
+    }
+
     fn route_input_event(
         &mut self,
         event_loop: &ActiveEventLoop,
         ev: InputEvent,
     ) -> Result<(), Box<dyn Error>> {
+        if self.try_handle_late_join(&ev) {
+            return Ok(());
+        }
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
                 crate::screens::menu::handle_input(&mut self.state.screens.menu_state, &ev)
@@ -1997,14 +2108,17 @@ impl App {
                         self.state.screens.select_music_state.active_color_index;
                     self.state.screens.select_music_state = select_music::init();
                     self.state.screens.select_music_state.active_color_index = current_color_index;
-                    self.state
-                        .screens
-                        .select_music_state
-                        .selected_steps_index = self.state.session.preferred_difficulty_index;
-                    self.state
-                        .screens
-                        .select_music_state
-                        .preferred_difficulty_index = self.state.session.preferred_difficulty_index;
+                    let preferred = self.state.session.preferred_difficulty_index;
+                    self.state.screens.select_music_state.selected_steps_index = preferred;
+                    self.state.screens.select_music_state.preferred_difficulty_index = preferred;
+
+                    let max_diff_index =
+                        color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
+                    let p2_pref = profile::get_for_side(profile::PlayerSide::P2)
+                        .last_difficulty_index
+                        .min(max_diff_index);
+                    self.state.screens.select_music_state.p2_selected_steps_index = p2_pref;
+                    self.state.screens.select_music_state.p2_preferred_difficulty_index = p2_pref;
 
                     // Treat the initial selection as already "settled" so preview/graphs can start
                     // immediately after the transition, matching ITG/Simply Love behavior.
