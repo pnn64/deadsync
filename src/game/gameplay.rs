@@ -323,6 +323,7 @@ pub struct State {
     pub cols_per_player: usize,
     pub num_players: usize,
     pub timing: Arc<TimingData>,
+    pub timing_players: [Arc<TimingData>; MAX_PLAYERS],
     pub beat_info_cache: BeatInfoCache,
     pub timing_profile: TimingProfile,
     pub notes: Vec<Note>,
@@ -606,9 +607,17 @@ pub fn init(
 
     let config = crate::config::get();
     let song_full_title: Arc<str> = Arc::from(song.display_full_title(config.translated_titles));
-    let mut timing = charts[0].timing.clone();
-    timing.set_global_offset_seconds(config.global_offset_seconds);
-    let timing = Arc::new(timing);
+    let mut timing_base = charts[0].timing.clone();
+    timing_base.set_global_offset_seconds(config.global_offset_seconds);
+    let timing = Arc::new(timing_base);
+    let mut timing_players: [Arc<TimingData>; MAX_PLAYERS] = std::array::from_fn(|player| {
+        let mut t = charts[player].timing.clone();
+        t.set_global_offset_seconds(config.global_offset_seconds);
+        Arc::new(t)
+    });
+    if num_players == 1 {
+        timing_players[1] = timing_players[0].clone();
+    }
     let beat_info_cache = BeatInfoCache::new(&timing);
 
     let notes_cap: usize = (0..num_players)
@@ -622,6 +631,7 @@ pub fn init(
     let mut max_row_index = 0usize;
 
     for player in 0..num_players {
+        let timing_player = &timing_players[player];
         let parsed_notes = &charts[player].parsed_notes;
         let start = notes.len();
         let col_offset = player.saturating_mul(cols_per_player);
@@ -629,11 +639,11 @@ pub fn init(
             let row_index = parsed.row_index;
             max_row_index = max_row_index.max(row_index);
 
-            let Some(beat) = timing.get_beat_for_row(row_index) else {
+            let Some(beat) = timing_player.get_beat_for_row(row_index) else {
                 continue;
             };
             let explicit_fake_tap = matches!(parsed.note_type, NoteType::Fake);
-            let fake_by_segment = timing.is_fake_at_beat(beat);
+            let fake_by_segment = timing_player.is_fake_at_beat(beat);
             let is_fake = explicit_fake_tap || fake_by_segment;
             let note_type = if explicit_fake_tap {
                 NoteType::Tap
@@ -642,7 +652,7 @@ pub fn init(
             };
 
             // Pre-calculate judgability to avoid binary searches during gameplay
-            let judgable_by_timing = timing.is_judgable_at_beat(beat);
+            let judgable_by_timing = timing_player.is_judgable_at_beat(beat);
             let can_be_judged = !is_fake && judgable_by_timing;
 
             if can_be_judged {
@@ -663,7 +673,7 @@ pub fn init(
 
             let hold = match (note_type, parsed.tail_row_index) {
                 (NoteType::Hold | NoteType::Roll, Some(tail_row)) => {
-                    timing.get_beat_for_row(tail_row).map(|end_beat| HoldData {
+                    timing_player.get_beat_for_row(tail_row).map(|end_beat| HoldData {
                         end_row_index: tail_row,
                         end_beat,
                         result: None,
@@ -695,6 +705,39 @@ pub fn init(
         note_ranges[player] = (start, end);
     }
 
+    let note_player_for_col = |col: usize| -> usize {
+        if num_players <= 1 || cols_per_player == 0 {
+            0
+        } else {
+            (col / cols_per_player).min(num_players.saturating_sub(1))
+        }
+    };
+
+    let note_time_cache: Vec<f32> = notes
+        .iter()
+        .map(|n| timing_players[note_player_for_col(n.column)].get_time_for_beat(n.beat))
+        .collect();
+    let note_display_beat_cache: Vec<f32> = notes
+        .iter()
+        .map(|n| timing_players[note_player_for_col(n.column)].get_displayed_beat(n.beat))
+        .collect();
+    let hold_end_time_cache: Vec<Option<f32>> = notes
+        .iter()
+        .map(|n| {
+            n.hold.as_ref().map(|h| {
+                timing_players[note_player_for_col(n.column)].get_time_for_beat(h.end_beat)
+            })
+        })
+        .collect();
+    let hold_end_display_beat_cache: Vec<Option<f32>> = notes
+        .iter()
+        .map(|n| {
+            n.hold.as_ref().map(|h| {
+                timing_players[note_player_for_col(n.column)].get_displayed_beat(h.end_beat)
+            })
+        })
+        .collect();
+
     let mut possible_grade_points = [0i32; MAX_PLAYERS];
     for player in 0..num_players {
         possible_grade_points[player] = compute_possible_grade_points(
@@ -713,31 +756,6 @@ pub fn init(
     }
 
     info!("Parsed {} notes from chart data.", notes.len());
-
-    let note_time_cache: Vec<f32> = notes
-        .iter()
-        .map(|n| timing.get_time_for_beat(n.beat))
-        .collect();
-    let note_display_beat_cache: Vec<f32> = notes
-        .iter()
-        .map(|n| timing.get_displayed_beat(n.beat))
-        .collect();
-    let hold_end_time_cache: Vec<Option<f32>> = notes
-        .iter()
-        .map(|n| {
-            n.hold
-                .as_ref()
-                .map(|h| timing.get_time_for_beat(h.end_beat))
-        })
-        .collect();
-    let hold_end_display_beat_cache: Vec<Option<f32>> = notes
-        .iter()
-        .map(|n| {
-            n.hold
-                .as_ref()
-                .map(|h| timing.get_displayed_beat(h.end_beat))
-        })
-        .collect();
 
     let mut row_map: HashMap<usize, Vec<usize>> = HashMap::new();
     for (i, n) in notes.iter().enumerate() {
@@ -766,12 +784,12 @@ pub fn init(
         }
     }
 
-    let first_note_beat = notes
+    let first_second = notes
         .iter()
-        .map(|n| n.beat)
+        .zip(&note_time_cache)
+        .filter_map(|(n, &t)| n.can_be_judged.then_some(t))
         .reduce(f32::min)
         .unwrap_or(0.0);
-    let first_second = timing.get_time_for_beat(first_note_beat);
     // ITGmania's ScreenGameplay::StartPlayingSong uses theme metrics
     // MinSecondsToStep / MinSecondsToMusic. Simply Love scales both by
     // MusicRate, so we apply the same here to keep real-world lead-in time
@@ -795,6 +813,7 @@ pub fn init(
         audio::play_music(music_path.clone(), cut, false, rate.max(0.01));
     }
 
+    let first_note_beat = timing.get_beat_for_time(first_second);
     let initial_bpm = timing.get_bpm_for_beat(first_note_beat);
 
     let centered = (0..num_players).any(|player| {
@@ -875,7 +894,7 @@ pub fn init(
         init_music_time - global_visual_delay_seconds - player_visual_delay_seconds[player]
     });
     let current_beat_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
-        timing.get_beat_for_time(current_music_time_visible[player])
+        timing_players[player].get_beat_for_time(current_music_time_visible[player])
     });
     let reverse_scroll: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
@@ -893,6 +912,7 @@ pub fn init(
         cols_per_player,
         num_players,
         timing,
+        timing_players,
         beat_info_cache,
         timing_profile,
         notes,
@@ -1317,6 +1337,9 @@ fn update_active_holds(
     delta_time: f32,
 ) {
     for column in 0..state.active_holds.len() {
+        let player = player_for_col(state, column);
+        let timing = &state.timing_players[player];
+        let current_beat = timing.get_beat_for_time(current_time);
         let mut handle_let_go = None;
         let mut handle_success = None;
         {
@@ -1336,20 +1359,16 @@ fn update_active_holds(
                     let prev_row = hold.last_held_row_index;
                     let prev_beat = hold.last_held_beat;
                     if pressed {
-                        let mut current_row = state
-                            .timing
-                            .get_row_for_beat(state.current_beat)
-                            .unwrap_or(note_start_row);
+                        let mut current_row =
+                            timing.get_row_for_beat(current_beat).unwrap_or(note_start_row);
                         current_row = current_row.clamp(note_start_row, hold.end_row_index);
                         let final_row = prev_row.max(current_row);
                         if final_row == prev_row {
                             hold.last_held_beat = prev_beat.clamp(note_start_beat, hold.end_beat);
                         } else {
                             hold.last_held_row_index = final_row;
-                            let mut new_beat = state
-                                .timing
-                                .get_beat_for_row(final_row)
-                                .unwrap_or(state.current_beat);
+                            let mut new_beat =
+                                timing.get_beat_for_row(final_row).unwrap_or(current_beat);
                             new_beat = new_beat.clamp(note_start_beat, hold.end_beat);
                             if new_beat < prev_beat {
                                 new_beat = prev_beat;
@@ -1707,18 +1726,40 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
         return ScreenAction::None;
     }
 
-    if let Some(timing) = Arc::get_mut(&mut state.timing) {
-        timing.set_global_offset_seconds(new_offset);
+    let set_global_offset = |timing: &mut Arc<TimingData>| {
+        if let Some(inner) = Arc::get_mut(timing) {
+            inner.set_global_offset_seconds(new_offset);
+            return;
+        }
+        let mut cloned = (**timing).clone();
+        cloned.set_global_offset_seconds(new_offset);
+        *timing = Arc::new(cloned);
+    };
+    set_global_offset(&mut state.timing);
+    for timing in &mut state.timing_players {
+        set_global_offset(timing);
     }
 
+    let num_players = state.num_players;
+    let cols_per_player = state.cols_per_player;
     for (time, note) in state.note_time_cache.iter_mut().zip(&state.notes) {
-        *time = state.timing.get_time_for_beat(note.beat);
+        let player = if num_players <= 1 || cols_per_player == 0 {
+            0
+        } else {
+            (note.column / cols_per_player).min(num_players.saturating_sub(1))
+        };
+        *time = state.timing_players[player].get_time_for_beat(note.beat);
     }
     for (time_opt, note) in state.hold_end_time_cache.iter_mut().zip(&state.notes) {
+        let player = if num_players <= 1 || cols_per_player == 0 {
+            0
+        } else {
+            (note.column / cols_per_player).min(num_players.saturating_sub(1))
+        };
         *time_opt = note
             .hold
             .as_ref()
-            .map(|h| state.timing.get_time_for_beat(h.end_beat));
+            .map(|h| state.timing_players[player].get_time_for_beat(h.end_beat));
     }
     state.beat_info_cache.reset(&state.timing);
 
@@ -2112,13 +2153,14 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
 #[inline(always)]
 fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
     for player in 0..state.num_players {
+        let timing = &state.timing_players[player];
         let (note_start, note_end) = player_note_range(state, player);
         let mut cursor = state.note_spawn_cursor[player].max(note_start);
         let spawn_time = music_time_sec.max(state.current_music_time_visible[player]);
         match state.scroll_speed[player] {
             ScrollSpeedSetting::CMod(_) => {
                 let lookahead_time = spawn_time + state.scroll_travel_time[player];
-                let lookahead_beat = state.timing.get_beat_for_time(lookahead_time);
+                let lookahead_beat = timing.get_beat_for_time(lookahead_time);
                 while cursor < note_end && state.notes[cursor].beat < lookahead_beat {
                     let note = &state.notes[cursor];
                     if note.column < state.num_cols {
@@ -2132,11 +2174,9 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
                 }
             }
             ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                let spawn_beat = state.timing.get_beat_for_time(spawn_time);
-                let current_displayed_beat = state.timing.get_displayed_beat(spawn_beat);
-                let speed_multiplier = state
-                    .timing
-                    .get_speed_multiplier(spawn_beat, spawn_time);
+                let spawn_beat = timing.get_beat_for_time(spawn_time);
+                let current_displayed_beat = timing.get_displayed_beat(spawn_beat);
+                let speed_multiplier = timing.get_speed_multiplier(spawn_beat, spawn_time);
                 let player_multiplier = state.scroll_speed[player]
                     .beat_multiplier(state.scroll_reference_bpm, state.music_rate);
                 let final_multiplier = player_multiplier * speed_multiplier;
@@ -2383,13 +2423,14 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     let player_cull_time: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         music_time_sec.min(state.current_music_time_visible[player])
     });
-    let player_cull_beat: [f32; MAX_PLAYERS] =
-        std::array::from_fn(|player| state.timing.get_beat_for_time(player_cull_time[player]));
+    let player_cull_beat: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        state.timing_players[player].get_beat_for_time(player_cull_time[player])
+    });
     let player_curr_disp_beat: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
-        state.timing.get_displayed_beat(player_cull_beat[player])
+        state.timing_players[player].get_displayed_beat(player_cull_beat[player])
     });
     let player_speed_multiplier: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
-        state.timing.get_speed_multiplier(player_cull_beat[player], player_cull_time[player])
+        state.timing_players[player].get_speed_multiplier(player_cull_beat[player], player_cull_time[player])
     });
 
     let beatmod_multiplier: [f32; MAX_PLAYERS] = std::array::from_fn(|player| match state.scroll_speed[player] {
@@ -2584,7 +2625,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         let delay = state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
         let visible_time = music_time_sec - delay;
         state.current_music_time_visible[player] = visible_time;
-        state.current_beat_visible[player] = state.timing.get_beat_for_time(visible_time);
+        state.current_beat_visible[player] = state.timing_players[player].get_beat_for_time(visible_time);
     }
 
     let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);

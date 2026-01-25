@@ -169,6 +169,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
     });
 
     if let Some(ns) = &state.noteskin[player_idx] {
+        let timing = &state.timing_players[player_idx];
         let target_arrow_px = TARGET_ARROW_PIXEL_SIZE * field_zoom;
         let target_explosion_px = TARGET_EXPLOSION_PIXEL_SIZE * field_zoom;
         let scale_sprite = |size: [i32; 2]| -> [f32; 2] {
@@ -205,10 +206,9 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
                 (rate, Some(pps), 0.0, 0.0)
             }
             ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                let curr_disp = state.timing.get_displayed_beat(state.current_beat_visible[player_idx]);
-                let speed_multiplier = state
-                    .timing
-                    .get_speed_multiplier(state.current_beat_visible[player_idx], current_time);
+                let curr_disp = timing.get_displayed_beat(state.current_beat_visible[player_idx]);
+                let speed_multiplier =
+                    timing.get_speed_multiplier(state.current_beat_visible[player_idx], current_time);
                 let player_multiplier =
                     scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
                 let final_multiplier = player_multiplier * speed_multiplier;
@@ -223,12 +223,12 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
             match scroll_speed {
                 ScrollSpeedSetting::CMod(_) => {
                     let pps_chart = cmod_pps_opt.expect("cmod pps computed");
-                    let note_time_chart = state.timing.get_time_for_beat(beat);
+                    let note_time_chart = timing.get_time_for_beat(beat);
                     let time_diff_real = (note_time_chart - current_time) / rate;
                     receptor_y_lane + dir * time_diff_real * pps_chart
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                    let note_disp_beat = state.timing.get_displayed_beat(beat);
+                    let note_disp_beat = timing.get_displayed_beat(beat);
                     let beat_diff_disp = note_disp_beat - curr_disp_beat;
                     receptor_y_lane
                         + dir
@@ -434,19 +434,7 @@ pub fn build(state: &State, profile: &profile::Profile, placement: FieldPlacemen
         }
         // Only consider notes that are currently in or near the lookahead window.
         let notes_len = state.notes.len();
-        let note_range = if state.num_players <= 1 {
-            (0, notes_len)
-        } else {
-            let per = notes_len / state.num_players;
-            let start = per.saturating_mul(player_idx);
-            let end = if player_idx + 1 >= state.num_players {
-                notes_len
-            } else {
-                start.saturating_add(per).min(notes_len)
-            };
-            (start, end)
-        };
-        let (note_start, note_end) = note_range;
+        let (note_start, note_end) = state.note_ranges[player_idx];
         let min_visible_index = state
             .arrows[col_start..col_end]
             .iter()

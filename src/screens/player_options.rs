@@ -49,55 +49,53 @@ fn compute_visible_rows(
         return (out, total_rows);
     }
 
-    // Mirror ITGmania ScreenOptions::PositionRows() semantics.
-    let p1_choice = if active[P1] { selected_row[P1] } else { selected_row[P2] };
-    let p2_choice = if active[P2] { selected_row[P2] } else { selected_row[P1] };
-    let p1_choice = p1_choice.min(total_rows - 1);
-    let p2_choice = p2_choice.min(total_rows - 1);
+    let total_rows_i = total_rows as i32;
+    let total = VISIBLE_ROWS as i32;
+    let halfsize = total / 2;
 
-    let half = VISIBLE_ROWS / 2;
-    let (mut first_start, mut first_end, mut second_start, mut second_end) = if !(active[P1]
-        && active[P2])
-    {
-        // Single cursor: show one contiguous window centered on the active player.
-        let start = p1_choice.saturating_sub(half);
-        let end = start + VISIBLE_ROWS;
-        (start, end, end, end)
+    // Mirror ITGmania ScreenOptions::PositionRows() semantics (signed math matters).
+    let p1_choice = if active[P1] {
+        selected_row[P1] as i32
     } else {
-        // Two cursors: show two 5-row windows (top/bottom), skipping middle rows if needed.
-        let earliest = p1_choice.min(p2_choice);
-        let first_start = earliest.saturating_sub(half / 2);
-        let first_end = first_start + half;
-
-        let latest = p1_choice.max(p2_choice);
-        let mut second_start = latest.saturating_sub(half / 2);
-        if second_start < first_end {
-            second_start = first_end;
-        }
-        let second_end = second_start + half;
-        (first_start, first_end, second_start, second_end)
+        selected_row[P2] as i32
     };
+    let p2_choice = if active[P2] {
+        selected_row[P2] as i32
+    } else {
+        selected_row[P1] as i32
+    };
+    let p1_choice = p1_choice.clamp(0, total_rows_i - 1);
+    let p2_choice = p2_choice.clamp(0, total_rows_i - 1);
 
-    first_end = first_end.min(total_rows);
-    second_end = second_end.min(total_rows);
-    if first_end < first_start {
-        first_end = first_start;
-    }
-    if second_end < second_start {
-        second_end = second_start;
-    }
+    let (mut first_start, mut first_end, mut second_start, mut second_end) =
+        if !(active[P1] && active[P2]) {
+            let first_start = (p1_choice - halfsize).max(0);
+            let first_end = first_start + total;
+            (first_start, first_end, first_end, first_end)
+        } else {
+            let earliest = p1_choice.min(p2_choice);
+            let first_start = (earliest - halfsize / 2).max(0);
+            let first_end = first_start + halfsize;
 
-    // If fewer than VISIBLE_ROWS can be shown, fill space intelligently.
+            let latest = p1_choice.max(p2_choice);
+            let second_start = (latest - halfsize / 2).max(0).max(first_end);
+            let second_end = second_start + halfsize;
+            (first_start, first_end, second_start, second_end)
+        };
+
+    first_end = first_end.min(total_rows_i);
+    second_end = second_end.min(total_rows_i);
+
     loop {
         let sum = (first_end - first_start) + (second_end - second_start);
-        if sum >= total_rows || sum >= VISIBLE_ROWS {
+        if sum >= total_rows_i || sum >= total {
             break;
         }
         if second_start > first_end {
             second_start -= 1;
         } else if first_start > 0 {
             first_start -= 1;
-        } else if second_end < total_rows {
+        } else if second_end < total_rows_i {
             second_end += 1;
         } else {
             break;
@@ -105,18 +103,20 @@ fn compute_visible_rows(
     }
 
     let mut len = 0usize;
-    for i in 0..total_rows {
-        let is_visible =
-            (i >= first_start && i < first_end) || (i >= second_start && i < second_end);
-        if !is_visible {
+    for i in 0..total_rows_i {
+        let is_hidden = i < first_start
+            || (i >= first_end && i < second_start)
+            || i >= second_end;
+        if is_hidden {
             continue;
         }
         if len >= VISIBLE_ROWS {
             break;
         }
-        out[len] = i;
+        out[len] = i as usize;
         len += 1;
     }
+
     (out, len)
 }
 
