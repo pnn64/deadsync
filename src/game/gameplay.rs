@@ -75,17 +75,22 @@ fn quantization_index_from_beat(beat: f32) -> u8 {
     }
 }
 
-fn compute_music_end_time(
+fn compute_end_times(
     notes: &[Note],
     note_time_cache: &[f32],
     hold_end_time_cache: &[Option<f32>],
     rate: f32,
-) -> f32 {
-    let last_relevant_second = notes.iter().enumerate().fold(0.0_f32, |acc, (i, _)| {
+) -> (f32, f32) {
+    let mut last_judgable_second = 0.0_f32;
+    let mut last_relevant_second = 0.0_f32;
+    for (i, note) in notes.iter().enumerate() {
         let start = note_time_cache[i];
         let end = hold_end_time_cache[i].unwrap_or(start);
-        acc.max(end)
-    });
+        last_relevant_second = last_relevant_second.max(end);
+        if note.can_be_judged {
+            last_judgable_second = last_judgable_second.max(end);
+        }
+    }
 
     let timing_profile = TimingProfile::default_itg_with_fa_plus();
     let mut max_window = timing_profile
@@ -98,8 +103,9 @@ fn compute_music_end_time(
     max_window = max_window.max(TIMING_WINDOW_SECONDS_ROLL);
 
     let max_step_distance = rate * max_window;
-    let last_step_seconds = last_relevant_second + max_step_distance;
-    last_step_seconds + POST_SONG_DISPLAY_SECONDS
+    let notes_end_time = last_judgable_second + max_step_distance;
+    let music_end_time = last_relevant_second + max_step_distance + POST_SONG_DISPLAY_SECONDS;
+    (notes_end_time, music_end_time)
 }
 
 #[inline(always)]
@@ -338,6 +344,7 @@ pub struct State {
     pub note_display_beat_cache: Vec<f32>,
     pub hold_end_time_cache: Vec<Option<f32>>,
     pub hold_end_display_beat_cache: Vec<Option<f32>>,
+    pub notes_end_time: f32,
     pub music_end_time: f32,
     pub music_rate: f32,
     pub play_mine_sounds: bool,
@@ -864,8 +871,8 @@ pub fn init(
     });
 
     let timing_profile = TimingProfile::default_itg_with_fa_plus();
-    let music_end_time =
-        compute_music_end_time(&notes, &note_time_cache, &hold_end_time_cache, rate);
+    let (notes_end_time, music_end_time) =
+        compute_end_times(&notes, &note_time_cache, &hold_end_time_cache, rate);
     let notes_len = notes.len();
     let mut column_scroll_dirs = [1.0_f32; MAX_COLS];
     for player in 0..num_players {
@@ -927,6 +934,7 @@ pub fn init(
         note_display_beat_cache,
         hold_end_time_cache,
         hold_end_display_beat_cache,
+        notes_end_time,
         music_end_time,
         music_rate: rate,
         play_mine_sounds: config.mine_hit_sound,
@@ -1763,12 +1771,14 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
     }
     state.beat_info_cache.reset(&state.timing);
 
-    state.music_end_time = compute_music_end_time(
+    let (notes_end_time, music_end_time) = compute_end_times(
         &state.notes,
         &state.note_time_cache,
         &state.hold_end_time_cache,
         state.music_rate,
     );
+    state.notes_end_time = notes_end_time;
+    state.music_end_time = music_end_time;
 
     state.global_offset_seconds = new_offset;
 
@@ -2578,19 +2588,6 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
 }
 
 pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
-    if let (Some(key), Some(start_time)) = (state.hold_to_exit_key, state.hold_to_exit_start)
-        && start_time.elapsed() >= std::time::Duration::from_secs(1)
-    {
-        state.hold_to_exit_key = None;
-        state.hold_to_exit_start = None;
-        return match key {
-            winit::keyboard::KeyCode::Enter => ScreenAction::Navigate(Screen::Evaluation),
-            winit::keyboard::KeyCode::Escape => ScreenAction::Navigate(Screen::SelectMusic),
-            _ => ScreenAction::None,
-        };
-    }
-    state.total_elapsed_in_screen += delta_time;
-
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -2604,6 +2601,22 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     let lead_in = state.audio_lead_in_seconds.max(0.0);
     let music_time_sec = (stream_pos - lead_in).mul_add(rate, anchor * (1.0 - rate));
     state.current_music_time = music_time_sec;
+
+    if let (Some(key), Some(start_time)) = (state.hold_to_exit_key, state.hold_to_exit_start)
+        && start_time.elapsed() >= std::time::Duration::from_secs(1)
+    {
+        state.hold_to_exit_key = None;
+        state.hold_to_exit_start = None;
+        if key == KeyCode::Enter && music_time_sec >= state.notes_end_time {
+            state.song_completed_naturally = true;
+        }
+        return match key {
+            KeyCode::Enter => ScreenAction::Navigate(Screen::Evaluation),
+            KeyCode::Escape => ScreenAction::Navigate(Screen::SelectMusic),
+            _ => ScreenAction::None,
+        };
+    }
+    state.total_elapsed_in_screen += delta_time;
 
     // Optimization: only record if time has advanced slightly to avoid duplicates
     for player in 0..state.num_players {
