@@ -589,6 +589,11 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
                 apply_alpha_to_actor(child, alpha);
             }
         }
+        Actor::Camera { children, .. } => {
+            for child in children {
+                apply_alpha_to_actor(child, alpha);
+            }
+        }
         Actor::Shadow { color, child, .. } => {
             color[3] *= alpha;
             apply_alpha_to_actor(child, alpha);
@@ -725,6 +730,11 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                 apply_zoom_to_actor(child, pivot, zoom);
             }
         }
+        Actor::Camera { children, .. } => {
+            for child in children {
+                apply_zoom_to_actor(child, pivot, zoom);
+            }
+        }
         Actor::Shadow { len, child, .. } => {
             len[0] *= zoom;
             len[1] *= zoom;
@@ -753,6 +763,11 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
             offset[0] += dx;
             offset[1] += dy;
         }
+        Actor::Camera { children, .. } => {
+            for child in children {
+                apply_offset_to_actor(child, dx, dy);
+            }
+        }
         Actor::Shadow { child, .. } => apply_offset_to_actor(child, dx, dy),
     }
 }
@@ -761,6 +776,11 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
     match actor {
         Actor::Text { clip, .. } => *clip = Some(rect),
         Actor::Frame { children, .. } => {
+            for child in children {
+                apply_clip_rect_to_actor(child, rect);
+            }
+        }
+        Actor::Camera { children, .. } => {
             for child in children {
                 apply_clip_rect_to_actor(child, rect);
             }

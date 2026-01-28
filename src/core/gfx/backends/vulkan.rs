@@ -767,6 +767,7 @@ pub fn draw(
         set: vk::DescriptorSet,
         start: u32,
         count: u32,
+        camera: u8,
     }
 
     let mut runs: Vec<Run> = Vec::new();
@@ -775,6 +776,7 @@ pub fn draw(
     unsafe {
         let dst_base = state.instance_ring_ptr.add(base_first_instance as usize);
         let mut last_set = vk::DescriptorSet::null();
+        let mut last_camera: u8 = 0;
 
         for obj in &render_list.objects {
             let (texture_id, tint, uv_scale, uv_offset, edge_fade) = match &obj.object_type {
@@ -815,13 +817,15 @@ pub fn draw(
                 },
             );
 
-            if runs.is_empty() || set != last_set {
+            if runs.is_empty() || set != last_set || obj.camera != last_camera {
                 runs.push(Run {
                     set,
                     start: written,
                     count: 1,
+                    camera: obj.camera,
                 });
                 last_set = set;
+                last_camera = obj.camera;
             } else if let Some(r) = runs.last_mut() {
                 r.count += 1;
             }
@@ -903,16 +907,6 @@ pub fn draw(
         device.cmd_set_scissor(cmd, 0, &[sc]);
 
         device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, state.sprite_pipeline);
-        let pc = ProjPush {
-            proj: state.projection,
-        };
-        device.cmd_push_constants(
-            cmd,
-            state.sprite_pipeline_layout,
-            vk::ShaderStageFlags::VERTEX,
-            0,
-            bytes_of(&pc),
-        );
         let vb0 = state.vertex_buffer.as_ref().unwrap().buffer;
         let inst_buf = state.instance_ring.as_ref().unwrap().buffer;
         device.cmd_bind_vertex_buffers(cmd, 0, &[vb0, inst_buf], &[0, 0]);
@@ -920,8 +914,25 @@ pub fn draw(
         device.cmd_bind_index_buffer(cmd, ib, 0, vk::IndexType::UINT16);
 
         let mut last_set = vk::DescriptorSet::null();
+        let mut last_camera: Option<u8> = None;
         let mut vertices_drawn: u32 = 0;
         for run in runs {
+            if last_camera != Some(run.camera) {
+                let vp = render_list
+                    .cameras
+                    .get(run.camera as usize)
+                    .copied()
+                    .unwrap_or(state.projection);
+                let pc = ProjPush { proj: vp };
+                device.cmd_push_constants(
+                    cmd,
+                    state.sprite_pipeline_layout,
+                    vk::ShaderStageFlags::VERTEX,
+                    0,
+                    bytes_of(&pc),
+                );
+                last_camera = Some(run.camera);
+            }
             if last_set != run.set {
                 device.cmd_bind_descriptor_sets(
                     cmd,

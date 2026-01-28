@@ -1059,6 +1059,16 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = idx;
         }
     }
+    // Initialize Perspective row from profile setting (Overhead, Hallway, Distant, Incoming, Space).
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Perspective") {
+        row.selected_choice_index[player_idx] = match profile.perspective {
+            crate::game::profile::Perspective::Overhead => 0,
+            crate::game::profile::Perspective::Hallway => 1,
+            crate::game::profile::Perspective::Distant => 2,
+            crate::game::profile::Perspective::Incoming => 3,
+            crate::game::profile::Perspective::Space => 4,
+        };
+    }
     // Initialize NoteField Offset X from profile (0..50, non-negative; P1 uses negative sign at render time)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "NoteField Offset X") {
         let val = profile.note_field_offset_x.clamp(0, 50);
@@ -1528,6 +1538,19 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
                     crate::game::profile::update_mini_percent_for_side(persist_side, val);
                 }
             }
+        }
+    } else if row_name == "Perspective" {
+        let setting = match row.selected_choice_index[player_idx] {
+            0 => crate::game::profile::Perspective::Overhead,
+            1 => crate::game::profile::Perspective::Hallway,
+            2 => crate::game::profile::Perspective::Distant,
+            3 => crate::game::profile::Perspective::Incoming,
+            4 => crate::game::profile::Perspective::Space,
+            _ => crate::game::profile::Perspective::Overhead,
+        };
+        state.player_profiles[player_idx].perspective = setting;
+        if should_persist {
+            crate::game::profile::update_perspective_for_side(persist_side, setting);
         }
     } else if row_name == "NoteField Offset X" {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])

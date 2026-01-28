@@ -857,13 +857,18 @@ pub fn init(
         }
         pps
     });
-    let draw_distance_before_targets = screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER;
+    let max_perspective_tilt: f32 = (0..num_players)
+        .map(|player| player_profiles[player].perspective.tilt_skew().0.abs())
+        .fold(0.0_f32, f32::max);
+    let draw_scale = (1.0 + 0.5 * max_perspective_tilt).max(1.0);
+    let draw_distance_before_targets =
+        screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale;
 
     // If Centered, we need to draw arrows well past the center line.
     let draw_distance_after_targets = if centered {
-        screen_height() * 0.6
+        screen_height() * 0.6 * draw_scale
     } else {
-        DRAW_DISTANCE_AFTER_TARGETS
+        DRAW_DISTANCE_AFTER_TARGETS * draw_scale
     };
 
     let travel_time: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
@@ -2681,7 +2686,12 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         state.scroll_pixels_per_second[player] = dynamic_speed;
     }
 
-    let draw_distance_before_targets = screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER;
+    let max_perspective_tilt: f32 = (0..state.num_players)
+        .map(|player| state.player_profiles[player].perspective.tilt_skew().0.abs())
+        .fold(0.0_f32, f32::max);
+    let draw_scale = (1.0 + 0.5 * max_perspective_tilt).max(1.0);
+    let draw_distance_before_targets =
+        screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale;
     state.draw_distance_before_targets = draw_distance_before_targets;
 
     // Dynamic update of draw distance logic based on profile
@@ -2691,9 +2701,9 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             .contains(profile::ScrollOption::Centered)
     });
     state.draw_distance_after_targets = if is_centered {
-        screen_height() * 0.6
+        screen_height() * 0.6 * draw_scale
     } else {
-        DRAW_DISTANCE_AFTER_TARGETS
+        DRAW_DISTANCE_AFTER_TARGETS * draw_scale
     };
 
     for player in 0..state.num_players {

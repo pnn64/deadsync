@@ -87,7 +87,8 @@ pub fn draw(
         *pixel = clear;
     }
 
-    let proj = state.projection;
+    let default_proj = state.projection;
+    let cameras = render_list.cameras.as_slice();
     let vertex_counter = AtomicU32::new(0);
 
     let threads_auto = thread::available_parallelism()
@@ -122,7 +123,8 @@ pub fn draw(
 
                 let objects = &render_list.objects;
                 let textures = textures;
-                let proj = proj;
+                let default_proj = default_proj;
+                let cameras = cameras;
                 let width = w;
                 let height = h;
                 let counter = &vertex_counter;
@@ -131,6 +133,10 @@ pub fn draw(
                     let mut local_vertices: u32 = 0;
 
                     for obj in objects {
+                        let proj = cameras
+                            .get(obj.camera as usize)
+                            .copied()
+                            .unwrap_or(default_proj);
                         let ObjectType::Sprite {
                             texture_id,
                             tint,
@@ -167,6 +173,10 @@ pub fn draw(
         });
     } else {
         for obj in &render_list.objects {
+            let proj = cameras
+                .get(obj.camera as usize)
+                .copied()
+                .unwrap_or(default_proj);
             let ObjectType::Sprite {
                 texture_id,
                 tint,

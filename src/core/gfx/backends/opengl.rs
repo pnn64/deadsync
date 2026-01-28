@@ -277,7 +277,12 @@ pub fn draw(
         for obj in &render_list.objects {
             apply_blend(gl, obj.blend, &mut last_blend);
 
-            let mvp_array: [[f32; 4]; 4] = (state.projection * obj.transform).into();
+            let cam = render_list
+                .cameras
+                .get(obj.camera as usize)
+                .copied()
+                .unwrap_or(state.projection);
+            let mvp_array: [[f32; 4]; 4] = (cam * obj.transform).into();
             gl.uniform_matrix_4_f32_slice(
                 Some(&state.mvp_location),
                 false,

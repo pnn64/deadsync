@@ -6,6 +6,57 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Mutex;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Perspective {
+    #[default]
+    Overhead,
+    Hallway,
+    Distant,
+    Incoming,
+    Space,
+}
+
+impl Perspective {
+    #[inline(always)]
+    pub const fn tilt_skew(self) -> (f32, f32) {
+        match self {
+            Self::Overhead => (0.0, 0.0),
+            Self::Hallway => (-1.0, 0.0),
+            Self::Distant => (1.0, 0.0),
+            Self::Incoming => (-1.0, 1.0),
+            Self::Space => (1.0, 1.0),
+        }
+    }
+}
+
+impl FromStr for Perspective {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let v = s.trim().to_lowercase();
+        match v.as_str() {
+            "overhead" => Ok(Self::Overhead),
+            "hallway" => Ok(Self::Hallway),
+            "distant" => Ok(Self::Distant),
+            "incoming" => Ok(Self::Incoming),
+            "space" => Ok(Self::Space),
+            other => Err(format!("'{other}' is not a valid Perspective setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for Perspective {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Overhead => write!(f, "Overhead"),
+            Self::Hallway => write!(f, "Hallway"),
+            Self::Distant => write!(f, "Distant"),
+            Self::Incoming => write!(f, "Incoming"),
+            Self::Space => write!(f, "Space"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScrollOption(u8);
 
@@ -392,6 +443,7 @@ pub struct Profile {
     // Mini modifier as a percentage, mirroring Simply Love semantics.
     // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
     pub mini_percent: i32,
+    pub perspective: Perspective,
     // NoteField positional offsets (Simply Love semantics).
     // X is non-negative and interpreted relative to player side:
     // for P1, positive values move the field left.
@@ -432,6 +484,7 @@ impl Default for Profile {
             show_ex_score: false,
             show_fa_plus_pane: false,
             mini_percent: 0,
+            perspective: Perspective::default(),
             note_field_offset_x: 0,
             note_field_offset_y: 0,
             visual_delay_ms: 0,
@@ -601,6 +654,7 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         content.push_str(&format!("ComboFont = {}\n", default_profile.combo_font));
         content.push_str(&format!("NoteSkin = {}\n", default_profile.noteskin));
         content.push_str(&format!("MiniPercent = {}\n", default_profile.mini_percent));
+        content.push_str(&format!("Perspective = {}\n", default_profile.perspective));
         content.push_str(&format!(
             "NoteFieldOffsetX = {}\n",
             default_profile.note_field_offset_x
@@ -685,6 +739,7 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!("ComboFont={}\n", profile.combo_font));
     content.push_str(&format!("NoteSkin={}\n", profile.noteskin));
     content.push_str(&format!("MiniPercent={}\n", profile.mini_percent));
+    content.push_str(&format!("Perspective={}\n", profile.perspective));
     content.push_str(&format!(
         "NoteFieldOffsetX={}\n",
         profile.note_field_offset_x
@@ -822,6 +877,10 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "MiniPercent")
                 .and_then(|s| s.parse::<i32>().ok())
                 .unwrap_or(default_profile.mini_percent);
+            profile.perspective = profile_conf
+                .get("PlayerOptions", "Perspective")
+                .and_then(|s| Perspective::from_str(&s).ok())
+                .unwrap_or(default_profile.perspective);
             profile.note_field_offset_x = profile_conf
                 .get("PlayerOptions", "NoteFieldOffsetX")
                 .and_then(|s| s.parse::<i32>().ok())
@@ -1295,6 +1354,18 @@ pub fn update_mini_percent_for_side(side: PlayerSide, percent: i32) {
             return;
         }
         profile.mini_percent = clamped;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_perspective_for_side(side: PlayerSide, perspective: Perspective) {
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.perspective == perspective {
+            return;
+        }
+        profile.perspective = perspective;
     }
     save_profile_ini_for_side(side);
 }

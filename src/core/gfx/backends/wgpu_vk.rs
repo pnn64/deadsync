@@ -65,6 +65,7 @@ struct Run {
     blend: BlendMode,
     bind_group: Arc<wgpu::BindGroup>,
     key: u64,
+    camera: u8,
 }
 
 struct OwnedWindowHandle(pub Arc<Window>);
@@ -385,6 +386,7 @@ pub fn draw(
             if let Some(last) = runs.last_mut()
                 && last.key == tex.id
                 && last.blend == obj.blend
+                && last.camera == obj.camera
             {
                 last.count += 1;
                 continue;
@@ -395,6 +397,7 @@ pub fn draw(
                 blend: obj.blend,
                 bind_group: tex.bind_group.clone(),
                 key: tex.id,
+                camera: obj.camera,
             });
         }
     }
@@ -408,8 +411,6 @@ pub fn draw(
             cast_slice(state.scratch_instances.as_slice()),
         );
     }
-    let proj_array: [[f32; 4]; 4] = state.projection.into();
-
     let frame = match state.surface.get_current_texture() {
         Ok(f) => f,
         Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
@@ -457,11 +458,26 @@ pub fn draw(
 
         let mut last_blend: Option<BlendMode> = None;
         let mut last_bind: Option<u64> = None;
+        let mut last_camera: Option<u8> = None;
         for run in &state.scratch_runs {
             if last_blend != Some(run.blend) {
                 pass.set_pipeline(state.pipelines.get(run.blend));
-                pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, cast_slice(&proj_array));
                 last_blend = Some(run.blend);
+                last_camera = None;
+            }
+            if last_camera != Some(run.camera) {
+                let vp = render_list
+                    .cameras
+                    .get(run.camera as usize)
+                    .copied()
+                    .unwrap_or(state.projection);
+                let vp_array: [[f32; 4]; 4] = vp.into();
+                pass.set_push_constants(
+                    wgpu::ShaderStages::VERTEX,
+                    0,
+                    cast_slice(&vp_array),
+                );
+                last_camera = Some(run.camera);
             }
             if last_bind != Some(run.key) {
                 pass.set_bind_group(0, Some(run.bind_group.as_ref()), &[]);

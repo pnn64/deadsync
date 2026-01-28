@@ -13,6 +13,7 @@ use crate::game::parsing::noteskin::NUM_QUANTIZATIONS;
 use crate::game::{gameplay::State, profile, scroll::ScrollSpeedSetting};
 use crate::ui::actors::Actor;
 use crate::ui::color;
+use cgmath::{Deg, Matrix4, Point3, Vector3};
 use std::array::from_fn;
 
 // --- CONSTANTS ---
@@ -80,12 +81,137 @@ fn mine_fill_state(colors: &[[f32; 4]], beat: f32) -> Option<MineFillState> {
     Some(MineFillState { layers })
 }
 
+#[inline(always)]
+fn sm_scale(v: f32, in0: f32, in1: f32, out0: f32, out1: f32) -> f32 {
+    let denom = in1 - in0;
+    if denom.abs() < 1e-6 {
+        return out1;
+    }
+    ((v - in0) / denom).mul_add(out1 - out0, out0)
+}
+
+#[inline(always)]
+fn rage_frustum(l: f32, r: f32, b: f32, t: f32, zn: f32, zf: f32) -> Matrix4<f32> {
+    let a = (r + l) / (r - l);
+    let bb = (t + b) / (t - b);
+    let c = -(zf + zn) / (zf - zn);
+    let d = -(2.0 * zf * zn) / (zf - zn);
+    // Match ITGmania's RageDisplay::GetFrustumMatrix (OpenGL-style frustum matrix).
+    //
+    // Note: cgmath::Matrix4::new takes elements in column-major order.
+    Matrix4::new(
+        // column 0
+        2.0 * zn / (r - l),
+        0.0,
+        0.0,
+        0.0,
+        // column 1
+        0.0,
+        2.0 * zn / (t - b),
+        0.0,
+        0.0,
+        // column 2
+        a,
+        bb,
+        c,
+        -1.0,
+        // column 3
+        0.0,
+        0.0,
+        d,
+        0.0,
+    )
+}
+
+fn notefield_view_proj(
+    screen_w: f32,
+    screen_h: f32,
+    playfield_center_x: f32,
+    center_y: f32,
+    tilt: f32,
+    skew: f32,
+    reverse: bool,
+) -> Option<Matrix4<f32>> {
+    if !screen_w.is_finite() || !screen_h.is_finite() || screen_w <= 0.0 || screen_h <= 0.0 {
+        return None;
+    }
+
+    let half_w = 0.5 * screen_w;
+    let half_h = 0.5 * screen_h;
+
+    // ITGmania: Player::PushPlayerMatrix -> LoadMenuPerspective(45, w, h, vanish_x, center_y)
+    let fov_deg = 45.0_f32;
+    let theta = (0.5 * fov_deg).to_radians();
+    let tan_theta = theta.tan();
+    if !tan_theta.is_finite() || tan_theta.abs() < 1e-6 {
+        return None;
+    }
+    let dist = half_w / tan_theta;
+    if !dist.is_finite() || dist <= 0.0 {
+        return None;
+    }
+
+    let vanish_x = sm_scale(skew, 0.1, 1.0, playfield_center_x, half_w);
+    let vanish_y = center_y;
+
+    let near = 1.0_f32;
+    let far = dist + 1000.0_f32;
+
+    // Match RageDisplay::LoadMenuPerspective exactly (ITGmania).
+    let mut vp_x = sm_scale(vanish_x, 0.0, screen_w, screen_w, 0.0);
+    let mut vp_y = sm_scale(vanish_y, 0.0, screen_h, screen_h, 0.0);
+    vp_x -= half_w;
+    vp_y -= half_h;
+    let l = (vp_x - half_w) / dist;
+    let r = (vp_x + half_w) / dist;
+    let b = (vp_y + half_h) / dist;
+    let t = (vp_y - half_h) / dist;
+    let proj = rage_frustum(l, r, b, t, near, far);
+
+    let eye = Point3::new(-vp_x + half_w, -vp_y + half_h, dist);
+    let at = Point3::new(-vp_x + half_w, -vp_y + half_h, 0.0);
+    let view = Matrix4::look_at_rh(eye, at, Vector3::unit_y());
+
+    // ITGmania: PlayerNoteFieldPositioner applies tilt/zoom/y_offset on the NoteField actor.
+    let reverse_mult = if reverse { -1.0 } else { 1.0 };
+    let tilt = tilt.clamp(-1.0, 1.0);
+    let tilt_deg = (-30.0 * tilt) * reverse_mult;
+    let tilt_abs = tilt.abs();
+    let tilt_scale = 1.0 - 0.1 * tilt_abs;
+    let y_offset_screen = if tilt > 0.0 {
+        -45.0 * tilt
+    } else {
+        20.0 * tilt
+    } * reverse_mult;
+    // Screen y-down to world y-up.
+    let y_offset_world = -y_offset_screen;
+
+    let pivot_x = playfield_center_x - half_w;
+    let pivot_y = half_h - center_y;
+    // Convert our world coords (centered, y-up) back into the SM-style screen
+    // coords (top-left, y-down) expected by the menu perspective camera.
+    let world_to_screen = Matrix4::new(
+        1.0, 0.0, 0.0, 0.0, //
+        0.0, -1.0, 0.0, 0.0, //
+        0.0, 0.0, 1.0, 0.0, //
+        half_w, half_h, 0.0, 1.0,
+    );
+    let field = Matrix4::from_translation(Vector3::new(0.0, y_offset_world, 0.0))
+        * Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
+        * Matrix4::from_angle_x(Deg(tilt_deg))
+        * Matrix4::from_nonuniform_scale(tilt_scale, tilt_scale, 1.0)
+        * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0));
+
+    Some((proj * view) * world_to_screen * field)
+}
+
 pub fn build(
     state: &State,
     profile: &profile::Profile,
     placement: FieldPlacement,
 ) -> (Vec<Actor>, f32) {
     let mut actors = Vec::new();
+    let mut hud_actors: Vec<Actor> = Vec::new();
     let hold_judgment_texture: Option<&str> = match profile.hold_judgment_graphic {
         profile::HoldJudgmentGraphic::Love => Some("hold_judgements/Love 1x2 (doubleres).png"),
         profile::HoldJudgmentGraphic::Mute => Some("hold_judgements/mute 1x2 (doubleres).png"),
@@ -1087,7 +1213,7 @@ pub fn build(
                         let alpha = (0.5 * (1.0 - progress)).max(0.0);
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let rotation = 90.0 * direction * progress;
-                            actors.push(act!(sprite("combo_explosion.png"):
+                            hud_actors.push(act!(sprite("combo_explosion.png"):
                                 align(0.5, 0.5):
                                 xy(combo_center_x, combo_center_y):
                                 zoom(zoom):
@@ -1104,7 +1230,7 @@ pub fn build(
                         let zoom = 0.25 + (2.0 - 0.25) * eased;
                         let alpha = (0.6 * (1.0 - eased)).max(0.0);
                         let rotation = 10.0 + (0.0 - 10.0) * eased;
-                        actors.push(act!(sprite("combo_100milestone_splode.png"):
+                        hud_actors.push(act!(sprite("combo_100milestone_splode.png"):
                             align(0.5, 0.5):
                             xy(combo_center_x, combo_center_y):
                             zoom(zoom):
@@ -1119,7 +1245,7 @@ pub fn build(
                             let mini_zoom = 0.25 + (1.8 - 0.25) * mini_progress;
                             let mini_alpha = (1.0 - mini_progress).max(0.0);
                             let mini_rotation = 10.0 + (0.0 - 10.0) * mini_progress;
-                            actors.push(act!(sprite("combo_100milestone_minisplode.png"):
+                            hud_actors.push(act!(sprite("combo_100milestone_minisplode.png"):
                                 align(0.5, 0.5):
                                 xy(combo_center_x, combo_center_y):
                                 zoom(mini_zoom):
@@ -1141,7 +1267,7 @@ pub fn build(
                         let x_offset = 100.0 * progress;
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let final_x = combo_center_x + x_offset * direction;
-                            actors.push(act!(sprite("combo_1000milestone_swoosh.png"):
+                            hud_actors.push(act!(sprite("combo_1000milestone_swoosh.png"):
                                 align(0.5, 0.5):
                                 xy(final_x, combo_center_y):
                                 zoom(zoom):
@@ -1176,7 +1302,7 @@ pub fn build(
             crate::game::profile::ComboFont::None => None,
         };
         if let Some(font_name) = miss_combo_font_name {
-            actors.push(act!(text:
+            hud_actors.push(act!(text:
                 font(font_name): settext(p.miss_combo.to_string()):
                 align(0.5, 0.5): xy(playfield_center_x, combo_y):
                 zoom(0.75): horizalign(center): shadowlength(1.0):
@@ -1222,7 +1348,7 @@ pub fn build(
             crate::game::profile::ComboFont::None => None,
         };
         if let Some(font_name) = combo_font_name {
-            actors.push(act!(text:
+            hud_actors.push(act!(text:
                 font(font_name): settext(p.combo.to_string()):
                 align(0.5, 0.5): xy(playfield_center_x, combo_y):
                 zoom(0.75): horizalign(center): shadowlength(1.0):
@@ -1325,7 +1451,7 @@ pub fn build(
                 } else {
                     screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
                 };
-                actors.push(act!(sprite(judgment_texture):
+                hud_actors.push(act!(sprite(judgment_texture):
                     align(0.5, 0.5): xy(playfield_center_x, judgment_y):
                     z(200): zoomtoheight(76.0): setstate(linear_index): zoom(zoom)
                 ));
@@ -1372,7 +1498,7 @@ pub fn build(
                 .and_then(|ns| ns.column_xs.get(i))
                 .map(|&x| x as f32)
                 .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
-            actors.push(act!(sprite(texture):
+            hud_actors.push(act!(sprite(texture):
                 align(0.5, 0.5):
                 xy(playfield_center_x + column_offset, hold_judgment_y):
                 z(195):
@@ -1383,5 +1509,31 @@ pub fn build(
         }
     }
 
-    (actors, playfield_center_x)
+    let (tilt, skew) = profile.perspective.tilt_skew();
+    if (tilt != 0.0 || skew != 0.0) && !actors.is_empty() {
+        let center_y = 0.5 * (receptor_y_normal + receptor_y_reverse);
+        let reverse = column_dirs[0] < 0.0;
+        if let Some(view_proj) = notefield_view_proj(
+            screen_width(),
+            screen_height(),
+            playfield_center_x,
+            center_y,
+            tilt,
+            skew,
+            reverse,
+        ) {
+            actors = vec![Actor::Camera {
+                view_proj,
+                children: actors,
+            }];
+        }
+    }
+
+    if hud_actors.is_empty() {
+        return (actors, playfield_center_x);
+    }
+    let mut out: Vec<Actor> = Vec::with_capacity(hud_actors.len() + actors.len());
+    out.extend(hud_actors);
+    out.extend(actors);
+    (out, playfield_center_x)
 }

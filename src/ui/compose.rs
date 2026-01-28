@@ -17,6 +17,15 @@ pub fn build_screen<'a>(
     total_elapsed: f32,
 ) -> RenderList<'a> {
     let mut objects = Vec::with_capacity(estimate_object_count(actors));
+    let mut cameras: Vec<Matrix4<f32>> = Vec::with_capacity(4);
+    cameras.push(cgmath::ortho(
+        m.left,
+        m.right,
+        m.bottom,
+        m.top,
+        -1.0,
+        1.0,
+    ));
     let mut order_counter: u32 = 0;
 
     let root_rect = SmRect {
@@ -26,6 +35,7 @@ pub fn build_screen<'a>(
         h: m.top - m.bottom,
     };
     let parent_z: i16 = 0;
+    let camera: u8 = 0;
 
     for actor in actors {
         build_actor_recursive(
@@ -34,6 +44,8 @@ pub fn build_screen<'a>(
             m,
             fonts,
             parent_z,
+            camera,
+            &mut cameras,
             &mut order_counter,
             &mut objects,
             total_elapsed,
@@ -44,6 +56,7 @@ pub fn build_screen<'a>(
 
     RenderList {
         clear_color,
+        cameras,
         objects,
     }
 }
@@ -76,6 +89,9 @@ fn estimate_object_count(actors: &[Actor]) -> usize {
                 }
                 stack.extend(children.iter());
             }
+            Actor::Camera { children, .. } => {
+                stack.extend(children.iter());
+            }
             Actor::Shadow { child, .. } => {
                 stack.push(child);
             }
@@ -101,6 +117,8 @@ fn build_actor_recursive<'a>(
     m: &Metrics,
     fonts: &std::collections::HashMap<&'static str, font::Font>,
     base_z: i16,
+    camera: u8,
+    cameras: &mut Vec<Matrix4<f32>>,
     order_counter: &mut u32,
     out: &mut Vec<RenderObject<'a>>,
     total_elapsed: f32,
@@ -188,6 +206,7 @@ fn build_actor_recursive<'a>(
             let before = out.len();
             push_sprite(
                 out,
+                camera,
                 rect,
                 m,
                 is_solid,
@@ -233,6 +252,8 @@ fn build_actor_recursive<'a>(
                 m,
                 fonts,
                 base_z,
+                camera,
+                cameras,
                 order_counter,
                 out,
                 total_elapsed,
@@ -265,7 +286,31 @@ fn build_actor_recursive<'a>(
                     // having to rewind the global order counter.
                     z: obj.z.saturating_sub(1),
                     order: obj.order, // order doesn't matter since z is lower
+                    camera: obj.camera,
                 });
+            }
+        }
+
+        actors::Actor::Camera { view_proj, children } => {
+            cameras.push(*view_proj);
+            let id = cameras
+                .len()
+                .saturating_sub(1)
+                .try_into()
+                .unwrap_or(0u8);
+            for child in children {
+                build_actor_recursive(
+                    child,
+                    parent,
+                    m,
+                    fonts,
+                    base_z,
+                    id,
+                    cameras,
+                    order_counter,
+                    out,
+                    total_elapsed,
+                );
             }
         }
 
@@ -345,6 +390,7 @@ fn build_actor_recursive<'a>(
                             o
                         };
                         obj.blend = *blend;
+                        obj.camera = camera;
                     }
                     out.extend(stroke_objects);
                 }
@@ -356,6 +402,7 @@ fn build_actor_recursive<'a>(
                         o
                     };
                     obj.blend = *blend;
+                    obj.camera = camera;
                     let renderer::ObjectType::Sprite { tint, .. } = &mut obj.object_type;
                     *tint = *color;
                 }
@@ -380,6 +427,7 @@ fn build_actor_recursive<'a>(
                         let before = out.len();
                         push_sprite(
                             out,
+                            camera,
                             rect,
                             m,
                             true,
@@ -416,6 +464,7 @@ fn build_actor_recursive<'a>(
                         let before = out.len();
                         push_sprite(
                             out,
+                            camera,
                             rect,
                             m,
                             false,
@@ -458,6 +507,8 @@ fn build_actor_recursive<'a>(
                     m,
                     fonts,
                     layer,
+                    camera,
+                    cameras,
                     order_counter,
                     out,
                     total_elapsed,
@@ -609,6 +660,7 @@ fn calculate_uvs(
 #[inline(always)]
 fn push_sprite<'a>(
     out: &mut Vec<renderer::RenderObject<'a>>,
+    camera: u8,
     rect: SmRect,
     m: &Metrics,
     is_solid: bool,
@@ -762,6 +814,7 @@ fn push_sprite<'a>(
         blend,
         z: 0,
         order: 0,
+        camera,
     });
 }
 
@@ -1049,6 +1102,7 @@ fn layout_text<'a>(
                     blend: BlendMode::Alpha,
                     z: 0,
                     order: 0,
+                    camera: 0,
                 });
             }
 

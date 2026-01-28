@@ -80,6 +80,8 @@ pub struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     projection: Matrix4<f32>,
+    projection_stride: u64,
+    projection_capacity: usize,
     projection_buffer: wgpu::Buffer,
     projection_group: wgpu::BindGroup,
     proj_layout: wgpu::BindGroupLayout,
@@ -151,12 +153,22 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
     surface.configure(&device, &config);
 
     let projection = ortho_for_window(size.width, size.height);
-    let proj_array: [[f32; 4]; 4] = projection.into();
-    let projection_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    let proj_bytes = mem::size_of::<[[f32; 4]; 4]>() as u64;
+    let align = device.limits().min_uniform_buffer_offset_alignment as u64;
+    let projection_stride = if align > 0 {
+        ((proj_bytes + align - 1) / align) * align
+    } else {
+        proj_bytes
+    };
+    let projection_capacity = 4usize;
+    let projection_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("gl projection"),
-        contents: cast_slice(&proj_array),
+        size: (projection_capacity as u64) * projection_stride,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
     });
+    let proj_array: [[f32; 4]; 4] = projection.into();
+    queue.write_buffer(&projection_buffer, 0, cast_slice(&proj_array));
 
     let proj_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("gl proj layout"),
@@ -165,7 +177,7 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
             visibility: wgpu::ShaderStages::VERTEX,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
+                has_dynamic_offset: true,
                 min_binding_size: wgpu::BufferSize::new((mem::size_of::<[[f32; 4]; 4]>()) as u64),
             },
             count: None,
@@ -254,6 +266,8 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         queue,
         config,
         projection,
+        projection_stride,
+        projection_capacity,
         projection_buffer,
         projection_group,
         proj_layout,
@@ -355,6 +369,7 @@ pub fn draw(
         blend: BlendMode,
         bind_group: Arc<wgpu::BindGroup>,
         key: u64,
+        camera: u8,
     }
 
     let mut instances: Vec<InstanceRaw> = Vec::with_capacity(render_list.objects.len());
@@ -404,6 +419,7 @@ pub fn draw(
         if let Some(last) = runs.last_mut()
             && last.key == tex.id
             && last.blend == obj.blend
+            && last.camera == obj.camera
         {
             last.count += 1;
             continue;
@@ -414,6 +430,7 @@ pub fn draw(
             blend: obj.blend,
             bind_group: tex.bind_group.clone(),
             key: tex.id,
+            camera: obj.camera,
         });
     }
 
@@ -424,7 +441,19 @@ pub fn draw(
             .write_buffer(&state.instance_buffer, 0, cast_slice(&instances));
     }
 
-    write_projection(&state.queue, &state.projection_buffer, state.projection);
+    ensure_projection_capacity(state, render_list.cameras.len().max(1));
+    if render_list.cameras.is_empty() {
+        let arr: [[f32; 4]; 4] = state.projection.into();
+        state.queue.write_buffer(&state.projection_buffer, 0, cast_slice(&arr));
+    } else {
+        for (i, &vp) in render_list.cameras.iter().enumerate() {
+            let arr: [[f32; 4]; 4] = vp.into();
+            let offset = (i as u64) * state.projection_stride;
+            state
+                .queue
+                .write_buffer(&state.projection_buffer, offset, cast_slice(&arr));
+        }
+    }
 
     let frame = match state.surface.get_current_texture() {
         Ok(f) => f,
@@ -470,11 +499,27 @@ pub fn draw(
         pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
         pass.set_vertex_buffer(1, state.instance_buffer.slice(..));
         pass.set_index_buffer(state.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        pass.set_bind_group(0, &state.projection_group, &[]);
 
+        let camera_len = render_list.cameras.len().max(1);
+        let mut last_blend: Option<BlendMode> = None;
+        let mut last_bind: Option<u64> = None;
+        let mut last_camera: Option<u8> = None;
         for run in runs {
-            pass.set_pipeline(state.pipelines.get(run.blend));
-            pass.set_bind_group(1, Some(run.bind_group.as_ref()), &[]);
+            if last_blend != Some(run.blend) {
+                pass.set_pipeline(state.pipelines.get(run.blend));
+                last_blend = Some(run.blend);
+                last_bind = None;
+            }
+            if last_camera != Some(run.camera) {
+                let idx = (run.camera as usize).min(camera_len - 1);
+                let offset = ((idx as u64) * state.projection_stride) as u32;
+                pass.set_bind_group(0, &state.projection_group, &[offset]);
+                last_camera = Some(run.camera);
+            }
+            if last_bind != Some(run.key) {
+                pass.set_bind_group(1, Some(run.bind_group.as_ref()), &[]);
+                last_bind = Some(run.key);
+            }
             pass.draw_indexed(0..state.index_count, 0, run.start..(run.start + run.count));
         }
         drop(pass);
@@ -514,6 +559,28 @@ fn ensure_instance_capacity(state: &mut State, needed: usize) {
     state.instance_capacity = new_cap;
 }
 
+fn ensure_projection_capacity(state: &mut State, needed: usize) {
+    if needed <= state.projection_capacity {
+        return;
+    }
+    let new_cap = needed.next_power_of_two().max(4);
+    state.projection_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("gl projection"),
+        size: (new_cap as u64) * state.projection_stride,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    state.projection_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("gl proj group"),
+        layout: &state.proj_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: state.projection_buffer.as_entire_binding(),
+        }],
+    });
+    state.projection_capacity = new_cap;
+}
+
 fn reconfigure_surface(state: &mut State) {
     if state.window_size.0 == 0 || state.window_size.1 == 0 {
         return;
@@ -531,7 +598,10 @@ fn reconfigure_surface(state: &mut State) {
     state.config.width = state.window_size.0;
     state.config.height = state.window_size.1;
     state.surface.configure(&state.device, &state.config);
-    write_projection(&state.queue, &state.projection_buffer, state.projection);
+    let arr: [[f32; 4]; 4] = state.projection.into();
+    state
+        .queue
+        .write_buffer(&state.projection_buffer, 0, cast_slice(&arr));
     if format_changed {
         let (shader, pipeline_layout, pipelines) = build_pipeline_set(
             &state.device,
@@ -796,12 +866,6 @@ fn get_sampler(state: &mut State, desc: SamplerDesc) -> wgpu::Sampler {
     let sampler = state.device.create_sampler(&sampler_descriptor(desc));
     state.samplers.insert(desc, sampler.clone());
     sampler
-}
-
-#[inline(always)]
-fn write_projection(queue: &wgpu::Queue, buffer: &wgpu::Buffer, proj: Matrix4<f32>) {
-    let arr: [[f32; 4]; 4] = proj.into();
-    queue.write_buffer(buffer, 0, cast_slice(&arr));
 }
 
 const SHADER: &str = r"

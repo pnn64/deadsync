@@ -1,4 +1,5 @@
 use crate::core::gfx::BlendMode;
+use cgmath::Matrix4;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -98,6 +99,13 @@ pub enum Actor {
         children: Vec<Self>,
         background: Option<Background>,
         z: i16,
+    },
+
+    /// Camera wrapper: renders all child actors using the provided view-projection matrix.
+    /// The matrix is expected to map world coordinates to clip space.
+    Camera {
+        view_proj: Matrix4<f32>,
+        children: Vec<Self>,
     },
 
     /// Shadow wrapper: draws child's objects once more with an offset and tint,

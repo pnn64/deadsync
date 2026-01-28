@@ -13,6 +13,7 @@ use winit::window::Window;
 #[derive(Clone)]
 pub struct RenderList<'a> {
     pub clear_color: [f32; 4],
+    pub cameras: Vec<Matrix4<f32>>,
     pub objects: Vec<RenderObject<'a>>,
 }
 #[derive(Clone)]
@@ -22,6 +23,7 @@ pub struct RenderObject<'a> {
     pub blend: BlendMode,
     pub z: i16,
     pub order: u32,
+    pub camera: u8,
 }
 #[derive(Clone)]
 pub enum ObjectType<'a> {
