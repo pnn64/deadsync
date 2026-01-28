@@ -482,6 +482,13 @@ impl PlayStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlayMode {
+    #[default]
+    Regular,
+    Marathon,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PlayerSide {
     #[default]
     P1,
@@ -507,6 +514,7 @@ struct SessionState {
     joined_mask: u8,
     music_rate: f32,
     play_style: PlayStyle,
+    play_mode: PlayMode,
     player_side: PlayerSide,
 }
 
@@ -521,6 +529,7 @@ static SESSION: std::sync::LazyLock<Mutex<SessionState>> = std::sync::LazyLock::
         joined_mask: SESSION_JOINED_MASK_P1,
         music_rate: 1.0,
         play_style: PlayStyle::Single,
+        play_mode: PlayMode::Regular,
         player_side: PlayerSide::P1,
     })
 });
@@ -1068,6 +1077,14 @@ pub fn get_session_play_style() -> PlayStyle {
 
 pub fn set_session_play_style(style: PlayStyle) {
     SESSION.lock().unwrap().play_style = style;
+}
+
+pub fn get_session_play_mode() -> PlayMode {
+    SESSION.lock().unwrap().play_mode
+}
+
+pub fn set_session_play_mode(mode: PlayMode) {
+    SESSION.lock().unwrap().play_mode = mode;
 }
 
 pub fn get_session_player_side() -> PlayerSide {

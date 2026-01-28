@@ -34,7 +34,9 @@ pub enum Ease {
     Accelerate,
     /// StepMania: `decelerate(t)` (quad-out)
     Decelerate,
-    /// StepMania: `ease(time, fEase)` — weighted in–out; `bias` == fEase in [-100,100].
+    /// StepMania: `smooth(t)` — classic in–out S curve.
+    Smooth,
+    /// StepMania: `ease(time, fEase)` — 1D Bezier curve, fEase in [-100,100].
     EaseInOut { bias: f32 },
 }
 
@@ -90,7 +92,8 @@ fn ease_apply(e: Ease, t: f32) -> f32 {
         Ease::Linear => t,
         Ease::Accelerate => ease_in_quad(t),
         Ease::Decelerate => ease_out_quad(t),
-        Ease::EaseInOut { bias } => ease_weighted_inout(t, bias),
+        Ease::Smooth => ease_weighted_inout(t, 0.0),
+        Ease::EaseInOut { bias } => eval_ease_p_for_f_ease(t, bias),
     }
 }
 
@@ -169,12 +172,42 @@ pub fn bounceend_p(x: f32) -> f32 {
     bezier_y_from_x(x, 0.0, 0.0, 1.0 / 3.0, 0.7, 0.58, 1.42, 1.0, 1.0)
 }
 
-/// Construct `ease(time, fEase)` — fEase in [-100, 100]; 0 = symmetric in–out.
-/// Positive fEase biases ease-out (fast early), negative biases ease-in.
+/// Evaluate `ease_p` like StepMania/ITGmania `Actor:ease(t, fEase)`.
+/// Ported from `itgmania/Themes/_fallback/Scripts/02 Actor.lua`.
+#[inline(always)]
+pub fn eval_ease_p_for_f_ease(x: f32, f_ease: f32) -> f32 {
+    let f = f_ease.clamp(-100.0, 100.0);
+    if f == -100.0 {
+        return (x.clamp(0.0, 1.0)).powi(2);
+    }
+    if f == 0.0 {
+        return x.clamp(0.0, 1.0);
+    }
+    if f == 100.0 {
+        let u = x.clamp(0.0, 1.0);
+        return 1.0 - (1.0 - u) * (1.0 - u);
+    }
+
+    // 1D Bezier: {0, x2, y3, 1}
+    // x2 = scale(fEase, -100, 100, 0/3, 2/3)
+    // y3 = scale(fEase, -100, 100, 1/3, 3/3)
+    let s = (f + 100.0) * 0.005; // [0,1]
+    let x2 = s * (2.0 / 3.0);
+    let y3 = (1.0 / 3.0) + s * (2.0 / 3.0);
+    bezier_y_from_x(x, 0.0, 0.0, x2, 0.0, y3, 1.0, 1.0, 1.0)
+}
+
+/// Construct `ease(time, fEase)` — fEase in [-100, 100]; 0 = linear.
 #[inline(always)]
 pub fn ease(dur: f32, f_ease: f32) -> SegmentBuilder {
     let bias = f_ease.clamp(-100.0, 100.0);
     SegmentBuilder::new(Ease::EaseInOut { bias }, dur)
+}
+
+/// Construct `smooth(time)` — classic in–out S curve.
+#[inline(always)]
+pub fn smooth(dur: f32) -> SegmentBuilder {
+    SegmentBuilder::new(Ease::Smooth, dur)
 }
 
 #[derive(Clone, Debug)]
@@ -255,6 +288,7 @@ impl Step {
                     Ease::Linear => mix(&mut h, 0),
                     Ease::Accelerate => mix(&mut h, 1),
                     Ease::Decelerate => mix(&mut h, 2),
+                    Ease::Smooth => mix(&mut h, 4),
                     Ease::EaseInOut { bias } => {
                         mix(&mut h, 3);
                         mix(&mut h, f32b(bias));

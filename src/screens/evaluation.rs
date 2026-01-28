@@ -387,7 +387,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
             for (i, grade) in JUDGMENT_ORDER.iter().enumerate() {
                 let info = JUDGMENT_INFO.get(grade).unwrap();
                 let count = score_info.judgment_counts.get(grade).copied().unwrap_or(0);
-                
+
                 // Label
                 let label_local_x = 28.0 + label_shift_x;
                 let label_local_y = (i as f32).mul_add(28.0, -16.0);
@@ -396,24 +396,24 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                     maxwidth(76.0): zoom(label_zoom): horizalign(right):
                     diffuse(info.color[0], info.color[1], info.color[2], info.color[3]): z(101)
                 ));
-        
+
 	                // Number (digit by digit for dimming)
 	                let bright_color = info.color;
 	                let dim_color = color::JUDGMENT_DIM_EVAL_RGBA[i];
 	                let number_str = format!("{count:0digits_to_fmt$}");
 	                let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
-                
+
                 let number_local_x = 64.0;
                 let number_local_y = (i as f32).mul_add(35.0, -20.0);
                 let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
                 let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
-                
+
                 for (char_idx, ch) in number_str.chars().enumerate() {
                     let is_dim = if count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
                     let color = if is_dim { dim_color } else { bright_color };
                     let index_from_right = digits_to_fmt - 1 - char_idx;
                     let cell_right_x = (index_from_right as f32).mul_add(-digit_width, number_base_x);
-                    
+
                     actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
                         align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
                         diffuse(color[0], color[1], color[2], color[3]): z(101)
@@ -472,19 +472,19 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 // Number
                 let number_str = format!("{count:0digits_to_fmt$}");
                 let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
-                
+
                 // Numbers: match Simply Love Pane2 numbers using 32px spacing.
                 let number_local_x = 64.0;
                 let number_local_y = (i as f32).mul_add(32.0, -24.0);
                 let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
                 let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
-                
+
                 for (char_idx, ch) in number_str.chars().enumerate() {
                     let is_dim = if *count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
                     let color = if is_dim { *dim_color } else { *bright_color };
                     let index_from_right = digits_to_fmt - 1 - char_idx;
                     let cell_right_x = (index_from_right as f32).mul_add(-digit_width, number_base_x);
-                    
+
                     actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
                         align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
                         diffuse(color[0], color[1], color[2], color[3]): z(101)
@@ -492,7 +492,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 }
             }
         }
-        
+
         // --- RADAR LABELS & NUMBERS ---
         let radar_categories = [
             ("hands", score_info.hands_achieved, score_info.chart.stats.hands),
@@ -514,23 +514,23 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
 
             let possible_clamped = possible.min(999);
             let achieved_clamped = achieved.min(999);
-            
+
             let number_local_y = (i as f32).mul_add(35.0, 53.0);
             let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
-            
+
             // --- Group 1: "Achieved" Numbers (Anchored at -180, separated from Slash) ---
             // Matches Lua: x = { P1=-180 }, aligned right.
             let achieved_anchor_x = (-180.0f32).mul_add(numbers_frame_zoom, numbers_frame_origin_x);
-            
+
             let achieved_str = format!("{achieved_clamped:03}");
             let first_nonzero_achieved = achieved_str.find(|c: char| c != '0').unwrap_or(achieved_str.len());
 
             for (char_idx_from_right, ch) in achieved_str.chars().rev().enumerate() {
-                 let is_dim = if achieved == 0 { 
+                let is_dim = if achieved == 0 {
                     char_idx_from_right > 0
-                } else { 
+                } else {
                     let idx_from_left = 2 - char_idx_from_right;
-                    idx_from_left < first_nonzero_achieved 
+                    idx_from_left < first_nonzero_achieved
                 };
                 let color = if is_dim { GRAY_ACHIEVED } else { white_color };
                 let x_pos = (char_idx_from_right as f32).mul_add(-digit_width, achieved_anchor_x);
@@ -544,21 +544,21 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
             // --- Group 2: "Slash + Possible" Numbers (Anchored at -114) ---
             // Matches Lua: x = { P1=-114 }, aligned right.
             let possible_anchor_x = (-114.0f32).mul_add(numbers_frame_zoom, numbers_frame_origin_x);
-            let mut cursor_x = possible_anchor_x; 
+	            let mut cursor_x = possible_anchor_x;
 
             // 1. Draw "possible" number (right-most part)
             let possible_str = format!("{possible_clamped:03}");
             let first_nonzero_possible = possible_str.find(|c: char| c != '0').unwrap_or(possible_str.len());
 
             for (char_idx_from_right, ch) in possible_str.chars().rev().enumerate() {
-                let is_dim = if possible_clamped == 0 { 
-                    char_idx_from_right > 0 
-                } else { 
+	                let is_dim = if possible_clamped == 0 {
+	                    char_idx_from_right > 0
+	                } else {
                     let idx_from_left = 2 - char_idx_from_right;
                     idx_from_left < first_nonzero_possible
                 };
                 let color = if is_dim { GRAY_POSSIBLE } else { white_color };
-                
+
                 actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
                     align(1.0, 0.5): xy(cursor_x, number_final_y): zoom(final_numbers_zoom):
                     diffuse(color[0], color[1], color[2], color[3]): z(101)

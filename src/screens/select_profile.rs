@@ -812,7 +812,7 @@ fn push_join_prompt(
         zoomto(FRAME_W_JOIN + FRAME_BORDER, frame_h + FRAME_BORDER):
         diffuse(border_rgba[0], border_rgba[1], border_rgba[2], border_rgba[3]):
         cropbottom(1.0):
-        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
+        smooth(FRAME_IN_CROP_DUR): cropbottom(0.0):
         z(100)
     ));
     out.push(act!(quad:
@@ -821,7 +821,7 @@ fn push_join_prompt(
         zoomto(FRAME_W_JOIN, frame_h):
         diffuse(0.0, 0.0, 0.0, 1.0):
         cropbottom(1.0):
-        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
+        smooth(FRAME_IN_CROP_DUR): cropbottom(0.0):
         z(101)
     ));
     out.push(act!(text:
@@ -867,7 +867,7 @@ fn push_scroller_frame(
         zoomto(FRAME_W_SCROLLER + FRAME_BORDER, frame_h + FRAME_BORDER):
         diffuse(border_rgba[0], border_rgba[1], border_rgba[2], border_rgba[3]):
         cropbottom(1.0):
-        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
+        smooth(FRAME_IN_CROP_DUR): cropbottom(0.0):
         z(100)
     ));
     // Base fill.
@@ -877,7 +877,7 @@ fn push_scroller_frame(
         zoomto(FRAME_W_SCROLLER, frame_h):
         diffuse(col_frame[0], col_frame[1], col_frame[2], col_frame[3]):
         cropbottom(1.0):
-        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
+        smooth(FRAME_IN_CROP_DUR): cropbottom(0.0):
         z(101)
     ));
     // Top-edge lighten gradient (approx for diffusetopedge()).
@@ -888,7 +888,7 @@ fn push_scroller_frame(
         diffuse(col_frame_top[0], col_frame_top[1], col_frame_top[2], col_frame_top[3]):
         fadebottom(1.0):
         cropbottom(1.0):
-        ease(FRAME_IN_CROP_DUR, 0.0): cropbottom(0.0):
+        smooth(FRAME_IN_CROP_DUR): cropbottom(0.0):
         z(101)
     ));
 

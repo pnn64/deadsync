@@ -179,7 +179,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         Some(0) => {
             state.exit_requested = true;
             state.exit_chosen_anim = true;
-            state.exit_target = Some(Screen::ProfileLoad);
+            state.exit_target = Some(Screen::SelectPlayMode);
             let _ = exit_anim_t(true);
             let choice = Choice::from_index(state.selected_index);
             crate::game::profile::set_session_play_style(match choice {

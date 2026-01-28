@@ -10,7 +10,7 @@ use crate::game::{profile, scores, scroll::ScrollSpeedSetting};
 use crate::screens::{
     Screen as CurrentScreen, ScreenAction, evaluation, gameplay, init, input as input_screen,
     mappings, menu, options, player_options, profile_load, sandbox, select_color, select_music,
-    select_profile, select_style,
+    select_play_mode, select_profile, select_style,
 };
 use crate::ui::color;
 use winit::{
@@ -133,6 +133,7 @@ pub struct ScreensState {
     select_profile_state: select_profile::State,
     select_color_state: select_color::State,
     select_style_state: select_style::State,
+    select_play_mode_state: select_play_mode::State,
     profile_load_state: profile_load::State,
     select_music_state: select_music::State,
     sandbox_state: sandbox::State,
@@ -223,6 +224,9 @@ impl ScreensState {
         let mut select_style_state = select_style::init();
         select_style_state.active_color_index = color_index;
 
+        let mut select_play_mode_state = select_play_mode::init();
+        select_play_mode_state.active_color_index = color_index;
+
         let mut profile_load_state = profile_load::init();
         profile_load_state.active_color_index = color_index;
 
@@ -253,6 +257,7 @@ impl ScreensState {
             select_profile_state,
             select_color_state,
             select_style_state,
+            select_play_mode_state,
             profile_load_state,
             select_music_state,
             sandbox_state: sandbox::init(),
@@ -301,6 +306,9 @@ impl ScreensState {
             }
             CurrentScreen::SelectStyle => {
                 select_style::update(&mut self.select_style_state, delta_time)
+            }
+            CurrentScreen::SelectPlayMode => {
+                select_play_mode::update(&mut self.select_play_mode_state, delta_time)
             }
             CurrentScreen::ProfileLoad => {
                 let action = profile_load::update(&mut self.profile_load_state, delta_time);
@@ -771,7 +779,10 @@ impl App {
         let screen = self.state.screens.current_screen;
         if !matches!(
             screen,
-            CurrentScreen::SelectColor | CurrentScreen::SelectStyle | CurrentScreen::SelectMusic
+            CurrentScreen::SelectColor
+                | CurrentScreen::SelectStyle
+                | CurrentScreen::SelectPlayMode
+                | CurrentScreen::SelectMusic
         ) {
             return false;
         }
@@ -831,6 +842,10 @@ impl App {
             ),
             CurrentScreen::SelectStyle => crate::screens::select_style::handle_input(
                 &mut self.state.screens.select_style_state,
+                &ev,
+            ),
+            CurrentScreen::SelectPlayMode => crate::screens::select_play_mode::handle_input(
+                &mut self.state.screens.select_play_mode_state,
                 &ev,
             ),
             CurrentScreen::ProfileLoad => crate::screens::profile_load::handle_input(
@@ -1119,6 +1134,9 @@ impl App {
             CurrentScreen::SelectStyle => {
                 select_style::get_actors(&self.state.screens.select_style_state)
             }
+            CurrentScreen::SelectPlayMode => {
+                select_play_mode::get_actors(&self.state.screens.select_play_mode_state)
+            }
             CurrentScreen::ProfileLoad => {
                 profile_load::get_actors(&self.state.screens.profile_load_state)
             }
@@ -1191,6 +1209,7 @@ impl App {
             CurrentScreen::SelectProfile => select_profile::out_transition(),
             CurrentScreen::SelectColor => select_color::out_transition(),
             CurrentScreen::SelectStyle => select_style::out_transition(),
+            CurrentScreen::SelectPlayMode => select_play_mode::out_transition(),
             CurrentScreen::ProfileLoad => profile_load::out_transition(),
             CurrentScreen::SelectMusic => select_music::out_transition(),
             CurrentScreen::Sandbox => sandbox::out_transition(),
@@ -1210,6 +1229,7 @@ impl App {
             CurrentScreen::SelectProfile => select_profile::in_transition(),
             CurrentScreen::SelectColor => select_color::in_transition(),
             CurrentScreen::SelectStyle => select_style::in_transition(),
+            CurrentScreen::SelectPlayMode => select_play_mode::in_transition(),
             CurrentScreen::ProfileLoad => profile_load::in_transition(),
             CurrentScreen::SelectMusic => select_music::in_transition(),
             CurrentScreen::Sandbox => sandbox::in_transition(),
@@ -1718,12 +1738,16 @@ impl App {
         let target_menu_music = menu_music_enabled
             && matches!(
                 target,
-                CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+                CurrentScreen::SelectColor
+                    | CurrentScreen::SelectStyle
+                    | CurrentScreen::SelectPlayMode
             );
         let prev_menu_music = menu_music_enabled
             && matches!(
                 prev,
-                CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+                CurrentScreen::SelectColor
+                    | CurrentScreen::SelectStyle
+                    | CurrentScreen::SelectPlayMode
             );
 
         if target_menu_music {
@@ -1849,6 +1873,7 @@ impl App {
             self.state.screens.menu_state.active_color_index = idx;
             self.state.screens.select_profile_state.active_color_index = idx;
             self.state.screens.select_style_state.active_color_index = idx;
+            self.state.screens.select_play_mode_state.active_color_index = idx;
             self.state.screens.profile_load_state.active_color_index = idx;
             self.state.screens.select_music_state.active_color_index = idx;
             self.state.screens.options_state.active_color_index = idx;
@@ -1890,8 +1915,17 @@ impl App {
             } else {
                 0 // "1 Player"
             };
+        } else if target == CurrentScreen::SelectPlayMode {
+            let current_color_index = self.state.screens.select_play_mode_state.active_color_index;
+            self.state.screens.select_play_mode_state = select_play_mode::init();
+            self.state.screens.select_play_mode_state.active_color_index = current_color_index;
+            select_play_mode::on_enter(&mut self.state.screens.select_play_mode_state);
         } else if target == CurrentScreen::ProfileLoad {
-            let current_color_index = self.state.screens.select_style_state.active_color_index;
+            let current_color_index = if prev == CurrentScreen::SelectPlayMode {
+                self.state.screens.select_play_mode_state.active_color_index
+            } else {
+                self.state.screens.select_style_state.active_color_index
+            };
             self.state.screens.profile_load_state = profile_load::init();
             self.state.screens.profile_load_state.active_color_index = current_color_index;
             profile_load::on_enter(&mut self.state.screens.profile_load_state);
