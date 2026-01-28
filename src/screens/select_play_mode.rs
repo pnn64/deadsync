@@ -32,6 +32,9 @@ const TIME_PER_ARROW: f32 = 0.2;
 const ARROW_H: f32 = 20.0;
 const ARROW_PAD_Y: f32 = 5.0;
 const LOOP_RESET_Y: f32 = 24.0 * ARROW_H;
+const ARROW_SPRITE_SZ: f32 = 128.0;
+const ARROW_SPRITE_ZOOM: f32 = 0.16;
+const SQRT_2: f32 = 1.414_213_56;
 
 const CHOICES: [&str; 2] = ["Regular", "Marathon"];
 const REGULAR_DESC: &str = "Choose your songs with a\nshort break between each.\n\nThese are dance games\nas we know and love them!";
@@ -547,6 +550,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let base_t = state.demo_time;
 
     let (nfx, nfy) = root_pt(90.0, 15.0);
+    // Simply Love uses MaskSource/MaskDest to clip the moving arrows. Approximate by
+    // clipping to the inner SelectMode box (300x160, centered at root (0,0)).
+    // Convert that box into notefield-local coordinates by subtracting the notefield offset.
+    let clip_top = -95.0;
+    let clip_bottom = 65.0;
+    let arrow_half = ARROW_SPRITE_SZ * ARROW_SPRITE_ZOOM * 0.5;
+    let arrow_half_diag = arrow_half * SQRT_2;
     let columns = [
         ("left", -36.0),
         ("down", -12.0),
@@ -558,11 +568,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let idx = arrow_frame(dir);
         let uv = u8_cell(idx);
         let (x, y) = (nfx + x_off * ROOT_ZOOM, nfy + (-55.0) * ROOT_ZOOM);
-        let (aw, ah) = root_sz(128.0, 128.0);
+        let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
         actors.push(act!(sprite("dance.png"):
             align(0.5, 0.5): xy(x, y):
             zoomto(aw, ah):
-            zoom(0.16):
+            zoom(ARROW_SPRITE_ZOOM):
             diffuse(1.0, 1.0, 1.0, field_alpha):
             customtexturerect(uv[0], uv[1], uv[2], uv[3])
         ));
@@ -603,20 +613,42 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let y = y0 + (-55.0 - y0) * p;
         let rot = if marathon { base_rot + 720.0 * p } else { 0.0 };
 
-        // Approximate SM mask: only render arrows in the box window.
-        if y < -80.0 || y > 80.0 {
-            continue;
+        let mut croptop = 0.0;
+        let mut cropbottom = 0.0;
+        if marathon {
+            // For rotating quads, avoid edge leakage by only drawing when fully inside.
+            if y < clip_top + arrow_half_diag || y > clip_bottom - arrow_half_diag {
+                continue;
+            }
+        } else {
+            // For axis-aligned quads, crop to match the box window.
+            if y < clip_top - arrow_half || y > clip_bottom + arrow_half {
+                continue;
+            }
+            let top_edge = y - arrow_half;
+            let bottom_edge = y + arrow_half;
+            if top_edge < clip_top {
+                croptop = ((clip_top - top_edge) / (2.0 * arrow_half)).clamp(0.0, 1.0);
+            }
+            if bottom_edge > clip_bottom {
+                cropbottom = ((bottom_edge - clip_bottom) / (2.0 * arrow_half)).clamp(0.0, 1.0);
+            }
+            if croptop + cropbottom >= 1.0 {
+                continue;
+            }
         }
 
         let tint = color::decorative_rgba(state.active_color_index + i as i32);
         let (x, y) = (nfx + col_x * ROOT_ZOOM, nfy + y * ROOT_ZOOM);
-        let (aw, ah) = root_sz(128.0, 128.0);
+        let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
         actors.push(act!(sprite("dance.png"):
             align(0.5, 0.5): xy(x, y):
             zoomto(aw, ah):
-            zoom(0.16):
+            zoom(ARROW_SPRITE_ZOOM):
             diffuse(tint[0], tint[1], tint[2], tint[3] * field_alpha):
             rotationz(rot):
+            croptop(croptop):
+            cropbottom(cropbottom):
             customtexturerect(uv[0], uv[1], uv[2], uv[3])
         ));
     }
