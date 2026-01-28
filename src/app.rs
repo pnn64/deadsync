@@ -1134,9 +1134,10 @@ impl App {
             CurrentScreen::SelectStyle => {
                 select_style::get_actors(&self.state.screens.select_style_state)
             }
-            CurrentScreen::SelectPlayMode => {
-                select_play_mode::get_actors(&self.state.screens.select_play_mode_state)
-            }
+            CurrentScreen::SelectPlayMode => select_play_mode::get_actors(
+                &self.state.screens.select_play_mode_state,
+                &self.asset_manager,
+            ),
             CurrentScreen::ProfileLoad => {
                 profile_load::get_actors(&self.state.screens.profile_load_state)
             }

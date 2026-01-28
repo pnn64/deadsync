@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::AssetManager;
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{screen_center_x, screen_center_y};
@@ -9,6 +10,7 @@ use crate::ui::components::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::ui::components::{heart_bg, screen_bar};
+use crate::ui::font;
 
 /* ------------------------------ layout ------------------------------- */
 const ROOT_X_OFF: f32 = 90.0;
@@ -303,7 +305,7 @@ fn ease01(x: f32, f_ease: f32) -> f32 {
     anim::eval_ease_p_for_f_ease(x, f_ease)
 }
 
-pub fn get_actors(state: &State) -> Vec<Actor> {
+pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     let exit_t = exit_anim_t(state.exit_requested);
 
@@ -435,7 +437,20 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
     // Cursor highlight.
     let cursor_crop = cropleft_after(exit_t, 0.4, 0.2);
     let cursor_alpha = 1.0;
-    let cursor_w = (choice.cursor_label_width() / 1.4).clamp(CURSOR_MIN_W, CURSOR_MAX_W);
+    let label = CHOICES[state.selected_index];
+    let measured_w = asset_manager.with_fonts(|all_fonts| {
+        asset_manager
+            .with_font("wendy", |f| {
+                font::measure_line_width_logical(f, label, all_fonts) as f32
+            })
+            .unwrap_or(0.0)
+    });
+    let base_w = if measured_w > 0.0 {
+        measured_w
+    } else {
+        choice.cursor_label_width()
+    };
+    let cursor_w = (base_w / 1.4).clamp(CURSOR_MIN_W, CURSOR_MAX_W);
     let (cw, ch_outer) = root_sz(cursor_w, CURSOR_H + 2.0);
     let (cw2, ch_inner) = root_sz(cursor_w, CURSOR_H);
     let (cx_outer, cy_outer) = root_pt(-151.0, state.cursor_y);
