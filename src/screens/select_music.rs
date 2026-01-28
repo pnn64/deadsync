@@ -374,17 +374,18 @@ pub(crate) fn steps_len(song: &SongData, chart_type: &str) -> usize {
 
 fn rebuild_displayed_entries(state: &mut State) {
     let mut new_entries = Vec::with_capacity(state.all_entries.len());
-    let mut current_pack_name: Option<&String> = None;
+    let mut current_pack_name: Option<&str> = None;
+    let expanded_pack_name = state.expanded_pack_name.as_deref();
 
-    // Linear pass, minimized cloning
+    // Linear pass, avoid per-entry string clones.
     for entry in &state.all_entries {
         match entry {
             MusicWheelEntry::PackHeader { name, .. } => {
-                current_pack_name = Some(name);
+                current_pack_name = Some(name.as_str());
                 new_entries.push(entry.clone());
             }
             MusicWheelEntry::Song(_) => {
-                if state.expanded_pack_name.as_ref() == current_pack_name.cloned().as_ref() {
+                if expanded_pack_name == current_pack_name {
                     new_entries.push(entry.clone());
                 }
             }
@@ -397,11 +398,18 @@ fn rebuild_displayed_entries(state: &mut State) {
 }
 
 pub fn init() -> State {
+    let started = Instant::now();
     info!("Initializing SelectMusic screen...");
+    let lock_started = Instant::now();
     let song_cache = get_song_cache();
-    let mut all_entries = Vec::with_capacity(song_cache.len() * 10); // Heuristic alloc
-    let mut pack_song_counts = HashMap::with_capacity(song_cache.len());
+    let lock_wait = lock_started.elapsed();
+
     let target_chart_type = profile::get_session_play_style().chart_type();
+    let total_packs = song_cache.len();
+    let total_songs: usize = song_cache.iter().map(|p| p.songs.len()).sum();
+
+    let mut all_entries = Vec::with_capacity(total_packs.saturating_add(total_songs));
+    let mut pack_song_counts = HashMap::with_capacity(total_packs);
 
     let profile_data = profile::get();
     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
@@ -413,49 +421,56 @@ pub fn init() -> State {
 
     let mut last_song_arc: Option<Arc<SongData>> = None;
     let mut last_pack_name: Option<String> = None;
+    let last_path = profile_data.last_song_music_path.as_deref();
+
+    let mut matched_packs = 0usize;
+    let mut matched_songs = 0usize;
 
     // Filter and build entries in one pass
     for (i, pack) in song_cache.iter().enumerate() {
-        let style_songs: Vec<Arc<SongData>> = pack
-            .songs
-            .iter()
-            .filter(|song| {
-                song.charts
-                    .iter()
-                    .any(|c| c.chart_type.eq_ignore_ascii_case(target_chart_type))
-            })
-            .cloned()
-            .collect();
+        let mut pack_name: Option<String> = None;
+        let mut pack_song_count = 0usize;
 
-        if !style_songs.is_empty() {
-            // Compute cache for get_actors (HOT PATH OPTIMIZATION)
-            pack_song_counts.insert(pack.name.clone(), style_songs.len());
+        for song in &pack.songs {
+            let ok = song.charts.iter().any(|c| {
+                c.chart_type
+                    .eq_ignore_ascii_case(target_chart_type)
+            });
+            if !ok {
+                continue;
+            }
 
-            all_entries.push(MusicWheelEntry::PackHeader {
-                name: pack.name.clone(),
-                original_index: i,
-                banner_path: pack.banner_path.clone(),
+            let pack_name = pack_name.get_or_insert_with(|| {
+                matched_packs += 1;
+                let name = pack.name.clone();
+                all_entries.push(MusicWheelEntry::PackHeader {
+                    name: name.clone(),
+                    original_index: i,
+                    banner_path: pack.banner_path.clone(),
+                });
+                name
             });
 
-            // Check for last played song
-            if let Some(last_path) = profile_data.last_song_music_path.as_deref() {
-                if last_song_arc.is_none() {
-                    for song in &style_songs {
-                        if song
-                            .music_path
-                            .as_ref()
-                            .is_some_and(|p| p.to_string_lossy() == last_path)
-                        {
-                            last_song_arc = Some(song.clone());
-                            last_pack_name = Some(pack.name.clone());
-                        }
-                    }
-                }
-            }
+            pack_song_count += 1;
+            matched_songs += 1;
+            all_entries.push(MusicWheelEntry::Song(song.clone()));
 
-            for song in style_songs {
-                all_entries.push(MusicWheelEntry::Song(song));
+            // Check for last played song
+            if last_song_arc.is_none()
+                && let Some(last_path) = last_path
+                && song
+                    .music_path
+                    .as_ref()
+                    .is_some_and(|p| p.to_string_lossy() == last_path)
+            {
+                last_song_arc = Some(song.clone());
+                last_pack_name = Some(pack_name.clone());
             }
+        }
+
+        if let Some(name) = pack_name {
+            // Compute cache for get_actors (HOT PATH OPTIMIZATION)
+            pack_song_counts.insert(name, pack_song_count);
         }
     }
 
@@ -495,7 +510,11 @@ pub fn init() -> State {
         pack_song_counts,
     };
 
+    let built_entries_len = state.all_entries.len();
+    let rebuild_started = Instant::now();
     rebuild_displayed_entries(&mut state);
+    let rebuild_dur = rebuild_started.elapsed();
+    let displayed_entries_len = state.entries.len();
 
     // Restore selection
     if let Some(last_song) = last_song_arc {
@@ -515,6 +534,13 @@ pub fn init() -> State {
                     state.p2_selected_steps_index = state.selected_steps_index;
                     state.p2_preferred_difficulty_index = state.preferred_difficulty_index;
                     state.prev_selected_index = state.selected_index;
+                    info!(
+                        "SelectMusic init done: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
+                        total_songs,
+                        lock_wait,
+                        rebuild_dur,
+                        started.elapsed()
+                    );
                     return state;
                 }
 
@@ -540,6 +566,13 @@ pub fn init() -> State {
     }
 
     state.prev_selected_index = state.selected_index;
+    info!(
+        "SelectMusic init done: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
+        total_songs,
+        lock_wait,
+        rebuild_dur,
+        started.elapsed()
+    );
     state
 }
 
