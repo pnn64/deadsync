@@ -680,10 +680,33 @@ fn push_sprite<'a>(
     let ft = fadetop.clamp(0.0, 1.0);
     let fb = fadebottom.clamp(0.0, 1.0);
 
-    let mut fl_eff = ((fl - cl).max(0.0) / sx_crop).clamp(0.0, 1.0);
-    let mut fr_eff = ((fr - cr).max(0.0) / sx_crop).clamp(0.0, 1.0);
-    let mut ft_eff = ((ft - ct).max(0.0) / sy_crop).clamp(0.0, 1.0);
-    let mut fb_eff = ((fb - cb).max(0.0) / sy_crop).clamp(0.0, 1.0);
+    // StepMania parity (Sprite::DrawPrimitives edge-fade behavior):
+    // - Fade distances are specified in the *pre-crop* [0..1] space.
+    // - Visible (post-crop) fraction is `(1 - crop_a - crop_b)`.
+    // - Negative crop values can "cancel" fade (used by Simply Love transitions).
+    let mut fl_size = (fl + cropleft.min(0.0)).max(0.0);
+    let mut fr_size = (fr + cropright.min(0.0)).max(0.0);
+    let mut ft_size = (ft + croptop.min(0.0)).max(0.0);
+    let mut fb_size = (fb + cropbottom.min(0.0)).max(0.0);
+
+    let sum_x = fl_size + fr_size;
+    if sum_x > 0.0 && sx_crop < sum_x {
+        let s = sx_crop / sum_x;
+        fl_size *= s;
+        fr_size *= s;
+    }
+
+    let sum_y = ft_size + fb_size;
+    if sum_y > 0.0 && sy_crop < sum_y {
+        let s = sy_crop / sum_y;
+        ft_size *= s;
+        fb_size *= s;
+    }
+
+    let mut fl_eff = (fl_size / sx_crop).clamp(0.0, 1.0);
+    let mut fr_eff = (fr_size / sx_crop).clamp(0.0, 1.0);
+    let mut ft_eff = (ft_size / sy_crop).clamp(0.0, 1.0);
+    let mut fb_eff = (fb_size / sy_crop).clamp(0.0, 1.0);
 
     if flip_x {
         std::mem::swap(&mut fl_eff, &mut fr_eff);
