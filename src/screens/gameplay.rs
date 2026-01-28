@@ -38,10 +38,11 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 // --- DRAWING ---
 
-fn build_background(state: &State) -> Actor {
+fn build_background(state: &State, bg_brightness: f32) -> Actor {
     let sw = screen_width();
     let sh = screen_height();
     let screen_aspect = if sh > 0.0 { sw / sh } else { 16.0 / 9.0 };
+    let bg_brightness = bg_brightness.clamp(0.0, 1.0);
 
     let (tex_w, tex_h) =
         if let Some(meta) = crate::assets::texture_dims(&state.background_texture_key) {
@@ -57,6 +58,7 @@ fn build_background(state: &State) -> Actor {
         act!(sprite(state.background_texture_key.clone()):
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             zoomtowidth(sw):
+            diffuse(bg_brightness, bg_brightness, bg_brightness, 1.0):
             z(-100)
         )
     } else {
@@ -64,6 +66,7 @@ fn build_background(state: &State) -> Actor {
         act!(sprite(state.background_texture_key.clone()):
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             zoomtoheight(sh):
+            diffuse(bg_brightness, bg_brightness, bg_brightness, 1.0):
             z(-100)
         )
     }
@@ -81,7 +84,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         state.player_color
     };
     // --- Background and Filter ---
-    actors.push(build_background(state));
+    actors.push(build_background(state, crate::config::get().bg_brightness));
 
     // Global offset adjustment overlay (centered text with subtle shadow).
     if let Some(msg) = &state.sync_overlay_message {

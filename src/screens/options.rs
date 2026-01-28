@@ -446,6 +446,10 @@ const DISPLAY_RESOLUTION_ROW_INDEX: usize = 3;
 const REFRESH_RATE_ROW_INDEX: usize = 4;
 const FULLSCREEN_TYPE_ROW_INDEX: usize = 5;
 
+const BG_BRIGHTNESS_CHOICES: [&str; 11] = [
+    "0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%",
+];
+
 const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
     (1920, 1080),
     (1600, 900),
@@ -510,6 +514,11 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: "BG Brightness",
+        choices: &BG_BRIGHTNESS_CHOICES,
+        inline: false,
+    },
+    SubRow {
         label: "Global Offset (ms)",
         choices: &["0 ms"],
         inline: false,
@@ -553,6 +562,10 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: "Show Stats",
         help: &["Display rendering statistics overlay."],
+    },
+    Item {
+        name: "BG Brightness",
+        help: &["Adjust the background brightness during gameplay."],
     },
     Item {
         name: "Global Offset (ms)",
@@ -1011,6 +1024,14 @@ fn sample_rate_from_choice(idx: usize) -> Option<u32> {
     SAMPLE_RATE_OPTIONS.get(idx).copied().flatten()
 }
 
+fn bg_brightness_choice_index(brightness: f32) -> usize {
+    ((brightness.clamp(0.0, 1.0) * 10.0).round() as i32).clamp(0, 10) as usize
+}
+
+fn bg_brightness_from_choice(idx: usize) -> f32 {
+    idx.min(10) as f32 / 10.0
+}
+
 pub struct State {
     pub selected: usize,
     prev_selected: usize,
@@ -1127,6 +1148,12 @@ pub fn init() -> State {
         GRAPHICS_OPTIONS_ROWS,
         "Show Stats",
         usize::from(cfg.show_stats),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_graphics,
+        GRAPHICS_OPTIONS_ROWS,
+        "BG Brightness",
+        bg_brightness_choice_index(cfg.bg_brightness),
     );
 
     set_choice_by_label(
@@ -1644,6 +1671,9 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
             if row.label == "Show Stats" {
                 let show = new_index == 1;
                 action = Some(ScreenAction::UpdateShowOverlay(show));
+            }
+            if row.label == "BG Brightness" {
+                config::update_bg_brightness(bg_brightness_from_choice(new_index));
             }
         } else if matches!(kind, SubmenuKind::Sound) {
             let row = &rows[row_index];

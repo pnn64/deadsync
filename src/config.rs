@@ -112,6 +112,9 @@ pub struct Config {
     pub show_stats: bool,
     pub translated_titles: bool,
     pub mine_hit_sound: bool,
+    // Global background brightness during gameplay (ITGmania: Pref "BGBrightness").
+    // 1.0 = full brightness, 0.0 = black.
+    pub bg_brightness: f32,
     pub display_width: u32,
     pub display_height: u32,
     pub video_renderer: BackendType,
@@ -151,6 +154,7 @@ impl Default for Config {
             show_stats: false,
             translated_titles: false,
             mine_hit_sound: true,
+            bg_brightness: 0.7,
             display_width: 1600,
             display_height: 900,
             video_renderer: BackendType::OpenGL,
@@ -197,6 +201,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     // [Options] section - keys in alphabetical order
     content.push_str("[Options]\n");
     content.push_str("AudioSampleRateHz=Auto\n");
+    content.push_str(&format!("BGBrightness={}\n", default.bg_brightness));
     content.push_str(&format!(
         "CacheSongs={}\n",
         if default.cachesongs { "1" } else { "0" }
@@ -372,6 +377,10 @@ pub fn load() {
                         }
                     })
                     .unwrap_or(default.translated_titles);
+                cfg.bg_brightness = conf
+                    .get("Options", "BGBrightness")
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map_or(default.bg_brightness, |v| v.clamp(0.0, 1.0));
                 cfg.display_width = conf
                     .get("Options", "DisplayWidth")
                     .and_then(|v| v.parse().ok())
@@ -475,6 +484,7 @@ pub fn load() {
                 let mut miss = false;
                 let options_keys = [
                     "AudioSampleRateHz",
+                    "BGBrightness",
                     "CacheSongs",
                     "DisplayHeight",
                     "DisplayWidth",
@@ -1112,6 +1122,7 @@ fn save_without_keymaps() {
         Some(hz) => hz.to_string(),
     };
     content.push_str(&format!("AudioSampleRateHz={audio_rate_str}\n"));
+    content.push_str(&format!("BGBrightness={}\n", cfg.bg_brightness.clamp(0.0, 1.0)));
     content.push_str(&format!(
         "CacheSongs={}\n",
         if cfg.cachesongs { "1" } else { "0" }
@@ -1337,6 +1348,18 @@ pub fn update_show_stats(enabled: bool) {
             return;
         }
         cfg.show_stats = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_bg_brightness(brightness: f32) {
+    let clamped = brightness.clamp(0.0, 1.0);
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if (cfg.bg_brightness - clamped).abs() < f32::EPSILON {
+            return;
+        }
+        cfg.bg_brightness = clamped;
     }
     save_without_keymaps();
 }
