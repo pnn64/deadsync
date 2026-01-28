@@ -279,6 +279,13 @@ pub enum DensityGraphSlot {
     Evaluation,
 }
 
+#[derive(Debug, Clone)]
+pub struct DensityGraphSource {
+    pub short_hash: String,
+    pub max_nps: f64,
+    pub measure_nps_vec: Vec<f64>,
+}
+
 impl DensityGraphSlot {
     pub const COUNT: usize = 3;
 

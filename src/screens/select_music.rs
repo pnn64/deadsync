@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{AssetManager, DensityGraphSlot};
+use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::core::audio;
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
 use crate::core::space::{
@@ -273,6 +273,12 @@ pub enum MusicWheelEntry {
     Song(Arc<SongData>),
 }
 
+#[derive(Clone, Debug)]
+struct DisplayedChart {
+    song: Arc<SongData>,
+    chart_hash: String,
+}
+
 pub struct State {
     pub entries: Vec<MusicWheelEntry>,
     pub selected_index: usize,
@@ -287,8 +293,8 @@ pub struct State {
     pub current_graph_key: String,
     pub current_graph_key_p2: String,
     pub session_elapsed: f32,
-    pub displayed_chart_data: Option<Arc<ChartData>>,
-    pub displayed_chart_data_p2: Option<Arc<ChartData>>,
+    displayed_chart_p1: Option<DisplayedChart>,
+    displayed_chart_p2: Option<DisplayedChart>,
 
     // Internal state
     out_prompt: OutPromptState,
@@ -517,8 +523,8 @@ pub fn init() -> State {
         last_requested_chart_hash: None,
         current_graph_key: "__white".to_string(),
         current_graph_key_p2: "__white".to_string(),
-        displayed_chart_data: None,
-        displayed_chart_data_p2: None,
+        displayed_chart_p1: None,
+        displayed_chart_p2: None,
         last_requested_chart_hash_p2: None,
         chord_mask_p1: 0,
         chord_mask_p2: 0,
@@ -1072,8 +1078,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.entries.get(state.selected_index),
             Some(MusicWheelEntry::PackHeader { .. })
         ) {
-            state.displayed_chart_data = None;
-            state.displayed_chart_data_p2 = None;
+            state.displayed_chart_p1 = None;
+            state.displayed_chart_p2 = None;
         }
 
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
@@ -1158,33 +1164,61 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         let play_style = profile::get_session_play_style();
         let target_chart_type = play_style.chart_type();
 
-        let chart_disp_p1 = selected_song.as_ref().and_then(|song| {
-            chart_for_steps_index(song, target_chart_type, state.selected_steps_index).cloned()
-        });
-        let chart_disp_p2 = selected_song.as_ref().and_then(|song| {
-            chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index).cloned()
-        });
-        state.displayed_chart_data = chart_disp_p1.clone().map(Arc::new);
-        state.displayed_chart_data_p2 = chart_disp_p2.clone().map(Arc::new);
+        if let Some(song) = selected_song.as_ref() {
+            let desired_p1 = chart_for_steps_index(song, target_chart_type, state.selected_steps_index);
+            let desired_hash_p1 = desired_p1.map(|c| c.short_hash.as_str());
 
-        let new_hash_p1 = chart_disp_p1.as_ref().map(|c| c.short_hash.clone());
-        if state.last_requested_chart_hash != new_hash_p1 {
-            state.last_requested_chart_hash = new_hash_p1;
-            return ScreenAction::RequestDensityGraph {
-                slot: DensityGraphSlot::SelectMusicP1,
-                chart_opt: chart_disp_p1,
-            };
-        }
+            if state.displayed_chart_p1.as_ref().map(|d| d.chart_hash.as_str()) != desired_hash_p1
+            {
+                state.displayed_chart_p1 = desired_hash_p1.map(|h| DisplayedChart {
+                    song: song.clone(),
+                    chart_hash: h.to_string(),
+                });
+            }
 
-        if play_style == crate::game::profile::PlayStyle::Versus {
-            let new_hash_p2 = chart_disp_p2.as_ref().map(|c| c.short_hash.clone());
-            if state.last_requested_chart_hash_p2 != new_hash_p2 {
-                state.last_requested_chart_hash_p2 = new_hash_p2;
+            if state.last_requested_chart_hash.as_deref() != desired_hash_p1 {
+                state.last_requested_chart_hash = desired_hash_p1.map(str::to_string);
                 return ScreenAction::RequestDensityGraph {
-                    slot: DensityGraphSlot::SelectMusicP2,
-                    chart_opt: chart_disp_p2,
+                    slot: DensityGraphSlot::SelectMusicP1,
+                    chart_opt: desired_p1.map(|c| DensityGraphSource {
+                        short_hash: c.short_hash.clone(),
+                        max_nps: c.max_nps,
+                        measure_nps_vec: c.measure_nps_vec.clone(),
+                    }),
                 };
             }
+
+            if play_style == crate::game::profile::PlayStyle::Versus {
+                let desired_p2 =
+                    chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index);
+                let desired_hash_p2 = desired_p2.map(|c| c.short_hash.as_str());
+
+                if state.displayed_chart_p2.as_ref().map(|d| d.chart_hash.as_str())
+                    != desired_hash_p2
+                {
+                    state.displayed_chart_p2 = desired_hash_p2.map(|h| DisplayedChart {
+                        song: song.clone(),
+                        chart_hash: h.to_string(),
+                    });
+                }
+
+                if state.last_requested_chart_hash_p2.as_deref() != desired_hash_p2 {
+                    state.last_requested_chart_hash_p2 = desired_hash_p2.map(str::to_string);
+                    return ScreenAction::RequestDensityGraph {
+                        slot: DensityGraphSlot::SelectMusicP2,
+                        chart_opt: desired_p2.map(|c| DensityGraphSource {
+                            short_hash: c.short_hash.clone(),
+                            max_nps: c.max_nps,
+                            measure_nps_vec: c.measure_nps_vec.clone(),
+                        }),
+                    };
+                }
+            } else {
+                state.displayed_chart_p2 = None;
+            }
+        } else {
+            state.displayed_chart_p1 = None;
+            state.displayed_chart_p2 = None;
         }
     } else if state.currently_playing_preview_path.is_some() {
         state.currently_playing_preview_path = None;
@@ -1227,18 +1261,24 @@ pub fn reset_preview_after_gameplay(state: &mut State) {
 pub fn prime_displayed_chart_data(state: &mut State) {
     if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
         let target_chart_type = profile::get_session_play_style().chart_type();
-        state.displayed_chart_data =
-            chart_for_steps_index(song, target_chart_type, state.selected_steps_index)
-                .cloned()
-                .map(Arc::new);
-        state.displayed_chart_data_p2 =
-            chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index)
-                .cloned()
-                .map(Arc::new);
+        state.displayed_chart_p1 =
+            chart_for_steps_index(song, target_chart_type, state.selected_steps_index).map(|c| {
+                DisplayedChart {
+                    song: song.clone(),
+                    chart_hash: c.short_hash.clone(),
+                }
+            });
+        state.displayed_chart_p2 =
+            chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index).map(|c| {
+                DisplayedChart {
+                    song: song.clone(),
+                    chart_hash: c.short_hash.clone(),
+                }
+            });
         return;
     }
-    state.displayed_chart_data = None;
-    state.displayed_chart_data_p2 = None;
+    state.displayed_chart_p1 = None;
+    state.displayed_chart_p2 = None;
 }
 
 // Fast non-allocating formatters where possible
@@ -1493,8 +1533,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         _ => None,
     };
 
-    let disp_chart_p1 = state.displayed_chart_data.as_deref();
-    let disp_chart_p2 = state.displayed_chart_data_p2.as_deref();
+    let disp_chart_p1 = state.displayed_chart_p1.as_ref().and_then(|d| {
+        d.song
+            .charts
+            .iter()
+            .find(|c| c.short_hash == d.chart_hash)
+    });
+    let disp_chart_p2 = state.displayed_chart_p2.as_ref().and_then(|d| {
+        d.song
+            .charts
+            .iter()
+            .find(|c| c.short_hash == d.chart_hash)
+    });
 
     let (step_artist, steps, jumps, holds, mines, hands, rolls, meter) =
         if let Some(c) = immediate_chart_p1 {

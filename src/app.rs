@@ -1,10 +1,9 @@
-use crate::assets::{AssetManager, DensityGraphSlot};
+use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::config::{self, DisplayMode};
 use crate::core::display;
 use crate::core::gfx::{self as renderer, BackendType, RenderList, create_backend};
 use crate::core::input::{self, InputEvent};
 use crate::core::space::{self as space, Metrics};
-use crate::game::chart::ChartData;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting};
 use crate::screens::{
@@ -43,7 +42,7 @@ enum Command {
     SetBanner(Option<PathBuf>),
     SetDensityGraph {
         slot: DensityGraphSlot,
-        chart_opt: Option<ChartData>,
+        chart_opt: Option<DensityGraphSource>,
     },
     FetchOnlineGrade(String),
     PlayMusic {
@@ -980,7 +979,7 @@ impl App {
         }
     }
 
-    fn apply_density_graph(&mut self, slot: DensityGraphSlot, chart_opt: Option<ChartData>) {
+    fn apply_density_graph(&mut self, slot: DensityGraphSlot, chart_opt: Option<DensityGraphSource>) {
         if let Some(backend) = self.backend.as_mut() {
             let graph_request = chart_opt.and_then(|chart| {
                 let graph_width = 1024;
@@ -2352,7 +2351,11 @@ impl App {
                         chart_type,
                         self.state.screens.select_music_state.selected_steps_index,
                     )
-                    .cloned()
+                    .map(|c| DensityGraphSource {
+                        short_hash: c.short_hash.clone(),
+                        max_nps: c.max_nps,
+                        measure_nps_vec: c.measure_nps_vec.clone(),
+                    })
                 }
                 _ => None,
             };
@@ -2379,7 +2382,11 @@ impl App {
                                 .select_music_state
                                 .p2_selected_steps_index,
                         )
-                        .cloned()
+                        .map(|c| DensityGraphSource {
+                            short_hash: c.short_hash.clone(),
+                            max_nps: c.max_nps,
+                            measure_nps_vec: c.measure_nps_vec.clone(),
+                        })
                     }
                     _ => None,
                 };

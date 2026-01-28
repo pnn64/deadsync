@@ -15,10 +15,9 @@ pub mod select_profile;
 pub mod select_style;
 use std::path::PathBuf;
 
-use crate::assets::DensityGraphSlot;
+use crate::assets::{DensityGraphSlot, DensityGraphSource};
 use crate::config::DisplayMode;
 use crate::core::gfx::BackendType;
-use crate::game::chart::ChartData;
 use crate::game::profile::ActiveProfile;
 #[derive(Debug, Clone)]
 pub enum ScreenAction {
@@ -36,7 +35,7 @@ pub enum ScreenAction {
     RequestBanner(Option<PathBuf>),
     RequestDensityGraph {
         slot: DensityGraphSlot,
-        chart_opt: Option<ChartData>,
+        chart_opt: Option<DensityGraphSource>,
     },
     FetchOnlineGrade(String),
     ChangeGraphics {
