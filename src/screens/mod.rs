@@ -24,6 +24,10 @@ use crate::game::profile::ActiveProfile;
 pub enum ScreenAction {
     None,
     Navigate(Screen),
+    /// Navigate immediately without running the current screen's out-transition.
+    /// This is used for cases where the current screen already rendered its own
+    /// full-screen transition-out animation and we only want the target's in-transition.
+    NavigateNoFade(Screen),
     Exit,
     SelectProfiles {
         p1: ActiveProfile,

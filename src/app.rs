@@ -445,6 +445,14 @@ impl App {
                 self.handle_navigation_action(screen);
                 Vec::new()
             }
+            ScreenAction::NavigateNoFade(screen) => {
+                // Skip the current screen's out-transition and immediately enter `screen`,
+                // letting the target screen's in-transition handle the visual change.
+                if matches!(self.state.shell.transition, TransitionState::Idle) {
+                    self.on_fade_complete(screen, event_loop);
+                }
+                return Ok(());
+            }
             ScreenAction::Exit => self.handle_exit_action(),
             ScreenAction::SelectProfiles { p1, p2 } => {
                 let profile_data = profile::set_active_profiles(p1, p2);
@@ -1958,6 +1966,45 @@ impl App {
                 (song.clone(), steps, pref)
             };
 
+            let color_index = self.state.screens.select_music_state.active_color_index;
+            self.state.screens.player_options_state = Some(player_options::init(
+                song_arc,
+                chart_steps_index,
+                preferred_difficulty_index,
+                color_index,
+            ));
+        } else if target == CurrentScreen::Gameplay
+            && prev == CurrentScreen::SelectMusic
+            && self.state.screens.player_options_state.is_none()
+        {
+            // Allow starting Gameplay directly from SelectMusic (Simply Love behavior) by
+            // constructing a PlayerOptions state from persisted profile/session defaults.
+            let (song_arc, chart_steps_index, preferred_difficulty_index) = {
+                let sm_state = &self.state.screens.select_music_state;
+                let entry = sm_state.entries.get(sm_state.selected_index).unwrap();
+                let song = match entry {
+                    select_music::MusicWheelEntry::Song(s) => s,
+                    _ => panic!("Cannot start gameplay on a pack header"),
+                };
+                let play_style = profile::get_session_play_style();
+                let (steps, pref) = match play_style {
+                    profile::PlayStyle::Versus => (
+                        [
+                            sm_state.selected_steps_index,
+                            sm_state.p2_selected_steps_index,
+                        ],
+                        [
+                            sm_state.preferred_difficulty_index,
+                            sm_state.p2_preferred_difficulty_index,
+                        ],
+                    ),
+                    profile::PlayStyle::Single | profile::PlayStyle::Double => (
+                        [sm_state.selected_steps_index; 2],
+                        [sm_state.preferred_difficulty_index; 2],
+                    ),
+                };
+                (song.clone(), steps, pref)
+            };
             let color_index = self.state.screens.select_music_state.active_color_index;
             self.state.screens.player_options_state = Some(player_options::init(
                 song_arc,

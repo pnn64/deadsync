@@ -31,6 +31,22 @@ use winit::keyboard::KeyCode;
 const TRANSITION_IN_DURATION: f32 = 0.5;
 const TRANSITION_OUT_DURATION: f32 = 0.3;
 
+// ITGmania metric: ScreenSelectMusic ShowOptionsMessageSeconds (fallback: 1.5).
+const SHOW_OPTIONS_MESSAGE_SECONDS: f32 = 1.5;
+
+// Simply Love ScreenSelectMusic out.lua "Entering Options..." timings.
+const ENTERING_OPTIONS_FADE_OUT_SECONDS: f32 = 0.125;
+const ENTERING_OPTIONS_HIBERNATE_SECONDS: f32 = 0.1;
+const ENTERING_OPTIONS_FADE_IN_SECONDS: f32 = 0.125;
+const ENTERING_OPTIONS_HOLD_SECONDS: f32 = 1.0;
+const ENTERING_OPTIONS_TOTAL_SECONDS: f32 = ENTERING_OPTIONS_FADE_OUT_SECONDS
+    + ENTERING_OPTIONS_HIBERNATE_SECONDS
+    + ENTERING_OPTIONS_FADE_IN_SECONDS
+    + ENTERING_OPTIONS_HOLD_SECONDS;
+
+const PRESS_START_FOR_OPTIONS_TEXT: &str = "Press &START; for options";
+const ENTERING_OPTIONS_TEXT: &str = "Entering Options...";
+
 // --- THEME LAYOUT CONSTANTS ---
 const BANNER_NATIVE_WIDTH: f32 = 418.0;
 const BANNER_NATIVE_HEIGHT: f32 = 164.0;
@@ -240,6 +256,13 @@ enum NavDirection {
     Right,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum OutPromptState {
+    None,
+    PressStartForOptions { elapsed: f32 },
+    EnteringOptions { elapsed: f32 },
+}
+
 #[derive(Clone, Debug)]
 pub enum MusicWheelEntry {
     PackHeader {
@@ -268,6 +291,7 @@ pub struct State {
     pub displayed_chart_data_p2: Option<Arc<ChartData>>,
 
     // Internal state
+    out_prompt: OutPromptState,
     all_entries: Vec<MusicWheelEntry>,
     expanded_pack_name: Option<String>,
     bg: heart_bg::State,
@@ -485,6 +509,7 @@ pub fn init() -> State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         selection_animation_timer: 0.0,
         wheel_offset_from_selection: 0.0,
+        out_prompt: OutPromptState::None,
         expanded_pack_name: last_pack_name,
         bg: heart_bg::State::new(),
         last_requested_banner_path: None,
@@ -854,12 +879,19 @@ fn handle_pad_dir_p2(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAct
 pub fn handle_confirm(state: &mut State) -> ScreenAction {
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
+    if state.out_prompt != OutPromptState::None {
+        return ScreenAction::None;
+    }
     if state.entries.is_empty() {
         audio::play_sfx("assets/sounds/expand.ogg");
         return ScreenAction::None;
     }
     match state.entries.get(state.selected_index) {
-        Some(MusicWheelEntry::Song(_)) => ScreenAction::Navigate(Screen::PlayerOptions),
+        Some(MusicWheelEntry::Song(_)) => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
+            ScreenAction::None
+        }
         Some(MusicWheelEntry::PackHeader { name, .. }) => {
             audio::play_sfx("assets/sounds/expand.ogg");
             let target = name.clone();
@@ -902,6 +934,20 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if state.out_prompt != OutPromptState::None {
+        if ev.pressed
+            && matches!(
+                ev.action,
+                VirtualAction::p1_start | VirtualAction::p2_start
+            )
+            && matches!(state.out_prompt, OutPromptState::PressStartForOptions { .. })
+        {
+            audio::play_sfx("assets/sounds/start.ogg");
+            state.out_prompt = OutPromptState::EnteringOptions { elapsed: 0.0 };
+        }
+        return ScreenAction::None;
+    }
+
     let play_style = crate::game::profile::get_session_play_style();
     if play_style == crate::game::profile::PlayStyle::Versus {
         return match ev.action {
@@ -977,6 +1023,28 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 }
 
 pub fn update(state: &mut State, dt: f32) -> ScreenAction {
+    match state.out_prompt {
+        OutPromptState::PressStartForOptions { elapsed } => {
+            let elapsed = elapsed + dt.max(0.0);
+            if elapsed >= SHOW_OPTIONS_MESSAGE_SECONDS {
+                state.out_prompt = OutPromptState::None;
+                return ScreenAction::NavigateNoFade(Screen::Gameplay);
+            }
+            state.out_prompt = OutPromptState::PressStartForOptions { elapsed };
+            return ScreenAction::None;
+        }
+        OutPromptState::EnteringOptions { elapsed } => {
+            let elapsed = elapsed + dt.max(0.0);
+            if elapsed >= ENTERING_OPTIONS_TOTAL_SECONDS {
+                state.out_prompt = OutPromptState::None;
+                return ScreenAction::NavigateNoFade(Screen::PlayerOptions);
+            }
+            state.out_prompt = OutPromptState::EnteringOptions { elapsed };
+            return ScreenAction::None;
+        }
+        OutPromptState::None => {}
+    }
+
     state.time_since_selection_change += dt;
     if dt > 0.0 {
         state.selection_animation_timer += dt;
@@ -1926,6 +1994,61 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             zoom(0.575):
             z(122)
         ));
+    }
+
+    // Simply Love ScreenSelectMusic out transition: "Press &START; for options"
+    if state.out_prompt != OutPromptState::None {
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 0.0):
+            cropbottom(1.0):
+            fadebottom(0.5):
+            z(1400):
+            linear(TRANSITION_OUT_DURATION): cropbottom(-0.5): alpha(1.0)
+        ));
+
+        match state.out_prompt {
+            OutPromptState::PressStartForOptions { .. } => {
+                actors.push(act!(text:
+                    font("wendy"):
+                    settext(PRESS_START_FOR_OPTIONS_TEXT):
+                    align(0.5, 0.5):
+                    xy(screen_center_x(), screen_center_y()):
+                    zoom(0.75):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    z(1401)
+                ));
+            }
+            OutPromptState::EnteringOptions { .. } => {
+                // Fade out "Press Start for options"
+                actors.push(act!(text:
+                    font("wendy"):
+                    settext(PRESS_START_FOR_OPTIONS_TEXT):
+                    align(0.5, 0.5):
+                    xy(screen_center_x(), screen_center_y()):
+                    zoom(0.75):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    z(1401):
+                    linear(ENTERING_OPTIONS_FADE_OUT_SECONDS): alpha(0.0)
+                ));
+
+                // Fade in "Entering Options..." after 0.1s hibernate
+                actors.push(act!(text:
+                    font("wendy"):
+                    settext(ENTERING_OPTIONS_TEXT):
+                    align(0.5, 0.5):
+                    xy(screen_center_x(), screen_center_y()):
+                    zoom(0.75):
+                    diffuse(1.0, 1.0, 1.0, 0.0):
+                    z(1401):
+                    sleep(ENTERING_OPTIONS_FADE_OUT_SECONDS + ENTERING_OPTIONS_HIBERNATE_SECONDS):
+                    linear(ENTERING_OPTIONS_FADE_IN_SECONDS): alpha(1.0):
+                    sleep(ENTERING_OPTIONS_HOLD_SECONDS)
+                ));
+            }
+            OutPromptState::None => {}
+        }
     }
 
     actors
