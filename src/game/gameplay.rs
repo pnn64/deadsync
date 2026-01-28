@@ -18,9 +18,11 @@ use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
 use log::{debug, info};
 use std::collections::{HashMap, VecDeque};
+use std::hash::Hasher;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
+use twox_hash::XxHash64;
 use winit::event::KeyEvent;
 use winit::keyboard::KeyCode;
 
@@ -72,6 +74,384 @@ fn quantization_index_from_beat(beat: f32) -> u8 {
         64 | 128 => noteskin::Quantization::Q12th as u8,
         32 | 160 => noteskin::Quantization::Q24th as u8,
         _ => noteskin::Quantization::Q192nd as u8,
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TurnRng {
+    state: u64,
+}
+
+impl TurnRng {
+    #[inline(always)]
+    fn new(seed: u64) -> Self {
+        let seed = if seed == 0 { 0x9E37_79B9_7F4A_7C15 } else { seed };
+        Self { state: seed }
+    }
+
+    #[inline(always)]
+    fn next_u32(&mut self) -> u32 {
+        // xorshift64*
+        let mut x = self.state;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.state = x;
+        (x >> 32) as u32
+    }
+
+    #[inline(always)]
+    fn gen_range(&mut self, upper_exclusive: usize) -> usize {
+        if upper_exclusive <= 1 {
+            0
+        } else {
+            (self.next_u32() as usize) % upper_exclusive
+        }
+    }
+
+    fn shuffle<T>(&mut self, slice: &mut [T]) {
+        if slice.len() <= 1 {
+            return;
+        }
+        for i in (1..slice.len()).rev() {
+            let j = self.gen_range(i + 1);
+            slice.swap(i, j);
+        }
+    }
+}
+
+fn turn_seed_for_song(song: &SongData) -> u64 {
+    let mut hasher = XxHash64::with_seed(0);
+    hasher.write(song.simfile_path.to_string_lossy().as_bytes());
+    hasher.finish()
+}
+
+fn turn_take_from(
+    turn: profile::TurnOption,
+    cols: usize,
+    seed: u64,
+) -> Option<Vec<usize>> {
+    if cols == 0 {
+        return None;
+    }
+    use profile::TurnOption;
+    match (turn, cols) {
+        (TurnOption::None, _) => None,
+        (TurnOption::Mirror, _) => Some((0..cols).rev().collect()),
+        (TurnOption::LRMirror, 4) => Some(vec![3, 1, 2, 0]),
+        (TurnOption::LRMirror, 8) => Some(vec![7, 5, 6, 4, 3, 1, 2, 0]),
+        (TurnOption::UDMirror, 4) => Some(vec![0, 2, 1, 3]),
+        (TurnOption::UDMirror, 8) => Some(vec![0, 2, 1, 3, 4, 6, 5, 7]),
+        (TurnOption::Left, 4) => Some(vec![2, 0, 3, 1]),
+        (TurnOption::Left, 8) => Some(vec![2, 0, 3, 1, 6, 4, 7, 5]),
+        (TurnOption::Right, 4) => Some(vec![1, 3, 0, 2]),
+        (TurnOption::Right, 8) => Some(vec![1, 3, 0, 2, 5, 7, 4, 6]),
+        (TurnOption::Shuffle, _) => {
+            let orig: Vec<usize> = (0..cols).collect();
+            let mut attempt_seed = seed as u32;
+            loop {
+                let mut out = orig.clone();
+                let mut rng = TurnRng::new(u64::from(attempt_seed));
+                rng.shuffle(&mut out);
+                if cols <= 1 || out != orig {
+                    return Some(out);
+                }
+                attempt_seed = attempt_seed.wrapping_add(1);
+            }
+        }
+        _ => None,
+    }
+}
+
+fn apply_turn_permutation(
+    notes: &mut [Note],
+    note_range: (usize, usize),
+    col_offset: usize,
+    cols: usize,
+    turn: profile::TurnOption,
+    seed: u64,
+) {
+    let Some(take_from) = turn_take_from(turn, cols, seed) else {
+        return;
+    };
+    if take_from.len() != cols {
+        return;
+    }
+    let mut old_to_new = vec![0usize; cols];
+    for (new_col, &old_col) in take_from.iter().enumerate() {
+        if old_col < cols {
+            old_to_new[old_col] = new_col;
+        }
+    }
+    let (start, end) = note_range;
+    for n in &mut notes[start..end] {
+        if n.column < col_offset {
+            continue;
+        }
+        let local = n.column - col_offset;
+        if local < cols {
+            n.column = col_offset + old_to_new[local];
+        }
+    }
+}
+
+fn build_row_grid(
+    notes: &[Note],
+    note_range: (usize, usize),
+    col_offset: usize,
+    cols: usize,
+) -> (Vec<usize>, HashMap<usize, [usize; MAX_COLS]>) {
+    let (start, end) = note_range;
+    let mut map: HashMap<usize, [usize; MAX_COLS]> = HashMap::new();
+    for note_idx in start..end {
+        let n = &notes[note_idx];
+        if n.column < col_offset {
+            continue;
+        }
+        let local = n.column - col_offset;
+        if local >= cols || local >= MAX_COLS {
+            continue;
+        }
+        let entry = map.entry(n.row_index).or_insert([usize::MAX; MAX_COLS]);
+        entry[local] = note_idx;
+    }
+    let mut rows: Vec<usize> = map.keys().copied().collect();
+    rows.sort_unstable();
+    (rows, map)
+}
+
+fn update_active_holds_for_row(
+    notes: &[Note],
+    row_index: usize,
+    grid: &[usize; MAX_COLS],
+    cols: usize,
+    hold_end_row: &mut [Option<usize>; MAX_COLS],
+) {
+    for col in 0..cols.min(MAX_COLS) {
+        if let Some(end) = hold_end_row[col] {
+            if row_index > end {
+                hold_end_row[col] = None;
+            }
+        }
+    }
+
+    for col in 0..cols.min(MAX_COLS) {
+        let idx = grid[col];
+        if idx == usize::MAX {
+            continue;
+        }
+        if matches!(notes[idx].note_type, NoteType::Hold | NoteType::Roll) {
+            let end = notes[idx]
+                .hold
+                .as_ref()
+                .map(|h| h.end_row_index)
+                .unwrap_or(row_index);
+            hold_end_row[col] = Some(end);
+        }
+    }
+}
+
+fn apply_super_shuffle_taps(
+    notes: &mut [Note],
+    note_range: (usize, usize),
+    col_offset: usize,
+    cols: usize,
+    seed: u64,
+) {
+    if cols == 0 || cols > MAX_COLS {
+        return;
+    }
+    let (rows, mut map) = build_row_grid(notes, note_range, col_offset, cols);
+    let mut rng = TurnRng::new(seed);
+    let mut hold_end_row: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
+
+    for row in rows {
+        let Some(mut grid) = map.remove(&row) else {
+            continue;
+        };
+        update_active_holds_for_row(notes, row, &grid, cols, &mut hold_end_row);
+
+        for t1 in 0..cols {
+            if hold_end_row[t1].is_some() {
+                continue;
+            }
+            let idx1 = grid[t1];
+            if idx1 == usize::MAX {
+                continue;
+            }
+            if matches!(notes[idx1].note_type, NoteType::Hold | NoteType::Roll) {
+                continue;
+            }
+
+            let mut tried_mask: u16 = 0;
+            for _ in 0..4 {
+                let t2 = rng.gen_range(cols);
+                let bit = 1u16 << (t2 as u32);
+                if (tried_mask & bit) != 0 {
+                    continue;
+                }
+                tried_mask |= bit;
+                if t1 == t2 {
+                    break;
+                }
+                if hold_end_row[t2].is_some() {
+                    continue;
+                }
+                let idx2 = grid[t2];
+                if idx2 != usize::MAX
+                    && matches!(notes[idx2].note_type, NoteType::Hold | NoteType::Roll)
+                {
+                    continue;
+                }
+
+                if idx2 != usize::MAX {
+                    notes[idx1].column = col_offset + t2;
+                    notes[idx2].column = col_offset + t1;
+                    grid.swap(t1, t2);
+                } else {
+                    notes[idx1].column = col_offset + t2;
+                    grid[t2] = idx1;
+                    grid[t1] = usize::MAX;
+                }
+                break;
+            }
+        }
+    }
+}
+
+fn apply_hyper_shuffle(
+    notes: &mut [Note],
+    note_range: (usize, usize),
+    col_offset: usize,
+    cols: usize,
+    seed: u64,
+) {
+    if cols == 0 || cols > MAX_COLS {
+        return;
+    }
+    let (rows, mut map) = build_row_grid(notes, note_range, col_offset, cols);
+    let mut rng = TurnRng::new(seed);
+    let mut hold_end_row: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
+
+    for row in rows {
+        let Some(grid) = map.remove(&row) else {
+            continue;
+        };
+        for col in 0..cols {
+            if let Some(end) = hold_end_row[col] {
+                if row > end {
+                    hold_end_row[col] = None;
+                }
+            }
+        }
+
+        let mut free_cols = [0usize; MAX_COLS];
+        let mut free_len = 0usize;
+        for col in 0..cols {
+            if hold_end_row[col].is_none() {
+                free_cols[free_len] = col;
+                free_len += 1;
+            }
+        }
+        if free_len == 0 {
+            continue;
+        }
+
+        let mut row_notes = [usize::MAX; MAX_COLS];
+        let mut notes_len = 0usize;
+        for col in 0..cols {
+            if hold_end_row[col].is_some() {
+                continue;
+            }
+            let idx = grid[col];
+            if idx == usize::MAX {
+                continue;
+            }
+            row_notes[notes_len] = idx;
+            notes_len += 1;
+        }
+        if notes_len == 0 {
+            continue;
+        }
+
+        rng.shuffle(&mut free_cols[..free_len]);
+        let place_len = notes_len.min(free_len);
+        for i in 0..place_len {
+            let idx = row_notes[i];
+            let col = free_cols[i];
+            notes[idx].column = col_offset + col;
+        }
+
+        for i in 0..place_len {
+            let idx = row_notes[i];
+            if !matches!(notes[idx].note_type, NoteType::Hold | NoteType::Roll) {
+                continue;
+            }
+            let local = notes[idx].column.saturating_sub(col_offset);
+            if local >= cols {
+                continue;
+            }
+            let end = notes[idx]
+                .hold
+                .as_ref()
+                .map(|h| h.end_row_index)
+                .unwrap_or(row);
+            hold_end_row[local] = Some(end);
+        }
+    }
+}
+
+fn apply_turn_options(
+    notes: &mut [Note],
+    note_ranges: [(usize, usize); MAX_PLAYERS],
+    cols_per_player: usize,
+    num_players: usize,
+    player_profiles: &[profile::Profile; MAX_PLAYERS],
+    base_seed: u64,
+) {
+    for player in 0..num_players {
+        let turn = player_profiles[player].turn_option;
+        let note_range = note_ranges[player];
+        let col_offset = player * cols_per_player;
+        match turn {
+            profile::TurnOption::None => {}
+            profile::TurnOption::Blender => {
+                apply_turn_permutation(
+                    notes,
+                    note_range,
+                    col_offset,
+                    cols_per_player,
+                    profile::TurnOption::Shuffle,
+                    base_seed,
+                );
+                apply_super_shuffle_taps(
+                    notes,
+                    note_range,
+                    col_offset,
+                    cols_per_player,
+                    base_seed ^ (0xD00D_F00D_u64.wrapping_mul(player as u64 + 1)),
+                );
+            }
+            profile::TurnOption::Random => {
+                apply_hyper_shuffle(
+                    notes,
+                    note_range,
+                    col_offset,
+                    cols_per_player,
+                    base_seed ^ (0xA5A5_5A5A_u64.wrapping_mul(player as u64 + 1)),
+                );
+            }
+            other => {
+                apply_turn_permutation(
+                    notes,
+                    note_range,
+                    col_offset,
+                    cols_per_player,
+                    other,
+                    base_seed,
+                );
+            }
+        }
     }
 }
 
@@ -720,6 +1100,15 @@ pub fn init(
         let end = notes.len();
         note_ranges[player] = (start, end);
     }
+
+    apply_turn_options(
+        &mut notes,
+        note_ranges,
+        cols_per_player,
+        num_players,
+        &player_profiles,
+        turn_seed_for_song(&song),
+    );
 
     let note_player_for_col = |col: usize| -> usize {
         if num_players <= 1 || cols_per_player == 0 {

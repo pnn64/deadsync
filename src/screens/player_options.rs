@@ -1093,6 +1093,21 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = idx;
         }
     }
+    // Initialize Turn row from profile setting.
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Turn") {
+        row.selected_choice_index[player_idx] = match profile.turn_option {
+            crate::game::profile::TurnOption::None => 0,
+            crate::game::profile::TurnOption::Mirror => 1,
+            crate::game::profile::TurnOption::Left => 2,
+            crate::game::profile::TurnOption::Right => 3,
+            crate::game::profile::TurnOption::LRMirror => 4,
+            crate::game::profile::TurnOption::UDMirror => 5,
+            crate::game::profile::TurnOption::Shuffle => 6,
+            crate::game::profile::TurnOption::Blender => 7,
+            crate::game::profile::TurnOption::Random => 8,
+        }
+        .min(row.choices.len().saturating_sub(1));
+    }
     // Initialize FA+ Options row from profile (three independent toggles).
     if let Some(row) = rows.iter_mut().find(|r| r.name == "FA+ Options") {
         // Cursor always starts on the first option; toggled state is reflected visually.
@@ -1517,6 +1532,23 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         };
         speed_mod.mod_type = new_type.to_string();
         speed_mod.value = new_value;
+    } else if row_name == "Turn" {
+        let setting = match row.selected_choice_index[player_idx] {
+            0 => crate::game::profile::TurnOption::None,
+            1 => crate::game::profile::TurnOption::Mirror,
+            2 => crate::game::profile::TurnOption::Left,
+            3 => crate::game::profile::TurnOption::Right,
+            4 => crate::game::profile::TurnOption::LRMirror,
+            5 => crate::game::profile::TurnOption::UDMirror,
+            6 => crate::game::profile::TurnOption::Shuffle,
+            7 => crate::game::profile::TurnOption::Blender,
+            8 => crate::game::profile::TurnOption::Random,
+            _ => crate::game::profile::TurnOption::None,
+        };
+        state.player_profiles[player_idx].turn_option = setting;
+        if should_persist {
+            crate::game::profile::update_turn_option_for_side(persist_side, setting);
+        }
     } else if row_name == "Background Filter" {
         let setting = match row.selected_choice_index[player_idx] {
             0 => crate::game::profile::BackgroundFilter::Off,

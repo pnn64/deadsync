@@ -57,6 +57,61 @@ impl core::fmt::Display for Perspective {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TurnOption {
+    #[default]
+    None,
+    Mirror,
+    Left,
+    Right,
+    LRMirror,
+    UDMirror,
+    Shuffle,
+    Blender,
+    Random,
+}
+
+impl FromStr for TurnOption {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "none" | "noturn" | "noturning" | "noturns" => Ok(Self::None),
+            "mirror" => Ok(Self::Mirror),
+            "left" => Ok(Self::Left),
+            "right" => Ok(Self::Right),
+            "lrmirror" => Ok(Self::LRMirror),
+            "udmirror" => Ok(Self::UDMirror),
+            "shuffle" => Ok(Self::Shuffle),
+            "blender" | "supershuffle" => Ok(Self::Blender),
+            "random" | "hypershuffle" => Ok(Self::Random),
+            other => Err(format!("'{other}' is not a valid Turn setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for TurnOption {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::Mirror => write!(f, "Mirror"),
+            Self::Left => write!(f, "Left"),
+            Self::Right => write!(f, "Right"),
+            Self::LRMirror => write!(f, "LRMirror"),
+            Self::UDMirror => write!(f, "UDMirror"),
+            Self::Shuffle => write!(f, "Shuffle"),
+            Self::Blender => write!(f, "Blender"),
+            Self::Random => write!(f, "Random"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScrollOption(u8);
 
@@ -435,6 +490,7 @@ pub struct Profile {
     pub scroll_speed: ScrollSpeedSetting,
     pub scroll_option: ScrollOption,
     pub reverse_scroll: bool,
+    pub turn_option: TurnOption,
     // FA+ visual options (Simply Love semantics).
     // These do not change core timing semantics; they only affect HUD/UX.
     pub show_fa_plus_window: bool,
@@ -480,6 +536,7 @@ impl Default for Profile {
             scroll_speed: ScrollSpeedSetting::default(),
             scroll_option: ScrollOption::default(),
             reverse_scroll: false,
+            turn_option: TurnOption::default(),
             show_fa_plus_window: false,
             show_ex_score: false,
             show_fa_plus_pane: false,
@@ -627,6 +684,7 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         ));
         content.push_str(&format!("ScrollSpeed = {}\n", default_profile.scroll_speed));
         content.push_str(&format!("Scroll = {}\n", default_profile.scroll_option));
+        content.push_str(&format!("Turn = {}\n", default_profile.turn_option));
         content.push_str(&format!(
             "ReverseScroll = {}\n",
             i32::from(default_profile.reverse_scroll)
@@ -715,6 +773,7 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!("BackgroundFilter={}\n", profile.background_filter));
     content.push_str(&format!("ScrollSpeed={}\n", profile.scroll_speed));
     content.push_str(&format!("Scroll={}\n", profile.scroll_option));
+    content.push_str(&format!("Turn={}\n", profile.turn_option));
     content.push_str(&format!(
         "ReverseScroll={}\n",
         i32::from(profile.reverse_scroll)
@@ -910,6 +969,10 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "ScrollSpeed")
                 .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
                 .unwrap_or(default_profile.scroll_speed);
+            profile.turn_option = profile_conf
+                .get("PlayerOptions", "Turn")
+                .and_then(|s| TurnOption::from_str(&s).ok())
+                .unwrap_or(default_profile.turn_option);
             profile.scroll_option = profile_conf
                 .get("PlayerOptions", "Scroll")
                 .and_then(|s| ScrollOption::from_str(&s).ok())
@@ -1290,6 +1353,21 @@ pub fn update_scroll_option_for_side(side: PlayerSide, setting: ScrollOption) {
         }
         profile.scroll_option = setting;
         profile.reverse_scroll = reverse_enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_turn_option_for_side(side: PlayerSide, setting: TurnOption) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.turn_option == setting {
+            return;
+        }
+        profile.turn_option = setting;
     }
     save_profile_ini_for_side(side);
 }
