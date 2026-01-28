@@ -10,13 +10,14 @@ use crate::ui::components::screen_bar::{
 };
 use crate::ui::components::{heart_bg, screen_bar};
 
-/* ---------------------------- transitions ---------------------------- */
-const TRANSITION_IN_DURATION: f32 = 0.4;
-const TRANSITION_OUT_DURATION: f32 = 0.4;
-
 /* ------------------------------ layout ------------------------------- */
 const ROOT_X_OFF: f32 = 90.0;
 const ROOT_ZOOM: f32 = 1.25;
+
+// Simply Love: Graphics/ScreenSelectPlayMode Icon.lua
+const CHOICE_ZOOM_FOCUSED: f32 = 0.75;
+const CHOICE_ZOOM_UNFOCUSED: f32 = 0.3;
+const CHOICE_ZOOM_TWEEN_DUR: f32 = 0.1;
 
 const CURSOR_H: f32 = 40.0;
 const CURSOR_MIN_W: f32 = 90.0;
@@ -64,7 +65,7 @@ impl Choice {
 
     #[inline(always)]
     const fn cursor_label_width(self) -> f32 {
-        // Approximation of SM's `choice_actor:GetWidth()/1.4`, clamped later.
+        // Approximation of SM's `choice_actor:GetWidth()`, clamped after dividing by 1.4.
         match self {
             Self::Regular => 140.0,
             Self::Marathon => 168.0,
@@ -84,6 +85,7 @@ pub struct State {
     pub active_color_index: i32,
     pub selected_index: usize,
     cursor_y: f32,
+    choice_zooms: [f32; CHOICES.len()],
     demo_time: f32,
     exit_requested: bool,
     exit_target: Option<Screen>,
@@ -95,6 +97,7 @@ pub fn init() -> State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         selected_index: 0,
         cursor_y: -60.0,
+        choice_zooms: [CHOICE_ZOOM_UNFOCUSED; CHOICES.len()],
         demo_time: 0.0,
         exit_requested: false,
         exit_target: None,
@@ -108,29 +111,23 @@ pub fn on_enter(state: &mut State) {
         crate::game::profile::PlayMode::Marathon => 1,
     };
     state.cursor_y = -60.0 + CURSOR_H * (state.selected_index as f32);
+    for (i, z) in state.choice_zooms.iter_mut().enumerate() {
+        *z = if i == state.selected_index {
+            CHOICE_ZOOM_FOCUSED
+        } else {
+            CHOICE_ZOOM_UNFOCUSED
+        };
+    }
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(crate::core::space::screen_width(), crate::core::space::screen_height()):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        z(1100):
-        linear(TRANSITION_IN_DURATION): alpha(0.0):
-        linear(0.0): visible(false)
-    );
-    (vec![actor], TRANSITION_IN_DURATION)
+    // Simply Love handles transitions via per-actor OffCommands and a sleep in out.lua.
+    (vec![], 0.0)
 }
 
 pub fn out_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(crate::core::space::screen_width(), crate::core::space::screen_height()):
-        diffuse(0.0, 0.0, 0.0, 0.0):
-        z(1200):
-        linear(TRANSITION_OUT_DURATION): alpha(1.0)
-    );
-    (vec![actor], TRANSITION_OUT_DURATION)
+    // Simply Love handles transitions via per-actor OffCommands and a sleep in out.lua.
+    (vec![], 0.0)
 }
 
 #[inline(always)]
@@ -182,6 +179,23 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
         state.cursor_y = target_y;
     } else {
         state.cursor_y += dy.signum() * max_step;
+    }
+
+    // Choice zoom (GainFocus/LoseFocus linear(0.1) in SL).
+    let zoom_speed = (CHOICE_ZOOM_FOCUSED - CHOICE_ZOOM_UNFOCUSED) / CHOICE_ZOOM_TWEEN_DUR;
+    let zoom_max_step = zoom_speed * dt;
+    for (i, z) in state.choice_zooms.iter_mut().enumerate() {
+        let target = if i == state.selected_index {
+            CHOICE_ZOOM_FOCUSED
+        } else {
+            CHOICE_ZOOM_UNFOCUSED
+        };
+        let dz = target - *z;
+        if dz.abs() <= zoom_max_step {
+            *z = target;
+        } else {
+            *z += dz.signum() * zoom_max_step;
+        }
     }
 
     if state.exit_requested {
@@ -240,7 +254,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::None
         }
-        Some(9) => ScreenAction::Navigate(Screen::SelectStyle),
+        Some(9) => {
+            state.exit_requested = true;
+            state.exit_target = Some(Screen::Menu);
+            let _ = exit_anim_t(true);
+            ScreenAction::None
+        }
         _ => ScreenAction::None,
     }
 }
@@ -364,28 +383,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         right_avatar,
     }));
 
-    // Border and background of the SelectMode box.
-    let border_crop = cropleft_after(exit_t, 0.6, 0.2);
-    let border_alpha = 1.0;
-    let bg_alpha = 1.0;
-
-    let (bx, by) = root_pt(0.0, 0.0);
-    let (bw, bh) = root_sz(302.0, 162.0);
-    actors.push(act!(quad:
-        align(0.5, 0.5): xy(bx, by):
-        zoomto(bw, bh):
-        diffuse(1.0, 1.0, 1.0, border_alpha):
-        cropleft(border_crop)
-    ));
-    let (iw, ih) = root_sz(300.0, 160.0);
-    actors.push(act!(quad:
-        align(0.5, 0.5): xy(bx, by):
-        zoomto(iw, ih):
-        diffuse(0.0, 0.0, 0.0, bg_alpha):
-        cropleft(border_crop)
-    ));
-
-    // Grey backgrounds behind choice labels.
+    // Grey backgrounds (SL: ScreenSelectPlayMode underlay/default.lua).
     let bg1_a = fade_after(exit_t, 0.4, 0.1);
     let bg2_a = fade_after(exit_t, 0.3, 0.1);
     let (gw, gh) = root_sz(90.0, 38.0);
@@ -402,24 +400,23 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         diffuse(0.2, 0.2, 0.2, bg2_a)
     ));
 
-    // Choice labels (engine icons in SM; we render text directly).
-    for (i, &label) in CHOICES.iter().enumerate() {
-        let (x, y) = root_pt(-160.0, -60.0 + CURSOR_H * (i as f32));
-        let mut c = [1.0, 1.0, 1.0, 1.0];
-        if i != state.selected_index {
-            c = [0.6, 0.6, 0.6, 1.0];
-        }
-        c[3] *= fade_after(exit_t, 0.4, 0.2);
-        actors.push(act!(text:
-            font("miso"):
-            settext(label):
-            align(0.5, 0.5):
-            xy(x, y):
-            zoom(0.65 * ROOT_ZOOM):
-            diffuse(c[0], c[1], c[2], c[3]):
-            horizalign(center)
-        ));
-    }
+    // Border and background of the SelectMode box.
+    let border_crop = cropleft_after(exit_t, 0.6, 0.2);
+    let (bx, by) = root_pt(0.0, 0.0);
+    let (bw, bh) = root_sz(302.0, 162.0);
+    actors.push(act!(quad:
+        align(0.5, 0.5): xy(bx, by):
+        zoomto(bw, bh):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        cropleft(border_crop)
+    ));
+    let (iw, ih) = root_sz(300.0, 160.0);
+    actors.push(act!(quad:
+        align(0.5, 0.5): xy(bx, by):
+        zoomto(iw, ih):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        cropleft(border_crop)
+    ));
 
     // Description text.
     let desc_alpha = fade_after(exit_t, 0.4, 0.2);
@@ -455,6 +452,33 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         diffuse(0.0, 0.0, 0.0, cursor_alpha):
         cropleft(cursor_crop)
     ));
+
+    // Choice labels (SL: Graphics/ScreenSelectPlayMode Icon.lua).
+    let label_alpha = fade_after(exit_t, 0.0, 0.2);
+    let label_selected = color::simply_love_rgba(state.active_color_index);
+    let label_unselected = color::rgba_hex("#888888");
+    let zoom_den = (CHOICE_ZOOM_FOCUSED - CHOICE_ZOOM_UNFOCUSED).max(f32::EPSILON);
+    for (i, &label) in CHOICES.iter().enumerate() {
+        let (x, y) = root_pt(-160.0, -60.0 + CURSOR_H * (i as f32));
+        let zoom = state.choice_zooms[i];
+        let t = ((zoom - CHOICE_ZOOM_UNFOCUSED) / zoom_den).clamp(0.0, 1.0);
+
+        let rgb = [
+            label_unselected[0] + (label_selected[0] - label_unselected[0]) * t,
+            label_unselected[1] + (label_selected[1] - label_unselected[1]) * t,
+            label_unselected[2] + (label_selected[2] - label_unselected[2]) * t,
+        ];
+
+        actors.push(act!(text:
+            font("wendy"):
+            settext(label):
+            align(1.0, 0.5):
+            xy(x, y):
+            zoom(zoom):
+            diffuse(rgb[0], rgb[1], rgb[2], label_alpha):
+            horizalign(right)
+        ));
+    }
 
     // Score.
     let score_alpha = fade_after(exit_t, 0.4, 0.2);

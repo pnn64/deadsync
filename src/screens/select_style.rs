@@ -1,9 +1,7 @@
 use crate::act;
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::{
-    screen_center_x, screen_center_y, screen_height, screen_width, widescale,
-};
+use crate::core::space::{screen_center_x, screen_center_y, widescale};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
@@ -11,10 +9,6 @@ use crate::ui::components::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::ui::components::{heart_bg, screen_bar};
-
-/* ---------------------------- transitions ---------------------------- */
-const TRANSITION_IN_DURATION: f32 = 0.4;
-const TRANSITION_OUT_DURATION: f32 = 0.4;
 
 /* ------------------------------ layout ------------------------------- */
 const CHOICE_COUNT: usize = 3;
@@ -88,26 +82,13 @@ pub fn init() -> State {
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        z(1100):
-        linear(TRANSITION_IN_DURATION): alpha(0.0):
-        linear(0.0): visible(false)
-    );
-    (vec![actor], TRANSITION_IN_DURATION)
+    // Simply Love handles transitions via per-actor OffCommands and a sleep in out.lua.
+    (vec![], 0.0)
 }
 
 pub fn out_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 0.0):
-        z(1200):
-        linear(TRANSITION_OUT_DURATION): alpha(1.0)
-    );
-    (vec![actor], TRANSITION_OUT_DURATION)
+    // Simply Love handles transitions via per-actor OffCommands and a sleep in out.lua.
+    (vec![], 0.0)
 }
 
 pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
