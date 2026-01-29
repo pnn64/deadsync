@@ -65,22 +65,24 @@ struct Ctx {
 
 impl Ctx {
     #[inline(always)]
-    fn emit_connected(&mut self, dev: &Dev) {
+    fn emit_connected(&mut self, dev: &Dev, initial: bool) {
         (self.emit_sys)(GpSystemEvent::Connected {
             name: dev.name.clone(),
             id: dev.id,
             vendor_id: dev.vendor_id,
             product_id: dev.product_id,
             backend: PadBackend::WindowsRawInput,
+            initial,
         });
     }
 
     #[inline(always)]
-    fn emit_disconnected(&mut self, dev: &Dev) {
+    fn emit_disconnected(&mut self, dev: &Dev, initial: bool) {
         (self.emit_sys)(GpSystemEvent::Disconnected {
             name: dev.name.clone(),
             id: dev.id,
             backend: PadBackend::WindowsRawInput,
+            initial,
         });
     }
 }
@@ -223,7 +225,7 @@ fn hat_logical_range(preparsed: &[u8]) -> Option<(i32, i32)> {
     }
 }
 
-fn add_device(ctx: &mut Ctx, h: HANDLE) {
+fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
     if ctx.devices.contains_key(&hkey(h)) {
         return;
     }
@@ -278,7 +280,7 @@ fn add_device(ctx: &mut Ctx, h: HANDLE) {
     };
 
     if refs == 0 {
-        ctx.emit_connected(&dev);
+        ctx.emit_connected(&dev, initial);
     }
     ctx.devices.insert(hkey(h), dev);
 }
@@ -291,7 +293,7 @@ fn remove_device(ctx: &mut Ctx, h: HANDLE) {
     let refs = ctx.refs_by_uuid.get(&dev.uuid).copied().unwrap_or(0);
     if refs <= 1 {
         ctx.refs_by_uuid.remove(&dev.uuid);
-        ctx.emit_disconnected(&dev);
+        ctx.emit_disconnected(&dev, false);
     } else {
         ctx.refs_by_uuid.insert(dev.uuid, refs - 1);
     }
@@ -317,7 +319,7 @@ fn enumerate_existing(ctx: &mut Ctx) {
             if item.dwType != RIM_TYPEHID {
                 continue;
             }
-            add_device(ctx, item.hDevice);
+            add_device(ctx, item.hDevice, true);
         }
     }
 }
@@ -529,7 +531,7 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
 
         let dev_handle = header.hDevice;
         if !ctx.devices.contains_key(&hkey(dev_handle)) {
-            add_device(ctx, dev_handle);
+            add_device(ctx, dev_handle, false);
         }
         let Some(dev) = ctx.devices.get_mut(&hkey(dev_handle)) else {
             return;
@@ -586,7 +588,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 let ctx = unsafe { &mut *ctx_ptr };
                 let h = HANDLE(lparam.0 as *mut c_void);
                 match wparam.0 {
-                    GIDC_ARRIVAL_U32 => add_device(ctx, h),
+                    GIDC_ARRIVAL_U32 => add_device(ctx, h, false),
                     GIDC_REMOVAL_U32 => remove_device(ctx, h),
                     _ => {}
                 }

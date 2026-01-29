@@ -149,6 +149,7 @@ pub fn handle_gamepad_system_event(state: &mut State, ev: &GpSystemEvent) {
             vendor_id,
             product_id,
             backend,
+            initial,
         } => {
             let dev = usize::from(*id);
             let vid = vendor_id
@@ -158,12 +159,14 @@ pub fn handle_gamepad_system_event(state: &mut State, ev: &GpSystemEvent) {
                 .map(|p| format!("0x{p:04X}"))
                 .unwrap_or_else(|| "n/a".to_string());
             format!(
-                "[SYS] Gamepad {dev} CONNECTED: \"{name}\" vid={vid} pid={pid} backend={backend:?}",
+                "[SYS] Gamepad {dev} CONNECTED: \"{name}\" vid={vid} pid={pid} backend={backend:?} initial={initial}",
             )
         }
-        GpSystemEvent::Disconnected { name, id, .. } => {
+        GpSystemEvent::Disconnected {
+            name, id, initial, ..
+        } => {
             let dev = usize::from(*id);
-            format!("[SYS] Gamepad {dev} DISCONNECTED: \"{name}\"")
+            format!("[SYS] Gamepad {dev} DISCONNECTED: \"{name}\" initial={initial}")
         }
     };
     state.last_inputs.push_front((msg, now));

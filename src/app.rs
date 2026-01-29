@@ -114,7 +114,6 @@ pub struct ShellState {
     display_height: u32,
     pending_window_position: Option<PhysicalPosition<i32>>,
     gamepad_overlay_state: Option<(String, Instant)>,
-    gamepad_startup_complete: bool,
     pending_exit: bool,
     shift_held: bool,
 }
@@ -174,7 +173,6 @@ impl ShellState {
             display_monitor: cfg.display_monitor,
             pending_window_position: None,
             gamepad_overlay_state: None,
-            gamepad_startup_complete: false,
             pending_exit: false,
             shift_held: false,
         }
@@ -2411,11 +2409,13 @@ impl ApplicationHandler<UserEvent> for App {
                     );
                 }
                 match &ev {
-                    GpSystemEvent::StartupComplete => {
-                        self.state.shell.gamepad_startup_complete = true;
-                    }
+                    GpSystemEvent::StartupComplete => {}
                     GpSystemEvent::Connected {
-                        name, id, backend, ..
+                        name,
+                        id,
+                        backend,
+                        initial,
+                        ..
                     } => {
                         info!(
                             "Gamepad connected: {} (ID: {}) via {:?}",
@@ -2423,7 +2423,7 @@ impl ApplicationHandler<UserEvent> for App {
                             usize::from(*id),
                             backend
                         );
-                        if self.state.shell.gamepad_startup_complete {
+                        if !*initial {
                             self.state.shell.gamepad_overlay_state = Some((
                                 format!(
                                     "Connected: {} (ID: {}) via {:?}",
@@ -2436,7 +2436,11 @@ impl ApplicationHandler<UserEvent> for App {
                         }
                     }
                     GpSystemEvent::Disconnected {
-                        name, id, backend, ..
+                        name,
+                        id,
+                        backend,
+                        initial,
+                        ..
                     } => {
                         info!(
                             "Gamepad disconnected: {} (ID: {}) via {:?}",
@@ -2444,7 +2448,7 @@ impl ApplicationHandler<UserEvent> for App {
                             usize::from(*id),
                             backend
                         );
-                        if self.state.shell.gamepad_startup_complete {
+                        if !*initial {
                             self.state.shell.gamepad_overlay_state = Some((
                                 format!(
                                     "Disconnected: {} (ID: {}) via {:?}",

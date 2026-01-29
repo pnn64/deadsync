@@ -159,12 +159,16 @@ pub enum GpSystemEvent {
         vendor_id: Option<u16>,
         product_id: Option<u16>,
         backend: PadBackend,
+        /// True when this connection is part of startup enumeration (no hotplug overlay).
+        initial: bool,
     },
     #[cfg_attr(all(unix, not(target_os = "macos")), allow(dead_code))]
     Disconnected {
         name: String,
         id: PadId,
         backend: PadBackend,
+        /// True when this disconnect is part of startup enumeration (no hotplug overlay).
+        initial: bool,
     },
     StartupComplete,
 }

@@ -144,15 +144,18 @@ struct Ctx {
     idx_by_uuid: HashMap<[u8; 16], usize>,
     id_by_uuid: HashMap<[u8; 16], PadId>,
     next_id: u32,
+    startup_grace_until: Instant,
 }
 
 impl Ctx {
     #[inline(always)]
     fn emit_disconnected(&mut self, dev: &Dev) {
+        let initial = Instant::now() < self.startup_grace_until;
         (self.emit_sys)(GpSystemEvent::Disconnected {
             name: dev.name.clone(),
             id: dev.id,
             backend: PadBackend::WindowsWgi,
+            initial,
         });
     }
 }
@@ -273,12 +276,14 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
     let id = dev.id;
     let vendor_id = dev.vendor_id;
     let product_id = dev.product_id;
+    let initial = Instant::now() < ctx.startup_grace_until;
     (ctx.emit_sys)(GpSystemEvent::Connected {
         name,
         id,
         vendor_id,
         product_id,
         backend: PadBackend::WindowsWgi,
+        initial,
     });
 }
 
@@ -550,6 +555,10 @@ pub fn run(
     });
     let _removed_token = RawGameController::RawGameControllerRemoved(&removed_handler).unwrap();
 
+    // WGI can surface already-connected controllers slightly after startup due to WinRT's
+    // async device discovery. Treat very-early adds/removes as "initial" to avoid hotplug
+    // overlays for devices that were plugged in before launch.
+    const STARTUP_GRACE: Duration = Duration::from_millis(3000);
     let mut ctx = Ctx {
         emit_pad: Box::new(emit_pad),
         emit_sys: Box::new(emit_sys),
@@ -557,30 +566,13 @@ pub fn run(
         idx_by_uuid: HashMap::new(),
         id_by_uuid: HashMap::new(),
         next_id: 0,
+        startup_grace_until: Instant::now() + STARTUP_GRACE,
     };
 
     enumerate_existing(&mut ctx);
-    // WGI may deliver "Added" notifications for already-present controllers asynchronously.
-    // Delay StartupComplete for a short settle window so the app doesn't treat initial devices
-    // as hotplugs, but keep pumping input immediately.
-    const STARTUP_SETTLE: Duration = Duration::from_millis(3000);
-    const STARTUP_SLICE: Duration = Duration::from_millis(50);
-    let startup_deadline = Instant::now() + STARTUP_SETTLE;
-    let mut startup_complete_sent = false;
+    (ctx.emit_sys)(GpSystemEvent::StartupComplete);
 
     loop {
-        if !startup_complete_sent && Instant::now() >= startup_deadline {
-            enumerate_existing(&mut ctx);
-            while let Ok(msg) = rx.try_recv() {
-                match msg {
-                    Msg::Added(c) => add_controller(&mut ctx, c),
-                    Msg::Removed(c) => remove_controller(&mut ctx, c),
-                }
-            }
-            (ctx.emit_sys)(GpSystemEvent::StartupComplete);
-            startup_complete_sent = true;
-        }
-
         while let Ok(msg) = rx.try_recv() {
             match msg {
                 Msg::Added(c) => add_controller(&mut ctx, c),
@@ -589,28 +581,12 @@ pub fn run(
         }
 
         if ctx.devs.is_empty() {
-            if startup_complete_sent {
-                let Ok(msg) = rx.recv() else {
-                    continue;
-                };
-                match msg {
-                    Msg::Added(c) => add_controller(&mut ctx, c),
-                    Msg::Removed(c) => remove_controller(&mut ctx, c),
-                }
-            } else {
-                let now = Instant::now();
-                let until = startup_deadline.saturating_duration_since(now);
-                let wait = STARTUP_SLICE.min(until);
-                if !wait.is_zero() {
-                    match rx.recv_timeout(wait) {
-                        Ok(msg) => match msg {
-                            Msg::Added(c) => add_controller(&mut ctx, c),
-                            Msg::Removed(c) => remove_controller(&mut ctx, c),
-                        },
-                        Err(mpsc::RecvTimeoutError::Timeout) => {}
-                        Err(mpsc::RecvTimeoutError::Disconnected) => {}
-                    }
-                }
+            let Ok(msg) = rx.recv() else {
+                continue;
+            };
+            match msg {
+                Msg::Added(c) => add_controller(&mut ctx, c),
+                Msg::Removed(c) => remove_controller(&mut ctx, c),
             }
             continue;
         }

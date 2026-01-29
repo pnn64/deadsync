@@ -125,6 +125,7 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                 vendor_id: None,
                 product_id: None,
                 backend: PadBackend::LinuxEvdev,
+                initial: true,
             });
 
             devs.push(Dev {
