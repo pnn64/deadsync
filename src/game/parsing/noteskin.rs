@@ -1954,7 +1954,7 @@ fn parse_pair_i32(input: &str) -> Option<[i32; 2]> {
 }
 
 fn infer_grid(texture_key: &str) -> (usize, usize) {
-    let (w, h) = assets::parse_sprite_sheet_dims(texture_key);
+    let (w, h) = assets::sprite_sheet_dims(texture_key);
     (w.max(1) as usize, h.max(1) as usize)
 }
 

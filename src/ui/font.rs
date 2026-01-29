@@ -2054,7 +2054,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
         let texture_key = assets::canonical_texture_key(tex_path);
         required_textures.push(tex_path.clone());
 
-        let (num_frames_wide, num_frames_high) = assets::parse_sprite_sheet_dims(&texture_key);
+        let (num_frames_wide, num_frames_high) = assets::sprite_sheet_dims(&texture_key);
         let total_frames = (num_frames_wide * num_frames_high) as usize;
 
         // settings: common → page → legacy
@@ -2153,7 +2153,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
 
         if let Some(stroke_path) = find_stroke_texture_path(tex_path) {
             let stroke_key = assets::canonical_texture_key(&stroke_path);
-            let (stroke_frames_w, stroke_frames_h) = assets::parse_sprite_sheet_dims(&stroke_key);
+            let (stroke_frames_w, stroke_frames_h) = assets::sprite_sheet_dims(&stroke_key);
             let stroke_total_frames = (stroke_frames_w * stroke_frames_h) as usize;
             let stroke_dims = image::image_dimensions(&stroke_path)?;
             let stroke_has_doubleres = is_doubleres_in_name(&stroke_key) || hints.doubleres;

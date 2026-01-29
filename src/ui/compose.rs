@@ -167,7 +167,7 @@ fn build_actor_recursive<'a>(
 
             if !is_solid && uv_rect.is_none() {
                 let (cols, rows) =
-                    grid.unwrap_or_else(|| assets::parse_sprite_sheet_dims(texture_name));
+                    grid.unwrap_or_else(|| assets::sprite_sheet_dims(texture_name));
                 let total = cols.saturating_mul(rows).max(1);
 
                 let start_linear: u32 = match *cell {
@@ -551,7 +551,7 @@ fn resolve_sprite_size_like_sm(
             tw *= (u1 - u0).abs().max(1e-6);
             th *= (v1 - v0).abs().max(1e-6);
         } else if cell.is_some() {
-            let (gc, gr) = grid.unwrap_or_else(|| assets::parse_sprite_sheet_dims(texture_name));
+            let (gc, gr) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(texture_name));
             let cols = gc.max(1);
             let rows = gr.max(1);
             tw /= cols as f32;
@@ -616,7 +616,7 @@ fn calculate_uvs(
         let dv = (v1 - v0).abs().max(1e-6);
         ([du, dv], [u0.min(u1), v0.min(v1)])
     } else if let Some((cx, cy)) = cell {
-        let (gc, gr) = grid.unwrap_or_else(|| assets::parse_sprite_sheet_dims(texture));
+        let (gc, gr) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(texture));
         let cols = gc.max(1);
         let rows = gr.max(1);
         let (col, row) = if cy == u32::MAX {

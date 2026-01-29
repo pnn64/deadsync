@@ -115,13 +115,29 @@ impl TextureHints {
 static TEX_META: std::sync::LazyLock<RwLock<HashMap<String, TexMeta>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
+static SHEET_DIMS: std::sync::LazyLock<RwLock<HashMap<String, (u32, u32)>>> =
+    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+
 pub fn register_texture_dims(key: &str, w: u32, h: u32) {
+    let sheet = parse_sprite_sheet_dims(key);
+    let key = key.to_string();
     let mut m = TEX_META.write().unwrap();
-    m.insert(key.to_string(), TexMeta { w, h });
+    m.insert(key.clone(), TexMeta { w, h });
+    drop(m);
+    SHEET_DIMS.write().unwrap().insert(key, sheet);
 }
 
 pub fn texture_dims(key: &str) -> Option<TexMeta> {
     TEX_META.read().unwrap().get(key).copied()
+}
+
+pub fn sprite_sheet_dims(key: &str) -> (u32, u32) {
+    if let Some(dims) = SHEET_DIMS.read().unwrap().get(key).copied() {
+        return dims;
+    }
+    let dims = parse_sprite_sheet_dims(key);
+    SHEET_DIMS.write().unwrap().insert(key.to_string(), dims);
+    dims
 }
 
 pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
