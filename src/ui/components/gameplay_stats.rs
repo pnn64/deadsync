@@ -795,6 +795,7 @@ fn build_pack_banner(
         profile::PlayerSide::P2 => screen_width() * 0.25,
     };
     let sidepane_center_y = screen_center_y() + 80.0;
+
     let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
     let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
     let banner_data_zoom = if note_field_is_centered && is_wide() && !is_ultrawide {
@@ -842,6 +843,15 @@ fn build_steps_info(
         profile::PlayerSide::P2 => screen_width() * 0.25,
     };
     let sidepane_center_y = screen_center_y() + 80.0;
+
+    // Dark background for the Step Statistics side pane (Simply Love: DarkBackground.lua).
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(sidepane_center_x, screen_center_y()):
+        zoomto(screen_width() * 0.5, screen_height()):
+        diffuse(0.0, 0.0, 0.0, 0.95):
+        z(-80)
+    ));
     let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
     let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
     let banner_data_zoom = if note_field_is_centered && is_wide() && !is_ultrawide {
@@ -1659,6 +1669,128 @@ fn build_side_pane(
             }
         }
     }));
+
+    // Density graph (Simply Love StepStatistics/DensityGraph.lua).
+    if is_wide() {
+        const MAX_SECONDS: f32 = 4.0 * 60.0;
+        const BG_RGB: [f32; 3] = [
+            30.0 / 255.0, // 0x1E
+            40.0 / 255.0, // 0x28
+            47.0 / 255.0, // 0x2F
+        ];
+
+        let graph_h = 105.0_f32;
+        let graph_w = (screen_width() * 0.5).round().max(1.0_f32);
+
+        let x0 = sidepane_center_x - graph_w * 0.5;
+        let y0 = sidepane_center_y + 55.0;
+
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(x0, y0):
+            zoomto(graph_w, graph_h):
+            diffuse(BG_RGB[0], BG_RGB[1], BG_RGB[2], 1.0):
+            z(59)
+        ));
+
+        let key = state.density_graph_texture_key.clone();
+        if key != "__white" {
+            let meta = crate::assets::texture_dims(&key).unwrap_or(crate::assets::TexMeta { w: 1, h: 1 });
+            let tex_w = meta.w.max(1) as f32;
+            let u_window = (graph_w / tex_w).clamp(0.0_f32, 1.0_f32);
+            let max_u0 = (1.0_f32 - u_window).max(0.0_f32);
+
+            let first_second = state.timing.get_time_for_beat(0.0).min(0.0_f32);
+            let last_second = state.song.total_length_seconds.max(0) as f32;
+            let duration = (last_second - first_second).max(0.001_f32);
+
+            let mut u0 = 0.0_f32;
+            if max_u0 > 0.0_f32 && duration > MAX_SECONDS {
+                let current_second = state.current_music_time;
+                if current_second > last_second - (MAX_SECONDS * 0.75) {
+                    u0 = max_u0;
+                } else {
+                    let seconds_past_one_fourth =
+                        (current_second - first_second) - (MAX_SECONDS * 0.25);
+                    if seconds_past_one_fourth > 0.0_f32 {
+                        u0 = (seconds_past_one_fourth / duration).clamp(0.0_f32, max_u0);
+                    }
+                }
+            }
+
+            let u1 = (u0 + u_window).min(1.0_f32);
+            actors.push(act!(sprite(key):
+                align(0.0, 0.0): xy(x0, y0):
+                zoomto(graph_w, graph_h):
+                customtexturerect(u0, 0.0, u1, 1.0):
+                z(60)
+            ));
+
+            // Lifeline overlay (Simply Love draws this as an ActorMultiVertex line strip).
+            {
+                let life_history = &state.players[player_idx].life_history;
+                if !life_history.is_empty() && duration > 0.0_f32 && tex_w > 0.0_f32 {
+                    let t0 = first_second + u0 * duration;
+                    let t1 = first_second + u1 * duration;
+                    let start_ix = life_history.partition_point(|&(t, _)| t < t0);
+                    let end_ix = life_history.partition_point(|&(t, _)| t <= t1);
+
+                    let offset_px = u0 * tex_w;
+                    let to_x = |t: f32| -> f32 {
+                        (((t - first_second) / duration).clamp(0.0_f32, 1.0_f32) * tex_w)
+                            - offset_px
+                    };
+                    let to_y = |life: f32| -> f32 {
+                        (1.0_f32 - life).clamp(0.0_f32, 1.0_f32) * graph_h
+                    };
+
+                    let mut last: Option<(f32, f32)> = None;
+                    let mut segs = 0u32;
+
+                    // Interpolate a point at the left edge, so the line stays continuous while scrolling.
+                    if start_ix > 0 && start_ix < life_history.len() {
+                        let (t_prev, l_prev) = life_history[start_ix - 1];
+                        let (t_next, l_next) = life_history[start_ix];
+                        let dt = (t_next - t_prev).max(0.000_001_f32);
+                        let a = ((t0 - t_prev) / dt).clamp(0.0_f32, 1.0_f32);
+                        let life = (l_prev + (l_next - l_prev) * a).clamp(0.0_f32, 1.0_f32);
+                        last = Some((0.0_f32, to_y(life)));
+                    }
+
+                    for &(t, life) in life_history[start_ix..end_ix].iter() {
+                        let x = to_x(t).clamp(0.0_f32, graph_w);
+                        let y = to_y(life);
+
+                        let Some((lx, ly)) = last else {
+                            last = Some((x, y));
+                            continue;
+                        };
+
+                        let dx = x - lx;
+                        let dy = y - ly;
+                        let len = dx.hypot(dy);
+                        if len < 0.5_f32 {
+                            continue;
+                        }
+
+                        let angle_deg = dy.atan2(dx).to_degrees();
+                        actors.push(act!(quad:
+                            align(0.0, 0.5): xy(x0 + lx, y0 + ly):
+                            zoomto(len, 2.0):
+                            diffuse(1.0, 1.0, 1.0, 0.8):
+                            rotationz(angle_deg):
+                            z(61)
+                        ));
+
+                        last = Some((x, y));
+                        segs += 1;
+                        if segs >= 2048 {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // --- Peak NPS Display (as seen in Simply Love's Step Statistics) ---
     if is_wide() {

@@ -294,6 +294,7 @@ pub enum DensityGraphSlot {
     SelectMusicP1,
     SelectMusicP2,
     Evaluation,
+    Gameplay,
 }
 
 #[derive(Debug, Clone)]
@@ -307,13 +308,14 @@ pub struct DensityGraphSource {
 }
 
 impl DensityGraphSlot {
-    pub const COUNT: usize = 3;
+    pub const COUNT: usize = 4;
 
     pub const fn ix(self) -> usize {
         match self {
             Self::SelectMusicP1 => 0,
             Self::SelectMusicP2 => 1,
             Self::Evaluation => 2,
+            Self::Gameplay => 3,
         }
     }
 }

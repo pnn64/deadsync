@@ -54,6 +54,7 @@ enum Command {
     },
     StopMusic,
     SetEvaluationGraphData(Option<(String, GraphImageData)>),
+    SetGameplayGraphData(Option<(String, GraphImageData)>),
     SetDynamicBackground(Option<PathBuf>),
     UpdateScrollSpeed {
         side: profile::PlayerSide,
@@ -938,6 +939,9 @@ impl App {
             Command::SetEvaluationGraphData(graph_request) => {
                 self.apply_evaluation_graph(graph_request);
             }
+            Command::SetGameplayGraphData(graph_request) => {
+                self.apply_gameplay_graph(graph_request);
+            }
             Command::SetDynamicBackground(path_opt) => self.apply_dynamic_background(path_opt),
             Command::UpdateScrollSpeed { side, setting } => {
                 profile::update_scroll_speed_for_side(side, setting);
@@ -1026,7 +1030,7 @@ impl App {
                 DensityGraphSlot::SelectMusicP2 => {
                     self.state.screens.select_music_state.current_graph_key_p2 = key;
                 }
-                DensityGraphSlot::Evaluation => {}
+                DensityGraphSlot::Evaluation | DensityGraphSlot::Gameplay => {}
             }
         }
     }
@@ -1068,6 +1072,25 @@ impl App {
                 .screens
                 .evaluation_state
                 .density_graph_texture_key = key;
+        }
+    }
+
+    fn apply_gameplay_graph(&mut self, graph_request: Option<(String, GraphImageData)>) {
+        if let Some(backend) = self.backend.as_mut() {
+            let key = if let Some((key, data)) = graph_request {
+                self.asset_manager.set_density_graph(
+                    backend,
+                    DensityGraphSlot::Gameplay,
+                    Some((key, data)),
+                )
+            } else {
+                self.asset_manager
+                    .set_density_graph(backend, DensityGraphSlot::Gameplay, None)
+            };
+
+            if let Some(gs) = &mut self.state.screens.gameplay_state {
+                gs.density_graph_texture_key = key;
+            }
         }
     }
 
@@ -2157,6 +2180,48 @@ impl App {
                 commands.push(Command::SetDynamicBackground(
                     gs.song.background_path.clone(),
                 ));
+                let graph_request = if space::is_wide()
+                    && profile::get_session_play_style() == profile::PlayStyle::Single
+                {
+                    const MAX_SECONDS: f32 = 4.0 * 60.0;
+                    let height = 105u32;
+                    let visible_width =
+                        (space::screen_width() * 0.5).round().max(1.0_f32) as u32;
+
+                    let first_second = gs.timing.get_time_for_beat(0.0).min(0.0_f32);
+                    let last_second = gs.song.total_length_seconds.max(0) as f32;
+                    let duration = (last_second - first_second).max(0.001_f32);
+                    let scaled_width = if duration > MAX_SECONDS {
+                        ((visible_width as f32) * (duration / MAX_SECONDS))
+                            .round()
+                            .max(1.0_f32) as u32
+                    } else {
+                        visible_width
+                    };
+
+                    let bottom_color = [0, 173, 192];
+                    let top_color = [130, 0, 161];
+                    let bg_color = [30, 40, 47];
+
+                    let chart = gs.charts[0].as_ref();
+                    let key = format!("dg_gp:{}:w{}h{}", chart.short_hash, scaled_width, height);
+                    let data = crate::ui::density_graph::render_density_graph_rgba(
+                        &chart.measure_nps_vec,
+                        chart.max_nps,
+                        &gs.timing,
+                        first_second,
+                        last_second,
+                        scaled_width,
+                        height,
+                        bottom_color,
+                        top_color,
+                        bg_color,
+                    );
+                    Some((key, data))
+                } else {
+                    None
+                };
+                commands.push(Command::SetGameplayGraphData(graph_request));
                 self.state.screens.gameplay_state = Some(gs);
             } else {
                 panic!("Navigating to Gameplay without PlayerOptions state!");
