@@ -444,7 +444,9 @@ pub fn draw(
     ensure_projection_capacity(state, render_list.cameras.len().max(1));
     if render_list.cameras.is_empty() {
         let arr: [[f32; 4]; 4] = state.projection.into();
-        state.queue.write_buffer(&state.projection_buffer, 0, cast_slice(&arr));
+        state
+            .queue
+            .write_buffer(&state.projection_buffer, 0, cast_slice(&arr));
     } else {
         for (i, &vp) in render_list.cameras.iter().enumerate() {
             let arr: [[f32; 4]; 4] = vp.into();

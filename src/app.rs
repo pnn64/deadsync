@@ -40,6 +40,7 @@ pub enum UserEvent {
 enum Command {
     ExitNow,
     SetBanner(Option<PathBuf>),
+    SetPackBanner(Option<PathBuf>),
     SetDensityGraph {
         slot: DensityGraphSlot,
         chart_opt: Option<DensityGraphSource>,
@@ -922,6 +923,7 @@ impl App {
                 event_loop.exit();
             }
             Command::SetBanner(path_opt) => self.apply_banner(path_opt),
+            Command::SetPackBanner(path_opt) => self.apply_pack_banner(path_opt),
             Command::SetDensityGraph { slot, chart_opt } => {
                 self.apply_density_graph(slot, chart_opt)
             }
@@ -977,7 +979,18 @@ impl App {
         }
     }
 
-    fn apply_density_graph(&mut self, slot: DensityGraphSlot, chart_opt: Option<DensityGraphSource>) {
+    fn apply_pack_banner(&mut self, path_opt: Option<PathBuf>) {
+        if let Some(backend) = self.backend.as_mut() {
+            self.asset_manager
+                .set_dynamic_pack_banner(backend, path_opt);
+        }
+    }
+
+    fn apply_density_graph(
+        &mut self,
+        slot: DensityGraphSlot,
+        chart_opt: Option<DensityGraphSource>,
+    ) {
         if let Some(backend) = self.backend.as_mut() {
             let graph_request = chart_opt.and_then(|chart| {
                 let graph_width = 1024;
@@ -2136,6 +2149,7 @@ impl App {
                     po_state.player_profiles,
                 );
 
+                commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
                 commands.push(Command::SetDynamicBackground(
                     gs.song.background_path.clone(),
                 ));

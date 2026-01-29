@@ -232,10 +232,9 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
         let buttons_now = vec![false; button_count];
         let mut switches = vec![GameControllerSwitchPosition::default(); switch_count];
         let mut axes = vec![0.0; axis_count];
-        let last_time =
-            controller
-                .GetCurrentReading(&mut buttons_prev, &mut switches, &mut axes)
-                .unwrap_or(0);
+        let last_time = controller
+            .GetCurrentReading(&mut buttons_prev, &mut switches, &mut axes)
+            .unwrap_or(0);
         let mut axes_prev = vec![0i16; axis_count];
         for i in 0..axis_count {
             axes_prev[i] = scale_axis(axes[i]);
@@ -451,11 +450,9 @@ fn pump_raw(
     controller: &RawGameController,
     st: &mut RawState,
 ) -> bool {
-    let Ok(time) = controller.GetCurrentReading(
-        &mut st.buttons_now,
-        &mut st.switches,
-        &mut st.axes,
-    ) else {
+    let Ok(time) =
+        controller.GetCurrentReading(&mut st.buttons_now, &mut st.switches, &mut st.axes)
+    else {
         return false;
     };
     let timestamp = Instant::now();

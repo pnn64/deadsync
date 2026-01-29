@@ -18,14 +18,7 @@ pub fn build_screen<'a>(
 ) -> RenderList<'a> {
     let mut objects = Vec::with_capacity(estimate_object_count(actors));
     let mut cameras: Vec<Matrix4<f32>> = Vec::with_capacity(4);
-    cameras.push(cgmath::ortho(
-        m.left,
-        m.right,
-        m.bottom,
-        m.top,
-        -1.0,
-        1.0,
-    ));
+    cameras.push(cgmath::ortho(m.left, m.right, m.bottom, m.top, -1.0, 1.0));
     let mut order_counter: u32 = 0;
 
     let root_rect = SmRect {
@@ -166,8 +159,7 @@ fn build_actor_recursive<'a>(
             let mut chosen_grid = *grid;
 
             if !is_solid && uv_rect.is_none() {
-                let (cols, rows) =
-                    grid.unwrap_or_else(|| assets::sprite_sheet_dims(texture_name));
+                let (cols, rows) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(texture_name));
                 let total = cols.saturating_mul(rows).max(1);
 
                 let start_linear: u32 = match *cell {
@@ -291,13 +283,12 @@ fn build_actor_recursive<'a>(
             }
         }
 
-        actors::Actor::Camera { view_proj, children } => {
+        actors::Actor::Camera {
+            view_proj,
+            children,
+        } => {
             cameras.push(*view_proj);
-            let id = cameras
-                .len()
-                .saturating_sub(1)
-                .try_into()
-                .unwrap_or(0u8);
+            let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
             for child in children {
                 build_actor_recursive(
                     child,

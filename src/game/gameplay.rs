@@ -19,7 +19,7 @@ use crate::ui::color;
 use log::{debug, info};
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 use twox_hash::XxHash64;
@@ -85,7 +85,11 @@ struct TurnRng {
 impl TurnRng {
     #[inline(always)]
     fn new(seed: u64) -> Self {
-        let seed = if seed == 0 { 0x9E37_79B9_7F4A_7C15 } else { seed };
+        let seed = if seed == 0 {
+            0x9E37_79B9_7F4A_7C15
+        } else {
+            seed
+        };
         Self { state: seed }
     }
 
@@ -126,11 +130,7 @@ fn turn_seed_for_song(song: &SongData) -> u64 {
     hasher.finish()
 }
 
-fn turn_take_from(
-    turn: profile::TurnOption,
-    cols: usize,
-    seed: u64,
-) -> Option<Vec<usize>> {
+fn turn_take_from(turn: profile::TurnOption, cols: usize, seed: u64) -> Option<Vec<usize>> {
     if cols == 0 {
         return None;
     }
@@ -706,6 +706,8 @@ fn init_player_runtime() -> PlayerRuntime {
 pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
+    pub pack_group: Arc<str>,
+    pub pack_banner_path: Option<PathBuf>,
     pub background_texture_key: String,
     pub charts: [Arc<ChartData>; MAX_PLAYERS],
     pub num_cols: usize,
@@ -1003,6 +1005,23 @@ pub fn init(
 
     let config = crate::config::get();
     let song_full_title: Arc<str> = Arc::from(song.display_full_title(config.translated_titles));
+    let pack_group: Arc<str> = Arc::from(
+        song.simfile_path
+            .parent()
+            .and_then(|p| p.parent())
+            .and_then(|p| p.file_name())
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_owned(),
+    );
+    let pack_banner_path: Option<PathBuf> = if pack_group.is_empty() {
+        None
+    } else {
+        crate::game::song::get_song_cache()
+            .iter()
+            .find(|p| p.group_name == pack_group.as_ref())
+            .and_then(|p| p.banner_path.clone())
+    };
     let mut timing_base = charts[0].timing.clone();
     timing_base.set_global_offset_seconds(config.global_offset_seconds);
     let timing = Arc::new(timing_base);
@@ -1316,6 +1335,8 @@ pub fn init(
     State {
         song,
         song_full_title,
+        pack_group,
+        pack_banner_path,
         charts,
         background_texture_key: "__white".to_string(),
         num_cols,
@@ -3076,7 +3097,13 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     }
 
     let max_perspective_tilt: f32 = (0..state.num_players)
-        .map(|player| state.player_profiles[player].perspective.tilt_skew().0.abs())
+        .map(|player| {
+            state.player_profiles[player]
+                .perspective
+                .tilt_skew()
+                .0
+                .abs()
+        })
         .fold(0.0_f32, f32::max);
     let draw_scale = (1.0 + 0.5 * max_perspective_tilt).max(1.0);
     let draw_distance_before_targets =

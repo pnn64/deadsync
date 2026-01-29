@@ -287,20 +287,20 @@ pub fn run(
             }
         }
 
-	        let mut ctx = Box::new(Ctx {
-	            emit_pad: Box::new(emit_pad),
-	            emit_sys: Box::new(emit_sys),
-	            next_id: 0,
-	            id_by_uuid: HashMap::new(),
-	            devs: HashMap::new(),
-	            startup_complete_sent: false,
-	            key_primary_usage_page: cfstr("PrimaryUsagePage"),
-	            key_primary_usage: cfstr("PrimaryUsage"),
-	            key_product: cfstr("Product"),
-	            key_vendor_id: cfstr("VendorID"),
-	            key_product_id: cfstr("ProductID"),
-	            key_location_id: cfstr("LocationID"),
-	        });
+        let mut ctx = Box::new(Ctx {
+            emit_pad: Box::new(emit_pad),
+            emit_sys: Box::new(emit_sys),
+            next_id: 0,
+            id_by_uuid: HashMap::new(),
+            devs: HashMap::new(),
+            startup_complete_sent: false,
+            key_primary_usage_page: cfstr("PrimaryUsagePage"),
+            key_primary_usage: cfstr("PrimaryUsage"),
+            key_product: cfstr("Product"),
+            key_vendor_id: cfstr("VendorID"),
+            key_product_id: cfstr("ProductID"),
+            key_location_id: cfstr("LocationID"),
+        });
 
         let ctx_ptr = ptr::addr_of_mut!(*ctx).cast::<c_void>();
         IOHIDManagerSetDeviceMatching(manager, ptr::null());

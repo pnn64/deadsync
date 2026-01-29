@@ -1136,7 +1136,10 @@ fn save_without_keymaps() {
         Some(hz) => hz.to_string(),
     };
     content.push_str(&format!("AudioSampleRateHz={audio_rate_str}\n"));
-    content.push_str(&format!("BGBrightness={}\n", cfg.bg_brightness.clamp(0.0, 1.0)));
+    content.push_str(&format!(
+        "BGBrightness={}\n",
+        cfg.bg_brightness.clamp(0.0, 1.0)
+    ));
     content.push_str(&format!(
         "CacheSongs={}\n",
         if cfg.cachesongs { "1" } else { "0" }
@@ -1151,10 +1154,7 @@ fn save_without_keymaps() {
         "FullscreenType={}\n",
         cfg.fullscreen_type.as_str()
     ));
-    content.push_str(&format!(
-        "GamepadBackend={}\n",
-        cfg.windows_gamepad_backend
-    ));
+    content.push_str(&format!("GamepadBackend={}\n", cfg.windows_gamepad_backend));
     content.push_str(&format!(
         "GlobalOffsetSeconds={}\n",
         cfg.global_offset_seconds

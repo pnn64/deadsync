@@ -462,10 +462,10 @@ pub fn init() -> State {
         let mut pack_song_count = 0usize;
 
         for song in &pack.songs {
-            let ok = song.charts.iter().any(|c| {
-                c.chart_type
-                    .eq_ignore_ascii_case(target_chart_type)
-            });
+            let ok = song
+                .charts
+                .iter()
+                .any(|c| c.chart_type.eq_ignore_ascii_case(target_chart_type));
             if !ok {
                 continue;
             }
@@ -942,11 +942,11 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if state.out_prompt != OutPromptState::None {
         if ev.pressed
+            && matches!(ev.action, VirtualAction::p1_start | VirtualAction::p2_start)
             && matches!(
-                ev.action,
-                VirtualAction::p1_start | VirtualAction::p2_start
+                state.out_prompt,
+                OutPromptState::PressStartForOptions { .. }
             )
-            && matches!(state.out_prompt, OutPromptState::PressStartForOptions { .. })
         {
             audio::play_sfx("assets/sounds/start.ogg");
             state.out_prompt = OutPromptState::EnteringOptions { elapsed: 0.0 };
@@ -1165,10 +1165,15 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         let target_chart_type = play_style.chart_type();
 
         if let Some(song) = selected_song.as_ref() {
-            let desired_p1 = chart_for_steps_index(song, target_chart_type, state.selected_steps_index);
+            let desired_p1 =
+                chart_for_steps_index(song, target_chart_type, state.selected_steps_index);
             let desired_hash_p1 = desired_p1.map(|c| c.short_hash.as_str());
 
-            if state.displayed_chart_p1.as_ref().map(|d| d.chart_hash.as_str()) != desired_hash_p1
+            if state
+                .displayed_chart_p1
+                .as_ref()
+                .map(|d| d.chart_hash.as_str())
+                != desired_hash_p1
             {
                 state.displayed_chart_p1 = desired_hash_p1.map(|h| DisplayedChart {
                     song: song.clone(),
@@ -1193,7 +1198,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                     chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index);
                 let desired_hash_p2 = desired_p2.map(|c| c.short_hash.as_str());
 
-                if state.displayed_chart_p2.as_ref().map(|d| d.chart_hash.as_str())
+                if state
+                    .displayed_chart_p2
+                    .as_ref()
+                    .map(|d| d.chart_hash.as_str())
                     != desired_hash_p2
                 {
                     state.displayed_chart_p2 = desired_hash_p2.map(|h| DisplayedChart {
@@ -1269,12 +1277,12 @@ pub fn prime_displayed_chart_data(state: &mut State) {
                 }
             });
         state.displayed_chart_p2 =
-            chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index).map(|c| {
-                DisplayedChart {
+            chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index).map(
+                |c| DisplayedChart {
                     song: song.clone(),
                     chart_hash: c.short_hash.clone(),
-                }
-            });
+                },
+            );
         return;
     }
     state.displayed_chart_p1 = None;
@@ -1533,18 +1541,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         _ => None,
     };
 
-    let disp_chart_p1 = state.displayed_chart_p1.as_ref().and_then(|d| {
-        d.song
-            .charts
-            .iter()
-            .find(|c| c.short_hash == d.chart_hash)
-    });
-    let disp_chart_p2 = state.displayed_chart_p2.as_ref().and_then(|d| {
-        d.song
-            .charts
-            .iter()
-            .find(|c| c.short_hash == d.chart_hash)
-    });
+    let disp_chart_p1 = state
+        .displayed_chart_p1
+        .as_ref()
+        .and_then(|d| d.song.charts.iter().find(|c| c.short_hash == d.chart_hash));
+    let disp_chart_p2 = state
+        .displayed_chart_p2
+        .as_ref()
+        .and_then(|d| d.song.charts.iter().find(|c| c.short_hash == d.chart_hash));
 
     let (step_artist, steps, jumps, holds, mines, hands, rolls, meter) =
         if let Some(c) = immediate_chart_p1 {

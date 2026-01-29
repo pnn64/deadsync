@@ -18,6 +18,8 @@ pub fn build(
 ) -> Vec<Actor> {
     let mut actors = Vec::new();
     actors.extend(build_banner(state, playfield_center_x, player_side));
+    actors.extend(build_pack_banner(state, playfield_center_x, player_side));
+    actors.extend(build_steps_info(state, playfield_center_x, player_side));
     actors.extend(build_side_pane(
         state,
         asset_manager,
@@ -361,6 +363,24 @@ pub fn build_double_step_stats(
             setsize(418.0, 164.0):
             zoom(0.4 * banner_data_zoom):
             z(-50)
+        ));
+    }
+
+    // Banner2.lua (zmod pack banner): static (no animation) at the final position.
+    if let Some(pack_banner_path) = state.pack_banner_path.as_ref() {
+        let pack_key = pack_banner_path.to_string_lossy().into_owned();
+        let (final_offset, final_size) = if note_field_is_centered {
+            (-115.0, 0.2)
+        } else {
+            (-160.0, 0.25)
+        };
+        let x = pane_cx + (final_offset * banner_data_zoom);
+        let y = pane_cy + (20.0 * banner_data_zoom);
+        actors.push(act!(sprite(pack_key):
+            align(0.5, 0.5): xy(x, y):
+            setsize(418.0, 164.0):
+            zoom(final_size * banner_data_zoom):
+            z(-49)
         ));
     }
 
@@ -754,6 +774,188 @@ fn build_banner(
             z(-50)
         ));
     }
+    actors
+}
+
+fn build_pack_banner(
+    state: &State,
+    playfield_center_x: f32,
+    player_side: profile::PlayerSide,
+) -> Vec<Actor> {
+    if !is_wide() {
+        return vec![];
+    }
+    let Some(pack_banner_path) = state.pack_banner_path.as_ref() else {
+        return vec![];
+    };
+    let pack_key = pack_banner_path.to_string_lossy().into_owned();
+
+    let sidepane_center_x = match player_side {
+        profile::PlayerSide::P1 => screen_width() * 0.75,
+        profile::PlayerSide::P2 => screen_width() * 0.25,
+    };
+    let sidepane_center_y = screen_center_y() + 80.0;
+    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
+    let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
+    let banner_data_zoom = if note_field_is_centered && is_wide() && !is_ultrawide {
+        let ar = screen_width() / screen_height();
+        let t = ((ar - (16.0 / 10.0)) / ((16.0 / 9.0) - (16.0 / 10.0))).clamp(0.0, 1.0);
+        0.825 + (0.925 - 0.825) * t
+    } else {
+        1.0
+    };
+
+    let x_sign = match player_side {
+        profile::PlayerSide::P1 => 1.0,
+        profile::PlayerSide::P2 => -1.0,
+    };
+
+    let (final_offset, final_size) = if note_field_is_centered {
+        (-115.0, 0.2)
+    } else {
+        (-160.0, 0.25)
+    };
+    let x = sidepane_center_x + (final_offset * x_sign * banner_data_zoom);
+    let y = sidepane_center_y + (20.0 * banner_data_zoom);
+
+    vec![act!(sprite(pack_key):
+        align(0.5, 0.5):
+        xy(x, y):
+        setsize(418.0, 164.0):
+        zoom(final_size * banner_data_zoom):
+        z(-49)
+    )]
+}
+
+fn build_steps_info(
+    state: &State,
+    playfield_center_x: f32,
+    player_side: profile::PlayerSide,
+) -> Vec<Actor> {
+    if !is_wide() {
+        return vec![];
+    }
+    let mut actors = Vec::new();
+
+    let sidepane_center_x = match player_side {
+        profile::PlayerSide::P1 => screen_width() * 0.75,
+        profile::PlayerSide::P2 => screen_width() * 0.25,
+    };
+    let sidepane_center_y = screen_center_y() + 80.0;
+    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
+    let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
+    let banner_data_zoom = if note_field_is_centered && is_wide() && !is_ultrawide {
+        let ar = screen_width() / screen_height();
+        let t = ((ar - (16.0 / 10.0)) / ((16.0 / 9.0) - (16.0 / 10.0))).clamp(0.0, 1.0);
+        0.825 + (0.925 - 0.825) * t
+    } else {
+        1.0
+    };
+
+    let player_idx = match (state.num_players, player_side) {
+        (2, profile::PlayerSide::P2) => 1,
+        _ => 0,
+    };
+    let chart = &state.charts[player_idx];
+    let desc = chart.description.trim();
+    let cred = chart.step_artist.trim();
+
+    let mut cycle = [None::<&str>; 2];
+    let mut cycle_len = 0usize;
+    if !desc.is_empty() {
+        cycle[cycle_len] = Some(desc);
+        cycle_len += 1;
+    }
+    if !cred.is_empty() && cred != desc && cycle_len < cycle.len() {
+        cycle[cycle_len] = Some(cred);
+        cycle_len += 1;
+    }
+    let desc_text = if cycle_len == 0 {
+        ""
+    } else {
+        let idx = ((state.total_elapsed_in_screen / 2.0).floor() as usize) % cycle_len;
+        cycle[idx].unwrap_or("")
+    };
+
+    let ar = screen_width() / screen_height().max(1.0);
+    let pnum = match player_side {
+        profile::PlayerSide::P1 => 1,
+        profile::PlayerSide::P2 => 2,
+    };
+    let pos_sign = if pnum == 1 { -1.0 } else { 1.0 };
+
+    let mut x = -190.0;
+    let xoffset = if pnum == 1 { 285.0 } else { 0.0 };
+    let mut yoffset = 0.0;
+    let mut zoom = 0.75;
+    let mut xvalues = 45.0;
+    let mut maxwidth = 320.0;
+    if note_field_is_centered {
+        xvalues = 0.0;
+        yoffset = -5.0;
+        if ar > 1.7 {
+            x = if pnum == 1 { -220.0 } else { -150.0 };
+            maxwidth = 240.0;
+            zoom = 0.9;
+        } else {
+            x = if pnum == 1 { -240.0 } else { -150.0 };
+            maxwidth = 210.0;
+            zoom = 0.95;
+        }
+    }
+
+    let origin_x = sidepane_center_x + ((x + xoffset) * pos_sign * banner_data_zoom);
+    let origin_y = sidepane_center_y + ((-8.0 + yoffset) * banner_data_zoom);
+    let group_zoom = zoom * banner_data_zoom;
+
+    let row_h = 16.0;
+    let z = 72i16;
+    if !note_field_is_centered {
+        for (i, label) in ["Song", "Artist", "Pack", "Desc"].iter().enumerate() {
+            let y = origin_y + (row_h * (i as f32 + 1.0) * group_zoom);
+            actors.push(act!(text:
+                font("miso"): settext(*label):
+                align(0.0, 0.5): xy(origin_x, y):
+                zoom(group_zoom): z(z):
+                horizalign(left)
+            ));
+        }
+    }
+
+    let values_x = origin_x + (xvalues * group_zoom);
+    let y_song = origin_y + (row_h * 1.0 * group_zoom);
+    actors.push(act!(text:
+        font("miso"): settext(state.song_full_title.clone()):
+        align(0.0, 0.5): xy(values_x, y_song):
+        maxwidth(maxwidth):
+        zoom(group_zoom): z(z):
+        horizalign(left)
+    ));
+    let y_artist = origin_y + (row_h * 2.0 * group_zoom);
+    actors.push(act!(text:
+        font("miso"): settext(state.song.artist.as_str()):
+        align(0.0, 0.5): xy(values_x, y_artist):
+        maxwidth(maxwidth):
+        zoom(group_zoom): z(z):
+        horizalign(left)
+    ));
+    let y_pack = origin_y + (row_h * 3.0 * group_zoom);
+    actors.push(act!(text:
+        font("miso"): settext(state.pack_group.clone()):
+        align(0.0, 0.5): xy(values_x, y_pack):
+        maxwidth(maxwidth):
+        zoom(group_zoom): z(z):
+        horizalign(left)
+    ));
+    let y_desc = origin_y + (row_h * 4.0 * group_zoom);
+    actors.push(act!(text:
+        font("miso"): settext(desc_text):
+        align(0.0, 0.5): xy(values_x, y_desc):
+        maxwidth(maxwidth):
+        zoom(group_zoom): z(z):
+        horizalign(left)
+    ));
+
     actors
 }
 

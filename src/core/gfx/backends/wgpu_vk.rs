@@ -472,11 +472,7 @@ pub fn draw(
                     .copied()
                     .unwrap_or(state.projection);
                 let vp_array: [[f32; 4]; 4] = vp.into();
-                pass.set_push_constants(
-                    wgpu::ShaderStages::VERTEX,
-                    0,
-                    cast_slice(&vp_array),
-                );
+                pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, cast_slice(&vp_array));
                 last_camera = Some(run.camera);
             }
             if last_bind != Some(run.key) {

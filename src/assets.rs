@@ -8,7 +8,7 @@ use std::{
     error::Error,
     fs,
     path::{Path, PathBuf},
-    sync::{mpsc, Arc, Mutex, RwLock},
+    sync::{Arc, Mutex, RwLock, mpsc},
 };
 
 // --- Texture Metadata ---
@@ -283,6 +283,7 @@ pub struct AssetManager {
     pub textures: HashMap<String, GfxTexture>,
     fonts: HashMap<&'static str, Font>,
     current_dynamic_banner: Option<(String, PathBuf)>,
+    current_dynamic_pack_banner: Option<(String, PathBuf)>,
     current_density_graph: [Option<String>; DensityGraphSlot::COUNT],
     current_dynamic_background: Option<(String, PathBuf)>,
     current_profile_avatars: [Option<(String, PathBuf)>; 2],
@@ -320,6 +321,7 @@ impl AssetManager {
             textures: HashMap::new(),
             fonts: HashMap::new(),
             current_dynamic_banner: None,
+            current_dynamic_pack_banner: None,
             current_density_graph: std::array::from_fn(|_| None),
             current_dynamic_background: None,
             current_profile_avatars: std::array::from_fn(|_| None),
@@ -633,8 +635,7 @@ impl AssetManager {
 
         let (job_tx, job_rx) = mpsc::channel::<(String, String)>();
         let job_rx = Arc::new(Mutex::new(job_rx));
-        let (res_tx, res_rx) =
-            mpsc::channel::<Result<(String, RgbaImage), (String, String)>>();
+        let (res_tx, res_rx) = mpsc::channel::<Result<(String, RgbaImage), (String, String)>>();
 
         let mut workers = Vec::with_capacity(worker_count);
         for _ in 0..worker_count {
@@ -646,7 +647,9 @@ impl AssetManager {
                         let Ok(rx) = job_rx.lock() else { return };
                         rx.recv()
                     };
-                    let Ok((key, relative_path)) = job else { return };
+                    let Ok((key, relative_path)) = job else {
+                        return;
+                    };
                     let _ = res_tx.send(decode_rgba(key, relative_path));
                 }
             }));
@@ -778,11 +781,15 @@ impl AssetManager {
 
     pub fn destroy_dynamic_assets(&mut self, backend: &mut Backend) {
         if self.current_dynamic_banner.is_some()
+            || self.current_dynamic_pack_banner.is_some()
             || self.current_density_graph.iter().any(|x| x.is_some())
             || self.current_dynamic_background.is_some()
         {
             backend.wait_for_idle(); // Wait for GPU to finish using old textures
             if let Some((key, _)) = self.current_dynamic_banner.take() {
+                self.textures.remove(&key);
+            }
+            if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
                 self.textures.remove(&key);
             }
             let mut removed_graph_keys: Vec<String> = Vec::new();
@@ -804,6 +811,50 @@ impl AssetManager {
 
     pub fn destroy_dynamic_banner(&mut self, backend: &mut Backend) {
         self.destroy_current_dynamic_banner(backend);
+    }
+
+    pub fn set_dynamic_pack_banner(&mut self, backend: &mut Backend, path_opt: Option<PathBuf>) {
+        if let Some(path) = path_opt {
+            if self
+                .current_dynamic_pack_banner
+                .as_ref()
+                .is_some_and(|(_, p)| p == &path)
+            {
+                return;
+            }
+
+            backend.wait_for_idle();
+            if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
+                self.textures.remove(&key);
+            }
+
+            match image::open(&path) {
+                Ok(img) => {
+                    let rgba = img.to_rgba8();
+                    match backend.create_texture(&rgba, SamplerDesc::default()) {
+                        Ok(texture) => {
+                            let key = path.to_string_lossy().into_owned();
+                            self.textures.insert(key.clone(), texture);
+                            register_texture_dims(&key, rgba.width(), rgba.height());
+                            self.current_dynamic_pack_banner = Some((key, path));
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Failed to create GPU texture for pack banner {path:?}: {e}. Skipping."
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to open pack banner image {path:?}: {e}. Skipping.");
+                }
+            }
+        } else {
+            backend.wait_for_idle();
+            if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
+                self.textures.remove(&key);
+            }
+        }
     }
 
     pub fn set_dynamic_banner(
