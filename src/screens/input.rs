@@ -1,5 +1,5 @@
 use crate::act;
-use crate::core::input::{InputEvent, PadEvent, VirtualAction, get_keymap};
+use crate::core::input::{InputEvent, PadEvent, VirtualAction, with_keymap};
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
@@ -217,8 +217,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 
     // Use the same mapping logic as the main input system to decide whether this
     // element corresponds to any virtual action. If not, show it as \"not mapped\".
-    let km = get_keymap();
-    let mapped = !km.actions_for_pad_event(pad_event).is_empty();
+    let mapped = with_keymap(|km| !km.actions_for_pad_event(pad_event).is_empty());
 
     if !mapped {
         if let Some(pressed) = pressed_opt {

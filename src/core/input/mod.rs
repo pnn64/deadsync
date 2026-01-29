@@ -349,7 +349,7 @@ static KEYMAP: std::sync::LazyLock<RwLock<Keymap>> =
     std::sync::LazyLock::new(|| RwLock::new(Keymap::default()));
 
 #[inline(always)]
-fn with_keymap<R>(f: impl FnOnce(&Keymap) -> R) -> R {
+pub fn with_keymap<R>(f: impl FnOnce(&Keymap) -> R) -> R {
     f(&KEYMAP.read().unwrap())
 }
 

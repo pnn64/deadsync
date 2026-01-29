@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::core::audio;
 use crate::core::input::{
-    GamepadCodeBinding, InputBinding, InputEvent, InputSource, PadEvent, VirtualAction, get_keymap,
+    GamepadCodeBinding, InputBinding, InputEvent, InputSource, PadEvent, VirtualAction, with_keymap,
 };
 use crate::core::space::{screen_height, screen_width, widescale};
 use crate::screens::{Screen, ScreenAction};
@@ -821,9 +821,6 @@ pub fn get_actors(
     let col_white = [1.0, 1.0, 1.0, 1.0];
     let col_gray = color::rgba_hex("#808080");
 
-    // Snapshot of current virtual keymap so defaults reflect deadsync.ini.
-    let keymap = get_keymap();
-
     // Compute available content area between top/bottom bars and side margins.
     let sw = screen_width();
     let sh = screen_height();
@@ -1090,28 +1087,46 @@ pub fn get_actors(
             ));
 
             let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
-            // Config order: first = Default, second = Primary, third = Secondary.
-            let p1_primary_text = p1_act_opt
-                .and_then(|act| keymap.binding_at(act, 1))
-                .map_or_else(|| "------".to_string(), format_binding_for_display);
-            let p1_secondary_text = p1_act_opt
-                .and_then(|act| keymap.binding_at(act, 2))
-                .map_or_else(|| "------".to_string(), format_binding_for_display);
-            let p2_primary_text = p2_act_opt
-                .and_then(|act| keymap.binding_at(act, 1))
-                .map_or_else(|| "------".to_string(), format_binding_for_display);
-            let p2_secondary_text = p2_act_opt
-                .and_then(|act| keymap.binding_at(act, 2))
-                .map_or_else(|| "------".to_string(), format_binding_for_display);
+            let (
+                p1_primary_text,
+                p1_secondary_text,
+                p2_primary_text,
+                p2_secondary_text,
+                p1_default_text,
+                p2_default_text,
+            ) = with_keymap(|keymap| {
+                // Config order: first = Default, second = Primary, third = Secondary.
+                let p1_primary_text = p1_act_opt
+                    .and_then(|act| keymap.binding_at(act, 1))
+                    .map_or_else(|| "------".to_string(), format_binding_for_display);
+                let p1_secondary_text = p1_act_opt
+                    .and_then(|act| keymap.binding_at(act, 2))
+                    .map_or_else(|| "------".to_string(), format_binding_for_display);
+                let p2_primary_text = p2_act_opt
+                    .and_then(|act| keymap.binding_at(act, 1))
+                    .map_or_else(|| "------".to_string(), format_binding_for_display);
+                let p2_secondary_text = p2_act_opt
+                    .and_then(|act| keymap.binding_at(act, 2))
+                    .map_or_else(|| "------".to_string(), format_binding_for_display);
 
-            let p1_default_text = p1_act_opt
-                .and_then(|act| keymap.first_key_binding(act))
-                .map(|code| format!("{code:?}"))
-                .unwrap_or_else(|| "------".to_string());
-            let p2_default_text = p2_act_opt
-                .and_then(|act| keymap.first_key_binding(act))
-                .map(|code| format!("{code:?}"))
-                .unwrap_or_else(|| "------".to_string());
+                let p1_default_text = p1_act_opt
+                    .and_then(|act| keymap.first_key_binding(act))
+                    .map(|code| format!("{code:?}"))
+                    .unwrap_or_else(|| "------".to_string());
+                let p2_default_text = p2_act_opt
+                    .and_then(|act| keymap.first_key_binding(act))
+                    .map(|code| format!("{code:?}"))
+                    .unwrap_or_else(|| "------".to_string());
+
+                (
+                    p1_primary_text,
+                    p1_secondary_text,
+                    p2_primary_text,
+                    p2_secondary_text,
+                    p1_default_text,
+                    p2_default_text,
+                )
+            });
             let active_value_color = if is_active { col_white } else { col_gray };
 
             // Heartbeat-style pulse for the slot currently being captured.
