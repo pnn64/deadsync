@@ -41,7 +41,7 @@ pub enum PadBackend {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WindowsPadBackend {
-    /// Choose the default Windows backend (currently RawInput).
+    /// Choose the default Windows backend (currently WGI).
     #[default]
     Auto,
     RawInput,
@@ -187,10 +187,8 @@ pub fn run_pad_backend(
 
     #[cfg(windows)]
     match win_backend {
-        WindowsPadBackend::Wgi => windows_wgi::run(emit_pad, emit_sys),
-        WindowsPadBackend::Auto | WindowsPadBackend::RawInput => {
-            windows_raw_input::run(emit_pad, emit_sys)
-        }
+        WindowsPadBackend::RawInput => windows_raw_input::run(emit_pad, emit_sys),
+        WindowsPadBackend::Auto | WindowsPadBackend::Wgi => windows_wgi::run(emit_pad, emit_sys),
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     return linux_evdev::run(emit_pad, emit_sys);

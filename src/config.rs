@@ -162,7 +162,7 @@ impl Default for Config {
             display_width: 1600,
             display_height: 900,
             video_renderer: BackendType::OpenGL,
-            windows_gamepad_backend: WindowsPadBackend::RawInput,
+            windows_gamepad_backend: WindowsPadBackend::Wgi,
             software_renderer_threads: 1,
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
