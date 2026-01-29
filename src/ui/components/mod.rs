@@ -1,3 +1,4 @@
+pub mod eval_grades;
 pub mod gamepad_overlay;
 pub mod gameplay_stats;
 pub mod heart_bg;

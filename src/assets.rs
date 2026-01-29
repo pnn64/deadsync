@@ -606,6 +606,30 @@ impl AssetManager {
             ),
         ];
 
+        // Simply Love-style grade assets (used by `ui::components::eval_grades`).
+        for p in [
+            "grades/star.png",
+            "grades/s-plus.png",
+            "grades/s.png",
+            "grades/s-minus.png",
+            "grades/a-plus.png",
+            "grades/a.png",
+            "grades/a-minus.png",
+            "grades/b-plus.png",
+            "grades/b.png",
+            "grades/b-minus.png",
+            "grades/c-plus.png",
+            "grades/c.png",
+            "grades/c-minus.png",
+            "grades/d.png",
+            "grades/f.png",
+            "grades/q.png",
+            "grades/affluent.png",
+            "grades/goldstar (stretch).png",
+        ] {
+            textures_to_load.push((p.to_string(), p.to_string()));
+        }
+
         append_noteskins_pngs(&mut textures_to_load, "noteskins/cel");
         append_noteskins_pngs(&mut textures_to_load, "noteskins/metal");
         append_noteskins_pngs(&mut textures_to_load, "noteskins/enchantment-v2");

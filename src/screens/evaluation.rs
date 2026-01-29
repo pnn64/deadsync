@@ -7,7 +7,7 @@ use crate::ui::color;
 use crate::ui::components::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::ui::components::{heart_bg, pad_display, screen_bar};
+use crate::ui::components::{eval_grades, heart_bg, pad_display, screen_bar};
 
 use crate::assets::AssetManager;
 use crate::game::chart::ChartData;
@@ -127,7 +127,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             gs.possible_grade_points[player_idx],
         );
 
-        let grade = if p.is_failing || !gs.song_completed_naturally {
+        let mut grade = if p.is_failing || !gs.song_completed_naturally {
             scores::Grade::Failed
         } else {
             scores::score_to_grade(score_percent * 10000.0)
@@ -151,6 +151,11 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             p.fail_time,
             mines_disabled,
         );
+
+        // Simply Love: show Quint (Grade_Tier00) if EX score is exactly 100.00.
+        if grade != scores::Grade::Failed && ex_score_percent >= 100.0 {
+            grade = scores::Grade::Quint;
+        }
 
         ScoreInfo {
             song: gs.song.clone(),
@@ -1017,8 +1022,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // --- Player 1 Upper Content Frame ---
     let p1_frame_x = screen_center_x() - 155.0;
 
-    // Letter Grade (0.4 for parity with individual pngs)
-    actors.push(act!(sprite("grades/grades 1x19.png"): align(0.5, 0.5): xy(p1_frame_x - 70.0, cy - 134.0): zoom(1.0): z(101): setstate(score_info.grade.to_sprite_state()) ));
+    // Letter Grade (Simply Love parity)
+    actors.extend(eval_grades::actors(
+        score_info.grade,
+        eval_grades::EvalGradeParams {
+            x: p1_frame_x - 70.0,
+            y: cy - 134.0,
+            z: 101,
+            zoom: 0.4,
+            elapsed: state.session_elapsed,
+        },
+    ));
 
     // Difficulty Text and Meter Block
     {
