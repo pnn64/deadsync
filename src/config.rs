@@ -1,5 +1,7 @@
 use crate::core::gfx::BackendType;
-use crate::core::input::{GamepadCodeBinding, InputBinding, Keymap, PadDir, VirtualAction};
+use crate::core::input::{
+    GamepadCodeBinding, InputBinding, Keymap, PadDir, VirtualAction, WindowsPadBackend,
+};
 use log::{info, warn};
 use std::collections::HashMap;
 use std::path::Path;
@@ -118,6 +120,8 @@ pub struct Config {
     pub display_width: u32,
     pub display_height: u32,
     pub video_renderer: BackendType,
+    /// Windows-only: choose which gamepad backend to use.
+    pub windows_gamepad_backend: WindowsPadBackend,
     // When using the Software video renderer:
     // 0 = Auto (use all logical cores)
     // 1 = Single-threaded
@@ -158,6 +162,7 @@ impl Default for Config {
             display_width: 1600,
             display_height: 900,
             video_renderer: BackendType::OpenGL,
+            windows_gamepad_backend: WindowsPadBackend::RawInput,
             software_renderer_threads: 1,
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
@@ -216,6 +221,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "FullscreenType={}\n",
         default.fullscreen_type.as_str()
+    ));
+    content.push_str(&format!(
+        "GamepadBackend={}\n",
+        default.windows_gamepad_backend
     ));
     content.push_str(&format!(
         "GlobalOffsetSeconds={}\n",
@@ -393,6 +402,10 @@ pub fn load() {
                     .get("Options", "VideoRenderer")
                     .and_then(|s| BackendType::from_str(&s).ok())
                     .unwrap_or(default.video_renderer);
+                cfg.windows_gamepad_backend = conf
+                    .get("Options", "GamepadBackend")
+                    .and_then(|s| WindowsPadBackend::from_str(&s).ok())
+                    .unwrap_or(default.windows_gamepad_backend);
                 cfg.global_offset_seconds = conf
                     .get("Options", "GlobalOffsetSeconds")
                     .and_then(|v| v.parse().ok())
@@ -490,6 +503,7 @@ pub fn load() {
                     "DisplayWidth",
                     "FastLoad",
                     "FullscreenType",
+                    "GamepadBackend",
                     "GlobalOffsetSeconds",
                     "MasterVolume",
                     "MenuMusic",
@@ -1136,6 +1150,10 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "FullscreenType={}\n",
         cfg.fullscreen_type.as_str()
+    ));
+    content.push_str(&format!(
+        "GamepadBackend={}\n",
+        cfg.windows_gamepad_backend
     ));
     content.push_str(&format!(
         "GlobalOffsetSeconds={}\n",

@@ -2741,6 +2741,7 @@ impl ApplicationHandler<UserEvent> for App {
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::get();
     let backend_type = config.video_renderer;
+    let win_pad_backend = config.windows_gamepad_backend;
     let show_stats = config.show_stats;
     let color_index = config.simply_love_color;
     let profile_data = profile::get();
@@ -2754,6 +2755,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     std::thread::spawn(move || {
         let proxy_pad = proxy.clone();
         input::run_pad_backend(
+            win_pad_backend,
             move |pe| {
                 let _ = proxy_pad.send_event(UserEvent::Pad(pe));
             },

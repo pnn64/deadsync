@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.1.528"
+version = "0.1.529"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "Rust-based ITG engine with switchable Vulkan/OpenGL backends, designed for accurate sync and competitive performance."
@@ -54,6 +54,10 @@ rssp = { path = "src/extern/rssp" }
 [target.'cfg(windows)'.dependencies]
 gpu-allocator = "0.28.0"
 windows = { version = "0.62.2", features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Gaming",
+    "Gaming_Input",
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_Devices_HumanInterfaceDevice",
@@ -62,6 +66,7 @@ windows = { version = "0.62.2", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_Threading",
     "Win32_System_LibraryLoader",
+    "Win32_System_WinRT",
 ] }
 windows-core = "0.62.2"
 windows-targets = "0.53.5"

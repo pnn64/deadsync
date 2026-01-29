@@ -31,10 +31,62 @@ impl PadCode {
 pub enum PadBackend {
     #[cfg(windows)]
     WindowsRawInput,
+    #[cfg(windows)]
+    WindowsWgi,
     #[cfg(all(unix, not(target_os = "macos")))]
     LinuxEvdev,
     #[cfg(target_os = "macos")]
     MacOsIohid,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WindowsPadBackend {
+    /// Choose the default Windows backend (currently RawInput).
+    #[default]
+    Auto,
+    RawInput,
+    Wgi,
+}
+
+impl WindowsPadBackend {
+    #[inline(always)]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::RawInput => "RawInput",
+            Self::Wgi => "WGI",
+        }
+    }
+}
+
+impl std::fmt::Display for WindowsPadBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for WindowsPadBackend {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("auto") {
+            return Ok(Self::Auto);
+        }
+        if s.eq_ignore_ascii_case("rawinput")
+            || s.eq_ignore_ascii_case("raw_input")
+            || s.eq_ignore_ascii_case("raw")
+        {
+            return Ok(Self::RawInput);
+        }
+        if s.eq_ignore_ascii_case("wgi")
+            || s.eq_ignore_ascii_case("windowsgaminginput")
+            || s.eq_ignore_ascii_case("gaminginput")
+        {
+            return Ok(Self::Wgi);
+        }
+        Err(())
+    }
 }
 
 #[inline(always)]
@@ -122,11 +174,20 @@ pub enum GpSystemEvent {
 /// This is intended to be called from a dedicated thread which forwards `PadEvent` and
 /// `GpSystemEvent` into the winit `EventLoopProxy` (see `deadsync/src/app.rs`).
 pub fn run_pad_backend(
+    win_backend: WindowsPadBackend,
     emit_pad: impl FnMut(PadEvent) + Send + 'static,
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
 ) {
+    #[cfg(not(windows))]
+    let _ = win_backend;
+
     #[cfg(windows)]
-    return windows_raw_input::run(emit_pad, emit_sys);
+    match win_backend {
+        WindowsPadBackend::Wgi => windows_wgi::run(emit_pad, emit_sys),
+        WindowsPadBackend::Auto | WindowsPadBackend::RawInput => {
+            windows_raw_input::run(emit_pad, emit_sys)
+        }
+    }
     #[cfg(all(unix, not(target_os = "macos")))]
     return linux_evdev::run(emit_pad, emit_sys);
     #[cfg(target_os = "macos")]
@@ -500,3 +561,5 @@ mod linux_evdev;
 mod macos_iohid;
 #[cfg(windows)]
 mod windows_raw_input;
+#[cfg(windows)]
+mod windows_wgi;
