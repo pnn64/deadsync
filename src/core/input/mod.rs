@@ -123,6 +123,18 @@ pub enum PadDir {
     Right,
 }
 
+impl PadDir {
+    #[inline(always)]
+    pub const fn ix(self) -> usize {
+        match self {
+            Self::Up => 0,
+            Self::Down => 1,
+            Self::Left => 2,
+            Self::Right => 3,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum PadEvent {
     Dir {
@@ -248,6 +260,7 @@ pub struct InputEdge {
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum VirtualAction {
     p1_up,
     p1_down,
@@ -277,6 +290,13 @@ pub enum VirtualAction {
     p2_restart,
 }
 
+impl VirtualAction {
+    #[inline(always)]
+    pub const fn ix(self) -> usize {
+        self as usize
+    }
+}
+
 /// Low-level gamepad binding to a platform-specific element code.
 ///
 /// - `code_u32` is the emitted `PadCode(u32)` (see `PadEvent::RawButton`).
@@ -297,9 +317,32 @@ pub enum InputBinding {
     GamepadCode(GamepadCodeBinding),
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
+struct PadCodeRev {
+    act: VirtualAction,
+    device: Option<usize>,
+    uuid: Option<[u8; 16]>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Keymap {
     map: HashMap<VirtualAction, Vec<InputBinding>>,
+    key_rev: HashMap<KeyCode, Vec<VirtualAction>>,
+    pad_dir_rev: [Vec<VirtualAction>; 4],
+    pad_dir_on_rev: HashMap<(usize, PadDir), Vec<VirtualAction>>,
+    pad_code_rev: HashMap<u32, Vec<PadCodeRev>>,
+}
+
+impl Default for Keymap {
+    fn default() -> Self {
+        Self {
+            map: HashMap::new(),
+            key_rev: HashMap::new(),
+            pad_dir_rev: std::array::from_fn(|_| Vec::new()),
+            pad_dir_on_rev: HashMap::new(),
+            pad_code_rev: HashMap::new(),
+        }
+    }
 }
 
 static KEYMAP: std::sync::LazyLock<RwLock<Keymap>> =
@@ -324,8 +367,74 @@ pub fn set_keymap(new_map: Keymap) {
 
 impl Keymap {
     #[inline(always)]
+    fn remove_rev(&mut self, action: VirtualAction, prev: &[InputBinding]) {
+        for b in prev {
+            match *b {
+                InputBinding::Key(code) => {
+                    if let Some(v) = self.key_rev.get_mut(&code) {
+                        v.retain(|a| *a != action);
+                        if v.is_empty() {
+                            self.key_rev.remove(&code);
+                        }
+                    }
+                }
+                InputBinding::PadDir(dir) => {
+                    self.pad_dir_rev[dir.ix()].retain(|a| *a != action);
+                }
+                InputBinding::PadDirOn { device, dir } => {
+                    let key = (device, dir);
+                    if let Some(v) = self.pad_dir_on_rev.get_mut(&key) {
+                        v.retain(|a| *a != action);
+                        if v.is_empty() {
+                            self.pad_dir_on_rev.remove(&key);
+                        }
+                    }
+                }
+                InputBinding::GamepadCode(binding) => {
+                    if let Some(v) = self.pad_code_rev.get_mut(&binding.code_u32) {
+                        v.retain(|e| {
+                            e.act != action || e.device != binding.device || e.uuid != binding.uuid
+                        });
+                        if v.is_empty() {
+                            self.pad_code_rev.remove(&binding.code_u32);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn add_rev(&mut self, action: VirtualAction, inputs: &[InputBinding]) {
+        for b in inputs {
+            match *b {
+                InputBinding::Key(code) => self.key_rev.entry(code).or_default().push(action),
+                InputBinding::PadDir(dir) => self.pad_dir_rev[dir.ix()].push(action),
+                InputBinding::PadDirOn { device, dir } => self
+                    .pad_dir_on_rev
+                    .entry((device, dir))
+                    .or_default()
+                    .push(action),
+                InputBinding::GamepadCode(binding) => self
+                    .pad_code_rev
+                    .entry(binding.code_u32)
+                    .or_default()
+                    .push(PadCodeRev {
+                        act: action,
+                        device: binding.device,
+                        uuid: binding.uuid,
+                    }),
+            }
+        }
+    }
+
+    #[inline(always)]
     pub fn bind(&mut self, action: VirtualAction, inputs: &[InputBinding]) {
+        if let Some(prev) = self.map.remove(&action) {
+            self.remove_rev(action, &prev);
+        }
         self.map.insert(action, inputs.to_vec());
+        self.add_rev(action, inputs);
     }
 
     /// Returns the first keyboard key bound to this virtual action, if any.
@@ -356,47 +465,61 @@ impl Keymap {
 
     #[inline(always)]
     pub fn actions_for_key_event(&self, ev: &KeyEvent) -> Vec<(VirtualAction, bool)> {
-        let mut out = Vec::with_capacity(2);
         let pressed = ev.state == ElementState::Pressed;
         let PhysicalKey::Code(code) = ev.physical_key else {
-            return out;
+            return Vec::new();
         };
-        for (act, binds) in &self.map {
-            for b in binds {
-                if *b == InputBinding::Key(code) {
-                    out.push((*act, pressed));
-                    break;
-                }
+        let Some(actions) = self.key_rev.get(&code) else {
+            return Vec::new();
+        };
+
+        let mut out = Vec::with_capacity(actions.len());
+        let mut seen: u32 = 0;
+        for &act in actions {
+            let bit = 1u32 << (act.ix() as u32);
+            if (seen & bit) != 0 {
+                continue;
             }
+            seen |= bit;
+            out.push((act, pressed));
         }
         out
     }
 
     #[inline(always)]
     pub fn actions_for_pad_event(&self, ev: &PadEvent) -> Vec<(VirtualAction, bool)> {
-        let mut out = Vec::with_capacity(2);
         match *ev {
             PadEvent::Dir {
                 id, dir, pressed, ..
             } => {
                 let dev = usize::from(id);
-                for (act, binds) in &self.map {
-                    for b in binds {
-                        match *b {
-                            InputBinding::PadDir(d) if d == dir => {
-                                out.push((*act, pressed));
-                                break;
-                            }
-                            InputBinding::PadDirOn { device, dir: d }
-                                if d == dir && device == dev =>
-                            {
-                                out.push((*act, pressed));
-                                break;
-                            }
-                            _ => {}
+                let any = &self.pad_dir_rev[dir.ix()];
+                let on = self.pad_dir_on_rev.get(&(dev, dir));
+                if any.is_empty() && on.is_none() {
+                    return Vec::new();
+                }
+
+                let mut out = Vec::with_capacity(any.len() + on.map_or(0, |v| v.len()));
+                let mut seen: u32 = 0;
+                for &act in any {
+                    let bit = 1u32 << (act.ix() as u32);
+                    if (seen & bit) != 0 {
+                        continue;
+                    }
+                    seen |= bit;
+                    out.push((act, pressed));
+                }
+                if let Some(v) = on {
+                    for &act in v {
+                        let bit = 1u32 << (act.ix() as u32);
+                        if (seen & bit) != 0 {
+                            continue;
                         }
+                        seen |= bit;
+                        out.push((act, pressed));
                     }
                 }
+                out
             }
             PadEvent::RawButton {
                 id,
@@ -407,37 +530,38 @@ impl Keymap {
             } => {
                 let dev = usize::from(id);
                 let code_u32 = code.into_u32();
-                for (act, binds) in &self.map {
-                    for b in binds {
-                        match *b {
-                            InputBinding::GamepadCode(binding) => {
-                                if binding.code_u32 != code_u32 {
-                                    continue;
-                                }
-                                if let Some(d_expected) = binding.device
-                                    && d_expected != dev
-                                {
-                                    continue;
-                                }
-                                if let Some(u_expected) = binding.uuid
-                                    && u_expected != uuid
-                                {
-                                    continue;
-                                }
-                                out.push((*act, pressed));
-                                break;
-                            }
-                            _ => {}
-                        }
+                let Some(entries) = self.pad_code_rev.get(&code_u32) else {
+                    return Vec::new();
+                };
+
+                let mut out = Vec::with_capacity(entries.len().min(4));
+                let mut seen: u32 = 0;
+                for e in entries {
+                    if let Some(d_expected) = e.device
+                        && d_expected != dev
+                    {
+                        continue;
                     }
+                    if let Some(u_expected) = e.uuid
+                        && u_expected != uuid
+                    {
+                        continue;
+                    }
+                    let bit = 1u32 << (e.act.ix() as u32);
+                    if (seen & bit) != 0 {
+                        continue;
+                    }
+                    seen |= bit;
+                    out.push((e.act, pressed));
                 }
+                out
             }
             PadEvent::RawAxis { .. } => {
                 // Axis events are exposed for debugging but are not yet
                 // mapped directly to virtual actions.
+                Vec::new()
             }
         }
-        out
     }
 }
 
