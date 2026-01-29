@@ -998,21 +998,24 @@ impl App {
     ) {
         if let Some(backend) = self.backend.as_mut() {
             let graph_request = chart_opt.map(|chart| {
-                let graph_width = if space::is_wide() { 286 } else { 276 };
-                let graph_height = 64;
+                const SS: u32 = 2;
+                let graph_width: u32 = if space::is_wide() { 286 } else { 276 };
+                let graph_height: u32 = 64;
                 let bottom_color = [0, 184, 204];
                 let top_color = [130, 0, 161];
                 let bg_color = [30, 40, 47];
 
-                let key = format!("dg:{}:w{}h{}", chart.short_hash, graph_width, graph_height);
+                let render_w = graph_width.saturating_mul(SS);
+                let render_h = graph_height.saturating_mul(SS);
+                let key = format!("dg:{}:w{}h{}", chart.short_hash, render_w, render_h);
                 let data = crate::ui::density_graph::render_density_graph_rgba(
                     &chart.measure_nps_vec,
                     chart.max_nps,
                     &chart.timing,
                     chart.first_second,
                     chart.last_second,
-                    graph_width,
-                    graph_height,
+                    render_w,
+                    render_h,
                     bottom_color,
                     top_color,
                     bg_color,
@@ -2184,20 +2187,24 @@ impl App {
                     && profile::get_session_play_style() == profile::PlayStyle::Single
                 {
                     const MAX_SECONDS: f32 = 4.0 * 60.0;
-                    let height = 105u32;
+                    const SS: u32 = 2;
+                    const MAX_TEX_W: u32 = 16_384;
+                    let height = 105u32.saturating_mul(SS);
                     let visible_width =
                         (space::screen_width() * 0.5).round().max(1.0_f32) as u32;
 
                     let first_second = gs.timing.get_time_for_beat(0.0).min(0.0_f32);
                     let last_second = gs.song.total_length_seconds.max(0) as f32;
                     let duration = (last_second - first_second).max(0.001_f32);
+                    let render_visible_width = visible_width.saturating_mul(SS);
                     let scaled_width = if duration > MAX_SECONDS {
-                        ((visible_width as f32) * (duration / MAX_SECONDS))
+                        ((render_visible_width as f32) * (duration / MAX_SECONDS))
                             .round()
                             .max(1.0_f32) as u32
                     } else {
-                        visible_width
+                        render_visible_width
                     };
+                    let scaled_width = scaled_width.min(MAX_TEX_W).max(1);
 
                     let bottom_color = [0, 173, 192];
                     let top_color = [130, 0, 161];
@@ -2237,35 +2244,38 @@ impl App {
             self.state.screens.evaluation_state = evaluation::init(gameplay_results);
             self.state.screens.evaluation_state.active_color_index = color_idx;
 
-            let graph_request =
-                if let Some(score_info) = &self.state.screens.evaluation_state.score_info {
-                    let graph_width = 610;
-                    let graph_height = 64;
-                    let bg_color = [16, 21, 25];
-                    let top_color = [54, 25, 67];
-                    let bottom_color = [38, 84, 91];
+                    let graph_request =
+                        if let Some(score_info) = &self.state.screens.evaluation_state.score_info {
+                            const SS: u32 = 2;
+                            let graph_width: u32 = 610;
+                            let graph_height: u32 = 64;
+                            let bg_color = [16, 21, 25];
+                            let top_color = [54, 25, 67];
+                            let bottom_color = [38, 84, 91];
 
-                    let graph_data = crate::ui::density_graph::render_density_graph_rgba(
-                        &score_info.chart.measure_nps_vec,
-                        score_info.chart.max_nps,
-                        &score_info.chart.timing,
-                        score_info.graph_first_second,
-                        score_info.song.total_length_seconds.max(0) as f32,
-                        graph_width,
-                        graph_height,
-                        bottom_color,
-                        top_color,
-                        bg_color,
-                    );
+                            let render_w = graph_width.saturating_mul(SS);
+                            let render_h = graph_height.saturating_mul(SS);
+                            let graph_data = crate::ui::density_graph::render_density_graph_rgba(
+                                &score_info.chart.measure_nps_vec,
+                                score_info.chart.max_nps,
+                                &score_info.chart.timing,
+                                score_info.graph_first_second,
+                                score_info.song.total_length_seconds.max(0) as f32,
+                                render_w,
+                                render_h,
+                                bottom_color,
+                                top_color,
+                                bg_color,
+                            );
 
-                    let key = format!(
-                        "dg_eval:{}:w{}h{}",
-                        score_info.chart.short_hash, graph_width, graph_height
-                    );
-                    Some((key, graph_data))
-                } else {
-                    None
-                };
+                            let key = format!(
+                                "dg_eval:{}:w{}h{}",
+                                score_info.chart.short_hash, render_w, render_h
+                            );
+                            Some((key, graph_data))
+                        } else {
+                            None
+                        };
 
             commands.push(Command::SetEvaluationGraphData(graph_request));
         }

@@ -1694,14 +1694,15 @@ fn build_side_pane(
 
         let key = state.density_graph_texture_key.clone();
         if key != "__white" {
-            let meta = crate::assets::texture_dims(&key).unwrap_or(crate::assets::TexMeta { w: 1, h: 1 });
-            let tex_w = meta.w.max(1) as f32;
-            let u_window = (graph_w / tex_w).clamp(0.0_f32, 1.0_f32);
-            let max_u0 = (1.0_f32 - u_window).max(0.0_f32);
-
             let first_second = state.timing.get_time_for_beat(0.0).min(0.0_f32);
             let last_second = state.song.total_length_seconds.max(0) as f32;
             let duration = (last_second - first_second).max(0.001_f32);
+            let u_window = if duration > MAX_SECONDS {
+                (MAX_SECONDS / duration).clamp(0.0_f32, 1.0_f32)
+            } else {
+                1.0_f32
+            };
+            let max_u0 = (1.0_f32 - u_window).max(0.0_f32);
 
             let mut u0 = 0.0_f32;
             if max_u0 > 0.0_f32 && duration > MAX_SECONDS {
@@ -1728,16 +1729,15 @@ fn build_side_pane(
             // Lifeline overlay (Simply Love draws this as an ActorMultiVertex line strip).
             {
                 let life_history = &state.players[player_idx].life_history;
-                if !life_history.is_empty() && duration > 0.0_f32 && tex_w > 0.0_f32 {
+                if !life_history.is_empty() && duration > 0.0_f32 && u_window > 0.0_f32 {
                     let t0 = first_second + u0 * duration;
                     let t1 = first_second + u1 * duration;
                     let start_ix = life_history.partition_point(|&(t, _)| t < t0);
                     let end_ix = life_history.partition_point(|&(t, _)| t <= t1);
 
-                    let offset_px = u0 * tex_w;
                     let to_x = |t: f32| -> f32 {
-                        (((t - first_second) / duration).clamp(0.0_f32, 1.0_f32) * tex_w)
-                            - offset_px
+                        let u = ((t - first_second) / duration).clamp(0.0_f32, 1.0_f32);
+                        ((u - u0) / u_window).clamp(0.0_f32, 1.0_f32) * graph_w
                     };
                     let to_y = |life: f32| -> f32 {
                         (1.0_f32 - life).clamp(0.0_f32, 1.0_f32) * graph_h
