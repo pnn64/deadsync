@@ -3,6 +3,7 @@ pub mod anim;
 pub mod color;
 pub mod components;
 pub mod compose;
+pub mod density_graph;
 pub mod dsl;
 pub mod font;
 pub mod runtime;

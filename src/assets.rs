@@ -301,6 +301,9 @@ pub struct DensityGraphSource {
     pub short_hash: String,
     pub max_nps: f64,
     pub measure_nps_vec: Vec<f64>,
+    pub timing: crate::game::timing::TimingData,
+    pub first_second: f32,
+    pub last_second: f32,
 }
 
 impl DensityGraphSlot {
@@ -931,7 +934,7 @@ impl AssetManager {
         &mut self,
         backend: &mut Backend,
         slot: DensityGraphSlot,
-        data: Option<(String, rssp::graph::GraphImageData)>,
+        data: Option<(String, crate::ui::density_graph::GraphImageData)>,
     ) -> String {
         const FALLBACK_KEY: &str = "__white";
 

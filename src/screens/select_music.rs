@@ -1189,6 +1189,9 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                         short_hash: c.short_hash.clone(),
                         max_nps: c.max_nps,
                         measure_nps_vec: c.measure_nps_vec.clone(),
+                        timing: c.timing.clone(),
+                        first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                        last_second: song.total_length_seconds.max(0) as f32,
                     }),
                 };
             }
@@ -1218,6 +1221,9 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                             short_hash: c.short_hash.clone(),
                             max_nps: c.max_nps,
                             measure_nps_vec: c.measure_nps_vec.clone(),
+                            timing: c.timing.clone(),
+                            first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                            last_second: song.total_length_seconds.max(0) as f32,
                         }),
                     };
                 }

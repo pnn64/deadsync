@@ -12,6 +12,7 @@ use crate::screens::{
     select_play_mode, select_profile, select_style,
 };
 use crate::ui::color;
+use crate::ui::density_graph::GraphImageData;
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
@@ -52,7 +53,7 @@ enum Command {
         volume: f32,
     },
     StopMusic,
-    SetEvaluationGraphData(Option<(String, rssp::graph::GraphImageData)>),
+    SetEvaluationGraphData(Option<(String, GraphImageData)>),
     SetDynamicBackground(Option<PathBuf>),
     UpdateScrollSpeed {
         side: profile::PlayerSide,
@@ -992,24 +993,27 @@ impl App {
         chart_opt: Option<DensityGraphSource>,
     ) {
         if let Some(backend) = self.backend.as_mut() {
-            let graph_request = chart_opt.and_then(|chart| {
-                let graph_width = 1024;
-                let graph_height = 256;
+            let graph_request = chart_opt.map(|chart| {
+                let graph_width = if space::is_wide() { 286 } else { 276 };
+                let graph_height = 64;
                 let bottom_color = [0, 184, 204];
                 let top_color = [130, 0, 161];
                 let bg_color = [30, 40, 47];
 
-                rssp::graph::generate_density_graph_rgba_data(
+                let key = format!("dg:{}:w{}h{}", chart.short_hash, graph_width, graph_height);
+                let data = crate::ui::density_graph::render_density_graph_rgba(
                     &chart.measure_nps_vec,
                     chart.max_nps,
+                    &chart.timing,
+                    chart.first_second,
+                    chart.last_second,
                     graph_width,
                     graph_height,
                     bottom_color,
                     top_color,
                     bg_color,
-                )
-                .ok()
-                .map(|data| (chart.short_hash, data))
+                );
+                (key, data)
             });
 
             let key = self
@@ -1047,7 +1051,7 @@ impl App {
 
     fn apply_evaluation_graph(
         &mut self,
-        graph_request: Option<(String, rssp::graph::GraphImageData)>,
+        graph_request: Option<(String, GraphImageData)>,
     ) {
         if let Some(backend) = self.backend.as_mut() {
             let key = if let Some((key, data)) = graph_request {
@@ -2170,25 +2174,30 @@ impl App {
 
             let graph_request =
                 if let Some(score_info) = &self.state.screens.evaluation_state.score_info {
-                    let graph_width = 1024;
-                    let graph_height = 256;
+                    let graph_width = 610;
+                    let graph_height = 64;
                     let bg_color = [16, 21, 25];
                     let top_color = [54, 25, 67];
                     let bottom_color = [38, 84, 91];
 
-                    let graph_data = rssp::graph::generate_density_graph_rgba_data(
+                    let graph_data = crate::ui::density_graph::render_density_graph_rgba(
                         &score_info.chart.measure_nps_vec,
                         score_info.chart.max_nps,
+                        &score_info.chart.timing,
+                        score_info.graph_first_second,
+                        score_info.song.total_length_seconds.max(0) as f32,
                         graph_width,
                         graph_height,
                         bottom_color,
                         top_color,
                         bg_color,
-                    )
-                    .ok();
+                    );
 
-                    let key = format!("{}_eval", score_info.chart.short_hash);
-                    graph_data.map(|data| (key, data))
+                    let key = format!(
+                        "dg_eval:{}:w{}h{}",
+                        score_info.chart.short_hash, graph_width, graph_height
+                    );
+                    Some((key, graph_data))
                 } else {
                     None
                 };
@@ -2367,6 +2376,9 @@ impl App {
                         short_hash: c.short_hash.clone(),
                         max_nps: c.max_nps,
                         measure_nps_vec: c.measure_nps_vec.clone(),
+                        timing: c.timing.clone(),
+                        first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                        last_second: song.total_length_seconds.max(0) as f32,
                     })
                 }
                 _ => None,
@@ -2398,6 +2410,9 @@ impl App {
                             short_hash: c.short_hash.clone(),
                             max_nps: c.max_nps,
                             measure_nps_vec: c.measure_nps_vec.clone(),
+                            timing: c.timing.clone(),
+                            first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                            last_second: song.total_length_seconds.max(0) as f32,
                         })
                     }
                     _ => None,
