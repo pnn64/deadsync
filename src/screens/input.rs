@@ -1,5 +1,5 @@
 use crate::act;
-use crate::core::input::{InputEvent, PadEvent, VirtualAction, with_keymap};
+use crate::core::input::{InputEvent, PadDir, PadEvent, VirtualAction, with_keymap};
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
@@ -11,6 +11,8 @@ use std::collections::HashMap;
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
+
+const UNMAPPED_AXIS_HELD_THRESHOLD: f32 = 0.5;
 
 /// Logical buttons we visualize on the pad/menu HUD.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -39,28 +41,49 @@ pub struct PadVisualState {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct UnmappedTracker {
-    /// Map of a human-readable device element label → whether it is currently held.
-    held: HashMap<String, bool>,
+struct UnmappedTracker {
+    held: HashMap<UnmappedKey, bool>,
+    axis_value: HashMap<UnmappedKey, f32>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum UnmappedKey {
+    Dir { dev: usize, dir: PadDir },
+    RawButton { dev: usize, code_u32: u32 },
+    RawAxis { dev: usize, code_u32: u32 },
 }
 
 impl UnmappedTracker {
     #[inline(always)]
-    pub fn set(&mut self, key: String, pressed: bool) {
-        if pressed {
-            self.held.insert(key, true);
-        } else {
-            self.held.insert(key, false);
-        }
+    fn set(&mut self, key: UnmappedKey, pressed: bool) {
+        self.held.insert(key, pressed);
     }
 
     #[inline(always)]
-    pub fn active_lines(&self) -> Vec<String> {
+    fn set_axis(&mut self, key: UnmappedKey, value: f32) {
+        self.axis_value.insert(key, value);
+        self.held
+            .insert(key, value.abs() >= UNMAPPED_AXIS_HELD_THRESHOLD);
+    }
+
+    #[inline(always)]
+    fn active_lines(&self) -> Vec<String> {
         let mut out = Vec::new();
-        for (k, v) in &self.held {
-            if *v {
-                out.push(format!("{k} (not mapped)"));
+        for (k, pressed) in &self.held {
+            if !*pressed {
+                continue;
             }
+            let line = match *k {
+                UnmappedKey::Dir { dev, dir } => format!("Gamepad {dev}: Dir::{dir:?}"),
+                UnmappedKey::RawButton { dev, code_u32 } => {
+                    format!("Gamepad {dev}: RawButton [0x{code_u32:08X}]")
+                }
+                UnmappedKey::RawAxis { dev, code_u32 } => {
+                    let value = self.axis_value.get(k).copied().unwrap_or(0.0);
+                    format!("Gamepad {dev}: RawAxis [0x{code_u32:08X}] ({value:.3})")
+                }
+            };
+            out.push(format!("{line} (not mapped)"));
         }
         out.sort();
         out
@@ -185,32 +208,41 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     use crate::core::input::PadEvent as PE;
 
     // Determine a stable, human-readable label for this device element.
-    let (label, pressed_opt) = match pad_event {
+    let (key, pressed_opt, axis_value_opt) = match pad_event {
         PE::Dir {
             id, dir, pressed, ..
         } => {
             let dev = usize::from(*id);
-            (format!("Gamepad {dev}: Dir::{dir:?}"), Some(*pressed))
+            (
+                UnmappedKey::Dir { dev, dir: *dir },
+                Some(*pressed),
+                None,
+            )
         }
         PE::RawButton {
             id, code, pressed, ..
         } => {
             let dev = usize::from(*id);
-            let code_u32 = code.into_u32();
             (
-                format!("Gamepad {dev}: RawButton [0x{code_u32:08X}]"),
+                UnmappedKey::RawButton {
+                    dev,
+                    code_u32: code.into_u32(),
+                },
                 Some(*pressed),
+                None,
             )
         }
         PE::RawAxis {
             id, code, value, ..
         } => {
             let dev = usize::from(*id);
-            let code_u32 = code.into_u32();
-            // Axis inputs are continuous; treat them as always \"pressed\" for display.
             (
-                format!("Gamepad {dev}: RawAxis [0x{code_u32:08X}] ({value:.3})"),
+                UnmappedKey::RawAxis {
+                    dev,
+                    code_u32: code.into_u32(),
+                },
                 None,
+                Some(*value),
             )
         }
     };
@@ -221,10 +253,11 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 
     if !mapped {
         if let Some(pressed) = pressed_opt {
-            state.unmapped.set(label, pressed);
-        } else {
-            // For axes, treat any movement as active.
-            state.unmapped.set(label, true);
+            state.unmapped.set(key, pressed);
+            return;
+        }
+        if let Some(value) = axis_value_opt {
+            state.unmapped.set_axis(key, value);
         }
     }
 }
