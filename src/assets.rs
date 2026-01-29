@@ -8,7 +8,7 @@ use std::{
     error::Error,
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::{mpsc, Arc, Mutex, RwLock},
 };
 
 // --- Texture Metadata ---
@@ -593,24 +593,57 @@ impl AssetManager {
         append_noteskins_pngs(&mut textures_to_load, "noteskins/enchantment-v2");
         append_noteskins_pngs(&mut textures_to_load, "noteskins/devcel-2024-v3");
 
-        let mut handles = Vec::with_capacity(textures_to_load.len());
-        for (key, relative_path) in textures_to_load {
-            handles.push(std::thread::spawn(move || {
-                let path = if relative_path.starts_with("noteskins/") {
-                    Path::new("assets").join(&relative_path)
-                } else {
-                    Path::new("assets/graphics").join(&relative_path)
-                };
-                match image::open(&path) {
-                    Ok(img) => Ok::<(String, RgbaImage), (String, String)>((key, img.to_rgba8())),
-                    Err(e) => Err((key, e.to_string())),
+        #[inline(always)]
+        fn decode_rgba(
+            key: String,
+            relative_path: String,
+        ) -> Result<(String, RgbaImage), (String, String)> {
+            let path = if relative_path.starts_with("noteskins/") {
+                Path::new("assets").join(&relative_path)
+            } else {
+                Path::new("assets/graphics").join(&relative_path)
+            };
+            match image::open(&path) {
+                Ok(img) => Ok((key, img.to_rgba8())),
+                Err(e) => Err((key, e.to_string())),
+            }
+        }
+
+        let job_count = textures_to_load.len();
+        let worker_count = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+            .min(job_count.max(1));
+
+        let (job_tx, job_rx) = mpsc::channel::<(String, String)>();
+        let job_rx = Arc::new(Mutex::new(job_rx));
+        let (res_tx, res_rx) =
+            mpsc::channel::<Result<(String, RgbaImage), (String, String)>>();
+
+        let mut workers = Vec::with_capacity(worker_count);
+        for _ in 0..worker_count {
+            let job_rx = Arc::clone(&job_rx);
+            let res_tx = res_tx.clone();
+            workers.push(std::thread::spawn(move || {
+                loop {
+                    let job = {
+                        let Ok(rx) = job_rx.lock() else { return };
+                        rx.recv()
+                    };
+                    let Ok((key, relative_path)) = job else { return };
+                    let _ = res_tx.send(decode_rgba(key, relative_path));
                 }
             }));
         }
+        drop(res_tx);
+        for (key, relative_path) in textures_to_load {
+            let _ = job_tx.send((key, relative_path));
+        }
+        drop(job_tx);
 
         let fallback_image = Arc::new(fallback_rgba());
-        for h in handles {
-            match h.join().expect("texture decode thread panicked") {
+        for r in res_rx {
+            match r {
                 Ok((key, rgba)) => {
                     let texture = backend.create_texture(&rgba, SamplerDesc::default())?;
                     register_texture_dims(&key, rgba.width(), rgba.height());
@@ -625,6 +658,10 @@ impl AssetManager {
                     self.textures.insert(key, texture);
                 }
             }
+        }
+
+        for w in workers {
+            w.join().expect("texture decode worker panicked");
         }
 
         let profile = profile::get();
