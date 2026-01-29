@@ -1,7 +1,7 @@
 use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
 use std::collections::HashMap;
 use std::sync::mpsc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use windows::Foundation::EventHandler;
 use windows::Gaming::Input::{
@@ -24,6 +24,8 @@ const CODE_BTN_VIEW: u32 = 0x0007;
 const CODE_BTN_MENU: u32 = 0x0008;
 const CODE_BTN_LS: u32 = 0x0009;
 const CODE_BTN_RS: u32 = 0x000A;
+const CODE_BTN_LT2: u32 = 0x000B;
+const CODE_BTN_RT2: u32 = 0x000C;
 
 // Standard mapped Gamepad axis codes.
 const CODE_AXIS_LT: u32 = 0x0100;
@@ -32,6 +34,10 @@ const CODE_AXIS_LX: u32 = 0x0102;
 const CODE_AXIS_LY: u32 = 0x0103;
 const CODE_AXIS_RX: u32 = 0x0104;
 const CODE_AXIS_RY: u32 = 0x0105;
+
+// Analog-to-digital thresholds (WGI values are normalized; we scale to i16).
+const STICK_DIGITAL_THRESH: i16 = 16_000;
+const TRIGGER_DIGITAL_THRESH: i16 = 16_000;
 
 // RawGameController indices (fallback for non-Gamepad devices).
 const RAW_BTN_BASE: u32 = 0x1000;
@@ -185,11 +191,23 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
                     scale_axis(reading.RightThumbstickX),
                     scale_axis(reading.RightThumbstickY),
                 ];
-                let want = [
+                let dpad = [
                     pressed(buttons_prev, GamepadButtons::DPadUp),
                     pressed(buttons_prev, GamepadButtons::DPadDown),
                     pressed(buttons_prev, GamepadButtons::DPadLeft),
                     pressed(buttons_prev, GamepadButtons::DPadRight),
+                ];
+                let stick = [
+                    axes_prev[3] >= STICK_DIGITAL_THRESH,
+                    axes_prev[3] <= -STICK_DIGITAL_THRESH,
+                    axes_prev[2] <= -STICK_DIGITAL_THRESH,
+                    axes_prev[2] >= STICK_DIGITAL_THRESH,
+                ];
+                let want = [
+                    dpad[0] || stick[0],
+                    dpad[1] || stick[1],
+                    dpad[2] || stick[2],
+                    dpad[3] || stick[3],
                 ];
                 (reading.Timestamp, buttons_prev, axes_prev, want)
             } else {
@@ -286,13 +304,15 @@ fn emit_dir_edges(
     dir_state: &mut [bool; 4],
     timestamp: Instant,
     want: [bool; 4],
-) {
+) -> bool {
+    let mut changed = false;
     let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
     for i in 0..4 {
         if dir_state[i] == want[i] {
             continue;
         }
         dir_state[i] = want[i];
+        changed = true;
         (emit_pad)(PadEvent::Dir {
             id,
             timestamp,
@@ -300,6 +320,7 @@ fn emit_dir_edges(
             pressed: want[i],
         });
     }
+    changed
 }
 
 fn pump_gamepad(
@@ -311,19 +332,38 @@ fn pump_gamepad(
     let Ok(reading) = st.pad.GetCurrentReading() else {
         return false;
     };
-    if reading.Timestamp == st.last_time {
-        return false;
-    }
-    st.last_time = reading.Timestamp;
     let timestamp = Instant::now();
 
-    let want = [
+    let old_lt = st.axes_prev[0];
+    let old_rt = st.axes_prev[1];
+
+    let lt = scale_trigger(reading.LeftTrigger);
+    let rt = scale_trigger(reading.RightTrigger);
+    let lx = scale_axis(reading.LeftThumbstickX);
+    let ly = scale_axis(reading.LeftThumbstickY);
+    let rx = scale_axis(reading.RightThumbstickX);
+    let ry = scale_axis(reading.RightThumbstickY);
+
+    let mut changed = false;
+    let dpad = [
         pressed(reading.Buttons, GamepadButtons::DPadUp),
         pressed(reading.Buttons, GamepadButtons::DPadDown),
         pressed(reading.Buttons, GamepadButtons::DPadLeft),
         pressed(reading.Buttons, GamepadButtons::DPadRight),
     ];
-    emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, want);
+    let stick = [
+        ly >= STICK_DIGITAL_THRESH,
+        ly <= -STICK_DIGITAL_THRESH,
+        lx <= -STICK_DIGITAL_THRESH,
+        lx >= STICK_DIGITAL_THRESH,
+    ];
+    let want = [
+        dpad[0] || stick[0],
+        dpad[1] || stick[1],
+        dpad[2] || stick[2],
+        dpad[3] || stick[3],
+    ];
+    changed |= emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, want);
 
     for (mask, code_u32) in BTN_MAP {
         let new_pressed = pressed(reading.Buttons, mask);
@@ -331,6 +371,7 @@ fn pump_gamepad(
         if new_pressed == old_pressed {
             continue;
         }
+        changed = true;
         (emit_pad)(PadEvent::RawButton {
             id,
             timestamp,
@@ -343,18 +384,19 @@ fn pump_gamepad(
     st.buttons_prev = reading.Buttons;
 
     let axes = [
-        (CODE_AXIS_LT, scale_trigger(reading.LeftTrigger)),
-        (CODE_AXIS_RT, scale_trigger(reading.RightTrigger)),
-        (CODE_AXIS_LX, scale_axis(reading.LeftThumbstickX)),
-        (CODE_AXIS_LY, scale_axis(reading.LeftThumbstickY)),
-        (CODE_AXIS_RX, scale_axis(reading.RightThumbstickX)),
-        (CODE_AXIS_RY, scale_axis(reading.RightThumbstickY)),
+        (CODE_AXIS_LT, lt),
+        (CODE_AXIS_RT, rt),
+        (CODE_AXIS_LX, lx),
+        (CODE_AXIS_LY, ly),
+        (CODE_AXIS_RX, rx),
+        (CODE_AXIS_RY, ry),
     ];
     for (i, (code_u32, v)) in axes.iter().enumerate() {
         if st.axes_prev[i] == *v {
             continue;
         }
         st.axes_prev[i] = *v;
+        changed = true;
         (emit_pad)(PadEvent::RawAxis {
             id,
             timestamp,
@@ -363,7 +405,38 @@ fn pump_gamepad(
             value: f32::from(*v),
         });
     }
-    true
+
+    // Treat triggers as digital buttons (lets the mappings UI capture them).
+    let old_lt_pressed = old_lt >= TRIGGER_DIGITAL_THRESH;
+    let old_rt_pressed = old_rt >= TRIGGER_DIGITAL_THRESH;
+    let lt_pressed = lt >= TRIGGER_DIGITAL_THRESH;
+    let rt_pressed = rt >= TRIGGER_DIGITAL_THRESH;
+
+    if lt_pressed != old_lt_pressed {
+        changed = true;
+        (emit_pad)(PadEvent::RawButton {
+            id,
+            timestamp,
+            code: PadCode(CODE_BTN_LT2),
+            uuid,
+            value: if lt_pressed { 1.0 } else { 0.0 },
+            pressed: lt_pressed,
+        });
+    }
+    if rt_pressed != old_rt_pressed {
+        changed = true;
+        (emit_pad)(PadEvent::RawButton {
+            id,
+            timestamp,
+            code: PadCode(CODE_BTN_RT2),
+            uuid,
+            value: if rt_pressed { 1.0 } else { 0.0 },
+            pressed: rt_pressed,
+        });
+    }
+
+    st.last_time = reading.Timestamp;
+    changed
 }
 
 fn pump_raw(
@@ -380,12 +453,9 @@ fn pump_raw(
     ) else {
         return false;
     };
-    if time == st.last_time {
-        return false;
-    }
-    st.last_time = time;
     let timestamp = Instant::now();
 
+    let mut changed = false;
     let n = st.buttons_now.len().min(st.buttons_prev.len());
     for i in 0..n {
         if st.buttons_now[i] == st.buttons_prev[i] {
@@ -394,6 +464,7 @@ fn pump_raw(
         let Some(code_u32) = RAW_BTN_BASE.checked_add(i as u32) else {
             continue;
         };
+        changed = true;
         (emit_pad)(PadEvent::RawButton {
             id,
             timestamp,
@@ -413,7 +484,7 @@ fn pump_raw(
         want[2] |= x < 0;
         want[3] |= x > 0;
     }
-    emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, want);
+    changed |= emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, want);
 
     let n = st.axes.len().min(st.axes_prev.len());
     for i in 0..n {
@@ -425,6 +496,7 @@ fn pump_raw(
         let Some(code_u32) = RAW_AXIS_BASE.checked_add(i as u32) else {
             continue;
         };
+        changed = true;
         (emit_pad)(PadEvent::RawAxis {
             id,
             timestamp,
@@ -433,7 +505,8 @@ fn pump_raw(
             value: f32::from(v),
         });
     }
-    true
+    st.last_time = time;
+    changed
 }
 
 fn enumerate_existing(ctx: &mut Ctx) {
@@ -487,9 +560,27 @@ pub fn run(
     };
 
     enumerate_existing(&mut ctx);
-    (ctx.emit_sys)(GpSystemEvent::StartupComplete);
+    // WGI may deliver "Added" notifications for already-present controllers asynchronously.
+    // Delay StartupComplete for a short settle window so the app doesn't treat initial devices
+    // as hotplugs, but keep pumping input immediately.
+    const STARTUP_SETTLE: Duration = Duration::from_millis(3000);
+    const STARTUP_SLICE: Duration = Duration::from_millis(50);
+    let startup_deadline = Instant::now() + STARTUP_SETTLE;
+    let mut startup_complete_sent = false;
 
     loop {
+        if !startup_complete_sent && Instant::now() >= startup_deadline {
+            enumerate_existing(&mut ctx);
+            while let Ok(msg) = rx.try_recv() {
+                match msg {
+                    Msg::Added(c) => add_controller(&mut ctx, c),
+                    Msg::Removed(c) => remove_controller(&mut ctx, c),
+                }
+            }
+            (ctx.emit_sys)(GpSystemEvent::StartupComplete);
+            startup_complete_sent = true;
+        }
+
         while let Ok(msg) = rx.try_recv() {
             match msg {
                 Msg::Added(c) => add_controller(&mut ctx, c),
@@ -498,12 +589,28 @@ pub fn run(
         }
 
         if ctx.devs.is_empty() {
-            let Ok(msg) = rx.recv() else {
-                continue;
-            };
-            match msg {
-                Msg::Added(c) => add_controller(&mut ctx, c),
-                Msg::Removed(c) => remove_controller(&mut ctx, c),
+            if startup_complete_sent {
+                let Ok(msg) = rx.recv() else {
+                    continue;
+                };
+                match msg {
+                    Msg::Added(c) => add_controller(&mut ctx, c),
+                    Msg::Removed(c) => remove_controller(&mut ctx, c),
+                }
+            } else {
+                let now = Instant::now();
+                let until = startup_deadline.saturating_duration_since(now);
+                let wait = STARTUP_SLICE.min(until);
+                if !wait.is_zero() {
+                    match rx.recv_timeout(wait) {
+                        Ok(msg) => match msg {
+                            Msg::Added(c) => add_controller(&mut ctx, c),
+                            Msg::Removed(c) => remove_controller(&mut ctx, c),
+                        },
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(mpsc::RecvTimeoutError::Disconnected) => {}
+                    }
+                }
             }
             continue;
         }
