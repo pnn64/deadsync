@@ -1220,12 +1220,12 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 if state.last_requested_chart_hash_p2.as_deref() != desired_hash_p2 {
                     state.last_requested_chart_hash_p2 = desired_hash_p2.map(str::to_string);
                     return ScreenAction::RequestDensityGraph {
-                    slot: DensityGraphSlot::SelectMusicP2,
-                    chart_opt: desired_p2.map(|c| DensityGraphSource {
-                        max_nps: c.max_nps,
-                        measure_nps_vec: c.measure_nps_vec.clone(),
-                        timing: c.timing.clone(),
-                        first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                        slot: DensityGraphSlot::SelectMusicP2,
+                        chart_opt: desired_p2.map(|c| DensityGraphSource {
+                            max_nps: c.max_nps,
+                            measure_nps_vec: c.measure_nps_vec.clone(),
+                            timing: c.timing.clone(),
+                            first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
                             last_second: song.total_length_seconds.max(0) as f32,
                         }),
                     };
@@ -1710,8 +1710,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     })
                 })
-                    .flatten()
-                    .unwrap_or_else(|| c.simple_breakdown.clone());
+                .flatten()
+                .unwrap_or_else(|| c.simple_breakdown.clone());
 
             let peak_x = panel_w * 0.5 + if is_p2_layout { -136.0 } else { 60.0 };
             if let Some(mesh) = graph_mesh

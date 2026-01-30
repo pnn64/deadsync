@@ -397,14 +397,11 @@ fn rasterize_mesh_triangles(
     }
 
     let mvp = *proj * *transform;
-    let mut tri: [ScreenVertexColor; 3] = [
-        ScreenVertexColor {
-            x: 0.0,
-            y: 0.0,
-            color: [0.0; 4],
-        };
-        3
-    ];
+    let mut tri: [ScreenVertexColor; 3] = [ScreenVertexColor {
+        x: 0.0,
+        y: 0.0,
+        color: [0.0; 4],
+    }; 3];
 
     let mut verts_drawn = 0u32;
     'tri: for chunk in vertices.chunks_exact(3) {

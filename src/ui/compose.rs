@@ -438,7 +438,8 @@ fn build_actor_recursive<'a>(
                         else {
                             continue;
                         };
-                        let Some(stroke_key) = fm.stroke_texture_map.get(texture_id.as_ref()) else {
+                        let Some(stroke_key) = fm.stroke_texture_map.get(texture_id.as_ref())
+                        else {
                             continue;
                         };
                         let mut stroke_obj = obj.clone();

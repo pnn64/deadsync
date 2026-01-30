@@ -1,5 +1,5 @@
-use crate::game::timing::TimingData;
 use crate::core::gfx::MeshVertex;
+use crate::game::timing::TimingData;
 
 #[inline(always)]
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
@@ -48,7 +48,17 @@ struct HistCol {
     top_color: [f32; 4],
 }
 
-fn build_hist_cols(measure_nps: &[f64], peak_nps: f64, timing: &TimingData, first_second: f32, last_second: f32, width: f32, height: f32, desaturation: Option<f32>, alpha: f32) -> (Vec<HistCol>, [f32; 4]) {
+fn build_hist_cols(
+    measure_nps: &[f64],
+    peak_nps: f64,
+    timing: &TimingData,
+    first_second: f32,
+    last_second: f32,
+    width: f32,
+    height: f32,
+    desaturation: Option<f32>,
+    alpha: f32,
+) -> (Vec<HistCol>, [f32; 4]) {
     let (blue, purple) = sl_hist_colors(desaturation, alpha);
     let denom_t = last_second - first_second;
     if width <= 0.0 || height <= 0.0 || !denom_t.is_finite() || denom_t <= 0.0 {

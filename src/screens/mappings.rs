@@ -700,7 +700,10 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
             for v in vertices.iter() {
                 let mut c = v.color;
                 c[3] *= alpha;
-                out.push(crate::core::gfx::MeshVertex { pos: v.pos, color: c });
+                out.push(crate::core::gfx::MeshVertex {
+                    pos: v.pos,
+                    color: c,
+                });
             }
             *vertices = std::sync::Arc::from(out);
         }

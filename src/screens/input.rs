@@ -213,11 +213,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             id, dir, pressed, ..
         } => {
             let dev = usize::from(*id);
-            (
-                UnmappedKey::Dir { dev, dir: *dir },
-                Some(*pressed),
-                None,
-            )
+            (UnmappedKey::Dir { dev, dir: *dir }, Some(*pressed), None)
         }
         PE::RawButton {
             id, code, pressed, ..

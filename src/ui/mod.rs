@@ -5,5 +5,6 @@ pub mod components;
 pub mod compose;
 pub mod density_graph;
 pub mod dsl;
+pub mod eval_graphs;
 pub mod font;
 pub mod runtime;

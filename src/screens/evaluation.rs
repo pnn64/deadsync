@@ -52,6 +52,8 @@ pub struct ScoreInfo {
     pub timing: timing_stats::TimingStats,
     // Prepared scatter plot points (time, offset), like Simply Love
     pub scatter: Vec<timing_stats::ScatterPoint>,
+    // Worst window used to scale scatter (at least W2), like Simply Love ScatterPlot.lua
+    pub scatter_worst_window_ms: f32,
     // Prepared histogram in 1ms bins
     pub histogram: timing_stats::HistogramMs,
     // Time range used to scale scatter/NPS graph (FirstSecond..LastSecond)
@@ -99,6 +101,8 @@ pub struct State {
     pub session_elapsed: f32, // To display the timer
     pub score_info: Option<ScoreInfo>,
     pub density_graph_mesh: Option<Arc<[MeshVertex]>>,
+    pub timing_hist_mesh: Option<Arc<[MeshVertex]>>,
+    pub scatter_mesh: Option<Arc<[MeshVertex]>>,
     pub density_graph_texture_key: String,
     active_pane: EvalPane,
 }
@@ -117,9 +121,25 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         // Prepare scatter points and histogram bins
         let scatter = timing_stats::build_scatter_points(notes, note_times);
         let histogram = timing_stats::build_histogram_ms(notes);
+        let scatter_worst_window_ms = {
+            let tw = timing_stats::effective_windows_ms();
+            let abs = histogram.worst_observed_ms.max(0.0);
+            let mut idx: usize = if abs <= tw[0] {
+                1
+            } else if abs <= tw[1] {
+                2
+            } else if abs <= tw[2] {
+                3
+            } else if abs <= tw[3] {
+                4
+            } else {
+                5
+            };
+            idx = idx.max(2);
+            tw[idx - 1]
+        };
         let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
-        // Pad right bound slightly (0.05s) to match SL visual alignment.
-        let graph_last_second = gs.song.total_length_seconds as f32 + 0.05;
+        let graph_last_second = gs.song.total_length_seconds as f32;
 
         let score_percent = judgment::calculate_itg_score_percent(
             &p.scoring_counts,
@@ -175,6 +195,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             mines_total: gs.mines_total[player_idx],
             timing: stats,
             scatter,
+            scatter_worst_window_ms,
             histogram,
             graph_first_second,
             graph_last_second,
@@ -216,12 +237,54 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         }
     });
 
+    let timing_hist_mesh = score_info.as_ref().and_then(|si| {
+        const PANE_W: f32 = 300.0;
+        const PANE_H: f32 = 180.0;
+        const TOP_H: f32 = 26.0;
+        const BOT_H: f32 = 13.0;
+
+        let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
+        let verts = crate::ui::eval_graphs::build_offset_histogram_mesh(
+            &si.histogram,
+            PANE_W,
+            graph_h,
+            PANE_H,
+            crate::config::get().smooth_histogram,
+        );
+        if verts.is_empty() {
+            None
+        } else {
+            Some(Arc::from(verts.into_boxed_slice()))
+        }
+    });
+
+    let scatter_mesh = score_info.as_ref().and_then(|si| {
+        const GRAPH_W: f32 = 610.0;
+        const GRAPH_H: f32 = 64.0;
+
+        let verts = crate::ui::eval_graphs::build_scatter_mesh(
+            &si.scatter,
+            si.graph_first_second,
+            si.graph_last_second,
+            GRAPH_W,
+            GRAPH_H,
+            si.scatter_worst_window_ms,
+        );
+        if verts.is_empty() {
+            None
+        } else {
+            Some(Arc::from(verts.into_boxed_slice()))
+        }
+    });
+
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // This will be overwritten by app.rs
         bg: heart_bg::State::new(),
         session_elapsed: 0.0,
         score_info,
         density_graph_mesh,
+        timing_hist_mesh,
+        scatter_mesh,
         density_graph_texture_key: "__white".to_string(),
         active_pane: EvalPane::default_from_profile(),
     }
@@ -688,84 +751,21 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
         }
     }
 
-    // Histogram bars (aggregate timing offsets)
-    if let Some(score_info) = &state.score_info {
-        let graph_area_height = (pane_height - topbar_height - bottombar_height).max(1.0_f32);
-        let y_bottom = pane_height - bottombar_height;
-        let worst_bin = (score_info.histogram.worst_window_ms / 1.0_f32).round() as i32; // 1ms bins
-        let total_bins = (worst_bin * 2 + 1).max(1);
-        let bar_w = pane_width / (total_bins as f32);
-
-        let use_smoothing = crate::config::get().smooth_histogram;
-        use std::collections::HashMap;
-        let worst_observed = score_info.histogram.worst_observed_ms.max(0.0);
-        // Choose source (smoothed vs raw)
-        let (height_scale_peak, get_value_at_bin): (f32, Box<dyn Fn(i32) -> f32>) = if use_smoothing
-        {
-            let mut smooth_map: HashMap<i32, f32> =
-                HashMap::with_capacity(score_info.histogram.smoothed.len());
-            for (bin, val) in &score_info.histogram.smoothed {
-                smooth_map.insert(*bin, *val);
-            }
-            let raw_peak = score_info.histogram.max_count.max(1) as f32;
-            (
-                raw_peak,
-                Box::new(move |b| *smooth_map.get(&b).unwrap_or(&0.0)),
-            )
-        } else {
-            let mut count_map: HashMap<i32, u32> =
-                HashMap::with_capacity(score_info.histogram.bins.len());
-            for (bin, cnt) in &score_info.histogram.bins {
-                count_map.insert(*bin, *cnt);
-            }
-            let max_count = score_info.histogram.max_count.max(1) as f32;
-            (
-                max_count,
-                Box::new(move |b| *count_map.get(&b).unwrap_or(&0) as f32),
-            )
-        };
-
-        let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
-            if abs_ms <= timing_windows[0] {
-                color::JUDGMENT_RGBA[0]
-            } else if abs_ms <= timing_windows[1] {
-                color::JUDGMENT_RGBA[1]
-            } else if abs_ms <= timing_windows[2] {
-                color::JUDGMENT_RGBA[2]
-            } else if abs_ms <= timing_windows[3] {
-                color::JUDGMENT_RGBA[3]
-            } else {
-                color::JUDGMENT_RGBA[4]
-            }
-        };
-
-        let mut draw_bin = |bin_idx: i32, y_val: f32| {
-            if y_val <= 0.0 {
-                return;
-            }
-            let x = (bin_idx - (-worst_bin)) as f32 * bar_w;
-            let abs_ms = (bin_idx as f32).abs();
-            // Don't draw beyond the worst observed offset, matching SL's behavior
-            if abs_ms > worst_observed {
-                return;
-            }
-            let col = color_for_abs_ms(abs_ms);
-            // Scale value by peak to 75% of graph area
-            let h = (y_val / height_scale_peak) * (graph_area_height * 0.75);
-            if h <= 0.0 {
-                return;
-            }
-            children.push(act!(quad:
-                align(0.0, 1.0): xy(x, y_bottom):
-                setsize(bar_w, h):
-                diffuse(col[0], col[1], col[2], 1.0)
-            ));
-        };
-
-        for bin_idx in (-worst_bin)..=(worst_bin) {
-            let y = get_value_at_bin(bin_idx);
-            draw_bin(bin_idx, y);
-        }
+    // Histogram (aggregate timing offsets) — Simply Love uses an ActorMultiVertex (QuadStrip).
+    if let Some(mesh) = &state.timing_hist_mesh
+        && !mesh.is_empty()
+    {
+        let graph_area_height = (pane_height - topbar_height - bottombar_height).max(0.0);
+        children.push(Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [0.0, topbar_height],
+            size: [SizeSpec::Px(pane_width), SizeSpec::Px(graph_area_height)],
+            vertices: mesh.clone(),
+            mode: MeshMode::Triangles,
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 0,
+        });
     }
 
     // Top bar stats
@@ -1287,70 +1287,28 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 ),
                 // Scatter plot overlay (judgment offsets over time)
                 {
-                    // Build actors for scatter lazily here
-                    let mut scatter_children: Vec<Actor> = Vec::new();
-                    if let Some(si) = &state.score_info {
-                        let first = si.graph_first_second;
-                        let last = si.graph_last_second.max(first + 0.001_f32);
-                        let dur = (last - first).max(0.001_f32);
-                        let worst = si.histogram.worst_window_ms.max(1.0_f32);
-
-                        let color_for_abs_ms = |abs_ms: f32| -> [f32; 4] {
-                            let tw = crate::game::timing::effective_windows_ms();
-                            if abs_ms <= tw[0] {
-                                color::JUDGMENT_RGBA[0]
-                            } else if abs_ms <= tw[1] {
-                                color::JUDGMENT_RGBA[1]
-                            } else if abs_ms <= tw[2] {
-                                color::JUDGMENT_RGBA[2]
-                            } else if abs_ms <= tw[3] {
-                                color::JUDGMENT_RGBA[3]
-                            } else {
-                                color::JUDGMENT_RGBA[4]
-                            }
-                        };
-
-                        for sp in &si.scatter {
-                            // For non-miss offsets, shift x by the offset amount (align to actual tap time).
-                            // For misses, shift by the current worst window to mimic SL.
-                            let x_time = match sp.offset_ms {
-                                Some(off_ms) => sp.time_sec - (off_ms / 1000.0),
-                                None => sp.time_sec - (worst / 1000.0),
-                            };
-                            // SL pads the right bound slightly by +0.05 seconds.
-                            let x = ((x_time - first) / (dur + 0.05)).clamp(0.0, 1.0) * GRAPH_WIDTH;
-                            match sp.offset_ms {
-                                Some(off_ms) => {
-                                    // Map offset to vertical position; center is at GRAPH_HEIGHT/2
-                                    let t = ((worst - off_ms) / (2.0 * worst)).clamp(0.0, 1.0);
-                                    let y = t * GRAPH_HEIGHT;
-                                    let c = color_for_abs_ms(off_ms.abs());
-                                    scatter_children.push(act!(quad:
-                                        align(0.0, 0.0): xy(x, y):
-                                        setsize(1.5, 1.5):
-                                        diffuse(c[0], c[1], c[2], 0.666):
-                                        z(3)
-                                    ));
-                                }
-                                None => {
-                                    // Miss: draw a thin red column
-                                    scatter_children.push(act!(quad:
-                                        align(0.0, 0.0): xy(x, 0.0):
-                                        setsize(1.0, GRAPH_HEIGHT):
-                                        diffuse(1.0, 0.0, 0.0, 0.47):
-                                        z(3)
-                                    ));
-                                }
-                            }
+                    if let Some(mesh) = &state.scatter_mesh
+                        && !mesh.is_empty()
+                    {
+                        Actor::Mesh {
+                            align: [0.0, 0.0],
+                            offset: [0.0, 0.0],
+                            size: [SizeSpec::Px(GRAPH_WIDTH), SizeSpec::Px(GRAPH_HEIGHT)],
+                            vertices: mesh.clone(),
+                            mode: MeshMode::Triangles,
+                            visible: true,
+                            blend: BlendMode::Alpha,
+                            z: 3,
                         }
-                    }
-                    Actor::Frame {
-                        align: [0.0, 0.0],
-                        offset: [0.0, 0.0],
-                        size: [SizeSpec::Px(GRAPH_WIDTH), SizeSpec::Px(GRAPH_HEIGHT)],
-                        background: None,
-                        z: 3,
-                        children: scatter_children,
+                    } else {
+                        Actor::Frame {
+                            align: [0.0, 0.0],
+                            offset: [0.0, 0.0],
+                            size: [SizeSpec::Px(GRAPH_WIDTH), SizeSpec::Px(GRAPH_HEIGHT)],
+                            background: None,
+                            z: 3,
+                            children: Vec::new(),
+                        }
                     }
                 },
                 // Life Line Overlay (z=4)
