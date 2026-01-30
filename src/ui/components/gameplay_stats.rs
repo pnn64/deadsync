@@ -1724,7 +1724,7 @@ fn build_side_pane(
         }
 
         let offset = (u0 * scaled_width).clamp(0.0_f32, scaled_width);
-        let verts = crate::ui::density_graph::build_density_histogram_mesh(
+        let verts = crate::ui::components::density_graph::build_density_histogram_mesh(
             &chart.measure_nps_vec,
             chart.max_nps,
             &state.timing,

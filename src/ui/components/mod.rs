@@ -1,4 +1,6 @@
+pub mod density_graph;
 pub mod eval_grades;
+pub mod eval_graphs;
 pub mod gamepad_overlay;
 pub mod gameplay_stats;
 pub mod heart_bg;

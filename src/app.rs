@@ -993,7 +993,7 @@ impl App {
             (276.0_f32, 64.0_f32)
         };
         let mesh = chart_opt.and_then(|chart| {
-            let verts = crate::ui::density_graph::build_density_histogram_mesh(
+            let verts = crate::ui::components::density_graph::build_density_histogram_mesh(
                 &chart.measure_nps_vec,
                 chart.max_nps,
                 &chart.timing,
