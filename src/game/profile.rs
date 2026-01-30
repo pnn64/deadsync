@@ -501,6 +501,14 @@ pub struct Profile {
     pub show_fa_plus_window: bool,
     pub show_ex_score: bool,
     pub show_fa_plus_pane: bool,
+    // "Hide" options (Simply Love semantics).
+    pub hide_targets: bool,
+    pub hide_song_bg: bool,
+    pub hide_combo: bool,
+    pub hide_lifebar: bool,
+    pub hide_score: bool,
+    pub hide_danger: bool,
+    pub hide_combo_explosions: bool,
     // Mini modifier as a percentage, mirroring Simply Love semantics.
     // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
     pub mini_percent: i32,
@@ -548,6 +556,13 @@ impl Default for Profile {
             show_fa_plus_window: false,
             show_ex_score: false,
             show_fa_plus_pane: false,
+            hide_targets: false,
+            hide_song_bg: false,
+            hide_combo: false,
+            hide_lifebar: false,
+            hide_score: false,
+            hide_danger: false,
+            hide_combo_explosions: false,
             mini_percent: 0,
             perspective: Perspective::default(),
             note_field_offset_x: 0,
@@ -706,6 +721,34 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             i32::from(default_profile.hide_early_dw_flash)
         ));
         content.push_str(&format!(
+            "HideTargets = {}\n",
+            i32::from(default_profile.hide_targets)
+        ));
+        content.push_str(&format!(
+            "HideSongBG = {}\n",
+            i32::from(default_profile.hide_song_bg)
+        ));
+        content.push_str(&format!(
+            "HideCombo = {}\n",
+            i32::from(default_profile.hide_combo)
+        ));
+        content.push_str(&format!(
+            "HideLifebar = {}\n",
+            i32::from(default_profile.hide_lifebar)
+        ));
+        content.push_str(&format!(
+            "HideScore = {}\n",
+            i32::from(default_profile.hide_score)
+        ));
+        content.push_str(&format!(
+            "HideDanger = {}\n",
+            i32::from(default_profile.hide_danger)
+        ));
+        content.push_str(&format!(
+            "HideComboExplosions = {}\n",
+            i32::from(default_profile.hide_combo_explosions)
+        ));
+        content.push_str(&format!(
             "ReverseScroll = {}\n",
             i32::from(default_profile.reverse_scroll)
         ));
@@ -805,6 +848,28 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!(
         "HideEarlyDecentWayOffFlash={}\n",
         i32::from(profile.hide_early_dw_flash)
+    ));
+    content.push_str(&format!(
+        "HideTargets={}\n",
+        i32::from(profile.hide_targets)
+    ));
+    content.push_str(&format!(
+        "HideSongBG={}\n",
+        i32::from(profile.hide_song_bg)
+    ));
+    content.push_str(&format!("HideCombo={}\n", i32::from(profile.hide_combo)));
+    content.push_str(&format!(
+        "HideLifebar={}\n",
+        i32::from(profile.hide_lifebar)
+    ));
+    content.push_str(&format!("HideScore={}\n", i32::from(profile.hide_score)));
+    content.push_str(&format!(
+        "HideDanger={}\n",
+        i32::from(profile.hide_danger)
+    ));
+    content.push_str(&format!(
+        "HideComboExplosions={}\n",
+        i32::from(profile.hide_combo_explosions)
     ));
     content.push_str(&format!(
         "ReverseScroll={}\n",
@@ -1017,6 +1082,34 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "HideEarlyDecentWayOffFlash")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.hide_early_dw_flash, |v| v != 0);
+            profile.hide_targets = profile_conf
+                .get("PlayerOptions", "HideTargets")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.hide_targets, |v| v != 0);
+            profile.hide_song_bg = profile_conf
+                .get("PlayerOptions", "HideSongBG")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.hide_song_bg, |v| v != 0);
+            profile.hide_combo = profile_conf
+                .get("PlayerOptions", "HideCombo")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.hide_combo, |v| v != 0);
+            profile.hide_lifebar = profile_conf
+                .get("PlayerOptions", "HideLifebar")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.hide_lifebar, |v| v != 0);
+            profile.hide_score = profile_conf
+                .get("PlayerOptions", "HideScore")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.hide_score, |v| v != 0);
+            profile.hide_danger = profile_conf
+                .get("PlayerOptions", "HideDanger")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.hide_danger, |v| v != 0);
+            profile.hide_combo_explosions = profile_conf
+                .get("PlayerOptions", "HideComboExplosions")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.hide_combo_explosions, |v| v != 0);
             profile.scroll_option = profile_conf
                 .get("PlayerOptions", "Scroll")
                 .and_then(|s| ScrollOption::from_str(&s).ok())
@@ -1444,6 +1537,43 @@ pub fn update_early_dw_options_for_side(side: PlayerSide, hide_judgments: bool, 
         }
         profile.hide_early_dw_judgments = hide_judgments;
         profile.hide_early_dw_flash = hide_flash;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_hide_options_for_side(
+    side: PlayerSide,
+    hide_targets: bool,
+    hide_song_bg: bool,
+    hide_combo: bool,
+    hide_lifebar: bool,
+    hide_score: bool,
+    hide_danger: bool,
+    hide_combo_explosions: bool,
+) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.hide_targets == hide_targets
+            && profile.hide_song_bg == hide_song_bg
+            && profile.hide_combo == hide_combo
+            && profile.hide_lifebar == hide_lifebar
+            && profile.hide_score == hide_score
+            && profile.hide_danger == hide_danger
+            && profile.hide_combo_explosions == hide_combo_explosions
+        {
+            return;
+        }
+        profile.hide_targets = hide_targets;
+        profile.hide_song_bg = hide_song_bg;
+        profile.hide_combo = hide_combo;
+        profile.hide_lifebar = hide_lifebar;
+        profile.hide_score = hide_score;
+        profile.hide_danger = hide_danger;
+        profile.hide_combo_explosions = hide_combo_explosions;
     }
     save_profile_ini_for_side(side);
 }

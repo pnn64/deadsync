@@ -386,39 +386,41 @@ pub fn build(
             let col = col_start + i;
             let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
             let receptor_y_lane = column_receptor_ys[i];
-            let bop_timer = state.receptor_bop_timers[col];
-            let bop_zoom = if bop_timer > 0.0 {
-                let t = (0.11 - bop_timer) / 0.11;
-                0.75 + (1.0 - 0.75) * t
-            } else {
-                1.0
-            };
-            let receptor_slot = &ns.receptor_off[i];
-            let receptor_frame =
-                receptor_slot.frame_index(state.total_elapsed_in_screen, current_beat);
-            let receptor_uv = receptor_slot.uv_for_frame(receptor_frame);
-            let receptor_size = scale_sprite(receptor_slot.size());
-            let receptor_color = ns.receptor_pulse.color_for_beat(current_beat);
-            actors.push(act!(sprite(receptor_slot.texture_key().to_string()):
-                align(0.5, 0.5):
-                xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                zoomto(receptor_size[0], receptor_size[1]):
-                zoom(bop_zoom):
-                diffuse(
-                    receptor_color[0],
-                    receptor_color[1],
-                    receptor_color[2],
-                    receptor_color[3]
-                ):
-                rotationz(-receptor_slot.def.rotation_deg as f32):
-                customtexturerect(
-                    receptor_uv[0],
-                    receptor_uv[1],
-                    receptor_uv[2],
-                    receptor_uv[3]
-                ):
-                z(Z_RECEPTOR)
-            ));
+            if !profile.hide_targets {
+                let bop_timer = state.receptor_bop_timers[col];
+                let bop_zoom = if bop_timer > 0.0 {
+                    let t = (0.11 - bop_timer) / 0.11;
+                    0.75 + (1.0 - 0.75) * t
+                } else {
+                    1.0
+                };
+                let receptor_slot = &ns.receptor_off[i];
+                let receptor_frame =
+                    receptor_slot.frame_index(state.total_elapsed_in_screen, current_beat);
+                let receptor_uv = receptor_slot.uv_for_frame(receptor_frame);
+                let receptor_size = scale_sprite(receptor_slot.size());
+                let receptor_color = ns.receptor_pulse.color_for_beat(current_beat);
+                actors.push(act!(sprite(receptor_slot.texture_key().to_string()):
+                    align(0.5, 0.5):
+                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                    zoomto(receptor_size[0], receptor_size[1]):
+                    zoom(bop_zoom):
+                    diffuse(
+                        receptor_color[0],
+                        receptor_color[1],
+                        receptor_color[2],
+                        receptor_color[3]
+                    ):
+                    rotationz(-receptor_slot.def.rotation_deg as f32):
+                    customtexturerect(
+                        receptor_uv[0],
+                        receptor_uv[1],
+                        receptor_uv[2],
+                        receptor_uv[3]
+                    ):
+                    z(Z_RECEPTOR)
+                ));
+            }
             if let Some(hold_slot) = state.active_holds[col]
                 .as_ref()
                 .filter(|active| active_hold_is_engaged(active))
@@ -451,80 +453,86 @@ pub fn build(
                     z(Z_HOLD_EXPLOSION)
                 ));
             }
-            let glow_timer = state.receptor_glow_timers[col];
-            if glow_timer > 0.0
-                && let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref())
-            {
-                let glow_frame = glow_slot.frame_index(state.total_elapsed_in_screen, current_beat);
-                let glow_uv = glow_slot.uv_for_frame(glow_frame);
-                let glow_size = glow_slot.size();
-                let alpha = (glow_timer / RECEPTOR_GLOW_DURATION).powf(0.75);
-                actors.push(act!(sprite(glow_slot.texture_key().to_string()):
-                    align(0.5, 0.5):
-                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                    zoomto(glow_size[0] as f32, glow_size[1] as f32):
-                    rotationz(-glow_slot.def.rotation_deg as f32):
-                    customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
-                    diffuse(1.0, 1.0, 1.0, alpha):
-                    blend(add):
-                    z(Z_HOLD_GLOW)
-                ));
+            if !profile.hide_targets {
+                let glow_timer = state.receptor_glow_timers[col];
+                if glow_timer > 0.0
+                    && let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref())
+                {
+                    let glow_frame =
+                        glow_slot.frame_index(state.total_elapsed_in_screen, current_beat);
+                    let glow_uv = glow_slot.uv_for_frame(glow_frame);
+                    let glow_size = glow_slot.size();
+                    let alpha = (glow_timer / RECEPTOR_GLOW_DURATION).powf(0.75);
+                    actors.push(act!(sprite(glow_slot.texture_key().to_string()):
+                        align(0.5, 0.5):
+                        xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                        zoomto(glow_size[0] as f32, glow_size[1] as f32):
+                        rotationz(-glow_slot.def.rotation_deg as f32):
+                        customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
+                        diffuse(1.0, 1.0, 1.0, alpha):
+                        blend(add):
+                        z(Z_HOLD_GLOW)
+                    ));
+                }
             }
         }
         // Tap explosions
-        for i in 0..num_cols {
-            let col = col_start + i;
-            if let Some(active) = state.tap_explosions[col].as_ref()
-                && let Some(explosion) = ns.tap_explosions.get(&active.window)
-            {
-                let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
-                let receptor_y_lane = column_receptor_ys[i];
-                let anim_time = active.elapsed;
-                let slot = &explosion.slot;
-                let beat_for_anim = if slot.source.is_beat_based() {
-                    (state.current_beat - active.start_beat).max(0.0)
-                } else {
-                    state.current_beat
-                };
-                let frame = slot.frame_index(anim_time, beat_for_anim);
-                let uv = slot.uv_for_frame(frame);
-                let size = scale_explosion(slot.size());
-                let visual = explosion.animation.state_at(active.elapsed);
-                let rotation_deg = ns
-                    .receptor_off
-                    .get(i)
-                    .map(|slot| slot.def.rotation_deg)
-                    .unwrap_or(0);
-                actors.push(act!(sprite(slot.texture_key().to_string()):
-                    align(0.5, 0.5):
-                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                    zoomto(size[0], size[1]):
-                    zoom(visual.zoom):
-                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                    diffuse(
-                        visual.diffuse[0],
-                        visual.diffuse[1],
-                        visual.diffuse[2],
-                        visual.diffuse[3]
-                    ):
-                    rotationz(-(rotation_deg as f32)):
-                    blend(normal):
-                    z(101)
-                ));
-                let glow = visual.glow;
-                let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
-                if glow_strength > f32::EPSILON {
+        if !profile.hide_combo_explosions {
+            for i in 0..num_cols {
+                let col = col_start + i;
+                if let Some(active) = state.tap_explosions[col].as_ref()
+                    && let Some(explosion) = ns.tap_explosions.get(&active.window)
+                {
+                    let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
+                    let receptor_y_lane = column_receptor_ys[i];
+                    let anim_time = active.elapsed;
+                    let slot = &explosion.slot;
+                    let beat_for_anim = if slot.source.is_beat_based() {
+                        (state.current_beat - active.start_beat).max(0.0)
+                    } else {
+                        state.current_beat
+                    };
+                    let frame = slot.frame_index(anim_time, beat_for_anim);
+                    let uv = slot.uv_for_frame(frame);
+                    let size = scale_explosion(slot.size());
+                    let visual = explosion.animation.state_at(active.elapsed);
+                    let rotation_deg = ns
+                        .receptor_off
+                        .get(i)
+                        .map(|slot| slot.def.rotation_deg)
+                        .unwrap_or(0);
                     actors.push(act!(sprite(slot.texture_key().to_string()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset, receptor_y_lane):
                         zoomto(size[0], size[1]):
                         zoom(visual.zoom):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                        diffuse(glow[0], glow[1], glow[2], glow[3]):
+                        diffuse(
+                            visual.diffuse[0],
+                            visual.diffuse[1],
+                            visual.diffuse[2],
+                            visual.diffuse[3]
+                        ):
                         rotationz(-(rotation_deg as f32)):
-                        blend(add):
+                        blend(normal):
                         z(101)
                     ));
+                    let glow = visual.glow;
+                    let glow_strength =
+                        glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
+                    if glow_strength > f32::EPSILON {
+                        actors.push(act!(sprite(slot.texture_key().to_string()):
+                            align(0.5, 0.5):
+                            xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                            zoomto(size[0], size[1]):
+                            zoom(visual.zoom):
+                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                            diffuse(glow[0], glow[1], glow[2], glow[3]):
+                            rotationz(-(rotation_deg as f32)):
+                            blend(add):
+                            z(101)
+                        ));
+                    }
                 }
             }
         }
@@ -1190,7 +1198,7 @@ pub fn build(
         }
     }
     // Combo Milestone Explosions (100 / 1000 combo)
-    if !p.combo_milestones.is_empty() {
+    if !profile.hide_combo && !profile.hide_combo_explosions && !p.combo_milestones.is_empty() {
         let combo_center_x = playfield_center_x;
         let combo_center_y = if state.reverse_scroll[player_idx] {
             screen_center_y() - COMBO_OFFSET_FROM_CENTER
@@ -1283,78 +1291,84 @@ pub fn build(
         }
     }
     // Combo
-    if p.miss_combo >= SHOW_COMBO_AT {
-        let combo_y = if is_centered {
-            receptor_y_centered + 155.0
-        } else if state.reverse_scroll[player_idx] {
-            screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
-        } else {
-            screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
-        };
-        let miss_combo_font_name = match profile.combo_font {
-            crate::game::profile::ComboFont::Wendy => Some("wendy_combo"),
-            crate::game::profile::ComboFont::ArialRounded => Some("combo_arial_rounded"),
-            crate::game::profile::ComboFont::Asap => Some("combo_asap"),
-            crate::game::profile::ComboFont::BebasNeue => Some("combo_bebas_neue"),
-            crate::game::profile::ComboFont::SourceCode => Some("combo_source_code"),
-            crate::game::profile::ComboFont::Work => Some("combo_work"),
-            crate::game::profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
-            crate::game::profile::ComboFont::None => None,
-        };
-        if let Some(font_name) = miss_combo_font_name {
-            hud_actors.push(act!(text:
-                font(font_name): settext(p.miss_combo.to_string()):
-                align(0.5, 0.5): xy(playfield_center_x, combo_y):
-                zoom(0.75): horizalign(center): shadowlength(1.0):
-                diffuse(1.0, 0.0, 0.0, 1.0):
-                z(90)
-            ));
-        }
-    } else if p.combo >= SHOW_COMBO_AT {
-        let combo_y = if is_centered {
-            receptor_y_centered + 155.0
-        } else if state.reverse_scroll[player_idx] {
-            screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
-        } else {
-            screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
-        };
-        let (color1, color2) = if let Some(fc_grade) = &p.full_combo_grade {
-            match fc_grade {
-                JudgeGrade::Fantastic => (color::rgba_hex("#C8FFFF"), color::rgba_hex("#6BF0FF")),
-                JudgeGrade::Excellent => (color::rgba_hex("#FDFFC9"), color::rgba_hex("#FDDB85")),
-                JudgeGrade::Great => (color::rgba_hex("#C9FFC9"), color::rgba_hex("#94FEC1")),
-                _ => ([1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]),
+    if !profile.hide_combo {
+        if p.miss_combo >= SHOW_COMBO_AT {
+            let combo_y = if is_centered {
+                receptor_y_centered + 155.0
+            } else if state.reverse_scroll[player_idx] {
+                screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
+            } else {
+                screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
+            };
+            let miss_combo_font_name = match profile.combo_font {
+                crate::game::profile::ComboFont::Wendy => Some("wendy_combo"),
+                crate::game::profile::ComboFont::ArialRounded => Some("combo_arial_rounded"),
+                crate::game::profile::ComboFont::Asap => Some("combo_asap"),
+                crate::game::profile::ComboFont::BebasNeue => Some("combo_bebas_neue"),
+                crate::game::profile::ComboFont::SourceCode => Some("combo_source_code"),
+                crate::game::profile::ComboFont::Work => Some("combo_work"),
+                crate::game::profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
+                crate::game::profile::ComboFont::None => None,
+            };
+            if let Some(font_name) = miss_combo_font_name {
+                hud_actors.push(act!(text:
+                    font(font_name): settext(p.miss_combo.to_string()):
+                    align(0.5, 0.5): xy(playfield_center_x, combo_y):
+                    zoom(0.75): horizalign(center): shadowlength(1.0):
+                    diffuse(1.0, 0.0, 0.0, 1.0):
+                    z(90)
+                ));
             }
-        } else {
-            ([1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0])
-        };
-        let effect_period = 0.8;
-        let t = (state.total_elapsed_in_screen / effect_period).fract();
-        let anim_t = ((t * 2.0 * std::f32::consts::PI).sin() + 1.0) / 2.0;
-        let final_color = [
-            color1[0] + (color2[0] - color1[0]) * anim_t,
-            color1[1] + (color2[1] - color1[1]) * anim_t,
-            color1[2] + (color2[2] - color1[2]) * anim_t,
-            1.0,
-        ];
-        let combo_font_name = match profile.combo_font {
-            crate::game::profile::ComboFont::Wendy => Some("wendy_combo"),
-            crate::game::profile::ComboFont::ArialRounded => Some("combo_arial_rounded"),
-            crate::game::profile::ComboFont::Asap => Some("combo_asap"),
-            crate::game::profile::ComboFont::BebasNeue => Some("combo_bebas_neue"),
-            crate::game::profile::ComboFont::SourceCode => Some("combo_source_code"),
-            crate::game::profile::ComboFont::Work => Some("combo_work"),
-            crate::game::profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
-            crate::game::profile::ComboFont::None => None,
-        };
-        if let Some(font_name) = combo_font_name {
-            hud_actors.push(act!(text:
-                font(font_name): settext(p.combo.to_string()):
-                align(0.5, 0.5): xy(playfield_center_x, combo_y):
-                zoom(0.75): horizalign(center): shadowlength(1.0):
-                diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
-                z(90)
-            ));
+        } else if p.combo >= SHOW_COMBO_AT {
+            let combo_y = if is_centered {
+                receptor_y_centered + 155.0
+            } else if state.reverse_scroll[player_idx] {
+                screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
+            } else {
+                screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
+            };
+            let (color1, color2) = if let Some(fc_grade) = &p.full_combo_grade {
+                match fc_grade {
+                    JudgeGrade::Fantastic => {
+                        (color::rgba_hex("#C8FFFF"), color::rgba_hex("#6BF0FF"))
+                    }
+                    JudgeGrade::Excellent => {
+                        (color::rgba_hex("#FDFFC9"), color::rgba_hex("#FDDB85"))
+                    }
+                    JudgeGrade::Great => (color::rgba_hex("#C9FFC9"), color::rgba_hex("#94FEC1")),
+                    _ => ([1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]),
+                }
+            } else {
+                ([1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0])
+            };
+            let effect_period = 0.8;
+            let t = (state.total_elapsed_in_screen / effect_period).fract();
+            let anim_t = ((t * 2.0 * std::f32::consts::PI).sin() + 1.0) / 2.0;
+            let final_color = [
+                color1[0] + (color2[0] - color1[0]) * anim_t,
+                color1[1] + (color2[1] - color1[1]) * anim_t,
+                color1[2] + (color2[2] - color1[2]) * anim_t,
+                1.0,
+            ];
+            let combo_font_name = match profile.combo_font {
+                crate::game::profile::ComboFont::Wendy => Some("wendy_combo"),
+                crate::game::profile::ComboFont::ArialRounded => Some("combo_arial_rounded"),
+                crate::game::profile::ComboFont::Asap => Some("combo_asap"),
+                crate::game::profile::ComboFont::BebasNeue => Some("combo_bebas_neue"),
+                crate::game::profile::ComboFont::SourceCode => Some("combo_source_code"),
+                crate::game::profile::ComboFont::Work => Some("combo_work"),
+                crate::game::profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
+                crate::game::profile::ComboFont::None => None,
+            };
+            if let Some(font_name) = combo_font_name {
+                hud_actors.push(act!(text:
+                    font(font_name): settext(p.combo.to_string()):
+                    align(0.5, 0.5): xy(playfield_center_x, combo_y):
+                    zoom(0.75): horizalign(center): shadowlength(1.0):
+                    diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
+                    z(90)
+                ));
+            }
         }
     }
     // Judgment Sprite (tap judgments)

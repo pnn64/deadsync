@@ -84,7 +84,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         state.player_color
     };
     // --- Background and Filter ---
-    actors.push(build_background(state, crate::config::get().bg_brightness));
+    let hide_song_bg = state
+        .player_profiles
+        .iter()
+        .take(state.num_players)
+        .any(|p| p.hide_song_bg);
+    if hide_song_bg {
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 1.0):
+            z(-100)
+        ));
+    } else {
+        actors.push(build_background(state, crate::config::get().bg_brightness));
+    }
 
     // Global offset adjustment overlay (centered text with subtle shadow).
     if let Some(msg) = &state.sync_overlay_message {
@@ -244,43 +258,45 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         });
 
         // Score Display
-        let score_y = 56.0;
-        let (score_text, score_color) = if state.player_profiles[player_idx].show_ex_score {
-            let mines_disabled = false;
-            let (start, end) = state.note_ranges[player_idx];
-            let ex_percent = judgment::calculate_ex_score_from_notes(
-                &state.notes[start..end],
-                &state.note_time_cache[start..end],
-                &state.hold_end_time_cache[start..end],
-                chart.stats.total_steps,
-                state.holds_total[player_idx],
-                state.rolls_total[player_idx],
-                state.mines_total[player_idx],
-                state.players[player_idx].fail_time,
-                mines_disabled,
-            );
-            (
-                format!("{:.2}", ex_percent.max(0.0)),
-                color::JUDGMENT_RGBA[0],
-            )
-        } else {
-            let score_percent = (judgment::calculate_itg_score_percent(
-                &state.players[player_idx].scoring_counts,
-                state.players[player_idx].holds_held_for_score,
-                state.players[player_idx].rolls_held_for_score,
-                state.players[player_idx].mines_hit_for_score,
-                state.possible_grade_points[player_idx],
-            ) * 100.0) as f32;
-            (format!("{score_percent:.2}"), [1.0, 1.0, 1.0, 1.0])
-        };
+        if !state.player_profiles[player_idx].hide_score {
+            let score_y = 56.0;
+            let (score_text, score_color) = if state.player_profiles[player_idx].show_ex_score {
+                let mines_disabled = false;
+                let (start, end) = state.note_ranges[player_idx];
+                let ex_percent = judgment::calculate_ex_score_from_notes(
+                    &state.notes[start..end],
+                    &state.note_time_cache[start..end],
+                    &state.hold_end_time_cache[start..end],
+                    chart.stats.total_steps,
+                    state.holds_total[player_idx],
+                    state.rolls_total[player_idx],
+                    state.mines_total[player_idx],
+                    state.players[player_idx].fail_time,
+                    mines_disabled,
+                );
+                (
+                    format!("{:.2}", ex_percent.max(0.0)),
+                    color::JUDGMENT_RGBA[0],
+                )
+            } else {
+                let score_percent = (judgment::calculate_itg_score_percent(
+                    &state.players[player_idx].scoring_counts,
+                    state.players[player_idx].holds_held_for_score,
+                    state.players[player_idx].rolls_held_for_score,
+                    state.players[player_idx].mines_hit_for_score,
+                    state.possible_grade_points[player_idx],
+                ) * 100.0) as f32;
+                (format!("{score_percent:.2}"), [1.0, 1.0, 1.0, 1.0])
+            };
 
-        actors.push(act!(text:
-            font("wendy_monospace_numbers"): settext(score_text):
-            align(1.0, 1.0): xy(score_x, score_y):
-            zoom(0.5): horizalign(right):
-            diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
-            z(90)
-        ));
+            actors.push(act!(text:
+                font("wendy_monospace_numbers"): settext(score_text):
+                align(1.0, 1.0): xy(score_x, score_y):
+                zoom(0.5): horizalign(right):
+                diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
+                z(90)
+            ));
+        }
     }
     // Current BPM Display (1:1 with Simply Love)
     {
@@ -377,6 +393,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
 
         for &(player_idx, meter_cx) in life_players {
+            if state.player_profiles[player_idx].hide_lifebar {
+                continue;
+            }
             // Frames/border
             actors.push(act!(quad: align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0): diffuse(1.0, 1.0, 1.0, 1.0): z(90) ));
             actors.push(act!(quad: align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w, h): diffuse(0.0, 0.0, 0.0, 1.0): z(91) ));
