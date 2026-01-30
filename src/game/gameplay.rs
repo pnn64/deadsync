@@ -1,8 +1,9 @@
 use crate::core::audio;
+use crate::core::gfx::MeshVertex;
 use crate::core::input::{
     InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
-use crate::core::space::{screen_center_y, screen_height};
+use crate::core::space::{is_wide, screen_center_y, screen_height, screen_width};
 use crate::game::chart::ChartData;
 use crate::game::judgment::{self, JudgeGrade, Judgment};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
@@ -16,6 +17,7 @@ use crate::game::{
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
+use crate::ui::components::density_graph::DensityHistCache;
 use log::{debug, info};
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
@@ -784,6 +786,18 @@ pub struct State {
 
     pub sync_overlay_message: Option<String>,
 
+    pub density_graph_first_second: f32,
+    pub density_graph_last_second: f32,
+    pub density_graph_duration: f32,
+    pub density_graph_graph_w: f32,
+    pub density_graph_graph_h: f32,
+    pub density_graph_scaled_width: f32,
+    pub density_graph_u0: f32,
+    pub density_graph_u_window: f32,
+    pub density_graph_cache: [Option<DensityHistCache>; MAX_PLAYERS],
+    pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub density_graph_mesh_offset_px: [i32; MAX_PLAYERS],
+
     pub hold_to_exit_key: Option<KeyCode>,
     pub hold_to_exit_start: Option<Instant>,
     prev_inputs: [bool; MAX_COLS],
@@ -826,12 +840,96 @@ fn player_note_range(state: &State, player: usize) -> (usize, usize) {
     state.note_ranges[player]
 }
 
+fn update_density_graph(state: &mut State, current_music_time: f32) {
+    let graph_w = state.density_graph_graph_w;
+    let graph_h = state.density_graph_graph_h;
+    let scaled_width = state.density_graph_scaled_width;
+    if graph_w <= 0.0_f32 || graph_h <= 0.0_f32 || scaled_width <= 0.0_f32 {
+        state.density_graph_u0 = 0.0_f32;
+        for player in 0..state.num_players {
+            state.density_graph_mesh[player] = None;
+        }
+        return;
+    }
+
+    let duration = state.density_graph_duration.max(0.001_f32);
+    let u_window = state.density_graph_u_window.clamp(0.0_f32, 1.0_f32);
+    let max_u0 = (1.0_f32 - u_window).max(0.0_f32);
+    let mut u0 = 0.0_f32;
+
+    if max_u0 > 0.0_f32 {
+        let max_seconds = (u_window * duration).max(0.0_f32);
+        if max_seconds > 0.0_f32 {
+            let first_second = state.density_graph_first_second;
+            let last_second = state.density_graph_last_second;
+            if current_music_time > last_second - (max_seconds * 0.75_f32) {
+                u0 = max_u0;
+            } else {
+                let seconds_past_one_fourth =
+                    (current_music_time - first_second) - (max_seconds * 0.25_f32);
+                if seconds_past_one_fourth > 0.0_f32 {
+                    u0 = (seconds_past_one_fourth / duration).clamp(0.0_f32, max_u0);
+                }
+            }
+        }
+    }
+
+    state.density_graph_u0 = u0;
+    let offset = (u0 * scaled_width).clamp(0.0_f32, scaled_width);
+    let offset_px = offset.floor() as i32;
+
+    for player in 0..state.num_players {
+        if offset_px == state.density_graph_mesh_offset_px[player] {
+            continue;
+        }
+        state.density_graph_mesh_offset_px[player] = offset_px;
+        let verts = state.density_graph_cache[player]
+            .as_ref()
+            .map_or(Vec::new(), |cache| cache.mesh(offset_px as f32, graph_w));
+        state.density_graph_mesh[player] = if verts.is_empty() {
+            None
+        } else {
+            Some(Arc::from(verts.into_boxed_slice()))
+        };
+    }
+}
+
+#[inline(always)]
+fn record_life(p: &mut PlayerRuntime, t: f32, life: f32) {
+    const SHIFT: f32 = 0.003_906_25_f32; // 1/256, matches ITGmania's PlayerStageStats quirk
+
+    let life = life.clamp(0.0_f32, 1.0_f32);
+    let hist = &mut p.life_history;
+    let Some(&(last_t, last_life)) = hist.last() else {
+        hist.push((t, life));
+        return;
+    };
+
+    if t > last_t {
+        if (life - last_life).abs() > 0.000_001_f32 {
+            hist.push((t, life));
+        }
+        return;
+    }
+
+    if (t - last_t).abs() <= 0.000_001_f32 {
+        if (life - last_life).abs() <= 0.000_001_f32 {
+            return;
+        }
+        let last_ix = hist.len() - 1;
+        hist[last_ix].0 = t - SHIFT;
+        hist.push((t, life));
+    }
+}
+
 fn apply_life_change(p: &mut PlayerRuntime, current_music_time: f32, delta: f32) {
     if is_player_dead(p) {
         p.life = 0.0;
         p.is_failing = true;
         return;
     }
+
+    let old_life = p.life;
 
     let mut final_delta = delta;
     if final_delta > 0.0 {
@@ -843,16 +941,22 @@ fn apply_life_change(p: &mut PlayerRuntime, current_music_time: f32, delta: f32)
         p.combo_after_miss = REGEN_COMBO_AFTER_MISS;
     }
 
-    p.life = (p.life + final_delta).clamp(0.0, 1.0);
+    let mut new_life = (p.life + final_delta).clamp(0.0, 1.0);
 
-    if p.life <= 0.0 {
+    if new_life <= 0.0 {
         if !p.is_failing {
             p.fail_time = Some(current_music_time);
         }
-        p.life = 0.0;
+        new_life = 0.0;
         p.is_failing = true;
         info!("Player has failed!");
     }
+
+    if (new_life - old_life).abs() > 0.000_001_f32 {
+        record_life(p, current_music_time, old_life);
+        record_life(p, current_music_time, new_life);
+    }
+    p.life = new_life;
 }
 
 pub fn queue_input_edge(
@@ -1332,6 +1436,71 @@ pub fn init(
         player_profiles[player].reverse_scroll
     });
 
+    let wide = is_wide();
+    let density_graph_graph_h = if wide { 105.0_f32 } else { 0.0_f32 };
+    let density_graph_graph_w = if wide {
+        (screen_width() * 0.5).round().max(1.0_f32)
+    } else {
+        0.0_f32
+    };
+    let density_graph_first_second = timing.get_time_for_beat(0.0).min(0.0_f32);
+    let density_graph_last_second = song.total_length_seconds.max(0) as f32;
+    let density_graph_duration =
+        (density_graph_last_second - density_graph_first_second).max(0.001_f32);
+
+    const DENSITY_GRAPH_MAX_SECONDS: f32 = 4.0 * 60.0;
+    let density_graph_scaled_width = if wide && density_graph_duration > DENSITY_GRAPH_MAX_SECONDS {
+        (density_graph_graph_w * (density_graph_duration / DENSITY_GRAPH_MAX_SECONDS))
+            .round()
+            .max(density_graph_graph_w)
+    } else {
+        density_graph_graph_w
+    };
+    let density_graph_u_window = if wide && density_graph_duration > DENSITY_GRAPH_MAX_SECONDS {
+        (DENSITY_GRAPH_MAX_SECONDS / density_graph_duration).clamp(0.0_f32, 1.0_f32)
+    } else {
+        1.0_f32
+    };
+    let density_graph_u0 = 0.0_f32;
+
+    let density_graph_cache: [Option<DensityHistCache>; MAX_PLAYERS] = std::array::from_fn(|p| {
+        if !wide || p >= num_players {
+            return None;
+        }
+        let chart = charts[p].as_ref();
+        crate::ui::components::density_graph::build_density_histogram_cache(
+            &chart.measure_nps_vec,
+            chart.max_nps,
+            &timing,
+            density_graph_first_second,
+            density_graph_last_second,
+            density_graph_scaled_width,
+            density_graph_graph_h,
+            None,
+            1.0,
+        )
+    });
+    let density_graph_mesh_offset_px: [i32; MAX_PLAYERS] = [0; MAX_PLAYERS];
+    let density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|p| {
+        if !wide || p >= num_players {
+            return None;
+        }
+        density_graph_cache[p].as_ref().and_then(|cache| {
+            let verts = cache.mesh(0.0_f32, density_graph_graph_w);
+            if verts.is_empty() {
+                None
+            } else {
+                Some(Arc::from(verts.into_boxed_slice()))
+            }
+        })
+    });
+
+    let mut players = std::array::from_fn(|_| init_player_runtime());
+    for p in 0..num_players {
+        let life = players[p].life;
+        players[p].life_history.push((init_music_time, life));
+    }
+
     State {
         song,
         song_full_title,
@@ -1374,7 +1543,7 @@ pub fn init(
         row_map_cache,
         decaying_hold_indices: Vec::new(),
         hold_decay_active: vec![false; notes_len],
-        players: std::array::from_fn(|_| init_player_runtime()),
+        players,
         hold_judgments: Default::default(),
         is_in_freeze: false,
         is_in_delay: false,
@@ -1403,6 +1572,17 @@ pub fn init(
         mines_total,
         total_elapsed_in_screen: 0.0,
         sync_overlay_message: None,
+        density_graph_first_second,
+        density_graph_last_second,
+        density_graph_duration,
+        density_graph_graph_w,
+        density_graph_graph_h,
+        density_graph_scaled_width,
+        density_graph_u0,
+        density_graph_u_window,
+        density_graph_cache,
+        density_graph_mesh,
+        density_graph_mesh_offset_px,
         hold_to_exit_key: None,
         hold_to_exit_start: None,
         prev_inputs: [false; MAX_COLS],
@@ -3055,14 +3235,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     }
     state.total_elapsed_in_screen += delta_time;
 
-    // Optimization: only record if time has advanced slightly to avoid duplicates
-    for player in 0..state.num_players {
-        let life = state.players[player].life;
-        let hist = &mut state.players[player].life_history;
-        if hist.last().is_none_or(|(t, _)| *t < music_time_sec) {
-            hist.push((music_time_sec, life));
-        }
-    }
+    update_density_graph(state, music_time_sec);
 
     let beat_info = state
         .timing

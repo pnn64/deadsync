@@ -1,5 +1,6 @@
 use crate::core::gfx::MeshVertex;
 use crate::game::timing::TimingData;
+use std::sync::Arc;
 
 #[inline(always)]
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
@@ -46,6 +47,13 @@ struct HistCol {
     x: f32,
     top_y: f32,
     top_color: [f32; 4],
+}
+
+pub struct DensityHistCache {
+    cols: Arc<[HistCol]>,
+    bottom_color: [f32; 4],
+    height: f32,
+    scaled_width: f32,
 }
 
 fn build_hist_cols(
@@ -114,6 +122,44 @@ fn build_hist_cols(
     }
 
     (cols, blue)
+}
+
+pub fn build_density_histogram_cache(
+    measure_nps: &[f64],
+    peak_nps: f64,
+    timing: &TimingData,
+    first_second: f32,
+    last_second: f32,
+    scaled_width: f32,
+    height: f32,
+    desaturation: Option<f32>,
+    alpha: f32,
+) -> Option<DensityHistCache> {
+    let scaled_width = scaled_width.max(0.0);
+    let height = height.max(0.0);
+    if scaled_width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+    let (cols, bottom_color) = build_hist_cols(
+        measure_nps,
+        peak_nps,
+        timing,
+        first_second,
+        last_second,
+        scaled_width,
+        height,
+        desaturation,
+        alpha,
+    );
+    if cols.len() < 2 {
+        return None;
+    }
+    Some(DensityHistCache {
+        cols: Arc::from(cols.into_boxed_slice()),
+        bottom_color,
+        height,
+        scaled_width,
+    })
 }
 
 #[inline(always)]
@@ -199,6 +245,23 @@ fn hist_cols_to_tris(cols: &[HistCol], bottom_y: f32, bottom_color: [f32; 4]) ->
     out
 }
 
+impl DensityHistCache {
+    pub fn mesh(&self, offset: f32, visible_width: f32) -> Vec<MeshVertex> {
+        let visible_width = visible_width.max(0.0);
+        if visible_width <= 0.0 || self.scaled_width <= 0.0 || self.height <= 0.0 {
+            return Vec::new();
+        }
+
+        let left = offset.clamp(0.0, self.scaled_width);
+        let right = (left + visible_width).clamp(0.0, self.scaled_width);
+        let mut clipped = clip_hist_cols(&self.cols, left, right);
+        for c in &mut clipped {
+            c.x -= left;
+        }
+        hist_cols_to_tris(&clipped, self.height, self.bottom_color)
+    }
+}
+
 pub fn build_density_histogram_mesh(
     measure_nps: &[f64],
     peak_nps: f64,
@@ -219,7 +282,7 @@ pub fn build_density_histogram_mesh(
         return Vec::new();
     }
 
-    let (cols, blue) = build_hist_cols(
+    let Some(cache) = build_density_histogram_cache(
         measure_nps,
         peak_nps,
         timing,
@@ -229,17 +292,8 @@ pub fn build_density_histogram_mesh(
         height,
         desaturation,
         alpha,
-    );
-    if cols.len() < 2 {
+    ) else {
         return Vec::new();
-    }
-
-    let left = offset.clamp(0.0, scaled_width);
-    let right = (left + visible_width).clamp(0.0, scaled_width);
-    let mut clipped = clip_hist_cols(&cols, left, right);
-    for c in &mut clipped {
-        c.x -= left;
-    }
-
-    hist_cols_to_tris(&clipped, height, blue)
+    };
+    cache.mesh(offset, visible_width)
 }
