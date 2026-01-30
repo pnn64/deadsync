@@ -1940,6 +1940,15 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
     match actor {
         Actor::Sprite { tint, .. } => tint[3] *= alpha,
         Actor::Text { color, .. } => color[3] *= alpha,
+        Actor::Mesh { vertices, .. } => {
+            let mut out: Vec<crate::core::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
+            for v in vertices.iter() {
+                let mut c = v.color;
+                c[3] *= alpha;
+                out.push(crate::core::gfx::MeshVertex { pos: v.pos, color: c });
+            }
+            *vertices = std::sync::Arc::from(out);
+        }
         Actor::Frame {
             background,
             children,

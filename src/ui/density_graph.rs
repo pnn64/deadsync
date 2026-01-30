@@ -1,203 +1,235 @@
 use crate::game::timing::TimingData;
+use crate::core::gfx::MeshVertex;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GraphImageData {
-    pub width: u32,
-    pub height: u32,
-    pub data: Vec<u8>,
+#[inline(always)]
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    (b - a).mul_add(t, a)
 }
 
-fn build_row_gradient(height: u32, bottom: [u8; 3], top: [u8; 3]) -> Vec<[u8; 4]> {
-    if height == 0 {
-        return Vec::new();
-    }
-    if height == 1 {
-        return vec![[bottom[0], bottom[1], bottom[2], 255]];
-    }
-
-    let denom = (height - 1) as f32;
-    let mut out = Vec::with_capacity(height as usize);
-    for y in 0..height {
-        let frac = (height - 1 - y) as f32 / denom;
-        let lerp = |a: u8, b: u8| -> u8 {
-            (f32::from(a) + (f32::from(b) - f32::from(a)) * frac)
-                .round()
-                .clamp(0.0, 255.0) as u8
-        };
-        out.push([lerp(bottom[0], top[0]), lerp(bottom[1], top[1]), lerp(bottom[2], top[2]), 255]);
-    }
-    out
+#[inline(always)]
+fn lerp_color(t: f32, a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
+    [
+        lerp(a[0], b[0], t),
+        lerp(a[1], b[1], t),
+        lerp(a[2], b[2], t),
+        lerp(a[3], b[3], t),
+    ]
 }
 
-fn fill_bg_rgba(pixels: &mut [u8], bg: [u8; 3]) {
-    let [r, g, b] = bg;
-    for px in pixels.chunks_exact_mut(4) {
-        px[0] = r;
-        px[1] = g;
-        px[2] = b;
-        px[3] = 255;
+#[inline(always)]
+fn desaturate_rgb(mut c: [f32; 4], desat: f32) -> [f32; 4] {
+    let d = desat.clamp(0.0, 1.0);
+    if d <= 0.0 {
+        return c;
     }
+    let luma = (0.3 * c[0]).mul_add(1.0, (0.59 * c[1]).mul_add(1.0, 0.11 * c[2]));
+    c[0] = c[0] + d * (luma - c[0]);
+    c[1] = c[1] + d * (luma - c[1]);
+    c[2] = c[2] + d * (luma - c[2]);
+    c
 }
 
-fn build_points(
-    measure_nps: &[f64],
-    peak_nps: f64,
-    timing: &TimingData,
-    first_second: f32,
-    last_second: f32,
-    width: u32,
-    height: u32,
-) -> Vec<(f32, f32)> {
-    let Some(start_ix) = measure_nps.iter().position(|&nps| nps > 0.0) else {
-        return Vec::new();
-    };
-    let denom = (last_second - first_second).max(0.001_f32);
-    let peak = (peak_nps as f32).max(0.000_001_f32);
-    let w = width as f32;
-    let h = height as f32;
+#[inline(always)]
+fn sl_hist_colors(desaturation: Option<f32>, alpha: f32) -> ([f32; 4], [f32; 4]) {
+    let a = alpha.clamp(0.0, 1.0);
+    let mut blue = [0.0, 0.678, 0.753, a];
+    let mut purple = [0.51, 0.0, 0.631, a];
+    if let Some(d) = desaturation {
+        blue = desaturate_rgb(blue, d);
+        purple = desaturate_rgb(purple, d);
+    }
+    (blue, purple)
+}
 
-    let mut out: Vec<(f32, f32)> = Vec::with_capacity(measure_nps.len() - start_ix + 1);
-    for (i, &nps_f64) in measure_nps.iter().enumerate().skip(start_ix) {
+#[derive(Clone, Copy, Debug)]
+struct HistCol {
+    x: f32,
+    top_y: f32,
+    top_color: [f32; 4],
+}
+
+fn build_hist_cols(measure_nps: &[f64], peak_nps: f64, timing: &TimingData, first_second: f32, last_second: f32, width: f32, height: f32, desaturation: Option<f32>, alpha: f32) -> (Vec<HistCol>, [f32; 4]) {
+    let (blue, purple) = sl_hist_colors(desaturation, alpha);
+    let denom_t = last_second - first_second;
+    if width <= 0.0 || height <= 0.0 || !denom_t.is_finite() || denom_t <= 0.0 {
+        return (Vec::new(), blue);
+    }
+    let peak = (peak_nps as f32).max(0.000_001);
+    if measure_nps.len() <= 1 || !peak.is_finite() {
+        return (Vec::new(), blue);
+    }
+
+    let mut cols: Vec<HistCol> = Vec::with_capacity(measure_nps.len().saturating_add(1));
+    let mut first_step_has_occurred = false;
+
+    for (i, &nps_f64) in measure_nps.iter().enumerate() {
+        let nps = nps_f64 as f32;
+        if nps > 0.0 {
+            first_step_has_occurred = true;
+        }
+        if !first_step_has_occurred {
+            continue;
+        }
+
         let t = timing.get_time_for_beat(i as f32 * 4.0);
-        let x = ((t - first_second) / denom * w).clamp(0.0, w);
-        let frac = ((nps_f64 as f32) / peak).clamp(0.0, 1.0);
-        let bar_h = (frac * h).round();
+        let x = ((t - first_second) / denom_t) * width;
+        let bar_h = ((nps / peak) * height).round();
+        let top_y = height - bar_h;
+        let frac = (bar_h / height).abs();
+        let top_color = lerp_color(frac, blue, purple);
 
-        if let Some(last) = out.last_mut()
-            && x <= last.0
-        {
-            last.1 = bar_h;
-            continue;
+        if cols.len() >= 2 {
+            let a = cols[cols.len() - 1];
+            let b = cols[cols.len() - 2];
+            if a.top_y == top_y && b.top_y == top_y {
+                let last_ix = cols.len() - 1;
+                cols[last_ix].x = x;
+                continue;
+            }
         }
-        out.push((x, bar_h));
+
+        cols.push(HistCol {
+            x,
+            top_y,
+            top_color,
+        });
     }
 
-    if !out.is_empty() && measure_nps.last().is_some_and(|&n| n != 0.0) {
-        if out.last().is_some_and(|&(x, _)| x < w) {
-            out.push((w, 0.0));
-        } else if let Some(last) = out.last_mut() {
-            last.0 = w;
-            last.1 = 0.0;
-        }
+    if first_step_has_occurred && measure_nps.last().is_some_and(|&n| n != 0.0) {
+        cols.push(HistCol {
+            x: width,
+            top_y: height,
+            top_color: blue,
+        });
+    }
+
+    (cols, blue)
+}
+
+#[inline(always)]
+fn interp_hist_col(a: HistCol, b: HistCol, x: f32) -> HistCol {
+    let dx = (b.x - a.x).max(0.000_001);
+    let t = ((x - a.x) / dx).clamp(0.0, 1.0);
+    HistCol {
+        x,
+        top_y: lerp(a.top_y, b.top_y, t),
+        top_color: lerp_color(t, a.top_color, b.top_color),
+    }
+}
+
+fn clip_hist_cols(cols: &[HistCol], left: f32, right: f32) -> Vec<HistCol> {
+    if cols.is_empty() || left >= right {
+        return Vec::new();
+    }
+    if left <= cols[0].x && right >= cols[cols.len() - 1].x {
+        return cols.to_vec();
+    }
+
+    let mut li = 0usize;
+    while li < cols.len() && cols[li].x < left {
+        li += 1;
+    }
+    if li >= cols.len() {
+        return Vec::new();
+    }
+
+    let mut ri = li;
+    while ri < cols.len() && cols[ri].x <= right {
+        ri += 1;
+    }
+
+    let mut out: Vec<HistCol> = Vec::with_capacity(ri.saturating_sub(li) + 2);
+    out.extend_from_slice(&cols[li..ri]);
+
+    if li > 0 {
+        out.insert(0, interp_hist_col(cols[li - 1], cols[li], left));
+    }
+    if ri < cols.len() && ri > 0 {
+        out.push(interp_hist_col(cols[ri - 1], cols[ri], right));
     }
 
     out
 }
 
-fn build_col_heights(points: &[(f32, f32)], width: u32, height: u32) -> Vec<u16> {
-    let w = width as usize;
-    let h_max = height as f32;
-    let mut out = vec![0u16; w];
-    if points.is_empty() || width == 0 || height == 0 {
-        return out;
+fn hist_cols_to_tris(cols: &[HistCol], bottom_y: f32, bottom_color: [f32; 4]) -> Vec<MeshVertex> {
+    if cols.len() < 2 {
+        return Vec::new();
     }
+    let mut out: Vec<MeshVertex> = Vec::with_capacity(cols.len().saturating_sub(1) * 6);
+    for w in cols.windows(2) {
+        let a = w[0];
+        let b = w[1];
 
-    if points.len() == 1 {
-        let (x0, h0) = points[0];
-        let xi = x0.round() as i32;
-        if (0..width as i32).contains(&xi) {
-            out[xi as usize] = h0.round().clamp(0.0, h_max) as u16;
-        }
-        return out;
+        out.push(MeshVertex {
+            pos: [a.x, bottom_y],
+            color: bottom_color,
+        });
+        out.push(MeshVertex {
+            pos: [a.x, a.top_y],
+            color: a.top_color,
+        });
+        out.push(MeshVertex {
+            pos: [b.x, bottom_y],
+            color: bottom_color,
+        });
+
+        out.push(MeshVertex {
+            pos: [a.x, a.top_y],
+            color: a.top_color,
+        });
+        out.push(MeshVertex {
+            pos: [b.x, b.top_y],
+            color: b.top_color,
+        });
+        out.push(MeshVertex {
+            pos: [b.x, bottom_y],
+            color: bottom_color,
+        });
     }
-
-    let mut seg = 0usize;
-    let first_x = points[0].0;
-    for x in 0..w {
-        let x_f = x as f32;
-        if x_f < first_x {
-            continue;
-        }
-        while seg + 1 < points.len() && points[seg + 1].0 <= x_f {
-            seg += 1;
-        }
-        if seg + 1 >= points.len() {
-            break;
-        }
-
-        let (x0, h0) = points[seg];
-        let (x1, h1) = points[seg + 1];
-        let dx = x1 - x0;
-        if dx <= 0.000_001 {
-            continue;
-        }
-
-        let t = (x_f - x0) / dx;
-        let h_x = (h0 + (h1 - h0) * t).round().clamp(0.0, h_max);
-        out[x] = h_x as u16;
-    }
-
     out
 }
 
-pub fn render_density_graph_rgba(
+pub fn build_density_histogram_mesh(
     measure_nps: &[f64],
     peak_nps: f64,
     timing: &TimingData,
     first_second: f32,
     last_second: f32,
-    width: u32,
-    height: u32,
-    bottom_color: [u8; 3],
-    top_color: [u8; 3],
-    bg_color: [u8; 3],
-) -> GraphImageData {
-    if width == 0 || height == 0 {
-        return GraphImageData {
-            width,
-            height,
-            data: Vec::new(),
-        };
+    scaled_width: f32,
+    height: f32,
+    offset: f32,
+    visible_width: f32,
+    desaturation: Option<f32>,
+    alpha: f32,
+) -> Vec<MeshVertex> {
+    let scaled_width = scaled_width.max(0.0);
+    let height = height.max(0.0);
+    let visible_width = visible_width.max(0.0);
+    if scaled_width <= 0.0 || height <= 0.0 || visible_width <= 0.0 {
+        return Vec::new();
     }
 
-    let mut pixels = vec![0u8; (width * height * 4) as usize];
-    fill_bg_rgba(&mut pixels, bg_color);
-
-    let denom = last_second - first_second;
-    if measure_nps.is_empty() || peak_nps <= 0.0 || !denom.is_finite() || denom <= 0.0 {
-        return GraphImageData {
-            width,
-            height,
-            data: pixels,
-        };
-    }
-
-    let points = build_points(
+    let (cols, blue) = build_hist_cols(
         measure_nps,
         peak_nps,
         timing,
         first_second,
         last_second,
-        width,
+        scaled_width,
         height,
+        desaturation,
+        alpha,
     );
-    if points.is_empty() {
-        return GraphImageData {
-            width,
-            height,
-            data: pixels,
-        };
+    if cols.len() < 2 {
+        return Vec::new();
     }
 
-    let grad = build_row_gradient(height, bottom_color, top_color);
-    let col_heights = build_col_heights(&points, width, height);
-
-    for x in 0..width as usize {
-        let bar_h = col_heights[x] as u32;
-        if bar_h == 0 {
-            continue;
-        }
-        let y_top = height.saturating_sub(bar_h);
-        for y in y_top..height {
-            let idx = (y * width) as usize * 4 + x * 4;
-            pixels[idx..idx + 4].copy_from_slice(&grad[y as usize]);
-        }
+    let left = offset.clamp(0.0, scaled_width);
+    let right = (left + visible_width).clamp(0.0, scaled_width);
+    let mut clipped = clip_hist_cols(&cols, left, right);
+    for c in &mut clipped {
+        c.x -= left;
     }
 
-    GraphImageData {
-        width,
-        height,
-        data: pixels,
-    }
+    hist_cols_to_tris(&clipped, height, blue)
 }
-

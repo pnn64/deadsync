@@ -25,6 +25,19 @@ pub struct RenderObject<'a> {
     pub order: u32,
     pub camera: u8,
 }
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MeshVertex {
+    pub pos: [f32; 2],
+    pub color: [f32; 4],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MeshMode {
+    Triangles,
+}
+
 #[derive(Clone)]
 pub enum ObjectType<'a> {
     Sprite {
@@ -33,6 +46,10 @@ pub enum ObjectType<'a> {
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         edge_fade: [f32; 4],
+    },
+    Mesh {
+        vertices: Cow<'a, [MeshVertex]>,
+        mode: MeshMode,
     },
 }
 

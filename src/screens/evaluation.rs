@@ -1,4 +1,5 @@
 use crate::act;
+use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::screens::Screen;
@@ -97,6 +98,7 @@ pub struct State {
     bg: heart_bg::State,
     pub session_elapsed: f32, // To display the timer
     pub score_info: Option<ScoreInfo>,
+    pub density_graph_mesh: Option<Arc<[MeshVertex]>>,
     pub density_graph_texture_key: String,
     active_pane: EvalPane,
 }
@@ -189,11 +191,37 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         }
     });
 
+    let density_graph_mesh = score_info.as_ref().and_then(|si| {
+        const GRAPH_W: f32 = 610.0;
+        const GRAPH_H: f32 = 64.0;
+
+        let last_second = si.song.total_length_seconds.max(0) as f32;
+        let verts = crate::ui::density_graph::build_density_histogram_mesh(
+            &si.chart.measure_nps_vec,
+            si.chart.max_nps,
+            &si.chart.timing,
+            si.graph_first_second,
+            last_second,
+            GRAPH_W,
+            GRAPH_H,
+            0.0,
+            GRAPH_W,
+            Some(0.5),
+            0.5,
+        );
+        if verts.is_empty() {
+            None
+        } else {
+            Some(Arc::from(verts.into_boxed_slice()))
+        }
+    });
+
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // This will be overwritten by app.rs
         bg: heart_bg::State::new(),
         session_elapsed: 0.0,
         score_info,
+        density_graph_mesh,
         density_graph_texture_key: "__white".to_string(),
         active_pane: EvalPane::default_from_profile(),
     }
@@ -1214,15 +1242,41 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             z: 101,
             background: None,
             children: vec![
+                act!(quad:
+                    align(0.0, 0.0):
+                    xy(0.0, 0.0):
+                    setsize(GRAPH_WIDTH, GRAPH_HEIGHT):
+                    diffuse(16.0/255.0, 21.0/255.0, 25.0/255.0, 1.0):
+                    z(0)
+                ),
                 // The NPS histogram is positioned with its origin at the bottom-left of the frame,
                 // and then shifted to be centered horizontally.
                 // Lua: `addx(-GraphWidth/2):addy(GraphHeight)`
                 // This is equivalent to `align(0.0, 1.0)` (bottom-left) and `xy` at the center of the frame.
-                act!(sprite(state.density_graph_texture_key.clone()):
-                    align(0.0, 1.0): // bottom-left
-                    xy(0.0, GRAPH_HEIGHT): // position at the bottom-left of the frame
-                    setsize(GRAPH_WIDTH, GRAPH_HEIGHT): z(1)
-                ),
+                {
+                    if let Some(mesh) = &state.density_graph_mesh
+                        && !mesh.is_empty()
+                    {
+                        Actor::Mesh {
+                            align: [0.0, 1.0],
+                            offset: [0.0, GRAPH_HEIGHT],
+                            size: [SizeSpec::Px(GRAPH_WIDTH), SizeSpec::Px(GRAPH_HEIGHT)],
+                            vertices: mesh.clone(),
+                            mode: MeshMode::Triangles,
+                            visible: true,
+                            blend: BlendMode::Alpha,
+                            z: 1,
+                        }
+                    } else if state.density_graph_texture_key != "__white" {
+                        act!(sprite(state.density_graph_texture_key.clone()):
+                            align(0.0, 1.0): // bottom-left
+                            xy(0.0, GRAPH_HEIGHT): // position at the bottom-left of the frame
+                            setsize(GRAPH_WIDTH, GRAPH_HEIGHT): z(1)
+                        )
+                    } else {
+                        act!(sprite("__white"): visible(false))
+                    }
+                },
                 // The horizontal zero-line, centered vertically in the panel.
                 act!(quad:
                     align(0.5, 0.5):

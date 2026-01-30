@@ -1,4 +1,4 @@
-use crate::core::gfx::BlendMode;
+use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use cgmath::Matrix4;
 use std::sync::Arc;
 
@@ -89,6 +89,18 @@ pub enum Actor {
         /// Clip rect in parent TL space: [x, y, w, h].
         clip: Option<[f32; 4]>,
         blend: BlendMode,
+    },
+
+    /// Mesh actor (ActorMultiVertex-like)
+    Mesh {
+        align: [f32; 2],
+        offset: [f32; 2],
+        size: [SizeSpec; 2],
+        vertices: Arc<[MeshVertex]>,
+        mode: MeshMode,
+        visible: bool,
+        blend: BlendMode,
+        z: i16,
     },
 
     /// Frame/group box

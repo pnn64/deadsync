@@ -577,6 +577,15 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
     match actor {
         Actor::Sprite { tint, .. } => tint[3] *= alpha,
         Actor::Text { color, .. } => color[3] *= alpha,
+        Actor::Mesh { vertices, .. } => {
+            let mut out: Vec<crate::core::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
+            for v in vertices.iter() {
+                let mut c = v.color;
+                c[3] *= alpha;
+                out.push(crate::core::gfx::MeshVertex { pos: v.pos, color: c });
+            }
+            *vertices = std::sync::Arc::from(out);
+        }
         Actor::Frame {
             background,
             children,
@@ -684,6 +693,28 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
             scale[0] *= zoom;
             scale[1] *= zoom;
         }
+        Actor::Mesh {
+            offset,
+            size,
+            vertices,
+            ..
+        } => {
+            offset[0] = scale_about(offset[0], pivot[0], zoom);
+            offset[1] = scale_about(offset[1], pivot[1], zoom);
+            for s in size.iter_mut() {
+                if let actors::SizeSpec::Px(v) = s {
+                    *v *= zoom;
+                }
+            }
+            let mut out: Vec<crate::core::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
+            for v in vertices.iter() {
+                out.push(crate::core::gfx::MeshVertex {
+                    pos: [v.pos[0] * zoom, v.pos[1] * zoom],
+                    color: v.color,
+                });
+            }
+            *vertices = std::sync::Arc::from(out);
+        }
         Actor::Text {
             offset,
             scale,
@@ -749,6 +780,10 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
             offset[0] += dx;
             offset[1] += dy;
         }
+        Actor::Mesh { offset, .. } => {
+            offset[0] += dx;
+            offset[1] += dy;
+        }
         Actor::Text { offset, clip, .. } => {
             offset[0] += dx;
             offset[1] += dy;
@@ -786,7 +821,7 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
             }
         }
         Actor::Shadow { child, .. } => apply_clip_rect_to_actor(child, rect),
-        Actor::Sprite { .. } => {}
+        Actor::Sprite { .. } | Actor::Mesh { .. } => {}
     }
 }
 

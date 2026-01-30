@@ -12,7 +12,6 @@ use crate::screens::{
     select_play_mode, select_profile, select_style,
 };
 use crate::ui::color;
-use crate::ui::density_graph::GraphImageData;
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
@@ -53,8 +52,6 @@ enum Command {
         volume: f32,
     },
     StopMusic,
-    SetEvaluationGraphData(Option<(String, GraphImageData)>),
-    SetGameplayGraphData(Option<(String, GraphImageData)>),
     SetDynamicBackground(Option<PathBuf>),
     UpdateScrollSpeed {
         side: profile::PlayerSide,
@@ -936,12 +933,6 @@ impl App {
                 volume,
             } => self.play_music_command(path, looped, volume),
             Command::StopMusic => self.stop_music_command(),
-            Command::SetEvaluationGraphData(graph_request) => {
-                self.apply_evaluation_graph(graph_request);
-            }
-            Command::SetGameplayGraphData(graph_request) => {
-                self.apply_gameplay_graph(graph_request);
-            }
             Command::SetDynamicBackground(path_opt) => self.apply_dynamic_background(path_opt),
             Command::UpdateScrollSpeed { side, setting } => {
                 profile::update_scroll_speed_for_side(side, setting);
@@ -996,44 +987,40 @@ impl App {
         slot: DensityGraphSlot,
         chart_opt: Option<DensityGraphSource>,
     ) {
-        if let Some(backend) = self.backend.as_mut() {
-            let graph_request = chart_opt.map(|chart| {
-                const SS: u32 = 2;
-                let graph_width: u32 = if space::is_wide() { 286 } else { 276 };
-                let graph_height: u32 = 64;
-                let bottom_color = [0, 184, 204];
-                let top_color = [130, 0, 161];
-                let bg_color = [30, 40, 47];
+        let (graph_w, graph_h) = if space::is_wide() {
+            (286.0_f32, 64.0_f32)
+        } else {
+            (276.0_f32, 64.0_f32)
+        };
+        let mesh = chart_opt.and_then(|chart| {
+            let verts = crate::ui::density_graph::build_density_histogram_mesh(
+                &chart.measure_nps_vec,
+                chart.max_nps,
+                &chart.timing,
+                chart.first_second,
+                chart.last_second,
+                graph_w,
+                graph_h,
+                0.0,
+                graph_w,
+                None,
+                1.0,
+            );
+            if verts.is_empty() {
+                None
+            } else {
+                Some(Arc::from(verts.into_boxed_slice()))
+            }
+        });
 
-                let render_w = graph_width.saturating_mul(SS);
-                let render_h = graph_height.saturating_mul(SS);
-                let key = format!("dg:{}:w{}h{}", chart.short_hash, render_w, render_h);
-                let data = crate::ui::density_graph::render_density_graph_rgba(
-                    &chart.measure_nps_vec,
-                    chart.max_nps,
-                    &chart.timing,
-                    chart.first_second,
-                    chart.last_second,
-                    render_w,
-                    render_h,
-                    bottom_color,
-                    top_color,
-                    bg_color,
-                );
-                (key, data)
-            });
-
-            let key = self
-                .asset_manager
-                .set_density_graph(backend, slot, graph_request);
-            match slot {
-                DensityGraphSlot::SelectMusicP1 => {
-                    self.state.screens.select_music_state.current_graph_key = key;
-                }
-                DensityGraphSlot::SelectMusicP2 => {
-                    self.state.screens.select_music_state.current_graph_key_p2 = key;
-                }
-                DensityGraphSlot::Evaluation | DensityGraphSlot::Gameplay => {}
+        match slot {
+            DensityGraphSlot::SelectMusicP1 => {
+                self.state.screens.select_music_state.current_graph_mesh = mesh;
+                self.state.screens.select_music_state.current_graph_key = "__white".to_string();
+            }
+            DensityGraphSlot::SelectMusicP2 => {
+                self.state.screens.select_music_state.current_graph_mesh_p2 = mesh;
+                self.state.screens.select_music_state.current_graph_key_p2 = "__white".to_string();
             }
         }
     }
@@ -1054,47 +1041,6 @@ impl App {
 
     fn stop_music_command(&self) {
         crate::core::audio::stop_music();
-    }
-
-    fn apply_evaluation_graph(
-        &mut self,
-        graph_request: Option<(String, GraphImageData)>,
-    ) {
-        if let Some(backend) = self.backend.as_mut() {
-            let key = if let Some((key, data)) = graph_request {
-                self.asset_manager.set_density_graph(
-                    backend,
-                    DensityGraphSlot::Evaluation,
-                    Some((key, data)),
-                )
-            } else {
-                self.asset_manager
-                    .set_density_graph(backend, DensityGraphSlot::Evaluation, None)
-            };
-            self.state
-                .screens
-                .evaluation_state
-                .density_graph_texture_key = key;
-        }
-    }
-
-    fn apply_gameplay_graph(&mut self, graph_request: Option<(String, GraphImageData)>) {
-        if let Some(backend) = self.backend.as_mut() {
-            let key = if let Some((key, data)) = graph_request {
-                self.asset_manager.set_density_graph(
-                    backend,
-                    DensityGraphSlot::Gameplay,
-                    Some((key, data)),
-                )
-            } else {
-                self.asset_manager
-                    .set_density_graph(backend, DensityGraphSlot::Gameplay, None)
-            };
-
-            if let Some(gs) = &mut self.state.screens.gameplay_state {
-                gs.density_graph_texture_key = key;
-            }
-        }
     }
 
     fn apply_dynamic_background(&mut self, path_opt: Option<PathBuf>) {
@@ -1603,7 +1549,6 @@ impl App {
         self.apply_banner(None);
         self.apply_density_graph(DensityGraphSlot::SelectMusicP1, None);
         self.apply_density_graph(DensityGraphSlot::SelectMusicP2, None);
-        self.apply_evaluation_graph(None);
         self.apply_dynamic_background(None);
 
         select_music::trigger_immediate_refresh(&mut self.state.screens.select_music_state);
@@ -2183,52 +2128,6 @@ impl App {
                 commands.push(Command::SetDynamicBackground(
                     gs.song.background_path.clone(),
                 ));
-                let graph_request = if space::is_wide()
-                    && profile::get_session_play_style() == profile::PlayStyle::Single
-                {
-                    const MAX_SECONDS: f32 = 4.0 * 60.0;
-                    const SS: u32 = 2;
-                    const MAX_TEX_W: u32 = 16_384;
-                    let height = 105u32.saturating_mul(SS);
-                    let visible_width =
-                        (space::screen_width() * 0.5).round().max(1.0_f32) as u32;
-
-                    let first_second = gs.timing.get_time_for_beat(0.0).min(0.0_f32);
-                    let last_second = gs.song.total_length_seconds.max(0) as f32;
-                    let duration = (last_second - first_second).max(0.001_f32);
-                    let render_visible_width = visible_width.saturating_mul(SS);
-                    let scaled_width = if duration > MAX_SECONDS {
-                        ((render_visible_width as f32) * (duration / MAX_SECONDS))
-                            .round()
-                            .max(1.0_f32) as u32
-                    } else {
-                        render_visible_width
-                    };
-                    let scaled_width = scaled_width.min(MAX_TEX_W).max(1);
-
-                    let bottom_color = [0, 173, 192];
-                    let top_color = [130, 0, 161];
-                    let bg_color = [30, 40, 47];
-
-                    let chart = gs.charts[0].as_ref();
-                    let key = format!("dg_gp:{}:w{}h{}", chart.short_hash, scaled_width, height);
-                    let data = crate::ui::density_graph::render_density_graph_rgba(
-                        &chart.measure_nps_vec,
-                        chart.max_nps,
-                        &gs.timing,
-                        first_second,
-                        last_second,
-                        scaled_width,
-                        height,
-                        bottom_color,
-                        top_color,
-                        bg_color,
-                    );
-                    Some((key, data))
-                } else {
-                    None
-                };
-                commands.push(Command::SetGameplayGraphData(graph_request));
                 self.state.screens.gameplay_state = Some(gs);
             } else {
                 panic!("Navigating to Gameplay without PlayerOptions state!");
@@ -2243,41 +2142,6 @@ impl App {
             );
             self.state.screens.evaluation_state = evaluation::init(gameplay_results);
             self.state.screens.evaluation_state.active_color_index = color_idx;
-
-                    let graph_request =
-                        if let Some(score_info) = &self.state.screens.evaluation_state.score_info {
-                            const SS: u32 = 2;
-                            let graph_width: u32 = 610;
-                            let graph_height: u32 = 64;
-                            let bg_color = [16, 21, 25];
-                            let top_color = [54, 25, 67];
-                            let bottom_color = [38, 84, 91];
-
-                            let render_w = graph_width.saturating_mul(SS);
-                            let render_h = graph_height.saturating_mul(SS);
-                            let graph_data = crate::ui::density_graph::render_density_graph_rgba(
-                                &score_info.chart.measure_nps_vec,
-                                score_info.chart.max_nps,
-                                &score_info.chart.timing,
-                                score_info.graph_first_second,
-                                score_info.song.total_length_seconds.max(0) as f32,
-                                render_w,
-                                render_h,
-                                bottom_color,
-                                top_color,
-                                bg_color,
-                            );
-
-                            let key = format!(
-                                "dg_eval:{}:w{}h{}",
-                                score_info.chart.short_hash, render_w, render_h
-                            );
-                            Some((key, graph_data))
-                        } else {
-                            None
-                        };
-
-            commands.push(Command::SetEvaluationGraphData(graph_request));
         }
 
         if target == CurrentScreen::SelectMusic {
@@ -2448,7 +2312,6 @@ impl App {
                         self.state.screens.select_music_state.selected_steps_index,
                     )
                     .map(|c| DensityGraphSource {
-                        short_hash: c.short_hash.clone(),
                         max_nps: c.max_nps,
                         measure_nps_vec: c.measure_nps_vec.clone(),
                         timing: c.timing.clone(),
@@ -2482,7 +2345,6 @@ impl App {
                                 .p2_selected_steps_index,
                         )
                         .map(|c| DensityGraphSource {
-                            short_hash: c.short_hash.clone(),
                             max_nps: c.max_nps,
                             measure_nps_vec: c.measure_nps_vec.clone(),
                             timing: c.timing.clone(),

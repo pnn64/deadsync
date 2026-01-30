@@ -1,9 +1,9 @@
 use crate::core::gfx::{
-    BlendMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    BlendMode, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
     Texture as RendererTexture,
 };
 use crate::core::space::ortho_for_window;
-use cgmath::Matrix4;
+use cgmath::{Matrix4, Vector4};
 use image::RgbaImage;
 use log::{info, warn};
 use raw_window_handle::{
@@ -51,6 +51,25 @@ impl PipelineSet {
     }
 }
 
+struct MeshPipelineSet {
+    alpha: wgpu::RenderPipeline,
+    add: wgpu::RenderPipeline,
+    multiply: wgpu::RenderPipeline,
+    subtract: wgpu::RenderPipeline,
+}
+
+impl MeshPipelineSet {
+    #[inline(always)]
+    const fn get(&self, mode: BlendMode) -> &wgpu::RenderPipeline {
+        match mode {
+            BlendMode::Alpha => &self.alpha,
+            BlendMode::Add => &self.add,
+            BlendMode::Multiply => &self.multiply,
+            BlendMode::Subtract => &self.subtract,
+        }
+    }
+}
+
 // A handle to a wgpu texture and its bind group.
 pub struct Texture {
     id: u64,
@@ -59,13 +78,24 @@ pub struct Texture {
     bind_group: Arc<wgpu::BindGroup>,
 }
 
-struct Run {
+struct SpriteRun {
     start: u32,
     count: u32,
     blend: BlendMode,
     bind_group: Arc<wgpu::BindGroup>,
     key: u64,
     camera: u8,
+}
+
+enum Op {
+    Sprite(SpriteRun),
+    Mesh {
+        start: u32,
+        count: u32,
+        mode: MeshMode,
+        blend: BlendMode,
+        camera: u8,
+    },
 }
 
 struct OwnedWindowHandle(pub Arc<Window>);
@@ -94,13 +124,19 @@ pub struct State {
     shader: wgpu::ShaderModule,
     pipeline_layout: wgpu::PipelineLayout,
     pipelines: PipelineSet,
+    mesh_shader: wgpu::ShaderModule,
+    mesh_pipeline_layout: wgpu::PipelineLayout,
+    mesh_pipelines: MeshPipelineSet,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     index_count: u32,
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
     scratch_instances: Vec<InstanceRaw>,
-    scratch_runs: Vec<Run>,
+    scratch_mesh_vertices: Vec<crate::core::gfx::MeshVertex>,
+    scratch_ops: Vec<Op>,
+    mesh_vertex_buffer: wgpu::Buffer,
+    mesh_vertex_capacity: usize,
     window_size: (u32, u32),
     vsync_enabled: bool,
     next_texture_id: u64,
@@ -186,6 +222,8 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
     });
 
     let (shader, pipeline_layout, pipelines) = build_pipeline_set(&device, &bind_layout, format);
+    let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
+        build_mesh_pipeline_set(&device, format);
 
     let vertex_data = [
         Vertex {
@@ -226,6 +264,14 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         mapped_at_creation: false,
     });
 
+    let mesh_vertex_capacity = 1024usize;
+    let mesh_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("vk mesh vertex buffer"),
+        size: (mesh_vertex_capacity * mem::size_of::<crate::core::gfx::MeshVertex>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+
     info!("Vulkan (wgpu) backend initialized.");
 
     Ok(State {
@@ -241,13 +287,19 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         shader,
         pipeline_layout,
         pipelines,
+        mesh_shader,
+        mesh_pipeline_layout,
+        mesh_pipelines,
         vertex_buffer,
         index_buffer,
         index_count: indices.len() as u32,
         instance_buffer,
         instance_capacity,
         scratch_instances: Vec::with_capacity(instance_capacity),
-        scratch_runs: Vec::with_capacity(32),
+        scratch_mesh_vertices: Vec::with_capacity(mesh_vertex_capacity),
+        scratch_ops: Vec::with_capacity(64),
+        mesh_vertex_buffer,
+        mesh_vertex_capacity,
         window_size: (size.width, size.height),
         vsync_enabled,
         next_texture_id: 1,
@@ -331,15 +383,24 @@ pub fn draw(
     }
 
     {
+        let objects_len = render_list.objects.len();
         let instances = &mut state.scratch_instances;
         instances.clear();
-        if instances.capacity() < render_list.objects.len() {
-            instances.reserve(render_list.objects.len() - instances.capacity());
+        if instances.capacity() < objects_len {
+            instances.reserve(objects_len - instances.capacity());
         }
-        let runs = &mut state.scratch_runs;
-        runs.clear();
-        if runs.capacity() < render_list.objects.len() {
-            runs.reserve(render_list.objects.len() - runs.capacity());
+
+        let mesh_vertices = &mut state.scratch_mesh_vertices;
+        mesh_vertices.clear();
+        let want_mesh = objects_len.saturating_mul(4);
+        if mesh_vertices.capacity() < want_mesh {
+            mesh_vertices.reserve(want_mesh - mesh_vertices.capacity());
+        }
+
+        let ops = &mut state.scratch_ops;
+        ops.clear();
+        if ops.capacity() < objects_len {
+            ops.reserve(objects_len - ops.capacity());
         }
 
         #[inline(always)]
@@ -355,50 +416,73 @@ pub fn draw(
         }
 
         for obj in &render_list.objects {
-            let (texture_id, tint, uv_scale, uv_offset, edge_fade) = match &obj.object_type {
+            match &obj.object_type {
                 ObjectType::Sprite {
                     texture_id,
                     tint,
                     uv_scale,
                     uv_offset,
                     edge_fade,
-                } => (texture_id, tint, uv_scale, uv_offset, edge_fade),
-            };
+                } => {
+                    let tex = match textures.get(texture_id.as_ref()) {
+                        Some(RendererTexture::VulkanWgpu(t)) => t,
+                        _ => continue,
+                    };
 
-            let tex = match textures.get(texture_id.as_ref()) {
-                Some(RendererTexture::VulkanWgpu(t)) => t,
-                _ => continue,
-            };
+                    let model: [[f32; 4]; 4] = obj.transform.into();
+                    let (center, size, sincos) = decompose_2d(model);
+                    let start = instances.len() as u32;
+                    instances.push(InstanceRaw {
+                        center,
+                        size,
+                        rot_sin_cos: sincos,
+                        tint: *tint,
+                        uv_scale: *uv_scale,
+                        uv_offset: *uv_offset,
+                        edge_fade: *edge_fade,
+                    });
 
-            let model: [[f32; 4]; 4] = obj.transform.into();
-            let (center, size, sincos) = decompose_2d(model);
-            let start = instances.len() as u32;
-            instances.push(InstanceRaw {
-                center,
-                size,
-                rot_sin_cos: sincos,
-                tint: *tint,
-                uv_scale: *uv_scale,
-                uv_offset: *uv_offset,
-                edge_fade: *edge_fade,
-            });
+                    if let Some(Op::Sprite(last)) = ops.last_mut()
+                        && last.key == tex.id
+                        && last.blend == obj.blend
+                        && last.camera == obj.camera
+                    {
+                        last.count += 1;
+                        continue;
+                    }
 
-            if let Some(last) = runs.last_mut()
-                && last.key == tex.id
-                && last.blend == obj.blend
-                && last.camera == obj.camera
-            {
-                last.count += 1;
-                continue;
+                    ops.push(Op::Sprite(SpriteRun {
+                        start,
+                        count: 1,
+                        blend: obj.blend,
+                        bind_group: tex.bind_group.clone(),
+                        key: tex.id,
+                        camera: obj.camera,
+                    }));
+                }
+                ObjectType::Mesh { vertices, mode } => {
+                    if vertices.is_empty() {
+                        continue;
+                    }
+                    let start = mesh_vertices.len() as u32;
+                    mesh_vertices.reserve(vertices.len());
+                    for v in vertices.iter() {
+                        let p = obj.transform * Vector4::new(v.pos[0], v.pos[1], 0.0, 1.0);
+                        mesh_vertices.push(crate::core::gfx::MeshVertex {
+                            pos: [p.x, p.y],
+                            color: v.color,
+                        });
+                    }
+
+                    ops.push(Op::Mesh {
+                        start,
+                        count: vertices.len() as u32,
+                        mode: *mode,
+                        blend: obj.blend,
+                        camera: obj.camera,
+                    });
+                }
             }
-            runs.push(Run {
-                start,
-                count: 1,
-                blend: obj.blend,
-                bind_group: tex.bind_group.clone(),
-                key: tex.id,
-                camera: obj.camera,
-            });
         }
     }
 
@@ -409,6 +493,15 @@ pub fn draw(
             &state.instance_buffer,
             0,
             cast_slice(state.scratch_instances.as_slice()),
+        );
+    }
+    let mesh_len = state.scratch_mesh_vertices.len();
+    ensure_mesh_vertex_capacity(state, mesh_len);
+    if mesh_len > 0 {
+        state.queue.write_buffer(
+            &state.mesh_vertex_buffer,
+            0,
+            cast_slice(state.scratch_mesh_vertices.as_slice()),
         );
     }
     let frame = match state.surface.get_current_texture() {
@@ -451,35 +544,79 @@ pub fn draw(
             occlusion_query_set: None,
             timestamp_writes: None,
         });
-
-        pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
-        pass.set_vertex_buffer(1, state.instance_buffer.slice(..));
-        pass.set_index_buffer(state.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-
+        let mut last_kind: Option<bool> = None;
         let mut last_blend: Option<BlendMode> = None;
         let mut last_bind: Option<u64> = None;
         let mut last_camera: Option<u8> = None;
-        for run in &state.scratch_runs {
-            if last_blend != Some(run.blend) {
-                pass.set_pipeline(state.pipelines.get(run.blend));
-                last_blend = Some(run.blend);
-                last_camera = None;
+        for op in &state.scratch_ops {
+            match op {
+                Op::Sprite(run) => {
+                    if last_kind != Some(false) {
+                        pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
+                        pass.set_vertex_buffer(1, state.instance_buffer.slice(..));
+                        pass.set_index_buffer(state.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                        last_kind = Some(false);
+                        last_blend = None;
+                        last_bind = None;
+                        last_camera = None;
+                    }
+                    if last_blend != Some(run.blend) {
+                        pass.set_pipeline(state.pipelines.get(run.blend));
+                        last_blend = Some(run.blend);
+                        last_bind = None;
+                    }
+                    if last_camera != Some(run.camera) {
+                        let vp = render_list
+                            .cameras
+                            .get(run.camera as usize)
+                            .copied()
+                            .unwrap_or(state.projection);
+                        let vp_array: [[f32; 4]; 4] = vp.into();
+                        pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, cast_slice(&vp_array));
+                        last_camera = Some(run.camera);
+                    }
+                    if last_bind != Some(run.key) {
+                        pass.set_bind_group(0, Some(run.bind_group.as_ref()), &[]);
+                        last_bind = Some(run.key);
+                    }
+                    pass.draw_indexed(0..state.index_count, 0, run.start..(run.start + run.count));
+                }
+                Op::Mesh {
+                    start,
+                    count,
+                    mode,
+                    blend,
+                    camera,
+                } => {
+                    if *count == 0 {
+                        continue;
+                    }
+                    if last_kind != Some(true) {
+                        pass.set_vertex_buffer(0, state.mesh_vertex_buffer.slice(..));
+                        last_kind = Some(true);
+                        last_blend = None;
+                        last_bind = None;
+                        last_camera = None;
+                    }
+                    if last_blend != Some(*blend) {
+                        pass.set_pipeline(state.mesh_pipelines.get(*blend));
+                        last_blend = Some(*blend);
+                    }
+                    if last_camera != Some(*camera) {
+                        let vp = render_list
+                            .cameras
+                            .get(*camera as usize)
+                            .copied()
+                            .unwrap_or(state.projection);
+                        let vp_array: [[f32; 4]; 4] = vp.into();
+                        pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, cast_slice(&vp_array));
+                        last_camera = Some(*camera);
+                    }
+                    match mode {
+                        MeshMode::Triangles => pass.draw(*start..(*start + *count), 0..1),
+                    }
+                }
             }
-            if last_camera != Some(run.camera) {
-                let vp = render_list
-                    .cameras
-                    .get(run.camera as usize)
-                    .copied()
-                    .unwrap_or(state.projection);
-                let vp_array: [[f32; 4]; 4] = vp.into();
-                pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, cast_slice(&vp_array));
-                last_camera = Some(run.camera);
-            }
-            if last_bind != Some(run.key) {
-                pass.set_bind_group(0, Some(run.bind_group.as_ref()), &[]);
-                last_bind = Some(run.key);
-            }
-            pass.draw_indexed(0..state.index_count, 0, run.start..(run.start + run.count));
         }
         drop(pass);
     }
@@ -518,6 +655,20 @@ fn ensure_instance_capacity(state: &mut State, needed: usize) {
     state.instance_capacity = new_cap;
 }
 
+fn ensure_mesh_vertex_capacity(state: &mut State, needed: usize) {
+    if needed <= state.mesh_vertex_capacity {
+        return;
+    }
+    let new_cap = needed.next_power_of_two().max(1024);
+    state.mesh_vertex_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("vk mesh vertex buffer"),
+        size: (new_cap * mem::size_of::<crate::core::gfx::MeshVertex>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    state.mesh_vertex_capacity = new_cap;
+}
+
 fn reconfigure_surface(state: &mut State) {
     if state.window_size.0 == 0 || state.window_size.1 == 0 {
         return;
@@ -538,9 +689,14 @@ fn reconfigure_surface(state: &mut State) {
     if format_changed {
         let (shader, pipeline_layout, pipelines) =
             build_pipeline_set(&state.device, &state.bind_layout, state.config.format);
+        let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
+            build_mesh_pipeline_set(&state.device, state.config.format);
         state.shader = shader;
         state.pipeline_layout = pipeline_layout;
         state.pipelines = pipelines;
+        state.mesh_shader = mesh_shader;
+        state.mesh_pipeline_layout = mesh_pipeline_layout;
+        state.mesh_pipelines = mesh_pipelines;
     }
 }
 
@@ -674,6 +830,40 @@ fn build_pipeline_set(
     (shader, pipeline_layout, pipelines)
 }
 
+fn build_mesh_pipeline_set(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+) -> (wgpu::ShaderModule, wgpu::PipelineLayout, MeshPipelineSet) {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("vk mesh shader module"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(MESH_SHADER)),
+    });
+
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("vk mesh pipeline layout"),
+        bind_group_layouts: &[],
+        push_constant_ranges: &[wgpu::PushConstantRange {
+            stages: wgpu::ShaderStages::VERTEX,
+            range: 0..(mem::size_of::<[[f32; 4]; 4]>() as u32),
+        }],
+    });
+
+    let pipelines = MeshPipelineSet {
+        alpha: build_mesh_pipeline(device, &pipeline_layout, format, BlendMode::Alpha, &shader),
+        add: build_mesh_pipeline(device, &pipeline_layout, format, BlendMode::Add, &shader),
+        multiply: build_mesh_pipeline(device, &pipeline_layout, format, BlendMode::Multiply, &shader),
+        subtract: build_mesh_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Subtract,
+            &shader,
+        ),
+    };
+
+    (shader, pipeline_layout, pipelines)
+}
+
 fn build_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
@@ -716,6 +906,48 @@ fn build_pipeline(
     })
 }
 
+fn build_mesh_pipeline(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    format: wgpu::TextureFormat,
+    mode: BlendMode,
+    shader: &wgpu::ShaderModule,
+) -> wgpu::RenderPipeline {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("vk mesh pipeline"),
+        layout: Some(layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: Some("vs_main"),
+            buffers: &[mesh_vertex_layout()],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: blend_state(mode),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: None,
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
+}
+
 const fn vertex_layout() -> wgpu::VertexBufferLayout<'static> {
     wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<Vertex>() as u64,
@@ -732,9 +964,22 @@ const fn instance_layout() -> wgpu::VertexBufferLayout<'static> {
     }
 }
 
+const fn mesh_vertex_layout() -> wgpu::VertexBufferLayout<'static> {
+    wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<crate::core::gfx::MeshVertex>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &MESH_ATTRS,
+    }
+}
+
 const VERT_ATTRS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
     0 => Float32x2,
     1 => Float32x2,
+];
+
+const MESH_ATTRS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
+    0 => Float32x2, // pos
+    1 => Float32x4, // color
 ];
 
 const INSTANCE_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
@@ -864,5 +1109,36 @@ fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
     var color = texel * input.tint;
     color.a = color.a * fade;
     return color;
+}
+";
+
+const MESH_SHADER: &str = r"
+struct Proj {
+    proj: mat4x4<f32>,
+};
+
+var<push_constant> u_proj: Proj;
+
+struct VertexIn {
+    @location(0) pos: vec2<f32>,
+    @location(1) color: vec4<f32>,
+};
+
+struct VertexOut {
+    @builtin(position) pos: vec4<f32>,
+    @location(0) color: vec4<f32>,
+};
+
+@vertex
+fn vs_main(input: VertexIn) -> VertexOut {
+    var out: VertexOut;
+    out.pos = u_proj.proj * vec4<f32>(input.pos, 0.0, 1.0);
+    out.color = input.color;
+    return out;
+}
+
+@fragment
+fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
+    return input.color;
 }
 ";

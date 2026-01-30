@@ -1,5 +1,5 @@
 use crate::core::gfx::{
-    BlendMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    BlendMode, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
     Texture as RendererTexture,
 };
 use crate::core::space::ortho_for_window;
@@ -27,7 +27,9 @@ pub struct State {
     gl_surface: Surface<WindowSurface>,
     gl_context: PossiblyCurrentContext,
     program: glow::Program,
+    mesh_program: glow::Program,
     mvp_location: UniformLocation,
+    mesh_mvp_location: UniformLocation,
     color_location: UniformLocation,
     texture_location: UniformLocation,
     projection: Matrix4<f32>,
@@ -37,6 +39,8 @@ pub struct State {
     _shared_vbo: glow::Buffer,
     _shared_ibo: glow::Buffer,
     index_count: i32,
+    mesh_vao: glow::VertexArray,
+    mesh_vbo: glow::Buffer,
     uv_scale_location: UniformLocation,
     uv_offset_location: UniformLocation,
     edge_fade_location: UniformLocation,
@@ -57,6 +61,7 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         edge_fade_location,
         instanced_location,
     ) = create_graphics_program(&gl)?;
+    let (mesh_program, mesh_mvp_location) = create_mesh_program(&gl)?;
 
     // Create shared static unit quad + index buffer.
     let (shared_vao, _shared_vbo, _shared_ibo, index_count) = unsafe {
@@ -107,6 +112,32 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         (vao, vbo, ibo, QUAD_INDICES.len() as i32)
     };
 
+    let (mesh_vao, mesh_vbo) = unsafe {
+        let vao = gl.create_vertex_array()?;
+        let vbo = gl.create_buffer()?;
+
+        gl.bind_vertex_array(Some(vao));
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+        gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
+
+        // a_pos (location 0), a_color (location 1)
+        let stride = std::mem::size_of::<crate::core::gfx::MeshVertex>() as i32;
+        gl.enable_vertex_attrib_array(0);
+        gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+        gl.enable_vertex_attrib_array(1);
+        gl.vertex_attrib_pointer_f32(
+            1,
+            4,
+            glow::FLOAT,
+            false,
+            stride,
+            (2 * std::mem::size_of::<f32>()) as i32,
+        );
+
+        gl.bind_vertex_array(None);
+        (vao, vbo)
+    };
+
     let initial_size = window.inner_size();
     let projection = ortho_for_window(initial_size.width, initial_size.height);
 
@@ -129,7 +160,9 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         gl_surface,
         gl_context,
         program,
+        mesh_program,
         mvp_location,
+        mesh_mvp_location,
         color_location,
         texture_location,
         projection,
@@ -138,6 +171,8 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         _shared_vbo,
         _shared_ibo,
         index_count,
+        mesh_vao,
+        mesh_vbo,
         uv_scale_location,
         uv_offset_location,
         edge_fade_location,
@@ -255,17 +290,11 @@ pub fn draw(
         gl.clear_color(c[0], c[1], c[2], c[3]);
         gl.clear(glow::COLOR_BUFFER_BIT);
 
-        gl.use_program(Some(state.program));
-        gl.bind_vertex_array(Some(state.shared_vao));
-
-        gl.uniform_1_i32(Some(&state.instanced_location), 0);
-
         gl.enable(glow::BLEND);
         gl.blend_equation(glow::FUNC_ADD);
         gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 
         gl.active_texture(glow::TEXTURE0);
-        gl.uniform_1_i32(Some(&state.texture_location), 0);
 
         let mut last_bound_tex: Option<glow::Texture> = None;
         let mut last_blend = Some(BlendMode::Alpha);
@@ -273,6 +302,7 @@ pub fn draw(
         let mut last_uv_offset: Option<[f32; 2]> = None;
         let mut last_color: Option<[f32; 4]> = None;
         let mut last_edge_fade: Option<[f32; 4]> = None;
+        let mut last_is_mesh: Option<bool> = None;
 
         for obj in &render_list.objects {
             apply_blend(gl, obj.blend, &mut last_blend);
@@ -282,12 +312,6 @@ pub fn draw(
                 .get(obj.camera as usize)
                 .copied()
                 .unwrap_or(state.projection);
-            let mvp_array: [[f32; 4]; 4] = (cam * obj.transform).into();
-            gl.uniform_matrix_4_f32_slice(
-                Some(&state.mvp_location),
-                false,
-                bytemuck::cast_slice(&mvp_array),
-            );
 
             match &obj.object_type {
                 ObjectType::Sprite {
@@ -297,6 +321,21 @@ pub fn draw(
                     uv_offset,
                     edge_fade,
                 } => {
+                    if last_is_mesh != Some(false) {
+                        gl.use_program(Some(state.program));
+                        gl.bind_vertex_array(Some(state.shared_vao));
+                        gl.uniform_1_i32(Some(&state.texture_location), 0);
+                        gl.uniform_1_i32(Some(&state.instanced_location), 0);
+                        last_is_mesh = Some(false);
+                    }
+
+                    let mvp_array: [[f32; 4]; 4] = (cam * obj.transform).into();
+                    gl.uniform_matrix_4_f32_slice(
+                        Some(&state.mvp_location),
+                        false,
+                        bytemuck::cast_slice(&mvp_array),
+                    );
+
                     if let Some(RendererTexture::OpenGL(gl_tex)) = textures.get(texture_id.as_ref())
                     {
                         if last_bound_tex != Some(gl_tex.0) {
@@ -336,9 +375,40 @@ pub fn draw(
                         vertices += 4;
                     }
                 }
+                ObjectType::Mesh { vertices: vs, mode } => {
+                    if vs.is_empty() {
+                        continue;
+                    }
+                    if last_is_mesh != Some(true) {
+                        gl.use_program(Some(state.mesh_program));
+                        gl.bind_vertex_array(Some(state.mesh_vao));
+                        last_is_mesh = Some(true);
+                    }
+
+                    let mvp_array: [[f32; 4]; 4] = (cam * obj.transform).into();
+                    gl.uniform_matrix_4_f32_slice(
+                        Some(&state.mesh_mvp_location),
+                        false,
+                        bytemuck::cast_slice(&mvp_array),
+                    );
+
+                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.mesh_vbo));
+                    gl.buffer_data_u8_slice(
+                        glow::ARRAY_BUFFER,
+                        bytemuck::cast_slice(vs.as_ref()),
+                        glow::DYNAMIC_DRAW,
+                    );
+
+                    let prim = match mode {
+                        MeshMode::Triangles => glow::TRIANGLES,
+                    };
+                    gl.draw_arrays(prim, 0, vs.len() as i32);
+                    vertices = vertices.saturating_add(vs.len() as u32);
+                }
             }
         }
         gl.bind_vertex_array(None);
+        gl.use_program(None);
     }
 
     state.gl_surface.swap_buffers(&state.gl_context)?;
@@ -365,9 +435,12 @@ pub fn cleanup(state: &mut State) {
     info!("Cleaning up OpenGL resources...");
     unsafe {
         state.gl.delete_program(state.program);
+        state.gl.delete_program(state.mesh_program);
         state.gl.delete_vertex_array(state.shared_vao);
         state.gl.delete_buffer(state._shared_vbo);
         state.gl.delete_buffer(state._shared_ibo);
+        state.gl.delete_vertex_array(state.mesh_vao);
+        state.gl.delete_buffer(state.mesh_vbo);
     }
     info!("OpenGL resources cleaned up.");
 }
@@ -564,6 +637,55 @@ fn create_graphics_program(
             edge_fade_location,
             instanced_location,
         ))
+    }
+}
+
+fn create_mesh_program(gl: &glow::Context) -> Result<(glow::Program, UniformLocation), String> {
+    unsafe {
+        let program = gl.create_program()?;
+        let compile = |ty, src: &str| -> Result<glow::Shader, String> {
+            let sh = gl.create_shader(ty)?;
+            gl.shader_source(sh, src);
+            gl.compile_shader(sh);
+            if !gl.get_shader_compile_status(sh) {
+                let log = gl.get_shader_info_log(sh);
+                gl.delete_shader(sh);
+                return Err(log);
+            }
+            Ok(sh)
+        };
+
+        let vert = compile(
+            glow::VERTEX_SHADER,
+            include_str!("../shaders/opengl_mesh.vert"),
+        )?;
+        let frag = compile(
+            glow::FRAGMENT_SHADER,
+            include_str!("../shaders/opengl_mesh.frag"),
+        )?;
+
+        gl.attach_shader(program, vert);
+        gl.attach_shader(program, frag);
+        gl.link_program(program);
+        if !gl.get_program_link_status(program) {
+            let log = gl.get_program_info_log(program);
+            gl.detach_shader(program, vert);
+            gl.detach_shader(program, frag);
+            gl.delete_shader(vert);
+            gl.delete_shader(frag);
+            gl.delete_program(program);
+            return Err(log);
+        }
+        gl.detach_shader(program, vert);
+        gl.detach_shader(program, frag);
+        gl.delete_shader(vert);
+        gl.delete_shader(frag);
+
+        let mvp_location = gl
+            .get_uniform_location(program, "u_model_view_proj")
+            .ok_or_else(|| "u_model_view_proj".to_string())?;
+
+        Ok((program, mvp_location))
     }
 }
 

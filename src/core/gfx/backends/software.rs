@@ -1,5 +1,5 @@
 use crate::core::gfx::{
-    BlendMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    BlendMode, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
     Texture as RendererTexture,
 };
 use crate::core::space::ortho_for_window;
@@ -137,34 +137,51 @@ pub fn draw(
                             .get(obj.camera as usize)
                             .copied()
                             .unwrap_or(default_proj);
-                        let ObjectType::Sprite {
-                            texture_id,
-                            tint,
-                            uv_scale,
-                            uv_offset,
-                            edge_fade: _,
-                        } = &obj.object_type;
-
-                        let tex_key = texture_id.as_ref();
-                        let Some(RendererTexture::Software(tex)) = textures.get(tex_key) else {
-                            continue;
-                        };
-
-                        local_vertices += rasterize_sprite(
-                            &proj,
-                            &obj.transform,
-                            *tint,
-                            *uv_scale,
-                            *uv_offset,
-                            obj.blend,
-                            &tex.image,
-                            tex.sampler,
-                            width,
-                            height,
-                            y_start,
-                            y_end,
-                            stripe,
-                        );
+                        match &obj.object_type {
+                            ObjectType::Sprite {
+                                texture_id,
+                                tint,
+                                uv_scale,
+                                uv_offset,
+                                edge_fade: _,
+                            } => {
+                                let tex_key = texture_id.as_ref();
+                                let Some(RendererTexture::Software(tex)) = textures.get(tex_key)
+                                else {
+                                    continue;
+                                };
+                                local_vertices += rasterize_sprite(
+                                    &proj,
+                                    &obj.transform,
+                                    *tint,
+                                    *uv_scale,
+                                    *uv_offset,
+                                    obj.blend,
+                                    &tex.image,
+                                    tex.sampler,
+                                    width,
+                                    height,
+                                    y_start,
+                                    y_end,
+                                    stripe,
+                                );
+                            }
+                            ObjectType::Mesh { vertices, mode } => match mode {
+                                MeshMode::Triangles => {
+                                    local_vertices += rasterize_mesh_triangles(
+                                        &proj,
+                                        &obj.transform,
+                                        vertices.as_ref(),
+                                        obj.blend,
+                                        width,
+                                        height,
+                                        y_start,
+                                        y_end,
+                                        stripe,
+                                    );
+                                }
+                            },
+                        }
                     }
 
                     counter.fetch_add(local_vertices, Ordering::Relaxed);
@@ -177,34 +194,48 @@ pub fn draw(
                 .get(obj.camera as usize)
                 .copied()
                 .unwrap_or(default_proj);
-            let ObjectType::Sprite {
-                texture_id,
-                tint,
-                uv_scale,
-                uv_offset,
-                edge_fade: _,
-            } = &obj.object_type;
-
-            let tex_key = texture_id.as_ref();
-            let Some(RendererTexture::Software(tex)) = textures.get(tex_key) else {
-                continue;
+            let v = match &obj.object_type {
+                ObjectType::Sprite {
+                    texture_id,
+                    tint,
+                    uv_scale,
+                    uv_offset,
+                    edge_fade: _,
+                } => {
+                    let tex_key = texture_id.as_ref();
+                    let Some(RendererTexture::Software(tex)) = textures.get(tex_key) else {
+                        continue;
+                    };
+                    rasterize_sprite(
+                        &proj,
+                        &obj.transform,
+                        *tint,
+                        *uv_scale,
+                        *uv_offset,
+                        obj.blend,
+                        &tex.image,
+                        tex.sampler,
+                        w,
+                        h,
+                        0,
+                        h,
+                        &mut buffer,
+                    )
+                }
+                ObjectType::Mesh { vertices, mode } => match mode {
+                    MeshMode::Triangles => rasterize_mesh_triangles(
+                        &proj,
+                        &obj.transform,
+                        vertices.as_ref(),
+                        obj.blend,
+                        w,
+                        h,
+                        0,
+                        h,
+                        &mut buffer,
+                    ),
+                },
             };
-
-            let v = rasterize_sprite(
-                &proj,
-                &obj.transform,
-                *tint,
-                *uv_scale,
-                *uv_offset,
-                obj.blend,
-                &tex.image,
-                tex.sampler,
-                w,
-                h,
-                0,
-                h,
-                &mut buffer,
-            );
             vertex_counter.fetch_add(v, Ordering::Relaxed);
         }
     }
@@ -252,6 +283,13 @@ struct ScreenVertex {
     y: f32,
     u: f32,
     v: f32,
+}
+
+#[derive(Clone, Copy)]
+struct ScreenVertexColor {
+    x: f32,
+    y: f32,
+    color: [f32; 4],
 }
 
 #[inline(always)]
@@ -341,6 +379,71 @@ fn rasterize_sprite(
     );
 
     4
+}
+
+fn rasterize_mesh_triangles(
+    proj: &Matrix4<f32>,
+    transform: &Matrix4<f32>,
+    vertices: &[crate::core::gfx::MeshVertex],
+    blend: BlendMode,
+    width: usize,
+    height: usize,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
+    buffer: &mut [u32],
+) -> u32 {
+    if vertices.len() < 3 || width == 0 || height == 0 || stripe_y_start >= stripe_y_end {
+        return 0;
+    }
+
+    let mvp = *proj * *transform;
+    let mut tri: [ScreenVertexColor; 3] = [
+        ScreenVertexColor {
+            x: 0.0,
+            y: 0.0,
+            color: [0.0; 4],
+        };
+        3
+    ];
+
+    let mut verts_drawn = 0u32;
+    'tri: for chunk in vertices.chunks_exact(3) {
+        for i in 0..3 {
+            let p = chunk[i].pos;
+            let clip = mvp * Vector4::new(p[0], p[1], 0.0, 1.0);
+            if clip.w == 0.0 {
+                continue 'tri;
+            }
+            let ndc_x = clip.x / clip.w;
+            let ndc_y = clip.y / clip.w;
+            if !ndc_x.is_finite() || !ndc_y.is_finite() {
+                continue 'tri;
+            }
+
+            let sx = ((ndc_x + 1.0) * 0.5) * (width as f32);
+            let sy = ((1.0 - ndc_y) * 0.5) * (height as f32);
+            tri[i] = ScreenVertexColor {
+                x: sx,
+                y: sy,
+                color: chunk[i].color,
+            };
+        }
+
+        rasterize_triangle_color(
+            &tri[0],
+            &tri[1],
+            &tri[2],
+            blend,
+            width,
+            height,
+            stripe_y_start,
+            stripe_y_end,
+            buffer,
+        );
+        verts_drawn = verts_drawn.saturating_add(3);
+    }
+
+    verts_drawn
 }
 
 #[inline(always)]
@@ -539,6 +642,97 @@ fn rasterize_triangle(
             sg = sg.clamp(0.0, 1.0);
             sb = sb.clamp(0.0, 1.0);
             sa = sa.clamp(0.0, 1.0);
+
+            let dst_idx = row * width + x as usize;
+            let dst = buffer[dst_idx];
+
+            let dr = ((dst >> 16) & 0xFF) as f32 / 255.0;
+            let dg = ((dst >> 8) & 0xFF) as f32 / 255.0;
+            let db = (dst & 0xFF) as f32 / 255.0;
+            let da = ((dst >> 24) & 0xFF) as f32 / 255.0;
+
+            let (out_r, out_g, out_b, out_a) = match blend {
+                BlendMode::Add => {
+                    let r = sr.mul_add(sa, dr).min(1.0);
+                    let g = sg.mul_add(sa, dg).min(1.0);
+                    let b = sb.mul_add(sa, db).min(1.0);
+                    let a = (da + sa).min(1.0);
+                    (r, g, b, a)
+                }
+                _ => {
+                    let inv = 1.0 - sa;
+                    let r = sr.mul_add(sa, dr * inv);
+                    let g = sg.mul_add(sa, dg * inv);
+                    let b = sb.mul_add(sa, db * inv);
+                    let a = sa + da * inv;
+                    (r, g, b, a)
+                }
+            };
+
+            buffer[dst_idx] = pack_rgba([out_r, out_g, out_b, out_a]);
+        }
+    }
+}
+
+#[inline(always)]
+fn rasterize_triangle_color(
+    v0: &ScreenVertexColor,
+    v1: &ScreenVertexColor,
+    v2: &ScreenVertexColor,
+    blend: BlendMode,
+    width: usize,
+    height: usize,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
+    buffer: &mut [u32],
+) {
+    let min_x = v0.x.min(v1.x).min(v2.x).floor().max(0.0) as i32;
+    let max_x = v0.x.max(v1.x).max(v2.x).ceil().min((width - 1) as f32) as i32;
+    let mut min_y = v0.y.min(v1.y).min(v2.y).floor().max(0.0) as i32;
+    let mut max_y = v0.y.max(v1.y).max(v2.y).ceil().min((height - 1) as f32) as i32;
+    if min_x > max_x || min_y > max_y {
+        return;
+    }
+
+    let stripe_start = stripe_y_start as i32;
+    let stripe_end = (stripe_y_end as i32) - 1;
+    if stripe_start > stripe_end || max_y < stripe_start || min_y > stripe_end {
+        return;
+    }
+    min_y = min_y.max(stripe_start);
+    max_y = max_y.min(stripe_end);
+
+    let denom = edge_function(v0.x, v0.y, v1.x, v1.y, v2.x, v2.y);
+    if denom == 0.0 {
+        return;
+    }
+    let inv_denom = 1.0 / denom;
+
+    for y in min_y..=max_y {
+        let py = y as f32 + 0.5;
+        let row = (y - stripe_start) as usize;
+        for x in min_x..=max_x {
+            let px = x as f32 + 0.5;
+
+            let w0 = edge_function(v1.x, v1.y, v2.x, v2.y, px, py) * inv_denom;
+            let w1 = edge_function(v2.x, v2.y, v0.x, v0.y, px, py) * inv_denom;
+            let w2 = 1.0 - w0 - w1;
+            if w0 < 0.0 || w1 < 0.0 || w2 < 0.0 {
+                continue;
+            }
+
+            let mut sr = v0.color[0].mul_add(w0, v1.color[0] * w1) + v2.color[0] * w2;
+            let mut sg = v0.color[1].mul_add(w0, v1.color[1] * w1) + v2.color[1] * w2;
+            let mut sb = v0.color[2].mul_add(w0, v1.color[2] * w1) + v2.color[2] * w2;
+            let mut sa = v0.color[3].mul_add(w0, v1.color[3] * w1) + v2.color[3] * w2;
+
+            sr = sr.clamp(0.0, 1.0);
+            sg = sg.clamp(0.0, 1.0);
+            sb = sb.clamp(0.0, 1.0);
+            sa = sa.clamp(0.0, 1.0);
+            if sa <= 0.0 {
+                continue;
+            }
 
             let dst_idx = row * width + x as usize;
             let dst = buffer[dst_idx];

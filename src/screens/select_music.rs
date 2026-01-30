@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::core::audio;
+use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
 use crate::core::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width, widescale,
@@ -292,6 +293,8 @@ pub struct State {
     pub current_banner_key: String,
     pub current_graph_key: String,
     pub current_graph_key_p2: String,
+    pub current_graph_mesh: Option<Arc<[MeshVertex]>>,
+    pub current_graph_mesh_p2: Option<Arc<[MeshVertex]>>,
     pub session_elapsed: f32,
     displayed_chart_p1: Option<DisplayedChart>,
     displayed_chart_p2: Option<DisplayedChart>,
@@ -523,6 +526,8 @@ pub fn init() -> State {
         last_requested_chart_hash: None,
         current_graph_key: "__white".to_string(),
         current_graph_key_p2: "__white".to_string(),
+        current_graph_mesh: None,
+        current_graph_mesh_p2: None,
         displayed_chart_p1: None,
         displayed_chart_p2: None,
         last_requested_chart_hash_p2: None,
@@ -1186,7 +1191,6 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 return ScreenAction::RequestDensityGraph {
                     slot: DensityGraphSlot::SelectMusicP1,
                     chart_opt: desired_p1.map(|c| DensityGraphSource {
-                        short_hash: c.short_hash.clone(),
                         max_nps: c.max_nps,
                         measure_nps_vec: c.measure_nps_vec.clone(),
                         timing: c.timing.clone(),
@@ -1216,13 +1220,12 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 if state.last_requested_chart_hash_p2.as_deref() != desired_hash_p2 {
                     state.last_requested_chart_hash_p2 = desired_hash_p2.map(str::to_string);
                     return ScreenAction::RequestDensityGraph {
-                        slot: DensityGraphSlot::SelectMusicP2,
-                        chart_opt: desired_p2.map(|c| DensityGraphSource {
-                            short_hash: c.short_hash.clone(),
-                            max_nps: c.max_nps,
-                            measure_nps_vec: c.measure_nps_vec.clone(),
-                            timing: c.timing.clone(),
-                            first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                    slot: DensityGraphSlot::SelectMusicP2,
+                    chart_opt: desired_p2.map(|c| DensityGraphSource {
+                        max_nps: c.max_nps,
+                        measure_nps_vec: c.measure_nps_vec.clone(),
+                        timing: c.timing.clone(),
+                        first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
                             last_second: song.total_length_seconds.max(0) as f32,
                         }),
                     };
@@ -1670,6 +1673,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let build_breakdown_panel = |graph_cy: f32,
                                  is_p2_layout: bool,
                                  graph_key: &String,
+                                 graph_mesh: Option<Arc<[MeshVertex]>>,
                                  chart: Option<&ChartData>| {
         let mut graph_kids = vec![
             act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
@@ -1706,13 +1710,28 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     })
                 })
-                .flatten()
-                .unwrap_or_else(|| c.simple_breakdown.clone());
+                    .flatten()
+                    .unwrap_or_else(|| c.simple_breakdown.clone());
 
             let peak_x = panel_w * 0.5 + if is_p2_layout { -136.0 } else { 60.0 };
-            graph_kids.push(
-                act!(sprite(graph_key.clone()): align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0)),
-            );
+            if let Some(mesh) = graph_mesh
+                && !mesh.is_empty()
+            {
+                graph_kids.push(Actor::Mesh {
+                    align: [0.0, 0.0],
+                    offset: [0.0, 0.0],
+                    size: [SizeSpec::Px(panel_w), SizeSpec::Px(64.0)],
+                    vertices: mesh,
+                    mode: MeshMode::Triangles,
+                    visible: true,
+                    blend: BlendMode::Alpha,
+                    z: 0,
+                });
+            } else if graph_key != "__white" {
+                graph_kids.push(act!(sprite(graph_key.clone()):
+                    align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0)
+                ));
+            }
             graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0)));
             graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, 47.0): setsize(panel_w, 17.0): diffuse(0.0, 0.0, 0.0, 0.5)));
             graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w)));
@@ -1733,12 +1752,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             screen_center_y() + 23.0,
             false,
             &state.current_graph_key,
+            state.current_graph_mesh.clone(),
             disp_chart_p1,
         ));
         actors.push(build_breakdown_panel(
             screen_center_y() + 111.0,
             true,
             &state.current_graph_key_p2,
+            state.current_graph_mesh_p2.clone(),
             disp_chart_p2,
         ));
     } else {
@@ -1747,6 +1768,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             graph_cy,
             is_p2_single,
             &state.current_graph_key,
+            state.current_graph_mesh.clone(),
             disp_chart_p1,
         ));
     }

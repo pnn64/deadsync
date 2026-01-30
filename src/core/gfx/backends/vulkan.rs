@@ -787,6 +787,7 @@ pub fn draw(
                     uv_offset,
                     edge_fade,
                 } => (texture_id, tint, uv_scale, uv_offset, edge_fade),
+                ObjectType::Mesh { .. } => continue,
             };
 
             let set_opt = textures.get(texture_id.as_ref()).and_then(|t| {

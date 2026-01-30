@@ -72,6 +72,13 @@ fn estimate_object_count(actors: &[Actor]) -> usize {
                 // 2 objects per char is a safe upper bound.
                 total += content.len() * 2;
             }
+            Actor::Mesh {
+                visible, vertices, ..
+            } => {
+                if *visible && !vertices.is_empty() {
+                    total += 1;
+                }
+            }
             Actor::Frame {
                 children,
                 background,
@@ -234,6 +241,56 @@ fn build_actor_recursive<'a>(
             }
         }
 
+        actors::Actor::Mesh {
+            align,
+            offset,
+            size,
+            vertices,
+            mode,
+            visible,
+            blend,
+            z,
+        } => {
+            if !*visible || vertices.is_empty() {
+                return;
+            }
+
+            let rect = place_rect(parent, *align, *offset, *size);
+            let base_x = m.left + rect.x;
+            let base_y = m.top - rect.y;
+
+            let mut world: Vec<renderer::MeshVertex> = Vec::with_capacity(vertices.len());
+            for v in vertices.iter() {
+                world.push(renderer::MeshVertex {
+                    pos: [base_x + v.pos[0], base_y - v.pos[1]],
+                    color: v.color,
+                });
+            }
+
+            let before = out.len();
+            out.push(renderer::RenderObject {
+                object_type: renderer::ObjectType::Mesh {
+                    vertices: std::borrow::Cow::Owned(world),
+                    mode: *mode,
+                },
+                transform: Matrix4::from_scale(1.0),
+                blend: *blend,
+                z: 0,
+                order: 0,
+                camera,
+            });
+
+            let layer = base_z.saturating_add(*z);
+            for obj in out.iter_mut().skip(before) {
+                obj.z = layer;
+                obj.order = {
+                    let o = *order_counter;
+                    *order_counter += 1;
+                    o
+                };
+            }
+        }
+
         actors::Actor::Shadow { len, color, child } => {
             // Build the child first to push its objects; then duplicate those objects
             // with a pre-multiplied world translation and shadow tint at z-1.
@@ -259,7 +316,6 @@ fn build_actor_recursive<'a>(
             let end = out.len();
             for i in start..end {
                 let obj = &out[i];
-                // Only sprites are emitted by our pipeline; clone safely.
                 let mut obj_type = obj.object_type.clone();
                 match &mut obj_type {
                     renderer::ObjectType::Sprite { tint, .. } => {
@@ -267,6 +323,22 @@ fn build_actor_recursive<'a>(
                         let mut shadow_tint = *color;
                         shadow_tint[3] *= (*tint)[3];
                         *tint = shadow_tint;
+                    }
+                    renderer::ObjectType::Mesh { vertices, .. } => {
+                        let sc = *color;
+                        let mut out = Vec::with_capacity(vertices.len());
+                        for v in vertices.iter() {
+                            out.push(renderer::MeshVertex {
+                                pos: v.pos,
+                                color: [
+                                    v.color[0] * sc[0],
+                                    v.color[1] * sc[1],
+                                    v.color[2] * sc[2],
+                                    v.color[3] * sc[3],
+                                ],
+                            });
+                        }
+                        *vertices = std::borrow::Cow::Owned(out);
                     }
                 }
 
@@ -362,16 +434,23 @@ fn build_actor_recursive<'a>(
                 if stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty() {
                     let mut stroke_objects = Vec::with_capacity(objects.len());
                     for obj in &objects {
-                        let renderer::ObjectType::Sprite { texture_id, .. } = &obj.object_type;
-                        if let Some(stroke_key) = fm.stroke_texture_map.get(texture_id.as_ref()) {
-                            let mut stroke_obj = obj.clone();
-                            let renderer::ObjectType::Sprite {
-                                texture_id, tint, ..
-                            } = &mut stroke_obj.object_type;
-                            *texture_id = std::borrow::Cow::Owned(stroke_key.clone());
-                            *tint = stroke_rgba;
-                            stroke_objects.push(stroke_obj);
-                        }
+                        let renderer::ObjectType::Sprite { texture_id, .. } = &obj.object_type
+                        else {
+                            continue;
+                        };
+                        let Some(stroke_key) = fm.stroke_texture_map.get(texture_id.as_ref()) else {
+                            continue;
+                        };
+                        let mut stroke_obj = obj.clone();
+                        let renderer::ObjectType::Sprite {
+                            texture_id, tint, ..
+                        } = &mut stroke_obj.object_type
+                        else {
+                            continue;
+                        };
+                        *texture_id = std::borrow::Cow::Owned(stroke_key.clone());
+                        *tint = stroke_rgba;
+                        stroke_objects.push(stroke_obj);
                     }
                     for obj in &mut stroke_objects {
                         obj.z = layer;
@@ -394,8 +473,9 @@ fn build_actor_recursive<'a>(
                     };
                     obj.blend = *blend;
                     obj.camera = camera;
-                    let renderer::ObjectType::Sprite { tint, .. } = &mut obj.object_type;
-                    *tint = *color;
+                    if let renderer::ObjectType::Sprite { tint, .. } = &mut obj.object_type {
+                        *tint = *color;
+                    }
                 }
                 out.extend(objects);
             }
@@ -1160,7 +1240,11 @@ fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect)
         uv_scale,
         uv_offset,
         ..
-    } = &mut obj.object_type;
+    } = &mut obj.object_type
+    else {
+        // Only sprite objects support clip-by-adjusting-UV today.
+        return true;
+    };
 
     let eps = 1e-6;
     let t = &obj.transform;

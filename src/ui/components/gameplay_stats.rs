@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
+use crate::core::gfx::{BlendMode, MeshMode};
 use crate::core::space::*;
 use crate::game::gameplay::State;
 use crate::game::judgment::JudgeGrade;
@@ -8,7 +9,7 @@ use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use crate::ui::font;
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 pub fn build(
     state: &State,
@@ -1692,39 +1693,63 @@ fn build_side_pane(
             z(59)
         ));
 
-        let key = state.density_graph_texture_key.clone();
-        if key != "__white" {
-            let first_second = state.timing.get_time_for_beat(0.0).min(0.0_f32);
-            let last_second = state.song.total_length_seconds.max(0) as f32;
-            let duration = (last_second - first_second).max(0.001_f32);
-            let u_window = if duration > MAX_SECONDS {
-                (MAX_SECONDS / duration).clamp(0.0_f32, 1.0_f32)
-            } else {
-                1.0_f32
-            };
-            let max_u0 = (1.0_f32 - u_window).max(0.0_f32);
+        let chart = state.charts[player_idx].as_ref();
+        let first_second = state.timing.get_time_for_beat(0.0).min(0.0_f32);
+        let last_second = state.song.total_length_seconds.max(0) as f32;
+        let duration = (last_second - first_second).max(0.001_f32);
+        let scaled_width = if duration > MAX_SECONDS {
+            (graph_w * (duration / MAX_SECONDS)).round().max(graph_w)
+        } else {
+            graph_w
+        };
+        let u_window = if duration > MAX_SECONDS {
+            (MAX_SECONDS / duration).clamp(0.0_f32, 1.0_f32)
+        } else {
+            1.0_f32
+        };
+        let max_u0 = (1.0_f32 - u_window).max(0.0_f32);
 
-            let mut u0 = 0.0_f32;
-            if max_u0 > 0.0_f32 && duration > MAX_SECONDS {
-                let current_second = state.current_music_time;
-                if current_second > last_second - (MAX_SECONDS * 0.75) {
-                    u0 = max_u0;
-                } else {
-                    let seconds_past_one_fourth =
-                        (current_second - first_second) - (MAX_SECONDS * 0.25);
-                    if seconds_past_one_fourth > 0.0_f32 {
-                        u0 = (seconds_past_one_fourth / duration).clamp(0.0_f32, max_u0);
-                    }
+        let mut u0 = 0.0_f32;
+        if max_u0 > 0.0_f32 && duration > MAX_SECONDS {
+            let current_second = state.current_music_time;
+            if current_second > last_second - (MAX_SECONDS * 0.75) {
+                u0 = max_u0;
+            } else {
+                let seconds_past_one_fourth = (current_second - first_second) - (MAX_SECONDS * 0.25);
+                if seconds_past_one_fourth > 0.0_f32 {
+                    u0 = (seconds_past_one_fourth / duration).clamp(0.0_f32, max_u0);
                 }
             }
+        }
 
-            let u1 = (u0 + u_window).min(1.0_f32);
-            actors.push(act!(sprite(key):
-                align(0.0, 0.0): xy(x0, y0):
-                zoomto(graph_w, graph_h):
-                customtexturerect(u0, 0.0, u1, 1.0):
-                z(60)
-            ));
+        let offset = (u0 * scaled_width).clamp(0.0_f32, scaled_width);
+        let verts = crate::ui::density_graph::build_density_histogram_mesh(
+            &chart.measure_nps_vec,
+            chart.max_nps,
+            &state.timing,
+            first_second,
+            last_second,
+            scaled_width,
+            graph_h,
+            offset,
+            graph_w,
+            None,
+            1.0,
+        );
+        if !verts.is_empty() {
+            actors.push(Actor::Mesh {
+                align: [0.0, 0.0],
+                offset: [x0, y0],
+                size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
+                vertices: Arc::from(verts.into_boxed_slice()),
+                mode: MeshMode::Triangles,
+                visible: true,
+                blend: BlendMode::Alpha,
+                z: 60,
+            });
+        }
+
+        let u1 = (u0 + u_window).min(1.0_f32);
 
             // Lifeline overlay (Simply Love draws this as an ActorMultiVertex line strip).
             {
@@ -1789,7 +1814,6 @@ fn build_side_pane(
                     }
                 }
             }
-        }
     }
 
     // --- Peak NPS Display (as seen in Simply Love's Step Statistics) ---
