@@ -41,6 +41,7 @@ pub struct Note {
     pub note_type: NoteType,
     pub row_index: usize,
     pub result: Option<Judgment>,
+    pub early_result: Option<Judgment>,
     pub hold: Option<HoldData>,
     pub mine_result: Option<MineResult>,
     pub is_fake: bool,

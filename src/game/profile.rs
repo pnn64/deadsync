@@ -491,6 +491,8 @@ pub struct Profile {
     pub scroll_option: ScrollOption,
     pub reverse_scroll: bool,
     pub turn_option: TurnOption,
+    // Allow early Decent/WayOff hits to be rescored to better judgments.
+    pub rescore_early_hits: bool,
     // FA+ visual options (Simply Love semantics).
     // These do not change core timing semantics; they only affect HUD/UX.
     pub show_fa_plus_window: bool,
@@ -537,6 +539,7 @@ impl Default for Profile {
             scroll_option: ScrollOption::default(),
             reverse_scroll: false,
             turn_option: TurnOption::default(),
+            rescore_early_hits: true,
             show_fa_plus_window: false,
             show_ex_score: false,
             show_fa_plus_pane: false,
@@ -686,6 +689,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         content.push_str(&format!("Scroll = {}\n", default_profile.scroll_option));
         content.push_str(&format!("Turn = {}\n", default_profile.turn_option));
         content.push_str(&format!(
+            "RescoreEarlyHits = {}\n",
+            i32::from(default_profile.rescore_early_hits)
+        ));
+        content.push_str(&format!(
             "ReverseScroll = {}\n",
             i32::from(default_profile.reverse_scroll)
         ));
@@ -774,6 +781,10 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!("ScrollSpeed={}\n", profile.scroll_speed));
     content.push_str(&format!("Scroll={}\n", profile.scroll_option));
     content.push_str(&format!("Turn={}\n", profile.turn_option));
+    content.push_str(&format!(
+        "RescoreEarlyHits={}\n",
+        i32::from(profile.rescore_early_hits)
+    ));
     content.push_str(&format!(
         "ReverseScroll={}\n",
         i32::from(profile.reverse_scroll)
@@ -973,6 +984,10 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "Turn")
                 .and_then(|s| TurnOption::from_str(&s).ok())
                 .unwrap_or(default_profile.turn_option);
+            profile.rescore_early_hits = profile_conf
+                .get("PlayerOptions", "RescoreEarlyHits")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.rescore_early_hits, |v| v != 0);
             profile.scroll_option = profile_conf
                 .get("PlayerOptions", "Scroll")
                 .and_then(|s| ScrollOption::from_str(&s).ok())
@@ -1368,6 +1383,21 @@ pub fn update_turn_option_for_side(side: PlayerSide, setting: TurnOption) {
             return;
         }
         profile.turn_option = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_rescore_early_hits_for_side(side: PlayerSide, enabled: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.rescore_early_hits == enabled {
+            return;
+        }
+        profile.rescore_early_hits = enabled;
     }
     save_profile_ini_for_side(side);
 }

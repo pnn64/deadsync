@@ -764,6 +764,16 @@ fn build_advanced_rows() -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
+            name: "Rescore Early Hits".to_string(),
+            choices: vec!["Yes".to_string(), "No".to_string()],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![
+                "Allow early hits of Decents and Way Offs to be rescored to better judgments."
+                    .to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
             name: "Early Decent/Way Off Options".to_string(),
             choices: vec![
                 "Hide Judgments".to_string(),
@@ -1108,6 +1118,9 @@ fn apply_profile_defaults(
         }
         .min(row.choices.len().saturating_sub(1));
     }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Rescore Early Hits") {
+        row.selected_choice_index[player_idx] = if profile.rescore_early_hits { 0 } else { 1 };
+    }
     // Initialize FA+ Options row from profile (three independent toggles).
     if let Some(row) = rows.iter_mut().find(|r| r.name == "FA+ Options") {
         // Cursor always starts on the first option; toggled state is reflected visually.
@@ -1394,6 +1407,7 @@ fn row_is_inline(row_name: &str) -> bool {
         || row_name == "Measure Counter"
         || row_name == "Measure Counter Options"
         || row_name == "Measure Lines"
+        || row_name == "Rescore Early Hits"
         || row_name == "Early Decent/Way Off Options"
         || row_name == "Timing Windows"
         || row_name == "FA+ Options"
@@ -1548,6 +1562,12 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         state.player_profiles[player_idx].turn_option = setting;
         if should_persist {
             crate::game::profile::update_turn_option_for_side(persist_side, setting);
+        }
+    } else if row_name == "Rescore Early Hits" {
+        let enabled = row.selected_choice_index[player_idx] == 0;
+        state.player_profiles[player_idx].rescore_early_hits = enabled;
+        if should_persist {
+            crate::game::profile::update_rescore_early_hits_for_side(persist_side, enabled);
         }
     } else if row_name == "Background Filter" {
         let setting = match row.selected_choice_index[player_idx] {

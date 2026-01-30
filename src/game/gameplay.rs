@@ -1427,6 +1427,7 @@ pub fn init(
                 note_type,
                 row_index,
                 result: None,
+                early_result: None,
                 hold,
                 mine_result: None,
                 is_fake,
@@ -2332,6 +2333,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     let global_offset_s = state.global_offset_seconds;
     let lead_in_s = state.audio_lead_in_seconds.max(0.0);
     let player = player_for_col(state, column);
+    let rescore_early_hits = state.player_profiles[player].rescore_early_hits;
     let (col_start, col_end) = player_col_range(state, player);
     let mut best: Option<(usize, usize, f32)> = None;
     for (idx, arrow) in state.arrows[column]
@@ -2437,6 +2439,168 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             // per tap window evaluation so we can compare it against both the
             // intended note time and the inferred hit time.
             let stream_pos_s = audio::get_music_stream_position_seconds();
+
+            if rescore_early_hits && notes_on_row.len() == 1 {
+                let idx = notes_on_row[0];
+                let note_col = state.notes[idx].column;
+                let row_note_time = state.note_time_cache[idx];
+                let te_music = current_time - row_note_time;
+                let te_real = te_music / rate;
+                let is_early = te_real < 0.0;
+                let is_bad = matches!(grade, JudgeGrade::Decent | JudgeGrade::WayOff);
+
+                if is_early && is_bad {
+                    if state.notes[idx].early_result.is_none() {
+                        let judgment = Judgment {
+                            time_error_ms: te_real * 1000.0,
+                            grade,
+                            window: Some(window),
+                        };
+                        state.notes[idx].early_result = Some(judgment.clone());
+                        let life_delta = match grade {
+                            JudgeGrade::Fantastic => LifeChange::FANTASTIC,
+                            JudgeGrade::Excellent => LifeChange::EXCELLENT,
+                            JudgeGrade::Great => LifeChange::GREAT,
+                            JudgeGrade::Decent => LifeChange::DECENT,
+                            JudgeGrade::WayOff => LifeChange::WAY_OFF,
+                            JudgeGrade::Miss => LifeChange::MISS,
+                        };
+                        let p = &mut state.players[player];
+                        apply_life_change(p, state.current_music_time, life_delta);
+                        p.last_judgment = Some(JudgmentRenderInfo {
+                            judgment: judgment.clone(),
+                            judged_at: Instant::now(),
+                        });
+                    }
+
+                    let expected_stream_for_note_s =
+                        row_note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                    let expected_stream_for_hit_s =
+                        current_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                    let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
+                    let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
+                    info!(
+                        concat!(
+                            "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
+                            "song_offset_s={:.4}, global_offset_s={:.4}, ",
+                            "note_time_s={:.6}, event_time_s={:.6}, music_now_s={:.6}, ",
+                            "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
+                            "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
+                            "stream_hit_s={:.6}, stream_delta_hit_ms={:.2}"
+                        ),
+                        grade,
+                        note_row_index,
+                        note_col,
+                        state.notes[idx].beat,
+                        song_offset_s,
+                        global_offset_s,
+                        row_note_time,
+                        current_time,
+                        state.current_music_time,
+                        te_real * 1000.0,
+                        rate,
+                        lead_in_s,
+                        stream_pos_s,
+                        expected_stream_for_note_s,
+                        stream_delta_note_ms,
+                        expected_stream_for_hit_s,
+                        stream_delta_hit_ms,
+                    );
+
+                    state.receptor_glow_timers[note_col] = RECEPTOR_GLOW_DURATION;
+                    trigger_tap_explosion(state, note_col, grade);
+                    if let Some(end_time) = state.hold_end_time_cache[idx]
+                        && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
+                    {
+                        if let Some(hold) = state.notes[idx].hold.as_mut() {
+                            hold.life = MAX_HOLD_LIFE;
+                        }
+                        state.active_holds[note_col] = Some(ActiveHold {
+                            note_index: idx,
+                            end_time,
+                            note_type: state.notes[idx].note_type,
+                            let_go: false,
+                            is_pressed: true,
+                            life: MAX_HOLD_LIFE,
+                        });
+                    }
+                    return true;
+                }
+
+                if state.notes[idx].early_result.is_some()
+                    && !matches!(
+                        grade,
+                        JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
+                    )
+                {
+                    return true;
+                }
+
+                state.notes[idx].result = Some(Judgment {
+                    time_error_ms: te_real * 1000.0,
+                    grade,
+                    window: Some(window),
+                });
+
+                let expected_stream_for_note_s =
+                    row_note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                let expected_stream_for_hit_s =
+                    current_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
+                let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
+                info!(
+                    concat!(
+                        "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
+                        "song_offset_s={:.4}, global_offset_s={:.4}, ",
+                        "note_time_s={:.6}, event_time_s={:.6}, music_now_s={:.6}, ",
+                        "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
+                        "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
+                        "stream_hit_s={:.6}, stream_delta_hit_ms={:.2}"
+                    ),
+                    grade,
+                    note_row_index,
+                    note_col,
+                    state.notes[idx].beat,
+                    song_offset_s,
+                    global_offset_s,
+                    row_note_time,
+                    current_time,
+                    state.current_music_time,
+                    te_real * 1000.0,
+                    rate,
+                    lead_in_s,
+                    stream_pos_s,
+                    expected_stream_for_note_s,
+                    stream_delta_note_ms,
+                    expected_stream_for_hit_s,
+                    stream_delta_hit_ms,
+                );
+
+                for col_arrows in &mut state.arrows {
+                    if let Some(pos) = col_arrows.iter().position(|a| a.note_index == idx) {
+                        col_arrows.remove(pos);
+                        break;
+                    }
+                }
+                state.receptor_glow_timers[note_col] = RECEPTOR_GLOW_DURATION;
+                trigger_tap_explosion(state, note_col, grade);
+                if let Some(end_time) = state.hold_end_time_cache[idx]
+                    && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
+                {
+                    if let Some(hold) = state.notes[idx].hold.as_mut() {
+                        hold.life = MAX_HOLD_LIFE;
+                    }
+                    state.active_holds[note_col] = Some(ActiveHold {
+                        note_index: idx,
+                        end_time,
+                        note_type: state.notes[idx].note_type,
+                        let_go: false,
+                        is_pressed: true,
+                        life: MAX_HOLD_LIFE,
+                    });
+                }
+                return true;
+            }
 
             for &idx in &notes_on_row {
                 let note_col = state.notes[idx].column;
@@ -2673,6 +2837,7 @@ fn finalize_row_judgment(
     player: usize,
     row_index: usize,
     judgments_in_row: Vec<Judgment>,
+    skip_life_change: bool,
 ) {
     if judgments_in_row.is_empty() {
         return;
@@ -2706,7 +2871,9 @@ fn finalize_row_judgment(
         JudgeGrade::WayOff => LifeChange::WAY_OFF,
         JudgeGrade::Miss => LifeChange::MISS,
     };
-    apply_life_change(p, state.current_music_time, life_delta);
+    if !skip_life_change {
+        apply_life_change(p, state.current_music_time, life_delta);
+    }
     p.last_judgment = Some(JudgmentRenderInfo {
         judgment: final_judgment,
         judged_at: Instant::now(),
@@ -2847,11 +3014,18 @@ fn update_judged_rows(state: &mut State) {
                 .iter()
                 .all(|&i| state.notes[i].result.is_some());
             if is_row_complete {
+                let skip_life_change = notes_on_row.iter().any(|&i| state.notes[i].early_result.is_some());
                 let judgments_on_row: Vec<Judgment> = notes_on_row
                     .iter()
                     .filter_map(|&i| state.notes[i].result.clone())
                     .collect();
-                finalize_row_judgment(state, player, row_index, judgments_on_row);
+                finalize_row_judgment(
+                    state,
+                    player,
+                    row_index,
+                    judgments_on_row,
+                    skip_life_change,
+                );
                 state.judged_row_cursor[player] += 1;
             } else {
                 break;
@@ -3148,12 +3322,14 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
         if music_time_sec - note_time > way_off_window * rate {
             let time_err_music = music_time_sec - note_time;
             let time_err_real = time_err_music / rate;
-            let judgment = Judgment {
+            let miss = Judgment {
                 time_error_ms: time_err_real * 1000.0,
                 grade: JudgeGrade::Miss,
                 window: None,
             };
-            if let Some(hold) = state.notes[note_index].hold.as_mut()
+            let judgment = state.notes[note_index].early_result.clone().unwrap_or(miss);
+            if judgment.grade == JudgeGrade::Miss
+                && let Some(hold) = state.notes[note_index].hold.as_mut()
                 && hold.result != Some(HoldResult::Held)
             {
                 hold.result = Some(HoldResult::LetGo);
@@ -3204,11 +3380,13 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                 };
                 let time_err_music = music_time_sec - note_time;
                 let time_err_real = time_err_music / rate;
-                state.notes[cursor].result = Some(Judgment {
+                let miss = Judgment {
                     time_error_ms: time_err_real * 1000.0,
                     grade: JudgeGrade::Miss,
                     window: None,
-                });
+                };
+                let judgment = state.notes[cursor].early_result.clone().unwrap_or(miss);
+                state.notes[cursor].result = Some(judgment.clone());
 
                 let stream_pos_s = audio::get_music_stream_position_seconds();
                 let expected_stream_for_note_s =
@@ -3234,7 +3412,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                     global_offset_s,
                     note_time,
                     music_time_sec,
-                    time_err_real * 1000.0,
+                    judgment.time_error_ms,
                     rate,
                     lead_in_s,
                     stream_pos_s,
@@ -3243,7 +3421,8 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                     expected_stream_for_miss_s,
                     stream_delta_miss_ms,
                 );
-                if let Some(hold) = state.notes[cursor].hold.as_mut()
+                if judgment.grade == JudgeGrade::Miss
+                    && let Some(hold) = state.notes[cursor].hold.as_mut()
                     && hold.result != Some(HoldResult::Held)
                 {
                     hold.result = Some(HoldResult::LetGo);
