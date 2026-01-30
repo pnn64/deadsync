@@ -2334,6 +2334,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     let lead_in_s = state.audio_lead_in_seconds.max(0.0);
     let player = player_for_col(state, column);
     let rescore_early_hits = state.player_profiles[player].rescore_early_hits;
+    let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
+    let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
     let (col_start, col_end) = player_col_range(state, player);
     let mut best: Option<(usize, usize, f32)> = None;
     for (idx, arrow) in state.arrows[column]
@@ -2467,62 +2469,69 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                         };
                         let p = &mut state.players[player];
                         apply_life_change(p, state.current_music_time, life_delta);
-                        p.last_judgment = Some(JudgmentRenderInfo {
-                            judgment: judgment.clone(),
-                            judged_at: Instant::now(),
-                        });
-                    }
-
-                    let expected_stream_for_note_s =
-                        row_note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-                    let expected_stream_for_hit_s =
-                        current_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-                    let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
-                    let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
-                    info!(
-                        concat!(
-                            "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
-                            "song_offset_s={:.4}, global_offset_s={:.4}, ",
-                            "note_time_s={:.6}, event_time_s={:.6}, music_now_s={:.6}, ",
-                            "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
-                            "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
-                            "stream_hit_s={:.6}, stream_delta_hit_ms={:.2}"
-                        ),
-                        grade,
-                        note_row_index,
-                        note_col,
-                        state.notes[idx].beat,
-                        song_offset_s,
-                        global_offset_s,
-                        row_note_time,
-                        current_time,
-                        state.current_music_time,
-                        te_real * 1000.0,
-                        rate,
-                        lead_in_s,
-                        stream_pos_s,
-                        expected_stream_for_note_s,
-                        stream_delta_note_ms,
-                        expected_stream_for_hit_s,
-                        stream_delta_hit_ms,
-                    );
-
-                    state.receptor_glow_timers[note_col] = RECEPTOR_GLOW_DURATION;
-                    trigger_tap_explosion(state, note_col, grade);
-                    if let Some(end_time) = state.hold_end_time_cache[idx]
-                        && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
-                    {
-                        if let Some(hold) = state.notes[idx].hold.as_mut() {
-                            hold.life = MAX_HOLD_LIFE;
+                        if !hide_early_dw_judgments {
+                            p.last_judgment = Some(JudgmentRenderInfo {
+                                judgment: judgment.clone(),
+                                judged_at: Instant::now(),
+                            });
                         }
-                        state.active_holds[note_col] = Some(ActiveHold {
-                            note_index: idx,
-                            end_time,
-                            note_type: state.notes[idx].note_type,
-                            let_go: false,
-                            is_pressed: true,
-                            life: MAX_HOLD_LIFE,
-                        });
+                        let expected_stream_for_note_s = row_note_time / rate
+                            + lead_in_s
+                            + global_offset_s * (1.0 - rate) / rate;
+                        let expected_stream_for_hit_s = current_time / rate
+                            + lead_in_s
+                            + global_offset_s * (1.0 - rate) / rate;
+                        let stream_delta_note_ms =
+                            (stream_pos_s - expected_stream_for_note_s) * 1000.0;
+                        let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
+                        info!(
+                            concat!(
+                                "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
+                                "song_offset_s={:.4}, global_offset_s={:.4}, ",
+                                "note_time_s={:.6}, event_time_s={:.6}, music_now_s={:.6}, ",
+                                "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
+                                "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
+                                "stream_hit_s={:.6}, stream_delta_hit_ms={:.2}"
+                            ),
+                            grade,
+                            note_row_index,
+                            note_col,
+                            state.notes[idx].beat,
+                            song_offset_s,
+                            global_offset_s,
+                            row_note_time,
+                            current_time,
+                            state.current_music_time,
+                            te_real * 1000.0,
+                            rate,
+                            lead_in_s,
+                            stream_pos_s,
+                            expected_stream_for_note_s,
+                            stream_delta_note_ms,
+                            expected_stream_for_hit_s,
+                            stream_delta_hit_ms,
+                        );
+
+                        if !hide_early_dw_flash {
+                            state.receptor_glow_timers[note_col] = RECEPTOR_GLOW_DURATION;
+                            trigger_tap_explosion(state, note_col, grade);
+                        }
+
+                        if let Some(end_time) = state.hold_end_time_cache[idx]
+                            && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
+                        {
+                            if let Some(hold) = state.notes[idx].hold.as_mut() {
+                                hold.life = MAX_HOLD_LIFE;
+                            }
+                            state.active_holds[note_col] = Some(ActiveHold {
+                                note_index: idx,
+                                end_time,
+                                note_type: state.notes[idx].note_type,
+                                let_go: false,
+                                is_pressed: true,
+                                life: MAX_HOLD_LIFE,
+                            });
+                        }
                     }
                     return true;
                 }

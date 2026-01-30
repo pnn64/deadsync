@@ -493,6 +493,9 @@ pub struct Profile {
     pub turn_option: TurnOption,
     // Allow early Decent/WayOff hits to be rescored to better judgments.
     pub rescore_early_hits: bool,
+    // Visual behavior for early Decent/Way Off hits (Simply Love semantics).
+    pub hide_early_dw_judgments: bool,
+    pub hide_early_dw_flash: bool,
     // FA+ visual options (Simply Love semantics).
     // These do not change core timing semantics; they only affect HUD/UX.
     pub show_fa_plus_window: bool,
@@ -540,6 +543,8 @@ impl Default for Profile {
             reverse_scroll: false,
             turn_option: TurnOption::default(),
             rescore_early_hits: true,
+            hide_early_dw_judgments: false,
+            hide_early_dw_flash: false,
             show_fa_plus_window: false,
             show_ex_score: false,
             show_fa_plus_pane: false,
@@ -693,6 +698,14 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             i32::from(default_profile.rescore_early_hits)
         ));
         content.push_str(&format!(
+            "HideEarlyDecentWayOffJudgments = {}\n",
+            i32::from(default_profile.hide_early_dw_judgments)
+        ));
+        content.push_str(&format!(
+            "HideEarlyDecentWayOffFlash = {}\n",
+            i32::from(default_profile.hide_early_dw_flash)
+        ));
+        content.push_str(&format!(
             "ReverseScroll = {}\n",
             i32::from(default_profile.reverse_scroll)
         ));
@@ -784,6 +797,14 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!(
         "RescoreEarlyHits={}\n",
         i32::from(profile.rescore_early_hits)
+    ));
+    content.push_str(&format!(
+        "HideEarlyDecentWayOffJudgments={}\n",
+        i32::from(profile.hide_early_dw_judgments)
+    ));
+    content.push_str(&format!(
+        "HideEarlyDecentWayOffFlash={}\n",
+        i32::from(profile.hide_early_dw_flash)
     ));
     content.push_str(&format!(
         "ReverseScroll={}\n",
@@ -988,6 +1009,14 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "RescoreEarlyHits")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.rescore_early_hits, |v| v != 0);
+            profile.hide_early_dw_judgments = profile_conf
+                .get("PlayerOptions", "HideEarlyDecentWayOffJudgments")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.hide_early_dw_judgments, |v| v != 0);
+            profile.hide_early_dw_flash = profile_conf
+                .get("PlayerOptions", "HideEarlyDecentWayOffFlash")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.hide_early_dw_flash, |v| v != 0);
             profile.scroll_option = profile_conf
                 .get("PlayerOptions", "Scroll")
                 .and_then(|s| ScrollOption::from_str(&s).ok())
@@ -1398,6 +1427,23 @@ pub fn update_rescore_early_hits_for_side(side: PlayerSide, enabled: bool) {
             return;
         }
         profile.rescore_early_hits = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_early_dw_options_for_side(side: PlayerSide, hide_judgments: bool, hide_flash: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.hide_early_dw_judgments == hide_judgments && profile.hide_early_dw_flash == hide_flash
+        {
+            return;
+        }
+        profile.hide_early_dw_judgments = hide_judgments;
+        profile.hide_early_dw_flash = hide_flash;
     }
     save_profile_ini_for_side(side);
 }

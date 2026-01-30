@@ -183,6 +183,9 @@ pub struct State {
     // For FA+ Options row: bitmask of which options are enabled.
     // bit0 = Display FA+ Window, bit1 = Display EX Score, bit2 = Display FA+ Pane.
     pub fa_plus_active_mask: [u8; PLAYER_SLOTS],
+    // For Early Decent/Way Off Options row: bitmask of which options are enabled.
+    // bit0 = Hide Judgments, bit1 = Hide NoteField Flash.
+    pub early_dw_active_mask: [u8; PLAYER_SLOTS],
     pub active_color_index: i32,
     pub speed_mod: [SpeedMod; PLAYER_SLOTS],
     pub music_rate: f32,
@@ -992,9 +995,10 @@ fn apply_profile_defaults(
     rows: &mut [Row],
     profile: &crate::game::profile::Profile,
     player_idx: usize,
-) -> (u8, u8) {
+) -> (u8, u8, u8) {
     let mut scroll_active_mask: u8 = 0;
     let mut fa_plus_active_mask: u8 = 0;
+    let mut early_dw_active_mask: u8 = 0;
     // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Background Filter") {
         row.selected_choice_index[player_idx] = match profile.background_filter {
@@ -1121,6 +1125,29 @@ fn apply_profile_defaults(
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Rescore Early Hits") {
         row.selected_choice_index[player_idx] = if profile.rescore_early_hits { 0 } else { 1 };
     }
+    if let Some(row) = rows
+        .iter_mut()
+        .find(|r| r.name == "Early Decent/Way Off Options")
+    {
+        if profile.hide_early_dw_judgments {
+            early_dw_active_mask |= 1u8 << 0;
+        }
+        if profile.hide_early_dw_flash {
+            early_dw_active_mask |= 1u8 << 1;
+        }
+
+        if early_dw_active_mask != 0 {
+            let first_idx = (0..row.choices.len())
+                .find(|i| {
+                    let bit = 1u8 << (*i as u8);
+                    (early_dw_active_mask & bit) != 0
+                })
+                .unwrap_or(0);
+            row.selected_choice_index[player_idx] = first_idx;
+        } else {
+            row.selected_choice_index[player_idx] = 0;
+        }
+    }
     // Initialize FA+ Options row from profile (three independent toggles).
     if let Some(row) = rows.iter_mut().find(|r| r.name == "FA+ Options") {
         // Cursor always starts on the first option; toggled state is reflected visually.
@@ -1184,7 +1211,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    (scroll_active_mask, fa_plus_active_mask)
+    (scroll_active_mask, fa_plus_active_mask, early_dw_active_mask)
 }
 
 pub fn init(
@@ -1247,9 +1274,9 @@ pub fn init(
         OptionsPane::Main,
     );
     let player_profiles = [p1_profile.clone(), p2_profile.clone()];
-    let (scroll_active_mask_p1, fa_plus_active_mask_p1) =
+    let (scroll_active_mask_p1, fa_plus_active_mask_p1, early_dw_active_mask_p1) =
         apply_profile_defaults(&mut rows, &player_profiles[P1], P1);
-    let (scroll_active_mask_p2, fa_plus_active_mask_p2) =
+    let (scroll_active_mask_p2, fa_plus_active_mask_p2, early_dw_active_mask_p2) =
         apply_profile_defaults(&mut rows, &player_profiles[P2], P2);
 
     // Load noteskin previews based on profile setting.
@@ -1304,6 +1331,7 @@ pub fn init(
         prev_selected_row: [0; PLAYER_SLOTS],
         scroll_active_mask: [scroll_active_mask_p1, scroll_active_mask_p2],
         fa_plus_active_mask: [fa_plus_active_mask_p1, fa_plus_active_mask_p2],
+        early_dw_active_mask: [early_dw_active_mask_p1, early_dw_active_mask_p2],
         active_color_index,
         speed_mod: [speed_mod_p1, speed_mod_p2],
         music_rate: session_music_rate,
@@ -2056,6 +2084,53 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
+fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.selected_row[idx];
+    if let Some(row) = state.rows.get(row_index) {
+        if row.name != "Early Decent/Way Off Options" {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let bit = if choice_index < 2 {
+        1u8 << (choice_index as u8)
+    } else {
+        0
+    };
+    if bit == 0 {
+        return;
+    }
+
+    if (state.early_dw_active_mask[idx] & bit) != 0 {
+        state.early_dw_active_mask[idx] &= !bit;
+    } else {
+        state.early_dw_active_mask[idx] |= bit;
+    }
+
+    let hide_judgments = (state.early_dw_active_mask[idx] & (1u8 << 0)) != 0;
+    let hide_flash = (state.early_dw_active_mask[idx] & (1u8 << 1)) != 0;
+    state.player_profiles[idx].hide_early_dw_judgments = hide_judgments;
+    state.player_profiles[idx].hide_early_dw_flash = hide_flash;
+
+    let play_style = crate::game::profile::get_session_play_style();
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || idx == session_persisted_player_idx();
+    if should_persist {
+        let side = if idx == P1 {
+            crate::game::profile::PlayerSide::P1
+        } else {
+            crate::game::profile::PlayerSide::P2
+        };
+        crate::game::profile::update_early_dw_options_for_side(side, hide_judgments, hide_flash);
+    }
+
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
 fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     if state.current_pane == pane {
         return;
@@ -2069,13 +2144,14 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
         state.music_rate,
         pane,
     );
-    let (scroll_active_mask_p1, fa_plus_active_mask_p1) =
+    let (scroll_active_mask_p1, fa_plus_active_mask_p1, early_dw_active_mask_p1) =
         apply_profile_defaults(&mut rows, &state.player_profiles[P1], P1);
-    let (scroll_active_mask_p2, fa_plus_active_mask_p2) =
+    let (scroll_active_mask_p2, fa_plus_active_mask_p2, early_dw_active_mask_p2) =
         apply_profile_defaults(&mut rows, &state.player_profiles[P2], P2);
     state.rows = rows;
     state.scroll_active_mask = [scroll_active_mask_p1, scroll_active_mask_p2];
     state.fa_plus_active_mask = [fa_plus_active_mask_p1, fa_plus_active_mask_p2];
+    state.early_dw_active_mask = [early_dw_active_mask_p1, early_dw_active_mask_p2];
     state.current_pane = pane;
     state.selected_row = [0; PLAYER_SLOTS];
     state.prev_selected_row = [0; PLAYER_SLOTS];
@@ -2137,6 +2213,10 @@ fn handle_start_event(
     }
     if row.name == "FA+ Options" {
         toggle_fa_plus_row(state, player_idx);
+        return None;
+    }
+    if row.name == "Early Decent/Way Off Options" {
+        toggle_early_dw_row(state, player_idx);
         return None;
     }
     if row_index == num_rows.saturating_sub(1)
@@ -2588,6 +2668,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             || row.name == "Data Visualizations"
             || row.name.starts_with("Gameplay Extras")
             || row.name == "Judgment Tilt Intensity"
+            || row.name == "Rescore Early Hits"
+            || row.name == "Early Decent/Way Off Options"
             || row.name == "FA+ Options"
             || row.name == "Insert"
             || row.name == "Remove"
@@ -2792,6 +2874,46 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         continue;
                     }
                     let mask = state.fa_plus_active_mask[player_idx];
+                    if mask == 0 {
+                        continue;
+                    }
+                    let underline_y = underline_y_for(player_idx);
+                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
+                    line_color[3] = 1.0;
+                    for idx in 0..row.choices.len() {
+                        let bit = 1u8 << (idx as u8);
+                        if (mask & bit) == 0 {
+                            continue;
+                        }
+                        if let Some(sel_x) = x_positions.get(idx).copied() {
+                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                            let underline_w = draw_w.ceil();
+                            actors.push(act!(quad:
+                                align(0.0, 0.5):
+                                xy(sel_x, underline_y):
+                                zoomto(underline_w, line_thickness):
+                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                z(101)
+                            ));
+                        }
+                    }
+                }
+            } else if row.name == "Early Decent/Way Off Options" {
+                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                let offset = widescale(3.0, 4.0);
+                let underline_base_y = current_row_y + text_h * 0.5 + offset;
+                let underline_y_for = |player_idx: usize| {
+                    if active[P1] && active[P2] {
+                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
+                    } else {
+                        underline_base_y
+                    }
+                };
+                for player_idx in 0..PLAYER_SLOTS {
+                    if !active[player_idx] {
+                        continue;
+                    }
+                    let mask = state.early_dw_active_mask[player_idx];
                     if mask == 0 {
                         continue;
                     }
