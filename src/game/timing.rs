@@ -631,6 +631,16 @@ impl TimingData {
         points[point_idx].bpm
     }
 
+    #[inline(always)]
+    pub fn first_bpm(&self) -> f32 {
+        self.beat_to_time.first().map_or(60.0, |p| p.bpm)
+    }
+
+    #[inline(always)]
+    pub fn has_bpm_changes(&self) -> bool {
+        self.beat_to_time.len() > 1
+    }
+
     pub fn get_capped_max_bpm(&self, cap: Option<f32>) -> f32 {
         let mut max_bpm = self.max_bpm.max(0.0);
         if max_bpm == 0.0 {

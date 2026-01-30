@@ -797,6 +797,12 @@ pub struct State {
     pub density_graph_cache: [Option<DensityHistCache>; MAX_PLAYERS],
     pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub density_graph_mesh_offset_px: [i32; MAX_PLAYERS],
+    pub density_graph_life_update_rate: f32,
+    pub density_graph_life_next_update_elapsed: f32,
+    pub density_graph_life_points: [Vec<[f32; 2]>; MAX_PLAYERS],
+    pub density_graph_life_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub density_graph_life_mesh_offset_px: [i32; MAX_PLAYERS],
+    pub density_graph_life_dirty: [bool; MAX_PLAYERS],
 
     pub hold_to_exit_key: Option<KeyCode>,
     pub hold_to_exit_start: Option<Instant>,
@@ -840,6 +846,155 @@ fn player_note_range(state: &State, player: usize) -> (usize, usize) {
     state.note_ranges[player]
 }
 
+fn push_density_life_point(points: &mut Vec<[f32; 2]>, x: f32, y: f32) {
+    if points.len() >= 2 {
+        let a = points[points.len() - 2];
+        let b = points[points.len() - 1];
+        let slope_original = (b[1] - a[1]).atan2(b[0] - a[0]);
+        let slope_new = (y - b[1]).atan2(x - b[0]);
+        let condense = (slope_new - slope_original).abs() < 0.18_f32
+            && slope_original > 0.0_f32
+            && slope_new > 0.0_f32;
+        if condense {
+            let last_ix = points.len() - 1;
+            points[last_ix] = [x, y];
+            return;
+        }
+    }
+    points.push([x, y]);
+}
+
+fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
+    while !points.is_empty() && points[0][0] < offset {
+        if points.len() > 1 && points[1][0] >= offset {
+            let a = points[0];
+            let b = points[1];
+            let dx = (b[0] - a[0]).max(0.000_001_f32);
+            let t = ((offset - a[0]) / dx).clamp(0.0_f32, 1.0_f32);
+            points[0] = [offset, a[1] + (b[1] - a[1]) * t];
+            break;
+        }
+        points.remove(0);
+    }
+}
+
+#[inline(always)]
+fn v2_sub(a: [f32; 2], b: [f32; 2]) -> [f32; 2] {
+    [a[0] - b[0], a[1] - b[1]]
+}
+
+#[inline(always)]
+fn v2_add(a: [f32; 2], b: [f32; 2]) -> [f32; 2] {
+    [a[0] + b[0], a[1] + b[1]]
+}
+
+#[inline(always)]
+fn v2_scale(v: [f32; 2], s: f32) -> [f32; 2] {
+    [v[0] * s, v[1] * s]
+}
+
+#[inline(always)]
+fn v2_dot(a: [f32; 2], b: [f32; 2]) -> f32 {
+    a[0].mul_add(b[0], a[1] * b[1])
+}
+
+#[inline(always)]
+fn v2_len(v: [f32; 2]) -> f32 {
+    v[0].hypot(v[1])
+}
+
+#[inline(always)]
+fn v2_norm(v: [f32; 2]) -> [f32; 2] {
+    let len = v2_len(v).max(0.000_001_f32);
+    [v[0] / len, v[1] / len]
+}
+
+#[inline(always)]
+fn v2_perp(v: [f32; 2]) -> [f32; 2] {
+    [-v[1], v[0]]
+}
+
+fn build_density_life_mesh(
+    points: &[[f32; 2]],
+    offset: f32,
+    width: f32,
+    thickness: f32,
+    color: [f32; 4],
+) -> Vec<MeshVertex> {
+    if points.len() < 2 || width <= 0.0_f32 || thickness <= 0.0_f32 {
+        return Vec::new();
+    }
+
+    let right = offset + width;
+    let start = points.partition_point(|p| p[0] < offset);
+    let end = points.partition_point(|p| p[0] <= right);
+    let slice = &points[start..end];
+    if slice.len() < 2 {
+        return Vec::new();
+    }
+
+    let mut local: Vec<[f32; 2]> = Vec::with_capacity(slice.len());
+    for &p in slice {
+        let q = [p[0] - offset, p[1]];
+        if local
+            .last()
+            .is_some_and(|&last| v2_len(v2_sub(q, last)) <= 0.000_1_f32)
+        {
+            continue;
+        }
+        local.push(q);
+    }
+    if local.len() < 2 {
+        return Vec::new();
+    }
+
+    let half = thickness * 0.5_f32;
+    let miter_cap = half * 4.0_f32;
+    let mut lr: Vec<([f32; 2], [f32; 2])> = Vec::with_capacity(local.len());
+
+    for i in 0..local.len() {
+        let p = local[i];
+        let dir_prev = if i > 0 {
+            v2_norm(v2_sub(p, local[i - 1]))
+        } else {
+            v2_norm(v2_sub(local[i + 1], p))
+        };
+        let dir_next = if i + 1 < local.len() {
+            v2_norm(v2_sub(local[i + 1], p))
+        } else {
+            v2_norm(v2_sub(p, local[i - 1]))
+        };
+
+        let n0 = v2_perp(dir_prev);
+        let n1 = v2_perp(dir_next);
+        let miter = v2_norm(v2_add(n0, n1));
+        let denom = v2_dot(miter, n0);
+        let miter_len = if denom.abs() <= 0.001_f32 {
+            half
+        } else {
+            (half / denom).abs().min(miter_cap)
+        };
+        let off = v2_scale(miter, miter_len);
+        lr.push((v2_add(p, off), v2_add(p, v2_scale(off, -1.0_f32))));
+    }
+
+    let mut out: Vec<MeshVertex> = Vec::with_capacity((local.len() - 1) * 6);
+    for i in 0..(lr.len() - 1) {
+        let (l0, r0) = lr[i];
+        let (l1, r1) = lr[i + 1];
+
+        out.push(MeshVertex { pos: l0, color });
+        out.push(MeshVertex { pos: r0, color });
+        out.push(MeshVertex { pos: l1, color });
+
+        out.push(MeshVertex { pos: r0, color });
+        out.push(MeshVertex { pos: r1, color });
+        out.push(MeshVertex { pos: l1, color });
+    }
+
+    out
+}
+
 fn update_density_graph(state: &mut State, current_music_time: f32) {
     let graph_w = state.density_graph_graph_w;
     let graph_h = state.density_graph_graph_h;
@@ -877,6 +1032,40 @@ fn update_density_graph(state: &mut State, current_music_time: f32) {
     state.density_graph_u0 = u0;
     let offset = (u0 * scaled_width).clamp(0.0_f32, scaled_width);
     let offset_px = offset.floor() as i32;
+    let offset_px_f = offset_px as f32;
+
+    let mut updates = 0u32;
+    let next_t = state.density_graph_life_next_update_elapsed;
+    if state.density_graph_life_update_rate > 0.0_f32 && state.total_elapsed_in_screen >= next_t {
+        while state.total_elapsed_in_screen >= state.density_graph_life_next_update_elapsed
+            && updates < 64
+        {
+            state.density_graph_life_next_update_elapsed += state.density_graph_life_update_rate;
+            updates += 1;
+
+            if !(current_music_time > 0.0_f32
+                && current_music_time <= state.density_graph_last_second)
+            {
+                continue;
+            }
+
+            let denom = state.density_graph_duration.max(0.001_f32);
+            let x = ((current_music_time - state.density_graph_first_second) / denom)
+                * state.density_graph_scaled_width;
+            if !x.is_finite() {
+                continue;
+            }
+
+            for player in 0..state.num_players {
+                let life = state.players[player].life;
+                let y = (1.0_f32 - life).clamp(0.0_f32, 1.0_f32) * graph_h;
+                let points = &mut state.density_graph_life_points[player];
+                push_density_life_point(points, x, y);
+                clip_density_life_points(points, offset_px_f);
+                state.density_graph_life_dirty[player] = true;
+            }
+        }
+    }
 
     for player in 0..state.num_players {
         if offset_px == state.density_graph_mesh_offset_px[player] {
@@ -887,6 +1076,30 @@ fn update_density_graph(state: &mut State, current_music_time: f32) {
             .as_ref()
             .map_or(Vec::new(), |cache| cache.mesh(offset_px as f32, graph_w));
         state.density_graph_mesh[player] = if verts.is_empty() {
+            None
+        } else {
+            Some(Arc::from(verts.into_boxed_slice()))
+        };
+    }
+
+    for player in 0..state.num_players {
+        if offset_px == state.density_graph_life_mesh_offset_px[player]
+            && !state.density_graph_life_dirty[player]
+        {
+            continue;
+        }
+        state.density_graph_life_mesh_offset_px[player] = offset_px;
+        state.density_graph_life_dirty[player] = false;
+
+        clip_density_life_points(&mut state.density_graph_life_points[player], offset_px_f);
+        let verts = build_density_life_mesh(
+            &state.density_graph_life_points[player],
+            offset_px_f,
+            graph_w,
+            2.0_f32,
+            [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
+        );
+        state.density_graph_life_mesh[player] = if verts.is_empty() {
             None
         } else {
             Some(Arc::from(verts.into_boxed_slice()))
@@ -1495,6 +1708,33 @@ pub fn init(
         })
     });
 
+    let mut density_graph_life_update_rate = 0.25_f32;
+    if wide && !timing.has_bpm_changes() {
+        let bpm = timing.first_bpm();
+        if bpm.is_finite() && bpm >= 60.0_f32 {
+            let interval_8th = (60.0_f32 / bpm) * 0.5_f32;
+            if interval_8th.is_finite() && interval_8th > 0.0_f32 {
+                density_graph_life_update_rate =
+                    interval_8th * (density_graph_life_update_rate / interval_8th).ceil();
+            }
+        }
+    }
+    if !density_graph_life_update_rate.is_finite() || density_graph_life_update_rate <= 0.0_f32 {
+        density_graph_life_update_rate = 0.25_f32;
+    }
+    let density_graph_life_next_update_elapsed = 0.0_f32;
+    let density_graph_life_points: [Vec<[f32; 2]>; MAX_PLAYERS] = std::array::from_fn(|p| {
+        if wide && p < num_players {
+            Vec::with_capacity(1024)
+        } else {
+            Vec::new()
+        }
+    });
+    let density_graph_life_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    let density_graph_life_mesh_offset_px: [i32; MAX_PLAYERS] = [0; MAX_PLAYERS];
+    let density_graph_life_dirty: [bool; MAX_PLAYERS] = [false; MAX_PLAYERS];
+
     let mut players = std::array::from_fn(|_| init_player_runtime());
     for p in 0..num_players {
         let life = players[p].life;
@@ -1583,6 +1823,12 @@ pub fn init(
         density_graph_cache,
         density_graph_mesh,
         density_graph_mesh_offset_px,
+        density_graph_life_update_rate,
+        density_graph_life_next_update_elapsed,
+        density_graph_life_points,
+        density_graph_life_mesh,
+        density_graph_life_mesh_offset_px,
+        density_graph_life_dirty,
         hold_to_exit_key: None,
         hold_to_exit_start: None,
         prev_inputs: [false; MAX_COLS],
@@ -3235,8 +3481,6 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     }
     state.total_elapsed_in_screen += delta_time;
 
-    update_density_graph(state, music_time_sec);
-
     let beat_info = state
         .timing
         .get_beat_info_from_time_cached(music_time_sec, &mut state.beat_info_cache);
@@ -3340,6 +3584,8 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     apply_time_based_tap_misses(state, music_time_sec);
     cull_scrolled_out_arrows(state, music_time_sec);
     update_judged_rows(state);
+
+    update_density_graph(state, music_time_sec);
 
     state.log_timer += delta_time;
     if state.log_timer >= 1.0 {

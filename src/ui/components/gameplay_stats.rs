@@ -1707,73 +1707,19 @@ fn build_side_pane(
                 });
             }
 
-            let first_second = state.density_graph_first_second;
-            let duration = state.density_graph_duration;
-            let u0 = state.density_graph_u0;
-            let u_window = state.density_graph_u_window;
-            let u1 = (u0 + u_window).min(1.0_f32);
-
-            // Lifeline overlay (Simply Love draws this as an ActorMultiVertex line strip).
+            if let Some(mesh) = &state.density_graph_life_mesh[player_idx]
+                && !mesh.is_empty()
             {
-                let life_history = &state.players[player_idx].life_history;
-                if !life_history.is_empty() && duration > 0.0_f32 && u_window > 0.0_f32 {
-                    let t0 = first_second + u0 * duration;
-                    let t1 = first_second + u1 * duration;
-                    let start_ix = life_history.partition_point(|&(t, _)| t < t0);
-                    let end_ix = life_history.partition_point(|&(t, _)| t <= t1);
-
-                    let to_x = |t: f32| -> f32 {
-                        let u = ((t - first_second) / duration).clamp(0.0_f32, 1.0_f32);
-                        ((u - u0) / u_window).clamp(0.0_f32, 1.0_f32) * graph_w
-                    };
-                    let to_y =
-                        |life: f32| -> f32 { (1.0_f32 - life).clamp(0.0_f32, 1.0_f32) * graph_h };
-
-                    let mut last: Option<(f32, f32)> = None;
-                    let mut segs = 0u32;
-
-                    // Interpolate a point at the left edge, so the line stays continuous while scrolling.
-                    if start_ix > 0 && start_ix < life_history.len() {
-                        let (t_prev, l_prev) = life_history[start_ix - 1];
-                        let (t_next, l_next) = life_history[start_ix];
-                        let dt = (t_next - t_prev).max(0.000_001_f32);
-                        let a = ((t0 - t_prev) / dt).clamp(0.0_f32, 1.0_f32);
-                        let life = (l_prev + (l_next - l_prev) * a).clamp(0.0_f32, 1.0_f32);
-                        last = Some((0.0_f32, to_y(life)));
-                    }
-
-                    for &(t, life) in life_history[start_ix..end_ix].iter() {
-                        let x = to_x(t).clamp(0.0_f32, graph_w);
-                        let y = to_y(life);
-
-                        let Some((lx, ly)) = last else {
-                            last = Some((x, y));
-                            continue;
-                        };
-
-                        let dx = x - lx;
-                        let dy = y - ly;
-                        let len = dx.hypot(dy);
-                        if len < 0.5_f32 {
-                            continue;
-                        }
-
-                        let angle_deg = dy.atan2(dx).to_degrees();
-                        actors.push(act!(quad:
-                            align(0.0, 0.5): xy(x0 + lx, y0 + ly):
-                            zoomto(len, 2.0):
-                            diffuse(1.0, 1.0, 1.0, 0.8):
-                            rotationz(angle_deg):
-                            z(61)
-                        ));
-
-                        last = Some((x, y));
-                        segs += 1;
-                        if segs >= 2048 {
-                            break;
-                        }
-                    }
-                }
+                actors.push(Actor::Mesh {
+                    align: [0.0, 0.0],
+                    offset: [x0, y0],
+                    size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
+                    vertices: mesh.clone(),
+                    mode: MeshMode::Triangles,
+                    visible: true,
+                    blend: BlendMode::Alpha,
+                    z: 61,
+                });
             }
         }
     }
