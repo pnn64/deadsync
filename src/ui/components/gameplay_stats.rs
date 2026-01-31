@@ -49,6 +49,13 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
     if state.num_players < 2 || state.players.len() < 2 {
         return vec![];
     }
+    let show_for: [bool; 2] = [
+        state.player_profiles[0].data_visualizations == profile::DataVisualizations::StepStatistics,
+        state.player_profiles[1].data_visualizations == profile::DataVisualizations::StepStatistics,
+    ];
+    if !show_for[0] && !show_for[1] {
+        return vec![];
+    }
 
     let center_x = screen_center_x();
 
@@ -143,6 +150,9 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
             let anchor_p2 = base_anchor_p2.clamp(bar_left + margin + block_w, bar_right - margin);
 
             for player_idx in 0..2usize {
+                if !show_for[player_idx] {
+                    continue;
+                }
                 let is_p1 = player_idx == 0;
                 let group_y = 100.0;
                 let anchor_x = if is_p1 { anchor_p1 } else { anchor_p2 };

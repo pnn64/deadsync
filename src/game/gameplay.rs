@@ -1680,9 +1680,18 @@ pub fn init(
         player_profiles[player].reverse_scroll
     });
 
+    let wants_step_stats = player_profiles
+        .iter()
+        .take(num_players)
+        .any(|p| p.data_visualizations == profile::DataVisualizations::StepStatistics);
     let wide = is_wide();
-    let density_graph_graph_h = if wide { 105.0_f32 } else { 0.0_f32 };
-    let density_graph_graph_w = if wide {
+    let density_graph_enabled = wide && wants_step_stats;
+    let density_graph_graph_h = if density_graph_enabled {
+        105.0_f32
+    } else {
+        0.0_f32
+    };
+    let density_graph_graph_w = if density_graph_enabled {
         (screen_width() * 0.5).round().max(1.0_f32)
     } else {
         0.0_f32
@@ -1693,22 +1702,24 @@ pub fn init(
         (density_graph_last_second - density_graph_first_second).max(0.001_f32);
 
     const DENSITY_GRAPH_MAX_SECONDS: f32 = 4.0 * 60.0;
-    let density_graph_scaled_width = if wide && density_graph_duration > DENSITY_GRAPH_MAX_SECONDS {
-        (density_graph_graph_w * (density_graph_duration / DENSITY_GRAPH_MAX_SECONDS))
-            .round()
-            .max(density_graph_graph_w)
-    } else {
-        density_graph_graph_w
-    };
-    let density_graph_u_window = if wide && density_graph_duration > DENSITY_GRAPH_MAX_SECONDS {
-        (DENSITY_GRAPH_MAX_SECONDS / density_graph_duration).clamp(0.0_f32, 1.0_f32)
-    } else {
-        1.0_f32
-    };
+    let density_graph_scaled_width =
+        if density_graph_enabled && density_graph_duration > DENSITY_GRAPH_MAX_SECONDS {
+            (density_graph_graph_w * (density_graph_duration / DENSITY_GRAPH_MAX_SECONDS))
+                .round()
+                .max(density_graph_graph_w)
+        } else {
+            density_graph_graph_w
+        };
+    let density_graph_u_window =
+        if density_graph_enabled && density_graph_duration > DENSITY_GRAPH_MAX_SECONDS {
+            (DENSITY_GRAPH_MAX_SECONDS / density_graph_duration).clamp(0.0_f32, 1.0_f32)
+        } else {
+            1.0_f32
+        };
     let density_graph_u0 = 0.0_f32;
 
     let density_graph_cache: [Option<DensityHistCache>; MAX_PLAYERS] = std::array::from_fn(|p| {
-        if !wide || p >= num_players {
+        if !density_graph_enabled || p >= num_players {
             return None;
         }
         let chart = charts[p].as_ref();
@@ -1726,7 +1737,7 @@ pub fn init(
     });
     let density_graph_mesh_offset_px: [i32; MAX_PLAYERS] = [0; MAX_PLAYERS];
     let density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|p| {
-        if !wide || p >= num_players {
+        if !density_graph_enabled || p >= num_players {
             return None;
         }
         density_graph_cache[p].as_ref().and_then(|cache| {
@@ -1740,7 +1751,7 @@ pub fn init(
     });
 
     let mut density_graph_life_update_rate = 0.25_f32;
-    if wide && !timing.has_bpm_changes() {
+    if density_graph_enabled && !timing.has_bpm_changes() {
         let bpm = timing.first_bpm();
         if bpm.is_finite() && bpm >= 60.0_f32 {
             let interval_8th = (60.0_f32 / bpm) * 0.5_f32;
@@ -1755,7 +1766,7 @@ pub fn init(
     }
     let density_graph_life_next_update_elapsed = 0.0_f32;
     let density_graph_life_points: [Vec<[f32; 2]>; MAX_PLAYERS] = std::array::from_fn(|p| {
-        if wide && p < num_players {
+        if density_graph_enabled && p < num_players {
             Vec::with_capacity(1024)
         } else {
             Vec::new()

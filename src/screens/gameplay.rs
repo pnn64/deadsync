@@ -518,24 +518,39 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         left_avatar,
         right_avatar,
     }));
-    if state.num_cols <= 4 && play_style != profile::PlayStyle::Versus {
-        actors.extend(gameplay_stats::build(
-            state,
-            asset_manager,
-            playfield_center_x,
-            player_side,
-        ));
-    } else if play_style == profile::PlayStyle::Versus {
-        actors.extend(gameplay_stats::build_versus_step_stats(
-            state,
-            asset_manager,
-        ));
-    } else if play_style == profile::PlayStyle::Double {
-        actors.extend(gameplay_stats::build_double_step_stats(
-            state,
-            asset_manager,
-            playfield_center_x,
-        ));
+    let show_step_stats = match play_style {
+        profile::PlayStyle::Single | profile::PlayStyle::Double => state
+            .player_profiles
+            .get(0)
+            .is_some_and(|p| p.data_visualizations == profile::DataVisualizations::StepStatistics),
+        profile::PlayStyle::Versus => {
+            state.player_profiles.get(0).is_some_and(|p| {
+                p.data_visualizations == profile::DataVisualizations::StepStatistics
+            }) || state.player_profiles.get(1).is_some_and(|p| {
+                p.data_visualizations == profile::DataVisualizations::StepStatistics
+            })
+        }
+    };
+    if show_step_stats {
+        if state.num_cols <= 4 && play_style != profile::PlayStyle::Versus {
+            actors.extend(gameplay_stats::build(
+                state,
+                asset_manager,
+                playfield_center_x,
+                player_side,
+            ));
+        } else if play_style == profile::PlayStyle::Versus {
+            actors.extend(gameplay_stats::build_versus_step_stats(
+                state,
+                asset_manager,
+            ));
+        } else if play_style == profile::PlayStyle::Double {
+            actors.extend(gameplay_stats::build_double_step_stats(
+                state,
+                asset_manager,
+                playfield_center_x,
+            ));
+        }
     }
     actors
 }

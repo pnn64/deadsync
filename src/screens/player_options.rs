@@ -1139,6 +1139,13 @@ fn apply_profile_defaults(
             crate::game::profile::ErrorBarStyle::Text => 3,
         };
     }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Data Visualizations") {
+        row.selected_choice_index[player_idx] = match profile.data_visualizations {
+            crate::game::profile::DataVisualizations::None => 0,
+            crate::game::profile::DataVisualizations::TargetScoreGraph => 1,
+            crate::game::profile::DataVisualizations::StepStatistics => 2,
+        };
+    }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar Trim") {
         row.selected_choice_index[player_idx] = match profile.error_bar_trim {
             crate::game::profile::ErrorBarTrim::Off => 0,
@@ -1807,6 +1814,17 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
             if should_persist {
                 crate::game::profile::update_tilt_multiplier_for_side(persist_side, mult);
             }
+        }
+    } else if row_name == "Data Visualizations" {
+        let setting = match row.selected_choice_index[player_idx] {
+            0 => crate::game::profile::DataVisualizations::None,
+            1 => crate::game::profile::DataVisualizations::TargetScoreGraph,
+            2 => crate::game::profile::DataVisualizations::StepStatistics,
+            _ => crate::game::profile::DataVisualizations::None,
+        };
+        state.player_profiles[player_idx].data_visualizations = setting;
+        if should_persist {
+            crate::game::profile::update_data_visualizations_for_side(persist_side, setting);
         }
     } else if row_name == "Error Bar" {
         let setting = match row.selected_choice_index[player_idx] {

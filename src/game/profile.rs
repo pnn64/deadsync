@@ -458,6 +458,45 @@ impl core::fmt::Display for ErrorBarTrim {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DataVisualizations {
+    #[default]
+    None,
+    TargetScoreGraph,
+    StepStatistics,
+}
+
+impl FromStr for DataVisualizations {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "none" => Ok(Self::None),
+            "targetscoregraph" | "targetscore" | "target" => Ok(Self::TargetScoreGraph),
+            "stepstatistics" | "stepstats" => Ok(Self::StepStatistics),
+            other => Err(format!(
+                "'{other}' is not a valid DataVisualizations setting"
+            )),
+        }
+    }
+}
+
+impl core::fmt::Display for DataVisualizations {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::TargetScoreGraph => write!(f, "Target Score Graph"),
+            Self::StepStatistics => write!(f, "Step Statistics"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NoteSkin {
     #[default]
     Cel,
@@ -572,6 +611,7 @@ pub struct Profile {
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
+    pub data_visualizations: DataVisualizations,
     // "Hide" options (Simply Love semantics).
     pub hide_targets: bool,
     pub hide_song_bg: bool,
@@ -633,6 +673,7 @@ impl Default for Profile {
             error_bar_up: false,
             error_bar_multi_tick: false,
             error_bar_trim: ErrorBarTrim::default(),
+            data_visualizations: DataVisualizations::default(),
             hide_targets: false,
             hide_song_bg: false,
             hide_combo: false,
@@ -863,6 +904,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             default_profile.error_bar_trim
         ));
         content.push_str(&format!(
+            "DataVisualizations = {}\n",
+            default_profile.data_visualizations
+        ));
+        content.push_str(&format!(
             "HoldJudgmentGraphic = {}\n",
             default_profile.hold_judgment_graphic
         ));
@@ -991,6 +1036,10 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         i32::from(profile.error_bar_multi_tick)
     ));
     content.push_str(&format!("ErrorBarTrim={}\n", profile.error_bar_trim));
+    content.push_str(&format!(
+        "DataVisualizations={}\n",
+        profile.data_visualizations
+    ));
     content.push_str(&format!(
         "HoldJudgmentGraphic={}\n",
         profile.hold_judgment_graphic
@@ -1191,6 +1240,10 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "ErrorBarTrim")
                 .and_then(|s| ErrorBarTrim::from_str(&s).ok())
                 .unwrap_or(default_profile.error_bar_trim);
+            profile.data_visualizations = profile_conf
+                .get("PlayerOptions", "DataVisualizations")
+                .and_then(|s| DataVisualizations::from_str(&s).ok())
+                .unwrap_or(default_profile.data_visualizations);
             profile.scroll_speed = profile_conf
                 .get("PlayerOptions", "ScrollSpeed")
                 .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
@@ -1905,6 +1958,21 @@ pub fn update_error_bar_trim_for_side(side: PlayerSide, setting: ErrorBarTrim) {
             return;
         }
         profile.error_bar_trim = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_data_visualizations_for_side(side: PlayerSide, setting: DataVisualizations) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.data_visualizations == setting {
+            return;
+        }
+        profile.data_visualizations = setting;
     }
     save_profile_ini_for_side(side);
 }
