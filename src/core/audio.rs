@@ -191,7 +191,11 @@ fn init_engine_and_thread() -> AudioEngine {
     let device = host
         .default_output_device()
         .expect("no audio output device");
-    let device_name = device.name().unwrap_or_else(|_| "<unknown>".to_string());
+    let device_name = device
+        .description()
+        .map(|desc| desc.name().to_string())
+        .unwrap_or_else(|_| "<unknown>".to_string());
+    let device_id = device.id().ok();
     let default_config = device
         .default_output_config()
         .expect("no default audio config");
@@ -202,15 +206,21 @@ fn init_engine_and_thread() -> AudioEngine {
         Ok(devices) => {
             info!("Enumerating audio output devices for host {:?}:", host.id());
             for (idx, dev) in devices.enumerate() {
-                let name = dev.name().unwrap_or_else(|_| "<unknown>".to_string());
-                let is_default = name == device_name;
+                let name = dev
+                    .description()
+                    .map(|desc| desc.name().to_string())
+                    .unwrap_or_else(|_| "<unknown>".to_string());
+                let is_default = match (&device_id, dev.id()) {
+                    (Some(default_id), Ok(id)) => *default_id == id,
+                    _ => false,
+                };
                 let tag = if is_default { " (default)" } else { "" };
                 info!("  Device {idx}: '{name}'{tag}");
                 match dev.supported_output_configs() {
                     Ok(configs) => {
                         for cfg_range in configs {
-                            let min = cfg_range.min_sample_rate().0;
-                            let max = cfg_range.max_sample_rate().0;
+                            let min = cfg_range.min_sample_rate();
+                            let max = cfg_range.max_sample_rate();
                             let channels = cfg_range.channels();
                             let fmt = cfg_range.sample_format();
                             info!("    - {fmt:?}, {channels} ch, {min}..{max} Hz");
@@ -232,13 +242,13 @@ fn init_engine_and_thread() -> AudioEngine {
     if let Some(target_hz) = requested_rate {
         info!(
             "Audio sample rate override requested: {} Hz (device default {} Hz).",
-            target_hz, stream_config.sample_rate.0
+            target_hz, stream_config.sample_rate
         );
-        stream_config.sample_rate = cpal::SampleRate(target_hz);
+        stream_config.sample_rate = target_hz;
     } else {
         info!(
             "Audio sample rate override: auto (using device default {} Hz).",
-            stream_config.sample_rate.0
+            stream_config.sample_rate
         );
     }
 
@@ -246,15 +256,15 @@ fn init_engine_and_thread() -> AudioEngine {
         "Audio device: '{}' (sample_format={:?}, default={} Hz, channels={}).",
         device_name,
         default_config.sample_format(),
-        default_config.sample_rate().0,
+        default_config.sample_rate(),
         default_config.channels()
     );
     info!(
         "Audio output stream config: {} Hz, {} ch (may be resampled by OS/driver).",
-        stream_config.sample_rate.0, stream_config.channels
+        stream_config.sample_rate, stream_config.channels
     );
 
-    let device_sample_rate = stream_config.sample_rate.0;
+    let device_sample_rate = stream_config.sample_rate;
     let device_channels = stream_config.channels as usize;
 
     // Spawn the audio manager thread (owns the CPAL stream and command loop)
