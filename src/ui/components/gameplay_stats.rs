@@ -163,7 +163,12 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
 
                 let (start, end) = state.note_ranges[player_idx];
                 if show_fa_plus_window && end > start {
-                    let wc = timing_stats::compute_window_counts(&state.notes[start..end]);
+                    let use_10ms_blue = state.player_profiles[player_idx].fa_plus_10ms_blue_window;
+                    let wc = if use_10ms_blue {
+                        timing_stats::compute_window_counts_10ms_blue(&state.notes[start..end])
+                    } else {
+                        timing_stats::compute_window_counts(&state.notes[start..end])
+                    };
                     let rows: [([f32; 4], [f32; 4], u32); 7] = [
                         (fantastic_color, dim_fantastic, wc.w0),
                         (white_fa_color, dim_white_fa, wc.w1),
@@ -408,6 +413,7 @@ pub fn build_double_step_stats(
             4
         };
         let show_fa_plus_window = state.player_profiles[0].show_fa_plus_window;
+        let use_10ms_blue = show_fa_plus_window && state.player_profiles[0].fa_plus_10ms_blue_window;
         let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
         let y_base = -280.0;
 
@@ -438,7 +444,11 @@ pub fn build_double_step_stats(
                         })
                         .collect()
                 } else {
-                    let wc = timing_stats::compute_window_counts(&state.notes);
+                    let wc = if use_10ms_blue {
+                        timing_stats::compute_window_counts_10ms_blue(&state.notes)
+                    } else {
+                        timing_stats::compute_window_counts(&state.notes)
+                    };
                     let fantastic_color = JUDGMENT_INFO
                         .get(&JudgeGrade::Fantastic)
                         .map(|info| info.color)
@@ -520,6 +530,19 @@ pub fn build_double_step_stats(
                         diffuse(bright[0], bright[1], bright[2], bright[3]):
                         z(71)
                     ));
+
+                    if use_10ms_blue && row_i == 0 {
+                        let y = y_label + (12.0 * base_zoom);
+                        actors.push(act!(text:
+                            font("miso"): settext("(10ms)".to_string()):
+                            align(1.0, 0.5): horizalign(right):
+                            xy(label_x, y):
+                            zoom(0.6 * base_zoom):
+                            maxwidth(72.0 * base_zoom):
+                            diffuse(bright[0], bright[1], bright[2], bright[3]):
+                            z(71)
+                        ));
+                    }
                 }
             });
         });
@@ -1415,7 +1438,12 @@ fn build_side_pane(
         } else {
             // FA+ mode: split Fantastic into W0 (blue) and W1 (white) using per-note windows,
             // matching Simply Love's FA+ Step Statistics semantics.
-            let wc = timing_stats::compute_window_counts(&state.notes);
+            let use_10ms_blue = state.player_profiles[player_idx].fa_plus_10ms_blue_window;
+            let wc = if use_10ms_blue {
+                timing_stats::compute_window_counts_10ms_blue(&state.notes)
+            } else {
+                timing_stats::compute_window_counts(&state.notes)
+            };
 	            let fantastic_color = JUDGMENT_INFO
 	                .get(&JudgeGrade::Fantastic)
 	                .map(|info| info.color)
@@ -1496,6 +1524,8 @@ fn build_side_pane(
 
                 let label_world_y = world_y + (1.0 * final_text_base_zoom);
                 let label_zoom = final_text_base_zoom * 0.833;
+                let sublabel_y = label_world_y + (12.0 * final_text_base_zoom);
+                let sublabel_zoom = final_text_base_zoom * 0.6;
 
                 if player_side == profile::PlayerSide::P1 {
                     actors.push(act!(text:
@@ -1505,6 +1535,15 @@ fn build_side_pane(
                         diffuse(bright[0], bright[1], bright[2], bright[3]):
                         z(71)
                     ));
+                    if use_10ms_blue && index == 0 {
+                        actors.push(act!(text:
+                            font("miso"): settext("(10ms)".to_string()): align(0.0, 0.5):
+                            xy(label_world_x, sublabel_y): zoom(sublabel_zoom):
+                            maxwidth(72.0 * final_text_base_zoom): horizalign(left):
+                            diffuse(bright[0], bright[1], bright[2], bright[3]):
+                            z(71)
+                        ));
+                    }
                 } else {
                     actors.push(act!(text:
                         font("miso"): settext(label.to_string()): align(1.0, 0.5):
@@ -1513,6 +1552,15 @@ fn build_side_pane(
                         diffuse(bright[0], bright[1], bright[2], bright[3]):
                         z(71)
                     ));
+                    if use_10ms_blue && index == 0 {
+                        actors.push(act!(text:
+                            font("miso"): settext("(10ms)".to_string()): align(1.0, 0.5):
+                            xy(label_world_x, sublabel_y): zoom(sublabel_zoom):
+                            maxwidth(72.0 * final_text_base_zoom): horizalign(right):
+                            diffuse(bright[0], bright[1], bright[2], bright[3]):
+                            z(71)
+                        ));
+                    }
                 }
             }
         }

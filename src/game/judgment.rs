@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use crate::game::note::{HoldResult, MineResult, Note, NoteType};
-use crate::game::timing::WindowCounts;
+use crate::game::timing::{WindowCounts, FA_PLUS_W010_MS};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TimingWindow {
@@ -170,6 +170,121 @@ const EX_WEIGHT_W3: f64 = 1.0;
 const EX_WEIGHT_HELD: f64 = 1.0;
 const EX_WEIGHT_HIT_MINE: f64 = -1.0;
 
+const HARD_EX_WEIGHT_W010: f64 = 3.5;
+const HARD_EX_WEIGHT_W110: f64 = 3.0;
+const HARD_EX_WEIGHT_W2: f64 = 1.0;
+const HARD_EX_WEIGHT_HELD: f64 = 1.0;
+const HARD_EX_WEIGHT_HIT_MINE: f64 = -1.0;
+
+struct ExScoreCounts {
+    windows: WindowCounts,
+    w010: u32,
+    holds_held: u32,
+    mines_hit: u32,
+}
+
+fn compute_ex_score_counts(
+    notes: &[Note],
+    note_times: &[f32],
+    hold_end_times: &[Option<f32>],
+    fail_time: Option<f32>,
+) -> ExScoreCounts {
+    let mut windows = WindowCounts::default();
+    let mut w010: u32 = 0;
+
+    let mut idx: usize = 0;
+    let len = notes.len();
+    while idx < len {
+        let row_index = notes[idx].row_index;
+
+        let row_time = note_times.get(idx).copied().unwrap_or(0.0);
+        let row_is_playable = match fail_time {
+            Some(t) => row_time <= t,
+            None => true,
+        };
+
+        let mut row_judgments: Vec<&Judgment> = Vec::new();
+        while idx < len && notes[idx].row_index == row_index {
+            let note = &notes[idx];
+            if row_is_playable
+                && !note.is_fake
+                && note.can_be_judged
+                && !matches!(note.note_type, NoteType::Mine)
+                && let Some(j) = note.result.as_ref()
+            {
+                row_judgments.push(j);
+            }
+            idx += 1;
+        }
+
+        if row_judgments.is_empty() {
+            continue;
+        }
+
+        if let Some(j) = aggregate_row_final_judgment(row_judgments.iter().copied()) {
+            match j.grade {
+                JudgeGrade::Fantastic => {
+                    if j.time_error_ms.abs() <= FA_PLUS_W010_MS {
+                        w010 = w010.saturating_add(1);
+                    }
+                    match j.window {
+                        Some(TimingWindow::W0) => windows.w0 = windows.w0.saturating_add(1),
+                        _ => windows.w1 = windows.w1.saturating_add(1),
+                    }
+                }
+                JudgeGrade::Excellent => windows.w2 = windows.w2.saturating_add(1),
+                JudgeGrade::Great => windows.w3 = windows.w3.saturating_add(1),
+                JudgeGrade::Decent => windows.w4 = windows.w4.saturating_add(1),
+                JudgeGrade::WayOff => windows.w5 = windows.w5.saturating_add(1),
+                JudgeGrade::Miss => windows.miss = windows.miss.saturating_add(1),
+            }
+        }
+    }
+
+    let mut holds_held: u32 = 0;
+    let mut mines_hit: u32 = 0;
+
+    for (i, note) in notes.iter().enumerate() {
+        if note.is_fake || !note.can_be_judged {
+            continue;
+        }
+
+        if let Some(ft) = fail_time {
+            let relevant_time = if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                hold_end_times.get(i).and_then(|t| *t).unwrap_or(0.0)
+            } else {
+                note_times.get(i).copied().unwrap_or(0.0)
+            };
+            if relevant_time > ft {
+                continue;
+            }
+        }
+
+        match note.note_type {
+            NoteType::Hold => {
+                if let Some(h) = note.hold.as_ref()
+                    && h.result == Some(HoldResult::Held)
+                {
+                    holds_held = holds_held.saturating_add(1);
+                }
+            }
+            NoteType::Mine => {
+                if note.mine_result == Some(MineResult::Hit) {
+                    mines_hit = mines_hit.saturating_add(1);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    ExScoreCounts {
+        windows,
+        w010,
+        holds_held,
+        mines_hit,
+    }
+}
+
 /// Calculates FA+ EX score using the same algebra as SL:
 ///
 ///   `total_possible` = `total_steps` * 3.5 + (`total_holds` + `total_rolls`)
@@ -197,99 +312,7 @@ pub fn calculate_ex_score_from_notes(
         return 0.0;
     }
 
-    // Compute window counts manually here so we can filter by fail_time.
-    // We cannot use timing::compute_window_counts directly as it lacks time-awareness.
-    let mut windows = WindowCounts::default();
-    {
-        let mut idx: usize = 0;
-        let len = notes.len();
-        while idx < len {
-            let row_index = notes[idx].row_index;
-
-            // Determine if this row happened before failure.
-            // Assuming notes are ordered, the time of the first note in the row is sufficient.
-            let row_time = note_times.get(idx).copied().unwrap_or(0.0);
-            let row_is_playable = match fail_time {
-                Some(t) => row_time <= t,
-                None => true,
-            };
-
-            let mut row_judgments: Vec<&Judgment> = Vec::new();
-
-            while idx < len && notes[idx].row_index == row_index {
-                let note = &notes[idx];
-                // Only include this note in the window count if the row is playable (pre-failure)
-                if row_is_playable
-                    && !note.is_fake
-                    && note.can_be_judged
-                    && !matches!(note.note_type, NoteType::Mine)
-                    && let Some(j) = note.result.as_ref()
-                {
-                    row_judgments.push(j);
-                }
-                idx += 1;
-            }
-
-            if row_judgments.is_empty() {
-                continue;
-            }
-
-            if let Some(j) = aggregate_row_final_judgment(row_judgments.iter().copied()) {
-                match j.grade {
-                    JudgeGrade::Fantastic => match j.window {
-                        Some(TimingWindow::W0) => windows.w0 = windows.w0.saturating_add(1),
-                        _ => windows.w1 = windows.w1.saturating_add(1),
-                    },
-                    JudgeGrade::Excellent => windows.w2 = windows.w2.saturating_add(1),
-                    JudgeGrade::Great => windows.w3 = windows.w3.saturating_add(1),
-                    JudgeGrade::Decent => windows.w4 = windows.w4.saturating_add(1),
-                    JudgeGrade::WayOff => windows.w5 = windows.w5.saturating_add(1),
-                    JudgeGrade::Miss => windows.miss = windows.miss.saturating_add(1),
-                }
-            }
-        }
-    }
-
-    // Count successful holds (not rolls) and mines hit.
-    let mut holds_held: u32 = 0;
-    let mut mines_hit: u32 = 0;
-
-    for (i, note) in notes.iter().enumerate() {
-        if note.is_fake || !note.can_be_judged {
-            continue;
-        }
-
-        // Filter out holds/mines that occur after failure
-        if let Some(ft) = fail_time {
-            let relevant_time = if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
-                // For holds, we check the end time (must complete the hold while alive)
-                hold_end_times.get(i).and_then(|t| *t).unwrap_or(0.0)
-            } else {
-                // For mines, check the note time
-                note_times.get(i).copied().unwrap_or(0.0)
-            };
-
-            if relevant_time > ft {
-                continue;
-            }
-        }
-
-        match note.note_type {
-            NoteType::Hold => {
-                if let Some(h) = note.hold.as_ref()
-                    && h.result == Some(HoldResult::Held)
-                {
-                    holds_held = holds_held.saturating_add(1);
-                }
-            }
-            NoteType::Mine => {
-                if note.mine_result == Some(MineResult::Hit) {
-                    mines_hit = mines_hit.saturating_add(1);
-                }
-            }
-            _ => {}
-        }
-    }
+    let counts = compute_ex_score_counts(notes, note_times, hold_end_times, fail_time);
 
     let total_steps_f = f64::from(total_steps);
     let total_holds_f = f64::from(holds_total);
@@ -305,16 +328,61 @@ pub fn calculate_ex_score_from_notes(
 
     // Spreadsheet-style EX points, ignoring rolls in the numerator:
     let mut total_points = 0.0_f64;
-    total_points += f64::from(windows.w0) * EX_WEIGHT_W0;
-    total_points += f64::from(windows.w1) * EX_WEIGHT_W1;
-    total_points += f64::from(windows.w2) * EX_WEIGHT_W2;
-    total_points += f64::from(windows.w3) * EX_WEIGHT_W3;
+    total_points += f64::from(counts.windows.w0) * EX_WEIGHT_W0;
+    total_points += f64::from(counts.windows.w1) * EX_WEIGHT_W1;
+    total_points += f64::from(counts.windows.w2) * EX_WEIGHT_W2;
+    total_points += f64::from(counts.windows.w3) * EX_WEIGHT_W3;
 
-    total_points += f64::from(holds_held) * EX_WEIGHT_HELD;
+    total_points += f64::from(counts.holds_held) * EX_WEIGHT_HELD;
 
     // Mines subtract if hit while alive.
-    let mines_effective = mines_hit.min(mines_total);
+    let mines_effective = counts.mines_hit.min(mines_total);
     total_points += f64::from(mines_effective) * EX_WEIGHT_HIT_MINE;
+
+    let ratio = (total_points / total_possible).max(0.0);
+    ((ratio * 10000.0).floor()) / 100.0
+}
+
+pub fn calculate_hard_ex_score_from_notes(
+    notes: &[Note],
+    note_times: &[f32],
+    hold_end_times: &[Option<f32>],
+    total_steps: u32,
+    holds_total: u32,
+    rolls_total: u32,
+    mines_total: u32,
+    fail_time: Option<f32>,
+    _mines_disabled: bool,
+) -> f64 {
+    if total_steps == 0 {
+        return 0.0;
+    }
+
+    let counts = compute_ex_score_counts(notes, note_times, hold_end_times, fail_time);
+
+    let total_steps_f = f64::from(total_steps);
+    let total_holds_f = f64::from(holds_total);
+    let total_rolls_f = f64::from(rolls_total);
+
+    let total_possible = total_steps_f.mul_add(
+        HARD_EX_WEIGHT_W010,
+        (total_holds_f + total_rolls_f) * HARD_EX_WEIGHT_HELD,
+    );
+    if total_possible <= 0.0 {
+        return 0.0;
+    }
+
+    let fantastic_total = counts.windows.w0.saturating_add(counts.windows.w1);
+    let w110 = fantastic_total.saturating_sub(counts.w010);
+
+    let mut total_points = 0.0_f64;
+    total_points += f64::from(counts.w010) * HARD_EX_WEIGHT_W010;
+    total_points += f64::from(w110) * HARD_EX_WEIGHT_W110;
+    total_points += f64::from(counts.windows.w2) * HARD_EX_WEIGHT_W2;
+    total_points += f64::from(counts.holds_held) * HARD_EX_WEIGHT_HELD;
+
+    let mines_effective = counts.mines_hit.min(mines_total);
+    total_points += f64::from(mines_effective) * HARD_EX_WEIGHT_HIT_MINE;
 
     let ratio = (total_points / total_possible).max(0.0);
     ((ratio * 10000.0).floor()) / 100.0

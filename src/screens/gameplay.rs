@@ -260,7 +260,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         // Score Display
         if !state.player_profiles[player_idx].hide_score {
             let score_y = 56.0;
-            let (score_text, score_color) = if state.player_profiles[player_idx].show_ex_score {
+            let show_ex_score = state.player_profiles[player_idx].show_ex_score;
+            let show_hard_ex_score =
+                show_ex_score && state.player_profiles[player_idx].show_hard_ex_score;
+            let (score_text, score_color) = if show_ex_score {
                 let mines_disabled = false;
                 let (start, end) = state.note_ranges[player_idx];
                 let ex_percent = judgment::calculate_ex_score_from_notes(
@@ -296,6 +299,31 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
                 z(90)
             ));
+
+            if show_hard_ex_score {
+                let mines_disabled = false;
+                let (start, end) = state.note_ranges[player_idx];
+                let hard_ex_percent = judgment::calculate_hard_ex_score_from_notes(
+                    &state.notes[start..end],
+                    &state.note_time_cache[start..end],
+                    &state.hold_end_time_cache[start..end],
+                    chart.stats.total_steps,
+                    state.holds_total[player_idx],
+                    state.rolls_total[player_idx],
+                    state.mines_total[player_idx],
+                    state.players[player_idx].fail_time,
+                    mines_disabled,
+                );
+                let hex = color::HARD_EX_SCORE_RGBA;
+                actors.push(act!(text:
+                    font("wendy_monospace_numbers"):
+                    settext(format!("{:.2}", hard_ex_percent.max(0.0))):
+                    align(0.0, 0.0): xy(score_x, score_y):
+                    zoom(0.25): horizalign(left):
+                    diffuse(hex[0], hex[1], hex[2], hex[3]):
+                    z(90)
+                ));
+            }
         }
     }
     // Current BPM Display (1:1 with Simply Love)

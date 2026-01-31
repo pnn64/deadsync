@@ -149,6 +149,9 @@ pub const JUDGMENT_FA_PLUS_WHITE_RGBA: [f32; 4] = rgba_hex("#FFFFFF");
 pub const JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA: [f32; 4] = rgba_hex("#444444");
 pub const JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA: [f32; 4] = rgba_hex("#595959");
 
+// Arrow Cloud "H.EX" score color.
+pub const HARD_EX_SCORE_RGBA: [f32; 4] = rgba_hex("#FF00CC");
+
 pub const EDIT_DIFFICULTY_RGBA: [f32; 4] = rgba_hex("#B4B7BA");
 
 /// Returns the Simply Love color for a given difficulty, based on an active theme color index.

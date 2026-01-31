@@ -24,6 +24,11 @@ pub const BASE_MINE_S: f32 = 0.0700;
 // See SL.Preferences["FA+"].TimingWindowSecondsW1 in SL_Init.lua.
 pub const BASE_FA_PLUS_W0_S: f32 = 0.0135;
 
+// Arrow Cloud: 10ms FA+ support for "SmallerWhite".
+// See Arrow Cloud's IsW010Judgment() helper (base 8.5ms + 1.5ms add == 10ms).
+pub const BASE_FA_PLUS_W010_S: f32 = 0.0085;
+pub const FA_PLUS_W010_MS: f32 = (BASE_FA_PLUS_W010_S + TIMING_WINDOW_ADD_S) * 1000.0;
+
 #[derive(Copy, Clone, Debug)]
 pub struct TimingProfile {
     // Unified ITG tap windows (seconds, already including TIMING_WINDOW_ADD_S), W1..W5.
@@ -1246,6 +1251,57 @@ pub fn compute_window_counts(notes: &[Note]) -> WindowCounts {
                     Some(TimingWindow::W0) => out.w0 = out.w0.saturating_add(1),
                     _ => out.w1 = out.w1.saturating_add(1),
                 },
+                JudgeGrade::Excellent => out.w2 = out.w2.saturating_add(1),
+                JudgeGrade::Great => out.w3 = out.w3.saturating_add(1),
+                JudgeGrade::Decent => out.w4 = out.w4.saturating_add(1),
+                JudgeGrade::WayOff => out.w5 = out.w5.saturating_add(1),
+                JudgeGrade::Miss => out.miss = out.miss.saturating_add(1),
+            }
+        }
+    }
+
+    out
+}
+
+#[inline(always)]
+pub fn compute_window_counts_10ms_blue(notes: &[Note]) -> WindowCounts {
+    let mut out = WindowCounts::default();
+    if notes.is_empty() {
+        return out;
+    }
+
+    let mut idx: usize = 0;
+    let len = notes.len();
+
+    while idx < len {
+        let row_index = notes[idx].row_index;
+        let mut row_judgments: Vec<&Judgment> = Vec::new();
+
+        while idx < len && notes[idx].row_index == row_index {
+            let note = &notes[idx];
+            if !note.is_fake
+                && note.can_be_judged
+                && !matches!(note.note_type, NoteType::Mine)
+                && let Some(j) = note.result.as_ref()
+            {
+                row_judgments.push(j);
+            }
+            idx += 1;
+        }
+
+        if row_judgments.is_empty() {
+            continue;
+        }
+
+        if let Some(j) = judgment::aggregate_row_final_judgment(row_judgments.iter().copied()) {
+            match j.grade {
+                JudgeGrade::Fantastic => {
+                    if j.time_error_ms.abs() <= FA_PLUS_W010_MS {
+                        out.w0 = out.w0.saturating_add(1);
+                    } else {
+                        out.w1 = out.w1.saturating_add(1);
+                    }
+                }
                 JudgeGrade::Excellent => out.w2 = out.w2.saturating_add(1),
                 JudgeGrade::Great => out.w3 = out.w3.saturating_add(1),
                 JudgeGrade::Decent => out.w4 = out.w4.saturating_add(1),

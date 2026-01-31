@@ -65,15 +65,20 @@ pub struct ScoreInfo {
     pub fail_time: Option<f32>,
     // Per-window tap counts (including FA+ W0) for display purposes.
     pub window_counts: timing_stats::WindowCounts,
+    // Like window_counts, but with the Fantastic split at 10ms (Arrow Cloud: "SmallerWhite").
+    pub window_counts_10ms: timing_stats::WindowCounts,
     // FA+ style EX score percentage (0.00–100.00), using the same semantics
     // as ScreenGameplay's EX HUD (Simply Love's CalculateExScore).
     pub ex_score_percent: f64,
+    // Arrow Cloud style "H.EX" score percentage (0.00–100.00).
+    pub hard_ex_score_percent: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum EvalPane {
     Standard,
     FaPlus,
+    HardEx,
 }
 
 impl EvalPane {
@@ -87,10 +92,14 @@ impl EvalPane {
     }
 
     #[inline(always)]
-    const fn toggle(self) -> Self {
-        match self {
-            Self::Standard => Self::FaPlus,
-            Self::FaPlus => Self::Standard,
+    fn toggle(self, has_hard_ex: bool) -> Self {
+        match (self, has_hard_ex) {
+            (Self::Standard, false) => Self::FaPlus,
+            (Self::FaPlus, false) => Self::Standard,
+            (Self::Standard, true) => Self::FaPlus,
+            (Self::FaPlus, true) => Self::HardEx,
+            (Self::HardEx, true) => Self::Standard,
+            (Self::HardEx, false) => Self::Standard,
         }
     }
 }
@@ -159,10 +168,22 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         // judgments that occurred (including after failure), matching the
         // standard pane's judgment_counts semantics.
         let window_counts = timing_stats::compute_window_counts(notes);
+        let window_counts_10ms = timing_stats::compute_window_counts_10ms_blue(notes);
 
         // NoMines handling is not wired yet, so treat mines as enabled.
         let mines_disabled = false;
         let ex_score_percent = judgment::calculate_ex_score_from_notes(
+            notes,
+            note_times,
+            hold_end_times,
+            gs.charts[player_idx].stats.total_steps,
+            gs.holds_total[player_idx],
+            gs.rolls_total[player_idx],
+            gs.mines_total[player_idx],
+            p.fail_time,
+            mines_disabled,
+        );
+        let hard_ex_score_percent = judgment::calculate_hard_ex_score_from_notes(
             notes,
             note_times,
             hold_end_times,
@@ -208,7 +229,9 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             life_history: p.life_history.clone(),
             fail_time: p.fail_time,
             window_counts,
+            window_counts_10ms,
             ex_score_percent,
+            hard_ex_score_percent,
         }
     });
 
@@ -350,7 +373,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p1_right
         | VirtualAction::p1_menu_right => {
             if state.score_info.is_some() {
-                state.active_pane = state.active_pane.toggle();
+                state.active_pane = state
+                    .active_pane
+                    .toggle(profile::get().show_hard_ex_score);
             }
             ScreenAction::None
         }
@@ -434,7 +459,13 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
 
     // Active evaluation pane is chosen at runtime; the profile toggle
     // only selects which pane is shown first.
-    let show_fa_plus_pane = matches!(state.active_pane, EvalPane::FaPlus);
+    let show_fa_plus_pane = matches!(state.active_pane, EvalPane::FaPlus | EvalPane::HardEx);
+    let show_10ms_blue = matches!(state.active_pane, EvalPane::HardEx);
+    let wc = if show_10ms_blue {
+        score_info.window_counts_10ms
+    } else {
+        score_info.window_counts
+    };
 
     // --- Calculate label shift for large numbers ---
     let max_judgment_count = if !show_fa_plus_pane {
@@ -444,21 +475,21 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
             .max()
             .unwrap_or(0)
     } else {
-        let wc = score_info.window_counts;
         *[wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss]
             .iter()
             .max()
             .unwrap_or(&0)
     };
 
-    let (label_shift_x, label_zoom) = if max_judgment_count > 9999 {
+    let (label_shift_x, label_zoom, sublabel_zoom) = if max_judgment_count > 9999 {
         let length = (max_judgment_count as f32).log10().floor() as i32 + 1;
         (
             -11.0 * (length - 4) as f32,
             0.1f32.mul_add(-((length - 4) as f32), 0.833),
+            0.1f32.mul_add(-((length - 4) as f32), 0.6),
         )
     } else {
-        (0.0, 0.833)
+        (0.0, 0.833, 0.6)
     };
 
     let digits_needed = if max_judgment_count == 0 {
@@ -517,7 +548,6 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 }
             }
 	        } else {
-	            let wc = score_info.window_counts;
 	            let fantastic_color = JUDGMENT_INFO
 	                .get(&JudgeGrade::Fantastic).map_or_else(|| color::JUDGMENT_RGBA[0], |info| info.color);
 	            let excellent_color = JUDGMENT_INFO
@@ -564,6 +594,14 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                     maxwidth(76.0): zoom(label_zoom): horizalign(right):
                     diffuse(bright_color[0], bright_color[1], bright_color[2], bright_color[3]): z(101)
                 ));
+                if show_10ms_blue && i == 0 {
+                    actors.push(act!(text: font("miso"): settext("(10ms)".to_string()):
+                        align(1.0, 0.5):
+                        xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y + 10.0):
+                        maxwidth(76.0): zoom(sublabel_zoom): horizalign(right):
+                        diffuse(bright_color[0], bright_color[1], bright_color[2], bright_color[3]): z(101)
+                    ));
+                }
 
                 // Number
                 let number_str = format!("{count:0digits_to_fmt$}");
@@ -1136,73 +1174,116 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let score_frame_y = screen_center_y() - 26.0;
         let percent_text = format!("{:.2}", score_info.score_percent * 100.0);
         let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));
+        let hard_ex_percent_text = format!("{:.2}", score_info.hard_ex_score_percent.max(0.0));
         let score_bg_color = color::rgba_hex("#101519");
-        let show_fa_plus_pane = matches!(state.active_pane, EvalPane::FaPlus);
 
         let mut children = Vec::new();
 
-        if show_fa_plus_pane {
-            // FA+ pane: stretch the background down (height 88, y-offset 14)
-            // to match Simply Love's Pane2 percentage container, and always
-            // show EX score beneath the normal ITG percent (independent of the
-            // in-game EX HUD option).
-            children.push(act!(quad:
-                align(0.0, 0.5):
-                xy(-150.0, 14.0):
-                setsize(158.5, 88.0):
-                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
-            ));
+        match state.active_pane {
+            EvalPane::FaPlus => {
+                // FA+ pane: stretch the background down (height 88, y-offset 14)
+                // to match Simply Love's Pane2 percentage container, and always
+                // show EX score beneath the normal ITG percent (independent of the
+                // in-game EX HUD option).
+                children.push(act!(quad:
+                    align(0.0, 0.5):
+                    xy(-150.0, 14.0):
+                    setsize(158.5, 88.0):
+                    diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+                ));
 
-            // Normal ITG score (top line, white)
-            children.push(act!(text:
-                font("wendy_white"):
-                settext(percent_text):
-                align(1.0, 0.5):
-                // Keep ITG percent in the same position regardless of FA+ pane.
-                xy(1.5, 0.0):
-                zoom(0.585):
-                horizalign(right)
-            ));
+                // Normal ITG score (top line, white)
+                children.push(act!(text:
+                    font("wendy_white"):
+                    settext(percent_text):
+                    align(1.0, 0.5):
+                    // Keep ITG percent in the same position regardless of FA+ pane.
+                    xy(1.5, 0.0):
+                    zoom(0.585):
+                    horizalign(right)
+                ));
 
-            // EX score (bottom line, Fantastic blue / turquoise), smaller than ITG score
-            let ex_color = color::JUDGMENT_RGBA[0];
-            // "EX" label to the left of the numeric EX score.
-            children.push(act!(text:
-                font("wendy_white"):
-                settext("EX"):
-                align(1.0, 0.5):
-                // Near the left edge of the background box.
-                xy(-108.0, 40.0):
-                zoom(0.31):
-                horizalign(right):
-                diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
-            ));
-            children.push(act!(text:
-                font("wendy_white"):
-                settext(ex_percent_text):
-                align(1.0, 0.5):
-                // EX numeric value aligned with label, further below ITG percent.
-                xy(0, 40.0):
-                zoom(0.31):
-                horizalign(right):
-                diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
-            ));
-        } else {
-            // Standard pane: original 60px-tall background and single ITG percent.
-            children.push(act!(quad:
-                align(0.0, 0.5):
-                xy(-150.0, 0.0):
-                setsize(158.5, 60.0):
-                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
-            ));
-            children.push(act!(text:
-                font("wendy_white"):
-                settext(percent_text):
-                align(1.0, 0.5):
-                xy(1.5, 0.0):
-                zoom(0.585):
-                horizalign(right)
-            ));
+                // EX score (bottom line, Fantastic blue / turquoise), smaller than ITG score
+                let ex_color = color::JUDGMENT_RGBA[0];
+                // "EX" label to the left of the numeric EX score.
+                children.push(act!(text:
+                    font("wendy_white"):
+                    settext("EX"):
+                    align(1.0, 0.5):
+                    // Near the left edge of the background box.
+                    xy(-108.0, 40.0):
+                    zoom(0.31):
+                    horizalign(right):
+                    diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
+                ));
+                children.push(act!(text:
+                    font("wendy_white"):
+                    settext(ex_percent_text):
+                    align(1.0, 0.5):
+                    // EX numeric value aligned with label, further below ITG percent.
+                    xy(0, 40.0):
+                    zoom(0.31):
+                    horizalign(right):
+                    diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
+                ));
+            }
+            EvalPane::HardEx => {
+                // H.EX pane: show EX (big) and H.EX (small) using the same layout
+                // as the FA+ pane's ITG+EX score box.
+                children.push(act!(quad:
+                    align(0.0, 0.5):
+                    xy(-150.0, 14.0):
+                    setsize(158.5, 88.0):
+                    diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+                ));
+
+                let ex_color = color::JUDGMENT_RGBA[0];
+                let hex_color = color::HARD_EX_SCORE_RGBA;
+                children.push(act!(text:
+                    font("wendy_white"):
+                    settext(ex_percent_text):
+                    align(1.0, 0.5):
+                    xy(1.5, 0.0):
+                    zoom(0.585):
+                    horizalign(right):
+                    diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
+                ));
+                children.push(act!(text:
+                    font("wendy_white"):
+                    settext("H.EX"):
+                    align(1.0, 0.5):
+                    xy(-108.0, 40.0):
+                    zoom(0.31):
+                    horizalign(right):
+                    diffuse(hex_color[0], hex_color[1], hex_color[2], hex_color[3])
+                ));
+                children.push(act!(text:
+                    font("wendy_white"):
+                    settext(hard_ex_percent_text):
+                    align(1.0, 0.5):
+                    xy(0, 40.0):
+                    zoom(0.31):
+                    horizalign(right):
+                    diffuse(hex_color[0], hex_color[1], hex_color[2], hex_color[3])
+                ));
+            }
+            EvalPane::Standard => {
+                // Standard pane: original 60px-tall background and single ITG percent.
+                children.push(act!(quad:
+                    align(0.0, 0.5):
+                    xy(-150.0, 0.0):
+                    setsize(158.5, 60.0):
+                    diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+                ));
+                children.push(act!(text:
+                    font("wendy_white"):
+                    settext(percent_text):
+                    align(1.0, 0.5):
+                    xy(1.5, 0.0):
+                    zoom(0.585):
+                    horizalign(right)
+                ));
+            }
         }
 
         let score_display_frame = Actor::Frame {

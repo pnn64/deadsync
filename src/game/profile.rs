@@ -602,7 +602,10 @@ pub struct Profile {
     // These do not change core timing semantics; they only affect HUD/UX.
     pub show_fa_plus_window: bool,
     pub show_ex_score: bool,
+    pub show_hard_ex_score: bool,
     pub show_fa_plus_pane: bool,
+    // 10ms blue Fantastic window for FA+ window display (Arrow Cloud: "SmallerWhite").
+    pub fa_plus_10ms_blue_window: bool,
     // Judgment tilt (Simply Love semantics).
     pub judgment_tilt: bool,
     pub tilt_multiplier: f32,
@@ -666,7 +669,9 @@ impl Default for Profile {
             hide_early_dw_flash: false,
             show_fa_plus_window: false,
             show_ex_score: false,
+            show_hard_ex_score: false,
             show_fa_plus_pane: false,
+            fa_plus_10ms_blue_window: false,
             judgment_tilt: false,
             tilt_multiplier: 1.0,
             error_bar: ErrorBarStyle::default(),
@@ -879,8 +884,16 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             i32::from(default_profile.show_ex_score)
         ));
         content.push_str(&format!(
+            "ShowHardEXScore = {}\n",
+            i32::from(default_profile.show_hard_ex_score)
+        ));
+        content.push_str(&format!(
             "ShowFaPlusPane = {}\n",
             i32::from(default_profile.show_fa_plus_pane)
+        ));
+        content.push_str(&format!(
+            "SmallerWhite = {}\n",
+            i32::from(default_profile.fa_plus_10ms_blue_window)
         ));
         content.push_str(&format!(
             "JudgmentTilt = {}\n",
@@ -1021,8 +1034,16 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         i32::from(profile.show_ex_score)
     ));
     content.push_str(&format!(
+        "ShowHardEXScore={}\n",
+        i32::from(profile.show_hard_ex_score)
+    ));
+    content.push_str(&format!(
         "ShowFaPlusPane={}\n",
         i32::from(profile.show_fa_plus_pane)
+    ));
+    content.push_str(&format!(
+        "SmallerWhite={}\n",
+        i32::from(profile.fa_plus_10ms_blue_window)
     ));
     content.push_str(&format!(
         "JudgmentTilt={}\n",
@@ -1211,10 +1232,18 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "ShowExScore")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.show_ex_score, |v| v != 0);
+            profile.show_hard_ex_score = profile_conf
+                .get("PlayerOptions", "ShowHardEXScore")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.show_hard_ex_score, |v| v != 0);
             profile.show_fa_plus_pane = profile_conf
                 .get("PlayerOptions", "ShowFaPlusPane")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.show_fa_plus_pane, |v| v != 0);
+            profile.fa_plus_10ms_blue_window = profile_conf
+                .get("PlayerOptions", "SmallerWhite")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.fa_plus_10ms_blue_window, |v| v != 0);
             profile.judgment_tilt = profile_conf
                 .get("PlayerOptions", "JudgmentTilt")
                 .and_then(|s| s.parse::<u8>().ok())
@@ -1884,6 +1913,21 @@ pub fn update_show_ex_score_for_side(side: PlayerSide, enabled: bool) {
     save_profile_ini_for_side(side);
 }
 
+pub fn update_show_hard_ex_score_for_side(side: PlayerSide, enabled: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.show_hard_ex_score == enabled {
+            return;
+        }
+        profile.show_hard_ex_score = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
 pub fn update_show_fa_plus_pane_for_side(side: PlayerSide, enabled: bool) {
     if session_side_is_guest(side) {
         return;
@@ -1895,6 +1939,21 @@ pub fn update_show_fa_plus_pane_for_side(side: PlayerSide, enabled: bool) {
             return;
         }
         profile.show_fa_plus_pane = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_fa_plus_10ms_blue_window_for_side(side: PlayerSide, enabled: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.fa_plus_10ms_blue_window == enabled {
+            return;
+        }
+        profile.fa_plus_10ms_blue_window = enabled;
     }
     save_profile_ini_for_side(side);
 }
