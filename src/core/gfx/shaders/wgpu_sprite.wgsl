@@ -4,7 +4,7 @@ struct Proj {
 
 @group(0) @binding(0) var u_sampler: sampler;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
-var<push_constant> u_proj: Proj;
+var<immediate> u_proj: Proj;
 
 struct VertexIn {
     @location(0) pos: vec2<f32>,
@@ -63,4 +63,3 @@ fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
     color.a = color.a * fade;
     return color;
 }
-

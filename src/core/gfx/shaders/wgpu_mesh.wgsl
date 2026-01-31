@@ -2,7 +2,7 @@ struct Proj {
     proj: mat4x4<f32>,
 };
 
-var<push_constant> u_proj: Proj;
+var<immediate> u_proj: Proj;
 
 struct VertexIn {
     @location(0) pos: vec2<f32>,
@@ -26,4 +26,3 @@ fn vs_main(input: VertexIn) -> VertexOut {
 fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
     return input.color;
 }
-

@@ -578,6 +578,7 @@ pub fn draw(
             depth_stencil_attachment: None,
             occlusion_query_set: None,
             timestamp_writes: None,
+            multiview_mask: None,
         });
 
         pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
@@ -869,7 +870,7 @@ fn build_pipeline_set(
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("dx12 pipeline layout"),
         bind_group_layouts: &[proj_layout, bind_layout],
-        push_constant_ranges: &[],
+        immediate_size: 0,
     });
 
     let pipelines = PipelineSet {
@@ -907,7 +908,7 @@ fn build_mesh_pipeline_set(
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("dx12 mesh pipeline layout"),
         bind_group_layouts: &[proj_layout],
-        push_constant_ranges: &[],
+        immediate_size: 0,
     });
 
     let pipelines = MeshPipelineSet {
@@ -969,7 +970,7 @@ fn build_pipeline(
         },
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     })
 }
@@ -1011,7 +1012,7 @@ fn build_mesh_pipeline(
         },
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     })
 }
@@ -1087,9 +1088,12 @@ fn sampler_descriptor(desc: SamplerDesc) -> wgpu::SamplerDescriptor<'static> {
     let filter = wgpu_filter_mode(desc.filter);
     let address = wgpu_address_mode(desc.wrap);
     let mip_filter = if desc.mipmaps {
-        filter
+        match desc.filter {
+            SamplerFilter::Linear => wgpu::MipmapFilterMode::Linear,
+            SamplerFilter::Nearest => wgpu::MipmapFilterMode::Nearest,
+        }
     } else {
-        wgpu::FilterMode::Nearest
+        wgpu::MipmapFilterMode::Nearest
     };
     wgpu::SamplerDescriptor {
         label: Some("dx12 sampler"),

@@ -165,9 +165,9 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
 
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("deadsync vk device"),
-        required_features: wgpu::Features::PUSH_CONSTANTS,
+        required_features: wgpu::Features::IMMEDIATES,
         required_limits: wgpu::Limits {
-            max_push_constant_size: mem::size_of::<[[f32; 4]; 4]>() as u32,
+            max_immediate_size: mem::size_of::<[[f32; 4]; 4]>() as u32,
             ..wgpu::Limits::default()
         },
         memory_hints: wgpu::MemoryHints::Performance,
@@ -543,6 +543,7 @@ pub fn draw(
             depth_stencil_attachment: None,
             occlusion_query_set: None,
             timestamp_writes: None,
+            multiview_mask: None,
         });
         let mut last_kind: Option<bool> = None;
         let mut last_blend: Option<BlendMode> = None;
@@ -575,11 +576,7 @@ pub fn draw(
                             .copied()
                             .unwrap_or(state.projection);
                         let vp_array: [[f32; 4]; 4] = vp.into();
-                        pass.set_push_constants(
-                            wgpu::ShaderStages::VERTEX,
-                            0,
-                            cast_slice(&vp_array),
-                        );
+                        pass.set_immediates(0, cast_slice(&vp_array));
                         last_camera = Some(run.camera);
                     }
                     if last_bind != Some(run.key) {
@@ -616,11 +613,7 @@ pub fn draw(
                             .copied()
                             .unwrap_or(state.projection);
                         let vp_array: [[f32; 4]; 4] = vp.into();
-                        pass.set_push_constants(
-                            wgpu::ShaderStages::VERTEX,
-                            0,
-                            cast_slice(&vp_array),
-                        );
+                        pass.set_immediates(0, cast_slice(&vp_array));
                         last_camera = Some(*camera);
                     }
                     match mode {
@@ -813,10 +806,7 @@ fn build_pipeline_set(
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("vk pipeline layout"),
         bind_group_layouts: &[bind_layout],
-        push_constant_ranges: &[wgpu::PushConstantRange {
-            stages: wgpu::ShaderStages::VERTEX,
-            range: 0..(mem::size_of::<[[f32; 4]; 4]>() as u32),
-        }],
+        immediate_size: mem::size_of::<[[f32; 4]; 4]>() as u32,
     });
 
     let pipelines = PipelineSet {
@@ -853,10 +843,7 @@ fn build_mesh_pipeline_set(
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("vk mesh pipeline layout"),
         bind_group_layouts: &[],
-        push_constant_ranges: &[wgpu::PushConstantRange {
-            stages: wgpu::ShaderStages::VERTEX,
-            range: 0..(mem::size_of::<[[f32; 4]; 4]>() as u32),
-        }],
+        immediate_size: mem::size_of::<[[f32; 4]; 4]>() as u32,
     });
 
     let pipelines = MeshPipelineSet {
@@ -918,7 +905,7 @@ fn build_pipeline(
         },
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     })
 }
@@ -960,7 +947,7 @@ fn build_mesh_pipeline(
         },
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     })
 }
@@ -1036,9 +1023,12 @@ fn sampler_descriptor(desc: SamplerDesc) -> wgpu::SamplerDescriptor<'static> {
     let filter = wgpu_filter_mode(desc.filter);
     let address = wgpu_address_mode(desc.wrap);
     let mip_filter = if desc.mipmaps {
-        filter
+        match desc.filter {
+            SamplerFilter::Linear => wgpu::MipmapFilterMode::Linear,
+            SamplerFilter::Nearest => wgpu::MipmapFilterMode::Nearest,
+        }
     } else {
-        wgpu::FilterMode::Nearest
+        wgpu::MipmapFilterMode::Nearest
     };
     wgpu::SamplerDescriptor {
         label: Some("vk sampler"),
