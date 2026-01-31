@@ -51,7 +51,12 @@ mod rubato_adapter {
             self.frames
         }
 
-        fn copy_from_channel_to_slice(&self, channel: usize, skip: usize, slice: &mut [T]) -> usize {
+        fn copy_from_channel_to_slice(
+            &self,
+            channel: usize,
+            skip: usize,
+            slice: &mut [T],
+        ) -> usize {
             if channel >= self.channels || skip >= self.frames {
                 return 0;
             }
@@ -108,7 +113,12 @@ mod rubato_adapter {
     where
         T: Clone + 'a,
     {
-        unsafe fn write_sample_unchecked(&mut self, channel: usize, frame: usize, value: &T) -> bool {
+        unsafe fn write_sample_unchecked(
+            &mut self,
+            channel: usize,
+            frame: usize,
+            value: &T,
+        ) -> bool {
             let idx = self.idx(channel, frame);
             unsafe {
                 *self.buf.get_unchecked_mut(idx) = value.clone();
@@ -996,7 +1006,8 @@ fn music_decoder_thread_loop(
                     in_ch,
                     out_frames,
                 );
-                let (in_used, out_used) = resampler.process_into_buffer(&input, &mut output, None)?;
+                let (in_used, out_used) =
+                    resampler.process_into_buffer(&input, &mut output, None)?;
 
                 // Drain consumed input
                 for ch in in_planar.iter_mut() {
@@ -1447,7 +1458,8 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
         partial_len: Some(0),
         active_channels_mask: None,
     };
-    let (_in_used, out_used) = resampler.process_into_buffer(&empty_input, &mut output, Some(&indexing))?;
+    let (_in_used, out_used) =
+        resampler.process_into_buffer(&empty_input, &mut output, Some(&indexing))?;
     if out_used > 0 {
         let produced_frames = out_used;
         resampled_data.reserve(produced_frames * out_ch);

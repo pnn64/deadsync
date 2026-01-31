@@ -464,9 +464,10 @@ fn ensure_chart_cache_for_song(
     let need_edits = state.selected_steps_index >= color::FILE_DIFFICULTY_NAMES.len()
         || (is_versus && state.p2_selected_steps_index >= color::FILE_DIFFICULTY_NAMES.len());
     if need_edits {
-        let rebuild_edits = state.cached_edits.as_ref().is_none_or(|c| {
-            !Arc::ptr_eq(&c.song, song) || c.chart_type != chart_type
-        });
+        let rebuild_edits = state
+            .cached_edits
+            .as_ref()
+            .is_none_or(|c| !Arc::ptr_eq(&c.song, song) || c.chart_type != chart_type);
         if rebuild_edits {
             state.cached_edits = Some(EditSortCache {
                 song: song.clone(),

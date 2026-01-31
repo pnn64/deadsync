@@ -2478,12 +2478,12 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                         let expected_stream_for_note_s = row_note_time / rate
                             + lead_in_s
                             + global_offset_s * (1.0 - rate) / rate;
-                        let expected_stream_for_hit_s = current_time / rate
-                            + lead_in_s
-                            + global_offset_s * (1.0 - rate) / rate;
+                        let expected_stream_for_hit_s =
+                            current_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
                         let stream_delta_note_ms =
                             (stream_pos_s - expected_stream_for_note_s) * 1000.0;
-                        let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
+                        let stream_delta_hit_ms =
+                            (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
                         info!(
                             concat!(
                                 "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
@@ -3023,18 +3023,14 @@ fn update_judged_rows(state: &mut State) {
                 .iter()
                 .all(|&i| state.notes[i].result.is_some());
             if is_row_complete {
-                let skip_life_change = notes_on_row.iter().any(|&i| state.notes[i].early_result.is_some());
+                let skip_life_change = notes_on_row
+                    .iter()
+                    .any(|&i| state.notes[i].early_result.is_some());
                 let judgments_on_row: Vec<Judgment> = notes_on_row
                     .iter()
                     .filter_map(|&i| state.notes[i].result.clone())
                     .collect();
-                finalize_row_judgment(
-                    state,
-                    player,
-                    row_index,
-                    judgments_on_row,
-                    skip_life_change,
-                );
+                finalize_row_judgment(state, player, row_index, judgments_on_row, skip_life_change);
                 state.judged_row_cursor[player] += 1;
             } else {
                 break;

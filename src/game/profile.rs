@@ -501,6 +501,9 @@ pub struct Profile {
     pub show_fa_plus_window: bool,
     pub show_ex_score: bool,
     pub show_fa_plus_pane: bool,
+    // Judgment tilt (Simply Love semantics).
+    pub judgment_tilt: bool,
+    pub tilt_multiplier: f32,
     // "Hide" options (Simply Love semantics).
     pub hide_targets: bool,
     pub hide_song_bg: bool,
@@ -556,6 +559,8 @@ impl Default for Profile {
             show_fa_plus_window: false,
             show_ex_score: false,
             show_fa_plus_pane: false,
+            judgment_tilt: false,
+            tilt_multiplier: 1.0,
             hide_targets: false,
             hide_song_bg: false,
             hide_combo: false,
@@ -765,6 +770,14 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             i32::from(default_profile.show_fa_plus_pane)
         ));
         content.push_str(&format!(
+            "JudgmentTilt = {}\n",
+            i32::from(default_profile.judgment_tilt)
+        ));
+        content.push_str(&format!(
+            "TiltMultiplier = {}\n",
+            default_profile.tilt_multiplier
+        ));
+        content.push_str(&format!(
             "HoldJudgmentGraphic = {}\n",
             default_profile.hold_judgment_graphic
         ));
@@ -853,20 +866,14 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         "HideTargets={}\n",
         i32::from(profile.hide_targets)
     ));
-    content.push_str(&format!(
-        "HideSongBG={}\n",
-        i32::from(profile.hide_song_bg)
-    ));
+    content.push_str(&format!("HideSongBG={}\n", i32::from(profile.hide_song_bg)));
     content.push_str(&format!("HideCombo={}\n", i32::from(profile.hide_combo)));
     content.push_str(&format!(
         "HideLifebar={}\n",
         i32::from(profile.hide_lifebar)
     ));
     content.push_str(&format!("HideScore={}\n", i32::from(profile.hide_score)));
-    content.push_str(&format!(
-        "HideDanger={}\n",
-        i32::from(profile.hide_danger)
-    ));
+    content.push_str(&format!("HideDanger={}\n", i32::from(profile.hide_danger)));
     content.push_str(&format!(
         "HideComboExplosions={}\n",
         i32::from(profile.hide_combo_explosions)
@@ -887,6 +894,11 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         "ShowFaPlusPane={}\n",
         i32::from(profile.show_fa_plus_pane)
     ));
+    content.push_str(&format!(
+        "JudgmentTilt={}\n",
+        i32::from(profile.judgment_tilt)
+    ));
+    content.push_str(&format!("TiltMultiplier={}\n", profile.tilt_multiplier));
     content.push_str(&format!(
         "HoldJudgmentGraphic={}\n",
         profile.hold_judgment_graphic
@@ -1062,6 +1074,15 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "ShowFaPlusPane")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.show_fa_plus_pane, |v| v != 0);
+            profile.judgment_tilt = profile_conf
+                .get("PlayerOptions", "JudgmentTilt")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.judgment_tilt, |v| v != 0);
+            profile.tilt_multiplier = profile_conf
+                .get("PlayerOptions", "TiltMultiplier")
+                .and_then(|s| s.parse::<f32>().ok())
+                .filter(|v| v.is_finite())
+                .unwrap_or(default_profile.tilt_multiplier);
             profile.scroll_speed = profile_conf
                 .get("PlayerOptions", "ScrollSpeed")
                 .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
@@ -1531,7 +1552,8 @@ pub fn update_early_dw_options_for_side(side: PlayerSide, hide_judgments: bool, 
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
-        if profile.hide_early_dw_judgments == hide_judgments && profile.hide_early_dw_flash == hide_flash
+        if profile.hide_early_dw_judgments == hide_judgments
+            && profile.hide_early_dw_flash == hide_flash
         {
             return;
         }
@@ -1712,6 +1734,39 @@ pub fn update_show_fa_plus_pane_for_side(side: PlayerSide, enabled: bool) {
             return;
         }
         profile.show_fa_plus_pane = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_judgment_tilt_for_side(side: PlayerSide, enabled: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.judgment_tilt == enabled {
+            return;
+        }
+        profile.judgment_tilt = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_tilt_multiplier_for_side(side: PlayerSide, multiplier: f32) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    if !multiplier.is_finite() {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if (profile.tilt_multiplier - multiplier).abs() < 1e-6 {
+            return;
+        }
+        profile.tilt_multiplier = multiplier;
     }
     save_profile_ini_for_side(side);
 }

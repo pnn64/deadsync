@@ -8,8 +8,8 @@ use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting};
 use crate::screens::{
     Screen as CurrentScreen, ScreenAction, evaluation, gameplay, init, input as input_screen,
-    mappings, menu, options, player_options, profile_load, sandbox, select_color, select_music,
-    select_mode, select_profile, select_style,
+    mappings, menu, options, player_options, profile_load, sandbox, select_color, select_mode,
+    select_music, select_profile, select_style,
 };
 use crate::ui::color;
 use winit::{

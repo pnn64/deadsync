@@ -1465,9 +1465,16 @@ pub fn build(
                 } else {
                     screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
                 };
+                let rot_deg = if profile.judgment_tilt && judgment.grade != JudgeGrade::Miss {
+                    let abs_sec = offset_sec.abs().min(0.050);
+                    let dir = if offset_sec < 0.0 { -1.0 } else { 1.0 };
+                    dir * abs_sec * 300.0 * profile.tilt_multiplier
+                } else {
+                    0.0
+                };
                 hud_actors.push(act!(sprite(judgment_texture):
                     align(0.5, 0.5): xy(playfield_center_x, judgment_y):
-                    z(200): zoomtoheight(76.0): setstate(linear_index): zoom(zoom)
+                    z(200): rotationz(rot_deg): zoomtoheight(76.0): setstate(linear_index): zoom(zoom)
                 ));
             }
         }
