@@ -5,7 +5,7 @@ use crate::core::input::{
 };
 use crate::core::space::{is_wide, screen_center_y, screen_height, screen_width};
 use crate::game::chart::ChartData;
-use crate::game::judgment::{self, JudgeGrade, Judgment};
+use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{self, Noteskin, Style};
 use crate::game::song::SongData;
@@ -632,6 +632,19 @@ fn compute_column_scroll_dirs(
     dirs
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct ErrorBarTick {
+    pub started_at: f32,
+    pub offset_s: f32,
+    pub window: TimingWindow,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ErrorBarText {
+    pub started_at: f32,
+    pub early: bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct PlayerRuntime {
     pub combo: u32,
@@ -661,6 +674,15 @@ pub struct PlayerRuntime {
     hands_holding_count_for_stats: i32,
 
     pub life_history: Vec<(f32, f32)>, // (time, life_value)
+
+    pub error_bar_mono_ticks: [Option<ErrorBarTick>; 15],
+    pub error_bar_mono_next: usize,
+    pub error_bar_color_ticks: [Option<ErrorBarTick>; 10],
+    pub error_bar_color_next: usize,
+    pub error_bar_color_bar_started_at: Option<f32>,
+    pub error_bar_color_flash_early: [Option<f32>; 6],
+    pub error_bar_color_flash_late: [Option<f32>; 6],
+    pub error_bar_text: Option<ErrorBarText>,
 }
 
 fn init_player_runtime() -> PlayerRuntime {
@@ -702,6 +724,14 @@ fn init_player_runtime() -> PlayerRuntime {
         mines_avoided: 0,
         hands_holding_count_for_stats: 0,
         life_history: Vec::with_capacity(10000),
+        error_bar_mono_ticks: [None; 15],
+        error_bar_mono_next: 0,
+        error_bar_color_ticks: [None; 10],
+        error_bar_color_next: 0,
+        error_bar_color_bar_started_at: None,
+        error_bar_color_flash_early: [None; 6],
+        error_bar_color_flash_late: [None; 6],
+        error_bar_text: None,
     }
 }
 
@@ -2320,6 +2350,140 @@ fn update_active_holds(
     }
 }
 
+#[inline(always)]
+const fn error_bar_window_ix(window: TimingWindow) -> usize {
+    match window {
+        TimingWindow::W0 => 0,
+        TimingWindow::W1 => 1,
+        TimingWindow::W2 => 2,
+        TimingWindow::W3 => 3,
+        TimingWindow::W4 => 4,
+        TimingWindow::W5 => 5,
+    }
+}
+
+#[inline(always)]
+fn error_bar_trim_allows(trim: profile::ErrorBarTrim, window: TimingWindow) -> bool {
+    match trim {
+        profile::ErrorBarTrim::Off => true,
+        profile::ErrorBarTrim::Great => {
+            matches!(
+                window,
+                TimingWindow::W0 | TimingWindow::W1 | TimingWindow::W2 | TimingWindow::W3
+            )
+        }
+        profile::ErrorBarTrim::Excellent => {
+            matches!(
+                window,
+                TimingWindow::W0 | TimingWindow::W1 | TimingWindow::W2
+            )
+        }
+    }
+}
+
+#[inline(always)]
+fn error_bar_push_tick<const N: usize>(
+    ticks: &mut [Option<ErrorBarTick>; N],
+    next: &mut usize,
+    multi_tick: bool,
+    tick: ErrorBarTick,
+) {
+    let ix = if multi_tick {
+        let ix = (*next) % N;
+        *next = (*next + 1) % N;
+        ix
+    } else {
+        0
+    };
+    ticks[ix] = Some(tick);
+    if !multi_tick {
+        *next = 0;
+    }
+}
+
+#[inline(always)]
+fn error_bar_register_tap(state: &mut State, player: usize, judgment: &Judgment) {
+    let prof = &state.player_profiles[player];
+    let style = prof.error_bar;
+    if style == profile::ErrorBarStyle::None {
+        return;
+    }
+    let Some(window) = judgment.window else {
+        return;
+    };
+
+    let now = state.total_elapsed_in_screen;
+    let offset_s = judgment.time_error_ms / 1000.0;
+    let p = &mut state.players[player];
+
+    if style == profile::ErrorBarStyle::Text {
+        let threshold_s = if prof.show_fa_plus_window {
+            state
+                .timing_profile
+                .fa_plus_window_s
+                .unwrap_or(state.timing_profile.windows_s[0])
+        } else {
+            state.timing_profile.windows_s[0]
+        };
+        if offset_s.abs() > threshold_s {
+            p.error_bar_text = Some(ErrorBarText {
+                started_at: now,
+                early: offset_s < 0.0,
+            });
+        } else {
+            p.error_bar_text = None;
+        }
+        return;
+    }
+
+    if !error_bar_trim_allows(prof.error_bar_trim, window) {
+        return;
+    }
+
+    let tick = ErrorBarTick {
+        started_at: now,
+        offset_s,
+        window,
+    };
+
+    match style {
+        profile::ErrorBarStyle::Monochrome => {
+            error_bar_push_tick(
+                &mut p.error_bar_mono_ticks,
+                &mut p.error_bar_mono_next,
+                prof.error_bar_multi_tick,
+                tick,
+            );
+        }
+        profile::ErrorBarStyle::Colorful => {
+            error_bar_push_tick(
+                &mut p.error_bar_color_ticks,
+                &mut p.error_bar_color_next,
+                prof.error_bar_multi_tick,
+                tick,
+            );
+            p.error_bar_color_bar_started_at = Some(now);
+
+            let is_top = if prof.show_fa_plus_window {
+                window == TimingWindow::W0
+            } else {
+                window == TimingWindow::W1
+            };
+            let wi = error_bar_window_ix(window);
+            if is_top {
+                p.error_bar_color_flash_early[wi] = Some(now);
+                p.error_bar_color_flash_late[wi] = Some(now);
+            } else if offset_s < 0.0 {
+                p.error_bar_color_flash_early[wi] = Some(now);
+            } else {
+                p.error_bar_color_flash_late[wi] = Some(now);
+            }
+        }
+        profile::ErrorBarStyle::None => {}
+        profile::ErrorBarStyle::Text => {}
+    }
+}
+
 pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool {
     let windows = state.timing_profile.windows_s;
     let way_off_window = windows[4];
@@ -2467,14 +2631,17 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                             JudgeGrade::WayOff => LifeChange::WAY_OFF,
                             JudgeGrade::Miss => LifeChange::MISS,
                         };
-                        let p = &mut state.players[player];
-                        apply_life_change(p, state.current_music_time, life_delta);
-                        if !hide_early_dw_judgments {
-                            p.last_judgment = Some(JudgmentRenderInfo {
-                                judgment: judgment.clone(),
-                                judged_at: Instant::now(),
-                            });
+                        {
+                            let p = &mut state.players[player];
+                            apply_life_change(p, state.current_music_time, life_delta);
+                            if !hide_early_dw_judgments {
+                                p.last_judgment = Some(JudgmentRenderInfo {
+                                    judgment: judgment.clone(),
+                                    judged_at: Instant::now(),
+                                });
+                            }
                         }
+                        error_bar_register_tap(state, player, &judgment);
                         let expected_stream_for_note_s = row_note_time / rate
                             + lead_in_s
                             + global_offset_s * (1.0 - rate) / rate;
@@ -2545,11 +2712,13 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     return true;
                 }
 
-                state.notes[idx].result = Some(Judgment {
+                let judgment = Judgment {
                     time_error_ms: te_real * 1000.0,
                     grade,
                     window: Some(window),
-                });
+                };
+                error_bar_register_tap(state, player, &judgment);
+                state.notes[idx].result = Some(judgment);
 
                 let expected_stream_for_note_s =
                     row_note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
@@ -2616,11 +2785,13 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 let row_note_time = state.note_time_cache[idx];
                 let te_music = current_time - row_note_time;
                 let te_real = te_music / rate;
-                state.notes[idx].result = Some(Judgment {
+                let judgment = Judgment {
                     time_error_ms: te_real * 1000.0,
                     grade,
                     window: Some(window),
-                });
+                };
+                error_bar_register_tap(state, player, &judgment);
+                state.notes[idx].result = Some(judgment);
 
                 // Map chart times into the shared audio device clock space to
                 // see how well the atomic sample clock aligns with both the

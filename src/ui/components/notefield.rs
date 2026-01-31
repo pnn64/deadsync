@@ -33,6 +33,24 @@ const HOLD_JUDGMENT_FINAL_ZOOM: f32 =
     HOLD_JUDGMENT_FINAL_HEIGHT / LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT;
 const HOLD_JUDGMENT_INITIAL_ZOOM: f32 =
     HOLD_JUDGMENT_INITIAL_HEIGHT / LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT;
+const ERROR_BAR_JUDGMENT_HEIGHT: f32 = 40.0; // SL: judgmentHeight in SL-Layout.lua
+const ERROR_BAR_OFFSET_FROM_JUDGMENT: f32 = ERROR_BAR_JUDGMENT_HEIGHT * 0.5 + 5.0; // SL: top/bottom +/-25px
+
+const ERROR_BAR_WIDTH_COLORFUL: f32 = 160.0;
+const ERROR_BAR_HEIGHT_COLORFUL: f32 = 10.0;
+const ERROR_BAR_WIDTH_MONOCHROME: f32 = 240.0;
+const ERROR_BAR_TICK_WIDTH: f32 = 2.0;
+const ERROR_BAR_TICK_DUR_COLORFUL: f32 = 0.5;
+const ERROR_BAR_TICK_DUR_MONOCHROME: f32 = 0.75;
+const ERROR_BAR_SEG_ALPHA_BASE: f32 = 0.3;
+const ERROR_BAR_MONO_BG_ALPHA: f32 = 0.5;
+const ERROR_BAR_LINE_ALPHA: f32 = 0.3;
+const ERROR_BAR_LINES_FADE_START_S: f32 = 2.5;
+const ERROR_BAR_LINES_FADE_DUR_S: f32 = 0.5;
+const ERROR_BAR_LABEL_FADE_DUR_S: f32 = 0.5;
+const ERROR_BAR_LABEL_HOLD_S: f32 = 2.0;
+
+const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
 
 // Visual Feedback
 const SHOW_COMBO_AT: u32 = 4; // From Simply Love metrics
@@ -88,6 +106,114 @@ fn sm_scale(v: f32, in0: f32, in1: f32, out0: f32, out1: f32) -> f32 {
         return out1;
     }
     ((v - in0) / denom).mul_add(out1 - out0, out0)
+}
+
+#[inline(always)]
+fn smoothstep01(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+#[inline(always)]
+const fn timing_window_from_num(n: usize) -> TimingWindow {
+    match n {
+        0 => TimingWindow::W0,
+        1 => TimingWindow::W1,
+        2 => TimingWindow::W2,
+        3 => TimingWindow::W3,
+        4 => TimingWindow::W4,
+        _ => TimingWindow::W5,
+    }
+}
+
+#[inline(always)]
+fn error_bar_color_for_window(window: TimingWindow, show_fa_plus_window: bool) -> [f32; 4] {
+    match window {
+        TimingWindow::W0 => color::JUDGMENT_RGBA[0],
+        TimingWindow::W1 => {
+            if show_fa_plus_window {
+                color::JUDGMENT_FA_PLUS_WHITE_RGBA
+            } else {
+                color::JUDGMENT_RGBA[0]
+            }
+        }
+        TimingWindow::W2 => color::JUDGMENT_RGBA[1],
+        TimingWindow::W3 => color::JUDGMENT_RGBA[2],
+        TimingWindow::W4 => color::JUDGMENT_RGBA[3],
+        TimingWindow::W5 => color::JUDGMENT_RGBA[4],
+    }
+}
+
+#[inline(always)]
+fn error_bar_tick_alpha(age: f32, dur: f32, multi_tick: bool) -> f32 {
+    if !age.is_finite() || age < 0.0 {
+        return 0.0;
+    }
+    if multi_tick {
+        if age < 0.03 {
+            1.0
+        } else if age < dur {
+            1.0 - (age - 0.03) / (dur - 0.03).max(0.000_001)
+        } else {
+            0.0
+        }
+    } else if age < dur {
+        1.0
+    } else {
+        0.0
+    }
+}
+
+#[inline(always)]
+fn error_bar_flash_alpha(now: f32, started_at: Option<f32>, dur: f32) -> f32 {
+    let Some(t0) = started_at else {
+        return ERROR_BAR_SEG_ALPHA_BASE;
+    };
+    let age = now - t0;
+    if !age.is_finite() || age < 0.0 || age >= dur {
+        return ERROR_BAR_SEG_ALPHA_BASE;
+    }
+    let t = (age / dur).clamp(0.0, 1.0);
+    1.0 - (1.0 - ERROR_BAR_SEG_ALPHA_BASE) * t
+}
+
+#[inline(always)]
+fn error_bar_trim_max_window_ix(trim: profile::ErrorBarTrim) -> usize {
+    match trim {
+        profile::ErrorBarTrim::Off => 4,       // W5
+        profile::ErrorBarTrim::Great => 2,     // W3
+        profile::ErrorBarTrim::Excellent => 1, // W2
+    }
+}
+
+#[inline(always)]
+fn error_bar_boundaries_s(
+    windows_s: [f32; 5],
+    w0_s: Option<f32>,
+    show_fa_plus_window: bool,
+    trim: profile::ErrorBarTrim,
+) -> ([f32; 6], usize) {
+    let mut out = [0.0_f32; 6];
+    let mut len: usize = 0;
+    let base_end = error_bar_trim_max_window_ix(trim) + 1; // 1..=5
+    for wi in 1..=base_end {
+        if show_fa_plus_window && wi == 1 {
+            if let Some(w0) = w0_s
+                && len < out.len()
+            {
+                out[len] = w0;
+                len += 1;
+            }
+            if len < out.len() {
+                out[len] = windows_s[0];
+                len += 1;
+            }
+        } else if len < out.len() {
+            out[len] = windows_s[wi - 1];
+            len += 1;
+        }
+    }
+    (out, len)
 }
 
 #[inline(always)]
@@ -297,6 +423,16 @@ pub fn build(
             receptor_y_reverse
         }
     });
+
+    let elapsed_screen = state.total_elapsed_in_screen;
+    let reverse_scroll = state.reverse_scroll[player_idx];
+    let judgment_y = if is_centered {
+        receptor_y_centered + 95.0
+    } else if reverse_scroll {
+        screen_center_y() + TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
+    } else {
+        screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
+    };
 
     if let Some(ns) = &state.noteskin[player_idx] {
         let timing = &state.timing_players[player_idx];
@@ -1371,6 +1507,269 @@ pub fn build(
             }
         }
     }
+
+    // Error Bar (Simply Love parity)
+    if profile.error_bar != crate::game::profile::ErrorBarStyle::None {
+        let (error_bar_y, error_bar_max_h) = if matches!(
+            profile.judgment_graphic,
+            crate::game::profile::JudgmentGraphic::None
+        ) {
+            (judgment_y, 30.0_f32)
+        } else if profile.error_bar_up {
+            (judgment_y - ERROR_BAR_OFFSET_FROM_JUDGMENT, 10.0_f32)
+        } else {
+            (judgment_y + ERROR_BAR_OFFSET_FROM_JUDGMENT, 10.0_f32)
+        };
+
+        match profile.error_bar {
+            crate::game::profile::ErrorBarStyle::Monochrome => {
+                let bar_h = error_bar_max_h;
+                let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
+                let max_offset_s = state.timing_profile.windows_s[max_window_ix];
+                let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
+                    (ERROR_BAR_WIDTH_MONOCHROME * 0.5) / max_offset_s
+                } else {
+                    0.0
+                };
+                let (bounds_s, bounds_len) = error_bar_boundaries_s(
+                    state.timing_profile.windows_s,
+                    state.timing_profile.fa_plus_window_s,
+                    profile.show_fa_plus_window,
+                    profile.error_bar_trim,
+                );
+
+                let bg_alpha = if matches!(
+                    profile.background_filter,
+                    crate::game::profile::BackgroundFilter::Off
+                ) {
+                    ERROR_BAR_MONO_BG_ALPHA
+                } else {
+                    0.0
+                };
+                if bg_alpha > 0.0 {
+                    hud_actors.push(act!(quad:
+                        align(0.5, 0.5): xy(playfield_center_x, error_bar_y):
+                        zoomto(ERROR_BAR_WIDTH_MONOCHROME + 2.0, bar_h + 2.0):
+                        diffuse(0.0, 0.0, 0.0, bg_alpha):
+                        z(180)
+                    ));
+                }
+
+                hud_actors.push(act!(quad:
+                    align(0.5, 0.5): xy(playfield_center_x, error_bar_y):
+                    zoomto(2.0, bar_h):
+                    diffuse(0.5, 0.5, 0.5, 1.0):
+                    z(181)
+                ));
+
+                let line_alpha = if elapsed_screen < ERROR_BAR_LINES_FADE_START_S {
+                    0.0
+                } else if elapsed_screen < ERROR_BAR_LINES_FADE_START_S + ERROR_BAR_LINES_FADE_DUR_S
+                {
+                    let t = (elapsed_screen - ERROR_BAR_LINES_FADE_START_S)
+                        / ERROR_BAR_LINES_FADE_DUR_S;
+                    ERROR_BAR_LINE_ALPHA * smoothstep01(t)
+                } else {
+                    ERROR_BAR_LINE_ALPHA
+                };
+                if line_alpha > 0.0 && wscale.is_finite() && wscale > 0.0 {
+                    for i in 0..bounds_len {
+                        let offset = bounds_s[i] * wscale;
+                        if !offset.is_finite() {
+                            continue;
+                        }
+                        for sx in [-1.0_f32, 1.0_f32] {
+                            hud_actors.push(act!(quad:
+                                align(0.5, 0.5): xy(playfield_center_x + sx * offset, error_bar_y):
+                                zoomto(1.0, bar_h):
+                                diffuse(1.0, 1.0, 1.0, line_alpha):
+                                z(182)
+                            ));
+                        }
+                    }
+                }
+
+                let label_fade_out_start_s = ERROR_BAR_LABEL_FADE_DUR_S + ERROR_BAR_LABEL_HOLD_S;
+                let label_alpha = if elapsed_screen < ERROR_BAR_LABEL_FADE_DUR_S {
+                    smoothstep01(elapsed_screen / ERROR_BAR_LABEL_FADE_DUR_S)
+                } else if elapsed_screen < label_fade_out_start_s {
+                    1.0
+                } else if elapsed_screen < label_fade_out_start_s + ERROR_BAR_LABEL_FADE_DUR_S {
+                    1.0 - smoothstep01(
+                        (elapsed_screen - label_fade_out_start_s) / ERROR_BAR_LABEL_FADE_DUR_S,
+                    )
+                } else {
+                    0.0
+                };
+                if label_alpha > 0.0 {
+                    let x_off = ERROR_BAR_WIDTH_MONOCHROME * 0.25;
+                    hud_actors.push(act!(text:
+                        font("game"): settext("Early"):
+                        align(0.5, 0.5): xy(playfield_center_x - x_off, error_bar_y):
+                        zoom(0.7): diffuse(1.0, 1.0, 1.0, label_alpha):
+                        z(184)
+                    ));
+                    hud_actors.push(act!(text:
+                        font("game"): settext("Late"):
+                        align(0.5, 0.5): xy(playfield_center_x + x_off, error_bar_y):
+                        zoom(0.7): diffuse(1.0, 1.0, 1.0, label_alpha):
+                        z(184)
+                    ));
+                }
+
+                if wscale.is_finite() && wscale > 0.0 {
+                    let multi_tick = profile.error_bar_multi_tick;
+                    for tick_opt in &p.error_bar_mono_ticks {
+                        let Some(tick) = tick_opt else {
+                            continue;
+                        };
+                        let alpha = error_bar_tick_alpha(
+                            elapsed_screen - tick.started_at,
+                            ERROR_BAR_TICK_DUR_MONOCHROME,
+                            multi_tick,
+                        );
+                        if alpha <= 0.0 {
+                            continue;
+                        }
+                        let x = tick.offset_s * wscale;
+                        if !x.is_finite() {
+                            continue;
+                        }
+                        let c =
+                            error_bar_color_for_window(tick.window, profile.show_fa_plus_window);
+                        hud_actors.push(act!(quad:
+                            align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
+                            zoomto(ERROR_BAR_TICK_WIDTH, bar_h):
+                            diffuse(c[0], c[1], c[2], alpha):
+                            z(183)
+                        ));
+                    }
+                }
+            }
+            crate::game::profile::ErrorBarStyle::Colorful => {
+                let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
+                let max_offset_s = state.timing_profile.windows_s[max_window_ix];
+                let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
+                    (ERROR_BAR_WIDTH_COLORFUL * 0.5) / max_offset_s
+                } else {
+                    0.0
+                };
+                let (bounds_s, bounds_len) = error_bar_boundaries_s(
+                    state.timing_profile.windows_s,
+                    state.timing_profile.fa_plus_window_s,
+                    profile.show_fa_plus_window,
+                    profile.error_bar_trim,
+                );
+
+                let bar_visible = p
+                    .error_bar_color_bar_started_at
+                    .map(|t0| {
+                        let age = elapsed_screen - t0;
+                        age >= 0.0 && age < ERROR_BAR_TICK_DUR_COLORFUL
+                    })
+                    .unwrap_or(false);
+
+                if bar_visible && wscale.is_finite() && wscale > 0.0 {
+                    hud_actors.push(act!(quad:
+                        align(0.5, 0.5): xy(playfield_center_x, error_bar_y):
+                        zoomto(ERROR_BAR_WIDTH_COLORFUL + 4.0, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
+                        diffuse(0.0, 0.0, 0.0, 1.0):
+                        z(180)
+                    ));
+
+                    let base = if profile.show_fa_plus_window {
+                        0usize
+                    } else {
+                        1usize
+                    };
+                    let mut lastx = 0.0_f32;
+                    for i in 0..bounds_len {
+                        let x = bounds_s[i] * wscale;
+                        let width = x - lastx;
+                        if !x.is_finite() || !width.is_finite() || width <= 0.0 {
+                            lastx = x;
+                            continue;
+                        }
+                        let window_num = base + i;
+                        let window = timing_window_from_num(window_num);
+                        let wi = window_num.min(5);
+                        let c = error_bar_color_for_window(window, profile.show_fa_plus_window);
+                        let early_a = error_bar_flash_alpha(
+                            elapsed_screen,
+                            p.error_bar_color_flash_early[wi],
+                            ERROR_BAR_TICK_DUR_COLORFUL,
+                        );
+                        let late_a = error_bar_flash_alpha(
+                            elapsed_screen,
+                            p.error_bar_color_flash_late[wi],
+                            ERROR_BAR_TICK_DUR_COLORFUL,
+                        );
+
+                        let cx_early = -0.5 * (lastx + x);
+                        let cx_late = 0.5 * (lastx + x);
+                        hud_actors.push(act!(quad:
+                            align(0.5, 0.5): xy(playfield_center_x + cx_early, error_bar_y):
+                            zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
+                            diffuse(c[0], c[1], c[2], early_a):
+                            z(181)
+                        ));
+                        hud_actors.push(act!(quad:
+                            align(0.5, 0.5): xy(playfield_center_x + cx_late, error_bar_y):
+                            zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
+                            diffuse(c[0], c[1], c[2], late_a):
+                            z(181)
+                        ));
+
+                        lastx = x;
+                    }
+                }
+
+                if wscale.is_finite() && wscale > 0.0 {
+                    let multi_tick = profile.error_bar_multi_tick;
+                    for tick_opt in &p.error_bar_color_ticks {
+                        let Some(tick) = tick_opt else {
+                            continue;
+                        };
+                        let alpha = error_bar_tick_alpha(
+                            elapsed_screen - tick.started_at,
+                            ERROR_BAR_TICK_DUR_COLORFUL,
+                            multi_tick,
+                        );
+                        if alpha <= 0.0 {
+                            continue;
+                        }
+                        let x = tick.offset_s * wscale;
+                        if !x.is_finite() {
+                            continue;
+                        }
+                        hud_actors.push(act!(quad:
+                            align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
+                            zoomto(ERROR_BAR_TICK_WIDTH, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
+                            diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
+                            z(182)
+                        ));
+                    }
+                }
+            }
+            crate::game::profile::ErrorBarStyle::Text => {
+                if let Some(text) = p.error_bar_text {
+                    let age = elapsed_screen - text.started_at;
+                    if age >= 0.0 && age < ERROR_BAR_TICK_DUR_COLORFUL {
+                        let x = if text.early { -40.0 } else { 40.0 };
+                        let s = if text.early { "EARLY" } else { "LATE" };
+                        hud_actors.push(act!(text:
+                            font("wendy"): settext(s):
+                            align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
+                            zoom(0.25): shadowlength(1.0):
+                            diffuse(1.0, 1.0, 1.0, 1.0):
+                            z(184)
+                        ));
+                    }
+                }
+            }
+            crate::game::profile::ErrorBarStyle::None => {}
+        }
+    }
     // Judgment Sprite (tap judgments)
     if let Some(render_info) = &p.last_judgment {
         if matches!(profile.judgment_graphic, profile::JudgmentGraphic::None) {
@@ -1457,13 +1856,6 @@ pub fn build(
                     profile::JudgmentGraphic::None => {
                         unreachable!("JudgmentGraphic::None is filtered above")
                     }
-                };
-                let judgment_y = if is_centered {
-                    receptor_y_centered + 95.0
-                } else if state.reverse_scroll[player_idx] {
-                    screen_center_y() + TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
-                } else {
-                    screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
                 };
                 let rot_deg = if profile.judgment_tilt && judgment.grade != JudgeGrade::Miss {
                     let abs_sec = offset_sec.abs().min(0.050);

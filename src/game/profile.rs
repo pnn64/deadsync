@@ -395,6 +395,69 @@ impl core::fmt::Display for JudgmentGraphic {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ErrorBarStyle {
+    #[default]
+    None,
+    Colorful,
+    Monochrome,
+    Text,
+}
+
+impl FromStr for ErrorBarStyle {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "none" => Ok(Self::None),
+            "colorful" => Ok(Self::Colorful),
+            "monochrome" => Ok(Self::Monochrome),
+            "text" => Ok(Self::Text),
+            other => Err(format!("'{other}' is not a valid ErrorBar setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for ErrorBarStyle {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::Colorful => write!(f, "Colorful"),
+            Self::Monochrome => write!(f, "Monochrome"),
+            Self::Text => write!(f, "Text"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ErrorBarTrim {
+    #[default]
+    Off,
+    Great,
+    Excellent,
+}
+
+impl FromStr for ErrorBarTrim {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "off" => Ok(Self::Off),
+            "great" => Ok(Self::Great),
+            "excellent" => Ok(Self::Excellent),
+            other => Err(format!("'{other}' is not a valid ErrorBarTrim setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for ErrorBarTrim {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Off => write!(f, "Off"),
+            Self::Great => write!(f, "Great"),
+            Self::Excellent => write!(f, "Excellent"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NoteSkin {
     #[default]
     Cel,
@@ -504,6 +567,11 @@ pub struct Profile {
     // Judgment tilt (Simply Love semantics).
     pub judgment_tilt: bool,
     pub tilt_multiplier: f32,
+    // Error bar (Simply Love semantics).
+    pub error_bar: ErrorBarStyle,
+    pub error_bar_up: bool,
+    pub error_bar_multi_tick: bool,
+    pub error_bar_trim: ErrorBarTrim,
     // "Hide" options (Simply Love semantics).
     pub hide_targets: bool,
     pub hide_song_bg: bool,
@@ -561,6 +629,10 @@ impl Default for Profile {
             show_fa_plus_pane: false,
             judgment_tilt: false,
             tilt_multiplier: 1.0,
+            error_bar: ErrorBarStyle::default(),
+            error_bar_up: false,
+            error_bar_multi_tick: false,
+            error_bar_trim: ErrorBarTrim::default(),
             hide_targets: false,
             hide_song_bg: false,
             hide_combo: false,
@@ -777,6 +849,19 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             "TiltMultiplier = {}\n",
             default_profile.tilt_multiplier
         ));
+        content.push_str(&format!("ErrorBar = {}\n", default_profile.error_bar));
+        content.push_str(&format!(
+            "ErrorBarUp = {}\n",
+            i32::from(default_profile.error_bar_up)
+        ));
+        content.push_str(&format!(
+            "ErrorBarMultiTick = {}\n",
+            i32::from(default_profile.error_bar_multi_tick)
+        ));
+        content.push_str(&format!(
+            "ErrorBarTrim = {}\n",
+            default_profile.error_bar_trim
+        ));
         content.push_str(&format!(
             "HoldJudgmentGraphic = {}\n",
             default_profile.hold_judgment_graphic
@@ -899,6 +984,13 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         i32::from(profile.judgment_tilt)
     ));
     content.push_str(&format!("TiltMultiplier={}\n", profile.tilt_multiplier));
+    content.push_str(&format!("ErrorBar={}\n", profile.error_bar));
+    content.push_str(&format!("ErrorBarUp={}\n", i32::from(profile.error_bar_up)));
+    content.push_str(&format!(
+        "ErrorBarMultiTick={}\n",
+        i32::from(profile.error_bar_multi_tick)
+    ));
+    content.push_str(&format!("ErrorBarTrim={}\n", profile.error_bar_trim));
     content.push_str(&format!(
         "HoldJudgmentGraphic={}\n",
         profile.hold_judgment_graphic
@@ -1083,6 +1175,22 @@ fn load_for_side(side: PlayerSide) {
                 .and_then(|s| s.parse::<f32>().ok())
                 .filter(|v| v.is_finite())
                 .unwrap_or(default_profile.tilt_multiplier);
+            profile.error_bar = profile_conf
+                .get("PlayerOptions", "ErrorBar")
+                .and_then(|s| ErrorBarStyle::from_str(&s).ok())
+                .unwrap_or(default_profile.error_bar);
+            profile.error_bar_up = profile_conf
+                .get("PlayerOptions", "ErrorBarUp")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.error_bar_up, |v| v != 0);
+            profile.error_bar_multi_tick = profile_conf
+                .get("PlayerOptions", "ErrorBarMultiTick")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.error_bar_multi_tick, |v| v != 0);
+            profile.error_bar_trim = profile_conf
+                .get("PlayerOptions", "ErrorBarTrim")
+                .and_then(|s| ErrorBarTrim::from_str(&s).ok())
+                .unwrap_or(default_profile.error_bar_trim);
             profile.scroll_speed = profile_conf
                 .get("PlayerOptions", "ScrollSpeed")
                 .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
@@ -1767,6 +1875,52 @@ pub fn update_tilt_multiplier_for_side(side: PlayerSide, multiplier: f32) {
             return;
         }
         profile.tilt_multiplier = multiplier;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_error_bar_for_side(side: PlayerSide, setting: ErrorBarStyle) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.error_bar == setting {
+            return;
+        }
+        profile.error_bar = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_error_bar_trim_for_side(side: PlayerSide, setting: ErrorBarTrim) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.error_bar_trim == setting {
+            return;
+        }
+        profile.error_bar_trim = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_error_bar_options_for_side(side: PlayerSide, up: bool, multi_tick: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.error_bar_up == up && profile.error_bar_multi_tick == multi_tick {
+            return;
+        }
+        profile.error_bar_up = up;
+        profile.error_bar_multi_tick = multi_tick;
     }
     save_profile_ini_for_side(side);
 }
