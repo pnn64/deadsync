@@ -280,6 +280,13 @@ struct DisplayedChart {
     chart_hash: String,
 }
 
+#[derive(Clone, Debug)]
+struct EditSortCache {
+    song: Arc<SongData>,
+    chart_type: &'static str,
+    indices: Vec<usize>,
+}
+
 pub struct State {
     pub entries: Vec<MusicWheelEntry>,
     pub selected_index: usize,
@@ -320,6 +327,13 @@ pub struct State {
     time_since_selection_change: f32,
 
     // Caches to avoid O(N) ops in hot paths
+    cached_song: Option<Arc<SongData>>,
+    cached_chart_type: &'static str,
+    cached_steps_index_p1: usize,
+    cached_steps_index_p2: usize,
+    cached_chart_ix_p1: Option<usize>,
+    cached_chart_ix_p2: Option<usize>,
+    cached_edits: Option<EditSortCache>,
     pub pack_song_counts: HashMap<String, usize>,
 }
 
@@ -374,6 +388,114 @@ pub(crate) fn chart_for_steps_index<'a>(
     edit_charts_sorted(song, chart_type)
         .get(edit_index)
         .copied()
+}
+
+fn edit_chart_indices_sorted(song: &SongData, chart_type: &str) -> Vec<usize> {
+    let mut indices: Vec<usize> = song
+        .charts
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| {
+            if c.chart_type.eq_ignore_ascii_case(chart_type)
+                && c.difficulty.eq_ignore_ascii_case("edit")
+                && !c.notes.is_empty()
+            {
+                Some(i)
+            } else {
+                None
+            }
+        })
+        .collect();
+    indices.sort_by(|&ai, &bi| {
+        let a = &song.charts[ai];
+        let b = &song.charts[bi];
+        a.description
+            .to_lowercase()
+            .cmp(&b.description.to_lowercase())
+            .then(a.meter.cmp(&b.meter))
+            .then(a.short_hash.cmp(&b.short_hash))
+    });
+    indices
+}
+
+#[inline]
+fn chart_ix_for_steps_index(
+    song: &SongData,
+    chart_type: &str,
+    steps_index: usize,
+    edits_sorted: &[usize],
+) -> Option<usize> {
+    if steps_index < color::FILE_DIFFICULTY_NAMES.len() {
+        let diff_name = color::FILE_DIFFICULTY_NAMES[steps_index];
+        return song
+            .charts
+            .iter()
+            .enumerate()
+            .find(|(_, c)| {
+                c.chart_type.eq_ignore_ascii_case(chart_type)
+                    && c.difficulty.eq_ignore_ascii_case(diff_name)
+                    && !c.notes.is_empty()
+            })
+            .map(|(i, _)| i);
+    }
+
+    let edit_index = steps_index - color::FILE_DIFFICULTY_NAMES.len();
+    edits_sorted.get(edit_index).copied()
+}
+
+fn ensure_chart_cache_for_song(
+    state: &mut State,
+    song: &Arc<SongData>,
+    chart_type: &'static str,
+    is_versus: bool,
+) {
+    let song_changed = state
+        .cached_song
+        .as_ref()
+        .is_none_or(|s| !Arc::ptr_eq(s, song));
+    let type_changed = state.cached_chart_type != chart_type;
+    let p1_changed = state.cached_steps_index_p1 != state.selected_steps_index;
+    let p2_changed = state.cached_steps_index_p2 != state.p2_selected_steps_index;
+
+    if song_changed || type_changed {
+        state.cached_edits = None;
+    }
+
+    let need_edits = state.selected_steps_index >= color::FILE_DIFFICULTY_NAMES.len()
+        || (is_versus && state.p2_selected_steps_index >= color::FILE_DIFFICULTY_NAMES.len());
+    if need_edits {
+        let rebuild_edits = state.cached_edits.as_ref().is_none_or(|c| {
+            !Arc::ptr_eq(&c.song, song) || c.chart_type != chart_type
+        });
+        if rebuild_edits {
+            state.cached_edits = Some(EditSortCache {
+                song: song.clone(),
+                chart_type,
+                indices: edit_chart_indices_sorted(song, chart_type),
+            });
+        }
+    }
+
+    let edits: &[usize] = state
+        .cached_edits
+        .as_ref()
+        .map_or(&[], |c| c.indices.as_slice());
+
+    if song_changed || type_changed || p1_changed {
+        state.cached_chart_ix_p1 =
+            chart_ix_for_steps_index(song, chart_type, state.selected_steps_index, edits);
+    }
+    if !is_versus {
+        state.cached_chart_ix_p2 = None;
+    } else if song_changed || type_changed || p2_changed {
+        state.cached_chart_ix_p2 =
+            chart_ix_for_steps_index(song, chart_type, state.p2_selected_steps_index, edits);
+    }
+
+    state.cached_song = Some(song.clone());
+    state.cached_chart_type = chart_type;
+    state.cached_steps_index_p1 = state.selected_steps_index;
+    state.cached_steps_index_p2 = state.p2_selected_steps_index;
 }
 
 pub(crate) fn steps_index_for_chart_hash(
@@ -543,6 +665,13 @@ pub fn init() -> State {
         session_elapsed: 0.0,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
+        cached_song: None,
+        cached_chart_type: "",
+        cached_steps_index_p1: usize::MAX,
+        cached_steps_index_p2: usize::MAX,
+        cached_chart_ix_p1: None,
+        cached_chart_ix_p2: None,
+        cached_edits: None,
         pack_song_counts,
     };
 
@@ -1170,9 +1299,12 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         let target_chart_type = play_style.chart_type();
 
         if let Some(song) = selected_song.as_ref() {
-            let desired_p1 =
-                chart_for_steps_index(song, target_chart_type, state.selected_steps_index);
-            let desired_hash_p1 = desired_p1.map(|c| c.short_hash.as_str());
+            let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
+            ensure_chart_cache_for_song(state, song, target_chart_type, is_versus);
+
+            let desired_hash_p1 = state
+                .cached_chart_ix_p1
+                .map(|ix| song.charts[ix].short_hash.as_str());
 
             if state
                 .displayed_chart_p1
@@ -1190,20 +1322,23 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 state.last_requested_chart_hash = desired_hash_p1.map(str::to_string);
                 return ScreenAction::RequestDensityGraph {
                     slot: DensityGraphSlot::SelectMusicP1,
-                    chart_opt: desired_p1.map(|c| DensityGraphSource {
-                        max_nps: c.max_nps,
-                        measure_nps_vec: c.measure_nps_vec.clone(),
-                        timing: c.timing.clone(),
-                        first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
-                        last_second: song.total_length_seconds.max(0) as f32,
+                    chart_opt: state.cached_chart_ix_p1.map(|ix| {
+                        let c = &song.charts[ix];
+                        DensityGraphSource {
+                            max_nps: c.max_nps,
+                            measure_nps_vec: c.measure_nps_vec.clone(),
+                            timing: c.timing.clone(),
+                            first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                            last_second: song.total_length_seconds.max(0) as f32,
+                        }
                     }),
                 };
             }
 
-            if play_style == crate::game::profile::PlayStyle::Versus {
-                let desired_p2 =
-                    chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index);
-                let desired_hash_p2 = desired_p2.map(|c| c.short_hash.as_str());
+            if is_versus {
+                let desired_hash_p2 = state
+                    .cached_chart_ix_p2
+                    .map(|ix| song.charts[ix].short_hash.as_str());
 
                 if state
                     .displayed_chart_p2
@@ -1221,12 +1356,15 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                     state.last_requested_chart_hash_p2 = desired_hash_p2.map(str::to_string);
                     return ScreenAction::RequestDensityGraph {
                         slot: DensityGraphSlot::SelectMusicP2,
-                        chart_opt: desired_p2.map(|c| DensityGraphSource {
-                            max_nps: c.max_nps,
-                            measure_nps_vec: c.measure_nps_vec.clone(),
-                            timing: c.timing.clone(),
-                            first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
-                            last_second: song.total_length_seconds.max(0) as f32,
+                        chart_opt: state.cached_chart_ix_p2.map(|ix| {
+                            let c = &song.charts[ix];
+                            DensityGraphSource {
+                                max_nps: c.max_nps,
+                                measure_nps_vec: c.measure_nps_vec.clone(),
+                                timing: c.timing.clone(),
+                                first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                                last_second: song.total_length_seconds.max(0) as f32,
+                            }
                         }),
                     };
                 }
@@ -1236,6 +1374,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         } else {
             state.displayed_chart_p1 = None;
             state.displayed_chart_p2 = None;
+            state.cached_song = None;
+            state.cached_chart_ix_p1 = None;
+            state.cached_chart_ix_p2 = None;
+            state.cached_edits = None;
         }
     } else if state.currently_playing_preview_path.is_some() {
         state.currently_playing_preview_path = None;
