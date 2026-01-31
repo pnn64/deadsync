@@ -35,6 +35,19 @@ const TRANSITION_OUT_DURATION: f32 = 0.3;
 // ITGmania metric: ScreenSelectMusic ShowOptionsMessageSeconds (fallback: 1.5).
 const SHOW_OPTIONS_MESSAGE_SECONDS: f32 = 1.5;
 
+// Simply Love BGAnimations/ScreenSelectMusic background.lua white flash overlay.
+const SL_BG_FLASH_SLEEP_SECONDS: f32 = 0.6;
+const SL_BG_FLASH_FADE_SECONDS: f32 = 0.5;
+
+// Simply Love BGAnimations/ScreenSelectMusic overlay/MusicWheelAnimation.lua
+const SL_WHEEL_CASCADE_NUM_VISIBLE_ITEMS: usize = 15;
+const SL_WHEEL_CASCADE_DELAY_STEP_SECONDS: f32 = 0.05;
+const SL_WHEEL_CASCADE_REVEAL_SECONDS: f32 = 0.1;
+const SL_WHEEL_CASCADE_FINAL_ALPHA: f32 = 0.25;
+const SL_WHEEL_CASCADE_ROW_Y_UPPER: f32 = 9.0;
+const SL_WHEEL_CASCADE_ROW_Y_LOWER: f32 = 25.0;
+const SL_WHEEL_CASCADE_Z: i16 = 63;
+
 // Simply Love ScreenSelectMusic out.lua "Entering Options..." timings.
 const ENTERING_OPTIONS_FADE_OUT_SECONDS: f32 = 0.125;
 const ENTERING_OPTIONS_HIBERNATE_SECONDS: f32 = 0.1;
@@ -1465,6 +1478,63 @@ fn format_chart_length(seconds: i32) -> String {
     }
 }
 
+fn sl_select_music_bg_flash() -> Actor {
+    act!(quad:
+        align(0.0, 0.0):
+        xy(0.0, 0.0):
+        zoomto(screen_width(), screen_height()):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(-98):
+        sleep(SL_BG_FLASH_SLEEP_SECONDS):
+        linear(SL_BG_FLASH_FADE_SECONDS): alpha(0.0):
+        linear(0.0): visible(false)
+    )
+}
+
+fn sl_select_music_wheel_cascade_mask() -> Vec<Actor> {
+    let n = SL_WHEEL_CASCADE_NUM_VISIBLE_ITEMS;
+    let count = n.saturating_sub(2);
+    let mut actors = Vec::with_capacity(count * 2);
+
+    let slot_spacing = screen_height() / n as f32;
+    let item_half_h = slot_spacing * 0.5;
+    let x = screen_center_x() + screen_width() * 0.25;
+    let w = screen_width() * 0.5;
+
+    for i in 1..=count {
+        let t_sleep = i as f32 * SL_WHEEL_CASCADE_DELAY_STEP_SECONDS;
+        let y_base = slot_spacing * i as f32;
+
+        // upper half mask
+        actors.push(act!(quad:
+            align(0.5, 0.5):
+            xy(x, SL_WHEEL_CASCADE_ROW_Y_UPPER + y_base):
+            zoomto(w, item_half_h):
+            diffuse(0.0, 0.0, 0.0, 1.0):
+            z(SL_WHEEL_CASCADE_Z):
+            cropbottom(0.0):
+            sleep(t_sleep):
+            linear(SL_WHEEL_CASCADE_REVEAL_SECONDS): cropbottom(1.0): alpha(SL_WHEEL_CASCADE_FINAL_ALPHA):
+            linear(0.0): visible(false)
+        ));
+
+        // lower half mask
+        actors.push(act!(quad:
+            align(0.5, 0.5):
+            xy(x, SL_WHEEL_CASCADE_ROW_Y_LOWER + y_base):
+            zoomto(w, item_half_h):
+            diffuse(0.0, 0.0, 0.0, 1.0):
+            z(SL_WHEEL_CASCADE_Z):
+            croptop(0.0):
+            sleep(t_sleep):
+            linear(SL_WHEEL_CASCADE_REVEAL_SECONDS): croptop(1.0): alpha(SL_WHEEL_CASCADE_FINAL_ALPHA):
+            linear(0.0): visible(false)
+        ));
+    }
+
+    actors
+}
+
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     let side = crate::game::profile::get_session_player_side();
@@ -1479,6 +1549,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
     }));
+    actors.push(sl_select_music_bg_flash());
     actors.push(screen_bar::build(ScreenBarParams {
         title: "SELECT MUSIC",
         title_placement: ScreenBarTitlePlacement::Left,
@@ -2174,6 +2245,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         preferred_difficulty_index: state.preferred_difficulty_index,
         selected_steps_index: state.selected_steps_index,
     }));
+    actors.extend(sl_select_music_wheel_cascade_mask());
 
     // Bouncing Arrow
     let bpm_val = if let Some(MusicWheelEntry::Song(s)) = entry_opt {
