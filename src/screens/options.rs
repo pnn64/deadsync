@@ -1848,6 +1848,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                             audio::play_sfx("assets/sounds/start.ogg");
                             return ScreenAction::Navigate(Screen::Input);
                         }
+                        "Manage Local Profiles" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            return ScreenAction::Navigate(Screen::ManageLocalProfiles);
+                        }
                         // Exit from Options back to Menu.
                         "Exit" => {
                             audio::play_sfx("assets/sounds/start.ogg");

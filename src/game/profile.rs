@@ -1717,6 +1717,126 @@ pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
     out
 }
 
+const LOCAL_PROFILE_MAX_ID: u32 = 99_999_999;
+
+fn scan_local_profile_numbers() -> Vec<u32> {
+    let root = Path::new(PROFILES_ROOT);
+    let Ok(read_dir) = fs::read_dir(root) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for entry in read_dir.flatten() {
+        let Ok(ft) = entry.file_type() else {
+            continue;
+        };
+        if !ft.is_dir() {
+            continue;
+        }
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else {
+            continue;
+        };
+        if name.len() != 8 {
+            continue;
+        }
+        let Ok(n) = name.parse::<u32>() else {
+            continue;
+        };
+        if n <= LOCAL_PROFILE_MAX_ID {
+            out.push(n);
+        }
+    }
+    out
+}
+
+fn allocate_local_profile_id() -> Result<String, std::io::Error> {
+    let mut nums = scan_local_profile_numbers();
+    nums.sort_unstable();
+    nums.dedup();
+
+    let mut first_free = 0_u32;
+    for &n in &nums {
+        if n == first_free {
+            first_free += 1;
+        } else if n > first_free {
+            break;
+        }
+    }
+
+    let mut next = nums.last().copied().unwrap_or(0);
+    if !nums.is_empty() {
+        next = next.saturating_add(1);
+    }
+    if next > LOCAL_PROFILE_MAX_ID {
+        if first_free > LOCAL_PROFILE_MAX_ID {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Too many profiles",
+            ));
+        }
+        next = first_free;
+    }
+    Ok(format!("{next:08}"))
+}
+
+fn initials_from_name(name: &str) -> String {
+    let mut out = String::new();
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_uppercase());
+            if out.len() >= 2 {
+                break;
+            }
+        }
+    }
+    match out.len() {
+        0 => "??".to_string(),
+        1 => {
+            out.push('?');
+            out
+        }
+        _ => out,
+    }
+}
+
+pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error> {
+    let name = display_name.trim();
+    if name.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Display name is empty",
+        ));
+    }
+
+    let id = allocate_local_profile_id()?;
+    let dir = local_profile_dir(&id);
+    fs::create_dir_all(&dir)?;
+
+    let default_profile = Profile::default();
+    let initials = initials_from_name(name);
+    let mut content = String::new();
+    content.push_str("[PlayerOptions]\n");
+    content.push_str(&format!("ScrollSpeed={}\n", default_profile.scroll_speed));
+    content.push_str(&format!("Scroll={}\n", default_profile.scroll_option));
+    content.push('\n');
+    content.push_str("[userprofile]\n");
+    content.push_str(&format!("DisplayName={name}\n"));
+    content.push_str(&format!("PlayerInitials={initials}\n"));
+    content.push('\n');
+    fs::write(profile_ini_path(&id), content)?;
+
+    let mut gs = String::new();
+    gs.push_str("[GrooveStats]\n");
+    gs.push_str("ApiKey=\n");
+    gs.push_str("IsPadPlayer=0\n");
+    gs.push_str("Username=\n");
+    gs.push('\n');
+    fs::write(groovestats_ini_path(&id), gs)?;
+
+    Ok(id)
+}
+
 pub fn get_session_music_rate() -> f32 {
     let s = SESSION.lock().unwrap();
     let r = s.music_rate;

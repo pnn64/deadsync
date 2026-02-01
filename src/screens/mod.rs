@@ -3,6 +3,7 @@ pub mod gameplay;
 pub mod init;
 pub mod input;
 pub mod mappings;
+pub mod manage_local_profiles;
 pub mod menu;
 pub mod options;
 pub mod player_options;
@@ -52,6 +53,7 @@ pub enum Screen {
     Menu,
     Gameplay,
     Options,
+    ManageLocalProfiles,
     Init,
     Mappings,
     Input,

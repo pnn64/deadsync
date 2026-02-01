@@ -8,8 +8,8 @@ use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting};
 use crate::screens::{
     Screen as CurrentScreen, ScreenAction, evaluation, gameplay, init, input as input_screen,
-    mappings, menu, options, player_options, profile_load, sandbox, select_color, select_mode,
-    select_music, select_profile, select_style,
+    manage_local_profiles, mappings, menu, options, player_options, profile_load, sandbox,
+    select_color, select_mode, select_music, select_profile, select_style,
 };
 use crate::ui::color;
 use winit::{
@@ -124,6 +124,7 @@ pub struct ScreensState {
     menu_state: menu::State,
     gameplay_state: Option<gameplay::State>,
     options_state: options::State,
+    manage_local_profiles_state: manage_local_profiles::State,
     mappings_state: mappings::State,
     input_state: input_screen::State,
     player_options_state: Option<player_options::State>,
@@ -230,6 +231,9 @@ impl ScreensState {
         let mut options_state = options::init();
         options_state.active_color_index = color_index;
 
+        let mut manage_local_profiles_state = manage_local_profiles::init();
+        manage_local_profiles_state.active_color_index = color_index;
+
         let mut mappings_state = mappings::init();
         mappings_state.active_color_index = color_index;
 
@@ -247,6 +251,7 @@ impl ScreensState {
             menu_state,
             gameplay_state: None,
             options_state,
+            manage_local_profiles_state,
             mappings_state,
             input_state,
             player_options_state: None,
@@ -275,6 +280,10 @@ impl ScreensState {
                 .map(|gs| gameplay::update(gs, delta_time)),
             CurrentScreen::Init => Some(init::update(&mut self.init_state, delta_time)),
             CurrentScreen::Options => options::update(&mut self.options_state, delta_time),
+            CurrentScreen::ManageLocalProfiles => manage_local_profiles::update(
+                &mut self.manage_local_profiles_state,
+                delta_time,
+            ),
             CurrentScreen::Mappings => {
                 mappings::update(&mut self.mappings_state, delta_time);
                 None
@@ -402,6 +411,7 @@ impl App {
             screen,
             CurrentScreen::Menu
                 | CurrentScreen::Options
+                | CurrentScreen::ManageLocalProfiles
                 | CurrentScreen::Mappings
                 | CurrentScreen::Input
         )
@@ -664,6 +674,8 @@ impl App {
             || (from == CurrentScreen::SelectStyle && to == CurrentScreen::SelectColor)
             || (from == CurrentScreen::Options && to == CurrentScreen::Mappings)
             || (from == CurrentScreen::Mappings && to == CurrentScreen::Options)
+            || (from == CurrentScreen::Options && to == CurrentScreen::ManageLocalProfiles)
+            || (from == CurrentScreen::ManageLocalProfiles && to == CurrentScreen::Options)
     }
 
     fn start_actor_fade(&mut self, from: CurrentScreen, target: CurrentScreen) {
@@ -860,6 +872,10 @@ impl App {
             CurrentScreen::Options => {
                 crate::screens::options::handle_input(&mut self.state.screens.options_state, &ev)
             }
+            CurrentScreen::ManageLocalProfiles => crate::screens::manage_local_profiles::handle_input(
+                &mut self.state.screens.manage_local_profiles_state,
+                &ev,
+            ),
             CurrentScreen::Mappings => {
                 crate::screens::mappings::handle_input(&mut self.state.screens.mappings_state, &ev)
             }
@@ -1122,6 +1138,11 @@ impl App {
                 &self.asset_manager,
                 screen_alpha_multiplier,
             ),
+            CurrentScreen::ManageLocalProfiles => manage_local_profiles::get_actors(
+                &self.state.screens.manage_local_profiles_state,
+                &self.asset_manager,
+                screen_alpha_multiplier,
+            ),
             CurrentScreen::Mappings => mappings::get_actors(
                 &self.state.screens.mappings_state,
                 &self.asset_manager,
@@ -1217,6 +1238,7 @@ impl App {
             }
             CurrentScreen::Gameplay => gameplay::out_transition(),
             CurrentScreen::Options => options::out_transition(),
+            CurrentScreen::ManageLocalProfiles => manage_local_profiles::out_transition(),
             CurrentScreen::Mappings => mappings::out_transition(),
             CurrentScreen::PlayerOptions => player_options::out_transition(),
             CurrentScreen::SelectProfile => select_profile::out_transition(),
@@ -1237,6 +1259,7 @@ impl App {
             CurrentScreen::Menu => menu::in_transition(),
             CurrentScreen::Gameplay => gameplay::in_transition(),
             CurrentScreen::Options => options::in_transition(),
+            CurrentScreen::ManageLocalProfiles => manage_local_profiles::in_transition(),
             CurrentScreen::Mappings => mappings::in_transition(),
             CurrentScreen::PlayerOptions => player_options::in_transition(),
             CurrentScreen::SelectProfile => select_profile::in_transition(),
@@ -1629,6 +1652,17 @@ impl App {
             // On the Mappings screen, arrows/Enter/Escape are handled entirely
             // via raw keycodes; do not route through the virtual keymap.
             return;
+        } else if self.state.screens.current_screen == CurrentScreen::ManageLocalProfiles {
+            let action = crate::screens::manage_local_profiles::handle_raw_key_event(
+                &mut self.state.screens.manage_local_profiles_state,
+                &key_event,
+            );
+            if !matches!(action, ScreenAction::None) {
+                if let Err(e) = self.handle_action(action, event_loop) {
+                    log::error!("Failed to handle ManageLocalProfiles raw key action: {e}");
+                }
+                return;
+            }
         } else if self.state.screens.current_screen == CurrentScreen::SelectMusic {
             // Route screen-specific raw key handling (e.g., F7 fetch) to the screen
             let action = crate::screens::select_music::handle_raw_key_event(
@@ -1889,6 +1923,7 @@ impl App {
             self.state.screens.profile_load_state.active_color_index = idx;
             self.state.screens.select_music_state.active_color_index = idx;
             self.state.screens.options_state.active_color_index = idx;
+            self.state.screens.manage_local_profiles_state.active_color_index = idx;
             self.state.screens.input_state.active_color_index = idx;
             if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                 gs.active_color_index = idx;
@@ -1904,6 +1939,10 @@ impl App {
             let current_color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.options_state = options::init();
             self.state.screens.options_state.active_color_index = current_color_index;
+        } else if target == CurrentScreen::ManageLocalProfiles {
+            let color_index = self.state.screens.options_state.active_color_index;
+            self.state.screens.manage_local_profiles_state = manage_local_profiles::init();
+            self.state.screens.manage_local_profiles_state.active_color_index = color_index;
         } else if target == CurrentScreen::Mappings {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.mappings_state = mappings::init();
@@ -2597,6 +2636,13 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.state.screens.options_state = options::init();
                                 self.state.screens.options_state.active_color_index =
                                     current_color_index;
+                            } else if target_screen == CurrentScreen::ManageLocalProfiles {
+                                let color_index =
+                                    self.state.screens.options_state.active_color_index;
+                                self.state.screens.manage_local_profiles_state =
+                                    manage_local_profiles::init();
+                                self.state.screens.manage_local_profiles_state.active_color_index =
+                                    color_index;
                             } else if target_screen == CurrentScreen::SelectProfile {
                                 let current_color_index =
                                     self.state.screens.select_profile_state.active_color_index;
@@ -2646,6 +2692,8 @@ impl ApplicationHandler<UserEvent> for App {
                                     gs.player_color = color::simply_love_rgba(idx);
                                 }
                                 self.state.screens.options_state.active_color_index = idx;
+                                self.state.screens.manage_local_profiles_state.active_color_index =
+                                    idx;
                             }
 
                             if target_screen == CurrentScreen::Options {
