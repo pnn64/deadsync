@@ -220,12 +220,18 @@ fn error_bar_boundaries_s(
 
 #[derive(Clone, Copy, Debug)]
 struct ZmodLayoutYs {
+    combo_y: f32,
     measure_counter_y: Option<f32>,
     subtractive_scoring_y: f32,
 }
 
 #[inline(always)]
-fn zmod_layout_ys(profile: &crate::game::profile::Profile, judgment_y: f32) -> ZmodLayoutYs {
+fn zmod_layout_ys(
+    profile: &crate::game::profile::Profile,
+    judgment_y: f32,
+    combo_y_base: f32,
+    reverse: bool,
+) -> ZmodLayoutYs {
     let mut top_y = judgment_y - ERROR_BAR_JUDGMENT_HEIGHT * 0.5;
     let mut bottom_y = judgment_y + ERROR_BAR_JUDGMENT_HEIGHT * 0.5;
 
@@ -259,13 +265,25 @@ fn zmod_layout_ys(profile: &crate::game::profile::Profile, judgment_y: f32) -> Z
         }
     }
 
+    // Zmod: HideLookahead is not implemented in deadsync, so we always take the normal branch.
     let subtractive_scoring_y = if has_measure_counter && profile.measure_counter_up {
-        bottom_y + 8.0
+        let y = bottom_y + 8.0;
+        bottom_y += 16.0;
+        y
     } else {
-        top_y - 8.0
+        let y = top_y - 8.0;
+        top_y -= 16.0;
+        y
+    };
+
+    let combo_y = if reverse {
+        combo_y_base.min(top_y - 20.0)
+    } else {
+        combo_y_base.max(bottom_y + 20.0)
     };
 
     ZmodLayoutYs {
+        combo_y,
         measure_counter_y,
         subtractive_scoring_y,
     }
@@ -625,6 +643,14 @@ pub fn build(
     } else {
         screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
     };
+    let combo_y_base = if is_centered {
+        receptor_y_centered + 155.0
+    } else if reverse_scroll {
+        screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
+    } else {
+        screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
+    };
+    let zmod_layout = zmod_layout_ys(profile, judgment_y, combo_y_base, reverse_scroll);
 
     if let Some(ns) = &state.noteskin[player_idx] {
         let timing = &state.timing_players[player_idx];
@@ -1750,13 +1776,7 @@ pub fn build(
     // Combo
     if !profile.hide_combo {
         if p.miss_combo >= SHOW_COMBO_AT {
-            let combo_y = if is_centered {
-                receptor_y_centered + 155.0
-            } else if state.reverse_scroll[player_idx] {
-                screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
-            } else {
-                screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
-            };
+            let combo_y = zmod_layout.combo_y;
             let miss_combo_font_name = match profile.combo_font {
                 crate::game::profile::ComboFont::Wendy => Some("wendy_combo"),
                 crate::game::profile::ComboFont::ArialRounded => Some("combo_arial_rounded"),
@@ -1777,13 +1797,7 @@ pub fn build(
                 ));
             }
         } else if p.combo >= SHOW_COMBO_AT {
-            let combo_y = if is_centered {
-                receptor_y_centered + 155.0
-            } else if state.reverse_scroll[player_idx] {
-                screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
-            } else {
-                screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
-            };
+            let combo_y = zmod_layout.combo_y;
             let (color1, color2) = if let Some(fc_grade) = &p.full_combo_grade {
                 match fc_grade {
                     JudgeGrade::Fantastic => {
@@ -2096,7 +2110,6 @@ pub fn build(
     if profile.measure_counter != crate::game::profile::MeasureCounter::None {
         let segs: &[StreamSegment] = &state.measure_counter_segments[player_idx];
         if !segs.is_empty() {
-            let layout = zmod_layout_ys(profile, judgment_y);
             let lookahead: u8 = profile.measure_counter_lookahead.min(4);
             let multiplier = profile.measure_counter.multiplier();
 
@@ -2124,7 +2137,7 @@ pub fn build(
                 column_width *= 4.0 / 3.0;
             }
 
-            if let Some(measure_counter_y) = layout.measure_counter_y {
+            if let Some(measure_counter_y) = zmod_layout.measure_counter_y {
                 for j in (0..=lookahead).rev() {
                     let seg_index_unshifted = base_index + j as usize;
                     if seg_index_unshifted >= segs.len() {
@@ -2273,7 +2286,7 @@ pub fn build(
                         if profile.measure_counter_left {
                             x -= column_width;
                         }
-                        let y = layout.subtractive_scoring_y;
+                        let y = zmod_layout.subtractive_scoring_y;
 
                         hud_actors.push(act!(text:
                             font(mc_font_name): settext(text):
