@@ -179,6 +179,44 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     };
 
+    // Danger overlay (Simply Love parity): red flashing in danger + green recovery, optional HideDanger.
+    {
+        let sw = screen_width();
+        let sh = screen_height();
+        let cx = screen_center_x();
+
+        for player_idx in 0..state.num_players {
+            let Some(rgba) = crate::game::gameplay::danger_overlay_rgba(state, player_idx) else {
+                continue;
+            };
+            let (x, w, fl, fr) = match play_style {
+                profile::PlayStyle::Double => (0.0, sw, 0.0, 0.0),
+                profile::PlayStyle::Versus => {
+                    if player_idx == 0 {
+                        (0.0, cx, 0.0, 0.1)
+                    } else {
+                        (cx, sw - cx, 0.1, 0.0)
+                    }
+                }
+                profile::PlayStyle::Single => {
+                    if is_p2_single {
+                        (cx, sw - cx, 0.1, 0.0)
+                    } else {
+                        (0.0, cx, 0.0, 0.1)
+                    }
+                }
+            };
+
+            actors.push(act!(quad:
+                align(0.0, 0.0): xy(x, 0.0):
+                zoomto(w, sh):
+                fadeleft(fl): faderight(fr):
+                diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
+                z(-99)
+            ));
+        }
+    }
+
     // Background filter per-player (Simply Love parity): draw behind each notefield, not full-screen.
     for &(player_idx, field_x) in &per_player_fields {
         if player_idx == usize::MAX || player_idx >= state.num_players {

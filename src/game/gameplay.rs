@@ -56,6 +56,19 @@ pub const RECEPTOR_GLOW_DURATION: f32 = 0.2;
 pub const COMBO_HUNDRED_MILESTONE_DURATION: f32 = 0.6;
 pub const COMBO_THOUSAND_MILESTONE_DURATION: f32 = 0.7;
 
+// Simply Love danger overlay semantics (ScreenGameplay underlay/PerPlayer/Danger.lua).
+// Metrics: itgmania/Themes/Simply Love/metrics.ini -> DangerThreshold=0.2
+const DANGER_THRESHOLD: f32 = 0.2;
+const DANGER_BASE_ALPHA: f32 = 0.7;
+const DANGER_FADE_IN_S: f32 = 0.3;
+const DANGER_HIDE_FADE_S: f32 = 0.3;
+const DANGER_FLASH_IN_S: f32 = 0.3;
+const DANGER_FLASH_OUT_S: f32 = 0.3;
+const DANGER_FLASH_ALPHA: f32 = 0.8;
+const DANGER_EFFECT_PERIOD_S: f32 = 1.0;
+const DANGER_EC1_RGBA: [f32; 4] = [1.0, 0.0, 0.24, 0.1];
+const DANGER_EC2_RGBA: [f32; 4] = [1.0, 0.0, 0.0, 0.35];
+
 const MAX_HOLD_LIFE: f32 = 1.0;
 const INITIAL_HOLD_LIFE: f32 = 1.0;
 const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32;
@@ -704,6 +717,158 @@ pub struct ErrorBarText {
     pub early: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum HealthState {
+    #[default]
+    Alive,
+    Danger,
+    Dead,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum DangerAnim {
+    Hidden,
+    Danger { started_at: f32, alpha_start: f32 },
+    FadeOut { started_at: f32, rgba_start: [f32; 4] },
+    Flash { started_at: f32, rgb: [f32; 3] },
+}
+
+impl Default for DangerAnim {
+    fn default() -> Self {
+        Self::Hidden
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct DangerFx {
+    last_health: HealthState,
+    prev_health: HealthState,
+    anim: DangerAnim,
+}
+
+#[inline(always)]
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    (b - a).mul_add(t.clamp(0.0, 1.0), a)
+}
+
+#[inline(always)]
+fn danger_flash_alpha(age: f32) -> f32 {
+    if !age.is_finite() || age <= 0.0 {
+        return 0.0;
+    }
+    if age < DANGER_FLASH_IN_S {
+        return DANGER_FLASH_ALPHA * (age / DANGER_FLASH_IN_S).clamp(0.0, 1.0);
+    }
+    let t2 = age - DANGER_FLASH_IN_S;
+    if t2 < DANGER_FLASH_OUT_S {
+        return DANGER_FLASH_ALPHA * (1.0 - (t2 / DANGER_FLASH_OUT_S).clamp(0.0, 1.0));
+    }
+    0.0
+}
+
+#[inline(always)]
+fn danger_effect_rgba(age: f32, base_alpha: f32) -> [f32; 4] {
+    let period = DANGER_EFFECT_PERIOD_S;
+    if !age.is_finite() || !base_alpha.is_finite() || base_alpha <= 0.0 || period <= 0.0 {
+        return [0.0, 0.0, 0.0, 0.0];
+    }
+    let phase = (age.rem_euclid(period) / period).clamp(0.0, 1.0);
+    let f = ((phase + 0.25) * std::f32::consts::TAU).sin().mul_add(0.5, 0.5);
+    let inv = 1.0 - f;
+
+    let r = DANGER_EC1_RGBA[0] * f + DANGER_EC2_RGBA[0] * inv;
+    let g = DANGER_EC1_RGBA[1] * f + DANGER_EC2_RGBA[1] * inv;
+    let b = DANGER_EC1_RGBA[2] * f + DANGER_EC2_RGBA[2] * inv;
+    let a = (DANGER_EC1_RGBA[3] * f + DANGER_EC2_RGBA[3] * inv) * base_alpha;
+    [r, g, b, a]
+}
+
+#[inline(always)]
+fn danger_anim_base_alpha(anim: &DangerAnim, now: f32) -> f32 {
+    let now = if now.is_finite() { now } else { 0.0 };
+    match *anim {
+        DangerAnim::Hidden => 0.0,
+        DangerAnim::Danger {
+            started_at,
+            alpha_start,
+        } => {
+            let age = now - started_at;
+            if !age.is_finite() || age <= 0.0 {
+                alpha_start
+            } else if age < DANGER_FADE_IN_S {
+                lerp(alpha_start, DANGER_BASE_ALPHA, age / DANGER_FADE_IN_S)
+            } else {
+                DANGER_BASE_ALPHA
+            }
+        }
+        DangerAnim::FadeOut {
+            started_at,
+            rgba_start,
+        } => {
+            let age = now - started_at;
+            if !age.is_finite() || age <= 0.0 {
+                rgba_start[3]
+            } else if age < DANGER_HIDE_FADE_S {
+                lerp(rgba_start[3], 0.0, age / DANGER_HIDE_FADE_S)
+            } else {
+                0.0
+            }
+        }
+        DangerAnim::Flash { started_at, .. } => danger_flash_alpha(now - started_at),
+    }
+}
+
+#[inline(always)]
+fn danger_anim_rgba(anim: &DangerAnim, now: f32) -> [f32; 4] {
+    let now = if now.is_finite() { now } else { 0.0 };
+    match *anim {
+        DangerAnim::Hidden => [0.0, 0.0, 0.0, 0.0],
+        DangerAnim::Danger {
+            started_at,
+            alpha_start,
+        } => {
+            let age = now - started_at;
+            let base_alpha = if !age.is_finite() || age <= 0.0 {
+                alpha_start
+            } else if age < DANGER_FADE_IN_S {
+                lerp(alpha_start, DANGER_BASE_ALPHA, age / DANGER_FADE_IN_S)
+            } else {
+                DANGER_BASE_ALPHA
+            };
+            danger_effect_rgba(age, base_alpha)
+        }
+        DangerAnim::FadeOut {
+            started_at,
+            rgba_start,
+        } => {
+            let age = now - started_at;
+            let a = if !age.is_finite() || age <= 0.0 {
+                rgba_start[3]
+            } else if age < DANGER_HIDE_FADE_S {
+                lerp(rgba_start[3], 0.0, age / DANGER_HIDE_FADE_S)
+            } else {
+                0.0
+            };
+            [rgba_start[0], rgba_start[1], rgba_start[2], a]
+        }
+        DangerAnim::Flash { started_at, rgb } => {
+            let a = danger_flash_alpha(now - started_at);
+            [rgb[0], rgb[1], rgb[2], a]
+        }
+    }
+}
+
+#[inline(always)]
+fn health_state_for_player(p: &PlayerRuntime) -> HealthState {
+    if p.is_failing || p.life <= 0.0 {
+        HealthState::Dead
+    } else if p.life < DANGER_THRESHOLD {
+        HealthState::Danger
+    } else {
+        HealthState::Alive
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct PlayerRuntime {
     pub combo: u32,
@@ -875,6 +1040,7 @@ pub struct State {
     pub total_elapsed_in_screen: f32,
 
     pub sync_overlay_message: Option<String>,
+    danger_fx: [DangerFx; MAX_PLAYERS],
 
     pub density_graph_first_second: f32,
     pub density_graph_last_second: f32,
@@ -912,6 +1078,17 @@ fn is_player_dead(p: &PlayerRuntime) -> bool {
 #[inline(always)]
 fn is_state_dead(state: &State, player: usize) -> bool {
     is_player_dead(&state.players[player])
+}
+
+pub fn danger_overlay_rgba(state: &State, player: usize) -> Option<[f32; 4]> {
+    if player >= state.num_players {
+        return None;
+    }
+    if state.player_profiles[player].hide_lifebar {
+        return None;
+    }
+    let rgba = danger_anim_rgba(&state.danger_fx[player].anim, state.total_elapsed_in_screen);
+    if rgba[3] > 0.0 { Some(rgba) } else { None }
 }
 
 #[inline(always)]
@@ -1926,6 +2103,7 @@ pub fn init(
         mines_total,
         total_elapsed_in_screen: 0.0,
         sync_overlay_message: None,
+        danger_fx: std::array::from_fn(|_| DangerFx::default()),
         density_graph_first_second,
         density_graph_last_second,
         density_graph_duration,
@@ -4024,6 +4202,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     update_judged_rows(state);
 
     update_density_graph(state, music_time_sec);
+    update_danger_fx(state);
 
     state.log_timer += delta_time;
     if state.log_timer >= 1.0 {
@@ -4039,4 +4218,62 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         state.log_timer -= 1.0;
     }
     ScreenAction::None
+}
+
+fn update_danger_fx(state: &mut State) {
+    let now = state.total_elapsed_in_screen;
+    for player in 0..state.num_players {
+        if state.player_profiles[player].hide_lifebar {
+            state.danger_fx[player] = DangerFx::default();
+            continue;
+        }
+
+        let fx = &mut state.danger_fx[player];
+        let health = health_state_for_player(&state.players[player]);
+        if fx.last_health == health {
+            continue;
+        }
+
+        if state.player_profiles[player].hide_danger {
+            if health == HealthState::Dead {
+                fx.anim = DangerAnim::Flash {
+                    started_at: now,
+                    rgb: [1.0, 0.0, 0.0],
+                };
+            }
+            fx.last_health = health;
+            continue;
+        }
+
+        match health {
+            HealthState::Danger => {
+                fx.anim = DangerAnim::Danger {
+                    started_at: now,
+                    alpha_start: danger_anim_base_alpha(&fx.anim, now),
+                };
+                fx.prev_health = HealthState::Danger;
+            }
+            HealthState::Dead => {
+                fx.anim = DangerAnim::Flash {
+                    started_at: now,
+                    rgb: [1.0, 0.0, 0.0],
+                };
+            }
+            HealthState::Alive => {
+                fx.anim = if fx.prev_health == HealthState::Danger {
+                    DangerAnim::Flash {
+                        started_at: now,
+                        rgb: [0.0, 1.0, 0.0],
+                    }
+                } else {
+                    DangerAnim::FadeOut {
+                        started_at: now,
+                        rgba_start: danger_anim_rgba(&fx.anim, now),
+                    }
+                };
+                fx.prev_health = HealthState::Alive;
+            }
+        }
+        fx.last_health = health;
+    }
 }
