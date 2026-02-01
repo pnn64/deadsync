@@ -1,4 +1,8 @@
+use crate::core::input::InputSource;
 use crate::core::network;
+use crate::config::SimpleIni;
+use crate::game::gameplay;
+use crate::game::judgment;
 use crate::game::profile::{self, Profile};
 use crate::game::song::get_song_cache;
 use log::{info, warn};
@@ -6,6 +10,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -80,17 +85,15 @@ pub struct CachedScore {
     pub lamp_judge_count: Option<u8>,
 }
 
-// --- Global Grade Cache ---
+// --- GrooveStats grade cache (on-disk + network-fetched) ---
 
 #[derive(Default)]
-struct GradeCacheState {
-    profile_id: Option<String>,
-    loaded: bool,
-    cache: HashMap<String, CachedScore>,
+struct GsScoreCacheState {
+    loaded_profiles: HashMap<String, HashMap<String, CachedScore>>,
 }
 
-static GRADE_CACHE: std::sync::LazyLock<Mutex<GradeCacheState>> =
-    std::sync::LazyLock::new(|| Mutex::new(GradeCacheState::default()));
+static GS_SCORE_CACHE: std::sync::LazyLock<Mutex<GsScoreCacheState>> =
+    std::sync::LazyLock::new(|| Mutex::new(GsScoreCacheState::default()));
 
 fn gs_scores_dir_for_profile(profile_id: &str) -> PathBuf {
     PathBuf::from("save/profiles")
@@ -99,40 +102,245 @@ fn gs_scores_dir_for_profile(profile_id: &str) -> PathBuf {
         .join("gs")
 }
 
-fn gs_scores_dir() -> Option<PathBuf> {
-    profile::active_local_profile_id().map(|id| gs_scores_dir_for_profile(&id))
-}
-
-fn ensure_score_cache_loaded() {
-    let profile_id = profile::active_local_profile_id();
-    let should_reload = {
-        let state = GRADE_CACHE.lock().unwrap();
-        !state.loaded || state.profile_id != profile_id
+fn ensure_gs_score_cache_loaded_for_profile(profile_id: &str) {
+    let needs_load = {
+        let state = GS_SCORE_CACHE.lock().unwrap();
+        !state.loaded_profiles.contains_key(profile_id)
     };
-    if !should_reload {
+    if !needs_load {
         return;
     }
 
-    let disk_cache = profile_id
-        .as_deref()
-        .map(|id| best_scores_from_disk(&gs_scores_dir_for_profile(id)))
-        .unwrap_or_default();
+    let disk_cache = best_scores_from_disk(&gs_scores_dir_for_profile(profile_id));
+    let mut state = GS_SCORE_CACHE.lock().unwrap();
+    state
+        .loaded_profiles
+        .entry(profile_id.to_string())
+        .or_insert(disk_cache);
+}
 
-    let mut state = GRADE_CACHE.lock().unwrap();
-    state.profile_id = profile_id;
-    state.loaded = true;
-    state.cache = disk_cache;
+pub fn get_cached_gs_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<CachedScore> {
+    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    ensure_gs_score_cache_loaded_for_profile(&profile_id);
+    GS_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(&profile_id)
+        .and_then(|m| m.get(chart_hash).copied())
+}
+
+fn set_cached_gs_score_for_profile(profile_id: &str, chart_hash: String, score: CachedScore) {
+    info!("Caching GrooveStats score {score:?} for chart hash {chart_hash}");
+    ensure_gs_score_cache_loaded_for_profile(profile_id);
+    let mut state = GS_SCORE_CACHE.lock().unwrap();
+    let Some(map) = state.loaded_profiles.get_mut(profile_id) else {
+        return;
+    };
+    map.insert(chart_hash, score);
+}
+
+// --- Local score cache (on-disk, one file per play) ---
+
+#[derive(Clone, Copy, Debug)]
+struct BestScalar {
+    grade: Grade,
+    percent: f64,
+}
+
+#[derive(Default)]
+struct LocalScoreIndex {
+    best_itg: HashMap<String, CachedScore>,
+    best_ex: HashMap<String, BestScalar>,
+    best_hard_ex: HashMap<String, BestScalar>,
+}
+
+#[derive(Default)]
+struct LocalScoreCacheState {
+    loaded_profiles: HashMap<String, LocalScoreIndex>,
+}
+
+static LOCAL_SCORE_CACHE: std::sync::LazyLock<Mutex<LocalScoreCacheState>> =
+    std::sync::LazyLock::new(|| Mutex::new(LocalScoreCacheState::default()));
+
+#[derive(Clone, Debug)]
+struct MachineBest {
+    score: CachedScore,
+    initials: String,
+}
+
+#[derive(Default)]
+struct MachineLocalScoreCacheState {
+    loaded: bool,
+    best_itg: HashMap<String, MachineBest>,
+}
+
+static MACHINE_LOCAL_SCORE_CACHE: std::sync::LazyLock<Mutex<MachineLocalScoreCacheState>> =
+    std::sync::LazyLock::new(|| Mutex::new(MachineLocalScoreCacheState::default()));
+
+fn local_scores_root_for_profile(profile_id: &str) -> PathBuf {
+    PathBuf::from("save/profiles")
+        .join(profile_id)
+        .join("scores")
+        .join("local")
+}
+
+#[inline(always)]
+fn shard2_for_hash(hash: &str) -> &str {
+    if hash.len() >= 2 { &hash[..2] } else { "00" }
+}
+
+#[inline(always)]
+fn is_better_itg(new: &CachedScore, old: &CachedScore) -> bool {
+    match (old.grade == Grade::Failed, new.grade == Grade::Failed) {
+        (true, false) => return true,
+        (false, true) => return false,
+        _ => {}
+    }
+    new.score_percent > old.score_percent
+}
+
+#[inline(always)]
+fn is_better_scalar(new: BestScalar, old: BestScalar) -> bool {
+    match (old.grade == Grade::Failed, new.grade == Grade::Failed) {
+        (true, false) => return true,
+        (false, true) => return false,
+        _ => {}
+    }
+    new.percent > old.percent
+}
+
+fn ensure_local_score_cache_loaded(profile_id: &str) {
+    if LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .contains_key(profile_id)
+    {
+        return;
+    }
+
+    let loaded = load_local_score_index(&local_scores_root_for_profile(profile_id));
+    let mut state = LOCAL_SCORE_CACHE.lock().unwrap();
+    state.loaded_profiles.entry(profile_id.to_string()).or_insert(loaded);
+}
+
+fn profile_initials_for_id(profile_id: &str) -> Option<String> {
+    let ini_path = PathBuf::from("save/profiles")
+        .join(profile_id)
+        .join("profile.ini");
+    if !ini_path.is_file() {
+        return None;
+    }
+    let mut ini = SimpleIni::new();
+    if ini.load(&ini_path).is_err() {
+        return None;
+    }
+    let s = ini.get("userprofile", "PlayerInitials")?;
+    let s = s.trim();
+    (!s.is_empty()).then_some(s.to_string())
+}
+
+fn ensure_machine_local_score_cache_loaded() {
+    let needs_load = {
+        let state = MACHINE_LOCAL_SCORE_CACHE.lock().unwrap();
+        !state.loaded
+    };
+    if !needs_load {
+        return;
+    }
+
+    let mut best_itg: HashMap<String, MachineBest> = HashMap::new();
+    for p in profile::scan_local_profiles() {
+        let initials = profile_initials_for_id(&p.id).unwrap_or_else(|| "----".to_string());
+        let idx = load_local_score_index(&local_scores_root_for_profile(&p.id));
+        for (chart_hash, score) in idx.best_itg {
+            match best_itg.get_mut(&chart_hash) {
+                Some(existing) => {
+                    if is_better_itg(&score, &existing.score) {
+                        existing.score = score;
+                        existing.initials = initials.clone();
+                    }
+                }
+                None => {
+                    best_itg.insert(
+                        chart_hash,
+                        MachineBest {
+                            score,
+                            initials: initials.clone(),
+                        },
+                    );
+                }
+            }
+        }
+    }
+
+    let mut state = MACHINE_LOCAL_SCORE_CACHE.lock().unwrap();
+    if !state.loaded {
+        state.loaded = true;
+        state.best_itg = best_itg;
+    }
+}
+
+fn update_machine_cache_if_loaded(chart_hash: &str, score: CachedScore, initials: &str) {
+    let mut state = MACHINE_LOCAL_SCORE_CACHE.lock().unwrap();
+    if !state.loaded {
+        return;
+    }
+    match state.best_itg.get_mut(chart_hash) {
+        Some(existing) => {
+            if is_better_itg(&score, &existing.score) {
+                existing.score = score;
+                existing.initials = initials.to_string();
+            }
+        }
+        None => {
+            state.best_itg.insert(
+                chart_hash.to_string(),
+                MachineBest {
+                    score,
+                    initials: initials.to_string(),
+                },
+            );
+        }
+    }
 }
 
 pub fn get_cached_score(chart_hash: &str) -> Option<CachedScore> {
-    ensure_score_cache_loaded();
-    GRADE_CACHE.lock().unwrap().cache.get(chart_hash).copied()
+    get_cached_score_for_side(chart_hash, profile::get_session_player_side())
 }
 
-pub fn set_cached_score(chart_hash: String, score: CachedScore) {
-    info!("Caching score {score:?} for chart hash {chart_hash}");
-    ensure_score_cache_loaded();
-    GRADE_CACHE.lock().unwrap().cache.insert(chart_hash, score);
+pub fn get_cached_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<CachedScore> {
+    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    ensure_local_score_cache_loaded(&profile_id);
+    let local = LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(&profile_id)
+        .and_then(|idx| idx.best_itg.get(chart_hash).copied());
+    let gs = get_cached_gs_score_for_side(chart_hash, side);
+    match (local, gs) {
+        (None, None) => None,
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (Some(a), Some(b)) => Some(if is_better_itg(&a, &b) { a } else { b }),
+    }
+}
+
+pub fn get_machine_record_local(chart_hash: &str) -> Option<(String, CachedScore)> {
+    ensure_machine_local_score_cache_loaded();
+    let state = MACHINE_LOCAL_SCORE_CACHE.lock().unwrap();
+    state
+        .best_itg
+        .get(chart_hash)
+        .map(|m| (m.initials.clone(), m.score))
 }
 
 // --- On-disk GrooveStats score storage ---
@@ -328,13 +536,16 @@ fn load_all_entries_for_chart(chart_hash: &str, dir: &Path) -> Vec<GsScoreEntry>
     entries
 }
 
-fn append_gs_score_on_disk(chart_hash: &str, score: CachedScore, username: &str) {
+fn append_gs_score_on_disk_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score: CachedScore,
+    username: &str,
+) {
     if username.trim().is_empty() {
         return;
     }
-    let Some(dir) = gs_scores_dir() else {
-        return;
-    };
+    let dir = gs_scores_dir_for_profile(profile_id);
 
     let mut entries = load_all_entries_for_chart(chart_hash, &dir);
     let fetched_at_ms = SystemTime::now()
@@ -358,13 +569,14 @@ fn append_gs_score_on_disk(chart_hash: &str, score: CachedScore, username: &str)
     entries.push(new_entry.clone());
 
     if let Err(e) = fs::create_dir_all(&dir) {
-        warn!("Failed to create GrooveStats scores dir {dir:?}: {e}");
+        warn!(
+            "Failed to create GrooveStats scores dir for profile {profile_id} at {dir:?}: {e}"
+        );
         return;
     }
 
     let file_name = format!("{chart_hash}-{fetched_at_ms}.bin");
-    let mut path = dir;
-    path.push(file_name);
+    let path = dir.join(file_name);
 
     match bincode::encode_to_vec(&new_entry, bincode::config::standard()) {
         Ok(buf) => {
@@ -377,6 +589,507 @@ fn append_gs_score_on_disk(chart_hash: &str, score: CachedScore, username: &str)
         Err(e) => {
             warn!("Failed to encode GrooveStats score for chart {chart_hash}: {e}");
         }
+    }
+}
+
+// --- On-disk local score storage (one file per play) ---
+
+const LOCAL_SCORE_VERSION_V1: u16 = 1;
+
+#[derive(Debug, Clone, Copy, Encode, Decode)]
+struct LocalReplayEdgeV1 {
+    time_s: f32,
+    lane: u8,
+    pressed: bool,
+    // 0 = Keyboard, 1 = Gamepad
+    source: u8,
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+struct LocalScoreEntryHeaderV1 {
+    version: u16,
+    played_at_ms: i64,
+    music_rate: f32,
+    score_percent: f64,
+    grade_code: u8,
+    lamp_index: Option<u8>,
+    lamp_judge_count: Option<u8>,
+    ex_score_percent: f64,
+    hard_ex_score_percent: f64,
+    // Fantastic, Excellent, Great, Decent, WayOff, Miss (row judgments)
+    judgment_counts: [u32; 6],
+    holds_held: u32,
+    holds_total: u32,
+    rolls_held: u32,
+    rolls_total: u32,
+    mines_avoided: u32,
+    mines_total: u32,
+    hands_achieved: u32,
+    fail_time: Option<f32>,
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+struct LocalScoreEntryV1 {
+    version: u16,
+    played_at_ms: i64,
+    music_rate: f32,
+    score_percent: f64,
+    grade_code: u8,
+    lamp_index: Option<u8>,
+    lamp_judge_count: Option<u8>,
+    ex_score_percent: f64,
+    hard_ex_score_percent: f64,
+    judgment_counts: [u32; 6],
+    holds_held: u32,
+    holds_total: u32,
+    rolls_held: u32,
+    rolls_total: u32,
+    mines_avoided: u32,
+    mines_total: u32,
+    hands_achieved: u32,
+    fail_time: Option<f32>,
+    replay: Vec<LocalReplayEdgeV1>,
+}
+
+#[inline(always)]
+fn local_lamp_judge_count(count: u32) -> Option<u8> {
+    if (1..=9).contains(&count) {
+        Some(count as u8)
+    } else {
+        None
+    }
+}
+
+fn compute_local_lamp(counts: [u32; 6], grade: Grade) -> (Option<u8>, Option<u8>) {
+    if grade == Grade::Failed {
+        return (None, None);
+    }
+    if grade == Grade::Quint {
+        return (Some(0), None);
+    }
+
+    let excellent = counts[1];
+    let great = counts[2];
+    let decent = counts[3];
+    let wayoff = counts[4];
+    let miss = counts[5];
+
+    if miss == 0 && wayoff == 0 && decent == 0 && great == 0 && excellent == 0 {
+        return (Some(1), None);
+    }
+    if miss == 0 && wayoff == 0 && decent == 0 && great == 0 {
+        return (Some(2), local_lamp_judge_count(excellent));
+    }
+    if miss == 0 && wayoff == 0 && decent == 0 {
+        return (Some(3), local_lamp_judge_count(great));
+    }
+    if miss == 0 && wayoff == 0 {
+        return (Some(4), local_lamp_judge_count(decent));
+    }
+    (None, None)
+}
+
+fn decode_local_score_header(bytes: &[u8]) -> Option<LocalScoreEntryHeaderV1> {
+    let Ok((h, _)) =
+        bincode::decode_from_slice::<LocalScoreEntryHeaderV1, _>(bytes, bincode::config::standard())
+    else {
+        return None;
+    };
+    if h.version != LOCAL_SCORE_VERSION_V1 {
+        return None;
+    }
+    Some(h)
+}
+
+fn read_local_score_header(path: &Path) -> Option<LocalScoreEntryHeaderV1> {
+    // Local score files include replay data; for indexing we only need the prefix.
+    // A 1KiB prefix comfortably covers the fixed header fields.
+    let file = fs::File::open(path).ok()?;
+    let mut buf = Vec::with_capacity(1024);
+    if file.take(1024).read_to_end(&mut buf).is_err() || buf.is_empty() {
+        return None;
+    }
+    decode_local_score_header(&buf)
+}
+
+fn scan_local_scores_dir(dir: &Path, index: &mut LocalScoreIndex) {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for item in read_dir.flatten() {
+        let path = item.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !name.ends_with(".bin") {
+            continue;
+        }
+        let base = &name[..name.len().saturating_sub(4)];
+        let Some(idx_dash) = base.rfind('-') else {
+            continue;
+        };
+        if idx_dash == 0 {
+            continue;
+        }
+        let chart_hash = &base[..idx_dash];
+
+        let Some(h) = read_local_score_header(&path) else {
+            continue;
+        };
+
+        let grade = grade_from_code(h.grade_code);
+        let cached = CachedScore {
+            grade,
+            score_percent: h.score_percent,
+            lamp_index: h.lamp_index,
+            lamp_judge_count: h.lamp_judge_count,
+        };
+
+        match index.best_itg.get_mut(chart_hash) {
+            Some(existing) => {
+                if is_better_itg(&cached, existing) {
+                    *existing = cached;
+                }
+            }
+            None => {
+                index.best_itg.insert(chart_hash.to_string(), cached);
+            }
+        }
+
+        let ex = BestScalar {
+            grade,
+            percent: h.ex_score_percent,
+        };
+        match index.best_ex.get_mut(chart_hash) {
+            Some(existing) => {
+                if is_better_scalar(ex, *existing) {
+                    *existing = ex;
+                }
+            }
+            None => {
+                index.best_ex.insert(chart_hash.to_string(), ex);
+            }
+        }
+
+        let hard_ex = BestScalar {
+            grade,
+            percent: h.hard_ex_score_percent,
+        };
+        match index.best_hard_ex.get_mut(chart_hash) {
+            Some(existing) => {
+                if is_better_scalar(hard_ex, *existing) {
+                    *existing = hard_ex;
+                }
+            }
+            None => {
+                index.best_hard_ex.insert(chart_hash.to_string(), hard_ex);
+            }
+        }
+    }
+}
+
+fn load_local_score_index(root: &Path) -> LocalScoreIndex {
+    let mut index = LocalScoreIndex::default();
+    if !root.is_dir() {
+        return index;
+    }
+
+    // Support both sharded (root/ab/*.bin) and unsharded (root/*.bin) layouts.
+    scan_local_scores_dir(root, &mut index);
+    let Ok(read_dir) = fs::read_dir(root) else {
+        return index;
+    };
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            scan_local_scores_dir(&path, &mut index);
+        }
+    }
+
+    index
+}
+
+fn update_local_index_with_header(
+    idx: &mut LocalScoreIndex,
+    chart_hash: &str,
+    h: &LocalScoreEntryHeaderV1,
+) {
+    let grade = grade_from_code(h.grade_code);
+    let cached = CachedScore {
+        grade,
+        score_percent: h.score_percent,
+        lamp_index: h.lamp_index,
+        lamp_judge_count: h.lamp_judge_count,
+    };
+    match idx.best_itg.get_mut(chart_hash) {
+        Some(existing) => {
+            if is_better_itg(&cached, existing) {
+                *existing = cached;
+            }
+        }
+        None => {
+            idx.best_itg.insert(chart_hash.to_string(), cached);
+        }
+    }
+
+    let ex = BestScalar {
+        grade,
+        percent: h.ex_score_percent,
+    };
+    match idx.best_ex.get_mut(chart_hash) {
+        Some(existing) => {
+            if is_better_scalar(ex, *existing) {
+                *existing = ex;
+            }
+        }
+        None => {
+            idx.best_ex.insert(chart_hash.to_string(), ex);
+        }
+    }
+
+    let hard_ex = BestScalar {
+        grade,
+        percent: h.hard_ex_score_percent,
+    };
+    match idx.best_hard_ex.get_mut(chart_hash) {
+        Some(existing) => {
+            if is_better_scalar(hard_ex, *existing) {
+                *existing = hard_ex;
+            }
+        }
+        None => {
+            idx.best_hard_ex.insert(chart_hash.to_string(), hard_ex);
+        }
+    }
+}
+
+fn append_local_score_on_disk(
+    profile_id: &str,
+    profile_initials: &str,
+    chart_hash: &str,
+    entry: &mut LocalScoreEntryV1,
+) {
+    let shard = shard2_for_hash(chart_hash);
+    let dir = local_scores_root_for_profile(profile_id).join(shard);
+    if let Err(e) = fs::create_dir_all(&dir) {
+        warn!("Failed to create local scores dir {dir:?}: {e}");
+        return;
+    }
+
+    // Avoid collisions: keep the GS-like "<hash>-<ms>.bin" filename shape.
+    let mut played_at_ms = entry.played_at_ms;
+    let mut path = dir.join(format!("{chart_hash}-{played_at_ms}.bin"));
+    while path.exists() {
+        played_at_ms = played_at_ms.saturating_add(1);
+        path = dir.join(format!("{chart_hash}-{played_at_ms}.bin"));
+    }
+    entry.played_at_ms = played_at_ms;
+
+    let tmp_path = dir.join(format!(".{chart_hash}-{played_at_ms}.tmp"));
+    let Ok(buf) = bincode::encode_to_vec(&*entry, bincode::config::standard()) else {
+        warn!("Failed to encode local score for chart {chart_hash}");
+        return;
+    };
+    if let Err(e) = fs::write(&tmp_path, buf) {
+        warn!("Failed to write local score temp file {tmp_path:?}: {e}");
+        return;
+    }
+    if let Err(e) = fs::rename(&tmp_path, &path) {
+        warn!("Failed to commit local score file {path:?}: {e}");
+        let _ = fs::remove_file(&tmp_path);
+        return;
+    }
+
+    // Update in-memory cache if it's already loaded for this profile.
+    let header = LocalScoreEntryHeaderV1 {
+        version: entry.version,
+        played_at_ms: entry.played_at_ms,
+        music_rate: entry.music_rate,
+        score_percent: entry.score_percent,
+        grade_code: entry.grade_code,
+        lamp_index: entry.lamp_index,
+        lamp_judge_count: entry.lamp_judge_count,
+        ex_score_percent: entry.ex_score_percent,
+        hard_ex_score_percent: entry.hard_ex_score_percent,
+        judgment_counts: entry.judgment_counts,
+        holds_held: entry.holds_held,
+        holds_total: entry.holds_total,
+        rolls_held: entry.rolls_held,
+        rolls_total: entry.rolls_total,
+        mines_avoided: entry.mines_avoided,
+        mines_total: entry.mines_total,
+        hands_achieved: entry.hands_achieved,
+        fail_time: entry.fail_time,
+    };
+    let mut state = LOCAL_SCORE_CACHE.lock().unwrap();
+    if let Some(idx) = state.loaded_profiles.get_mut(profile_id) {
+        update_local_index_with_header(idx, chart_hash, &header);
+    }
+
+    let cached = CachedScore {
+        grade: grade_from_code(header.grade_code),
+        score_percent: header.score_percent,
+        lamp_index: header.lamp_index,
+        lamp_judge_count: header.lamp_judge_count,
+    };
+    update_machine_cache_if_loaded(chart_hash, cached, profile_initials);
+}
+
+fn judgment_counts_arr(p: &gameplay::PlayerRuntime) -> [u32; 6] {
+    use crate::game::judgment::JudgeGrade as G;
+    [
+        *p.judgment_counts.get(&G::Fantastic).unwrap_or(&0),
+        *p.judgment_counts.get(&G::Excellent).unwrap_or(&0),
+        *p.judgment_counts.get(&G::Great).unwrap_or(&0),
+        *p.judgment_counts.get(&G::Decent).unwrap_or(&0),
+        *p.judgment_counts.get(&G::WayOff).unwrap_or(&0),
+        *p.judgment_counts.get(&G::Miss).unwrap_or(&0),
+    ]
+}
+
+fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalReplayEdgeV1> {
+    if player >= gs.num_players {
+        return Vec::new();
+    }
+
+    let (col_start, col_end) = if gs.num_players <= 1 {
+        (0usize, gs.num_cols)
+    } else {
+        let start = player.saturating_mul(gs.cols_per_player);
+        (start, start.saturating_add(gs.cols_per_player))
+    };
+
+    let mut out = Vec::new();
+    out.reserve(gs.replay_edges.len().min(4096));
+    for e in &gs.replay_edges {
+        let lane = e.lane_index as usize;
+        if lane < col_start || lane >= col_end {
+            continue;
+        }
+        let source = match e.source {
+            InputSource::Keyboard => 0,
+            InputSource::Gamepad => 1,
+        };
+        out.push(LocalReplayEdgeV1 {
+            time_s: e.event_music_time,
+            lane: (lane - col_start) as u8,
+            pressed: e.pressed,
+            source,
+        });
+    }
+    out
+}
+
+pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    // NoMines handling is not wired yet, so treat mines as enabled.
+    let mines_disabled = false;
+
+    for player_idx in 0..gs.num_players {
+        let side = if gs.num_players >= 2 {
+            if player_idx == 0 {
+                profile::PlayerSide::P1
+            } else {
+                profile::PlayerSide::P2
+            }
+        } else {
+            profile::get_session_player_side()
+        };
+
+        let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+            continue;
+        };
+
+        let chart_hash = gs.charts[player_idx].short_hash.as_str();
+        let p = &gs.players[player_idx];
+
+        let score_percent = judgment::calculate_itg_score_percent(
+            &p.scoring_counts,
+            p.holds_held_for_score,
+            p.rolls_held_for_score,
+            p.mines_hit_for_score,
+            gs.possible_grade_points[player_idx],
+        );
+
+        let mut grade = if p.is_failing || !gs.song_completed_naturally {
+            Grade::Failed
+        } else {
+            score_to_grade(score_percent * 10000.0)
+        };
+
+        let (start, end) = gs.note_ranges[player_idx];
+        let notes = &gs.notes[start..end];
+        let note_times = &gs.note_time_cache[start..end];
+        let hold_end_times = &gs.hold_end_time_cache[start..end];
+
+        let ex_score_percent = judgment::calculate_ex_score_from_notes(
+            notes,
+            note_times,
+            hold_end_times,
+            gs.charts[player_idx].stats.total_steps,
+            gs.holds_total[player_idx],
+            gs.rolls_total[player_idx],
+            gs.mines_total[player_idx],
+            p.fail_time,
+            mines_disabled,
+        );
+        let hard_ex_score_percent = judgment::calculate_hard_ex_score_from_notes(
+            notes,
+            note_times,
+            hold_end_times,
+            gs.charts[player_idx].stats.total_steps,
+            gs.holds_total[player_idx],
+            gs.rolls_total[player_idx],
+            gs.mines_total[player_idx],
+            p.fail_time,
+            mines_disabled,
+        );
+
+        // Simply Love: show Quint (Grade_Tier00) if EX score is exactly 100.00.
+        if grade != Grade::Failed && ex_score_percent >= 100.0 {
+            grade = Grade::Quint;
+        }
+
+        let counts = judgment_counts_arr(p);
+        let (lamp_index, lamp_judge_count) = compute_local_lamp(counts, grade);
+        let replay = replay_edges_for_player(gs, player_idx);
+
+        let mut entry = LocalScoreEntryV1 {
+            version: LOCAL_SCORE_VERSION_V1,
+            played_at_ms: now_ms,
+            music_rate: gs.music_rate,
+            score_percent,
+            grade_code: grade_to_code(grade),
+            lamp_index,
+            lamp_judge_count,
+            ex_score_percent,
+            hard_ex_score_percent,
+            judgment_counts: counts,
+            holds_held: p.holds_held,
+            holds_total: gs.holds_total[player_idx],
+            rolls_held: p.rolls_held,
+            rolls_total: gs.rolls_total[player_idx],
+            mines_avoided: p.mines_avoided,
+            mines_total: gs.mines_total[player_idx],
+            hands_achieved: p.hands_achieved,
+            fail_time: p.fail_time,
+            replay,
+        };
+
+        append_local_score_on_disk(
+            &profile_id,
+            gs.player_profiles[player_idx].player_initials.as_str(),
+            chart_hash,
+            &mut entry,
+        );
     }
 }
 
@@ -754,6 +1467,7 @@ pub fn score_to_grade(score: f64) -> Grade {
 // --- Public Fetch Function ---
 
 pub fn fetch_and_store_grade(
+    profile_id: String,
     profile: Profile,
     chart_hash: String,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -802,8 +1516,13 @@ pub fn fetch_and_store_grade(
             lamp_index,
             lamp_judge_count,
         };
-        set_cached_score(chart_hash.clone(), cached_score);
-        append_gs_score_on_disk(&chart_hash, cached_score, &profile.groovestats_username);
+        set_cached_gs_score_for_profile(&profile_id, chart_hash.clone(), cached_score);
+        append_gs_score_on_disk_for_profile(
+            &profile_id,
+            &chart_hash,
+            cached_score,
+            &profile.groovestats_username,
+        );
     } else {
         warn!(
             "No score found for player '{}' on chart '{}'. Caching as Failed.",
@@ -816,7 +1535,7 @@ pub fn fetch_and_store_grade(
             lamp_index: None,
             lamp_judge_count: None,
         };
-        set_cached_score(chart_hash, cached_score);
+        set_cached_gs_score_for_profile(&profile_id, chart_hash, cached_score);
     }
 
     Ok(())

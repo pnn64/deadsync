@@ -1027,9 +1027,13 @@ impl App {
 
     fn spawn_grade_fetch(&self, hash: String) {
         info!("Fetching online grade for chart hash: {hash}");
+        let Some(profile_id) = profile::active_local_profile_id() else {
+            warn!("Skipping GrooveStats grade fetch: no active local profile");
+            return;
+        };
         let profile = profile::get();
         std::thread::spawn(move || {
-            if let Err(e) = scores::fetch_and_store_grade(profile, hash) {
+            if let Err(e) = scores::fetch_and_store_grade(profile_id, profile, hash) {
                 warn!("Failed to fetch online grade: {e}");
             }
         });

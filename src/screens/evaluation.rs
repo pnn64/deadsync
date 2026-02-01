@@ -118,6 +118,9 @@ pub struct State {
 
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     let score_info = gameplay_results.map(|gs| {
+        // Persist one score file per play (per local profile), including fails and replay lane input.
+        scores::save_local_scores_from_gameplay(&gs);
+
         let player_idx = 0;
         let (start, end) = gs.note_ranges[player_idx];
         let notes = &gs.notes[start..end];

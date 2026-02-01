@@ -2067,6 +2067,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     let build_pane = |pane_cx: f32,
                       sel_col: [f32; 4],
+                      side: profile::PlayerSide,
                       player_initials: &str,
                       steps: &str,
                       mines: &str,
@@ -2096,26 +2097,30 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
 
         // Scores
-        let (s_name, s_pct) = if let Some(c) = chart {
-            if let Some(sc) = scores::get_cached_score(&c.short_hash) {
-                if sc.grade != scores::Grade::Failed {
-                    (
-                        player_initials.to_string(),
-                        format!("{:.2}%", sc.score_percent * 100.0),
-                    )
-                } else {
-                    ("----".to_string(), "??.??%".to_string())
-                }
-            } else {
-                ("----".to_string(), "??.??%".to_string())
-            }
+        let placeholder = ("----".to_string(), "??.??%".to_string());
+        let (p_name, p_pct) = if let Some(c) = chart
+            && let Some(sc) = scores::get_cached_score_for_side(&c.short_hash, side)
+            && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
+        {
+            (player_initials.to_string(), format!("{:.2}%", sc.score_percent * 100.0))
         } else {
-            ("----".to_string(), "??.??%".to_string())
+            placeholder.clone()
         };
 
+        let (m_name, m_pct) = if let Some(c) = chart
+            && let Some((initials, sc)) = scores::get_machine_record_local(&c.short_hash)
+            && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
+        {
+            (initials, format!("{:.2}%", sc.score_percent * 100.0))
+        } else {
+            placeholder
+        };
+
+        let lines = [(p_name, p_pct), (m_name, m_pct)];
         for i in 0..2 {
-            out.push(act!(text: font("miso"): settext(&s_name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-            out.push(act!(text: font("miso"): settext(&s_pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+            let (name, pct) = &lines[i];
+            out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+            out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
         }
 
         // Difficulty Meter
@@ -2133,6 +2138,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.extend(build_pane(
             screen_width() * 0.25 - 5.0,
             sel_col_p1,
+            profile::PlayerSide::P1,
             p1_profile.player_initials.as_str(),
             &steps,
             &mines,
@@ -2146,6 +2152,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.extend(build_pane(
             screen_width() * 0.75 + 5.0,
             sel_col_p2,
+            profile::PlayerSide::P2,
             p2_profile.player_initials.as_str(),
             &steps_p2,
             &mines_p2,
@@ -2165,6 +2172,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.extend(build_pane(
             pane_cx,
             sel_col_p1,
+            if is_p2_single {
+                profile::PlayerSide::P2
+            } else {
+                profile::PlayerSide::P1
+            },
             if is_p2_single {
                 p2_profile.player_initials.as_str()
             } else {

@@ -959,6 +959,14 @@ fn init_player_runtime() -> PlayerRuntime {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct RecordedLaneEdge {
+    pub lane_index: u8,
+    pub pressed: bool,
+    pub source: InputSource,
+    pub event_music_time: f32,
+}
+
 pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
@@ -1066,6 +1074,7 @@ pub struct State {
     keyboard_lane_state: [bool; MAX_COLS],
     gamepad_lane_state: [bool; MAX_COLS],
     pending_edges: VecDeque<InputEdge>,
+    pub replay_edges: Vec<RecordedLaneEdge>,
 
     log_timer: f32,
 }
@@ -1485,6 +1494,15 @@ pub fn queue_input_edge(
 
     state.pending_edges.push_back(InputEdge {
         lane,
+        pressed,
+        source,
+        event_music_time,
+    });
+
+    // Record every gameplay lane edge for replay.
+    let lane_index = lane.index() as u8;
+    state.replay_edges.push(RecordedLaneEdge {
+        lane_index,
         pressed,
         source,
         event_music_time,
@@ -2127,6 +2145,7 @@ pub fn init(
         keyboard_lane_state: [false; MAX_COLS],
         gamepad_lane_state: [false; MAX_COLS],
         pending_edges: VecDeque::new(),
+        replay_edges: Vec::with_capacity(4096),
         log_timer: 0.0,
     }
 }
