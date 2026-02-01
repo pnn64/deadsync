@@ -2116,7 +2116,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             placeholder
         };
 
-        let lines = [(p_name, p_pct), (m_name, m_pct)];
+        // Simply Love PaneDisplay order: Machine/World first, then Player.
+        let lines = [(m_name, m_pct), (p_name, p_pct)];
         for i in 0..2 {
             let (name, pct) = &lines[i];
             out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));

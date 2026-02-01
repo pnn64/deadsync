@@ -1627,10 +1627,6 @@ pub fn get_active_profile_for_side(side: PlayerSide) -> ActiveProfile {
     SESSION.lock().unwrap().active_profiles[side_ix(side)].clone()
 }
 
-pub fn active_local_profile_id() -> Option<String> {
-    active_local_profile_id_for_side(get_session_player_side())
-}
-
 pub fn active_local_profile_id_for_side(side: PlayerSide) -> Option<String> {
     let session = SESSION.lock().unwrap();
     match &session.active_profiles[side_ix(side)] {

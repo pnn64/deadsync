@@ -309,10 +309,6 @@ fn update_machine_cache_if_loaded(chart_hash: &str, score: CachedScore, initials
     }
 }
 
-pub fn get_cached_score(chart_hash: &str) -> Option<CachedScore> {
-    get_cached_score_for_side(chart_hash, profile::get_session_player_side())
-}
-
 pub fn get_cached_score_for_side(
     chart_hash: &str,
     side: profile::PlayerSide,

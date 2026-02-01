@@ -1,6 +1,7 @@
 use crate::act;
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::game::profile;
 use crate::game::scores;
 use crate::screens::select_music::MusicWheelEntry;
 use crate::ui::actors::{Actor, SizeSpec};
@@ -79,7 +80,7 @@ pub struct MusicWheelParams<'a> {
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let mut actors = Vec::new();
     let translated_titles = crate::config::get().translated_titles;
-    let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
+    let target_chart_type = profile::get_session_play_style().chart_type();
 
     const WHEEL_WIDTH_DIVISOR: f32 = 2.125;
     let num_visible_items = NUM_VISIBLE_WHEEL_ITEMS;
@@ -280,22 +281,12 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     ));
                 }
 
-                // --- Grade Sprite + Lamp (using cached scores) ---
-                let grade_x = widescale(10.0, 17.0); // widescale(38.0, 50.0) - sl_shift
+                // --- Grade Sprites + Lamps (using cached scores) ---
                 let grade_y = half_item_h;
                 let grade_zoom = widescale(0.18, 0.3);
-
-                let mut grade_actor = act!(sprite("grades/grades 1x19.png"):
-                    align(0.5, 0.5):
-                    xy(grade_x, grade_y):
-                    zoom(grade_zoom):
-                    z(2):
-                    visible(false)
-                );
-
-                // Optional lamp quad, positioned to the left of the grade sprite.
-                let mut lamp_actor: Option<Actor> = None;
-                let mut judge_actor: Option<Actor> = None;
+                // Simply Love metrics: [MusicWheel] GradeP1X/GradeP2X, adjusted for our container shift.
+                let grade_x_p1 = widescale(10.0, 17.0); // WideScale(38,50) - sl_shift
+                let grade_x_p2 = widescale(26.0, 47.0); // WideScale(54,80) - sl_shift
 
                 // Find the relevant chart to check for a grade (and lamp).
                 if let Some(MusicWheelEntry::Song(info)) = p.entries.get(list_index) {
@@ -316,18 +307,46 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     };
 
                     if let Some(chart) = chart
-                        && let Some(cached_score) = scores::get_cached_score(&chart.short_hash)
                     {
-                        let has_score = cached_score.grade != scores::Grade::Failed
-                            || cached_score.score_percent > 0.0;
-                        if has_score {
-                            if let Actor::Sprite { visible, cell, .. } = &mut grade_actor {
-                                *visible = true;
-                                *cell = Some((cached_score.grade.to_sprite_state(), u32::MAX));
+                        let sides = [
+                            (profile::PlayerSide::P1, grade_x_p1),
+                            (profile::PlayerSide::P2, grade_x_p2),
+                        ];
+
+                        for (side, grade_x) in sides {
+                            if !profile::is_session_side_joined(side) {
+                                continue;
+                            }
+                            let Some(cached_score) =
+                                scores::get_cached_score_for_side(&chart.short_hash, side)
+                            else {
+                                continue;
+                            };
+                            let has_score = cached_score.grade != scores::Grade::Failed
+                                || cached_score.score_percent > 0.0;
+                            if !has_score {
+                                continue;
                             }
 
+                            let mut grade_actor = act!(sprite("grades/grades 1x19.png"):
+                                align(0.5, 0.5):
+                                xy(grade_x, grade_y):
+                                zoom(grade_zoom):
+                                z(2):
+                                visible(true)
+                            );
+                            if let Actor::Sprite { cell, .. } = &mut grade_actor {
+                                *cell = Some((cached_score.grade.to_sprite_state(), u32::MAX));
+                            }
+                            slot_children.push(grade_actor);
+
                             // Position and size mirror Simply Love/zmod's lamp quad.
-                            let lamp_x = grade_x - widescale(13.0, 20.0);
+                            let lamp_dir = if side == profile::PlayerSide::P1 {
+                                -1.0
+                            } else {
+                                1.0
+                            };
+                            let lamp_x = grade_x + lamp_dir * widescale(13.0, 20.0);
                             let lamp_w = widescale(5.0, 6.0);
                             let lamp_h = 31.0;
 
@@ -359,7 +378,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 lamp_color
                             };
 
-                            lamp_actor = Some(act!(quad:
+                            slot_children.push(act!(quad:
                                 align(0.5, 0.5):
                                 xy(lamp_x, grade_y):
                                 zoomto(lamp_w, lamp_h):
@@ -371,10 +390,10 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 && let Some(count) = cached_score.lamp_judge_count
                                 && count < 10
                             {
-                                let judge_x = grade_x - widescale(7.0, 13.0);
+                                let judge_x = grade_x + lamp_dir * widescale(7.0, 13.0);
                                 let judge_y = grade_y + 10.0;
                                 let judge_col = lamp_judge_count_color(lamp_index);
-                                judge_actor = Some(act!(text:
+                                slot_children.push(act!(text:
                                     font("wendy_screenevaluation"):
                                     settext(format!("{}", count)):
                                     align(0.5, 0.5):
@@ -387,14 +406,6 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             }
                         }
                     }
-                }
-
-                slot_children.push(grade_actor);
-                if let Some(lamp) = lamp_actor {
-                    slot_children.push(lamp);
-                }
-                if let Some(judge) = judge_actor {
-                    slot_children.push(judge);
                 }
             }
 

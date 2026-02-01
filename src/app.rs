@@ -1027,16 +1027,30 @@ impl App {
 
     fn spawn_grade_fetch(&self, hash: String) {
         info!("Fetching online grade for chart hash: {hash}");
-        let Some(profile_id) = profile::active_local_profile_id() else {
-            warn!("Skipping GrooveStats grade fetch: no active local profile");
-            return;
-        };
-        let profile = profile::get();
-        std::thread::spawn(move || {
-            if let Err(e) = scores::fetch_and_store_grade(profile_id, profile, hash) {
-                warn!("Failed to fetch online grade: {e}");
+        let mut spawned = 0;
+        for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+            if !profile::is_session_side_joined(side) {
+                continue;
             }
-        });
+            let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+                continue;
+            };
+            let profile = profile::get_for_side(side);
+            if profile.groovestats_api_key.is_empty() || profile.groovestats_username.is_empty() {
+                continue;
+            }
+
+            spawned += 1;
+            let hash = hash.clone();
+            std::thread::spawn(move || {
+                if let Err(e) = scores::fetch_and_store_grade(profile_id, profile, hash) {
+                    warn!("Failed to fetch online grade: {e}");
+                }
+            });
+        }
+        if spawned == 0 {
+            warn!("Skipping GrooveStats grade fetch: no joined local profile with GrooveStats configured");
+        }
     }
 
     fn play_music_command(&self, path: PathBuf, looped: bool, volume: f32) {
