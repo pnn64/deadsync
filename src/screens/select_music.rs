@@ -61,6 +61,26 @@ const ENTERING_OPTIONS_TOTAL_SECONDS: f32 = ENTERING_OPTIONS_FADE_OUT_SECONDS
 const PRESS_START_FOR_OPTIONS_TEXT: &str = "Press &START; for options";
 const ENTERING_OPTIONS_TEXT: &str = "Entering Options...";
 
+// Simply Love BGAnimations/ScreenSelectMusic overlay/EscapeFromEventMode.lua prompt.
+const SL_EXIT_PROMPT_BG_ALPHA: f32 = 0.925;
+const SL_EXIT_PROMPT_TEXT: &str = "Do you want to exit this game?";
+const SL_EXIT_PROMPT_NO_LABEL: &str = "No";
+const SL_EXIT_PROMPT_YES_LABEL: &str = "Yes";
+const SL_EXIT_PROMPT_NO_INFO: &str = "Keep playing.";
+const SL_EXIT_PROMPT_YES_INFO: &str = "I'm finished.";
+const SL_EXIT_PROMPT_CHOICE_Y: f32 = 250.0;
+const SL_EXIT_PROMPT_CHOICE_X_OFFSET: f32 = 100.0;
+const SL_EXIT_PROMPT_PROMPT_Y_OFFSET: f32 = -70.0;
+const SL_EXIT_PROMPT_PROMPT_ZOOM: f32 = 1.3;
+const SL_EXIT_PROMPT_LABEL_ZOOM: f32 = 1.1;
+const SL_EXIT_PROMPT_INFO_ZOOM: f32 = 0.825;
+const SL_EXIT_PROMPT_INFO_Y_OFFSET: f32 = 30.0;
+const SL_EXIT_PROMPT_ACTIVE_ZOOM: f32 = 1.1;
+const SL_EXIT_PROMPT_INACTIVE_ZOOM: f32 = 0.5;
+const SL_EXIT_PROMPT_CHOICE_TWEEN_SECONDS: f32 = 0.1;
+const SL_EXIT_PROMPT_CHOICES_DELAY_SECONDS: f32 = 0.333;
+const SL_EXIT_PROMPT_CHOICES_FADE_SECONDS: f32 = 0.15;
+
 // --- THEME LAYOUT CONSTANTS ---
 const BANNER_NATIVE_WIDTH: f32 = 418.0;
 const BANNER_NATIVE_HEIGHT: f32 = 164.0;
@@ -277,6 +297,17 @@ enum OutPromptState {
     EnteringOptions { elapsed: f32 },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ExitPromptState {
+    None,
+    Active {
+        elapsed: f32,
+        active_choice: u8,
+        switch_from: Option<u8>,
+        switch_elapsed: f32,
+    },
+}
+
 #[derive(Clone, Debug)]
 pub enum MusicWheelEntry {
     PackHeader {
@@ -321,6 +352,7 @@ pub struct State {
 
     // Internal state
     out_prompt: OutPromptState,
+    exit_prompt: ExitPromptState,
     all_entries: Vec<MusicWheelEntry>,
     expanded_pack_name: Option<String>,
     bg: heart_bg::State,
@@ -655,6 +687,7 @@ pub fn init() -> State {
         selection_animation_timer: 0.0,
         wheel_offset_from_selection: 0.0,
         out_prompt: OutPromptState::None,
+        exit_prompt: ExitPromptState::None,
         expanded_pack_name: last_pack_name,
         bg: heart_bg::State::new(),
         last_requested_banner_path: None,
@@ -1102,6 +1135,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
+    if state.exit_prompt != ExitPromptState::None {
+        return handle_exit_prompt_input(state, ev);
+    }
+
     let play_style = crate::game::profile::get_session_play_style();
     if play_style == crate::game::profile::PlayStyle::Versus {
         return match ev.action {
@@ -1118,7 +1155,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 handle_pad_dir(state, PadDir::Down, ev.pressed)
             }
             VirtualAction::p1_start if ev.pressed => handle_confirm(state),
-            VirtualAction::p1_back if ev.pressed => ScreenAction::Navigate(Screen::Menu),
+            VirtualAction::p1_back if ev.pressed => {
+                begin_exit_prompt(state);
+                ScreenAction::None
+            }
 
             VirtualAction::p2_left | VirtualAction::p2_menu_left => {
                 handle_pad_dir(state, PadDir::Left, ev.pressed)
@@ -1133,7 +1173,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 handle_pad_dir_p2(state, PadDir::Down, ev.pressed)
             }
             VirtualAction::p2_start if ev.pressed => handle_confirm(state),
-            VirtualAction::p2_back if ev.pressed => ScreenAction::Navigate(Screen::Menu),
+            VirtualAction::p2_back if ev.pressed => {
+                begin_exit_prompt(state);
+                ScreenAction::None
+            }
             _ => ScreenAction::None,
         };
     }
@@ -1153,7 +1196,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 handle_pad_dir(state, PadDir::Down, ev.pressed)
             }
             VirtualAction::p2_start if ev.pressed => handle_confirm(state),
-            VirtualAction::p2_back if ev.pressed => ScreenAction::Navigate(Screen::Menu),
+            VirtualAction::p2_back if ev.pressed => {
+                begin_exit_prompt(state);
+                ScreenAction::None
+            }
             _ => ScreenAction::None,
         },
         crate::game::profile::PlayerSide::P1 => match ev.action {
@@ -1170,7 +1216,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 handle_pad_dir(state, PadDir::Down, ev.pressed)
             }
             VirtualAction::p1_start if ev.pressed => handle_confirm(state),
-            VirtualAction::p1_back if ev.pressed => ScreenAction::Navigate(Screen::Menu),
+            VirtualAction::p1_back if ev.pressed => {
+                begin_exit_prompt(state);
+                ScreenAction::None
+            }
             _ => ScreenAction::None,
         },
     }
@@ -1197,6 +1246,24 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             return ScreenAction::None;
         }
         OutPromptState::None => {}
+    }
+
+    if let ExitPromptState::Active {
+        elapsed,
+        switch_from,
+        switch_elapsed,
+        ..
+    } = &mut state.exit_prompt
+    {
+        let dt = dt.max(0.0);
+        *elapsed += dt;
+        if switch_from.is_some() {
+            *switch_elapsed += dt;
+            if *switch_elapsed >= SL_EXIT_PROMPT_CHOICE_TWEEN_SECONDS {
+                *switch_from = None;
+                *switch_elapsed = 0.0;
+            }
+        }
     }
 
     state.time_since_selection_change += dt;
@@ -2348,5 +2415,204 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
+    // Simply Love "Exit from Event Mode" prompt overlay.
+    if let ExitPromptState::Active {
+        elapsed,
+        active_choice,
+        switch_from,
+        switch_elapsed,
+    } = state.exit_prompt
+    {
+        let choices_alpha = if elapsed <= SL_EXIT_PROMPT_CHOICES_DELAY_SECONDS {
+            0.0
+        } else {
+            ((elapsed - SL_EXIT_PROMPT_CHOICES_DELAY_SECONDS) / SL_EXIT_PROMPT_CHOICES_FADE_SECONDS)
+                .clamp(0.0, 1.0)
+        };
+        let p2_color = color::simply_love_rgba(state.active_color_index - 2);
+
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, SL_EXIT_PROMPT_BG_ALPHA):
+            z(1500)
+        ));
+        actors.push(act!(text:
+            font("miso"):
+            settext(SL_EXIT_PROMPT_TEXT):
+            align(0.5, 0.0):
+            xy(screen_center_x(), screen_center_y() + SL_EXIT_PROMPT_PROMPT_Y_OFFSET):
+            zoom(SL_EXIT_PROMPT_PROMPT_ZOOM):
+            maxwidth(420.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(1501):
+            horizalign(center)
+        ));
+
+        let zoom_no = exit_prompt_choice_zoom(0, active_choice, switch_from, switch_elapsed);
+        let zoom_yes = exit_prompt_choice_zoom(1, active_choice, switch_from, switch_elapsed);
+        let cx = screen_center_x();
+        push_exit_prompt_choice(
+            &mut actors,
+            cx - SL_EXIT_PROMPT_CHOICE_X_OFFSET,
+            SL_EXIT_PROMPT_CHOICE_Y,
+            SL_EXIT_PROMPT_NO_LABEL,
+            SL_EXIT_PROMPT_NO_INFO,
+            active_choice == 0,
+            zoom_no,
+            p2_color,
+            choices_alpha,
+            1502,
+        );
+        push_exit_prompt_choice(
+            &mut actors,
+            cx + SL_EXIT_PROMPT_CHOICE_X_OFFSET,
+            SL_EXIT_PROMPT_CHOICE_Y,
+            SL_EXIT_PROMPT_YES_LABEL,
+            SL_EXIT_PROMPT_YES_INFO,
+            active_choice == 1,
+            zoom_yes,
+            p2_color,
+            choices_alpha,
+            1502,
+        );
+    }
+
     actors
+}
+
+#[inline(always)]
+fn begin_exit_prompt(state: &mut State) {
+    state.exit_prompt = ExitPromptState::Active {
+        elapsed: 0.0,
+        active_choice: 0,
+        switch_from: None,
+        switch_elapsed: 0.0,
+    };
+    // Match SL's `MusicWheel:Move(0)` intent: stop any ongoing hold-scroll.
+    state.nav_key_held_direction = None;
+    state.nav_key_held_since = None;
+}
+
+#[inline(always)]
+fn exit_prompt_choice_zoom(
+    choice: u8,
+    active_choice: u8,
+    switch_from: Option<u8>,
+    switch_elapsed: f32,
+) -> f32 {
+    #[inline(always)]
+    fn lerp(a: f32, b: f32, t: f32) -> f32 {
+        (b - a).mul_add(t, a)
+    }
+
+    if let Some(from) = switch_from {
+        let t = (switch_elapsed / SL_EXIT_PROMPT_CHOICE_TWEEN_SECONDS).clamp(0.0, 1.0);
+        if choice == from {
+            return lerp(SL_EXIT_PROMPT_ACTIVE_ZOOM, SL_EXIT_PROMPT_INACTIVE_ZOOM, t);
+        }
+        if choice == active_choice {
+            return lerp(SL_EXIT_PROMPT_INACTIVE_ZOOM, SL_EXIT_PROMPT_ACTIVE_ZOOM, t);
+        }
+    }
+
+    [SL_EXIT_PROMPT_INACTIVE_ZOOM, SL_EXIT_PROMPT_ACTIVE_ZOOM][(choice == active_choice) as usize]
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_exit_prompt_choice(
+    out: &mut Vec<Actor>,
+    cx: f32,
+    cy: f32,
+    label: &str,
+    info: &str,
+    active: bool,
+    choice_zoom: f32,
+    active_rgba: [f32; 4],
+    alpha: f32,
+    z: i16,
+) {
+    let mut rgba = [1.0; 4];
+    if active {
+        rgba = active_rgba;
+    }
+    rgba[3] *= alpha;
+
+    out.push(act!(text:
+        align(0.5, 0.5):
+        xy(cx, cy):
+        font("wendy"):
+        zoom(SL_EXIT_PROMPT_LABEL_ZOOM * choice_zoom):
+        settext(label):
+        diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
+        z(z):
+        horizalign(center)
+    ));
+    out.push(act!(text:
+        align(0.5, 0.5):
+        xy(cx, cy + SL_EXIT_PROMPT_INFO_Y_OFFSET * choice_zoom):
+        font("miso"):
+        zoom(SL_EXIT_PROMPT_INFO_ZOOM * choice_zoom):
+        settext(info):
+        diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
+        z(z):
+        horizalign(center)
+    ));
+}
+
+fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if !ev.pressed {
+        return ScreenAction::None;
+    }
+    let ExitPromptState::Active { active_choice, .. } = state.exit_prompt else {
+        return ScreenAction::None;
+    };
+
+    match ev.action {
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => {
+            let ExitPromptState::Active {
+                active_choice,
+                switch_from,
+                switch_elapsed,
+                ..
+            } = &mut state.exit_prompt
+            else {
+                return ScreenAction::None;
+            };
+            let prev = *active_choice;
+            *active_choice = 1 - prev;
+            *switch_from = Some(prev);
+            *switch_elapsed = 0.0;
+            audio::play_sfx("assets/sounds/change.ogg");
+            ScreenAction::None
+        }
+
+        VirtualAction::p1_back
+        | VirtualAction::p2_back
+        | VirtualAction::p1_select
+        | VirtualAction::p2_select => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            state.exit_prompt = ExitPromptState::None;
+            ScreenAction::None
+        }
+
+        VirtualAction::p1_start | VirtualAction::p2_start => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            state.exit_prompt = ExitPromptState::None;
+            if active_choice == 1 {
+                ScreenAction::Navigate(Screen::Menu)
+            } else {
+                ScreenAction::None
+            }
+        }
+
+        _ => ScreenAction::None,
+    }
 }
