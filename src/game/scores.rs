@@ -102,6 +102,10 @@ fn gs_scores_dir_for_profile(profile_id: &str) -> PathBuf {
         .join("gs")
 }
 
+fn gs_scores_dir_for_profile_and_hash(profile_id: &str, chart_hash: &str) -> PathBuf {
+    gs_scores_dir_for_profile(profile_id).join(shard2_for_hash(chart_hash))
+}
+
 fn ensure_gs_score_cache_loaded_for_profile(profile_id: &str) {
     let needs_load = {
         let state = GS_SCORE_CACHE.lock().unwrap();
@@ -449,14 +453,9 @@ fn decode_gs_score_entry(bytes: &[u8]) -> Option<GsScoreEntry> {
     None
 }
 
-fn best_scores_from_disk(dir: &Path) -> HashMap<String, CachedScore> {
-    let mut best_by_chart: HashMap<String, CachedScore> = HashMap::new();
-
-    if !dir.is_dir() {
-        return best_by_chart;
-    }
+fn scan_gs_scores_dir(dir: &Path, best_by_chart: &mut HashMap<String, CachedScore>) {
     let Ok(read_dir) = fs::read_dir(dir) else {
-        return best_by_chart;
+        return;
     };
 
     for item in read_dir.flatten() {
@@ -496,6 +495,25 @@ fn best_scores_from_disk(dir: &Path) -> HashMap<String, CachedScore> {
             None => {
                 best_by_chart.insert(chart_hash.to_string(), cached);
             }
+        }
+    }
+}
+
+fn best_scores_from_disk(dir: &Path) -> HashMap<String, CachedScore> {
+    let mut best_by_chart: HashMap<String, CachedScore> = HashMap::new();
+
+    if !dir.is_dir() {
+        return best_by_chart;
+    }
+
+    // Sharded layout only: root/ab/*.bin
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return best_by_chart;
+    };
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            scan_gs_scores_dir(&path, &mut best_by_chart);
         }
     }
 
@@ -541,7 +559,7 @@ fn append_gs_score_on_disk_for_profile(
     if username.trim().is_empty() {
         return;
     }
-    let dir = gs_scores_dir_for_profile(profile_id);
+    let dir = gs_scores_dir_for_profile_and_hash(profile_id, chart_hash);
 
     let mut entries = load_all_entries_for_chart(chart_hash, &dir);
     let fetched_at_ms = SystemTime::now()
