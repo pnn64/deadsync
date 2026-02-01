@@ -458,6 +458,103 @@ impl core::fmt::Display for ErrorBarTrim {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MeasureCounter {
+    #[default]
+    None,
+    Eighth,
+    Twelfth,
+    Sixteenth,
+    TwentyFourth,
+    ThirtySecond,
+}
+
+impl MeasureCounter {
+    #[inline(always)]
+    pub const fn notes_threshold(self) -> Option<usize> {
+        match self {
+            Self::None => None,
+            Self::Eighth => Some(8),
+            Self::Twelfth => Some(12),
+            Self::Sixteenth => Some(16),
+            Self::TwentyFourth => Some(24),
+            Self::ThirtySecond => Some(32),
+        }
+    }
+
+    #[inline(always)]
+    pub const fn multiplier(self) -> f32 {
+        match self {
+            Self::TwentyFourth => 1.5,
+            Self::ThirtySecond => 2.0,
+            _ => 1.0,
+        }
+    }
+}
+
+impl FromStr for MeasureCounter {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "none" => Ok(Self::None),
+            "8th" => Ok(Self::Eighth),
+            "12th" => Ok(Self::Twelfth),
+            "16th" => Ok(Self::Sixteenth),
+            "24th" => Ok(Self::TwentyFourth),
+            "32nd" => Ok(Self::ThirtySecond),
+            other => Err(format!("'{other}' is not a valid MeasureCounter setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for MeasureCounter {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::Eighth => write!(f, "8th"),
+            Self::Twelfth => write!(f, "12th"),
+            Self::Sixteenth => write!(f, "16th"),
+            Self::TwentyFourth => write!(f, "24th"),
+            Self::ThirtySecond => write!(f, "32nd"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MeasureLines {
+    #[default]
+    Off,
+    Measure,
+    Quarter,
+    Eighth,
+}
+
+impl FromStr for MeasureLines {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "off" => Ok(Self::Off),
+            "measure" => Ok(Self::Measure),
+            "quarter" => Ok(Self::Quarter),
+            "eighth" => Ok(Self::Eighth),
+            other => Err(format!("'{other}' is not a valid MeasureLines setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for MeasureLines {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Off => write!(f, "Off"),
+            Self::Measure => write!(f, "Measure"),
+            Self::Quarter => write!(f, "Quarter"),
+            Self::Eighth => write!(f, "Eighth"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DataVisualizations {
     #[default]
     None,
@@ -615,6 +712,14 @@ pub struct Profile {
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
     pub data_visualizations: DataVisualizations,
+    pub measure_counter: MeasureCounter,
+    pub measure_counter_lookahead: u8,
+    pub measure_counter_left: bool,
+    pub measure_counter_up: bool,
+    pub measure_counter_vert: bool,
+    pub broken_run: bool,
+    pub run_timer: bool,
+    pub measure_lines: MeasureLines,
     // "Hide" options (Simply Love semantics).
     pub hide_targets: bool,
     pub hide_song_bg: bool,
@@ -679,6 +784,14 @@ impl Default for Profile {
             error_bar_multi_tick: false,
             error_bar_trim: ErrorBarTrim::default(),
             data_visualizations: DataVisualizations::default(),
+            measure_counter: MeasureCounter::default(),
+            measure_counter_lookahead: 2,
+            measure_counter_left: true,
+            measure_counter_up: false,
+            measure_counter_vert: false,
+            broken_run: false,
+            run_timer: false,
+            measure_lines: MeasureLines::default(),
             hide_targets: false,
             hide_song_bg: false,
             hide_combo: false,
@@ -921,6 +1034,35 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             default_profile.data_visualizations
         ));
         content.push_str(&format!(
+            "MeasureCounter = {}\n",
+            default_profile.measure_counter
+        ));
+        content.push_str(&format!(
+            "MeasureCounterLookahead = {}\n",
+            default_profile.measure_counter_lookahead
+        ));
+        content.push_str(&format!(
+            "MeasureCounterLeft = {}\n",
+            i32::from(default_profile.measure_counter_left)
+        ));
+        content.push_str(&format!(
+            "MeasureCounterUp = {}\n",
+            i32::from(default_profile.measure_counter_up)
+        ));
+        content.push_str(&format!(
+            "MeasureCounterVert = {}\n",
+            i32::from(default_profile.measure_counter_vert)
+        ));
+        content.push_str(&format!(
+            "BrokenRun = {}\n",
+            i32::from(default_profile.broken_run)
+        ));
+        content.push_str(&format!(
+            "RunTimer = {}\n",
+            i32::from(default_profile.run_timer)
+        ));
+        content.push_str(&format!("MeasureLines = {}\n", default_profile.measure_lines));
+        content.push_str(&format!(
             "HoldJudgmentGraphic = {}\n",
             default_profile.hold_judgment_graphic
         ));
@@ -1061,6 +1203,26 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         "DataVisualizations={}\n",
         profile.data_visualizations
     ));
+    content.push_str(&format!("MeasureCounter={}\n", profile.measure_counter));
+    content.push_str(&format!(
+        "MeasureCounterLookahead={}\n",
+        profile.measure_counter_lookahead
+    ));
+    content.push_str(&format!(
+        "MeasureCounterLeft={}\n",
+        i32::from(profile.measure_counter_left)
+    ));
+    content.push_str(&format!(
+        "MeasureCounterUp={}\n",
+        i32::from(profile.measure_counter_up)
+    ));
+    content.push_str(&format!(
+        "MeasureCounterVert={}\n",
+        i32::from(profile.measure_counter_vert)
+    ));
+    content.push_str(&format!("BrokenRun={}\n", i32::from(profile.broken_run)));
+    content.push_str(&format!("RunTimer={}\n", i32::from(profile.run_timer)));
+    content.push_str(&format!("MeasureLines={}\n", profile.measure_lines));
     content.push_str(&format!(
         "HoldJudgmentGraphic={}\n",
         profile.hold_judgment_graphic
@@ -1273,6 +1435,39 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "DataVisualizations")
                 .and_then(|s| DataVisualizations::from_str(&s).ok())
                 .unwrap_or(default_profile.data_visualizations);
+            profile.measure_counter = profile_conf
+                .get("PlayerOptions", "MeasureCounter")
+                .and_then(|s| MeasureCounter::from_str(&s).ok())
+                .unwrap_or(default_profile.measure_counter);
+            profile.measure_counter_lookahead = profile_conf
+                .get("PlayerOptions", "MeasureCounterLookahead")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map(|v| v.min(4))
+                .unwrap_or(default_profile.measure_counter_lookahead);
+            profile.measure_counter_left = profile_conf
+                .get("PlayerOptions", "MeasureCounterLeft")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.measure_counter_left, |v| v != 0);
+            profile.measure_counter_up = profile_conf
+                .get("PlayerOptions", "MeasureCounterUp")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.measure_counter_up, |v| v != 0);
+            profile.measure_counter_vert = profile_conf
+                .get("PlayerOptions", "MeasureCounterVert")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.measure_counter_vert, |v| v != 0);
+            profile.broken_run = profile_conf
+                .get("PlayerOptions", "BrokenRun")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.broken_run, |v| v != 0);
+            profile.run_timer = profile_conf
+                .get("PlayerOptions", "RunTimer")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.run_timer, |v| v != 0);
+            profile.measure_lines = profile_conf
+                .get("PlayerOptions", "MeasureLines")
+                .and_then(|s| MeasureLines::from_str(&s).ok())
+                .unwrap_or(default_profile.measure_lines);
             profile.scroll_speed = profile_conf
                 .get("PlayerOptions", "ScrollSpeed")
                 .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
@@ -2048,6 +2243,83 @@ pub fn update_error_bar_options_for_side(side: PlayerSide, up: bool, multi_tick:
         }
         profile.error_bar_up = up;
         profile.error_bar_multi_tick = multi_tick;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_measure_counter_for_side(side: PlayerSide, setting: MeasureCounter) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.measure_counter == setting {
+            return;
+        }
+        profile.measure_counter = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_measure_counter_lookahead_for_side(side: PlayerSide, lookahead: u8) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    let lookahead = lookahead.min(4);
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.measure_counter_lookahead == lookahead {
+            return;
+        }
+        profile.measure_counter_lookahead = lookahead;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_measure_counter_options_for_side(
+    side: PlayerSide,
+    left: bool,
+    up: bool,
+    vert: bool,
+    broken_run: bool,
+    run_timer: bool,
+) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.measure_counter_left == left
+            && profile.measure_counter_up == up
+            && profile.measure_counter_vert == vert
+            && profile.broken_run == broken_run
+            && profile.run_timer == run_timer
+        {
+            return;
+        }
+        profile.measure_counter_left = left;
+        profile.measure_counter_up = up;
+        profile.measure_counter_vert = vert;
+        profile.broken_run = broken_run;
+        profile.run_timer = run_timer;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_measure_lines_for_side(side: PlayerSide, setting: MeasureLines) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.measure_lines == setting {
+            return;
+        }
+        profile.measure_lines = setting;
     }
     save_profile_ini_for_side(side);
 }

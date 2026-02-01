@@ -19,6 +19,7 @@ use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
 use crate::ui::components::density_graph::DensityHistCache;
 use log::{debug, info};
+use rssp::streams::StreamSegment;
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
 use std::path::{Path, PathBuf};
@@ -632,6 +633,64 @@ fn compute_column_scroll_dirs(
     dirs
 }
 
+#[must_use]
+fn stream_sequences_threshold(measures: &[usize], threshold: usize) -> Vec<StreamSegment> {
+    let streams: Vec<_> = measures
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| **n >= threshold)
+        .map(|(i, _)| i + 1)
+        .collect();
+
+    if streams.is_empty() {
+        return Vec::new();
+    }
+
+    let mut segs = Vec::new();
+    let first_break = streams[0].saturating_sub(1);
+    if first_break >= 2 {
+        segs.push(StreamSegment {
+            start: 0,
+            end: first_break,
+            is_break: true,
+        });
+    }
+
+    let (mut count, mut end) = (1usize, None);
+    for (i, &cur) in streams.iter().enumerate() {
+        let next = streams.get(i + 1).copied().unwrap_or(usize::MAX);
+        if cur + 1 == next {
+            count += 1;
+            end = Some(cur + 1);
+            continue;
+        }
+
+        let e = end.unwrap_or(cur);
+        segs.push(StreamSegment {
+            start: e - count,
+            end: e,
+            is_break: false,
+        });
+
+        let bstart = cur;
+        let bend = if next == usize::MAX {
+            measures.len()
+        } else {
+            next - 1
+        };
+        if bend >= bstart + 2 {
+            segs.push(StreamSegment {
+                start: bstart,
+                end: bend,
+                is_break: true,
+            });
+        }
+        count = 1;
+        end = None;
+    }
+    segs
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct ErrorBarTick {
     pub started_at: f32,
@@ -774,6 +833,7 @@ pub struct State {
     pub next_tap_miss_cursor: [usize; MAX_PLAYERS],
     pub next_mine_avoid_cursor: [usize; MAX_PLAYERS],
     pub row_entries: Vec<RowEntry>,
+    pub measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS],
 
     // Optimization: Direct array lookup instead of HashMap
     pub row_map_cache: Vec<u32>,
@@ -1680,6 +1740,17 @@ pub fn init(
         player_profiles[player].reverse_scroll
     });
 
+    let measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] = std::array::from_fn(|p| {
+        if p >= num_players {
+            return Vec::new();
+        }
+        let Some(threshold) = player_profiles[p].measure_counter.notes_threshold() else {
+            return Vec::new();
+        };
+        let measures = rssp::stats::measure_densities(&charts[p].notes, cols_per_player);
+        stream_sequences_threshold(&measures, threshold)
+    });
+
     let wants_step_stats = player_profiles
         .iter()
         .take(num_players)
@@ -1822,6 +1893,7 @@ pub fn init(
         next_tap_miss_cursor: note_range_start,
         next_mine_avoid_cursor: note_range_start,
         row_entries,
+        measure_counter_segments,
         row_map_cache,
         decaying_hold_indices: Vec::new(),
         hold_decay_active: vec![false; notes_len],

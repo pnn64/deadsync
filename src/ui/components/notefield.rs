@@ -14,6 +14,7 @@ use crate::game::{gameplay::State, profile, scroll::ScrollSpeedSetting};
 use crate::ui::actors::Actor;
 use crate::ui::color;
 use cgmath::{Deg, Matrix4, Point3, Vector3};
+use rssp::streams::StreamSegment;
 use std::array::from_fn;
 
 // --- CONSTANTS ---
@@ -65,6 +66,7 @@ const Z_MINE_EXPLOSION: i32 = 101;
 const Z_TAP_NOTE: i32 = 140;
 const MINE_CORE_SIZE_RATIO: f32 = 0.45;
 const MINE_FILL_LAYERS: usize = 32;
+const Z_MEASURE_LINES: i32 = 80;
 
 #[derive(Clone, Copy, Debug)]
 pub enum FieldPlacement {
@@ -214,6 +216,196 @@ fn error_bar_boundaries_s(
         }
     }
     (out, len)
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ZmodLayoutYs {
+    measure_counter_y: Option<f32>,
+    subtractive_scoring_y: f32,
+}
+
+#[inline(always)]
+fn zmod_layout_ys(profile: &crate::game::profile::Profile, judgment_y: f32) -> ZmodLayoutYs {
+    let mut top_y = judgment_y - ERROR_BAR_JUDGMENT_HEIGHT * 0.5;
+    let mut bottom_y = judgment_y + ERROR_BAR_JUDGMENT_HEIGHT * 0.5;
+
+    // Zmod SL-Layout.lua: hasErrorBar checks multiple flags; deadsync models this as one enum.
+    if profile.error_bar != crate::game::profile::ErrorBarStyle::None {
+        if matches!(
+            profile.judgment_graphic,
+            crate::game::profile::JudgmentGraphic::None
+        ) {
+            // Error bar replaces judgment; no top/bottom adjustment.
+        } else if profile.error_bar_up {
+            top_y -= 15.0;
+        } else {
+            bottom_y += 15.0;
+        }
+    }
+
+    let mut measure_counter_y = None;
+    let has_measure_counter = profile.measure_counter != crate::game::profile::MeasureCounter::None;
+    if has_measure_counter {
+        if profile.measure_counter_up {
+            let mut y = top_y - 8.0;
+            top_y -= 20.0;
+            if profile.broken_run {
+                y -= 16.0;
+            }
+            measure_counter_y = Some(y);
+        } else {
+            measure_counter_y = Some(bottom_y + 8.0);
+            bottom_y += 21.0;
+        }
+    }
+
+    let subtractive_scoring_y = if has_measure_counter && profile.measure_counter_up {
+        bottom_y + 8.0
+    } else {
+        top_y - 8.0
+    };
+
+    ZmodLayoutYs {
+        measure_counter_y,
+        subtractive_scoring_y,
+    }
+}
+
+fn zmod_measure_counter_text(
+    curr_beat_floor: f32,
+    curr_measure: f32,
+    segs: &[StreamSegment],
+    stream_index_unshifted: usize,
+    is_lookahead: bool,
+    lookahead: u8,
+    multiplier: f32,
+) -> String {
+    if segs.is_empty() {
+        return String::new();
+    }
+
+    let mut stream_index = stream_index_unshifted as isize;
+    let beat_div4 = curr_beat_floor / 4.0;
+
+    if curr_measure < 0.0 {
+        if !is_lookahead {
+            let first = segs[0];
+            if !first.is_break {
+                let v = ((beat_div4 * -1.0) + (1.0 * multiplier)).floor() as i32;
+                return format!("({v})");
+            }
+            let len = (first.end - first.start) as i32;
+            let v_unscaled = (beat_div4 * -1.0).floor() as i32 + 1 + len;
+            let v = ((v_unscaled as f32) * multiplier).floor() as i32;
+            return format!("({v})");
+        }
+        if !segs[0].is_break {
+            stream_index -= 1;
+        }
+    }
+
+    let Some(seg) = stream_index
+        .try_into()
+        .ok()
+        .and_then(|i: usize| segs.get(i).copied())
+    else {
+        return String::new();
+    };
+
+    let segment_start = seg.start as f32;
+    let segment_end = seg.end as f32;
+    let seg_len = ((segment_end - segment_start) * multiplier).floor() as i32;
+    let curr_count = (((beat_div4 - segment_start) * multiplier).floor() as i32) + 1;
+
+    if seg.is_break {
+        if lookahead == 0 {
+            return String::new();
+        }
+        if is_lookahead {
+            format!("({seg_len})")
+        } else {
+            let remaining = seg_len - curr_count + 1;
+            format!("({remaining})")
+        }
+    } else if !is_lookahead && curr_count != 0 {
+        format!("{curr_count}/{seg_len}")
+    } else {
+        seg_len.to_string()
+    }
+}
+
+fn zmod_broken_run_end(segs: &[StreamSegment], start_index: usize) -> (usize, bool) {
+    let Some(first) = segs.get(start_index).copied() else {
+        return (0, false);
+    };
+    if first.is_break {
+        return (first.end, false);
+    }
+
+    let last_index = segs.len().saturating_sub(1);
+    let mut end = first.end;
+    let mut broken = false;
+
+    for i in (start_index + 1)..segs.len() {
+        let seg = segs[i];
+        let len = seg.end - seg.start;
+        if seg.is_break {
+            if len < 4 && i != last_index {
+                end += len;
+                broken = true;
+                continue;
+            }
+            break;
+        }
+
+        broken = true;
+        end += len;
+        if !segs[i - 1].is_break {
+            end += 1;
+        }
+    }
+
+    (end, broken)
+}
+
+fn zmod_broken_run_segment(segs: &[StreamSegment], curr_measure: f32) -> Option<(usize, usize, bool)> {
+    for (i, seg) in segs.iter().copied().enumerate() {
+        if seg.is_break {
+            if curr_measure < seg.end as f32 {
+                return Some((i, seg.end, false));
+            }
+            continue;
+        }
+        let (end, broken) = zmod_broken_run_end(segs, i);
+        if curr_measure < end as f32 {
+            return Some((i, end, broken));
+        }
+    }
+    None
+}
+
+fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option<usize> {
+    for (i, seg) in segs.iter().copied().enumerate() {
+        let len = (seg.end - seg.start) as f32;
+        let curr_count = (curr_measure - seg.start as f32).ceil();
+        if curr_count <= len {
+            return Some(i);
+        }
+    }
+    None
+}
+
+fn zmod_run_timer_fmt(seconds: i32, minute_threshold: i32) -> String {
+    let seconds = seconds.max(0);
+    if seconds < 10 {
+        format!("0.0{seconds}")
+    } else if seconds > minute_threshold {
+        let minutes = seconds / 60;
+        let secs = seconds % 60;
+        format!("{minutes}.{secs:02}")
+    } else {
+        format!("0.{seconds}")
+    }
 }
 
 #[inline(always)]
@@ -505,6 +697,135 @@ pub fn build(
                 }
             }
         };
+
+        // Measure Lines (Zmod parity: NoteField:SetBeatBarsAlpha)
+        if !matches!(profile.measure_lines, crate::game::profile::MeasureLines::Off) {
+            let (alpha_measure, alpha_quarter, alpha_eighth) = match profile.measure_lines {
+                crate::game::profile::MeasureLines::Off => (0.0, 0.0, 0.0),
+                crate::game::profile::MeasureLines::Measure => (0.75, 0.0, 0.0),
+                crate::game::profile::MeasureLines::Quarter => (0.75, 0.5, 0.0),
+                crate::game::profile::MeasureLines::Eighth => (0.75, 0.5, 0.125),
+            };
+
+            let mut pos_min_x: f32 = f32::INFINITY;
+            let mut pos_max_x: f32 = f32::NEG_INFINITY;
+            let mut pos_receptor_y: f32 = 0.0;
+            let mut pos_any = false;
+
+            let mut neg_min_x: f32 = f32::INFINITY;
+            let mut neg_max_x: f32 = f32::NEG_INFINITY;
+            let mut neg_receptor_y: f32 = 0.0;
+            let mut neg_any = false;
+
+            for i in 0..num_cols {
+                let x = ns.column_xs[i] as f32;
+                if column_dirs[i] >= 0.0 {
+                    if !pos_any {
+                        pos_any = true;
+                        pos_receptor_y = column_receptor_ys[i];
+                        pos_min_x = x;
+                        pos_max_x = x;
+                    } else {
+                        pos_min_x = pos_min_x.min(x);
+                        pos_max_x = pos_max_x.max(x);
+                    }
+                } else if !neg_any {
+                    neg_any = true;
+                    neg_receptor_y = column_receptor_ys[i];
+                    neg_min_x = x;
+                    neg_max_x = x;
+                } else {
+                    neg_min_x = neg_min_x.min(x);
+                    neg_max_x = neg_max_x.max(x);
+                }
+            }
+
+            let beat_units_start = (current_beat * 2.0).floor() as i64;
+            let thickness = (2.0 * field_zoom).max(1.0);
+            let y_min = -400.0;
+            let y_max = screen_height() + 400.0;
+
+            let mut draw_group = |min_x: f32, max_x: f32, receptor_y: f32, dir: f32| {
+                let center_x_offset = 0.5 * (min_x + max_x) * field_zoom;
+                let w = ((max_x - min_x) + ScrollSpeedSetting::ARROW_SPACING) * field_zoom;
+                if !w.is_finite() || w <= 0.0 {
+                    return;
+                }
+
+                let x_center = playfield_center_x + center_x_offset;
+
+                // Walk backward from current beat.
+                let mut u = beat_units_start;
+                let mut iters = 0;
+                while iters < 2000 {
+                    let alpha = if u.rem_euclid(8) == 0 {
+                        alpha_measure
+                    } else if u.rem_euclid(2) == 0 {
+                        alpha_quarter
+                    } else {
+                        alpha_eighth
+                    };
+
+                    let beat = (u as f32) * 0.5;
+                    let y = compute_lane_y_dynamic(beat, receptor_y, dir);
+                    if !y.is_finite() {
+                        break;
+                    }
+                    if (dir >= 0.0 && y < y_min) || (dir < 0.0 && y > y_max) {
+                        break;
+                    }
+                    if alpha > 0.0 && y >= y_min && y <= y_max {
+                        actors.push(act!(quad:
+                            align(0.5, 0.5): xy(x_center, y):
+                            zoomto(w, thickness):
+                            diffuse(1.0, 1.0, 1.0, alpha):
+                            z(Z_MEASURE_LINES)
+                        ));
+                    }
+                    u -= 1;
+                    iters += 1;
+                }
+
+                // Walk forward from next half-beat to avoid duplicating the start line.
+                let mut u = beat_units_start + 1;
+                let mut iters = 0;
+                while iters < 2000 {
+                    let alpha = if u.rem_euclid(8) == 0 {
+                        alpha_measure
+                    } else if u.rem_euclid(2) == 0 {
+                        alpha_quarter
+                    } else {
+                        alpha_eighth
+                    };
+
+                    let beat = (u as f32) * 0.5;
+                    let y = compute_lane_y_dynamic(beat, receptor_y, dir);
+                    if !y.is_finite() {
+                        break;
+                    }
+                    if (dir >= 0.0 && y > y_max) || (dir < 0.0 && y < y_min) {
+                        break;
+                    }
+                    if alpha > 0.0 && y >= y_min && y <= y_max {
+                        actors.push(act!(quad:
+                            align(0.5, 0.5): xy(x_center, y):
+                            zoomto(w, thickness):
+                            diffuse(1.0, 1.0, 1.0, alpha):
+                            z(Z_MEASURE_LINES)
+                        ));
+                    }
+                    u += 1;
+                    iters += 1;
+                }
+            };
+
+            if pos_any {
+                draw_group(pos_min_x, pos_max_x, pos_receptor_y, 1.0);
+            }
+            if neg_any {
+                draw_group(neg_min_x, neg_max_x, neg_receptor_y, -1.0);
+            }
+        }
 
         let mine_explosion_size = {
             let base = assets::texture_dims("hit_mine_explosion.png")
@@ -1770,6 +2091,203 @@ pub fn build(
             crate::game::profile::ErrorBarStyle::None => {}
         }
     }
+
+    // Measure Counter / Measure Breakdown (Zmod parity)
+    if profile.measure_counter != crate::game::profile::MeasureCounter::None {
+        let segs: &[StreamSegment] = &state.measure_counter_segments[player_idx];
+        if !segs.is_empty() {
+            let layout = zmod_layout_ys(profile, judgment_y);
+            let lookahead: u8 = profile.measure_counter_lookahead.min(4);
+            let multiplier = profile.measure_counter.multiplier();
+
+            let mc_font_name = match profile.combo_font {
+                crate::game::profile::ComboFont::Wendy | crate::game::profile::ComboFont::WendyCursed => {
+                    "wendy"
+                }
+                crate::game::profile::ComboFont::ArialRounded => "combo_arial_rounded",
+                crate::game::profile::ComboFont::Asap => "combo_asap",
+                crate::game::profile::ComboFont::BebasNeue => "combo_bebas_neue",
+                crate::game::profile::ComboFont::SourceCode => "combo_source_code",
+                crate::game::profile::ComboFont::Work => "combo_work",
+                crate::game::profile::ComboFont::None => "wendy",
+            };
+
+            let beat_floor = state.current_beat_visible[player_idx].floor();
+            let curr_measure = beat_floor / 4.0;
+            let base_index = segs
+                .iter()
+                .position(|s| curr_measure < s.end as f32)
+                .unwrap_or(segs.len());
+
+            let mut column_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
+            if profile.measure_counter_left {
+                column_width *= 4.0 / 3.0;
+            }
+
+            if let Some(measure_counter_y) = layout.measure_counter_y {
+                for j in (0..=lookahead).rev() {
+                    let seg_index_unshifted = base_index + j as usize;
+                    if seg_index_unshifted >= segs.len() {
+                        continue;
+                    }
+
+                    let is_lookahead = j != 0;
+                    let text = zmod_measure_counter_text(
+                        beat_floor,
+                        curr_measure,
+                        segs,
+                        seg_index_unshifted,
+                        is_lookahead,
+                        lookahead,
+                        multiplier,
+                    );
+                    if text.is_empty() {
+                        continue;
+                    }
+
+                    let seg_unshifted = segs[seg_index_unshifted];
+                    let rgba = if seg_unshifted.is_break {
+                        if is_lookahead {
+                            [0.4, 0.4, 0.4, 1.0]
+                        } else {
+                            [0.5, 0.5, 0.5, 1.0]
+                        }
+                    } else if is_lookahead {
+                        [0.45, 0.45, 0.45, 1.0]
+                    } else if text.contains('/') {
+                        [1.0, 1.0, 1.0, 1.0]
+                    } else {
+                        [0.5, 0.5, 0.5, 1.0]
+                    };
+
+                    let zoom = 0.35 - 0.05 * (j as f32);
+                    let mut x = playfield_center_x;
+                    let mut y = measure_counter_y;
+
+                    if profile.measure_counter_vert {
+                        y += 20.0 * (j as f32);
+                    } else {
+                        let denom = if lookahead == 0 { 1.0 } else { lookahead as f32 };
+                        x += (column_width / denom) * 2.0 * (j as f32);
+                    }
+                    if profile.measure_counter_left {
+                        x -= column_width;
+                    }
+
+                    hud_actors.push(act!(text:
+                        font(mc_font_name): settext(text):
+                        align(0.5, 0.5): xy(x, y):
+                        zoom(zoom): horizalign(center): shadowlength(1.0):
+                        diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
+                        z(85)
+                    ));
+                }
+
+                // Broken Run Total (Zmod BrokenRunCounter.lua)
+                if profile.broken_run
+                    && let Some((broken_index, broken_end, is_broken)) =
+                        zmod_broken_run_segment(segs, curr_measure)
+                {
+                    let seg0 = segs[broken_index];
+                    if !seg0.is_break && is_broken {
+                        let curr_count =
+                            (curr_measure - (seg0.start as f32)).floor() as i32 + 1;
+                        let len = (broken_end - seg0.start) as i32;
+                        let text = if curr_measure < 0.0 {
+                            // BrokenRunCounter.lua special-cases negative time.
+                            let first = segs[0];
+                            if !first.is_break {
+                                let v = (curr_measure * -1.0).floor() as i32 + 1;
+                                format!("({v})")
+                            } else {
+                                let first_len = (first.end - first.start) as i32;
+                                let v = (curr_measure * -1.0).floor() as i32 + 1 + first_len;
+                                format!("({v})")
+                            }
+                        } else if curr_count != 0 {
+                            format!("{curr_count}/{len}")
+                        } else {
+                            len.to_string()
+                        };
+
+                        if text.contains('/') {
+                            let mut x = playfield_center_x;
+                            let mut y = measure_counter_y + 15.0;
+                            if profile.measure_counter_vert {
+                                y -= 15.0;
+                                x += column_width * (4.0 / 3.0);
+                            }
+                            if profile.measure_counter_left {
+                                x -= column_width;
+                            }
+
+                            hud_actors.push(act!(text:
+                                font(mc_font_name): settext(text):
+                                align(0.5, 0.5): xy(x, y):
+                                zoom(0.35): horizalign(center): shadowlength(1.0):
+                                diffuse(1.0, 1.0, 1.0, 0.7):
+                                z(85)
+                            ));
+                        }
+                    }
+                }
+            }
+
+            // Run Timer (Zmod RunTimer.lua: TimerMode=Time only)
+            if profile.run_timer
+                && let Some(stream_index) = zmod_run_timer_index(segs, curr_measure)
+            {
+                let seg = segs[stream_index];
+                if !seg.is_break {
+                    let cur_bps = state.timing.get_bpm_for_beat(state.current_beat) / 60.0;
+                    let rate = state.music_rate;
+                    if cur_bps.is_finite() && cur_bps > 0.0 && rate.is_finite() && rate > 0.0 {
+                        let measure_seconds = 4.0 / (cur_bps * rate);
+                        let curr_time = state.current_beat / (cur_bps * rate);
+
+                        let seg_len_s =
+                            (((seg.end - seg.start) as f32) * measure_seconds).ceil() as i32;
+                        let total = zmod_run_timer_fmt(seg_len_s, 60);
+
+                        let remaining_s =
+                            (((seg.end as f32) * measure_seconds) - curr_time).ceil() as i32;
+                        let remaining_s = remaining_s.max(0);
+
+                        let text = if remaining_s > seg_len_s {
+                            total
+                        } else if remaining_s < 1 {
+                            "0.00 ".to_string()
+                        } else {
+                            let rem = zmod_run_timer_fmt(remaining_s, 59);
+                            format!("{rem} ")
+                        };
+
+                        let active = text.contains(' ');
+                        let rgba = if active {
+                            [1.0, 1.0, 1.0, 1.0]
+                        } else {
+                            [0.5, 0.5, 0.5, 1.0]
+                        };
+
+                        let mut x = playfield_center_x;
+                        if profile.measure_counter_left {
+                            x -= column_width;
+                        }
+                        let y = layout.subtractive_scoring_y;
+
+                        hud_actors.push(act!(text:
+                            font(mc_font_name): settext(text):
+                            align(0.5, 0.5): xy(x, y):
+                            zoom(0.35): horizalign(center): shadowlength(1.0):
+                            diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
+                            z(85)
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     // Judgment Sprite (tap judgments)
     if let Some(render_info) = &p.last_judgment {
         if matches!(profile.judgment_graphic, profile::JudgmentGraphic::None) {
