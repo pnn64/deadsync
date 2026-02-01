@@ -292,6 +292,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 (format!("{score_percent:.2}"), [1.0, 1.0, 1.0, 1.0])
             };
 
+            let is_p2_side = player_idx == 1 || is_p2_single;
+            // Arrow Cloud parity: EX remains the "normal" score position/anchor.
+            // H.EX is placed at a different x on P2 so it appears to the left of EX.
             actors.push(act!(text:
                 font("wendy_monospace_numbers"): settext(score_text):
                 align(1.0, 1.0): xy(score_x, score_y):
@@ -315,14 +318,32 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     mines_disabled,
                 );
                 let hex = color::HARD_EX_SCORE_RGBA;
-                actors.push(act!(text:
-                    font("wendy_monospace_numbers"):
-                    settext(format!("{:.2}", hard_ex_percent.max(0.0))):
-                    align(0.0, 0.0): xy(score_x, score_y):
-                    zoom(0.25): horizalign(left):
-                    diffuse(hex[0], hex[1], hex[2], hex[3]):
-                    z(90)
-                ));
+                let hard_ex_x = if is_p2_side {
+                    // Arrow Cloud: HardEX uses /4.3 on P2 (while EX uses /2.75).
+                    screen_center_x() + clamped_width / 4.3
+                } else {
+                    score_x
+                };
+
+                if is_p2_side {
+                    actors.push(act!(text:
+                        font("wendy_monospace_numbers"):
+                        settext(format!("{:.2}", hard_ex_percent.max(0.0))):
+                        align(1.0, 0.0): xy(hard_ex_x, score_y):
+                        zoom(0.25): horizalign(right):
+                        diffuse(hex[0], hex[1], hex[2], hex[3]):
+                        z(90)
+                    ));
+                } else {
+                    actors.push(act!(text:
+                        font("wendy_monospace_numbers"):
+                        settext(format!("{:.2}", hard_ex_percent.max(0.0))):
+                        align(0.0, 0.0): xy(hard_ex_x, score_y):
+                        zoom(0.25): horizalign(left):
+                        diffuse(hex[0], hex[1], hex[2], hex[3]):
+                        z(90)
+                    ));
+                }
             }
         }
     }
