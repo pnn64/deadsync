@@ -10,7 +10,7 @@ use ash::{
 };
 use cgmath::{Matrix4, Vector4};
 use image::RgbaImage;
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use std::{collections::HashMap, error::Error, ffi, mem, sync::Arc};
 use winit::{
     dpi::PhysicalSize,
@@ -1741,11 +1741,7 @@ fn create_instance(entry: &Entry, window: &Window) -> Result<Instance, Box<dyn E
         create_flags |= vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR;
     }
 
-    let layers_names_raw: Vec<*const ffi::c_char> = if cfg!(debug_assertions) {
-        vec![ffi::CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0")?.as_ptr()]
-    } else {
-        vec![]
-    };
+    let layers_names_raw: Vec<*const ffi::c_char> = vec![];
 
     let create_info = vk::InstanceCreateInfo::default()
         .application_info(&app_info)
@@ -1756,28 +1752,9 @@ fn create_instance(entry: &Entry, window: &Window) -> Result<Instance, Box<dyn E
     unsafe { Ok(entry.create_instance(&create_info, None)?) }
 }
 
-unsafe extern "system" fn vulkan_debug_callback(
-    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
-    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-    _user_data: *mut ffi::c_void,
-) -> vk::Bool32 {
-    let message = unsafe { ffi::CStr::from_ptr((*p_callback_data).p_message) };
-    let severity = format!("{message_severity:?}").to_lowercase();
-    let ty = format!("{message_type:?}").to_lowercase();
-    let log_message = format!("[vulkan_{}_{}] {}", severity, ty, message.to_string_lossy());
-
-    match message_severity {
-        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => error!("{log_message}"),
-        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => warn!("{log_message}"),
-        _ => debug!("{log_message}"),
-    }
-    vk::FALSE
-}
-
 fn setup_debug_messenger(
-    entry: &Entry,
-    instance: &Instance,
+    _entry: &Entry,
+    _instance: &Instance,
 ) -> Result<
     (
         Option<ash::ext::debug_utils::Instance>,
@@ -1785,23 +1762,8 @@ fn setup_debug_messenger(
     ),
     vk::Result,
 > {
-    if !cfg!(debug_assertions) {
-        return Ok((None, None));
-    }
-    let create_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
-        .message_severity(
-            vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
-                | vk::DebugUtilsMessageSeverityFlagsEXT::ERROR,
-        )
-        .message_type(
-            vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
-                | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
-                | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
-        )
-        .pfn_user_callback(Some(vulkan_debug_callback));
-    let loader = ash::ext::debug_utils::Instance::new(entry, instance);
-    let messenger = unsafe { loader.create_debug_utils_messenger(&create_info, None)? };
-    Ok((Some(loader), Some(messenger)))
+    // validation layers are disabled; return None for the loader and messenger
+    Ok((None, None))
 }
 
 fn create_surface(
