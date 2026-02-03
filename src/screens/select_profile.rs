@@ -1210,7 +1210,7 @@ fn push_scroller_frame(
                 out.push(act!(sprite(note_slot.texture_key().to_string()):
                     align(0.5, 0.5):
                     xy(ns_x, ns_y):
-                    zoomto(width * scale, target_height):
+                    setsize(width * scale, target_height):
                     rotationz(-note_slot.def.rotation_deg as f32):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                     diffusealpha(inner_alpha):

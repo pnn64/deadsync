@@ -240,7 +240,7 @@ fn push_pad_tiles(
 
             out.push(act!(sprite("rounded-square.png"):
                 xy(x, y):
-                zoomto(PAD_TILE_NATIVE_SIZE, PAD_TILE_NATIVE_SIZE):
+                setsize(PAD_TILE_NATIVE_SIZE, PAD_TILE_NATIVE_SIZE):
                 zoom(tile_zoom):
                 diffuse(tint[0], tint[1], tint[2], tint[3])
             ));

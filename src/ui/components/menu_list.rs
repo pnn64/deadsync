@@ -48,8 +48,7 @@ pub fn build_vertical_menu(p: MenuParams) -> Vec<Actor> {
         out.push(act!(text:
             align(0.5, 0.5):
             xy(center_x, center_y):
-            zoomtoheight(MENU_BASE_PX):
-            zoom(zoom_factor):
+            zoomtoheight(MENU_BASE_PX * zoom_factor):
             diffuse(color[0], color[1], color[2], color[3]):
             shadowlength(0.8):
             font(p.font):

@@ -571,7 +571,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
         actors.push(act!(sprite("dance.png"):
             align(0.5, 0.5): xy(x, y):
-            zoomto(aw, ah):
+            setsize(aw, ah):
             zoom(ARROW_SPRITE_ZOOM):
             diffuse(1.0, 1.0, 1.0, field_alpha):
             customtexturerect(uv[0], uv[1], uv[2], uv[3])
@@ -643,7 +643,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
         actors.push(act!(sprite("dance.png"):
             align(0.5, 0.5): xy(x, y):
-            zoomto(aw, ah):
+            setsize(aw, ah):
             zoom(ARROW_SPRITE_ZOOM):
             diffuse(tint[0], tint[1], tint[2], tint[3] * field_alpha):
             rotationz(rot):

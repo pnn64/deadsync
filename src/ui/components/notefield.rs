@@ -886,7 +886,7 @@ pub fn build(
                 actors.push(act!(sprite(receptor_slot.texture_key().to_string()):
                     align(0.5, 0.5):
                     xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                    zoomto(receptor_size[0], receptor_size[1]):
+                    setsize(receptor_size[0], receptor_size[1]):
                     zoom(bop_zoom):
                     diffuse(
                         receptor_color[0],
@@ -987,7 +987,7 @@ pub fn build(
                     actors.push(act!(sprite(slot.texture_key().to_string()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                        zoomto(size[0], size[1]):
+                        setsize(size[0], size[1]):
                         zoom(visual.zoom):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                         diffuse(
@@ -1007,7 +1007,7 @@ pub fn build(
                         actors.push(act!(sprite(slot.texture_key().to_string()):
                             align(0.5, 0.5):
                             xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                            zoomto(size[0], size[1]):
+                            setsize(size[0], size[1]):
                             zoom(visual.zoom):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                             diffuse(glow[0], glow[1], glow[2], glow[3]):
@@ -1671,7 +1671,7 @@ pub fn build(
                     actors.push(act!(sprite(note_slot.texture_key().to_string()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset, y_pos):
-                        zoomto(note_size[0], note_size[1]):
+                        setsize(note_size[0], note_size[1]):
                         rotationz(-note_slot.def.rotation_deg as f32):
                         customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                         z(Z_TAP_NOTE)
@@ -2397,7 +2397,7 @@ pub fn build(
                 };
                 hud_actors.push(act!(sprite(judgment_texture):
                     align(0.5, 0.5): xy(playfield_center_x, judgment_y):
-                    z(200): rotationz(rot_deg): zoomtoheight(76.0): setstate(linear_index): zoom(zoom)
+                    z(200): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
                 ));
             }
         }

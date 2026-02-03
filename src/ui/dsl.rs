@@ -1,3 +1,4 @@
+use crate::assets;
 use crate::core::gfx::BlendMode;
 use crate::ui::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
 use crate::ui::{anim, font, runtime};
@@ -34,6 +35,8 @@ pub enum Mod<'a> {
     ZoomY(f32),
     AddZoomX(f32),
     AddZoomY(f32),
+    /// `zoomto(w,h)` — sets zoom based on current unzoomed width/height.
+    ZoomToPx(f32, f32),
 
     // helpers that set one axis and preserve aspect
     ZoomToWidth(f32),
@@ -65,7 +68,11 @@ pub enum Mod<'a> {
 
     // visibility + rotation
     Visible(bool),
+    RotX(f32),
+    RotY(f32),
     RotZ(f32),
+    AddRotX(f32),
+    AddRotY(f32),
     AddRotZ(f32),
 
     // ---- NEW: SM/ITG-compatible sprite controls ----
@@ -116,6 +123,53 @@ fn hash_bytes64(bs: &[u8]) -> u64 {
     x
 }
 
+#[inline(always)]
+fn sprite_native_dims(
+    source: &SpriteSource,
+    uv: Option<[f32; 4]>,
+    cell: Option<(u32, u32)>,
+    grid: Option<(u32, u32)>,
+) -> (f32, f32) {
+    match source {
+        SpriteSource::Solid => (1.0, 1.0),
+        SpriteSource::Texture(key) => {
+            let Some(meta) = assets::texture_dims(key) else {
+                return (0.0, 0.0);
+            };
+            let (mut tw, mut th) = (meta.w as f32, meta.h as f32);
+
+            if let Some([u0, v0, u1, v1]) = uv {
+                tw *= (u1 - u0).abs().max(1e-6);
+                th *= (v1 - v0).abs().max(1e-6);
+                return (tw, th);
+            }
+
+            // Match compose: if the texture looks like a sheet and no cell is specified,
+            // default to cell 0 for sizing (per-frame dimensions).
+            let effective_cell = if cell.is_some() {
+                cell
+            } else {
+                let (gc, gr) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(key));
+                if gc.saturating_mul(gr) > 1 {
+                    Some((0, u32::MAX))
+                } else {
+                    None
+                }
+            };
+
+            if effective_cell.is_some() {
+                let (gc, gr) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(key));
+                let cols = gc.max(1);
+                let rows = gr.max(1);
+                tw /= cols as f32;
+                th /= rows as f32;
+            }
+
+            (tw, th)
+        }
+    }
+}
+
 /* ======================== SPRITE/QUAD CORE ======================== */
 
 #[inline(always)]
@@ -136,7 +190,9 @@ fn build_sprite_like<'a>(
     let (mut cl, mut cr, mut ct, mut cb) = (0.0, 0.0, 0.0, 0.0);
     let (mut fl, mut fr, mut ft, mut fb) = (0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32);
     let mut blend = BlendMode::Alpha;
-    let mut rot = 0.0_f32;
+    let mut rot_x = 0.0_f32;
+    let mut rot_y = 0.0_f32;
+    let mut rot_z = 0.0_f32;
     let mut uv: Option<[f32; 4]> = None;
     let mut cell: Option<(u32, u32)> = None;
     let mut grid: Option<(u32, u32)> = None;
@@ -223,6 +279,13 @@ fn build_sprite_like<'a>(
             Mod::AddZoomY(b) => {
                 sy += *b;
             }
+            Mod::ZoomToPx(tw, th) => {
+                let (nw, nh) = sprite_native_dims(&source, uv, cell, grid);
+                let base_w = if w != 0.0 { w } else { nw };
+                let base_h = if h != 0.0 { h } else { nh };
+                sx = if base_w != 0.0 { *tw / base_w } else { 0.0 };
+                sy = if base_h != 0.0 { *th / base_h } else { 0.0 };
+            }
 
             // aspect-preserving absolute sizes
             Mod::ZoomToWidth(new_w) => {
@@ -277,11 +340,23 @@ fn build_sprite_like<'a>(
             Mod::Visible(v) => {
                 vis = *v;
             }
+            Mod::RotX(d) => {
+                rot_x = *d;
+            }
+            Mod::RotY(d) => {
+                rot_y = *d;
+            }
             Mod::RotZ(d) => {
-                rot = *d;
+                rot_z = *d;
+            }
+            Mod::AddRotX(dd) => {
+                rot_x += *dd;
+            }
+            Mod::AddRotY(dd) => {
+                rot_y += *dd;
             }
             Mod::AddRotZ(dd) => {
-                rot += *dd;
+                rot_z += *dd;
             }
 
             // text-only mods ignored here
@@ -329,6 +404,14 @@ fn build_sprite_like<'a>(
         }
     }
 
+    // For tweening, StepMania's `zoomto()` relies on the actor's unzoomed size.
+    // If size isn't explicitly set, use native texture size (or 1x1 for quads).
+    if tw.is_some() && w == 0.0 && h == 0.0 {
+        let (nw, nh) = sprite_native_dims(&source, uv, cell, grid);
+        w = nw;
+        h = nh;
+    }
+
     if let Some(steps) = tw {
         let mut init = anim::TweenState::default();
         init.x = x;
@@ -342,7 +425,9 @@ fn build_sprite_like<'a>(
         init.visible = vis;
         init.flip_x = fx;
         init.flip_y = fy;
-        init.rot_z = rot;
+        init.rot_x = rot_x;
+        init.rot_y = rot_y;
+        init.rot_z = rot_z;
         init.fade_l = fl;
         init.fade_r = fr;
         init.fade_t = ft;
@@ -373,6 +458,8 @@ fn build_sprite_like<'a>(
             mix_u64(&mut h, f32b_u64(init.h));
             mix_u64(&mut h, f32b_u64(init.hx));
             mix_u64(&mut h, f32b_u64(init.vy));
+            mix_u64(&mut h, f32b_u64(init.rot_x));
+            mix_u64(&mut h, f32b_u64(init.rot_y));
             mix_u64(&mut h, f32b_u64(init.rot_z));
             for c in init.tint {
                 mix_u64(&mut h, f32b_u64(c));
@@ -414,7 +501,9 @@ fn build_sprite_like<'a>(
         vis = s.visible;
         fx = s.flip_x;
         fy = s.flip_y;
-        rot = s.rot_z;
+        rot_x = s.rot_x;
+        rot_y = s.rot_y;
+        rot_z = s.rot_z;
         fl = s.fade_l;
         fr = s.fade_r;
         ft = s.fade_t;
@@ -478,7 +567,9 @@ fn build_sprite_like<'a>(
         fadetop: ft,
         fadebottom: fb,
         blend,
-        rot_z_deg: rot,
+        rot_x_deg: rot_x,
+        rot_y_deg: rot_y,
+        rot_z_deg: rot_z,
         texcoordvelocity: texv,
         animate: anim_enable,
         state_delay,
@@ -1027,13 +1118,20 @@ macro_rules! __dsl_apply_one {
         else { $mods.push($crate::ui::dsl::Mod::AddZoomY(df)); }
     }};
 
-    // Absolute size (zoomto/setsize) — tweenable size op
+    // StepMania:
+    // - `zoomto(w,h)` sets zoom based on unzoomed size (i.e. affects scale).
+    // - `setsize(w,h)` sets the unzoomed size (width/height).
     (zoomto ($w:expr, $h:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.size(($w) as f32, ($h) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::SizePx(($w) as f32, ($h) as f32)); }
+        let ww = ($w) as f32;
+        let hh = ($h) as f32;
+        if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.zoomto(ww, hh); $cur=::core::option::Option::Some(seg); }
+        else { $mods.push($crate::ui::dsl::Mod::ZoomToPx(ww, hh)); }
     }};
     (setsize ($w:expr, $h:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $crate::__dsl_apply_one!(zoomto(($w), ($h)) $mods $tw $cur $site)
+        let ww = ($w) as f32;
+        let hh = ($h) as f32;
+        if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.size(ww, hh); $cur=::core::option::Option::Some(seg); }
+        else { $mods.push($crate::ui::dsl::Mod::SizePx(ww, hh)); }
     }};
 
     // --- absolute size helpers preserving aspect ---------------------
@@ -1131,11 +1229,35 @@ macro_rules! __dsl_apply_one {
         else { $mods.push($crate::ui::dsl::Mod::Visible(($v) as bool)); }
     }};
 
-    // --- rotationz (degrees) ---
+    // --- rotation (degrees) ---
+    (rotationx ($deg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        let d=($deg) as f32;
+        if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.rotationx(d); $cur=::core::option::Option::Some(seg); }
+        else { $mods.push($crate::ui::dsl::Mod::RotX(d)); }
+    }};
+
+    (rotationy ($deg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        let d=($deg) as f32;
+        if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.rotationy(d); $cur=::core::option::Option::Some(seg); }
+        else { $mods.push($crate::ui::dsl::Mod::RotY(d)); }
+    }};
+
     (rotationz ($deg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let d=($deg) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.rotationz(d); $cur=::core::option::Option::Some(seg); }
         else { $mods.push($crate::ui::dsl::Mod::RotZ(d)); }
+    }};
+
+    (addrotationx ($ddeg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        let dd=($ddeg) as f32;
+        if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addrotationx(dd); $cur=::core::option::Option::Some(seg); }
+        else { $mods.push($crate::ui::dsl::Mod::AddRotX(dd)); }
+    }};
+
+    (addrotationy ($ddeg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        let dd=($ddeg) as f32;
+        if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addrotationy(dd); $cur=::core::option::Option::Some(seg); }
+        else { $mods.push($crate::ui::dsl::Mod::AddRotY(dd)); }
     }};
 
     (addrotationz ($ddeg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{

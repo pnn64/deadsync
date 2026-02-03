@@ -4217,7 +4217,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             actors.push(act!(sprite(note_slot.texture_key().to_string()):
                                 align(0.5, 0.5):
                                 xy(preview_center_x, current_row_y):
-                                zoomto(final_width, final_height):
+                                setsize(final_width, final_height):
                                 rotationz(-note_slot.def.rotation_deg as f32):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                 z(102)

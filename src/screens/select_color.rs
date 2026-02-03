@@ -428,7 +428,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             xy(x, y):
             rotationz(rot_deg):
             z(z_layer):
-            zoomto(base_w, base_h):
+            setsize(base_w, base_h):
             zoom(zoom):
             diffuse(tint[0], tint[1], tint[2], alpha)
         ));

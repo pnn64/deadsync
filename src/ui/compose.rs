@@ -4,7 +4,7 @@ use crate::core::gfx::{BlendMode, RenderList, RenderObject};
 use crate::core::space::Metrics;
 use crate::ui::actors::{self, Actor, SizeSpec};
 use crate::ui::font;
-use cgmath::{Matrix4, Vector2, Vector3};
+use cgmath::{Matrix4, Rad, Vector2, Vector3};
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
 
@@ -148,6 +148,8 @@ fn build_actor_recursive<'a>(
             fadetop,
             fadebottom,
             rot_z_deg,
+            rot_x_deg,
+            rot_y_deg,
             texcoordvelocity,
             animate,
             state_delay,
@@ -225,6 +227,8 @@ fn build_actor_recursive<'a>(
                 *fadetop,
                 *fadebottom,
                 *blend,
+                *rot_x_deg,
+                *rot_y_deg,
                 *rot_z_deg,
                 *texcoordvelocity,
                 total_elapsed,
@@ -520,6 +524,8 @@ fn build_actor_recursive<'a>(
                             0.0,
                             BlendMode::Alpha,
                             0.0,
+                            0.0,
+                            0.0,
                             None,
                             total_elapsed,
                         );
@@ -556,6 +562,8 @@ fn build_actor_recursive<'a>(
                             0.0,
                             0.0,
                             BlendMode::Alpha,
+                            0.0,
+                            0.0,
                             0.0,
                             None,
                             total_elapsed,
@@ -752,6 +760,8 @@ fn push_sprite<'a>(
     fadetop: f32,
     fadebottom: f32,
     blend: BlendMode,
+    rot_x_deg: f32,
+    rot_y_deg: f32,
     rot_z_deg: f32,
     texcoordvelocity: Option<[f32; 2]>,
     total_elapsed: f32,
@@ -839,33 +849,16 @@ fn push_sprite<'a>(
         std::mem::swap(&mut ft_eff, &mut fb_eff);
     }
 
+    // Matrix = T * R * S
+    // SM->world flips Y, so rotationx sign flips; rotationy/z keep sign.
     let transform = {
-        let r_rad = rot_z_deg.to_radians();
-        let (s, c) = r_rad.sin_cos();
-        // Matrix = T * R * S
-        // Cgmath is column-major: new(c0, c1, c2, c3)
-        // c0 = [sx*c, sx*s, 0, 0]
-        // c1 = [-sy*s, sy*c, 0, 0]
-        // c2 = [0, 0, 1, 0]
-        // c3 = [ctx, cty, 0, 1]
-        Matrix4::new(
-            size_x * c,
-            size_x * s,
-            0.0,
-            0.0,
-            -size_y * s,
-            size_y * c,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            center_x,
-            center_y,
-            0.0,
-            1.0,
-        )
+        let rx = Matrix4::from_angle_x(Rad((-rot_x_deg).to_radians()));
+        let ry = Matrix4::from_angle_y(Rad(rot_y_deg.to_radians()));
+        let rz = Matrix4::from_angle_z(Rad(rot_z_deg.to_radians()));
+        let r = rx * ry * rz;
+        let s = Matrix4::from_nonuniform_scale(size_x, size_y, 1.0);
+        let t = Matrix4::from_translation(Vector3::new(center_x, center_y, 0.0));
+        t * r * s
     };
 
     let final_texture_id = if is_solid {

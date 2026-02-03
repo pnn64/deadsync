@@ -223,7 +223,9 @@ pub struct TweenState {
     pub visible: bool,
     pub flip_x: bool,
     pub flip_y: bool,
-    pub rot_z: f32, // NEW: degrees
+    pub rot_x: f32, // degrees
+    pub rot_y: f32, // degrees
+    pub rot_z: f32, // degrees
     pub crop_l: f32,
     pub crop_r: f32,
     pub crop_t: f32,
@@ -249,7 +251,9 @@ impl Default for TweenState {
             visible: true,
             flip_x: false,
             flip_y: false,
-            rot_z: 0.0, // NEW
+            rot_x: 0.0,
+            rot_y: 0.0,
+            rot_z: 0.0,
             fade_l: 0.0,
             fade_r: 0.0,
             fade_t: 0.0,
@@ -341,6 +345,14 @@ impl Step {
                             mix(&mut h, 16);
                             mix_t(&mut h, t);
                         }
+                        BuildOp::ZoomToW(w) => {
+                            mix(&mut h, 31);
+                            mix(&mut h, f32b(*w));
+                        }
+                        BuildOp::ZoomToH(hh) => {
+                            mix(&mut h, 32);
+                            mix(&mut h, f32b(*hh));
+                        }
                         BuildOp::Tint(r, g, b, a) => {
                             mix(&mut h, 17);
                             mix_t(&mut h, r);
@@ -366,6 +378,14 @@ impl Step {
                         BuildOp::FlipY(v) => {
                             mix(&mut h, 21);
                             mix(&mut h, u64::from(*v));
+                        }
+                        BuildOp::RotX(t) => {
+                            mix(&mut h, 33);
+                            mix_t(&mut h, t);
+                        }
+                        BuildOp::RotY(t) => {
+                            mix(&mut h, 34);
+                            mix_t(&mut h, t);
                         }
                         BuildOp::RotZ(t) => {
                             mix(&mut h, 22);
@@ -426,11 +446,15 @@ enum BuildOp {
     ZoomBoth(Target),
     ZoomX(Target),
     ZoomY(Target),
+    ZoomToW(f32),
+    ZoomToH(f32),
     Tint(Target, Target, Target, Target),
     Glow(Target, Target, Target, Target),
     Visible(bool),
     FlipX(bool),
     FlipY(bool),
+    RotX(Target),
+    RotY(Target),
     RotZ(Target),
     CropL(Target),
     CropR(Target),
@@ -460,6 +484,8 @@ enum PreparedKind {
     Visible(bool),
     FlipX(bool),
     FlipY(bool),
+    RotX { from: f32, to: f32 },
+    RotY { from: f32, to: f32 },
     RotZ { from: f32, to: f32 },
     CropL { from: f32, to: f32 },
     CropR { from: f32, to: f32 },
@@ -494,6 +520,8 @@ impl OpPrepared {
             PreparedKind::Visible(v) => s.visible = v,
             PreparedKind::FlipX(v) => s.flip_x = v,
             PreparedKind::FlipY(v) => s.flip_y = v,
+            PreparedKind::RotX { from, to } => s.rot_x = from + (to - from) * a,
+            PreparedKind::RotY { from, to } => s.rot_y = from + (to - from) * a,
             PreparedKind::RotZ { from, to } => s.rot_z = from + (to - from) * a,
             PreparedKind::CropL { from, to } => s.crop_l = from + (to - from) * a,
             PreparedKind::CropR { from, to } => s.crop_r = from + (to - from) * a,
@@ -622,6 +650,24 @@ impl Segment {
                         },
                     });
                 }
+                BuildOp::ZoomToW(w) => {
+                    let to = if s.w != 0.0 { w / s.w } else { 0.0 };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::ScaleX {
+                            from: s.scale[0],
+                            to,
+                        },
+                    });
+                }
+                BuildOp::ZoomToH(h) => {
+                    let to = if s.h != 0.0 { h / s.h } else { 0.0 };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::ScaleY {
+                            from: s.scale[1],
+                            to,
+                        },
+                    });
+                }
                 BuildOp::Tint(tr, tg, tb, ta) => {
                     let to0 = match tr {
                         Target::Abs(v) => v,
@@ -683,6 +729,24 @@ impl Segment {
                 BuildOp::FlipY(v) => {
                     self.prepared.push(OpPrepared {
                         kind: PreparedKind::FlipY(v),
+                    });
+                }
+                BuildOp::RotX(t) => {
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.rot_x + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::RotX { from: s.rot_x, to },
+                    });
+                }
+                BuildOp::RotY(t) => {
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.rot_y + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::RotY { from: s.rot_y, to },
                     });
                 }
                 BuildOp::RotZ(t) => {
@@ -839,7 +903,7 @@ impl SegmentBuilder {
         self
     }
 
-    // --- absolute size (zoomto/setsize) ---
+    // --- absolute size (StepMania: SetWidth/SetHeight/setsize) ---
     pub fn size(mut self, w: f32, h: f32) -> Self {
         self.ops.push(BuildOp::Width(Target::Abs(w)));
         self.ops.push(BuildOp::Height(Target::Abs(h)));
@@ -870,6 +934,13 @@ impl SegmentBuilder {
     }
     pub fn addzoomy(mut self, df: f32) -> Self {
         self.ops.push(BuildOp::ZoomY(Target::Rel(df)));
+        self
+    }
+
+    // --- zoomto (StepMania: zoomto/zoomtowidth/zoomtoheight) ---
+    pub fn zoomto(mut self, w: f32, h: f32) -> Self {
+        self.ops.push(BuildOp::ZoomToW(w));
+        self.ops.push(BuildOp::ZoomToH(h));
         self
     }
 
@@ -946,6 +1017,24 @@ impl SegmentBuilder {
     }
 
     // --- rotation (degrees) ---  NEW
+    pub fn rotationx(mut self, deg: f32) -> Self {
+        self.ops.push(BuildOp::RotX(Target::Abs(deg)));
+        self
+    }
+    pub fn addrotationx(mut self, ddeg: f32) -> Self {
+        self.ops.push(BuildOp::RotX(Target::Rel(ddeg)));
+        self
+    }
+
+    pub fn rotationy(mut self, deg: f32) -> Self {
+        self.ops.push(BuildOp::RotY(Target::Abs(deg)));
+        self
+    }
+    pub fn addrotationy(mut self, ddeg: f32) -> Self {
+        self.ops.push(BuildOp::RotY(Target::Rel(ddeg)));
+        self
+    }
+
     pub fn rotationz(mut self, deg: f32) -> Self {
         self.ops.push(BuildOp::RotZ(Target::Abs(deg)));
         self

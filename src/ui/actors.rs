@@ -60,6 +60,8 @@ pub enum Actor {
         fadetop: f32,
         fadebottom: f32,
         blend: BlendMode,
+        rot_x_deg: f32,
+        rot_y_deg: f32,
         rot_z_deg: f32,
         texcoordvelocity: Option<[f32; 2]>,
         animate: bool,
