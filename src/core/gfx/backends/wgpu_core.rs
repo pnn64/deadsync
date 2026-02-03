@@ -13,6 +13,36 @@ use std::{borrow::Cow, collections::HashMap, error::Error, mem, sync::Arc};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Api {
+    Vulkan,
+    OpenGL,
+    #[cfg(target_os = "windows")]
+    DirectX,
+}
+
+impl Api {
+    #[inline(always)]
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Vulkan => "Vulkan",
+            Self::OpenGL => "OpenGL",
+            #[cfg(target_os = "windows")]
+            Self::DirectX => "DirectX",
+        }
+    }
+
+    #[inline(always)]
+    const fn backends(self) -> wgpu::Backends {
+        match self {
+            Self::Vulkan => wgpu::Backends::VULKAN,
+            Self::OpenGL => wgpu::Backends::GL,
+            #[cfg(target_os = "windows")]
+            Self::DirectX => wgpu::Backends::DX12,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct Vertex {
@@ -70,6 +100,17 @@ impl MeshPipelineSet {
     }
 }
 
+enum ProjState {
+    Immediates,
+    Uniform {
+        stride: u64,
+        capacity: usize,
+        buffer: wgpu::Buffer,
+        group: wgpu::BindGroup,
+        layout: wgpu::BindGroupLayout,
+    },
+}
+
 // A handle to a wgpu texture and its bind group.
 pub struct Texture {
     id: u64,
@@ -112,6 +153,8 @@ impl HasDisplayHandle for OwnedWindowHandle {
 }
 
 pub struct State {
+    api: Api,
+    proj: ProjState,
     _instance: wgpu::Instance,
     surface: wgpu::Surface<'static>,
     adapter: wgpu::Adapter,
@@ -142,11 +185,24 @@ pub struct State {
     next_texture_id: u64,
 }
 
-pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
-    info!("Initializing Vulkan (wgpu) backend...");
+pub fn init_vulkan(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
+    init(Api::Vulkan, window, vsync_enabled)
+}
+
+pub fn init_opengl(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
+    init(Api::OpenGL, window, vsync_enabled)
+}
+
+#[cfg(target_os = "windows")]
+pub fn init_dx12(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
+    init(Api::DirectX, window, vsync_enabled)
+}
+
+fn init(api: Api, window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
+    info!("Initializing {} (wgpu) backend...", api.name());
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::VULKAN,
+        backends: api.backends(),
         flags: wgpu::InstanceFlags::default(),
         memory_budget_thresholds: Default::default(),
         backend_options: Default::default(),
@@ -161,15 +217,34 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         compatible_surface: Some(&surface),
         force_fallback_adapter: false,
     }))
-    .map_err(|e| format!("No suitable Vulkan adapter found: {e}"))?;
+    .map_err(|e| format!("No suitable {} adapter found: {e}", api.name()))?;
 
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("deadsync vk device"),
-        required_features: wgpu::Features::IMMEDIATES,
-        required_limits: wgpu::Limits {
-            max_immediate_size: mem::size_of::<[[f32; 4]; 4]>() as u32,
+    let want_immediates = matches!(api, Api::Vulkan);
+    let use_immediates = want_immediates && adapter.features().contains(wgpu::Features::IMMEDIATES);
+    if want_immediates && !use_immediates {
+        warn!(
+            "{} adapter does not support wgpu immediates; falling back to uniform projection.",
+            api.name()
+        );
+    }
+
+    let required_features = if use_immediates {
+        wgpu::Features::IMMEDIATES
+    } else {
+        wgpu::Features::empty()
+    };
+    let required_limits = if use_immediates {
+        wgpu::Limits {
+            max_immediate_size: PROJ_BYTES as u32,
             ..wgpu::Limits::default()
-        },
+        }
+    } else {
+        wgpu::Limits::default()
+    };
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        label: Some("deadsync wgpu device"),
+        required_features,
+        required_limits,
         memory_hints: wgpu::MemoryHints::Performance,
         trace: Default::default(),
         experimental_features: Default::default(),
@@ -198,9 +273,14 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
     surface.configure(&device, &config);
 
     let projection = ortho_for_window(size.width, size.height);
+    let proj = if use_immediates {
+        ProjState::Immediates
+    } else {
+        init_uniform_proj(&device, &queue, projection)
+    };
 
     let bind_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("vk texture layout"),
+        label: Some("wgpu texture layout"),
         entries: &[
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -221,9 +301,9 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         ],
     });
 
-    let (shader, pipeline_layout, pipelines) = build_pipeline_set(&device, &bind_layout, format);
+    let (shader, pipeline_layout, pipelines) = build_pipeline_set(&device, &proj, &bind_layout, format);
     let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
-        build_mesh_pipeline_set(&device, format);
+        build_mesh_pipeline_set(&device, &proj, format);
 
     let vertex_data = [
         Vertex {
@@ -244,21 +324,21 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
         },
     ];
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("vk quad vertices"),
+        label: Some("wgpu quad vertices"),
         contents: cast_slice(&vertex_data),
         usage: wgpu::BufferUsages::VERTEX,
     });
 
     let indices: [u16; 6] = [0, 1, 2, 2, 3, 0];
     let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("vk quad indices"),
+        label: Some("wgpu quad indices"),
         contents: cast_slice(&indices),
         usage: wgpu::BufferUsages::INDEX,
     });
 
     let instance_capacity = 64usize;
     let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("vk instance buffer"),
+        label: Some("wgpu instance buffer"),
         size: (instance_capacity * mem::size_of::<InstanceRaw>()) as u64,
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
@@ -266,15 +346,17 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
 
     let mesh_vertex_capacity = 1024usize;
     let mesh_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("vk mesh vertex buffer"),
+        label: Some("wgpu mesh vertex buffer"),
         size: (mesh_vertex_capacity * mem::size_of::<crate::core::gfx::MeshVertex>()) as u64,
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
 
-    info!("Vulkan (wgpu) backend initialized.");
+    info!("{} (wgpu) backend initialized.", api.name());
 
     Ok(State {
+        api,
+        proj,
         _instance: instance,
         surface,
         adapter,
@@ -306,6 +388,58 @@ pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn E
     })
 }
 
+fn init_uniform_proj(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    projection: Matrix4<f32>,
+) -> ProjState {
+    let align = device.limits().min_uniform_buffer_offset_alignment as u64;
+    let stride = if align > 0 {
+        ((PROJ_BYTES + align - 1) / align) * align
+    } else {
+        PROJ_BYTES
+    };
+    let capacity = 4usize;
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu projection"),
+        size: (capacity as u64) * stride,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let proj_array: [[f32; 4]; 4] = projection.into();
+    queue.write_buffer(&buffer, 0, cast_slice(&proj_array));
+
+    let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("wgpu proj layout"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: true,
+                min_binding_size: wgpu::BufferSize::new(PROJ_BYTES),
+            },
+            count: None,
+        }],
+    });
+    let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("wgpu proj group"),
+        layout: &layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: buffer.as_entire_binding(),
+        }],
+    });
+
+    ProjState::Uniform {
+        stride,
+        capacity,
+        buffer,
+        group,
+        layout,
+    }
+}
+
 pub fn create_texture(
     state: &mut State,
     image: &RgbaImage,
@@ -318,7 +452,7 @@ pub fn create_texture(
     };
 
     let texture = state.device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("vk texture"),
+        label: Some("wgpu texture"),
         size,
         mip_level_count: 1,
         sample_count: 1,
@@ -347,7 +481,7 @@ pub fn create_texture(
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     let sampler = get_sampler(state, sampler);
     let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("vk texture bind group"),
+        label: Some("wgpu texture bind group"),
         layout: &state.bind_layout,
         entries: &[
             wgpu::BindGroupEntry {
@@ -372,6 +506,29 @@ pub fn create_texture(
     })
 }
 
+#[inline(always)]
+fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
+    let center = [m[3][0], m[3][1]];
+    let c0 = [m[0][0], m[0][1]];
+    let c1 = [m[1][0], m[1][1]];
+    let sx = c0[0].hypot(c0[1]).max(1e-12);
+    let sy = c1[0].hypot(c1[1]).max(1e-12);
+    let cos_t = c0[0] / sx;
+    let sin_t = c0[1] / sx;
+    (center, [sx, sy], [sin_t, cos_t])
+}
+
+#[inline(always)]
+fn pick_tex<'a>(api: Api, tex: &'a RendererTexture) -> Option<&'a Texture> {
+    match (api, tex) {
+        (Api::Vulkan, RendererTexture::VulkanWgpu(t)) => Some(t),
+        (Api::OpenGL, RendererTexture::OpenGLWgpu(t)) => Some(t),
+        #[cfg(target_os = "windows")]
+        (Api::DirectX, RendererTexture::DirectX(t)) => Some(t),
+        _ => None,
+    }
+}
+
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
@@ -382,8 +539,10 @@ pub fn draw(
         return Ok(0);
     }
 
+    let api = state.api;
+    let objects_len = render_list.objects.len();
+
     {
-        let objects_len = render_list.objects.len();
         let instances = &mut state.scratch_instances;
         instances.clear();
         if instances.capacity() < objects_len {
@@ -403,18 +562,6 @@ pub fn draw(
             ops.reserve(objects_len - ops.capacity());
         }
 
-        #[inline(always)]
-        fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
-            let center = [m[3][0], m[3][1]];
-            let c0 = [m[0][0], m[0][1]];
-            let c1 = [m[1][0], m[1][1]];
-            let sx = c0[0].hypot(c0[1]).max(1e-12);
-            let sy = c1[0].hypot(c1[1]).max(1e-12);
-            let cos_t = c0[0] / sx;
-            let sin_t = c0[1] / sx;
-            (center, [sx, sy], [sin_t, cos_t])
-        }
-
         for obj in &render_list.objects {
             match &obj.object_type {
                 ObjectType::Sprite {
@@ -424,9 +571,11 @@ pub fn draw(
                     uv_offset,
                     edge_fade,
                 } => {
-                    let tex = match textures.get(texture_id.as_ref()) {
-                        Some(RendererTexture::VulkanWgpu(t)) => t,
-                        _ => continue,
+                    let tex = textures
+                        .get(texture_id.as_ref())
+                        .and_then(|t| pick_tex(api, t));
+                    let Some(tex) = tex else {
+                        continue;
                     };
 
                     let model: [[f32; 4]; 4] = obj.transform.into();
@@ -504,6 +653,8 @@ pub fn draw(
             cast_slice(state.scratch_mesh_vertices.as_slice()),
         );
     }
+    upload_projections(state, &render_list.cameras);
+
     let frame = match state.surface.get_current_texture() {
         Ok(f) => f,
         Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
@@ -520,12 +671,12 @@ pub fn draw(
     let mut encoder = state
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("vk encoder"),
+            label: Some("wgpu encoder"),
         });
 
     {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("vk render pass"),
+            label: Some("wgpu render pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &view,
                 depth_slice: None,
@@ -545,6 +696,13 @@ pub fn draw(
             timestamp_writes: None,
             multiview_mask: None,
         });
+
+        let camera_count = render_list.cameras.len();
+        let texture_group = match state.proj {
+            ProjState::Immediates => 0,
+            ProjState::Uniform { .. } => 1,
+        };
+
         let mut last_kind: Option<bool> = None;
         let mut last_blend: Option<BlendMode> = None;
         let mut last_bind: Option<u64> = None;
@@ -555,10 +713,7 @@ pub fn draw(
                     if last_kind != Some(false) {
                         pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
                         pass.set_vertex_buffer(1, state.instance_buffer.slice(..));
-                        pass.set_index_buffer(
-                            state.index_buffer.slice(..),
-                            wgpu::IndexFormat::Uint16,
-                        );
+                        pass.set_index_buffer(state.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                         last_kind = Some(false);
                         last_blend = None;
                         last_bind = None;
@@ -570,17 +725,18 @@ pub fn draw(
                         last_bind = None;
                     }
                     if last_camera != Some(run.camera) {
-                        let vp = render_list
-                            .cameras
-                            .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let vp_array: [[f32; 4]; 4] = vp.into();
-                        pass.set_immediates(0, cast_slice(&vp_array));
+                        set_camera(
+                            &mut pass,
+                            &state.proj,
+                            run.camera,
+                            camera_count,
+                            &render_list.cameras,
+                            state.projection,
+                        );
                         last_camera = Some(run.camera);
                     }
                     if last_bind != Some(run.key) {
-                        pass.set_bind_group(0, Some(run.bind_group.as_ref()), &[]);
+                        pass.set_bind_group(texture_group, Some(run.bind_group.as_ref()), &[]);
                         last_bind = Some(run.key);
                     }
                     pass.draw_indexed(0..state.index_count, 0, run.start..(run.start + run.count));
@@ -607,13 +763,14 @@ pub fn draw(
                         last_blend = Some(*blend);
                     }
                     if last_camera != Some(*camera) {
-                        let vp = render_list
-                            .cameras
-                            .get(*camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let vp_array: [[f32; 4]; 4] = vp.into();
-                        pass.set_immediates(0, cast_slice(&vp_array));
+                        set_camera(
+                            &mut pass,
+                            &state.proj,
+                            *camera,
+                            camera_count,
+                            &render_list.cameras,
+                            state.projection,
+                        );
                         last_camera = Some(*camera);
                     }
                     match mode {
@@ -628,7 +785,58 @@ pub fn draw(
     state.queue.submit(Some(encoder.finish()));
     frame.present();
 
-    Ok((instance_len as u32) * 4)
+    Ok((instance_len as u32) * 4 + mesh_len as u32)
+}
+
+fn upload_projections(state: &mut State, cameras: &[Matrix4<f32>]) {
+    let ProjState::Uniform { .. } = state.proj else {
+        return;
+    };
+    let needed = cameras.len().saturating_add(1).max(1);
+    ensure_projection_capacity(state, needed);
+
+    let ProjState::Uniform { buffer, stride, .. } = &state.proj else {
+        return;
+    };
+    for (i, &vp) in cameras.iter().enumerate() {
+        let arr: [[f32; 4]; 4] = vp.into();
+        let offset = (i as u64) * *stride;
+        state.queue.write_buffer(buffer, offset, cast_slice(&arr));
+    }
+    let fallback_offset = (cameras.len() as u64) * *stride;
+    let fallback: [[f32; 4]; 4] = state.projection.into();
+    state
+        .queue
+        .write_buffer(buffer, fallback_offset, cast_slice(&fallback));
+}
+
+fn set_camera(
+    pass: &mut wgpu::RenderPass<'_>,
+    proj: &ProjState,
+    camera: u8,
+    camera_count: usize,
+    cameras: &[Matrix4<f32>],
+    fallback: Matrix4<f32>,
+) {
+    match proj {
+        ProjState::Immediates => {
+            let vp = cameras
+                .get(camera as usize)
+                .copied()
+                .unwrap_or(fallback);
+            let vp_array: [[f32; 4]; 4] = vp.into();
+            pass.set_immediates(0, cast_slice(&vp_array));
+        }
+        ProjState::Uniform { group, stride, .. } => {
+            let idx = if (camera as usize) < camera_count {
+                camera as usize
+            } else {
+                camera_count
+            };
+            let offset = ((idx as u64) * *stride) as u32;
+            pass.set_bind_group(0, group, &[offset]);
+        }
+    }
 }
 
 pub fn resize(state: &mut State, width: u32, height: u32) {
@@ -641,8 +849,8 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     reconfigure_surface(state);
 }
 
-pub fn cleanup(_state: &mut State) {
-    info!("Vulkan (wgpu) backend cleanup complete.");
+pub fn cleanup(state: &mut State) {
+    info!("{} (wgpu) backend cleanup complete.", state.api.name());
 }
 
 fn ensure_instance_capacity(state: &mut State, needed: usize) {
@@ -651,7 +859,7 @@ fn ensure_instance_capacity(state: &mut State, needed: usize) {
     }
     let new_cap = needed.next_power_of_two().max(64);
     state.instance_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("vk instance buffer"),
+        label: Some("wgpu instance buffer"),
         size: (new_cap * mem::size_of::<InstanceRaw>()) as u64,
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
@@ -665,12 +873,44 @@ fn ensure_mesh_vertex_capacity(state: &mut State, needed: usize) {
     }
     let new_cap = needed.next_power_of_two().max(1024);
     state.mesh_vertex_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("vk mesh vertex buffer"),
+        label: Some("wgpu mesh vertex buffer"),
         size: (new_cap * mem::size_of::<crate::core::gfx::MeshVertex>()) as u64,
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
     state.mesh_vertex_capacity = new_cap;
+}
+
+fn ensure_projection_capacity(state: &mut State, needed: usize) {
+    let ProjState::Uniform {
+        stride,
+        capacity,
+        buffer,
+        group,
+        layout,
+    } = &mut state.proj
+    else {
+        return;
+    };
+    if needed <= *capacity {
+        return;
+    }
+    let new_cap = needed.next_power_of_two().max(4);
+    *buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu projection"),
+        size: (new_cap as u64) * *stride,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    *group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("wgpu proj group"),
+        layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: buffer.as_entire_binding(),
+        }],
+    });
+    *capacity = new_cap;
 }
 
 fn reconfigure_surface(state: &mut State) {
@@ -690,11 +930,19 @@ fn reconfigure_surface(state: &mut State) {
     state.config.width = state.window_size.0;
     state.config.height = state.window_size.1;
     state.surface.configure(&state.device, &state.config);
+
+    if matches!(state.proj, ProjState::Uniform { .. }) {
+        let fallback: [[f32; 4]; 4] = state.projection.into();
+        if let ProjState::Uniform { buffer, .. } = &state.proj {
+            state.queue.write_buffer(buffer, 0, cast_slice(&fallback));
+        }
+    }
+
     if format_changed {
         let (shader, pipeline_layout, pipelines) =
-            build_pipeline_set(&state.device, &state.bind_layout, state.config.format);
+            build_pipeline_set(&state.device, &state.proj, &state.bind_layout, state.config.format);
         let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
-            build_mesh_pipeline_set(&state.device, state.config.format);
+            build_mesh_pipeline_set(&state.device, &state.proj, state.config.format);
         state.shader = shader;
         state.pipeline_layout = pipeline_layout;
         state.pipelines = pipelines;
@@ -705,7 +953,7 @@ fn reconfigure_surface(state: &mut State) {
 }
 
 fn pick_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
-    // Match GL/Vulkan path: avoid sRGB conversion to keep colors consistent.
+    // Avoid sRGB conversion to keep colors consistent across backends.
     caps.formats
         .iter()
         .copied()
@@ -795,19 +1043,37 @@ fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
 
 fn build_pipeline_set(
     device: &wgpu::Device,
+    proj: &ProjState,
     bind_layout: &wgpu::BindGroupLayout,
     format: wgpu::TextureFormat,
 ) -> (wgpu::ShaderModule, wgpu::PipelineLayout, PipelineSet) {
+    let shader_src = match proj {
+        ProjState::Immediates => SHADER_IMM,
+        ProjState::Uniform { .. } => SHADER_UBO,
+    };
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("vk shader module"),
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(SHADER)),
+        label: Some("wgpu shader module"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_src)),
     });
 
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("vk pipeline layout"),
-        bind_group_layouts: &[bind_layout],
-        immediate_size: mem::size_of::<[[f32; 4]; 4]>() as u32,
-    });
+    let pipeline_layout = match proj {
+        ProjState::Immediates => {
+            let layouts = [bind_layout];
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("wgpu pipeline layout"),
+                bind_group_layouts: &layouts,
+                immediate_size: PROJ_BYTES as u32,
+            })
+        }
+        ProjState::Uniform { layout, .. } => {
+            let layouts = [layout, bind_layout];
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("wgpu pipeline layout"),
+                bind_group_layouts: &layouts,
+                immediate_size: 0,
+            })
+        }
+    };
 
     let pipelines = PipelineSet {
         alpha: build_pipeline(device, &pipeline_layout, format, BlendMode::Alpha, &shader),
@@ -833,18 +1099,33 @@ fn build_pipeline_set(
 
 fn build_mesh_pipeline_set(
     device: &wgpu::Device,
+    proj: &ProjState,
     format: wgpu::TextureFormat,
 ) -> (wgpu::ShaderModule, wgpu::PipelineLayout, MeshPipelineSet) {
+    let shader_src = match proj {
+        ProjState::Immediates => MESH_SHADER_IMM,
+        ProjState::Uniform { .. } => MESH_SHADER_UBO,
+    };
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("vk mesh shader module"),
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(MESH_SHADER)),
+        label: Some("wgpu mesh shader module"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_src)),
     });
 
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("vk mesh pipeline layout"),
-        bind_group_layouts: &[],
-        immediate_size: mem::size_of::<[[f32; 4]; 4]>() as u32,
-    });
+    let pipeline_layout = match proj {
+        ProjState::Immediates => device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("wgpu mesh pipeline layout"),
+            bind_group_layouts: &[],
+            immediate_size: PROJ_BYTES as u32,
+        }),
+        ProjState::Uniform { layout, .. } => {
+            let layouts = [layout];
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("wgpu mesh pipeline layout"),
+                bind_group_layouts: &layouts,
+                immediate_size: 0,
+            })
+        }
+    };
 
     let pipelines = MeshPipelineSet {
         alpha: build_mesh_pipeline(device, &pipeline_layout, format, BlendMode::Alpha, &shader),
@@ -876,7 +1157,7 @@ fn build_pipeline(
     shader: &wgpu::ShaderModule,
 ) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("vk pipeline"),
+        label: Some("wgpu pipeline"),
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: shader,
@@ -918,7 +1199,7 @@ fn build_mesh_pipeline(
     shader: &wgpu::ShaderModule,
 ) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("vk mesh pipeline"),
+        label: Some("wgpu mesh pipeline"),
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: shader,
@@ -996,6 +1277,8 @@ const INSTANCE_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
     8 => Float32x4, // edge fade
 ];
 
+const PROJ_BYTES: u64 = mem::size_of::<[[f32; 4]; 4]>() as u64;
+
 #[inline(always)]
 const fn cast_slice<T>(data: &[T]) -> &[u8] {
     let len = std::mem::size_of_val(data);
@@ -1031,7 +1314,7 @@ fn sampler_descriptor(desc: SamplerDesc) -> wgpu::SamplerDescriptor<'static> {
         wgpu::MipmapFilterMode::Nearest
     };
     wgpu::SamplerDescriptor {
-        label: Some("vk sampler"),
+        label: Some("wgpu sampler"),
         address_mode_u: address,
         address_mode_v: address,
         address_mode_w: address,
@@ -1051,5 +1334,7 @@ fn get_sampler(state: &mut State, desc: SamplerDesc) -> wgpu::Sampler {
     sampler
 }
 
-const SHADER: &str = include_str!("../shaders/wgpu_sprite.wgsl");
-const MESH_SHADER: &str = include_str!("../shaders/wgpu_mesh.wgsl");
+const SHADER_IMM: &str = include_str!("../shaders/wgpu_sprite.wgsl");
+const MESH_SHADER_IMM: &str = include_str!("../shaders/wgpu_mesh.wgsl");
+const SHADER_UBO: &str = include_str!("../shaders/wgpu_sprite_ubo.wgsl");
+const MESH_SHADER_UBO: &str = include_str!("../shaders/wgpu_mesh_ubo.wgsl");
