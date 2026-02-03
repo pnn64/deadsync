@@ -203,7 +203,7 @@ fn init(api: Api, window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: api.backends(),
-        flags: wgpu::InstanceFlags::default(),
+        flags: wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL,
         memory_budget_thresholds: Default::default(),
         backend_options: Default::default(),
     });
