@@ -74,6 +74,26 @@ const INITIAL_HOLD_LIFE: f32 = 1.0;
 const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32;
 const TIMING_WINDOW_SECONDS_ROLL: f32 = 0.35;
 
+// Simply Love: ScreenGameplay GiveUpSeconds=0.33
+const GIVE_UP_HOLD_SECONDS: f32 = 0.33;
+// Mirrors ScreenGameplay::AbortGiveUpText tween duration (1/2 second).
+const GIVE_UP_ABORT_TEXT_SECONDS: f32 = 0.5;
+const BACK_OUT_HOLD_SECONDS: f32 = 1.0;
+// Simply Love: ScreenGameplay out.lua (sleep 0.5, linear 1.0).
+const GIVE_UP_OUT_TOTAL_SECONDS: f32 = GIVE_UP_OUT_FADE_DELAY_SECONDS + GIVE_UP_OUT_FADE_SECONDS;
+const GIVE_UP_OUT_FADE_DELAY_SECONDS: f32 = 0.5;
+const GIVE_UP_OUT_FADE_SECONDS: f32 = 1.0;
+// Simply Love: _fade out normal.lua (sleep 0.1, linear 0.4).
+const BACK_OUT_TOTAL_SECONDS: f32 = BACK_OUT_FADE_DELAY_SECONDS + BACK_OUT_FADE_SECONDS;
+const BACK_OUT_FADE_DELAY_SECONDS: f32 = 0.1;
+const BACK_OUT_FADE_SECONDS: f32 = 0.4;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HoldToExitKey {
+    Start,
+    Back,
+}
+
 #[inline(always)]
 fn quantize_offset_seconds(v: f32) -> f32 {
     let step = 0.001_f32;
@@ -1068,8 +1088,10 @@ pub struct State {
     pub density_graph_life_mesh_offset_px: [i32; MAX_PLAYERS],
     pub density_graph_life_dirty: [bool; MAX_PLAYERS],
 
-    pub hold_to_exit_key: Option<KeyCode>,
+    pub hold_to_exit_key: Option<HoldToExitKey>,
     pub hold_to_exit_start: Option<Instant>,
+    pub hold_to_exit_aborted_at: Option<Instant>,
+    pub exit_transition: Option<ExitTransition>,
     prev_inputs: [bool; MAX_COLS],
     keyboard_lane_state: [bool; MAX_COLS],
     gamepad_lane_state: [bool; MAX_COLS],
@@ -1087,6 +1109,70 @@ fn is_player_dead(p: &PlayerRuntime) -> bool {
 #[inline(always)]
 fn is_state_dead(state: &State, player: usize) -> bool {
     is_player_dead(&state.players[player])
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExitTransitionKind {
+    Out,
+    Cancel,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ExitTransition {
+    pub kind: ExitTransitionKind,
+    pub target: Screen,
+    pub started_at: Instant,
+}
+
+#[inline(always)]
+const fn exit_total_seconds(kind: ExitTransitionKind) -> f32 {
+    match kind {
+        ExitTransitionKind::Out => GIVE_UP_OUT_TOTAL_SECONDS,
+        ExitTransitionKind::Cancel => BACK_OUT_TOTAL_SECONDS,
+    }
+}
+
+#[inline(always)]
+pub fn exit_transition_alpha(exit: &ExitTransition) -> f32 {
+    let t = exit.started_at.elapsed().as_secs_f32();
+    let (delay, fade) = match exit.kind {
+        ExitTransitionKind::Out => (GIVE_UP_OUT_FADE_DELAY_SECONDS, GIVE_UP_OUT_FADE_SECONDS),
+        ExitTransitionKind::Cancel => (BACK_OUT_FADE_DELAY_SECONDS, BACK_OUT_FADE_SECONDS),
+    };
+    if fade <= 0.0 {
+        return 1.0;
+    }
+    let a = if t <= delay {
+        0.0
+    } else {
+        (t - delay) / fade
+    };
+    a.clamp(0.0, 1.0)
+}
+
+#[inline(always)]
+fn abort_hold_to_exit(state: &mut State, at: Instant) {
+    if state.hold_to_exit_start.is_some() {
+        state.hold_to_exit_key = None;
+        state.hold_to_exit_start = None;
+        state.hold_to_exit_aborted_at = Some(at);
+    }
+}
+
+#[inline(always)]
+fn begin_exit_transition(state: &mut State, kind: ExitTransitionKind, target: Screen) {
+    if state.exit_transition.is_some() {
+        return;
+    }
+    state.hold_to_exit_key = None;
+    state.hold_to_exit_start = None;
+    state.hold_to_exit_aborted_at = None;
+    state.exit_transition = Some(ExitTransition {
+        kind,
+        target,
+        started_at: Instant::now(),
+    });
+    audio::stop_music();
 }
 
 pub fn danger_overlay_rgba(state: &State, player: usize) -> Option<[f32; 4]> {
@@ -2141,6 +2227,8 @@ pub fn init(
         density_graph_life_dirty,
         hold_to_exit_key: None,
         hold_to_exit_start: None,
+        hold_to_exit_aborted_at: None,
+        exit_transition: None,
         prev_inputs: [false; MAX_COLS],
         keyboard_lane_state: [false; MAX_COLS],
         gamepad_lane_state: [false; MAX_COLS],
@@ -3153,8 +3241,12 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if state.exit_transition.is_some() {
+        return ScreenAction::None;
+    }
     if let Some(lane) = lane_from_action(ev.action) {
         queue_input_edge(state, ev.source, lane, ev.pressed, ev.timestamp);
+        abort_hold_to_exit(state, ev.timestamp);
         return ScreenAction::None;
     }
     let is_p2_single = profile::get_session_play_style() == profile::PlayStyle::Single
@@ -3162,38 +3254,38 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match ev.action {
         VirtualAction::p1_start if !is_p2_single => {
             if ev.pressed {
-                state.hold_to_exit_key = Some(KeyCode::Enter);
+                state.hold_to_exit_key = Some(HoldToExitKey::Start);
                 state.hold_to_exit_start = Some(ev.timestamp);
-            } else if state.hold_to_exit_key == Some(KeyCode::Enter) {
-                state.hold_to_exit_key = None;
-                state.hold_to_exit_start = None;
+                state.hold_to_exit_aborted_at = None;
+            } else if state.hold_to_exit_key == Some(HoldToExitKey::Start) {
+                abort_hold_to_exit(state, ev.timestamp);
             }
         }
         VirtualAction::p2_start if is_p2_single => {
             if ev.pressed {
-                state.hold_to_exit_key = Some(KeyCode::Enter);
+                state.hold_to_exit_key = Some(HoldToExitKey::Start);
                 state.hold_to_exit_start = Some(ev.timestamp);
-            } else if state.hold_to_exit_key == Some(KeyCode::Enter) {
-                state.hold_to_exit_key = None;
-                state.hold_to_exit_start = None;
+                state.hold_to_exit_aborted_at = None;
+            } else if state.hold_to_exit_key == Some(HoldToExitKey::Start) {
+                abort_hold_to_exit(state, ev.timestamp);
             }
         }
         VirtualAction::p1_back if !is_p2_single => {
             if ev.pressed {
-                state.hold_to_exit_key = Some(KeyCode::Escape);
+                state.hold_to_exit_key = Some(HoldToExitKey::Back);
                 state.hold_to_exit_start = Some(ev.timestamp);
-            } else if state.hold_to_exit_key == Some(KeyCode::Escape) {
-                state.hold_to_exit_key = None;
-                state.hold_to_exit_start = None;
+                state.hold_to_exit_aborted_at = None;
+            } else if state.hold_to_exit_key == Some(HoldToExitKey::Back) {
+                abort_hold_to_exit(state, ev.timestamp);
             }
         }
         VirtualAction::p2_back if is_p2_single => {
             if ev.pressed {
-                state.hold_to_exit_key = Some(KeyCode::Escape);
+                state.hold_to_exit_key = Some(HoldToExitKey::Back);
                 state.hold_to_exit_start = Some(ev.timestamp);
-            } else if state.hold_to_exit_key == Some(KeyCode::Escape) {
-                state.hold_to_exit_key = None;
-                state.hold_to_exit_start = None;
+                state.hold_to_exit_aborted_at = None;
+            } else if state.hold_to_exit_key == Some(HoldToExitKey::Back) {
+                abort_hold_to_exit(state, ev.timestamp);
             }
         }
         _ => {}
@@ -4094,12 +4186,27 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
 }
 
 pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
+    if let Some(exit) = state.exit_transition {
+        state.total_elapsed_in_screen += delta_time;
+        if exit.started_at.elapsed().as_secs_f32() >= exit_total_seconds(exit.kind) {
+            state.exit_transition = None;
+            return ScreenAction::NavigateNoFade(exit.target);
+        }
+        return ScreenAction::None;
+    }
+
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
         1.0
     };
     let anchor = -state.global_offset_seconds;
+
+    if let Some(at) = state.hold_to_exit_aborted_at
+        && at.elapsed().as_secs_f32() >= GIVE_UP_ABORT_TEXT_SECONDS
+    {
+        state.hold_to_exit_aborted_at = None;
+    }
 
     // Music time driven directly by the audio device clock, interpolated
     // between callbacks for smooth, continuous motion.
@@ -4108,19 +4215,25 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     let music_time_sec = (stream_pos - lead_in).mul_add(rate, anchor * (1.0 - rate));
     state.current_music_time = music_time_sec;
 
-    if let (Some(key), Some(start_time)) = (state.hold_to_exit_key, state.hold_to_exit_start)
-        && start_time.elapsed() >= std::time::Duration::from_secs(1)
-    {
-        state.hold_to_exit_key = None;
-        state.hold_to_exit_start = None;
-        if key == KeyCode::Enter && music_time_sec >= state.notes_end_time {
-            state.song_completed_naturally = true;
-        }
-        return match key {
-            KeyCode::Enter => ScreenAction::Navigate(Screen::Evaluation),
-            KeyCode::Escape => ScreenAction::Navigate(Screen::SelectMusic),
-            _ => ScreenAction::None,
+    if let (Some(key), Some(start_time)) = (state.hold_to_exit_key, state.hold_to_exit_start) {
+        let hold_s = match key {
+            HoldToExitKey::Start => GIVE_UP_HOLD_SECONDS,
+            HoldToExitKey::Back => BACK_OUT_HOLD_SECONDS,
         };
+        if start_time.elapsed().as_secs_f32() >= hold_s {
+            if key == HoldToExitKey::Start && music_time_sec >= state.notes_end_time {
+                state.song_completed_naturally = true;
+            }
+            match key {
+                HoldToExitKey::Start => {
+                    begin_exit_transition(state, ExitTransitionKind::Out, Screen::Evaluation);
+                }
+                HoldToExitKey::Back => {
+                    begin_exit_transition(state, ExitTransitionKind::Cancel, Screen::SelectMusic);
+                }
+            }
+            return ScreenAction::None;
+        }
     }
     state.total_elapsed_in_screen += delta_time;
 
