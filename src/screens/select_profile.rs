@@ -14,6 +14,7 @@ use crate::ui::components::screen_bar::{
 use crate::ui::components::{heart_bg, screen_bar};
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -102,14 +103,73 @@ pub struct State {
     exit_anim: bool,
     choices: Vec<Choice>,
     bg: heart_bg::State,
-    p1_preview_noteskin: Option<Noteskin>,
-    p2_preview_noteskin: Option<Noteskin>,
+    noteskin_cache: NoteskinCache,
+    p1_preview_noteskin: Option<Arc<Noteskin>>,
+    p2_preview_noteskin: Option<Arc<Noteskin>>,
     preview_time: f32,
     preview_beat: f32,
     p1_join_pulse_t: f32,
     p2_join_pulse_t: f32,
     p1_shake_t: f32,
     p2_shake_t: f32,
+}
+
+struct NoteskinCache {
+    cel: Option<Arc<Noteskin>>,
+    metal: Option<Arc<Noteskin>>,
+    enchantment_v2: Option<Arc<Noteskin>>,
+    devcel_2024_v3: Option<Arc<Noteskin>>,
+}
+
+impl NoteskinCache {
+    fn new(choices: &[Choice]) -> Self {
+        const CEL: u8 = 1 << 0;
+        const METAL: u8 = 1 << 1;
+        const ENCHANTMENT_V2: u8 = 1 << 2;
+        const DEVCEL_2024_V3: u8 = 1 << 3;
+
+        let mut mask: u8 = 0;
+        for choice in choices {
+            if !matches!(&choice.kind, ActiveProfile::Local { .. }) {
+                continue;
+            }
+            mask |= match choice.noteskin {
+                profile::NoteSkin::Cel => CEL,
+                profile::NoteSkin::Metal => METAL,
+                profile::NoteSkin::EnchantmentV2 => ENCHANTMENT_V2,
+                profile::NoteSkin::DevCel2024V3 => DEVCEL_2024_V3,
+            };
+        }
+
+        let mut cache = Self {
+            cel: None,
+            metal: None,
+            enchantment_v2: None,
+            devcel_2024_v3: None,
+        };
+        if mask & CEL != 0 {
+            cache.cel = load_noteskin(profile::NoteSkin::Cel).map(Arc::new);
+        }
+        if mask & METAL != 0 {
+            cache.metal = load_noteskin(profile::NoteSkin::Metal).map(Arc::new);
+        }
+        if mask & ENCHANTMENT_V2 != 0 {
+            cache.enchantment_v2 = load_noteskin(profile::NoteSkin::EnchantmentV2).map(Arc::new);
+        }
+        if mask & DEVCEL_2024_V3 != 0 {
+            cache.devcel_2024_v3 = load_noteskin(profile::NoteSkin::DevCel2024V3).map(Arc::new);
+        }
+        cache
+    }
+
+    fn get(&self, kind: profile::NoteSkin) -> Option<&Arc<Noteskin>> {
+        match kind {
+            profile::NoteSkin::Cel => self.cel.as_ref(),
+            profile::NoteSkin::Metal => self.metal.as_ref(),
+            profile::NoteSkin::EnchantmentV2 => self.enchantment_v2.as_ref(),
+            profile::NoteSkin::DevCel2024V3 => self.devcel_2024_v3.as_ref(),
+        }
+    }
 }
 
 fn load_noteskin(kind: profile::NoteSkin) -> Option<Noteskin> {
@@ -131,13 +191,17 @@ fn load_noteskin(kind: profile::NoteSkin) -> Option<Noteskin> {
         .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok())
 }
 
-fn preview_noteskin_for_choice(choices: &[Choice], selected_index: usize) -> Option<Noteskin> {
+fn preview_noteskin_for_choice(
+    cache: &NoteskinCache,
+    choices: &[Choice],
+    selected_index: usize,
+) -> Option<Arc<Noteskin>> {
     let Some(choice) = choices.get(selected_index) else {
         return None;
     };
     match choice.kind {
         ActiveProfile::Guest => None,
-        ActiveProfile::Local { .. } => load_noteskin(choice.noteskin),
+        ActiveProfile::Local { .. } => cache.get(choice.noteskin).cloned(),
     }
 }
 
@@ -259,6 +323,7 @@ fn build_choices() -> Vec<Choice> {
 
 pub fn init() -> State {
     let choices = build_choices();
+    let noteskin_cache = NoteskinCache::new(&choices);
     let active = profile::get_active_profile();
     let active_color_index = crate::config::get().simply_love_color;
 
@@ -283,6 +348,7 @@ pub fn init() -> State {
         exit_anim: false,
         choices,
         bg: heart_bg::State::new(),
+        noteskin_cache,
         p1_preview_noteskin: None,
         p2_preview_noteskin: None,
         preview_time: 0.0,
@@ -292,10 +358,16 @@ pub fn init() -> State {
         p1_shake_t: SHAKE_DUR,
         p2_shake_t: SHAKE_DUR,
     };
-    state.p1_preview_noteskin =
-        preview_noteskin_for_choice(&state.choices, state.p1_selected_index);
-    state.p2_preview_noteskin =
-        preview_noteskin_for_choice(&state.choices, state.p2_selected_index);
+    state.p1_preview_noteskin = preview_noteskin_for_choice(
+        &state.noteskin_cache,
+        &state.choices,
+        state.p1_selected_index,
+    );
+    state.p2_preview_noteskin = preview_noteskin_for_choice(
+        &state.noteskin_cache,
+        &state.choices,
+        state.p2_selected_index,
+    );
     state
 }
 
@@ -307,10 +379,16 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
     state.p1_join_pulse_t = JOIN_PULSE_DURATION;
     state.p2_join_pulse_t = JOIN_PULSE_DURATION;
 
-    state.p1_preview_noteskin =
-        preview_noteskin_for_choice(&state.choices, state.p1_selected_index);
-    state.p2_preview_noteskin =
-        preview_noteskin_for_choice(&state.choices, state.p2_selected_index);
+    state.p1_preview_noteskin = preview_noteskin_for_choice(
+        &state.noteskin_cache,
+        &state.choices,
+        state.p1_selected_index,
+    );
+    state.p2_preview_noteskin = preview_noteskin_for_choice(
+        &state.noteskin_cache,
+        &state.choices,
+        state.p2_selected_index,
+    );
 }
 
 pub fn update(state: &mut State, dt: f32) {
@@ -399,8 +477,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             if state.p1_selected_index > 0 {
                 state.p1_selected_index -= 1;
-                state.p1_preview_noteskin =
-                    preview_noteskin_for_choice(&state.choices, state.p1_selected_index);
+                state.p1_preview_noteskin = preview_noteskin_for_choice(
+                    &state.noteskin_cache,
+                    &state.choices,
+                    state.p1_selected_index,
+                );
                 audio::play_sfx("assets/sounds/change.ogg");
             }
             ScreenAction::None
@@ -411,8 +492,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             if state.p1_selected_index + 1 < state.choices.len() {
                 state.p1_selected_index += 1;
-                state.p1_preview_noteskin =
-                    preview_noteskin_for_choice(&state.choices, state.p1_selected_index);
+                state.p1_preview_noteskin = preview_noteskin_for_choice(
+                    &state.noteskin_cache,
+                    &state.choices,
+                    state.p1_selected_index,
+                );
                 audio::play_sfx("assets/sounds/change.ogg");
             }
             ScreenAction::None
@@ -422,8 +506,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 state.p1_joined = true;
                 state.p1_ready = false;
                 state.p1_join_pulse_t = 0.0;
-                state.p1_preview_noteskin =
-                    preview_noteskin_for_choice(&state.choices, state.p1_selected_index);
+                state.p1_preview_noteskin = preview_noteskin_for_choice(
+                    &state.noteskin_cache,
+                    &state.choices,
+                    state.p1_selected_index,
+                );
                 audio::play_sfx("assets/sounds/start.ogg");
                 return ScreenAction::None;
             }
@@ -487,8 +574,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             if state.p2_selected_index > 0 {
                 state.p2_selected_index -= 1;
-                state.p2_preview_noteskin =
-                    preview_noteskin_for_choice(&state.choices, state.p2_selected_index);
+                state.p2_preview_noteskin = preview_noteskin_for_choice(
+                    &state.noteskin_cache,
+                    &state.choices,
+                    state.p2_selected_index,
+                );
                 audio::play_sfx("assets/sounds/change.ogg");
             }
             ScreenAction::None
@@ -499,8 +589,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             if state.p2_selected_index + 1 < state.choices.len() {
                 state.p2_selected_index += 1;
-                state.p2_preview_noteskin =
-                    preview_noteskin_for_choice(&state.choices, state.p2_selected_index);
+                state.p2_preview_noteskin = preview_noteskin_for_choice(
+                    &state.noteskin_cache,
+                    &state.choices,
+                    state.p2_selected_index,
+                );
                 audio::play_sfx("assets/sounds/change.ogg");
             }
             ScreenAction::None
@@ -510,8 +603,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 state.p2_joined = true;
                 state.p2_ready = false;
                 state.p2_join_pulse_t = 0.0;
-                state.p2_preview_noteskin =
-                    preview_noteskin_for_choice(&state.choices, state.p2_selected_index);
+                state.p2_preview_noteskin = preview_noteskin_for_choice(
+                    &state.noteskin_cache,
+                    &state.choices,
+                    state.p2_selected_index,
+                );
                 audio::play_sfx("assets/sounds/start.ogg");
                 return ScreenAction::None;
             }
@@ -1268,7 +1364,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             &mut scroller_ui,
             &state.choices,
             state.p1_selected_index,
-            state.p1_preview_noteskin.as_ref(),
+            state.p1_preview_noteskin.as_deref(),
             state.preview_time,
             state.preview_beat,
             p1_cx,
@@ -1352,7 +1448,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             &mut scroller_ui,
             &state.choices,
             state.p2_selected_index,
-            state.p2_preview_noteskin.as_ref(),
+            state.p2_preview_noteskin.as_deref(),
             state.preview_time,
             state.preview_beat,
             p2_cx,
