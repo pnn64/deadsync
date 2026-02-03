@@ -13,6 +13,8 @@ use crate::ui::components::{eval_grades, heart_bg, pad_display, screen_bar};
 use crate::assets::AssetManager;
 use crate::game::chart::ChartData;
 use crate::game::judgment::{self, JudgeGrade};
+use crate::game::note::NoteType;
+use crate::game::parsing::noteskin::{Noteskin, Quantization, NUM_QUANTIZATIONS};
 use crate::game::scores;
 use crate::game::scroll::ScrollSpeedSetting;
 use crate::game::song::SongData;
@@ -72,6 +74,75 @@ pub struct ScoreInfo {
     pub ex_score_percent: f64,
     // Arrow Cloud style "H.EX" score percentage (0.00–100.00).
     pub hard_ex_score_percent: f64,
+    // Per-column tap note judgment breakdown (Pane3 in Simply Love).
+    pub column_judgments: Vec<ColumnJudgments>,
+    // Noteskin used during gameplay, for Pane3 column previews.
+    pub noteskin: Option<Arc<Noteskin>>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ColumnJudgments {
+    pub w0: u32,
+    pub w1: u32,
+    pub w2: u32,
+    pub w3: u32,
+    pub w4: u32,
+    pub w5: u32,
+    pub miss: u32,
+    pub early_w4: u32,
+    pub early_w5: u32,
+    pub held_miss: u32,
+}
+
+fn compute_column_judgments(notes: &[crate::game::note::Note], cols_per_player: usize) -> Vec<ColumnJudgments> {
+    let cols = cols_per_player.max(0);
+    let mut out = vec![ColumnJudgments::default(); cols];
+    if cols == 0 {
+        return out;
+    }
+
+    for note in notes {
+        if note.is_fake || !note.can_be_judged || matches!(note.note_type, NoteType::Mine) {
+            continue;
+        }
+        let Some(j) = note.result.as_ref() else {
+            continue;
+        };
+        let col = note.column;
+        if col >= out.len() {
+            continue;
+        }
+        let slot = &mut out[col];
+
+        match j.grade {
+            JudgeGrade::Fantastic => match j.window {
+                Some(crate::game::judgment::TimingWindow::W0) => slot.w0 = slot.w0.saturating_add(1),
+                _ => slot.w1 = slot.w1.saturating_add(1),
+            },
+            JudgeGrade::Excellent => slot.w2 = slot.w2.saturating_add(1),
+            JudgeGrade::Great => slot.w3 = slot.w3.saturating_add(1),
+            JudgeGrade::Decent => {
+                slot.w4 = slot.w4.saturating_add(1);
+                if j.time_error_ms < 0.0 {
+                    slot.early_w4 = slot.early_w4.saturating_add(1);
+                }
+            }
+            JudgeGrade::WayOff => {
+                slot.w5 = slot.w5.saturating_add(1);
+                if j.time_error_ms < 0.0 {
+                    slot.early_w5 = slot.early_w5.saturating_add(1);
+                }
+            }
+            JudgeGrade::Miss => {
+                slot.miss = slot.miss.saturating_add(1);
+                if j.miss_because_held {
+                    slot.held_miss = slot.held_miss.saturating_add(1);
+                }
+            }
+        }
+    }
+
+    out
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -79,6 +150,7 @@ enum EvalPane {
     Standard,
     FaPlus,
     HardEx,
+    Column,
 }
 
 impl EvalPane {
@@ -95,10 +167,14 @@ impl EvalPane {
     fn toggle(self, has_hard_ex: bool) -> Self {
         match (self, has_hard_ex) {
             (Self::Standard, false) => Self::FaPlus,
-            (Self::FaPlus, false) => Self::Standard,
+            (Self::FaPlus, false) => Self::Column,
+            (Self::Column, false) => Self::Standard,
+
             (Self::Standard, true) => Self::FaPlus,
             (Self::FaPlus, true) => Self::HardEx,
-            (Self::HardEx, true) => Self::Standard,
+            (Self::HardEx, true) => Self::Column,
+            (Self::Column, true) => Self::Standard,
+
             (Self::HardEx, false) => Self::Standard,
         }
     }
@@ -117,11 +193,13 @@ pub struct State {
 }
 
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
-    let score_info = gameplay_results.map(|gs| {
+    let score_info = gameplay_results.map(|mut gs| {
         // Persist one score file per play (per local profile), including fails and replay lane input.
         scores::save_local_scores_from_gameplay(&gs);
 
         let player_idx = 0;
+        let cols_per_player = gs.cols_per_player;
+        let noteskin = gs.noteskin[player_idx].take().map(Arc::new);
         let (start, end) = gs.note_ranges[player_idx];
         let notes = &gs.notes[start..end];
         let note_times = &gs.note_time_cache[start..end];
@@ -203,6 +281,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             grade = scores::Grade::Quint;
         }
 
+        let column_judgments = compute_column_judgments(notes, cols_per_player);
+
         ScoreInfo {
             song: gs.song.clone(),
             chart: gs.charts[player_idx].clone(),
@@ -235,6 +315,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             window_counts_10ms,
             ex_score_percent,
             hard_ex_score_percent,
+            column_judgments,
+            noteskin,
         }
     });
 
@@ -715,6 +797,257 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
     actors
 }
 
+fn build_p1_column_judgments_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+    let Some(score_info) = &state.score_info else {
+        return vec![];
+    };
+    let num_cols = score_info.column_judgments.len();
+    if num_cols == 0 {
+        return vec![];
+    }
+
+    #[derive(Clone, Copy)]
+    enum RowKind {
+        FanCombined,
+        FanW0,
+        FanW1,
+        Ex,
+        Gr,
+        Dec,
+        Wo,
+        Miss,
+    }
+
+    #[derive(Clone, Copy)]
+    struct RowInfo {
+        kind: RowKind,
+        label: &'static str,
+        color: [f32; 4],
+    }
+
+    let show_fa_plus_rows = profile::get().show_fa_plus_pane;
+    let rows: Vec<RowInfo> = if show_fa_plus_rows {
+        vec![
+            RowInfo {
+                kind: RowKind::FanW0,
+                label: "FANTASTIC",
+                color: color::JUDGMENT_RGBA[0],
+            },
+            RowInfo {
+                kind: RowKind::FanW1,
+                label: "FANTASTIC",
+                color: color::JUDGMENT_FA_PLUS_WHITE_RGBA,
+            },
+            RowInfo {
+                kind: RowKind::Ex,
+                label: "EXCELLENT",
+                color: color::JUDGMENT_RGBA[1],
+            },
+            RowInfo {
+                kind: RowKind::Gr,
+                label: "GREAT",
+                color: color::JUDGMENT_RGBA[2],
+            },
+            RowInfo {
+                kind: RowKind::Dec,
+                label: "DECENT",
+                color: color::JUDGMENT_RGBA[3],
+            },
+            RowInfo {
+                kind: RowKind::Wo,
+                label: "WAY OFF",
+                color: color::JUDGMENT_RGBA[4],
+            },
+            RowInfo {
+                kind: RowKind::Miss,
+                label: "MISS",
+                color: color::JUDGMENT_RGBA[5],
+            },
+        ]
+    } else {
+        vec![
+            RowInfo {
+                kind: RowKind::FanCombined,
+                label: "FANTASTIC",
+                color: color::JUDGMENT_RGBA[0],
+            },
+            RowInfo {
+                kind: RowKind::Ex,
+                label: "EXCELLENT",
+                color: color::JUDGMENT_RGBA[1],
+            },
+            RowInfo {
+                kind: RowKind::Gr,
+                label: "GREAT",
+                color: color::JUDGMENT_RGBA[2],
+            },
+            RowInfo {
+                kind: RowKind::Dec,
+                label: "DECENT",
+                color: color::JUDGMENT_RGBA[3],
+            },
+            RowInfo {
+                kind: RowKind::Wo,
+                label: "WAY OFF",
+                color: color::JUDGMENT_RGBA[4],
+            },
+            RowInfo {
+                kind: RowKind::Miss,
+                label: "MISS",
+                color: color::JUDGMENT_RGBA[5],
+            },
+        ]
+    };
+
+    let cy = screen_center_y();
+    let p1_origin_x = screen_center_x() - 155.0;
+
+    // Pane3 geometry (Simply Love): 230x146 box, anchored near (-104, cy-40) within the P1 pane.
+    let box_width: f32 = 230.0;
+    let box_height: f32 = 146.0;
+    let col_width = box_width / num_cols as f32;
+    let row_height = box_height / rows.len() as f32;
+    let base_x = p1_origin_x - 104.0;
+    let base_y = cy - 40.0;
+
+    // Judgment label column (Simply Love): frame at (50, cy-36), labels at x=-130 for P1.
+    let labels_frame_x = p1_origin_x + 50.0;
+    let labels_frame_y = cy - 36.0;
+    let labels_right_x = labels_frame_x - 130.0;
+
+    let mut actors = Vec::new();
+
+    let count_for = |cj: ColumnJudgments, kind: RowKind| -> (u32, Option<u32>) {
+        match kind {
+            RowKind::FanCombined => (cj.w0.saturating_add(cj.w1), None),
+            RowKind::FanW0 => (cj.w0, None),
+            RowKind::FanW1 => (cj.w1, None),
+            RowKind::Ex => (cj.w2, None),
+            RowKind::Gr => (cj.w3, None),
+            RowKind::Dec => (cj.w4, Some(cj.early_w4)),
+            RowKind::Wo => (cj.w5, Some(cj.early_w5)),
+            RowKind::Miss => (cj.miss, None),
+        }
+    };
+
+    asset_manager.with_fonts(|all_fonts| asset_manager.with_font("miso", |miso_font| {
+        let label_zoom: f32 = 0.8;
+        let number_zoom: f32 = 0.9;
+        let small_zoom: f32 = 0.65;
+        let held_label_zoom: f32 = 0.6;
+
+        // Row labels
+        for (row_idx, row) in rows.iter().enumerate() {
+            let y = labels_frame_y + (row_idx as f32 + 1.0).mul_add(row_height, 0.0);
+            actors.push(act!(text: font("miso"): settext(row.label.to_string()):
+                align(1.0, 0.5):
+                xy(labels_right_x, y):
+                zoom(label_zoom):
+                maxwidth(65.0 / label_zoom):
+                horizalign(right):
+                diffuse(row.color[0], row.color[1], row.color[2], row.color[3]):
+                z(101)
+            ));
+        }
+
+        // "HELD" label at the bottom, aligned relative to the MISS label width.
+        let miss_label_width =
+            font::measure_line_width_logical(miso_font, "MISS", all_fonts) as f32 * label_zoom;
+        let held_label_x = labels_right_x - miss_label_width / 1.15;
+        let held_y = labels_frame_y + 140.0;
+        let miss_color = color::JUDGMENT_RGBA[5];
+        actors.push(act!(text: font("miso"): settext("HELD".to_string()):
+            align(1.0, 0.5):
+            xy(held_label_x, held_y):
+            zoom(held_label_zoom):
+            horizalign(right):
+            diffuse(miss_color[0], miss_color[1], miss_color[2], miss_color[3]):
+            z(101)
+        ));
+
+        // Columns: arrows + per-row counts
+        for col_idx in 0..num_cols {
+            let cj = score_info.column_judgments[col_idx];
+            let col_center_x = (col_idx as f32 + 1.0).mul_add(col_width, base_x);
+
+            // Measure Miss number width for this column for alignment of early/held counts.
+            let miss_str = cj.miss.to_string();
+            let miss_width =
+                font::measure_line_width_logical(miso_font, &miss_str, all_fonts) as f32
+                    * number_zoom;
+            let right_edge_x = col_center_x - 1.0 - miss_width * 0.5;
+
+            // Noteskin preview arrow (Tap Note, Q4th) above the column.
+            if let Some(ns) = score_info.noteskin.as_ref() {
+                let note_idx = col_idx
+                    .saturating_mul(NUM_QUANTIZATIONS)
+                    .saturating_add(Quantization::Q4th as usize);
+                if let Some(slot) = ns.notes.get(note_idx) {
+                    let uv = slot.uv_for_frame(0);
+                    let size = slot.size();
+                    let w = size[0].max(0) as f32;
+                    let h = size[1].max(0) as f32;
+                    if w > 0.0 && h > 0.0 {
+                        // Match gameplay arrow sizing (target 64px tall), then apply Pane3 zoom(0.4).
+                        const TARGET_ARROW_PX: f32 = 64.0;
+                        let (w_scaled, h_scaled) = if h > 0.0 {
+                            let s = TARGET_ARROW_PX / h;
+                            (w * s, TARGET_ARROW_PX)
+                        } else {
+                            (w, h)
+                        };
+
+                        actors.push(act!(sprite(slot.texture_key().to_string()):
+                            align(0.5, 0.5):
+                            xy(col_center_x, base_y):
+                            setsize(w_scaled, h_scaled):
+                            zoom(0.4):
+                            rotationz(-slot.def.rotation_deg as f32):
+                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                            z(101)
+                        ));
+                    }
+                }
+            }
+
+            for (row_idx, row) in rows.iter().enumerate() {
+                let (count, early_opt) = count_for(cj, row.kind);
+                let y = labels_frame_y + (row_idx as f32 + 1.0).mul_add(row_height, 0.0);
+                actors.push(act!(text: font("miso"): settext(count.to_string()):
+                    align(0.5, 0.5):
+                    xy(col_center_x, y):
+                    zoom(number_zoom):
+                    horizalign(center):
+                    z(101)
+                ));
+
+                if let Some(early) = early_opt {
+                    let early_y = y - 10.0;
+                    actors.push(act!(text: font("miso"): settext(early.to_string()):
+                        align(1.0, 0.5):
+                        xy(right_edge_x, early_y):
+                        zoom(small_zoom):
+                        horizalign(right):
+                        z(101)
+                    ));
+                }
+            }
+
+            // Held-miss count per column (MissBecauseHeld) at y=144, aligned like early counts.
+            let held_str = cj.held_miss.to_string();
+            actors.push(act!(text: font("miso"): settext(held_str):
+                align(1.0, 0.5):
+                xy(right_edge_x, base_y + 144.0):
+                zoom(small_zoom):
+                horizalign(right):
+                z(101)
+            ));
+        }
+    }));
+
+    actors
+}
+
 /// Builds the timing statistics pane for P2 (or P1 in single player).
 fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
     let pane_width: f32 = 300.0;
@@ -1172,21 +1505,42 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         maxwidth(155.0): horizalign(left): z(101): diffuse(1.0, 1.0, 1.0, 1.0)
     ));
 
-    // --- Player 1 Score Percentage Display ---
-    {
-        let score_frame_y = screen_center_y() - 26.0;
-        let percent_text = format!("{:.2}", score_info.score_percent * 100.0);
-        let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));
-        let hard_ex_percent_text = format!("{:.2}", score_info.hard_ex_score_percent.max(0.0));
-        let score_bg_color = color::rgba_hex("#101519");
+	    // --- Player 1 Score Percentage Display ---
+	    {
+	        let mut score_frame_x = p1_frame_x;
+	        let mut score_frame_y = screen_center_y() - 26.0;
+	        let percent_text = format!("{:.2}", score_info.score_percent * 100.0);
+	        let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));
+	        let hard_ex_percent_text = format!("{:.2}", score_info.hard_ex_score_percent.max(0.0));
+	        let score_bg_color = color::rgba_hex("#101519");
 
         let mut children = Vec::new();
 
-        match state.active_pane {
-            EvalPane::FaPlus => {
-                // FA+ pane: stretch the background down (height 88, y-offset 14)
-                // to match Simply Love's Pane2 percentage container, and always
-                // show EX score beneath the normal ITG percent (independent of the
+	        match state.active_pane {
+	            EvalPane::Column => {
+	                // Pane3 percentage container (Simply Love): small box at x=-115, y=_screen.cy-40.
+	                score_frame_x = p1_frame_x - 115.0;
+	                score_frame_y = screen_center_y() - 40.0;
+
+	                children.push(act!(quad:
+	                    align(0.5, 0.5):
+	                    xy(0.0, -2.0):
+	                    setsize(70.0, 28.0):
+	                    diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+	                ));
+	                children.push(act!(text:
+	                    font("wendy_white"):
+	                    settext(percent_text):
+	                    align(1.0, 0.5):
+	                    xy(30.0, -2.0):
+	                    zoom(0.25):
+	                    horizalign(right)
+	                ));
+	            }
+	            EvalPane::FaPlus => {
+	                // FA+ pane: stretch the background down (height 88, y-offset 14)
+	                // to match Simply Love's Pane2 percentage container, and always
+	                // show EX score beneath the normal ITG percent (independent of the
                 // in-game EX HUD option).
                 children.push(act!(quad:
                     align(0.0, 0.5):
@@ -1289,21 +1643,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         }
 
-        let score_display_frame = Actor::Frame {
-            align: [0.5, 0.5],
-            offset: [p1_frame_x, score_frame_y],
-            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-            background: None,
-            // Draw above the judgment/radar pane (z≈101) so the stretched
-            // background cleanly covers the top radar row when FA+ pane is used.
+	        let score_display_frame = Actor::Frame {
+	            align: [0.5, 0.5],
+	            offset: [score_frame_x, score_frame_y],
+	            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+	            background: None,
+	            // Draw above the judgment/radar pane (z≈101) so the stretched
+	            // background cleanly covers the top radar row when FA+ pane is used.
             z: 102,
             children,
         };
         actors.push(score_display_frame);
     }
 
-    // --- P1 Stats Pane (Judgments & Radar) ---
-    actors.extend(build_p1_stats_pane(state, asset_manager));
+    // --- P1 Stats Pane ---
+    match state.active_pane {
+        EvalPane::Column => actors.extend(build_p1_column_judgments_pane(state, asset_manager)),
+        _ => actors.extend(build_p1_stats_pane(state, asset_manager)),
+    }
 
     // --- P2 Timing Pane (repurposed for single player) ---
     actors.extend(build_p2_timing_pane(state));

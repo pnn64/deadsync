@@ -2901,6 +2901,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                             time_error_ms: te_real * 1000.0,
                             grade,
                             window: Some(window),
+                            miss_because_held: false,
                         };
                         state.notes[idx].early_result = Some(judgment.clone());
                         let life_delta = match grade {
@@ -2996,6 +2997,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     time_error_ms: te_real * 1000.0,
                     grade,
                     window: Some(window),
+                    miss_because_held: false,
                 };
                 error_bar_register_tap(state, player, &judgment);
                 state.notes[idx].result = Some(judgment);
@@ -3069,6 +3071,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     time_error_ms: te_real * 1000.0,
                     grade,
                     window: Some(window),
+                    miss_because_held: false,
                 };
                 error_bar_register_tap(state, player, &judgment);
                 state.notes[idx].result = Some(judgment);
@@ -3778,10 +3781,12 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
         if music_time_sec - note_time > way_off_window * rate {
             let time_err_music = music_time_sec - note_time;
             let time_err_real = time_err_music / rate;
+            let miss_because_held = state.keyboard_lane_state[col_idx] || state.gamepad_lane_state[col_idx];
             let miss = Judgment {
                 time_error_ms: time_err_real * 1000.0,
                 grade: JudgeGrade::Miss,
                 window: None,
+                miss_because_held,
             };
             let judgment = state.notes[note_index].early_result.clone().unwrap_or(miss);
             if judgment.grade == JudgeGrade::Miss
@@ -3836,10 +3841,13 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                 };
                 let time_err_music = music_time_sec - note_time;
                 let time_err_real = time_err_music / rate;
+                let miss_because_held = (col < state.num_cols)
+                    && (state.keyboard_lane_state[col] || state.gamepad_lane_state[col]);
                 let miss = Judgment {
                     time_error_ms: time_err_real * 1000.0,
                     grade: JudgeGrade::Miss,
                     window: None,
+                    miss_because_held,
                 };
                 let judgment = state.notes[cursor].early_result.clone().unwrap_or(miss);
                 state.notes[cursor].result = Some(judgment.clone());

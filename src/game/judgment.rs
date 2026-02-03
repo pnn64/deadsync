@@ -31,6 +31,9 @@ pub struct Judgment {
     pub time_error_ms: f32,
     pub grade: JudgeGrade,            // The grade of this specific note
     pub window: Option<TimingWindow>, // Optional detailed window (W0-W5) for FA+/EX-style features
+    // ITGmania parity: tap notes that are missed while the corresponding input is still held.
+    // This is not a distinct tap note score in ITGmania; it is tracked as a separate flag.
+    pub miss_because_held: bool,
 }
 
 /// Aggregates per-note judgments on a single row into the final row judgment,
