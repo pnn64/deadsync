@@ -19,6 +19,7 @@ use crate::game::scores;
 use crate::game::scroll::ScrollSpeedSetting;
 use crate::game::song::SongData;
 use crate::game::timing as timing_stats;
+use crate::game::gameplay::MAX_PLAYERS;
 use crate::screens::gameplay;
 use crate::ui::font;
 use std::collections::HashMap;
@@ -78,6 +79,9 @@ pub struct ScoreInfo {
     pub column_judgments: Vec<ColumnJudgments>,
     // Noteskin used during gameplay, for Pane3 column previews.
     pub noteskin: Option<Arc<Noteskin>>,
+    pub show_fa_plus_window: bool,
+    pub show_hard_ex_score: bool,
+    pub show_fa_plus_pane: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -94,7 +98,11 @@ pub struct ColumnJudgments {
     pub held_miss: u32,
 }
 
-fn compute_column_judgments(notes: &[crate::game::note::Note], cols_per_player: usize) -> Vec<ColumnJudgments> {
+fn compute_column_judgments(
+    notes: &[crate::game::note::Note],
+    cols_per_player: usize,
+    col_offset: usize,
+) -> Vec<ColumnJudgments> {
     let cols = cols_per_player.max(0);
     let mut out = vec![ColumnJudgments::default(); cols];
     if cols == 0 {
@@ -108,7 +116,7 @@ fn compute_column_judgments(notes: &[crate::game::note::Note], cols_per_player: 
         let Some(j) = note.result.as_ref() else {
             continue;
         };
-        let col = note.column;
+        let col = note.column.saturating_sub(col_offset);
         if col >= out.len() {
             continue;
         }
@@ -151,12 +159,13 @@ enum EvalPane {
     FaPlus,
     HardEx,
     Column,
+    Timing,
 }
 
 impl EvalPane {
     #[inline(always)]
-    fn default_from_profile() -> Self {
-        if profile::get().show_fa_plus_pane {
+    const fn default_for(show_fa_plus_pane: bool) -> Self {
+        if show_fa_plus_pane {
             Self::FaPlus
         } else {
             Self::Standard
@@ -164,18 +173,30 @@ impl EvalPane {
     }
 
     #[inline(always)]
-    fn toggle(self, has_hard_ex: bool) -> Self {
+    fn next(self, has_hard_ex: bool) -> Self {
+        // Order (per user parity request):
+        // ITG -> EX -> H.EX -> Arrow breakdown -> Timing -> ITG
         match (self, has_hard_ex) {
-            (Self::Standard, false) => Self::FaPlus,
-            (Self::FaPlus, false) => Self::Column,
-            (Self::Column, false) => Self::Standard,
-
-            (Self::Standard, true) => Self::FaPlus,
+            (Self::Standard, _) => Self::FaPlus,
             (Self::FaPlus, true) => Self::HardEx,
+            (Self::FaPlus, false) => Self::Column,
             (Self::HardEx, true) => Self::Column,
-            (Self::Column, true) => Self::Standard,
-
             (Self::HardEx, false) => Self::Standard,
+            (Self::Column, _) => Self::Timing,
+            (Self::Timing, _) => Self::Standard,
+        }
+    }
+
+    #[inline(always)]
+    fn prev(self, has_hard_ex: bool) -> Self {
+        match (self, has_hard_ex) {
+            (Self::Standard, _) => Self::Timing,
+            (Self::Timing, _) => Self::Column,
+            (Self::Column, true) => Self::HardEx,
+            (Self::Column, false) => Self::FaPlus,
+            (Self::HardEx, true) => Self::FaPlus,
+            (Self::HardEx, false) => Self::Standard,
+            (Self::FaPlus, _) => Self::Standard,
         }
     }
 }
@@ -184,206 +205,239 @@ pub struct State {
     pub active_color_index: i32,
     bg: heart_bg::State,
     pub session_elapsed: f32, // To display the timer
-    pub score_info: Option<ScoreInfo>,
-    pub density_graph_mesh: Option<Arc<[MeshVertex]>>,
-    pub timing_hist_mesh: Option<Arc<[MeshVertex]>>,
-    pub scatter_mesh: Option<Arc<[MeshVertex]>>,
+    pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub scatter_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub density_graph_texture_key: String,
-    active_pane: EvalPane,
+    active_pane: [EvalPane; MAX_PLAYERS],
 }
 
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
-    let score_info = gameplay_results.map(|mut gs| {
+    let mut score_info: [Option<ScoreInfo>; MAX_PLAYERS] = std::array::from_fn(|_| None);
+    let mut density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    let mut timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    let mut scatter_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|_| None);
+    let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
+
+    if let Some(mut gs) = gameplay_results {
         // Persist one score file per play (per local profile), including fails and replay lane input.
         scores::save_local_scores_from_gameplay(&gs);
 
-        let player_idx = 0;
         let cols_per_player = gs.cols_per_player;
-        let noteskin = gs.noteskin[player_idx].take().map(Arc::new);
-        let (start, end) = gs.note_ranges[player_idx];
-        let notes = &gs.notes[start..end];
-        let note_times = &gs.note_time_cache[start..end];
-        let hold_end_times = &gs.hold_end_time_cache[start..end];
-        let p = &gs.players[player_idx];
+        for player_idx in 0..gs.num_players.min(MAX_PLAYERS) {
+            let noteskin = gs.noteskin[player_idx].take().map(Arc::new);
+            let (start, end) = gs.note_ranges[player_idx];
+            let notes = &gs.notes[start..end];
+            let note_times = &gs.note_time_cache[start..end];
+            let hold_end_times = &gs.hold_end_time_cache[start..end];
+            let p = &gs.players[player_idx];
+            let prof = &gs.player_profiles[player_idx];
 
-        // Compute timing statistics across all non-miss tap judgments
-        let stats = timing_stats::compute_note_timing_stats(notes);
-        // Prepare scatter points and histogram bins
-        let scatter = timing_stats::build_scatter_points(notes, note_times);
-        let histogram = timing_stats::build_histogram_ms(notes);
-        let scatter_worst_window_ms = {
-            let tw = timing_stats::effective_windows_ms();
-            let abs = histogram.worst_observed_ms.max(0.0);
-            let mut idx: usize = if abs <= tw[0] {
-                1
-            } else if abs <= tw[1] {
-                2
-            } else if abs <= tw[2] {
-                3
-            } else if abs <= tw[3] {
-                4
-            } else {
-                5
+            // Compute timing statistics across all non-miss tap judgments
+            let stats = timing_stats::compute_note_timing_stats(notes);
+            // Prepare scatter points and histogram bins
+            let scatter = timing_stats::build_scatter_points(notes, note_times);
+            let histogram = timing_stats::build_histogram_ms(notes);
+            let scatter_worst_window_ms = {
+                let tw = timing_stats::effective_windows_ms();
+                let abs = histogram.worst_observed_ms.max(0.0);
+                let mut idx: usize = if abs <= tw[0] {
+                    1
+                } else if abs <= tw[1] {
+                    2
+                } else if abs <= tw[2] {
+                    3
+                } else if abs <= tw[3] {
+                    4
+                } else {
+                    5
+                };
+                idx = idx.max(2);
+                tw[idx - 1]
             };
-            idx = idx.max(2);
-            tw[idx - 1]
-        };
-        let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
-        let graph_last_second = gs.song.total_length_seconds as f32;
+            let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
+            let graph_last_second = gs.song.total_length_seconds as f32;
 
-        let score_percent = judgment::calculate_itg_score_percent(
-            &p.scoring_counts,
-            p.holds_held_for_score,
-            p.rolls_held_for_score,
-            p.mines_hit_for_score,
-            gs.possible_grade_points[player_idx],
-        );
+            let score_percent = judgment::calculate_itg_score_percent(
+                &p.scoring_counts,
+                p.holds_held_for_score,
+                p.rolls_held_for_score,
+                p.mines_hit_for_score,
+                gs.possible_grade_points[player_idx],
+            );
 
-        let mut grade = if p.is_failing || !gs.song_completed_naturally {
-            scores::Grade::Failed
-        } else {
-            scores::score_to_grade(score_percent * 10000.0)
-        };
-
-        // Per-window counts for the FA+ pane should always reflect all tap
-        // judgments that occurred (including after failure), matching the
-        // standard pane's judgment_counts semantics.
-        let window_counts = timing_stats::compute_window_counts(notes);
-        let window_counts_10ms = timing_stats::compute_window_counts_10ms_blue(notes);
-
-        // NoMines handling is not wired yet, so treat mines as enabled.
-        let mines_disabled = false;
-        let ex_score_percent = judgment::calculate_ex_score_from_notes(
-            notes,
-            note_times,
-            hold_end_times,
-            gs.charts[player_idx].stats.total_steps,
-            gs.holds_total[player_idx],
-            gs.rolls_total[player_idx],
-            gs.mines_total[player_idx],
-            p.fail_time,
-            mines_disabled,
-        );
-        let hard_ex_score_percent = judgment::calculate_hard_ex_score_from_notes(
-            notes,
-            note_times,
-            hold_end_times,
-            gs.charts[player_idx].stats.total_steps,
-            gs.holds_total[player_idx],
-            gs.rolls_total[player_idx],
-            gs.mines_total[player_idx],
-            p.fail_time,
-            mines_disabled,
-        );
-
-        // Simply Love: show Quint (Grade_Tier00) if EX score is exactly 100.00.
-        if grade != scores::Grade::Failed && ex_score_percent >= 100.0 {
-            grade = scores::Grade::Quint;
-        }
-
-        let column_judgments = compute_column_judgments(notes, cols_per_player);
-
-        ScoreInfo {
-            song: gs.song.clone(),
-            chart: gs.charts[player_idx].clone(),
-            judgment_counts: p.judgment_counts.clone(),
-            score_percent,
-            grade,
-            speed_mod: gs.scroll_speed[0],
-            hands_achieved: p.hands_achieved,
-            holds_held: p.holds_held,
-            holds_total: gs.holds_total[player_idx],
-            rolls_held: p.rolls_held,
-            rolls_total: gs.rolls_total[player_idx],
-            mines_avoided: p.mines_avoided,
-            mines_total: gs.mines_total[player_idx],
-            timing: stats,
-            scatter,
-            scatter_worst_window_ms,
-            histogram,
-            graph_first_second,
-            graph_last_second,
-            music_rate: if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
-                gs.music_rate
+            let mut grade = if p.is_failing || !gs.song_completed_naturally {
+                scores::Grade::Failed
             } else {
-                1.0
-            },
-            scroll_option: profile::get().scroll_option,
-            life_history: p.life_history.clone(),
-            fail_time: p.fail_time,
-            window_counts,
-            window_counts_10ms,
-            ex_score_percent,
-            hard_ex_score_percent,
-            column_judgments,
-            noteskin,
+                scores::score_to_grade(score_percent * 10000.0)
+            };
+
+            // Per-window counts for the FA+ pane should always reflect all tap
+            // judgments that occurred (including after failure), matching the
+            // standard pane's judgment_counts semantics.
+            let window_counts = timing_stats::compute_window_counts(notes);
+            let window_counts_10ms = timing_stats::compute_window_counts_10ms_blue(notes);
+
+            // NoMines handling is not wired yet, so treat mines as enabled.
+            let mines_disabled = false;
+            let ex_score_percent = judgment::calculate_ex_score_from_notes(
+                notes,
+                note_times,
+                hold_end_times,
+                gs.charts[player_idx].stats.total_steps,
+                gs.holds_total[player_idx],
+                gs.rolls_total[player_idx],
+                gs.mines_total[player_idx],
+                p.fail_time,
+                mines_disabled,
+            );
+            let hard_ex_score_percent = judgment::calculate_hard_ex_score_from_notes(
+                notes,
+                note_times,
+                hold_end_times,
+                gs.charts[player_idx].stats.total_steps,
+                gs.holds_total[player_idx],
+                gs.rolls_total[player_idx],
+                gs.mines_total[player_idx],
+                p.fail_time,
+                mines_disabled,
+            );
+
+            // Simply Love: show Quint (Grade_Tier00) if EX score is exactly 100.00.
+            if grade != scores::Grade::Failed && ex_score_percent >= 100.0 {
+                grade = scores::Grade::Quint;
+            }
+
+            let col_offset = player_idx.saturating_mul(cols_per_player);
+            let column_judgments = compute_column_judgments(notes, cols_per_player, col_offset);
+
+            score_info[player_idx] = Some(ScoreInfo {
+                song: gs.song.clone(),
+                chart: gs.charts[player_idx].clone(),
+                judgment_counts: p.judgment_counts.clone(),
+                score_percent,
+                grade,
+                speed_mod: gs.scroll_speed[player_idx],
+                hands_achieved: p.hands_achieved,
+                holds_held: p.holds_held,
+                holds_total: gs.holds_total[player_idx],
+                rolls_held: p.rolls_held,
+                rolls_total: gs.rolls_total[player_idx],
+                mines_avoided: p.mines_avoided,
+                mines_total: gs.mines_total[player_idx],
+                timing: stats,
+                scatter,
+                scatter_worst_window_ms,
+                histogram,
+                graph_first_second,
+                graph_last_second,
+                music_rate: if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
+                    gs.music_rate
+                } else {
+                    1.0
+                },
+                scroll_option: prof.scroll_option,
+                life_history: p.life_history.clone(),
+                fail_time: p.fail_time,
+                window_counts,
+                window_counts_10ms,
+                ex_score_percent,
+                hard_ex_score_percent,
+                column_judgments,
+                noteskin,
+                show_fa_plus_window: prof.show_fa_plus_window,
+                show_hard_ex_score: prof.show_hard_ex_score,
+                show_fa_plus_pane: prof.show_fa_plus_pane,
+            });
         }
-    });
 
-    let density_graph_mesh = score_info.as_ref().and_then(|si| {
-        const GRAPH_W: f32 = 610.0;
-        const GRAPH_H: f32 = 64.0;
-
-        let last_second = si.song.total_length_seconds.max(0) as f32;
-        let verts = crate::ui::components::density_graph::build_density_histogram_mesh(
-            &si.chart.measure_nps_vec,
-            si.chart.max_nps,
-            &si.chart.timing,
-            si.graph_first_second,
-            last_second,
-            GRAPH_W,
-            GRAPH_H,
-            0.0,
-            GRAPH_W,
-            Some(0.5),
-            0.5,
-        );
-        if verts.is_empty() {
-            None
+        let play_style = profile::get_session_play_style();
+        let graph_width: f32 = if play_style == profile::PlayStyle::Versus {
+            300.0
         } else {
-            Some(Arc::from(verts.into_boxed_slice()))
+            610.0
+        };
+
+        for player_idx in 0..MAX_PLAYERS {
+            let Some(si) = score_info[player_idx].as_ref() else {
+                continue;
+            };
+
+            density_graph_mesh[player_idx] = {
+                const GRAPH_H: f32 = 64.0;
+                let last_second = si.song.total_length_seconds.max(0) as f32;
+                let verts = crate::ui::components::density_graph::build_density_histogram_mesh(
+                    &si.chart.measure_nps_vec,
+                    si.chart.max_nps,
+                    &si.chart.timing,
+                    si.graph_first_second,
+                    last_second,
+                    graph_width,
+                    GRAPH_H,
+                    0.0,
+                    graph_width,
+                    Some(0.5),
+                    0.5,
+                );
+                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+            };
+
+            scatter_mesh[player_idx] = {
+                const GRAPH_H: f32 = 64.0;
+                let verts = crate::ui::components::eval_graphs::build_scatter_mesh(
+                    &si.scatter,
+                    si.graph_first_second,
+                    si.graph_last_second,
+                    graph_width,
+                    GRAPH_H,
+                    si.scatter_worst_window_ms,
+                );
+                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+            };
+
+            timing_hist_mesh[player_idx] = {
+                const PANE_W: f32 = 300.0;
+                const PANE_H: f32 = 180.0;
+                const TOP_H: f32 = 26.0;
+                const BOT_H: f32 = 13.0;
+
+                let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
+                let verts = crate::ui::components::eval_graphs::build_offset_histogram_mesh(
+                    &si.histogram,
+                    PANE_W,
+                    graph_h,
+                    PANE_H,
+                    crate::config::get().smooth_histogram,
+                );
+                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+            };
         }
-    });
 
-    let timing_hist_mesh = score_info.as_ref().and_then(|si| {
-        const PANE_W: f32 = 300.0;
-        const PANE_H: f32 = 180.0;
-        const TOP_H: f32 = 26.0;
-        const BOT_H: f32 = 13.0;
-
-        let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-        let verts = crate::ui::components::eval_graphs::build_offset_histogram_mesh(
-            &si.histogram,
-            PANE_W,
-            graph_h,
-            PANE_H,
-            crate::config::get().smooth_histogram,
-        );
-        if verts.is_empty() {
-            None
-        } else {
-            Some(Arc::from(verts.into_boxed_slice()))
+        match play_style {
+            profile::PlayStyle::Versus => {
+                active_pane[0] = score_info[0]
+                    .as_ref()
+                    .map_or(EvalPane::Standard, |si| EvalPane::default_for(si.show_fa_plus_pane));
+                active_pane[1] = score_info[1]
+                    .as_ref()
+                    .map_or(EvalPane::Standard, |si| EvalPane::default_for(si.show_fa_plus_pane));
+            }
+            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                let joined = profile::get_session_player_side();
+                let primary = score_info[0]
+                    .as_ref()
+                    .map_or(EvalPane::Standard, |si| EvalPane::default_for(si.show_fa_plus_pane));
+                let secondary = EvalPane::Timing;
+                active_pane = match joined {
+                    profile::PlayerSide::P1 => [primary, secondary],
+                    profile::PlayerSide::P2 => [secondary, primary],
+                };
+            }
         }
-    });
-
-    let scatter_mesh = score_info.as_ref().and_then(|si| {
-        const GRAPH_W: f32 = 610.0;
-        const GRAPH_H: f32 = 64.0;
-
-        let verts = crate::ui::components::eval_graphs::build_scatter_mesh(
-            &si.scatter,
-            si.graph_first_second,
-            si.graph_last_second,
-            GRAPH_W,
-            GRAPH_H,
-            si.scatter_worst_window_ms,
-        );
-        if verts.is_empty() {
-            None
-        } else {
-            Some(Arc::from(verts.into_boxed_slice()))
-        }
-    });
+    }
 
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // This will be overwritten by app.rs
@@ -394,7 +448,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         timing_hist_mesh,
         scatter_mesh,
         density_graph_texture_key: "__white".to_string(),
-        active_pane: EvalPane::default_from_profile(),
+        active_pane,
     }
 }
 
@@ -449,19 +503,66 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
+    let play_style = profile::get_session_play_style();
+    let side_idx = |side: profile::PlayerSide| match side {
+        profile::PlayerSide::P1 => 0,
+        profile::PlayerSide::P2 => 1,
+    };
+    let player_idx_for_controller = |controller: profile::PlayerSide| {
+        if play_style == profile::PlayStyle::Versus {
+            side_idx(controller)
+        } else {
+            0
+        }
+    };
+    let mut shift_pane_for = |controller: profile::PlayerSide, dir: i32| {
+        let controller_idx = side_idx(controller);
+        let player_idx = player_idx_for_controller(controller);
+        let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
+            return;
+        };
+        let has_hard_ex = si.show_hard_ex_score;
+
+        state.active_pane[controller_idx] = if dir >= 0 {
+            state.active_pane[controller_idx].next(has_hard_ex)
+        } else {
+            state.active_pane[controller_idx].prev(has_hard_ex)
+        };
+
+        // Don't allow duplicate panes in single/double.
+        if play_style != profile::PlayStyle::Versus {
+            let other_idx = 1 - controller_idx;
+            if state.active_pane[controller_idx] == state.active_pane[other_idx] {
+                state.active_pane[controller_idx] = if dir >= 0 {
+                    state.active_pane[controller_idx].next(has_hard_ex)
+                } else {
+                    state.active_pane[controller_idx].prev(has_hard_ex)
+                };
+            }
+        }
+    };
+
     match ev.action {
-        VirtualAction::p1_back | VirtualAction::p1_start => {
+        VirtualAction::p1_back
+        | VirtualAction::p1_start
+        | VirtualAction::p2_back
+        | VirtualAction::p2_start => {
             ScreenAction::Navigate(Screen::SelectMusic)
         }
-        VirtualAction::p1_left
-        | VirtualAction::p1_menu_left
-        | VirtualAction::p1_right
-        | VirtualAction::p1_menu_right => {
-            if state.score_info.is_some() {
-                state.active_pane = state
-                    .active_pane
-                    .toggle(profile::get().show_hard_ex_score);
-            }
+        VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+            shift_pane_for(profile::PlayerSide::P1, 1);
+            ScreenAction::None
+        }
+        VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+            shift_pane_for(profile::PlayerSide::P1, -1);
+            ScreenAction::None
+        }
+        VirtualAction::p2_right | VirtualAction::p2_menu_right => {
+            shift_pane_for(profile::PlayerSide::P2, 1);
+            ScreenAction::None
+        }
+        VirtualAction::p2_left | VirtualAction::p2_menu_left => {
+            shift_pane_for(profile::PlayerSide::P2, -1);
             ScreenAction::None
         }
         _ => ScreenAction::None,
@@ -531,21 +632,25 @@ static JUDGMENT_INFO: LazyLock<HashMap<JudgeGrade, JudgmentDisplayInfo>> = LazyL
     ])
 });
 
-/// Builds the entire P1 (left side) stats pane including judgments and radar counts.
-fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
-    let Some(score_info) = &state.score_info else {
-        return vec![];
-    };
+/// Builds a 300px evaluation pane for a given controller side, including judgment and radar counts.
+fn build_stats_pane(
+    score_info: &ScoreInfo,
+    pane: EvalPane,
+    controller: profile::PlayerSide,
+    asset_manager: &AssetManager,
+) -> Vec<Actor> {
     let mut actors = Vec::new();
     let cy = screen_center_y();
 
-    // The base offset for all P1 panes from the screen center.
-    let p1_side_offset = screen_center_x() - 155.0;
+    let (pane_origin_x, side_sign) = match controller {
+        profile::PlayerSide::P1 => (screen_center_x() - 155.0, 1.0_f32),
+        profile::PlayerSide::P2 => (screen_center_x() + 155.0, -1.0_f32),
+    };
 
     // Active evaluation pane is chosen at runtime; the profile toggle
     // only selects which pane is shown first.
-    let show_fa_plus_pane = matches!(state.active_pane, EvalPane::FaPlus | EvalPane::HardEx);
-    let show_10ms_blue = matches!(state.active_pane, EvalPane::HardEx);
+    let show_fa_plus_pane = matches!(pane, EvalPane::FaPlus | EvalPane::HardEx);
+    let show_10ms_blue = matches!(pane, EvalPane::HardEx);
     let wc = if show_10ms_blue {
         score_info.window_counts_10ms
     } else {
@@ -585,15 +690,20 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
     let digits_to_fmt = digits_needed.max(4);
 
     asset_manager.with_fonts(|all_fonts| asset_manager.with_font("wendy_screenevaluation", |metrics_font| {
-        let numbers_frame_zoom = 0.8;
+        let numbers_frame_zoom: f32 = 0.8;
         let final_numbers_zoom = numbers_frame_zoom * 0.5;
         let digit_width = font::measure_line_width_logical(metrics_font, "0", all_fonts) as f32 * final_numbers_zoom;
         if digit_width <= 0.0 { return; }
 
         // --- Judgment Labels & Numbers ---
-        let labels_frame_origin_x = p1_side_offset + 50.0;
-        let numbers_frame_origin_x = p1_side_offset + 90.0;
+        let labels_frame_origin_x = (50.0 * side_sign).mul_add(1.0, pane_origin_x);
+        let numbers_frame_origin_x = (90.0 * side_sign).mul_add(1.0, pane_origin_x);
         let frame_origin_y = cy - 24.0;
+        let number_local_x = if controller == profile::PlayerSide::P1 {
+            64.0
+        } else {
+            94.0
+        };
 
         if !show_fa_plus_pane {
             for (i, grade) in JUDGMENT_ORDER.iter().enumerate() {
@@ -601,7 +711,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 let count = score_info.judgment_counts.get(grade).copied().unwrap_or(0);
 
                 // Label
-                let label_local_x = 28.0 + label_shift_x;
+                let label_local_x = (28.0f32).mul_add(1.0, label_shift_x * side_sign) * side_sign;
                 let label_local_y = (i as f32).mul_add(28.0, -16.0);
                 actors.push(act!(text: font("miso"): settext(info.label):
                     align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
@@ -615,7 +725,6 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
 	                let number_str = format!("{count:0digits_to_fmt$}");
 	                let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
 
-                let number_local_x = 64.0;
                 let number_local_y = (i as f32).mul_add(35.0, -20.0);
                 let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
                 let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
@@ -672,7 +781,7 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 // Label: match Simply Love Pane2 labels using 26px spacing.
                 // Original Lua uses 1-based indexing: y = i*26 - 46.
                 // Our rows are 0-based, so use (i+1) here.
-                let label_local_x = 28.0 + label_shift_x;
+                let label_local_x = (28.0f32).mul_add(1.0, label_shift_x * side_sign) * side_sign;
                 let label_local_y = (i as f32 + 1.0).mul_add(26.0, -46.0);
                 actors.push(act!(text: font("miso"): settext(label.to_string()):
                     align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
@@ -693,7 +802,6 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
                 let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
 
                 // Numbers: match Simply Love Pane2 numbers using 32px spacing.
-                let number_local_x = 64.0;
                 let number_local_y = (i as f32).mul_add(32.0, -24.0);
                 let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
                 let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
@@ -725,7 +833,11 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
         let white_color = [1.0, 1.0, 1.0, 1.0];
 
         for (i, (label, achieved, possible)) in radar_categories.iter().copied().enumerate() {
-            let label_local_x = -160.0;
+            let label_local_x = if controller == profile::PlayerSide::P1 {
+                -160.0
+            } else {
+                90.0
+            };
             let label_local_y = (i as f32).mul_add(28.0, 41.0);
             actors.push(act!(text: font("miso"): settext(label.to_string()):
                 align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y): horizalign(right): zoom(0.833): z(101)
@@ -739,7 +851,12 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
 
             // --- Group 1: "Achieved" Numbers (Anchored at -180, separated from Slash) ---
             // Matches Lua: x = { P1=-180 }, aligned right.
-            let achieved_anchor_x = (-180.0f32).mul_add(numbers_frame_zoom, numbers_frame_origin_x);
+            let achieved_anchor_x = (if controller == profile::PlayerSide::P1 {
+                -180.0_f32
+            } else {
+                218.0_f32
+            })
+            .mul_add(numbers_frame_zoom, numbers_frame_origin_x);
 
             let achieved_str = format!("{achieved_clamped:03}");
             let first_nonzero_achieved = achieved_str.find(|c: char| c != '0').unwrap_or(achieved_str.len());
@@ -762,8 +879,13 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
 
             // --- Group 2: "Slash + Possible" Numbers (Anchored at -114) ---
             // Matches Lua: x = { P1=-114 }, aligned right.
-            let possible_anchor_x = (-114.0f32).mul_add(numbers_frame_zoom, numbers_frame_origin_x);
-	            let mut cursor_x = possible_anchor_x;
+            let possible_anchor_x = (if controller == profile::PlayerSide::P1 {
+                -114.0_f32
+            } else {
+                286.0_f32
+            })
+            .mul_add(numbers_frame_zoom, numbers_frame_origin_x);
+            let mut cursor_x = possible_anchor_x;
 
             // 1. Draw "possible" number (right-most part)
             let possible_str = format!("{possible_clamped:03}");
@@ -797,10 +919,178 @@ fn build_p1_stats_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor
     actors
 }
 
-fn build_p1_column_judgments_pane(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
-    let Some(score_info) = &state.score_info else {
+fn build_pane_percentage_display(
+    score_info: &ScoreInfo,
+    pane: EvalPane,
+    controller: profile::PlayerSide,
+) -> Vec<Actor> {
+    if matches!(pane, EvalPane::Timing) {
         return vec![];
+    }
+
+    let pane_origin_x = match controller {
+        profile::PlayerSide::P1 => screen_center_x() - 155.0,
+        profile::PlayerSide::P2 => screen_center_x() + 155.0,
     };
+    let cy = screen_center_y();
+
+    let percent_text = format!("{:.2}", score_info.score_percent * 100.0);
+    let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));
+    let hard_ex_percent_text = format!("{:.2}", score_info.hard_ex_score_percent.max(0.0));
+    let score_bg_color = color::rgba_hex("#101519");
+
+    let (bg_align_x, bg_x, percent_x) = if controller == profile::PlayerSide::P1 {
+        (0.0, -150.0, 1.5)
+    } else {
+        (1.0, 150.0, 141.0)
+    };
+
+    let mut frame_x = pane_origin_x;
+    let mut frame_y = cy - 26.0;
+    let mut children: Vec<Actor> = Vec::new();
+
+    match pane {
+        EvalPane::Timing => {}
+        EvalPane::Column => {
+            // Pane3 percentage container: small and not mirrored.
+            frame_x = pane_origin_x - 115.0;
+            frame_y = cy - 40.0;
+            children.push(act!(quad:
+                align(0.5, 0.5):
+                xy(0.0, -2.0):
+                setsize(70.0, 28.0):
+                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+            ));
+            children.push(act!(text:
+                font("wendy_white"):
+                settext(percent_text):
+                align(1.0, 0.5):
+                xy(30.0, -2.0):
+                zoom(0.25):
+                horizalign(right)
+            ));
+        }
+        EvalPane::FaPlus => {
+            children.push(act!(quad:
+                align(bg_align_x, 0.5):
+                xy(bg_x, 14.0):
+                setsize(158.5, 88.0):
+                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+            ));
+            children.push(act!(text:
+                font("wendy_white"):
+                settext(percent_text):
+                align(1.0, 0.5):
+                xy(percent_x, 0.0):
+                zoom(0.585):
+                horizalign(right)
+            ));
+
+            let ex_color = color::JUDGMENT_RGBA[0];
+            let bottom_value_x = if controller == profile::PlayerSide::P1 {
+                0.0
+            } else {
+                percent_x
+            };
+            let bottom_label_x = bottom_value_x - 108.0;
+            children.push(act!(text:
+                font("wendy_white"):
+                settext("EX"):
+                align(1.0, 0.5):
+                xy(bottom_label_x, 40.0):
+                zoom(0.31):
+                horizalign(right):
+                diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
+            ));
+            children.push(act!(text:
+                font("wendy_white"):
+                settext(ex_percent_text):
+                align(1.0, 0.5):
+                xy(bottom_value_x, 40.0):
+                zoom(0.31):
+                horizalign(right):
+                diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
+            ));
+        }
+        EvalPane::HardEx => {
+            children.push(act!(quad:
+                align(bg_align_x, 0.5):
+                xy(bg_x, 14.0):
+                setsize(158.5, 88.0):
+                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+            ));
+
+            let ex_color = color::JUDGMENT_RGBA[0];
+            let hex_color = color::HARD_EX_SCORE_RGBA;
+            children.push(act!(text:
+                font("wendy_white"):
+                settext(ex_percent_text):
+                align(1.0, 0.5):
+                xy(percent_x, 0.0):
+                zoom(0.585):
+                horizalign(right):
+                diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
+            ));
+
+            let bottom_value_x = if controller == profile::PlayerSide::P1 {
+                0.0
+            } else {
+                percent_x
+            };
+            let bottom_label_x = bottom_value_x - 108.0;
+            children.push(act!(text:
+                font("wendy_white"):
+                settext("H.EX"):
+                align(1.0, 0.5):
+                xy(bottom_label_x, 40.0):
+                zoom(0.31):
+                horizalign(right):
+                diffuse(hex_color[0], hex_color[1], hex_color[2], hex_color[3])
+            ));
+            children.push(act!(text:
+                font("wendy_white"):
+                settext(hard_ex_percent_text):
+                align(1.0, 0.5):
+                xy(bottom_value_x, 40.0):
+                zoom(0.31):
+                horizalign(right):
+                diffuse(hex_color[0], hex_color[1], hex_color[2], hex_color[3])
+            ));
+        }
+        EvalPane::Standard => {
+            children.push(act!(quad:
+                align(bg_align_x, 0.5):
+                xy(bg_x, 0.0):
+                setsize(158.5, 60.0):
+                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+            ));
+            children.push(act!(text:
+                font("wendy_white"):
+                settext(percent_text):
+                align(1.0, 0.5):
+                xy(percent_x, 0.0):
+                zoom(0.585):
+                horizalign(right)
+            ));
+        }
+    }
+
+    vec![Actor::Frame {
+        align: [0.5, 0.5],
+        offset: [frame_x, frame_y],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        background: None,
+        z: 102,
+        children,
+    }]
+}
+
+fn build_column_judgments_pane(
+    score_info: &ScoreInfo,
+    controller: profile::PlayerSide,
+    player_side: profile::PlayerSide,
+    asset_manager: &AssetManager,
+) -> Vec<Actor> {
     let num_cols = score_info.column_judgments.len();
     if num_cols == 0 {
         return vec![];
@@ -825,7 +1115,7 @@ fn build_p1_column_judgments_pane(state: &State, asset_manager: &AssetManager) -
         color: [f32; 4],
     }
 
-    let show_fa_plus_rows = profile::get().show_fa_plus_pane;
+    let show_fa_plus_rows = score_info.show_fa_plus_window && score_info.show_fa_plus_pane;
     let rows: Vec<RowInfo> = if show_fa_plus_rows {
         vec![
             RowInfo {
@@ -900,20 +1190,33 @@ fn build_p1_column_judgments_pane(state: &State, asset_manager: &AssetManager) -
     };
 
     let cy = screen_center_y();
-    let p1_origin_x = screen_center_x() - 155.0;
+    let pane_origin_x = match controller {
+        profile::PlayerSide::P1 => screen_center_x() - 155.0,
+        profile::PlayerSide::P2 => screen_center_x() + 155.0,
+    };
 
     // Pane3 geometry (Simply Love): 230x146 box, anchored near (-104, cy-40) within the P1 pane.
     let box_width: f32 = 230.0;
     let box_height: f32 = 146.0;
     let col_width = box_width / num_cols as f32;
     let row_height = box_height / rows.len() as f32;
-    let base_x = p1_origin_x - 104.0;
+    let base_x = pane_origin_x - 104.0;
     let base_y = cy - 40.0;
 
-    // Judgment label column (Simply Love): frame at (50, cy-36), labels at x=-130 for P1.
-    let labels_frame_x = p1_origin_x + 50.0;
+    // Judgment label column (Simply Love): frame at (50, cy-36), labels at x=-130 for P1 and -28 for P2.
+    let labels_frame_x = (if player_side == profile::PlayerSide::P1 {
+        50.0_f32
+    } else {
+        -50.0_f32
+    })
+    .mul_add(1.0_f32, pane_origin_x);
     let labels_frame_y = cy - 36.0;
-    let labels_right_x = labels_frame_x - 130.0;
+    let labels_right_x = labels_frame_x
+        + if player_side == profile::PlayerSide::P1 {
+            -130.0
+        } else {
+            -28.0
+        };
 
     let mut actors = Vec::new();
 
@@ -1048,14 +1351,22 @@ fn build_p1_column_judgments_pane(state: &State, asset_manager: &AssetManager) -
     actors
 }
 
-/// Builds the timing statistics pane for P2 (or P1 in single player).
-fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
+/// Builds the timing statistics pane (Simply Love Pane5), shown inside a 300px evaluation pane.
+fn build_timing_pane(
+    score_info: &ScoreInfo,
+    timing_hist_mesh: Option<&Arc<[MeshVertex]>>,
+    controller: profile::PlayerSide,
+) -> Vec<Actor> {
     let pane_width: f32 = 300.0;
     let pane_height: f32 = 180.0;
     let topbar_height: f32 = 26.0;
     let bottombar_height: f32 = 13.0;
 
-    let frame_x = screen_center_x() + 5.0;
+    let pane_origin_x = match controller {
+        profile::PlayerSide::P1 => screen_center_x() - 155.0,
+        profile::PlayerSide::P2 => screen_center_x() + 155.0,
+    };
+    let frame_x = pane_origin_x - pane_width * 0.5;
     let frame_y = screen_center_y() - 56.0;
 
     let mut children = Vec::new();
@@ -1126,7 +1437,7 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
     }
 
     // Histogram (aggregate timing offsets) — Simply Love uses an ActorMultiVertex (QuadStrip).
-    if let Some(mesh) = &state.timing_hist_mesh
+    if let Some(mesh) = timing_hist_mesh
         && !mesh.is_empty()
     {
         let graph_area_height = (pane_height - topbar_height - bottombar_height).max(0.0);
@@ -1148,24 +1459,10 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
     let label_zoom = 0.575;
     let value_zoom = 0.8;
 
-    let max_error_text = state.score_info.as_ref().map_or_else(
-        || "0.0ms".to_string(),
-        |s| format!("{:.1}ms", s.timing.max_abs_ms),
-    );
-
-    let stats = state.score_info.as_ref();
-    let mean_abs_text = stats.map_or_else(
-        || "0.0ms".to_string(),
-        |s| format!("{:.1}ms", s.timing.mean_abs_ms),
-    );
-    let mean_text = stats.map_or_else(
-        || "0.0ms".to_string(),
-        |s| format!("{:.1}ms", s.timing.mean_ms),
-    );
-    let stddev3_text = stats.map_or_else(
-        || "0.0ms".to_string(),
-        |s| format!("{:.1}ms", s.timing.stddev_ms * 3.0),
-    );
+    let max_error_text = format!("{:.1}ms", score_info.timing.max_abs_ms);
+    let mean_abs_text = format!("{:.1}ms", score_info.timing.mean_abs_ms);
+    let mean_text = format!("{:.1}ms", score_info.timing.mean_ms);
+    let stddev3_text = format!("{:.1}ms", score_info.timing.stddev_ms * 3.0);
 
     let labels_and_values = [
         ("mean abs error", 40.0, mean_abs_text),
@@ -1199,24 +1496,14 @@ fn build_p2_timing_pane(state: &State) -> Vec<Actor> {
     }]
 }
 
-/// Builds the modifiers display pane for P1.
-fn build_modifiers_pane(state: &State) -> Vec<Actor> {
-    // These positions are derived from the original ActorFrame layout to place
-    // the text in the exact same world-space position without the frame.
-    let p1_side_offset = screen_center_x() - 155.0;
+fn build_modifiers_pane(score_info: &ScoreInfo, bar_center_x: f32, bar_width: f32) -> Vec<Actor> {
     let frame_center_y = screen_center_y() + 200.5;
     let font_zoom = 0.7;
 
-    // The text's top-left corner was positioned at xy(-140, -5) relative to the
-    // frame's center. We now calculate that absolute position directly.
-    let text_x = p1_side_offset - 140.0;
+    // The text's top-left corner is positioned at xy(-140, -5) relative to the bar center.
+    let text_x = bar_center_x - 140.0;
     let text_y = frame_center_y - 5.0;
 
-    // The original large background pane is at z=100. This text needs to be on top.
-    let text_z = 101;
-
-    // Get the speed mod and scroll perspective from score info.
-    let score_info = state.score_info.as_ref().unwrap();
     let speed_mod_text = score_info.speed_mod.to_string();
     let mut parts = Vec::new();
     parts.push(speed_mod_text);
@@ -1241,17 +1528,25 @@ fn build_modifiers_pane(state: &State) -> Vec<Actor> {
     parts.push("Overhead".to_string());
     let final_text = parts.join(", ");
 
-    let modifier_text = act!(text:
-        font("miso"):
-        settext(final_text):
-        align(0.0, 0.0):
-        xy(text_x, text_y):
-        zoom(font_zoom):
-        z(text_z):
-        diffuse(1.0, 1.0, 1.0, 1.0)
-    );
-
-    vec![modifier_text]
+    let bg = color::rgba_hex("#1E282F");
+    vec![
+        act!(quad:
+            align(0.5, 0.5):
+            xy(bar_center_x, frame_center_y):
+            zoomto(bar_width, 26.0):
+            diffuse(bg[0], bg[1], bg[2], 1.0):
+            z(101)
+        ),
+        act!(text:
+            font("miso"):
+            settext(final_text):
+            align(0.0, 0.0):
+            xy(text_x, text_y):
+            zoom(font_zoom):
+            z(102):
+            diffuse(1.0, 1.0, 1.0, 1.0)
+        ),
+    ]
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
@@ -1291,7 +1586,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         horizalign(center)
     ));
 
-    let Some(score_info) = &state.score_info else {
+    let play_style = profile::get_session_play_style();
+    let player_side = profile::get_session_player_side();
+
+    let Some(score_info) = state.score_info.iter().find_map(|s| s.as_ref()) else {
         actors.push(act!(text:
             font("wendy"):
             settext("NO SCORE DATA AVAILABLE"):
@@ -1304,20 +1602,34 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // --- Lower Stats Pane Background ---
     {
-        let pane_width = 300.0f64.mul_add(2.0, 10.0);
-        let pane_x_left = screen_center_x() - 305.0;
         let pane_y_top = screen_center_y() - 56.0;
         let pane_y_bottom = (screen_center_y() + 34.0) + 180.0;
         let pane_height = pane_y_bottom - pane_y_top;
         let pane_bg_color = color::rgba_hex("#1E282F");
 
-        actors.push(act!(quad:
-            align(0.0, 0.0):
-            xy(pane_x_left, pane_y_top):
-            zoomto(pane_width, pane_height):
-            diffuse(pane_bg_color[0], pane_bg_color[1], pane_bg_color[2], 1.0):
-            z(100)
-        ));
+        let pane_x_left = screen_center_x() - 305.0;
+        if play_style == profile::PlayStyle::Versus {
+            let pane_w = 300.0;
+            let pane_x_right = screen_center_x() + 5.0;
+            for x in [pane_x_left, pane_x_right] {
+                actors.push(act!(quad:
+                    align(0.0, 0.0):
+                    xy(x, pane_y_top):
+                    zoomto(pane_w, pane_height):
+                    diffuse(pane_bg_color[0], pane_bg_color[1], pane_bg_color[2], 1.0):
+                    z(100)
+                ));
+            }
+        } else {
+            let pane_w = 300.0_f32.mul_add(2.0, 10.0);
+            actors.push(act!(quad:
+                align(0.0, 0.0):
+                xy(pane_x_left, pane_y_top):
+                zoomto(pane_w, pane_height):
+                diffuse(pane_bg_color[0], pane_bg_color[1], pane_bg_color[2], 1.0):
+                z(100)
+            ));
+        }
     }
 
     let cy = screen_center_y();
@@ -1421,374 +1733,362 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.push(song_features_frame);
     }
 
-    // --- Player 1 Upper Content Frame ---
-    let p1_frame_x = screen_center_x() - 155.0;
-
-    // Letter Grade (Simply Love parity)
-    actors.extend(eval_grades::actors(
-        score_info.grade,
-        eval_grades::EvalGradeParams {
-            x: p1_frame_x - 70.0,
-            y: cy - 134.0,
-            z: 101,
-            zoom: 0.4,
-            elapsed: state.session_elapsed,
-        },
-    ));
-
-    // Difficulty Text and Meter Block
+    // --- Upper Content (Simply Love PerPlayer/Upper) ---
     {
-        let difficulty_display_name = if score_info.chart.difficulty.eq_ignore_ascii_case("edit") {
-            "Edit"
-        } else {
-            let difficulty_index = color::FILE_DIFFICULTY_NAMES
-                .iter()
-                .position(|&n| n.eq_ignore_ascii_case(&score_info.chart.difficulty))
-                .unwrap_or(2);
-            color::DISPLAY_DIFFICULTY_NAMES[difficulty_index]
+        let style_label = match play_style {
+            profile::PlayStyle::Double => "Double",
+            profile::PlayStyle::Single | profile::PlayStyle::Versus => "Single",
         };
 
-        let difficulty_color =
-            color::difficulty_rgba(&score_info.chart.difficulty, state.active_color_index);
-        let difficulty_text = format!("Single / {difficulty_display_name}");
-        actors.push(act!(text: font("miso"): settext(difficulty_text): align(0.0, 0.5): xy(p1_frame_x - 115.0, cy - 65.0): zoom(0.7): z(101): diffuse(1.0, 1.0, 1.0, 1.0) ));
-        actors.push(act!(quad: align(0.5, 0.5): xy(p1_frame_x - 134.5, cy - 71.0): zoomto(30.0, 30.0): z(101): diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0) ));
-        actors.push(act!(text: font("wendy"): settext(score_info.chart.meter.to_string()): align(0.5, 0.5): xy(p1_frame_x - 134.5, cy - 71.0): zoom(0.4): z(102): diffuse(0.0, 0.0, 0.0, 1.0) ));
-    }
+        let upper_single = [(0, player_side)];
+        let upper_vs = [
+            (0, profile::PlayerSide::P1),
+            (1, profile::PlayerSide::P2),
+        ];
+        let upper_players: &[(usize, profile::PlayerSide)] = if play_style == profile::PlayStyle::Versus {
+            &upper_vs
+        } else {
+            &upper_single
+        };
 
-    // Step Artist (or Edit description)
-    let step_artist_text = if score_info.chart.difficulty.eq_ignore_ascii_case("edit")
-        && !score_info.chart.description.trim().is_empty()
-    {
-        score_info.chart.description.clone()
-    } else {
-        score_info.chart.step_artist.clone()
-    };
-    actors.push(act!(text: font("miso"): settext(step_artist_text): align(0.0, 0.5): xy(p1_frame_x - 115.0, cy - 81.0): zoom(0.7): z(101): diffuse(1.0, 1.0, 1.0, 1.0) ));
+        for &(player_idx, side) in upper_players {
+            let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
+                continue;
+            };
 
-    // --- Breakdown Text (under grade) ---
-    let breakdown_text = {
-        let chart = &score_info.chart;
-        // Match the Lua script by progressively minimizing the breakdown text until it fits.
-        asset_manager
-            .with_fonts(|all_fonts| {
-                asset_manager.with_font("miso", |miso_font| -> Option<String> {
-                    let width_constraint = 155.0;
-                    let text_zoom = 0.7;
-                    // Measure at logical width (zoom 1.0) and ensure it fits once scaled down.
-                    let max_allowed_logical_width = width_constraint / text_zoom;
+            let upper_origin_x = match side {
+                profile::PlayerSide::P1 => screen_center_x() - 155.0,
+                profile::PlayerSide::P2 => screen_center_x() + 155.0,
+            };
+            let dir = if side == profile::PlayerSide::P1 { -1.0 } else { 1.0 };
 
-                    let fits = |text: &str| {
-                        let logical_width =
-                            font::measure_line_width_logical(miso_font, text, all_fonts) as f32;
-                        logical_width <= max_allowed_logical_width
-                    };
+            // Letter Grade
+            actors.extend(eval_grades::actors(
+                si.grade,
+                eval_grades::EvalGradeParams {
+                    x: upper_origin_x + 70.0 * dir,
+                    y: cy - 134.0,
+                    z: 101,
+                    zoom: 0.4,
+                    elapsed: state.session_elapsed,
+                },
+            ));
 
-                    if fits(&chart.detailed_breakdown) {
-                        Some(chart.detailed_breakdown.clone())
-                    } else if fits(&chart.partial_breakdown) {
-                        Some(chart.partial_breakdown.clone())
-                    } else if fits(&chart.simple_breakdown) {
-                        Some(chart.simple_breakdown.clone())
-                    } else {
-                        Some(format!("{} Total", chart.total_streams))
-                    }
-                })
-            })
-            .flatten()
-            .unwrap_or_else(|| chart.simple_breakdown.clone()) // Fallback if font isn't found
-    };
+            // Difficulty Text and Meter Block
+            {
+                let difficulty_display_name = if si.chart.difficulty.eq_ignore_ascii_case("edit") {
+                    "Edit"
+                } else {
+                    let difficulty_index = color::FILE_DIFFICULTY_NAMES
+                        .iter()
+                        .position(|&n| n.eq_ignore_ascii_case(&si.chart.difficulty))
+                        .unwrap_or(2);
+                    color::DISPLAY_DIFFICULTY_NAMES[difficulty_index]
+                };
 
-    // Position based on P1, left-aligned. The y-value is from the original theme.
-    actors.push(act!(text: font("miso"): settext(breakdown_text):
-        align(0.0, 0.5): xy(p1_frame_x - 150.0, cy - 95.0): zoom(0.7):
-        maxwidth(155.0): horizalign(left): z(101): diffuse(1.0, 1.0, 1.0, 1.0)
-    ));
+                let difficulty_color =
+                    color::difficulty_rgba(&si.chart.difficulty, state.active_color_index);
+                let difficulty_text = format!("{style_label} / {difficulty_display_name}");
+                let text_x = upper_origin_x + 115.0 * dir;
+                let box_x = upper_origin_x + 134.5 * dir;
+                let align_x = if side == profile::PlayerSide::P1 { 0.0 } else { 1.0 };
 
-	    // --- Player 1 Score Percentage Display ---
-	    {
-	        let mut score_frame_x = p1_frame_x;
-	        let mut score_frame_y = screen_center_y() - 26.0;
-	        let percent_text = format!("{:.2}", score_info.score_percent * 100.0);
-	        let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));
-	        let hard_ex_percent_text = format!("{:.2}", score_info.hard_ex_score_percent.max(0.0));
-	        let score_bg_color = color::rgba_hex("#101519");
+                if side == profile::PlayerSide::P1 {
+                    actors.push(act!(text: font("miso"): settext(difficulty_text):
+                        align(align_x, 0.5): xy(text_x, cy - 65.0): zoom(0.7): z(101):
+                        diffuse(1.0, 1.0, 1.0, 1.0)
+                    ));
+                } else {
+                    actors.push(act!(text: font("miso"): settext(difficulty_text):
+                        align(align_x, 0.5): xy(text_x, cy - 65.0): zoom(0.7): z(101):
+                        diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
+                    ));
+                }
 
-        let mut children = Vec::new();
-
-	        match state.active_pane {
-	            EvalPane::Column => {
-	                // Pane3 percentage container (Simply Love): small box at x=-115, y=_screen.cy-40.
-	                score_frame_x = p1_frame_x - 115.0;
-	                score_frame_y = screen_center_y() - 40.0;
-
-	                children.push(act!(quad:
-	                    align(0.5, 0.5):
-	                    xy(0.0, -2.0):
-	                    setsize(70.0, 28.0):
-	                    diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
-	                ));
-	                children.push(act!(text:
-	                    font("wendy_white"):
-	                    settext(percent_text):
-	                    align(1.0, 0.5):
-	                    xy(30.0, -2.0):
-	                    zoom(0.25):
-	                    horizalign(right)
-	                ));
-	            }
-	            EvalPane::FaPlus => {
-	                // FA+ pane: stretch the background down (height 88, y-offset 14)
-	                // to match Simply Love's Pane2 percentage container, and always
-	                // show EX score beneath the normal ITG percent (independent of the
-                // in-game EX HUD option).
-                children.push(act!(quad:
-                    align(0.0, 0.5):
-                    xy(-150.0, 14.0):
-                    setsize(158.5, 88.0):
-                    diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+                actors.push(act!(quad:
+                    align(0.5, 0.5):
+                    xy(box_x, cy - 71.0):
+                    zoomto(30.0, 30.0):
+                    z(101):
+                    diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
                 ));
-
-                // Normal ITG score (top line, white)
-                children.push(act!(text:
-                    font("wendy_white"):
-                    settext(percent_text):
-                    align(1.0, 0.5):
-                    // Keep ITG percent in the same position regardless of FA+ pane.
-                    xy(1.5, 0.0):
-                    zoom(0.585):
-                    horizalign(right)
-                ));
-
-                // EX score (bottom line, Fantastic blue / turquoise), smaller than ITG score
-                let ex_color = color::JUDGMENT_RGBA[0];
-                // "EX" label to the left of the numeric EX score.
-                children.push(act!(text:
-                    font("wendy_white"):
-                    settext("EX"):
-                    align(1.0, 0.5):
-                    // Near the left edge of the background box.
-                    xy(-108.0, 40.0):
-                    zoom(0.31):
-                    horizalign(right):
-                    diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
-                ));
-                children.push(act!(text:
-                    font("wendy_white"):
-                    settext(ex_percent_text):
-                    align(1.0, 0.5):
-                    // EX numeric value aligned with label, further below ITG percent.
-                    xy(0, 40.0):
-                    zoom(0.31):
-                    horizalign(right):
-                    diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
+                actors.push(act!(text:
+                    font("wendy"):
+                    settext(si.chart.meter.to_string()):
+                    align(0.5, 0.5):
+                    xy(box_x, cy - 71.0):
+                    zoom(0.4):
+                    z(102):
+                    diffuse(0.0, 0.0, 0.0, 1.0)
                 ));
             }
-            EvalPane::HardEx => {
-                // H.EX pane: show EX (big) and H.EX (small) using the same layout
-                // as the FA+ pane's ITG+EX score box.
-                children.push(act!(quad:
-                    align(0.0, 0.5):
-                    xy(-150.0, 14.0):
-                    setsize(158.5, 88.0):
-                    diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
-                ));
 
-                let ex_color = color::JUDGMENT_RGBA[0];
-                let hex_color = color::HARD_EX_SCORE_RGBA;
-                children.push(act!(text:
-                    font("wendy_white"):
-                    settext(ex_percent_text):
-                    align(1.0, 0.5):
-                    xy(1.5, 0.0):
-                    zoom(0.585):
-                    horizalign(right):
-                    diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
-                ));
-                children.push(act!(text:
-                    font("wendy_white"):
-                    settext("H.EX"):
-                    align(1.0, 0.5):
-                    xy(-108.0, 40.0):
-                    zoom(0.31):
-                    horizalign(right):
-                    diffuse(hex_color[0], hex_color[1], hex_color[2], hex_color[3])
-                ));
-                children.push(act!(text:
-                    font("wendy_white"):
-                    settext(hard_ex_percent_text):
-                    align(1.0, 0.5):
-                    xy(0, 40.0):
-                    zoom(0.31):
-                    horizalign(right):
-                    diffuse(hex_color[0], hex_color[1], hex_color[2], hex_color[3])
-                ));
+            // Step Artist (or Edit description)
+            let step_artist_text = if si.chart.difficulty.eq_ignore_ascii_case("edit")
+                && !si.chart.description.trim().is_empty()
+            {
+                si.chart.description.clone()
+            } else {
+                si.chart.step_artist.clone()
+            };
+            {
+                let x = upper_origin_x + 115.0 * dir;
+                let align_x = if side == profile::PlayerSide::P1 { 0.0 } else { 1.0 };
+                if side == profile::PlayerSide::P1 {
+                    actors.push(act!(text: font("miso"): settext(step_artist_text):
+                        align(align_x, 0.5): xy(x, cy - 81.0): zoom(0.7): z(101):
+                        diffuse(1.0, 1.0, 1.0, 1.0)
+                    ));
+                } else {
+                    actors.push(act!(text: font("miso"): settext(step_artist_text):
+                        align(align_x, 0.5): xy(x, cy - 81.0): zoom(0.7): z(101):
+                        diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
+                    ));
+                }
             }
-            EvalPane::Standard => {
-                // Standard pane: original 60px-tall background and single ITG percent.
-                children.push(act!(quad:
-                    align(0.0, 0.5):
-                    xy(-150.0, 0.0):
-                    setsize(158.5, 60.0):
-                    diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
-                ));
-                children.push(act!(text:
-                    font("wendy_white"):
-                    settext(percent_text):
-                    align(1.0, 0.5):
-                    xy(1.5, 0.0):
-                    zoom(0.585):
-                    horizalign(right)
-                ));
+
+            // Breakdown Text (under grade)
+            let breakdown_text = {
+                let chart = &si.chart;
+                asset_manager
+                    .with_fonts(|all_fonts| {
+                        asset_manager.with_font("miso", |miso_font| -> Option<String> {
+                            let width_constraint = 155.0;
+                            let text_zoom = 0.7;
+                            let max_allowed_logical_width = width_constraint / text_zoom;
+
+                            let fits = |text: &str| {
+                                let logical_width =
+                                    font::measure_line_width_logical(miso_font, text, all_fonts) as f32;
+                                logical_width <= max_allowed_logical_width
+                            };
+
+                            if fits(&chart.detailed_breakdown) {
+                                Some(chart.detailed_breakdown.clone())
+                            } else if fits(&chart.partial_breakdown) {
+                                Some(chart.partial_breakdown.clone())
+                            } else if fits(&chart.simple_breakdown) {
+                                Some(chart.simple_breakdown.clone())
+                            } else {
+                                Some(format!("{} Total", chart.total_streams))
+                            }
+                        })
+                    })
+                    .flatten()
+                    .unwrap_or_else(|| chart.simple_breakdown.clone())
+            };
+
+            {
+                let x = upper_origin_x + 150.0 * dir;
+                let align_x = if side == profile::PlayerSide::P1 { 0.0 } else { 1.0 };
+                if side == profile::PlayerSide::P1 {
+                    actors.push(act!(text: font("miso"): settext(breakdown_text):
+                        align(align_x, 0.5): xy(x, cy - 95.0): zoom(0.7):
+                        maxwidth(155.0): horizalign(left): z(101):
+                        diffuse(1.0, 1.0, 1.0, 1.0)
+                    ));
+                } else {
+                    actors.push(act!(text: font("miso"): settext(breakdown_text):
+                        align(align_x, 0.5): xy(x, cy - 95.0): zoom(0.7):
+                        maxwidth(155.0): horizalign(right): z(101):
+                        diffuse(1.0, 1.0, 1.0, 1.0)
+                    ));
+                }
             }
         }
-
-	        let score_display_frame = Actor::Frame {
-	            align: [0.5, 0.5],
-	            offset: [score_frame_x, score_frame_y],
-	            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-	            background: None,
-	            // Draw above the judgment/radar pane (z≈101) so the stretched
-	            // background cleanly covers the top radar row when FA+ pane is used.
-            z: 102,
-            children,
-        };
-        actors.push(score_display_frame);
     }
 
-    // --- P1 Stats Pane ---
-    match state.active_pane {
-        EvalPane::Column => actors.extend(build_p1_column_judgments_pane(state, asset_manager)),
-        _ => actors.extend(build_p1_stats_pane(state, asset_manager)),
-    }
-
-    // --- P2 Timing Pane (repurposed for single player) ---
-    actors.extend(build_p2_timing_pane(state));
-
-    // --- NEW: P1 Modifiers Pane ---
-    actors.extend(build_modifiers_pane(state));
-
-    // --- DENSITY GRAPH PANE (Corrected Layout) ---
+    // --- Panes (Simply Love ScreenEvaluation common/Panes) ---
     {
-        const GRAPH_WIDTH: f32 = 610.0;
-        const GRAPH_HEIGHT: f32 = 64.0;
+        for controller in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+            let controller_idx = if controller == profile::PlayerSide::P1 { 0 } else { 1 };
+            let player_idx = if play_style == profile::PlayStyle::Versus {
+                controller_idx
+            } else {
+                0
+            };
+            let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
+                continue;
+            };
+            let pane = state.active_pane[controller_idx];
 
-        let frame_center_x = screen_center_x();
+            actors.extend(build_pane_percentage_display(si, pane, controller));
+
+            match pane {
+                EvalPane::Timing => actors.extend(build_timing_pane(
+                    si,
+                    state.timing_hist_mesh[player_idx].as_ref(),
+                    controller,
+                )),
+                EvalPane::Column => {
+                    let pane3_player_side = if play_style == profile::PlayStyle::Versus {
+                        controller
+                    } else {
+                        player_side
+                    };
+                    actors.extend(build_column_judgments_pane(
+                        si,
+                        controller,
+                        pane3_player_side,
+                        asset_manager,
+                    ));
+                }
+                EvalPane::Standard | EvalPane::FaPlus | EvalPane::HardEx => {
+                    actors.extend(build_stats_pane(si, pane, controller, asset_manager));
+                }
+            }
+        }
+    }
+
+    // --- Player Modifiers Bar (Simply Love PerPlayer/Lower/PlayerModifiers) ---
+    {
+        let graph_width = if play_style == profile::PlayStyle::Versus {
+            300.0
+        } else {
+            610.0
+        };
+
+        if play_style == profile::PlayStyle::Versus {
+            for (player_idx, center_x) in [
+                (0, screen_center_x() - 155.0),
+                (1, screen_center_x() + 155.0),
+            ] {
+                if let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) {
+                    actors.extend(build_modifiers_pane(si, center_x, graph_width));
+                }
+            }
+        } else if let Some(si) = state.score_info.get(0).and_then(|s| s.as_ref()) {
+            actors.extend(build_modifiers_pane(si, screen_center_x(), graph_width));
+        }
+    }
+
+    // --- Graphs (density + scatter + life) ---
+    {
+        let graph_width = if play_style == profile::PlayStyle::Versus {
+            300.0
+        } else {
+            610.0
+        };
+        let graph_height = 64.0_f32;
         let frame_center_y = screen_center_y() + 124.0;
 
-        let graph_frame = Actor::Frame {
-            align: [0.5, 0.0], // Center-Top alignment for the main frame
-            offset: [frame_center_x, frame_center_y],
-            size: [SizeSpec::Px(GRAPH_WIDTH), SizeSpec::Px(GRAPH_HEIGHT)],
-            z: 101,
-            background: None,
-            children: vec![
-                act!(quad:
-                    align(0.0, 0.0):
-                    xy(0.0, 0.0):
-                    setsize(GRAPH_WIDTH, GRAPH_HEIGHT):
-                    diffuse(16.0/255.0, 21.0/255.0, 25.0/255.0, 1.0):
-                    z(0)
-                ),
-                // The NPS histogram is positioned with its origin at the bottom-left of the frame,
-                // and then shifted to be centered horizontally.
-                // Lua: `addx(-GraphWidth/2):addy(GraphHeight)`
-                // This is equivalent to `align(0.0, 1.0)` (bottom-left) and `xy` at the center of the frame.
-                {
-                    if let Some(mesh) = &state.density_graph_mesh
-                        && !mesh.is_empty()
+        let cx = screen_center_x();
+        let graph_single = [(0, cx)];
+        let graph_vs = [(0, cx - 155.0), (1, cx + 155.0)];
+        let graph_players: &[(usize, f32)] = if play_style == profile::PlayStyle::Versus {
+            &graph_vs
+        } else {
+            &graph_single
+        };
+
+        for &(player_idx, frame_center_x) in graph_players {
+            let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
+                continue;
+            };
+
+            let density_mesh = state.density_graph_mesh[player_idx].as_ref();
+            let scatter_mesh = state.scatter_mesh[player_idx].as_ref();
+
+            let graph_frame = Actor::Frame {
+                align: [0.5, 0.0],
+                offset: [frame_center_x, frame_center_y],
+                size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
+                z: 101,
+                background: None,
+                children: vec![
+                    act!(quad:
+                        align(0.0, 0.0):
+                        xy(0.0, 0.0):
+                        setsize(graph_width, graph_height):
+                        diffuse(16.0/255.0, 21.0/255.0, 25.0/255.0, 1.0):
+                        z(0)
+                    ),
                     {
-                        Actor::Mesh {
-                            align: [0.0, 1.0],
-                            offset: [0.0, GRAPH_HEIGHT],
-                            size: [SizeSpec::Px(GRAPH_WIDTH), SizeSpec::Px(GRAPH_HEIGHT)],
-                            vertices: mesh.clone(),
-                            mode: MeshMode::Triangles,
-                            visible: true,
-                            blend: BlendMode::Alpha,
-                            z: 1,
+                        if let Some(mesh) = density_mesh
+                            && !mesh.is_empty()
+                        {
+                            Actor::Mesh {
+                                align: [0.0, 1.0],
+                                offset: [0.0, graph_height],
+                                size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
+                                vertices: mesh.clone(),
+                                mode: MeshMode::Triangles,
+                                visible: true,
+                                blend: BlendMode::Alpha,
+                                z: 1,
+                            }
+                        } else if state.density_graph_texture_key != "__white" {
+                            act!(sprite(state.density_graph_texture_key.clone()):
+                                align(0.0, 1.0):
+                                xy(0.0, graph_height):
+                                setsize(graph_width, graph_height): z(1)
+                            )
+                        } else {
+                            act!(sprite("__white"): visible(false))
                         }
-                    } else if state.density_graph_texture_key != "__white" {
-                        act!(sprite(state.density_graph_texture_key.clone()):
-                            align(0.0, 1.0): // bottom-left
-                            xy(0.0, GRAPH_HEIGHT): // position at the bottom-left of the frame
-                            setsize(GRAPH_WIDTH, GRAPH_HEIGHT): z(1)
-                        )
-                    } else {
-                        act!(sprite("__white"): visible(false))
-                    }
-                },
-                // The horizontal zero-line, centered vertically in the panel.
-                act!(quad:
-                    align(0.5, 0.5):
-                    xy(GRAPH_WIDTH / 2.0_f32, GRAPH_HEIGHT / 2.0_f32):
-                    setsize(GRAPH_WIDTH, 1.0):
-                    diffusealpha(0.1):
-                    z(2)
-                ),
-                // Scatter plot overlay (judgment offsets over time)
-                {
-                    if let Some(mesh) = &state.scatter_mesh
-                        && !mesh.is_empty()
+                    },
+                    act!(quad:
+                        align(0.5, 0.5):
+                        xy(graph_width / 2.0_f32, graph_height / 2.0_f32):
+                        setsize(graph_width, 1.0):
+                        diffusealpha(0.1):
+                        z(2)
+                    ),
                     {
-                        Actor::Mesh {
-                            align: [0.0, 0.0],
-                            offset: [0.0, 0.0],
-                            size: [SizeSpec::Px(GRAPH_WIDTH), SizeSpec::Px(GRAPH_HEIGHT)],
-                            vertices: mesh.clone(),
-                            mode: MeshMode::Triangles,
-                            visible: true,
-                            blend: BlendMode::Alpha,
-                            z: 3,
+                        if let Some(mesh) = scatter_mesh
+                            && !mesh.is_empty()
+                        {
+                            Actor::Mesh {
+                                align: [0.0, 0.0],
+                                offset: [0.0, 0.0],
+                                size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
+                                vertices: mesh.clone(),
+                                mode: MeshMode::Triangles,
+                                visible: true,
+                                blend: BlendMode::Alpha,
+                                z: 3,
+                            }
+                        } else {
+                            Actor::Frame {
+                                align: [0.0, 0.0],
+                                offset: [0.0, 0.0],
+                                size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
+                                background: None,
+                                z: 3,
+                                children: Vec::new(),
+                            }
                         }
-                    } else {
-                        Actor::Frame {
-                            align: [0.0, 0.0],
-                            offset: [0.0, 0.0],
-                            size: [SizeSpec::Px(GRAPH_WIDTH), SizeSpec::Px(GRAPH_HEIGHT)],
-                            background: None,
-                            z: 3,
-                            children: Vec::new(),
-                        }
-                    }
-                },
-                // Life Line Overlay (z=4)
-                {
-                    let mut life_children: Vec<Actor> = Vec::new();
-                    if let Some(si) = &state.score_info {
+                    },
+                    {
+                        let mut life_children: Vec<Actor> = Vec::new();
                         let first = si.graph_first_second;
                         let last = si.graph_last_second.max(first + 0.001_f32);
                         let dur = (last - first).max(0.001_f32);
-                        let padding = 0.05; // Same padding as scatter
+                        let padding = 0.05;
 
                         let mut last_x = -999.0_f32;
                         let mut last_y = -999.0_f32;
 
                         for &(t, life) in &si.life_history {
-                            let x = ((t - first) / (dur + padding)).clamp(0.0, 1.0) * GRAPH_WIDTH;
-                            // Map life (0..1) to Y (GraphHeight..0)
-                            // life 1.0 = top (y=0), life 0.0 = bottom (y=Height)
-                            let y = (1.0 - life).clamp(0.0, 1.0) * GRAPH_HEIGHT;
+                            let x =
+                                ((t - first) / (dur + padding)).clamp(0.0, 1.0) * graph_width;
+                            let y = (1.0 - life).clamp(0.0, 1.0) * graph_height;
 
-                            // Skip if this point is identical to the last one in screen space
                             if (x - last_x).abs() < 0.5 && (y - last_y).abs() < 0.5 {
                                 continue;
                             }
 
                             if last_x > -900.0 {
-                                // Horizontal segment (if time passed)
                                 let w = (x - last_x).max(0.0);
                                 if w > 0.5 {
                                     life_children.push(act!(quad:
                                         align(0.0, 0.5): xy(last_x, last_y):
-                                        setsize(w, 2.0): // 2px thick
+                                        setsize(w, 2.0):
                                         diffuse(1.0, 1.0, 1.0, 0.8):
                                         z(4)
                                     ));
                                 }
 
-                                // Vertical segment (drawdown/gain)
-                                // This handles the "loss of life" vertical drop perfectly.
                                 let h = (y - last_y).abs();
                                 if h > 0.5 {
                                     let min_y = last_y.min(y);
@@ -1800,7 +2100,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     ));
                                 }
                             } else {
-                                // First point dot
                                 life_children.push(act!(quad:
                                     align(0.5, 0.5): xy(x, y):
                                     setsize(2.0, 2.0):
@@ -1813,22 +2112,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             last_y = y;
                         }
 
-                        // Draw Fail Marker if present
                         if let Some(fail_time) = si.fail_time {
                             let x = ((fail_time - first) / (dur + padding)).clamp(0.0, 1.0)
-                                * GRAPH_WIDTH;
+                                * graph_width;
 
-                            // Red vertical line
                             life_children.push(act!(quad:
                                 align(0.5, 0.0): xy(x, 0.0):
-                                setsize(1.5, GRAPH_HEIGHT):
+                                setsize(1.5, graph_height):
                                 diffuse(1.0, 0.0, 0.0, 0.8):
                                 z(5)
                             ));
 
-                            // Time remaining text calculation
-                            // Match Simply Love's TrackFailTime behavior:
-                            // display remaining time using chart length divided by MusicRate.
                             let base_total = si.song.total_length_seconds.max(0) as f32;
                             let rate = if si.music_rate.is_finite() && si.music_rate > 0.0 {
                                 si.music_rate
@@ -1848,49 +2142,43 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let remaining = (total_display - death_display).max(0.0);
                             let remaining_str = format!("-{}", format_session_time(remaining));
 
-                            // Flag box background (Black with Red border)
-                            // Using a small frame to group the flag elements
                             let flag_w = 40.0;
                             let flag_h = 14.0;
-
                             life_children.push(act!(quad:
-                                align(1.0, 1.0): xy(x, GRAPH_HEIGHT):
+                                align(1.0, 1.0): xy(x, graph_height):
                                 setsize(flag_w, flag_h):
-                                diffuse(1.0, 0.0, 0.0, 1.0): // Red border
+                                diffuse(1.0, 0.0, 0.0, 1.0):
                                 z(5)
                             ));
                             life_children.push(act!(quad:
-                                align(1.0, 1.0): xy(x - 1.0, GRAPH_HEIGHT - 1.0):
+                                align(1.0, 1.0): xy(x - 1.0, graph_height - 1.0):
                                 setsize(flag_w - 2.0, flag_h - 2.0):
-                                diffuse(0.0, 0.0, 0.0, 0.8): // Black fill
+                                diffuse(0.0, 0.0, 0.0, 0.8):
                                 z(6)
                             ));
-
-                            // Flag Text
                             life_children.push(act!(text:
                                 font("miso"): settext(remaining_str):
-                                align(1.0, 1.0): xy(x - 4.0, GRAPH_HEIGHT - 1.5):
+                                align(1.0, 1.0): xy(x - 4.0, graph_height - 1.5):
                                 zoom(0.5):
                                 diffuse(1.0, 0.3, 0.3, 1.0):
                                 z(7)
                             ));
                         }
-                    }
 
-                    Actor::Frame {
-                        align: [0.0, 0.0],
-                        offset: [0.0, 0.0],
-                        size: [SizeSpec::Px(GRAPH_WIDTH), SizeSpec::Px(GRAPH_HEIGHT)],
-                        background: None,
-                        z: 4,
-                        children: life_children,
-                    }
-                },
-            ],
-        };
-        actors.push(graph_frame);
+                        Actor::Frame {
+                            align: [0.0, 0.0],
+                            offset: [0.0, 0.0],
+                            size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
+                            background: None,
+                            z: 4,
+                            children: life_children,
+                        }
+                    },
+                ],
+            };
+            actors.push(graph_frame);
+        }
     }
-
     // --- "ITG" text and Pads (top right) ---
     {
         let itg_text_x = screen_width() - widescale(55.0, 62.0);
