@@ -2,6 +2,7 @@ pub mod evaluation;
 pub mod evaluation_summary;
 pub mod gameplay;
 pub mod init;
+pub mod initials;
 pub mod input;
 pub mod mappings;
 pub mod manage_local_profiles;
@@ -56,6 +57,7 @@ pub enum Screen {
     Options,
     ManageLocalProfiles,
     Init,
+    Initials,
     Mappings,
     Input,
     SelectProfile,

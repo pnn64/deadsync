@@ -1924,6 +1924,22 @@ pub fn update_last_played_for_side(
     save_profile_ini_for_side(side);
 }
 
+pub fn update_player_initials_for_side(side: PlayerSide, initials: &str) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    let initials = initials.trim();
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.player_initials == initials {
+            return;
+        }
+        profile.player_initials = initials.to_string();
+    }
+    save_profile_ini_for_side(side);
+}
+
 pub fn update_scroll_speed_for_side(side: PlayerSide, setting: ScrollSpeedSetting) {
     if session_side_is_guest(side) {
         return;

@@ -51,7 +51,7 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Sc
         VirtualAction::p1_back
         | VirtualAction::p1_start
         | VirtualAction::p2_back
-        | VirtualAction::p2_start => ScreenAction::Navigate(Screen::Menu),
+        | VirtualAction::p2_start => ScreenAction::Navigate(Screen::Initials),
 
         VirtualAction::p1_menu_left
         | VirtualAction::p1_menu_up

@@ -8,8 +8,9 @@ use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::{
     Screen as CurrentScreen, ScreenAction, evaluation, evaluation_summary, gameplay, init,
-    input as input_screen, manage_local_profiles, mappings, menu, options, player_options,
-    profile_load, sandbox, select_color, select_mode, select_music, select_profile, select_style,
+    initials, input as input_screen, manage_local_profiles, mappings, menu, options,
+    player_options, profile_load, sandbox, select_color, select_mode, select_music, select_profile,
+    select_style,
 };
 use crate::ui::color;
 use winit::{
@@ -138,6 +139,7 @@ pub struct ScreensState {
     sandbox_state: sandbox::State,
     evaluation_state: evaluation::State,
     evaluation_summary_state: evaluation_summary::State,
+    initials_state: initials::State,
 }
 
 /// Session-wide values that survive screen swaps.
@@ -313,6 +315,9 @@ impl ScreensState {
         let mut evaluation_summary_state = evaluation_summary::init();
         evaluation_summary_state.active_color_index = color_index;
 
+        let mut initials_state = initials::init();
+        initials_state.active_color_index = color_index;
+
         Self {
             current_screen: CurrentScreen::Init,
             menu_state,
@@ -332,6 +337,7 @@ impl ScreensState {
             sandbox_state: sandbox::init(),
             evaluation_state,
             evaluation_summary_state,
+            initials_state,
         }
     }
 
@@ -424,6 +430,7 @@ impl ScreensState {
                 evaluation_summary::update(&mut self.evaluation_summary_state, delta_time);
                 None
             }
+            CurrentScreen::Initials => initials::update(&mut self.initials_state, delta_time),
             CurrentScreen::SelectMusic => {
                 if let Some(start) = session.session_start_time {
                     self.select_music_state.session_elapsed =
@@ -985,6 +992,10 @@ impl App {
                 self.state.session.played_stages.len(),
                 &ev,
             ),
+            CurrentScreen::Initials => crate::screens::initials::handle_input(
+                &mut self.state.screens.initials_state,
+                &ev,
+            ),
             CurrentScreen::Sandbox => {
                 crate::screens::sandbox::handle_input(&mut self.state.screens.sandbox_state, &ev)
             }
@@ -1276,6 +1287,11 @@ impl App {
                 &self.state.session.played_stages,
                 &self.asset_manager,
             ),
+            CurrentScreen::Initials => initials::get_actors(
+                &self.state.screens.initials_state,
+                &self.state.session.played_stages,
+                &self.asset_manager,
+            ),
         };
 
         if self.state.shell.show_overlay {
@@ -1344,6 +1360,7 @@ impl App {
             CurrentScreen::Init => init::out_transition(),
             CurrentScreen::Evaluation => evaluation::out_transition(),
             CurrentScreen::EvaluationSummary => evaluation_summary::out_transition(),
+            CurrentScreen::Initials => initials::out_transition(),
             CurrentScreen::Input => input_screen::out_transition(),
         }
     }
@@ -1365,6 +1382,7 @@ impl App {
             CurrentScreen::Sandbox => sandbox::in_transition(),
             CurrentScreen::Evaluation => evaluation::in_transition(),
             CurrentScreen::EvaluationSummary => evaluation_summary::in_transition(),
+            CurrentScreen::Initials => initials::in_transition(),
             CurrentScreen::Input => input_screen::in_transition(),
             CurrentScreen::Init => (vec![], 0.0),
         }
@@ -2021,6 +2039,7 @@ impl App {
             self.state.screens.manage_local_profiles_state.active_color_index = idx;
             self.state.screens.input_state.active_color_index = idx;
             self.state.screens.evaluation_summary_state.active_color_index = idx;
+            self.state.screens.initials_state.active_color_index = idx;
             if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                 gs.active_color_index = idx;
                 gs.player_color = color::simply_love_rgba(idx);
@@ -2307,6 +2326,27 @@ impl App {
             };
             self.state.screens.evaluation_summary_state = evaluation_summary::init();
             self.state.screens.evaluation_summary_state.active_color_index = color_idx;
+
+            if let Some(backend) = self.backend.as_mut() {
+                for stage in &self.state.session.played_stages {
+                    if let Some(path) = stage.song.banner_path.as_ref() {
+                        self.asset_manager.ensure_texture_from_path(backend, path);
+                    }
+                }
+            }
+        }
+
+        if target == CurrentScreen::Initials {
+            let color_idx = match prev {
+                CurrentScreen::EvaluationSummary => {
+                    self.state.screens.evaluation_summary_state.active_color_index
+                }
+                CurrentScreen::SelectMusic => self.state.screens.select_music_state.active_color_index,
+                CurrentScreen::Evaluation => self.state.screens.evaluation_state.active_color_index,
+                _ => self.state.screens.initials_state.active_color_index,
+            };
+            self.state.screens.initials_state = initials::init();
+            self.state.screens.initials_state.active_color_index = color_idx;
 
             if let Some(backend) = self.backend.as_mut() {
                 for stage in &self.state.session.played_stages {
