@@ -929,7 +929,7 @@ pub fn build(
                 actors.push(act!(sprite(hold_slot.texture_key().to_string()):
                     align(0.5, 0.5):
                     xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                    zoomto(hold_size[0], hold_size[1]):
+                    setsize(hold_size[0], hold_size[1]):
                     rotationz(-final_rotation):
                     customtexturerect(hold_uv[0], hold_uv[1], hold_uv[2], hold_uv[3]):
                     blend(normal):
@@ -949,7 +949,7 @@ pub fn build(
                     actors.push(act!(sprite(glow_slot.texture_key().to_string()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                        zoomto(glow_size[0] as f32, glow_size[1] as f32):
+                        setsize(glow_size[0] as f32, glow_size[1] as f32):
                         rotationz(-glow_slot.def.rotation_deg as f32):
                         customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
                         diffuse(1.0, 1.0, 1.0, alpha):
@@ -1420,7 +1420,7 @@ pub fn build(
                             actors.push(act!(sprite(body_slot.texture_key().to_string()):
                                 align(0.5, 0.5):
                                 xy(playfield_center_x + col_x_offset, segment_center_screen):
-                                zoomto(body_width, segment_size_screen):
+                                setsize(body_width, segment_size_screen):
                                 rotationz(rotation):
                                 customtexturerect(u0, v0, u1, v1):
                                 diffuse(
@@ -1509,7 +1509,7 @@ pub fn build(
                         actors.push(act!(sprite(cap_slot.texture_key().to_string()):
                             align(0.5, 0.5):
                             xy(playfield_center_x + col_x_offset, cap_center):
-                            zoomto(cap_width, cap_height):
+                            setsize(cap_width, cap_height):
                             customtexturerect(u0, v0, u1, v1):
                             diffuse(
                                 hold_diffuse[0],
@@ -1535,7 +1535,7 @@ pub fn build(
                     actors.push(act!(sprite(note_slot.texture_key().to_string()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset, head_y):
-                        zoomto(size[0], size[1]):
+                        setsize(size[0], size[1]):
                         rotationz(-note_slot.def.rotation_deg as f32):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                         diffuse(
@@ -1637,7 +1637,7 @@ pub fn build(
                             actors.push(act!(sprite(slot.texture_key().to_string()):
                                 align(0.5, 0.5):
                                 xy(playfield_center_x + col_x_offset, y_pos):
-                                zoomto(width, height):
+                                setsize(width, height):
                                 rotationz(rotation):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                 diffuse(1.0, 1.0, 1.0, 0.9):
@@ -1653,7 +1653,7 @@ pub fn build(
                         actors.push(act!(sprite(slot.texture_key().to_string()):
                             align(0.5, 0.5):
                             xy(playfield_center_x + col_x_offset, y_pos):
-                            zoomto(size[0], size[1]):
+                            setsize(size[0], size[1]):
                             rotationz(rotation):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                             z(Z_TAP_NOTE)
