@@ -2135,12 +2135,8 @@ pub fn get_actors(
                 }
 
                 // Text (Miso)
-                let text_x = if is_exit {
-                    // no heart => start at left pad
-                    text_x_base
-                } else {
-                    text_x_base
-                };
+                // Exit has no heart, so align text to the heart position instead of indenting.
+                let text_x = if is_exit { heart_x } else { text_x_base };
 
                 let label = ITEMS[item_idx].name;
 
