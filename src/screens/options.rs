@@ -7,6 +7,7 @@ use crate::core::space::{screen_height, screen_width, widescale};
 use crate::config::{self, DisplayMode, FullscreenType};
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
+use crate::game::parsing::simfile as song_loading;
 use crate::screens::{Screen, ScreenAction};
 use std::borrow::Cow;
 use std::time::{Duration, Instant};
@@ -337,6 +338,40 @@ enum SubmenuTransition {
     FadeInSubmenu,
     FadeOutToMain,
     FadeInMain,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReloadPhase {
+    Songs,
+    Courses,
+}
+
+#[derive(Debug)]
+enum ReloadMsg {
+    Phase(ReloadPhase),
+    Song { pack: String, song: String },
+    Course { group: String, course: String },
+    Done,
+}
+
+struct ReloadUiState {
+    phase: ReloadPhase,
+    line2: String,
+    line3: String,
+    done: bool,
+    rx: std::sync::mpsc::Receiver<ReloadMsg>,
+}
+
+impl ReloadUiState {
+    fn new(rx: std::sync::mpsc::Receiver<ReloadMsg>) -> Self {
+        Self {
+            phase: ReloadPhase::Songs,
+            line2: String::new(),
+            line3: String::new(),
+            done: false,
+            rx,
+        }
+    }
 }
 
 // Local fade timing when swapping between main options list and System Options submenu.
@@ -1048,6 +1083,7 @@ pub struct State {
     pending_submenu_kind: Option<SubmenuKind>,
     submenu_fade_t: f32,
     content_alpha: f32,
+    reload_ui: Option<ReloadUiState>,
     // Submenu state
     sub_selected: usize,
     sub_prev_selected: usize,
@@ -1095,6 +1131,7 @@ pub fn init() -> State {
         pending_submenu_kind: None,
         submenu_fade_t: 0.0,
         content_alpha: 1.0,
+        reload_ui: None,
         view: OptionsView::Main,
         sub_selected: 0,
         sub_prev_selected: 0,
@@ -1273,7 +1310,98 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
+fn start_reload_songs_and_courses(state: &mut State) {
+    if state.reload_ui.is_some() {
+        return;
+    }
+
+    // Clear navigation holds so the menu can't "run away" after reload finishes.
+    state.nav_key_held_direction = None;
+    state.nav_key_held_since = None;
+    state.nav_key_last_scrolled_at = None;
+    state.nav_lr_held_direction = None;
+    state.nav_lr_held_since = None;
+    state.nav_lr_last_adjusted_at = None;
+
+    let (tx, rx) = std::sync::mpsc::channel::<ReloadMsg>();
+    state.reload_ui = Some(ReloadUiState::new(rx));
+
+    std::thread::spawn(move || {
+        let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Songs));
+
+        let interval = Duration::from_millis(50);
+        let mut last_sent = Instant::now() - interval;
+        let mut on_song = |pack: &str, song: &str| {
+            let now = Instant::now();
+            if now.duration_since(last_sent) < interval {
+                return;
+            }
+            last_sent = now;
+            let _ = tx.send(ReloadMsg::Song {
+                pack: pack.to_owned(),
+                song: song.to_owned(),
+            });
+        };
+        song_loading::scan_and_load_songs_with_progress("songs", &mut on_song);
+
+        let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Courses));
+
+        let mut last_sent = Instant::now() - interval;
+        let mut on_course = |group: &str, course: &str| {
+            let now = Instant::now();
+            if now.duration_since(last_sent) < interval {
+                return;
+            }
+            last_sent = now;
+            let _ = tx.send(ReloadMsg::Course {
+                group: group.to_owned(),
+                course: course.to_owned(),
+            });
+        };
+        song_loading::scan_and_load_courses_with_progress("courses", "songs", &mut on_course);
+
+        let _ = tx.send(ReloadMsg::Done);
+    });
+}
+
+fn poll_reload_ui(reload: &mut ReloadUiState) {
+    while let Ok(msg) = reload.rx.try_recv() {
+        match msg {
+            ReloadMsg::Phase(phase) => {
+                reload.phase = phase;
+                reload.line2.clear();
+                reload.line3.clear();
+            }
+            ReloadMsg::Song { pack, song } => {
+                reload.phase = ReloadPhase::Songs;
+                reload.line2 = pack;
+                reload.line3 = song;
+            }
+            ReloadMsg::Course { group, course } => {
+                reload.phase = ReloadPhase::Courses;
+                reload.line2 = group;
+                reload.line3 = course;
+            }
+            ReloadMsg::Done => {
+                reload.done = true;
+            }
+        }
+    }
+}
+
 pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
+    if state.reload_ui.is_some() {
+        let done = {
+            let reload = state.reload_ui.as_mut().unwrap();
+            poll_reload_ui(reload);
+            reload.done
+        };
+        if done {
+            state.reload_ui = None;
+        }
+        return None;
+    }
+
     let mut pending_action: Option<ScreenAction> = None;
     // ------------------------- local submenu fade ------------------------- //
     match state.submenu_transition {
@@ -1717,6 +1845,9 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if state.reload_ui.is_some() {
+        return ScreenAction::None;
+    }
     // Ignore new navigation while a local submenu fade is in progress.
     if !matches!(state.submenu_transition, SubmenuTransition::None) {
         return ScreenAction::None;
@@ -1851,6 +1982,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         "Manage Local Profiles" => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             return ScreenAction::Navigate(Screen::ManageLocalProfiles);
+                        }
+                        "Reload Songs/Courses" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            start_reload_songs_and_courses(state);
                         }
                         // Exit from Options back to Menu.
                         "Exit" => {
@@ -1999,6 +2134,46 @@ pub fn get_actors(
     }));
 
     if alpha_multiplier <= 0.0 {
+        return actors;
+    }
+
+    if let Some(reload) = &state.reload_ui {
+        let header = match reload.phase {
+            ReloadPhase::Songs => "Loading songs...",
+            ReloadPhase::Courses => "Loading courses...",
+        };
+        let text = if reload.line2.is_empty() && reload.line3.is_empty() {
+            header.to_string()
+        } else if reload.line2.is_empty() {
+            format!("{header}\n{}", reload.line3)
+        } else if reload.line3.is_empty() {
+            format!("{header}\n{}", reload.line2)
+        } else {
+            format!("{header}\n{}\n{}", reload.line2, reload.line3)
+        };
+
+        let mut ui_actors: Vec<Actor> = Vec::with_capacity(2);
+        ui_actors.push(act!(quad:
+            align(0.0, 0.0):
+            xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 0.65):
+            z(300)
+        ));
+        ui_actors.push(act!(text:
+            align(0.5, 0.5):
+            xy(screen_width() * 0.5, screen_height() * 0.5):
+            zoom(1.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            font("miso"):
+            settext(text):
+            horizalign(center):
+            z(301)
+        ));
+        for actor in &mut ui_actors {
+            apply_alpha_to_actor(actor, alpha_multiplier);
+        }
+        actors.extend(ui_actors);
         return actors;
     }
 

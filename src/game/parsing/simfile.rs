@@ -766,6 +766,20 @@ fn process_song(
 /// Scans the provided root directory (e.g., "songs/") for simfiles,
 /// parses them, and populates the global cache. This should be run once at startup.
 pub fn scan_and_load_songs(root_path_str: &'static str) {
+    scan_and_load_songs_impl(root_path_str, None);
+}
+
+pub fn scan_and_load_songs_with_progress(
+    root_path_str: &'static str,
+    progress: &mut dyn FnMut(&str, &str),
+) {
+    scan_and_load_songs_impl(root_path_str, Some(progress));
+}
+
+fn scan_and_load_songs_impl(
+    root_path_str: &'static str,
+    mut progress: Option<&mut dyn FnMut(&str, &str)>,
+) {
     info!("Starting simfile scan in '{root_path_str}'...");
 
     let started = Instant::now();
@@ -862,6 +876,14 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
     }
 
     for pack in packs {
+        let pack_display = pack
+            .dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .filter(|s| !s.is_empty())
+            .unwrap_or(pack.group_name.as_str())
+            .to_owned();
+
         let current_pack = SongPack {
             group_name: pack.group_name,
             name: pack.display_title,
@@ -880,6 +902,20 @@ pub fn scan_and_load_songs(root_path_str: &'static str) {
 
         for song in pack.songs {
             let simfile_path = song.simfile;
+            if let Some(cb) = progress.as_mut() {
+                let song_display = simfile_path
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str())
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| {
+                        simfile_path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or_default()
+                    });
+                cb(pack_display.as_str(), song_display);
+            }
 
             if parallel_parsing {
                 let rt = runtime.get_or_insert_with(|| {
@@ -1120,6 +1156,22 @@ fn resolve_song_dir(
 }
 
 pub fn scan_and_load_courses(courses_root_str: &'static str, songs_root_str: &'static str) {
+    scan_and_load_courses_impl(courses_root_str, songs_root_str, None);
+}
+
+pub fn scan_and_load_courses_with_progress(
+    courses_root_str: &'static str,
+    songs_root_str: &'static str,
+    progress: &mut dyn FnMut(&str, &str),
+) {
+    scan_and_load_courses_impl(courses_root_str, songs_root_str, Some(progress));
+}
+
+fn scan_and_load_courses_impl(
+    courses_root_str: &'static str,
+    songs_root_str: &'static str,
+    mut progress: Option<&mut dyn FnMut(&str, &str)>,
+) {
     info!("Starting course scan in '{courses_root_str}'...");
     let started = Instant::now();
 
@@ -1142,6 +1194,20 @@ pub fn scan_and_load_courses(courses_root_str: &'static str, songs_root_str: &'s
     let mut group_dirs: HashMap<String, PathBuf> = HashMap::new();
 
     for course_path in collect_course_paths(courses_root) {
+        if let Some(cb) = progress.as_mut() {
+            let group_display = course_path
+                .parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .filter(|s| !s.is_empty())
+                .unwrap_or(courses_root_str);
+            let course_display = course_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_default();
+            cb(group_display, course_display);
+        }
         let data = match fs::read(&course_path) {
             Ok(d) => d,
             Err(e) => {
