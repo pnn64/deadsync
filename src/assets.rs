@@ -1008,7 +1008,7 @@ impl AssetManager {
         profile::set_avatar_texture_key_for_side(side, None);
     }
 
-    fn ensure_texture_from_path(&mut self, backend: &mut Backend, path: &Path) {
+    pub(crate) fn ensure_texture_from_path(&mut self, backend: &mut Backend, path: &Path) {
         let key = path.to_string_lossy().into_owned();
         if self.textures.contains_key(&key) {
             return;

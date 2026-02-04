@@ -1,4 +1,5 @@
 pub mod evaluation;
+pub mod evaluation_summary;
 pub mod gameplay;
 pub mod init;
 pub mod input;
@@ -65,5 +66,6 @@ pub enum Screen {
     SelectMusic,
     Sandbox,
     Evaluation,
+    EvaluationSummary,
     PlayerOptions,
 }

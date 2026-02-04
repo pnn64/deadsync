@@ -9,4 +9,5 @@ pub mod profile;
 pub mod scores;
 pub mod scroll;
 pub mod song;
+pub mod stage_stats;
 pub mod timing;

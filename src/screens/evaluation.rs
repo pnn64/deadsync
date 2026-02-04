@@ -40,6 +40,7 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 pub struct ScoreInfo {
     pub song: Arc<SongData>,
     pub chart: Arc<ChartData>,
+    pub profile_name: String,
     pub judgment_counts: HashMap<JudgeGrade, u32>,
     pub score_percent: f64,
     pub grade: scores::Grade,
@@ -80,6 +81,7 @@ pub struct ScoreInfo {
     // Noteskin used during gameplay, for Pane3 column previews.
     pub noteskin: Option<Arc<Noteskin>>,
     pub show_fa_plus_window: bool,
+    pub show_ex_score: bool,
     pub show_hard_ex_score: bool,
     pub show_fa_plus_pane: bool,
 }
@@ -306,8 +308,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 mines_disabled,
             );
 
-            // Simply Love: show Quint (Grade_Tier00) if EX score is exactly 100.00.
-            if grade != scores::Grade::Failed && ex_score_percent >= 100.0 {
+            let w0_enabled =
+                (prof.show_fa_plus_window && prof.show_fa_plus_pane) || prof.show_ex_score;
+
+            // Simply Love: show Quint (Grade_Tier00) if EX score is exactly 100.00
+            // and we're in a mode that actually tracks/displays W0 (FA+/EX score).
+            if w0_enabled && grade != scores::Grade::Failed && ex_score_percent >= 100.0 {
                 grade = scores::Grade::Quint;
             }
 
@@ -317,6 +323,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             score_info[player_idx] = Some(ScoreInfo {
                 song: gs.song.clone(),
                 chart: gs.charts[player_idx].clone(),
+                profile_name: prof.display_name.clone(),
                 judgment_counts: p.judgment_counts.clone(),
                 score_percent,
                 grade,
@@ -349,6 +356,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 column_judgments,
                 noteskin,
                 show_fa_plus_window: prof.show_fa_plus_window,
+                show_ex_score: prof.show_ex_score,
                 show_hard_ex_score: prof.show_hard_ex_score,
                 show_fa_plus_pane: prof.show_fa_plus_pane,
             });
