@@ -254,14 +254,14 @@ fn build_player_stats(
     };
 
     let (percent_zoom, percent_y) = if showex {
-        (0.19, -12.0)
+        (0.38, -12.0)
     } else if show_w0 {
-        (0.24, -32.0)
+        (0.48, -32.0)
     } else {
-        (0.25, -24.0)
+        (0.5, -24.0)
     };
     let mut percent_actor = act!(text:
-        font("wendy_white"):
+        font("wendy"):
         settext(percent_text):
         align(align1_x, 0.5):
         xy(col1x, percent_y):
@@ -279,12 +279,12 @@ fn build_player_stats(
         let ex_color = color::JUDGMENT_RGBA[0];
         let ex_text = format!("{:.2}", p.ex_score_percent.max(0.0));
         let (ex_zoom, ex_y) = if showex {
-            (0.24, -32.0)
+            (0.48, -32.0)
         } else {
-            (0.19, -12.0)
+            (0.38, -12.0)
         };
         let mut ex_actor = act!(text:
-            font("wendy_white"):
+            font("wendy"):
             settext(ex_text):
             align(align1_x, 0.5):
             xy(col1x, ex_y):
@@ -321,9 +321,9 @@ fn build_player_stats(
     // Difficulty meter
     {
         let diff_color = color::difficulty_rgba(&p.chart.difficulty, active_color_index);
-        let (meter_zoom, meter_y) = if show_w0 { (0.15, 5.0) } else { (0.2, -1.0) };
+        let (meter_zoom, meter_y) = if show_w0 { (0.3, 5.0) } else { (0.4, -1.0) };
         let mut a = act!(text:
-            font("wendy_white"):
+            font("wendy"):
             settext(p.chart.meter.to_string()):
             align(align1_x, 0.5):
             xy(col1x, meter_y):
@@ -404,11 +404,11 @@ fn build_player_stats(
         };
 
         let mut a = act!(text:
-            font("wendy_monospace_numbers"):
+            font("wendy"):
             settext(counts[i].to_string()):
             align(align2_x, 0.5):
             xy(col2x, y):
-            zoom(0.14):
+            zoom(0.28):
             z(3):
             diffuse(rgba[0], rgba[1], rgba[2], rgba[3])
         );
