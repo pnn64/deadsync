@@ -32,12 +32,13 @@ const WHEEL_Y_IN_FRAME: f32 = 58.0;
 const PLAYERNAME_X: f32 = -80.0;
 const CURSOR_Y_IN_FRAME: f32 = 58.0;
 
-// Cursor (approximate Cursor.png: 496x92 at zoom 0.5 -> 248x46)
-const CURSOR_TOTAL_W: f32 = 248.0;
-const CURSOR_BOX_W: f32 = 46.0;
-const CURSOR_BOX_H: f32 = 46.0;
-const CURSOR_BOX_THICK: f32 = 2.0;
-const CURSOR_ARROW_ZOOM: f32 = 0.5;
+// Cursor.png (Simply Love): 496x92, zoom(0.5)
+const NAME_ENTRY_CURSOR_TEX: &str = "name_entry_cursor.png";
+const NAME_ENTRY_CURSOR_ZOOM: f32 = 0.5;
+
+// NameEntry wheel masking (Simply Love: 3 MaskSource quads leave two “windows”).
+const MASK_OUTER_X: f32 = 272.0;
+const MASK_CENTER_HALF_W: f32 = 55.0; // CenterMask is 110px wide
 
 const POSSIBLE_CHARS: [&str; 40] = [
     "&BACK;",
@@ -578,8 +579,20 @@ fn build_banner_and_title(
     actors
 }
 
-fn build_wheel(p: &PlayerEntry, alpha: f32) -> Actor {
+fn build_wheel(side: profile::PlayerSide, player_frame_x: f32, p: &PlayerEntry, alpha: f32) -> Actor {
     let mut children = Vec::with_capacity(WHEEL_NUM_ITEMS);
+
+    let cx = screen_center_x();
+    let (win_min, win_max) = match side {
+        profile::PlayerSide::P1 => (cx - MASK_OUTER_X, cx - MASK_CENTER_HALF_W),
+        profile::PlayerSide::P2 => (cx + MASK_CENTER_HALF_W, cx + MASK_OUTER_X),
+    };
+    let wheel_global_x = player_frame_x + WHEEL_X_IN_FRAME;
+    let clip_x = win_min - wheel_global_x;
+    let clip_w = win_max - win_min;
+    let clip_y = -screen_height();
+    let clip_h = screen_height() * 2.0;
+    let clip = Some([clip_x, clip_y, clip_w, clip_h]);
 
     for item_index in 1..=WHEEL_NUM_ITEMS {
         let it = &p.wheel.items[item_index - 1];
@@ -595,7 +608,7 @@ fn build_wheel(p: &PlayerEntry, alpha: f32) -> Actor {
             (0.75, 0.75, 0.75)
         };
 
-        children.push(act!(text:
+        let mut actor = act!(text:
             font("wendy_white"):
             settext(content):
             align(0.5, 0.5):
@@ -604,7 +617,11 @@ fn build_wheel(p: &PlayerEntry, alpha: f32) -> Actor {
             z(12):
             diffuse(r, g, b, a):
             horizalign(center)
-        ));
+        );
+        if let Actor::Text { clip: c, .. } = &mut actor {
+            *c = clip;
+        }
+        children.push(actor);
     }
 
     Actor::Frame {
@@ -675,64 +692,16 @@ fn build_player_frame(side: profile::PlayerSide, state: &State) -> Actor {
         if alpha > 0.0 {
             let pc = player_color_rgba(side, state.active_color_index);
 
-            // Cursor outline around the focused character (always centered).
-            let hw = CURSOR_BOX_W * 0.5;
-            let hh = CURSOR_BOX_H * 0.5;
-            let t = CURSOR_BOX_THICK;
-
-            // Top
-            children.push(act!(quad:
+            // Simply Love: PlayerNameAndDecorations.lua loads Cursor.png (tinted to PlayerColor).
+            children.push(act!(sprite(NAME_ENTRY_CURSOR_TEX):
                 align(0.5, 0.5):
-                xy(0.0, CURSOR_Y_IN_FRAME - hh + t * 0.5):
-                zoomto(CURSOR_BOX_W, t):
-                diffuse(pc[0], pc[1], pc[2], alpha):
-                z(11)
-            ));
-            // Bottom
-            children.push(act!(quad:
-                align(0.5, 0.5):
-                xy(0.0, CURSOR_Y_IN_FRAME + hh - t * 0.5):
-                zoomto(CURSOR_BOX_W, t):
-                diffuse(pc[0], pc[1], pc[2], alpha):
-                z(11)
-            ));
-            // Left
-            children.push(act!(quad:
-                align(0.5, 0.5):
-                xy(-hw + t * 0.5, CURSOR_Y_IN_FRAME):
-                zoomto(t, CURSOR_BOX_H):
-                diffuse(pc[0], pc[1], pc[2], alpha):
-                z(11)
-            ));
-            // Right
-            children.push(act!(quad:
-                align(0.5, 0.5):
-                xy(hw - t * 0.5, CURSOR_Y_IN_FRAME):
-                zoomto(t, CURSOR_BOX_H):
-                diffuse(pc[0], pc[1], pc[2], alpha):
-                z(11)
-            ));
-
-            // Cursor arrows (Simply Love Cursor.png edges).
-            let arrow_x = CURSOR_TOTAL_W * 0.5 - 12.0;
-            children.push(act!(sprite("meter_arrow.png"):
-                align(0.5, 0.5):
-                xy(-arrow_x, CURSOR_Y_IN_FRAME):
-                rotationz(0.0):
-                zoom(CURSOR_ARROW_ZOOM):
-                z(11):
-                diffuse(pc[0], pc[1], pc[2], alpha)
-            ));
-            children.push(act!(sprite("meter_arrow.png"):
-                align(0.5, 0.5):
-                xy(arrow_x, CURSOR_Y_IN_FRAME):
-                rotationz(180.0):
-                zoom(CURSOR_ARROW_ZOOM):
-                z(11):
+                xy(0.0, CURSOR_Y_IN_FRAME):
+                zoom(NAME_ENTRY_CURSOR_ZOOM):
+                z(13):
                 diffuse(pc[0], pc[1], pc[2], alpha)
             ));
 
-            children.push(build_wheel(p, alpha));
+            children.push(build_wheel(side, px, p, alpha));
         }
     } else if p.joined {
         let pc = player_color_rgba(side, state.active_color_index);
