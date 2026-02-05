@@ -593,8 +593,9 @@ fn get_cache_path(simfile_path: &Path) -> Result<PathBuf, std::io::Error> {
     let path_hash = hasher.finish();
 
     let cache_dir = Path::new("cache/songs");
-    let file_name = format!("{path_hash:x}.bin");
-    Ok(cache_dir.join(file_name))
+    let hash_hex = format!("{path_hash:016x}");
+    let shard2 = &hash_hex[..2];
+    Ok(cache_dir.join(shard2).join(format!("{hash_hex}.bin")))
 }
 
 fn compute_song_cache_keys(path: &Path) -> SongCacheKeys {
@@ -1378,12 +1379,21 @@ fn parse_song_and_maybe_write_cache(
         };
 
         if let Ok(encoded) = bincode::encode_to_vec(&cached_song, bincode::config::standard()) {
-            if let Ok(mut file) = fs::File::create(&cp) {
-                if file.write_all(&encoded).is_err() {
-                    warn!("Failed to write cache file for {cp:?}");
+            let mut can_write = true;
+            if let Some(parent) = cp.parent()
+                && let Err(e) = fs::create_dir_all(parent)
+            {
+                warn!("Failed to create song cache dir {parent:?}: {e}");
+                can_write = false;
+            }
+            if can_write {
+                if let Ok(mut file) = fs::File::create(&cp) {
+                    if file.write_all(&encoded).is_err() {
+                        warn!("Failed to write cache file for {cp:?}");
+                    }
+                } else {
+                    warn!("Failed to create cache file for {cp:?}");
                 }
-            } else {
-                warn!("Failed to create cache file for {cp:?}");
             }
         }
     }
