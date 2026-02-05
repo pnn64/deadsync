@@ -1513,8 +1513,9 @@ fn build_modifiers_pane(score_info: &ScoreInfo, bar_center_x: f32, bar_width: f3
     let frame_center_y = screen_center_y() + 200.5;
     let font_zoom = 0.7;
 
-    // The text's top-left corner is positioned at xy(-140, -5) relative to the bar center.
-    let text_x = bar_center_x - 140.0;
+    // Simply Love places the modifiers text 10px from the bar's left edge.
+    // (For a 300px bar this is equivalent to `center_x - 140`.)
+    let text_x = bar_center_x - (bar_width * 0.5) + 10.0;
     let text_y = frame_center_y - 5.0;
 
     let speed_mod_text = score_info.speed_mod.to_string();
