@@ -7,10 +7,9 @@ use crate::core::space::{self as space, Metrics};
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::{
-    Screen as CurrentScreen, ScreenAction, evaluation, evaluation_summary, gameplay, init,
-    initials, input as input_screen, manage_local_profiles, mappings, menu, options,
-    player_options, profile_load, sandbox, select_color, select_mode, select_music, select_profile,
-    select_style,
+    Screen as CurrentScreen, ScreenAction, evaluation, evaluation_summary, gameover, gameplay, init,
+    initials, input as input_screen, manage_local_profiles, mappings, menu, options, player_options,
+    profile_load, sandbox, select_color, select_mode, select_music, select_profile, select_style,
 };
 use crate::ui::color;
 use winit::{
@@ -140,6 +139,7 @@ pub struct ScreensState {
     evaluation_state: evaluation::State,
     evaluation_summary_state: evaluation_summary::State,
     initials_state: initials::State,
+    gameover_state: gameover::State,
 }
 
 /// Session-wide values that survive screen swaps.
@@ -222,12 +222,27 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
     let mut players: [Option<stage_stats::PlayerStageSummary>; crate::game::gameplay::MAX_PLAYERS] =
         std::array::from_fn(|_| None);
 
+    let notes_hit = |si: &evaluation::ScoreInfo| -> u32 {
+        let mut total: u32 = 0;
+        for c in &si.column_judgments {
+            total = total
+                .saturating_add(c.w0)
+                .saturating_add(c.w1)
+                .saturating_add(c.w2)
+                .saturating_add(c.w3)
+                .saturating_add(c.w4)
+                .saturating_add(c.w5);
+        }
+        total
+    };
+
     let to_player = |si: &evaluation::ScoreInfo| stage_stats::PlayerStageSummary {
         profile_name: si.profile_name.clone(),
         chart: si.chart.clone(),
         grade: si.grade,
         score_percent: si.score_percent,
         ex_score_percent: si.ex_score_percent,
+        notes_hit: notes_hit(si),
         window_counts: si.window_counts,
         show_w0: (si.show_fa_plus_window && si.show_fa_plus_pane) || si.show_ex_score,
         show_ex_score: si.show_ex_score,
@@ -262,6 +277,7 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
         } else {
             1.0
         },
+        duration_seconds: eval.stage_duration_seconds,
         players,
     })
 }
@@ -318,6 +334,9 @@ impl ScreensState {
         let mut initials_state = initials::init();
         initials_state.active_color_index = color_index;
 
+        let mut gameover_state = gameover::init_blank();
+        gameover_state.active_color_index = color_index;
+
         Self {
             current_screen: CurrentScreen::Init,
             menu_state,
@@ -338,6 +357,7 @@ impl ScreensState {
             evaluation_state,
             evaluation_summary_state,
             initials_state,
+            gameover_state,
         }
     }
 
@@ -431,6 +451,7 @@ impl ScreensState {
                 None
             }
             CurrentScreen::Initials => initials::update(&mut self.initials_state, delta_time),
+            CurrentScreen::GameOver => gameover::update(&mut self.gameover_state, delta_time),
             CurrentScreen::SelectMusic => {
                 if let Some(start) = session.session_start_time {
                     self.select_music_state.session_elapsed =
@@ -996,6 +1017,10 @@ impl App {
                 &mut self.state.screens.initials_state,
                 &ev,
             ),
+            CurrentScreen::GameOver => crate::screens::gameover::handle_input(
+                &mut self.state.screens.gameover_state,
+                &ev,
+            ),
             CurrentScreen::Sandbox => {
                 crate::screens::sandbox::handle_input(&mut self.state.screens.sandbox_state, &ev)
             }
@@ -1292,6 +1317,11 @@ impl App {
                 &self.state.session.played_stages,
                 &self.asset_manager,
             ),
+            CurrentScreen::GameOver => gameover::get_actors(
+                &self.state.screens.gameover_state,
+                &self.state.session.played_stages,
+                &self.asset_manager,
+            ),
         };
 
         if self.state.shell.show_overlay {
@@ -1361,6 +1391,7 @@ impl App {
             CurrentScreen::Evaluation => evaluation::out_transition(),
             CurrentScreen::EvaluationSummary => evaluation_summary::out_transition(),
             CurrentScreen::Initials => initials::out_transition(),
+            CurrentScreen::GameOver => gameover::out_transition(),
             CurrentScreen::Input => input_screen::out_transition(),
         }
     }
@@ -1383,6 +1414,7 @@ impl App {
             CurrentScreen::Evaluation => evaluation::in_transition(),
             CurrentScreen::EvaluationSummary => evaluation_summary::in_transition(),
             CurrentScreen::Initials => initials::in_transition(),
+            CurrentScreen::GameOver => gameover::in_transition(),
             CurrentScreen::Input => input_screen::in_transition(),
             CurrentScreen::Init => (vec![], 0.0),
         }
@@ -2040,6 +2072,7 @@ impl App {
             self.state.screens.input_state.active_color_index = idx;
             self.state.screens.evaluation_summary_state.active_color_index = idx;
             self.state.screens.initials_state.active_color_index = idx;
+            self.state.screens.gameover_state.active_color_index = idx;
             if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                 gs.active_color_index = idx;
                 gs.player_color = color::simply_love_rgba(idx);
@@ -2316,6 +2349,15 @@ impl App {
             );
             self.state.screens.evaluation_state = evaluation::init(gameplay_results);
             self.state.screens.evaluation_state.active_color_index = color_idx;
+
+            if let Some(stage) = stage_summary_from_eval(&self.state.screens.evaluation_state) {
+                for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+                    if let Some(p) = stage.players.get(side_ix(side)).and_then(|p| p.as_ref()) {
+                        profile::add_stage_calories_for_side(side, p.notes_hit);
+                    }
+                }
+                self.state.session.played_stages.push(stage);
+            }
         }
 
         if target == CurrentScreen::EvaluationSummary {
@@ -2357,17 +2399,25 @@ impl App {
             }
         }
 
+        if target == CurrentScreen::GameOver {
+            let color_idx = match prev {
+                CurrentScreen::Initials => self.state.screens.initials_state.active_color_index,
+                CurrentScreen::EvaluationSummary => {
+                    self.state.screens.evaluation_summary_state.active_color_index
+                }
+                CurrentScreen::SelectMusic => self.state.screens.select_music_state.active_color_index,
+                CurrentScreen::Evaluation => self.state.screens.evaluation_state.active_color_index,
+                _ => self.state.screens.gameover_state.active_color_index,
+            };
+            self.state.screens.gameover_state = gameover::init();
+            self.state.screens.gameover_state.active_color_index = color_idx;
+        }
+
         if target == CurrentScreen::SelectMusic {
             if self.state.session.session_start_time.is_none() {
                 self.state.session.session_start_time = Some(Instant::now());
                 self.state.session.played_stages.clear();
                 info!("Session timer started.");
-            }
-
-            if prev == CurrentScreen::Evaluation
-                && let Some(stage) = stage_summary_from_eval(&self.state.screens.evaluation_state)
-            {
-                self.state.session.played_stages.push(stage);
             }
 
             match prev {

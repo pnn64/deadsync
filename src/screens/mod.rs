@@ -1,5 +1,6 @@
 pub mod evaluation;
 pub mod evaluation_summary;
+pub mod gameover;
 pub mod gameplay;
 pub mod init;
 pub mod initials;
@@ -58,6 +59,7 @@ pub enum Screen {
     ManageLocalProfiles,
     Init,
     Initials,
+    GameOver,
     Mappings,
     Input,
     SelectProfile,

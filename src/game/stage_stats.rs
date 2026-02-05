@@ -10,6 +10,7 @@ use crate::game::timing::WindowCounts;
 pub struct StageSummary {
     pub song: Arc<SongData>,
     pub music_rate: f32,
+    pub duration_seconds: f32,
     pub players: [Option<PlayerStageSummary>; MAX_PLAYERS],
 }
 
@@ -20,6 +21,8 @@ pub struct PlayerStageSummary {
     pub grade: scores::Grade,
     pub score_percent: f64,
     pub ex_score_percent: f64,
+    /// Total hit tapnotes this stage (counts jumps/hands as >1).
+    pub notes_hit: u32,
     pub window_counts: WindowCounts,
     pub show_w0: bool,
     pub show_ex_score: bool,

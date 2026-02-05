@@ -366,7 +366,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     if let Some(t) = &mut state.finish_hold_elapsed {
         *t = (*t + dt).max(0.0);
         if *t >= WHEEL_HIDE_FADE_SECONDS {
-            return Some(ScreenAction::Navigate(Screen::Menu));
+            return Some(ScreenAction::Navigate(Screen::GameOver));
         }
         return None;
     }

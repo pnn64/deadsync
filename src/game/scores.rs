@@ -192,6 +192,55 @@ fn local_scores_root_for_profile(profile_id: &str) -> PathBuf {
         .join("local")
 }
 
+fn count_local_score_bins_in_dir(dir: &Path) -> u32 {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return 0;
+    };
+
+    let mut total: u32 = 0;
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        if path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("bin"))
+        {
+            total = total.saturating_add(1);
+        }
+    }
+    total
+}
+
+/// Total number of locally-saved plays for this profile (one `.bin` per play).
+pub fn total_songs_played_for_profile(profile_id: &str) -> u32 {
+    let root = local_scores_root_for_profile(profile_id);
+    if !root.is_dir() {
+        return 0;
+    }
+
+    // Support both sharded (root/ab/*.bin) and unsharded (root/*.bin) layouts.
+    let mut total = count_local_score_bins_in_dir(&root);
+    let Ok(read_dir) = fs::read_dir(&root) else {
+        return total;
+    };
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            total = total.saturating_add(count_local_score_bins_in_dir(&path));
+        }
+    }
+    total
+}
+
+pub fn total_songs_played_for_side(side: profile::PlayerSide) -> u32 {
+    let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+        return 0;
+    };
+    total_songs_played_for_profile(&profile_id)
+}
+
 #[inline(always)]
 fn shard2_for_hash(hash: &str) -> &str {
     if hash.len() >= 2 { &hash[..2] } else { "00" }

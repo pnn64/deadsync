@@ -207,6 +207,7 @@ pub struct State {
     pub active_color_index: i32,
     bg: heart_bg::State,
     pub session_elapsed: f32, // To display the timer
+    pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
     pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
@@ -223,8 +224,11 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         std::array::from_fn(|_| None);
     let mut scatter_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|_| None);
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
+    let mut stage_duration_seconds: f32 = 0.0;
 
     if let Some(mut gs) = gameplay_results {
+        stage_duration_seconds = gs.total_elapsed_in_screen;
+
         // Persist one score file per play (per local profile), including fails and replay lane input.
         scores::save_local_scores_from_gameplay(&gs);
 
@@ -451,6 +455,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // This will be overwritten by app.rs
         bg: heart_bg::State::new(),
         session_elapsed: 0.0,
+        stage_duration_seconds,
         score_info,
         density_graph_mesh,
         timing_hist_mesh,

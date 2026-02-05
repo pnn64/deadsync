@@ -1,5 +1,6 @@
 pub use super::scroll::ScrollSpeedSetting;
 use crate::config::SimpleIni;
+use chrono::Local;
 use log::{info, warn};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -676,6 +677,10 @@ impl core::fmt::Display for ComboFont {
 pub struct Profile {
     pub display_name: String,
     pub player_initials: String,
+    // Profile stats (Simply Love / StepMania semantics).
+    pub calories_burned_today: f32,
+    pub calories_burned_day: String,
+    pub ignore_step_count_calories: bool,
     pub groovestats_api_key: String,
     pub groovestats_is_pad_player: bool,
     pub groovestats_username: String,
@@ -755,6 +760,9 @@ impl Default for Profile {
         Self {
             display_name: "Player 1".to_string(),
             player_initials: "P1".to_string(),
+            calories_burned_today: 0.0,
+            calories_burned_day: String::new(),
+            ignore_step_count_calories: false,
             groovestats_api_key: String::new(),
             groovestats_is_pad_player: false,
             groovestats_username: String::new(),
@@ -1096,6 +1104,20 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         ));
         content.push('\n');
 
+        // Stats (for ScreenGameOver parity)
+        let today = Local::now().date_naive().to_string();
+        content.push_str("[Stats]\n");
+        content.push_str(&format!("CaloriesBurnedDate = {today}\n"));
+        content.push_str(&format!(
+            "CaloriesBurnedToday = {}\n",
+            default_profile.calories_burned_today
+        ));
+        content.push_str(&format!(
+            "IgnoreStepCountCalories = {}\n",
+            i32::from(default_profile.ignore_step_count_calories)
+        ));
+        content.push('\n');
+
         fs::write(profile_ini, content)?;
     }
 
@@ -1264,6 +1286,18 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!(
         "DifficultyIndex={}\n",
         profile.last_difficulty_index
+    ));
+    content.push('\n');
+
+    content.push_str("[Stats]\n");
+    content.push_str(&format!("CaloriesBurnedDate={}\n", profile.calories_burned_day));
+    content.push_str(&format!(
+        "CaloriesBurnedToday={}\n",
+        profile.calories_burned_today
+    ));
+    content.push_str(&format!(
+        "IgnoreStepCountCalories={}\n",
+        i32::from(profile.ignore_step_count_calories)
     ));
     content.push('\n');
 
@@ -1558,6 +1592,30 @@ fn load_for_side(side: PlayerSide) {
                 .unwrap_or(default_profile.last_difficulty_index);
             // Do not assume any particular max here; clamp later at call sites.
             profile.last_difficulty_index = raw_last_diff;
+
+            // Profile stats (ScreenGameOver parity)
+            profile.ignore_step_count_calories = profile_conf
+                .get("Stats", "IgnoreStepCountCalories")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.ignore_step_count_calories, |v| v != 0);
+
+            let today = Local::now().date_naive().to_string();
+            let saved_day = profile_conf
+                .get("Stats", "CaloriesBurnedDate")
+                .unwrap_or_default();
+            let saved_cals = profile_conf
+                .get("Stats", "CaloriesBurnedToday")
+                .and_then(|s| s.parse::<f32>().ok())
+                .filter(|v| v.is_finite() && *v >= 0.0)
+                .unwrap_or(default_profile.calories_burned_today);
+
+            if saved_day.trim() == today {
+                profile.calories_burned_day = today;
+                profile.calories_burned_today = saved_cals;
+            } else {
+                profile.calories_burned_day = today;
+                profile.calories_burned_today = 0.0;
+            }
         } else {
             warn!(
                 "Failed to load '{}', using default profile settings.",
@@ -1824,6 +1882,13 @@ pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error
     content.push_str(&format!("DisplayName={name}\n"));
     content.push_str(&format!("PlayerInitials={initials}\n"));
     content.push('\n');
+
+    let today = Local::now().date_naive().to_string();
+    content.push_str("[Stats]\n");
+    content.push_str(&format!("CaloriesBurnedDate={today}\n"));
+    content.push_str("CaloriesBurnedToday=0\n");
+    content.push_str("IgnoreStepCountCalories=0\n");
+    content.push('\n');
     fs::write(profile_ini_path(&id), content)?;
 
     let mut gs = String::new();
@@ -1919,6 +1984,33 @@ pub fn update_last_played_for_side(
         }
         if !changed {
             return;
+        }
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn add_stage_calories_for_side(side: PlayerSide, notes_hit: u32) {
+    if session_side_is_guest(side) {
+        return;
+    }
+
+    let today = Local::now().date_naive().to_string();
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+
+        if profile.calories_burned_day.trim() != today {
+            profile.calories_burned_day = today.clone();
+            profile.calories_burned_today = 0.0;
+        }
+
+        if !profile.ignore_step_count_calories {
+            // TODO: Implement StepMania's actual calorie model.
+            const KCAL_PER_NOTE_HIT: f32 = 0.032;
+            let add = notes_hit as f32 * KCAL_PER_NOTE_HIT;
+            if add.is_finite() && add >= 0.0 {
+                profile.calories_burned_today = (profile.calories_burned_today + add).max(0.0);
+            }
         }
     }
     save_profile_ini_for_side(side);
