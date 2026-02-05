@@ -9,6 +9,7 @@ use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use crate::ui::components::heart_bg;
+use std::time::{Duration, Instant};
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -17,6 +18,11 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 const STAGE_CYCLE_SECONDS: f32 = 4.0;
 
 const CHARACTER_LIMIT: usize = 4;
+
+/* -------------------------- hold-to-scroll timing ------------------------- */
+// ITGmania `_fallback` [ScreenNameEntryTraditional]: RepeatDelay=1/4, RepeatRate=15.
+const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
+const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_nanos(66_666_667); // 1/15s
 
 const WHEEL_CHAR_WIDTH: f32 = 40.0;
 const WHEEL_NUM_ITEMS: usize = 7;
@@ -91,6 +97,12 @@ struct WheelItem {
     x1: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NavDirection {
+    Left,
+    Right,
+}
+
 #[derive(Clone, Debug)]
 struct Wheel {
     info_pos: i32,
@@ -106,6 +118,9 @@ struct PlayerEntry {
     hide_elapsed: f32,
     name: String,
     wheel: Wheel,
+    nav_key_held_direction: Option<NavDirection>,
+    nav_key_held_since: Option<Instant>,
+    nav_key_last_scrolled_at: Option<Instant>,
 }
 
 pub struct State {
@@ -303,7 +318,61 @@ fn player_entry_for(side: profile::PlayerSide) -> PlayerEntry {
         hide_elapsed: 0.0,
         name,
         wheel: Wheel::new(focus_char_index1),
+        nav_key_held_direction: None,
+        nav_key_held_since: None,
+        nav_key_last_scrolled_at: None,
     }
+}
+
+fn reset_nav_hold(p: &mut PlayerEntry) {
+    p.nav_key_held_direction = None;
+    p.nav_key_held_since = None;
+    p.nav_key_last_scrolled_at = None;
+}
+
+fn on_nav_press(p: &mut PlayerEntry, dir: NavDirection) {
+    let now = Instant::now();
+    p.nav_key_held_direction = Some(dir);
+    p.nav_key_held_since = Some(now);
+    p.nav_key_last_scrolled_at = Some(now);
+}
+
+fn on_nav_release(p: &mut PlayerEntry, dir: NavDirection) {
+    if p.nav_key_held_direction == Some(dir) {
+        reset_nav_hold(p);
+    }
+}
+
+fn update_hold_scroll(p: &mut PlayerEntry) {
+    if !(p.joined && p.can_enter) || p.done {
+        reset_nav_hold(p);
+        return;
+    }
+    let Some(dir) = p.nav_key_held_direction else {
+        return;
+    };
+    let Some(held_since) = p.nav_key_held_since else {
+        return;
+    };
+    let Some(last_at) = p.nav_key_last_scrolled_at else {
+        return;
+    };
+
+    let now = Instant::now();
+    if now.duration_since(held_since) < NAV_INITIAL_HOLD_DELAY {
+        return;
+    }
+    if now.duration_since(last_at) < NAV_REPEAT_SCROLL_INTERVAL {
+        return;
+    }
+
+    let dist = match dir {
+        NavDirection::Left => -1,
+        NavDirection::Right => 1,
+    };
+    p.wheel.scroll_by(dist);
+    audio::play_sfx("assets/sounds/change.ogg");
+    p.nav_key_last_scrolled_at = Some(now);
 }
 
 pub fn init() -> State {
@@ -355,6 +424,9 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     state.elapsed = (state.elapsed + dt).max(0.0);
 
     for p in &mut state.players {
+        if state.finish_hold_elapsed.is_none() {
+            update_hold_scroll(p);
+        }
         if p.can_enter {
             p.wheel.update(dt);
         }
@@ -421,7 +493,7 @@ fn handle_delete(p: &mut PlayerEntry) {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if state.finish_hold_elapsed.is_some() || !ev.pressed {
+    if state.finish_hold_elapsed.is_some() {
         return ScreenAction::None;
     }
 
@@ -445,8 +517,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             let ix = side_ix(profile::PlayerSide::P1);
             let p = &mut state.players[ix];
             if p.joined && p.can_enter && !p.done {
-                p.wheel.scroll_by(-1);
-                audio::play_sfx("assets/sounds/change.ogg");
+                if ev.pressed {
+                    if p.nav_key_held_direction != Some(NavDirection::Left) {
+                        p.wheel.scroll_by(-1);
+                        audio::play_sfx("assets/sounds/change.ogg");
+                        on_nav_press(p, NavDirection::Left);
+                    }
+                } else {
+                    on_nav_release(p, NavDirection::Left);
+                }
             }
         }
         VirtualAction::p1_menu_right
@@ -456,12 +535,27 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             let ix = side_ix(profile::PlayerSide::P1);
             let p = &mut state.players[ix];
             if p.joined && p.can_enter && !p.done {
-                p.wheel.scroll_by(1);
-                audio::play_sfx("assets/sounds/change.ogg");
+                if ev.pressed {
+                    if p.nav_key_held_direction != Some(NavDirection::Right) {
+                        p.wheel.scroll_by(1);
+                        audio::play_sfx("assets/sounds/change.ogg");
+                        on_nav_press(p, NavDirection::Right);
+                    }
+                } else {
+                    on_nav_release(p, NavDirection::Right);
+                }
             }
         }
-        VirtualAction::p1_start => handle_for(profile::PlayerSide::P1, handle_start),
-        VirtualAction::p1_select => handle_for(profile::PlayerSide::P1, handle_delete),
+        VirtualAction::p1_start => {
+            if ev.pressed {
+                handle_for(profile::PlayerSide::P1, handle_start);
+            }
+        }
+        VirtualAction::p1_select => {
+            if ev.pressed {
+                handle_for(profile::PlayerSide::P1, handle_delete);
+            }
+        }
 
         VirtualAction::p2_menu_left
         | VirtualAction::p2_left
@@ -470,8 +564,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             let ix = side_ix(profile::PlayerSide::P2);
             let p = &mut state.players[ix];
             if p.joined && p.can_enter && !p.done {
-                p.wheel.scroll_by(-1);
-                audio::play_sfx("assets/sounds/change.ogg");
+                if ev.pressed {
+                    if p.nav_key_held_direction != Some(NavDirection::Left) {
+                        p.wheel.scroll_by(-1);
+                        audio::play_sfx("assets/sounds/change.ogg");
+                        on_nav_press(p, NavDirection::Left);
+                    }
+                } else {
+                    on_nav_release(p, NavDirection::Left);
+                }
             }
         }
         VirtualAction::p2_menu_right
@@ -481,12 +582,27 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             let ix = side_ix(profile::PlayerSide::P2);
             let p = &mut state.players[ix];
             if p.joined && p.can_enter && !p.done {
-                p.wheel.scroll_by(1);
-                audio::play_sfx("assets/sounds/change.ogg");
+                if ev.pressed {
+                    if p.nav_key_held_direction != Some(NavDirection::Right) {
+                        p.wheel.scroll_by(1);
+                        audio::play_sfx("assets/sounds/change.ogg");
+                        on_nav_press(p, NavDirection::Right);
+                    }
+                } else {
+                    on_nav_release(p, NavDirection::Right);
+                }
             }
         }
-        VirtualAction::p2_start => handle_for(profile::PlayerSide::P2, handle_start),
-        VirtualAction::p2_select => handle_for(profile::PlayerSide::P2, handle_delete),
+        VirtualAction::p2_start => {
+            if ev.pressed {
+                handle_for(profile::PlayerSide::P2, handle_start);
+            }
+        }
+        VirtualAction::p2_select => {
+            if ev.pressed {
+                handle_for(profile::PlayerSide::P2, handle_delete);
+            }
+        }
 
         _ => {}
     }
