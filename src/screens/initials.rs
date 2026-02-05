@@ -245,6 +245,18 @@ impl Wheel {
             self.items.rotate_right((-dir) as usize);
         }
         self.sync_info_indices();
+
+        // Simply Love's sick_wheel rotates actors, which means the wrapped item (slot 7 -> slot 1)
+        // would tween across the whole row when scrolling left. That looks jarring in our
+        // clip-rect implementation, so "spawn" the wrapped item just offscreen to the left so it
+        // slides in the same direction as the other items.
+        if dir < 0 {
+            let spawn_x = slot_x(1) - WHEEL_CHAR_WIDTH;
+            let it = &mut self.items[0];
+            it.x = spawn_x;
+            it.x0 = spawn_x;
+            it.x1 = spawn_x;
+        }
         self.start_tween_to_slots();
     }
 
@@ -695,14 +707,14 @@ fn build_banner_and_title(
     actors
 }
 
-fn build_wheel(side: profile::PlayerSide, player_frame_x: f32, p: &PlayerEntry, alpha: f32) -> Actor {
+fn build_wheel(_side: profile::PlayerSide, player_frame_x: f32, p: &PlayerEntry, alpha: f32) -> Actor {
     let mut children = Vec::with_capacity(WHEEL_NUM_ITEMS);
 
-    let cx = screen_center_x();
-    let (win_min, win_max) = match side {
-        profile::PlayerSide::P1 => (cx - MASK_OUTER_X, cx - MASK_CENTER_HALF_W),
-        profile::PlayerSide::P2 => (cx + MASK_CENTER_HALF_W, cx + MASK_OUTER_X),
-    };
+    // Approximate SL's 3-mask "window" by centering a single clip rect on the cursor.
+    // This keeps the clip symmetric relative to Cursor.png's arrows on both sides.
+    let win_half_w = 0.5 * (MASK_OUTER_X - MASK_CENTER_HALF_W);
+    let win_min = player_frame_x - win_half_w;
+    let win_max = player_frame_x + win_half_w;
     let wheel_global_x = player_frame_x + WHEEL_X_IN_FRAME;
     let clip_x = win_min - wheel_global_x;
     let clip_w = win_max - win_min;
