@@ -568,7 +568,7 @@ fn build_banner_and_title(
         settext(title):
         align(0.5, 0.5):
         xy(cx, 54.0):
-        zoom(0.8):
+        zoom(1.0):
         maxwidth(294.0):
         shadowlength(0.333):
         z(12):
