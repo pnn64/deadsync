@@ -584,13 +584,13 @@ pub fn get_actors(
         horizalign(center)
     ));
 
-    // --- "ITG" text (top right, no pads) ---
-    {
-        let itg_text_x = screen_width() - widescale(55.0, 62.0);
-        actors.push(act!(text:
-            font("wendy"):
-            settext("ITG"):
-            align(1.0, 0.5):
+	    // --- "ITG" text (top right, no pads) ---
+	    {
+	        let itg_text_x = screen_width() - 10.0;
+	        actors.push(act!(text:
+	            font("wendy"):
+	            settext("ITG"):
+	            align(1.0, 0.5):
             xy(itg_text_x, 15.0):
             zoom(widescale(0.5, 0.6)):
             z(121):
