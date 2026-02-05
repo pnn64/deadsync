@@ -4,6 +4,7 @@ use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::profile::{self, ActiveProfile};
+use crate::game::scores;
 use crate::game::scroll::ScrollSpeedSetting;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{self, Actor};
@@ -71,7 +72,6 @@ const PREVIEW_Y_OFF: f32 = 42.0;
 const TOTAL_SONGS_ZOOM: f32 = 0.65; // SL: TotalSongs zoom(0.65)
 const MODS_ZOOM: f32 = 0.625; // SL: RecentMods zoom(0.625)
 const MODS_Y_OFF: f32 = 47.0; // SL: RecentMods xy(...,47)
-const TOTAL_SONGS_STATIC: &str = "123 Songs Played";
 
 const JOIN_TEXT: &str = "Press &START; to join!";
 const WAITING_TEXT: &str = "Waiting ...";
@@ -87,6 +87,7 @@ struct Choice {
     display_name: String,
     speed_mod: String,
     avatar_key: Option<String>,
+    total_songs: String,
     scroll_option: profile::ScrollOption,
     noteskin: profile::NoteSkin,
     judgment: profile::JudgmentGraphic,
@@ -206,6 +207,15 @@ fn preview_noteskin_for_choice(
 }
 
 #[inline(always)]
+fn format_total_songs_played(count: u32) -> String {
+    if count == 1 {
+        format!("{count} Song Played")
+    } else {
+        format!("{count} Songs Played")
+    }
+}
+
+#[inline(always)]
 fn format_recent_mods(speed_mod: &str, scroll: profile::ScrollOption) -> String {
     let mut out = String::new();
     let mut first = true;
@@ -253,11 +263,13 @@ fn build_choices() -> Vec<Choice> {
         display_name: "[ GUEST ]".to_string(),
         speed_mod: guest_speed_mod,
         avatar_key: None,
+        total_songs: String::new(),
         scroll_option: default_scroll_option,
         noteskin: profile::NoteSkin::default(),
         judgment: profile::JudgmentGraphic::default(),
     });
     for p in profile::scan_local_profiles() {
+        let total_songs = format_total_songs_played(scores::total_songs_played_for_profile(&p.id));
         let mut speed_mod = default_speed_mod.clone();
         let mut scroll_option = default_scroll_option;
         let mut noteskin = profile::NoteSkin::default();
@@ -313,6 +325,7 @@ fn build_choices() -> Vec<Choice> {
             avatar_key: p
                 .avatar_path
                 .map(|path| path.to_string_lossy().into_owned()),
+            total_songs,
             scroll_option,
             noteskin,
             judgment,
@@ -1164,7 +1177,7 @@ fn push_scroller_frame(
             font("miso"):
             zoom(TOTAL_SONGS_ZOOM):
             maxwidth(info_max_w):
-            settext(TOTAL_SONGS_STATIC):
+            settext(selected.unwrap().total_songs.clone()):
             diffuse(1.0, 1.0, 1.0, inner_alpha):
             z(103)
         ));
