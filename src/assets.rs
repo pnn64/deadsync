@@ -679,15 +679,31 @@ impl AssetManager {
         for r in res_rx {
             match r {
                 Ok((key, rgba)) => {
-                    let texture = backend.create_texture(&rgba, SamplerDesc::default())?;
+                    let sampler = if key == "swoosh.png" {
+                        SamplerDesc {
+                            wrap: SamplerWrap::Repeat,
+                            ..SamplerDesc::default()
+                        }
+                    } else {
+                        SamplerDesc::default()
+                    };
+                    let texture = backend.create_texture(&rgba, sampler)?;
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     info!("Loaded texture: {key}");
                     self.textures.insert(key, texture);
                 }
                 Err((key, msg)) => {
                     warn!("Failed to load texture for key '{key}': {msg}. Using fallback.");
+                    let sampler = if key == "swoosh.png" {
+                        SamplerDesc {
+                            wrap: SamplerWrap::Repeat,
+                            ..SamplerDesc::default()
+                        }
+                    } else {
+                        SamplerDesc::default()
+                    };
                     let texture =
-                        backend.create_texture(&fallback_image, SamplerDesc::default())?;
+                        backend.create_texture(&fallback_image, sampler)?;
                     register_texture_dims(&key, fallback_image.width(), fallback_image.height());
                     self.textures.insert(key, texture);
                 }

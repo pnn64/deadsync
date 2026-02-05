@@ -529,26 +529,38 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
     // --- Life Meter ---
     {
-        let w = 136.0;
-        let h = 18.0;
-        let meter_cy = 20.0;
-
-        let life_players: &[(usize, f32)] = match play_style {
-            profile::PlayStyle::Versus => &[
-                (0, screen_center_x() - widescale(238.0, 288.0)),
-                (1, screen_center_x() + widescale(238.0, 288.0)),
-            ],
-            _ if is_p2_single => &[(0, screen_center_x() + widescale(238.0, 288.0))],
-            _ => &[(0, screen_center_x() - widescale(238.0, 288.0))],
+        let player_life_color = |player_idx: usize| -> [f32; 4] {
+            match play_style {
+                profile::PlayStyle::Versus => {
+                    if player_idx == 0 {
+                        color::decorative_rgba(state.active_color_index)
+                    } else {
+                        color::decorative_rgba(state.active_color_index - 2)
+                    }
+                }
+                _ => {
+                    if is_p2_single {
+                        color::decorative_rgba(state.active_color_index - 2)
+                    } else {
+                        color::decorative_rgba(state.active_color_index)
+                    }
+                }
+            }
         };
 
-        for &(player_idx, meter_cx) in life_players {
+        let players: &[(usize, profile::PlayerSide)] = match play_style {
+            profile::PlayStyle::Versus => &[
+                (0, profile::PlayerSide::P1),
+                (1, profile::PlayerSide::P2),
+            ],
+            _ if is_p2_single => &[(0, profile::PlayerSide::P2)],
+            _ => &[(0, profile::PlayerSide::P1)],
+        };
+
+        for &(player_idx, side) in players {
             if state.player_profiles[player_idx].hide_lifebar {
                 continue;
             }
-            // Frames/border
-            actors.push(act!(quad: align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0): diffuse(1.0, 1.0, 1.0, 1.0): z(90) ));
-            actors.push(act!(quad: align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w, h): diffuse(0.0, 0.0, 0.0, 1.0): z(91) ));
 
             // Latch-to-zero for rendering the very frame we die.
             let dead =
@@ -558,46 +570,204 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 state.players[player_idx].life.clamp(0.0, 1.0)
             };
-            let is_hot = !dead && life_for_render >= 1.0;
-            let life_color = if is_hot {
-                [1.0, 1.0, 1.0, 1.0]
-            } else {
-                player_color
-            };
-            let filled_width = w * life_for_render;
-            // Never draw swoosh if dead OR nothing to fill.
-            if filled_width > 0.0 && !dead {
-                // Logic Parity:
-                // velocity = -(songposition:GetCurBPS() * 0.5)
-                // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
-                let bps = state.timing.get_bpm_for_beat(state.current_beat) / 60.0;
-                let velocity_x = if state.is_in_freeze || state.is_in_delay {
-                    0.0
-                } else {
-                    -(bps * 0.5)
-                };
 
-                let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
+            match state.player_profiles[player_idx].lifemeter_type {
+                profile::LifeMeterType::Standard => {
+                    let w = 136.0;
+                    let h = 18.0;
+                    let meter_cy = 20.0;
+                    let meter_cx = screen_center_x()
+                        + match play_style {
+                            profile::PlayStyle::Versus => match side {
+                                profile::PlayerSide::P1 => -widescale(238.0, 288.0),
+                                profile::PlayerSide::P2 => widescale(238.0, 288.0),
+                            },
+                            _ => match side {
+                                profile::PlayerSide::P1 => -widescale(238.0, 288.0),
+                                profile::PlayerSide::P2 => widescale(238.0, 288.0),
+                            },
+                        };
 
-                // MeterSwoosh
-                actors.push(act!(sprite("swoosh.png"):
-                    align(0.0, 0.5):
-                    xy(meter_cx - w / 2.0, meter_cy):
-                    zoomto(filled_width, h):
-                    diffusealpha(swoosh_alpha):
-                    // Apply the calculated velocity
-                    texcoordvelocity(velocity_x, 0.0):
-                    z(93)
-                ));
+                    // Frames/border
+                    actors.push(act!(quad:
+                        align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0):
+                        diffuse(1.0, 1.0, 1.0, 1.0): z(90)
+                    ));
+                    actors.push(act!(quad:
+                        align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w, h):
+                        diffuse(0.0, 0.0, 0.0, 1.0): z(91)
+                    ));
 
-                // MeterFill
-                actors.push(act!(quad:
-                    align(0.0, 0.5):
-                    xy(meter_cx - w / 2.0, meter_cy):
-                    zoomto(filled_width, h):
-                    diffuse(life_color[0], life_color[1], life_color[2], 1.0):
-                    z(92)
-                ));
+                    let is_hot = !dead && life_for_render >= 1.0;
+                    let life_color = if is_hot {
+                        [1.0, 1.0, 1.0, 1.0]
+                    } else {
+                        player_life_color(player_idx)
+                    };
+                    let filled_width = w * life_for_render;
+                    // Never draw swoosh if dead OR nothing to fill.
+                    if filled_width > 0.0 && !dead {
+                        // Logic Parity:
+                        // velocity = -(songposition:GetCurBPS() * 0.5)
+                        // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
+                        let bps = state.timing.get_bpm_for_beat(state.current_beat) / 60.0;
+                        let velocity_x = if state.is_in_freeze || state.is_in_delay {
+                            0.0
+                        } else {
+                            -(bps * 0.5)
+                        };
+
+                        let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
+
+                        // MeterSwoosh
+                        actors.push(act!(sprite("swoosh.png"):
+                            align(0.0, 0.5):
+                            xy(meter_cx - w / 2.0, meter_cy):
+                            zoomto(filled_width, h):
+                            diffusealpha(swoosh_alpha):
+                            texcoordvelocity(velocity_x, 0.0):
+                            z(93)
+                        ));
+
+                        // MeterFill
+                        actors.push(act!(quad:
+                            align(0.0, 0.5):
+                            xy(meter_cx - w / 2.0, meter_cy):
+                            zoomto(filled_width, h):
+                            diffuse(life_color[0], life_color[1], life_color[2], 1.0):
+                            z(92)
+                        ));
+                    }
+                }
+                profile::LifeMeterType::Surround => {
+                    let sw = screen_width();
+                    let sh = screen_height();
+                    let w = sw * 0.5;
+                    let h = sh - 80.0;
+                    let y = 80.0;
+                    let croptop = 1.0 - life_for_render;
+
+                    if play_style == profile::PlayStyle::Double {
+                        // Double: two quads flanking left/right, moving in unison.
+                        actors.push(act!(quad:
+                            align(0.0, 0.0): xy(0.0, y):
+                            zoomto(w, h):
+                            diffuse(0.2, 0.2, 0.2, 1.0):
+                            faderight(0.8):
+                            croptop(croptop):
+                            z(-98)
+                        ));
+                        actors.push(act!(quad:
+                            align(1.0, 0.0): xy(sw, y):
+                            zoomto(w, h):
+                            diffuse(0.2, 0.2, 0.2, 1.0):
+                            fadeleft(0.8):
+                            croptop(croptop):
+                            z(-98)
+                        ));
+                        // Only one player in Double style.
+                        break;
+                    }
+
+                    match side {
+                        profile::PlayerSide::P1 => {
+                            actors.push(act!(quad:
+                                align(0.0, 0.0): xy(0.0, y):
+                                zoomto(w, h):
+                                diffuse(0.2, 0.2, 0.2, 1.0):
+                                faderight(0.8):
+                                croptop(croptop):
+                                z(-98)
+                            ));
+                        }
+                        profile::PlayerSide::P2 => {
+                            actors.push(act!(quad:
+                                align(1.0, 0.0): xy(sw, y):
+                                zoomto(w, h):
+                                diffuse(0.2, 0.2, 0.2, 1.0):
+                                fadeleft(0.8):
+                                croptop(croptop):
+                                z(-98)
+                            ));
+                        }
+                    }
+                }
+                profile::LifeMeterType::Vertical => {
+                    let bar_w = 16.0;
+                    let bar_h = 250.0;
+
+                    let x = {
+                        // SL: default to _screen.cx +/- SL_WideScale(302, 400).
+                        let mut x = screen_center_x()
+                            + match side {
+                                profile::PlayerSide::P1 => -widescale(302.0, 400.0),
+                                profile::PlayerSide::P2 => widescale(302.0, 400.0),
+                            };
+
+                        // SL: if double style, position next to notefield.
+                        if play_style == profile::PlayStyle::Double {
+                            let half_nf = notefield_width(player_idx) * 0.5;
+                            x = screen_center_x()
+                                + match side {
+                                    profile::PlayerSide::P1 => -(half_nf + 10.0),
+                                    profile::PlayerSide::P2 => half_nf + 10.0,
+                                };
+                        }
+
+                        x
+                    };
+
+                    let cy = bar_h + 10.0;
+                    // Frames/border
+                    actors.push(act!(quad:
+                        align(0.5, 0.5): xy(x, cy): zoomto(bar_w + 2.0, bar_h + 2.0):
+                        diffuse(1.0, 1.0, 1.0, 1.0): z(90)
+                    ));
+                    actors.push(act!(quad:
+                        align(0.5, 0.5): xy(x, cy): zoomto(bar_w, bar_h):
+                        diffuse(0.0, 0.0, 0.0, 1.0): z(91)
+                    ));
+
+                    let is_hot = !dead && life_for_render >= 1.0;
+                    let filled_h = bar_h * life_for_render;
+                    let life_color = if is_hot {
+                        [1.0, 1.0, 1.0, 1.0]
+                    } else {
+                        player_life_color(player_idx)
+                    };
+
+                    // MeterFill
+                    if filled_h > 0.0 {
+                        actors.push(act!(quad:
+                            align(0.0, 1.0):
+                            xy(x - bar_w * 0.5, cy + bar_h * 0.5):
+                            zoomto(bar_w, filled_h):
+                            diffuse(life_color[0], life_color[1], life_color[2], 1.0):
+                            z(92)
+                        ));
+                    }
+
+                    // MeterSwoosh
+                    if filled_h > 0.0 && !dead {
+                        let bps = state.timing.get_bpm_for_beat(state.current_beat) / 60.0;
+                        let velocity_x = if state.is_in_freeze || state.is_in_delay {
+                            0.0
+                        } else {
+                            -(bps * 0.5)
+                        };
+                        let swoosh_alpha = if is_hot { 1.0 } else { 0.65 };
+
+                        actors.push(act!(sprite("swoosh.png"):
+                            align(0.5, 0.5):
+                            xy(x, (cy + bar_h * 0.5) - filled_h * 0.5):
+                            zoomto(filled_h, bar_w):
+                            diffusealpha(swoosh_alpha):
+                            rotationz(90.0):
+                            texcoordvelocity(velocity_x, 0.0):
+                            z(93)
+                        ));
+                    }
+                }
             }
         }
     }

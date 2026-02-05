@@ -595,6 +595,37 @@ impl core::fmt::Display for DataVisualizations {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LifeMeterType {
+    #[default]
+    Standard,
+    Surround,
+    Vertical,
+}
+
+impl FromStr for LifeMeterType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "" | "standard" => Ok(Self::Standard),
+            "surround" => Ok(Self::Surround),
+            "vertical" => Ok(Self::Vertical),
+            other => Err(format!("'{other}' is not a valid LifeMeterType setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for LifeMeterType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Standard => write!(f, "Standard"),
+            Self::Surround => write!(f, "Surround"),
+            Self::Vertical => write!(f, "Vertical"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NoteSkin {
     #[default]
     Cel,
@@ -717,6 +748,7 @@ pub struct Profile {
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
     pub data_visualizations: DataVisualizations,
+    pub lifemeter_type: LifeMeterType,
     pub measure_counter: MeasureCounter,
     pub measure_counter_lookahead: u8,
     pub measure_counter_left: bool,
@@ -792,6 +824,7 @@ impl Default for Profile {
             error_bar_multi_tick: false,
             error_bar_trim: ErrorBarTrim::default(),
             data_visualizations: DataVisualizations::default(),
+            lifemeter_type: LifeMeterType::default(),
             measure_counter: MeasureCounter::default(),
             measure_counter_lookahead: 2,
             measure_counter_left: true,
@@ -1041,6 +1074,7 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             "DataVisualizations = {}\n",
             default_profile.data_visualizations
         ));
+        content.push_str(&format!("LifeMeterType = {}\n", default_profile.lifemeter_type));
         content.push_str(&format!(
             "MeasureCounter = {}\n",
             default_profile.measure_counter
@@ -1225,6 +1259,7 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         "DataVisualizations={}\n",
         profile.data_visualizations
     ));
+    content.push_str(&format!("LifeMeterType={}\n", profile.lifemeter_type));
     content.push_str(&format!("MeasureCounter={}\n", profile.measure_counter));
     content.push_str(&format!(
         "MeasureCounterLookahead={}\n",
@@ -1469,6 +1504,10 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "DataVisualizations")
                 .and_then(|s| DataVisualizations::from_str(&s).ok())
                 .unwrap_or(default_profile.data_visualizations);
+            profile.lifemeter_type = profile_conf
+                .get("PlayerOptions", "LifeMeterType")
+                .and_then(|s| LifeMeterType::from_str(&s).ok())
+                .unwrap_or(default_profile.lifemeter_type);
             profile.measure_counter = profile_conf
                 .get("PlayerOptions", "MeasureCounter")
                 .and_then(|s| MeasureCounter::from_str(&s).ok())
@@ -2451,6 +2490,21 @@ pub fn update_data_visualizations_for_side(side: PlayerSide, setting: DataVisual
             return;
         }
         profile.data_visualizations = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_lifemeter_type_for_side(side: PlayerSide, setting: LifeMeterType) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.lifemeter_type == setting {
+            return;
+        }
+        profile.lifemeter_type = setting;
     }
     save_profile_ini_for_side(side);
 }

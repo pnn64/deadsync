@@ -1172,6 +1172,13 @@ fn apply_profile_defaults(
             crate::game::profile::DataVisualizations::StepStatistics => 2,
         };
     }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "LifeMeter Type") {
+        row.selected_choice_index[player_idx] = match profile.lifemeter_type {
+            crate::game::profile::LifeMeterType::Standard => 0,
+            crate::game::profile::LifeMeterType::Surround => 1,
+            crate::game::profile::LifeMeterType::Vertical => 2,
+        };
+    }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar Trim") {
         row.selected_choice_index[player_idx] = match profile.error_bar_trim {
             crate::game::profile::ErrorBarTrim::Off => 0,
@@ -1911,6 +1918,17 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
             if should_persist {
                 crate::game::profile::update_tilt_multiplier_for_side(persist_side, mult);
             }
+        }
+    } else if row_name == "LifeMeter Type" {
+        let setting = match row.selected_choice_index[player_idx] {
+            0 => crate::game::profile::LifeMeterType::Standard,
+            1 => crate::game::profile::LifeMeterType::Surround,
+            2 => crate::game::profile::LifeMeterType::Vertical,
+            _ => crate::game::profile::LifeMeterType::Standard,
+        };
+        state.player_profiles[player_idx].lifemeter_type = setting;
+        if should_persist {
+            crate::game::profile::update_lifemeter_type_for_side(persist_side, setting);
         }
     } else if row_name == "Data Visualizations" {
         let setting = match row.selected_choice_index[player_idx] {
