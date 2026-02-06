@@ -8,6 +8,7 @@ use crate::game::chart::ChartData;
 use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{self, Noteskin, Style};
+use crate::game::scores;
 use crate::game::song::SongData;
 use crate::game::timing::{BeatInfoCache, TimingData, TimingProfile, classify_offset_s};
 use crate::game::{
@@ -724,6 +725,136 @@ fn stream_sequences_threshold(measures: &[usize], threshold: usize) -> Vec<Strea
     segs
 }
 
+#[inline(always)]
+fn player_side_for_index(
+    play_style: profile::PlayStyle,
+    session_side: profile::PlayerSide,
+    player_idx: usize,
+) -> profile::PlayerSide {
+    if play_style == profile::PlayStyle::Versus {
+        if player_idx == 0 {
+            profile::PlayerSide::P1
+        } else {
+            profile::PlayerSide::P2
+        }
+    } else {
+        session_side
+    }
+}
+
+#[inline(always)]
+fn target_score_setting_percent(setting: profile::TargetScoreSetting) -> Option<f64> {
+    use profile::TargetScoreSetting;
+    match setting {
+        TargetScoreSetting::CMinus => Some(50.0),
+        TargetScoreSetting::C => Some(55.0),
+        TargetScoreSetting::CPlus => Some(60.0),
+        TargetScoreSetting::BMinus => Some(64.0),
+        TargetScoreSetting::B => Some(68.0),
+        TargetScoreSetting::BPlus => Some(72.0),
+        TargetScoreSetting::AMinus => Some(76.0),
+        TargetScoreSetting::A => Some(80.0),
+        TargetScoreSetting::APlus => Some(83.0),
+        TargetScoreSetting::SMinus => Some(86.0),
+        TargetScoreSetting::S => Some(89.0),
+        TargetScoreSetting::SPlus => Some(92.0),
+        TargetScoreSetting::MachineBest | TargetScoreSetting::PersonalBest => None,
+    }
+}
+
+#[inline(always)]
+fn zmod_stream_density(measures: &[usize], threshold: usize, multiplier: f32) -> f32 {
+    let segs = stream_sequences_threshold(measures, threshold);
+    if segs.is_empty() {
+        return 0.0;
+    }
+    let mut total_stream = 0.0_f32;
+    let mut total_measures = 0.0_f32;
+    for seg in &segs {
+        let seg_len = ((seg.end.saturating_sub(seg.start)) as f32 * multiplier).floor();
+        if seg_len <= 0.0 {
+            continue;
+        }
+        if !seg.is_break {
+            total_stream += seg_len;
+        }
+        total_measures += seg_len;
+    }
+    if total_measures <= 0.0 {
+        0.0
+    } else {
+        total_stream / total_measures
+    }
+}
+
+#[inline(always)]
+fn zmod_stream_totals_full_measures(
+    measures: &[usize],
+    constant_bpm: bool,
+) -> (Vec<StreamSegment>, f32, f32) {
+    // Mirrors SL-ChartParserHelpers.lua::GetTotalStreamAndBreakMeasures(pn, true).
+    let addition = 2usize;
+
+    let mut threshold = 14 + addition;
+    let mut multiplier = 1.0_f32;
+    if constant_bpm {
+        threshold = 30 + addition;
+        multiplier = 2.0;
+
+        let d32 = zmod_stream_density(measures, threshold, multiplier);
+        if d32 < 0.2 {
+            threshold = 22 + addition;
+            multiplier = 1.5;
+            let d24 = zmod_stream_density(measures, threshold, multiplier);
+            if d24 < 0.2 {
+                threshold = 18 + addition;
+                multiplier = 1.25;
+                let d20 = zmod_stream_density(measures, threshold, multiplier);
+                if d20 < 0.2 {
+                    threshold = 14 + addition;
+                    multiplier = 1.0;
+                }
+            }
+        }
+    }
+
+    let segs = stream_sequences_threshold(measures, threshold);
+    if segs.is_empty() {
+        return (segs, 0.0, 0.0);
+    }
+
+    let mut total_stream = 0.0_f32;
+    let mut total_break = 0.0_f32;
+    let mut edge_break = 0.0_f32;
+    let mut last_stream = false;
+    let len = segs.len();
+    for (i, seg) in segs.iter().enumerate() {
+        let seg_len = seg.end.saturating_sub(seg.start) as f32;
+        if seg_len <= 0.0 {
+            continue;
+        }
+        if seg.is_break && i > 0 && i + 1 < len {
+            total_break += seg_len;
+            last_stream = false;
+        } else if seg.is_break {
+            edge_break += seg_len;
+            last_stream = false;
+        } else {
+            if last_stream {
+                total_break += 1.0;
+            }
+            total_stream += seg_len;
+            last_stream = true;
+        }
+    }
+
+    if total_stream + total_break < 10.0 || total_stream + total_break < edge_break {
+        total_break += edge_break;
+    }
+
+    (segs, total_stream * multiplier, total_break * multiplier)
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct ErrorBarTick {
     pub started_at: f32,
@@ -1031,6 +1162,10 @@ pub struct State {
     pub next_mine_avoid_cursor: [usize; MAX_PLAYERS],
     pub row_entries: Vec<RowEntry>,
     pub measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS],
+    pub mini_indicator_stream_segments: [Vec<StreamSegment>; MAX_PLAYERS],
+    pub mini_indicator_total_stream_measures: [f32; MAX_PLAYERS],
+    pub mini_indicator_target_score_percent: [f64; MAX_PLAYERS],
+    pub mini_indicator_rival_score_percent: [f64; MAX_PLAYERS],
 
     // Optimization: Direct array lookup instead of HashMap
     pub row_map_cache: Vec<u32>,
@@ -2025,6 +2160,13 @@ pub fn init(
         player_profiles[player].reverse_scroll
     });
 
+    let measure_densities: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|p| {
+        if p >= num_players {
+            return Vec::new();
+        }
+        rssp::stats::measure_densities(&charts[p].notes, cols_per_player)
+    });
+
     let measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] = std::array::from_fn(|p| {
         if p >= num_players {
             return Vec::new();
@@ -2032,9 +2174,40 @@ pub fn init(
         let Some(threshold) = player_profiles[p].measure_counter.notes_threshold() else {
             return Vec::new();
         };
-        let measures = rssp::stats::measure_densities(&charts[p].notes, cols_per_player);
-        stream_sequences_threshold(&measures, threshold)
+        stream_sequences_threshold(&measure_densities[p], threshold)
     });
+
+    let mut mini_indicator_stream_segments: [Vec<StreamSegment>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
+    let mut mini_indicator_total_stream_measures = [0.0_f32; MAX_PLAYERS];
+    let mut mini_indicator_target_score_percent = [89.0_f64; MAX_PLAYERS];
+    let mut mini_indicator_rival_score_percent = [0.0_f64; MAX_PLAYERS];
+
+    for p in 0..num_players {
+        let constant_bpm = !timing_players[p].has_bpm_changes();
+        let (stream_segments, total_stream, _total_break) =
+            zmod_stream_totals_full_measures(&measure_densities[p], constant_bpm);
+        mini_indicator_total_stream_measures[p] = total_stream.max(0.0);
+        mini_indicator_stream_segments[p] = stream_segments;
+
+        let side = player_side_for_index(play_style, player_side, p);
+        let chart_hash = charts[p].short_hash.as_str();
+        let personal_best = scores::get_cached_score_for_side(chart_hash, side)
+            .map(|s| (s.score_percent * 100.0).clamp(0.0, 100.0));
+        let machine_best = scores::get_machine_record_local(chart_hash)
+            .map(|(_, s)| (s.score_percent * 100.0).clamp(0.0, 100.0));
+
+        let target = match player_profiles[p].target_score {
+            profile::TargetScoreSetting::MachineBest => machine_best.or(personal_best),
+            profile::TargetScoreSetting::PersonalBest => personal_best,
+            setting => target_score_setting_percent(setting),
+        }
+        .unwrap_or(89.0);
+        mini_indicator_target_score_percent[p] = target;
+
+        mini_indicator_rival_score_percent[p] =
+            machine_best.unwrap_or(0.0).max(personal_best.unwrap_or(0.0));
+    }
 
     let wants_step_stats = player_profiles
         .iter()
@@ -2179,6 +2352,10 @@ pub fn init(
         next_mine_avoid_cursor: note_range_start,
         row_entries,
         measure_counter_segments,
+        mini_indicator_stream_segments,
+        mini_indicator_total_stream_measures,
+        mini_indicator_target_score_percent,
+        mini_indicator_rival_score_percent,
         row_map_cache,
         decaying_hold_indices: Vec::new(),
         hold_decay_active: vec![false; notes_len],

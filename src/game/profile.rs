@@ -753,6 +753,76 @@ impl core::fmt::Display for MiniIndicator {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TargetScoreSetting {
+    CMinus,
+    C,
+    CPlus,
+    BMinus,
+    B,
+    BPlus,
+    AMinus,
+    A,
+    APlus,
+    SMinus,
+    #[default]
+    S,
+    SPlus,
+    MachineBest,
+    PersonalBest,
+}
+
+impl FromStr for TargetScoreSetting {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "cminus" | "c-" => Ok(Self::CMinus),
+            "c" => Ok(Self::C),
+            "cplus" | "c+" => Ok(Self::CPlus),
+            "bminus" | "b-" => Ok(Self::BMinus),
+            "b" => Ok(Self::B),
+            "bplus" | "b+" => Ok(Self::BPlus),
+            "aminus" | "a-" => Ok(Self::AMinus),
+            "a" => Ok(Self::A),
+            "aplus" | "a+" => Ok(Self::APlus),
+            "sminus" | "s-" => Ok(Self::SMinus),
+            "" | "s" => Ok(Self::S),
+            "splus" | "s+" => Ok(Self::SPlus),
+            "machinebest" | "machine" => Ok(Self::MachineBest),
+            "personalbest" | "personal" => Ok(Self::PersonalBest),
+            other => Err(format!("'{other}' is not a valid TargetScore setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for TargetScoreSetting {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::CMinus => write!(f, "C-"),
+            Self::C => write!(f, "C"),
+            Self::CPlus => write!(f, "C+"),
+            Self::BMinus => write!(f, "B-"),
+            Self::B => write!(f, "B"),
+            Self::BPlus => write!(f, "B+"),
+            Self::AMinus => write!(f, "A-"),
+            Self::A => write!(f, "A"),
+            Self::APlus => write!(f, "A+"),
+            Self::SMinus => write!(f, "S-"),
+            Self::S => write!(f, "S"),
+            Self::SPlus => write!(f, "S+"),
+            Self::MachineBest => write!(f, "Machine Best"),
+            Self::PersonalBest => write!(f, "Personal Best"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub display_name: String,
@@ -797,6 +867,7 @@ pub struct Profile {
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
     pub data_visualizations: DataVisualizations,
+    pub target_score: TargetScoreSetting,
     pub lifemeter_type: LifeMeterType,
     pub measure_counter: MeasureCounter,
     pub measure_counter_lookahead: u8,
@@ -879,6 +950,7 @@ impl Default for Profile {
             error_bar_multi_tick: false,
             error_bar_trim: ErrorBarTrim::default(),
             data_visualizations: DataVisualizations::default(),
+            target_score: TargetScoreSetting::default(),
             lifemeter_type: LifeMeterType::default(),
             measure_counter: MeasureCounter::default(),
             measure_counter_lookahead: 2,
@@ -1154,6 +1226,7 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             "DataVisualizations = {}\n",
             default_profile.data_visualizations
         ));
+        content.push_str(&format!("TargetScore = {}\n", default_profile.target_score));
         content.push_str(&format!("LifeMeterType = {}\n", default_profile.lifemeter_type));
         content.push_str(&format!(
             "MeasureCounter = {}\n",
@@ -1353,6 +1426,7 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         "DataVisualizations={}\n",
         profile.data_visualizations
     ));
+    content.push_str(&format!("TargetScore={}\n", profile.target_score));
     content.push_str(&format!("LifeMeterType={}\n", profile.lifemeter_type));
     content.push_str(&format!("MeasureCounter={}\n", profile.measure_counter));
     content.push_str(&format!(
@@ -1598,6 +1672,10 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "DataVisualizations")
                 .and_then(|s| DataVisualizations::from_str(&s).ok())
                 .unwrap_or(default_profile.data_visualizations);
+            profile.target_score = profile_conf
+                .get("PlayerOptions", "TargetScore")
+                .and_then(|s| TargetScoreSetting::from_str(&s).ok())
+                .unwrap_or(default_profile.target_score);
             profile.lifemeter_type = profile_conf
                 .get("PlayerOptions", "LifeMeterType")
                 .and_then(|s| LifeMeterType::from_str(&s).ok())
@@ -2671,6 +2749,21 @@ pub fn update_data_visualizations_for_side(side: PlayerSide, setting: DataVisual
             return;
         }
         profile.data_visualizations = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_target_score_for_side(side: PlayerSide, setting: TargetScoreSetting) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.target_score == setting {
+            return;
+        }
+        profile.target_score = setting;
     }
     save_profile_ini_for_side(side);
 }

@@ -742,7 +742,7 @@ fn build_advanced_rows() -> Vec<Row> {
                 "Machine Best".to_string(),
                 "Personal Best".to_string(),
             ],
-            selected_choice_index: [11; PLAYER_SLOTS], // S by default, matching screenshot
+            selected_choice_index: [10; PLAYER_SLOTS], // S by default
             help: vec!["Choose a grade or score to chase.".to_string()],
             choice_difficulty_indices: None,
         },
@@ -1278,6 +1278,25 @@ fn apply_profile_defaults(
             crate::game::profile::DataVisualizations::TargetScoreGraph => 1,
             crate::game::profile::DataVisualizations::StepStatistics => 2,
         };
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Target Score") {
+        row.selected_choice_index[player_idx] = match profile.target_score {
+            crate::game::profile::TargetScoreSetting::CMinus => 0,
+            crate::game::profile::TargetScoreSetting::C => 1,
+            crate::game::profile::TargetScoreSetting::CPlus => 2,
+            crate::game::profile::TargetScoreSetting::BMinus => 3,
+            crate::game::profile::TargetScoreSetting::B => 4,
+            crate::game::profile::TargetScoreSetting::BPlus => 5,
+            crate::game::profile::TargetScoreSetting::AMinus => 6,
+            crate::game::profile::TargetScoreSetting::A => 7,
+            crate::game::profile::TargetScoreSetting::APlus => 8,
+            crate::game::profile::TargetScoreSetting::SMinus => 9,
+            crate::game::profile::TargetScoreSetting::S => 10,
+            crate::game::profile::TargetScoreSetting::SPlus => 11,
+            crate::game::profile::TargetScoreSetting::MachineBest => 12,
+            crate::game::profile::TargetScoreSetting::PersonalBest => 13,
+        }
+        .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "LifeMeter Type") {
         row.selected_choice_index[player_idx] = match profile.lifemeter_type {
@@ -2285,6 +2304,28 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         state.player_profiles[player_idx].data_visualizations = setting;
         if should_persist {
             crate::game::profile::update_data_visualizations_for_side(persist_side, setting);
+        }
+    } else if row_name == "Target Score" {
+        let setting = match row.selected_choice_index[player_idx] {
+            0 => crate::game::profile::TargetScoreSetting::CMinus,
+            1 => crate::game::profile::TargetScoreSetting::C,
+            2 => crate::game::profile::TargetScoreSetting::CPlus,
+            3 => crate::game::profile::TargetScoreSetting::BMinus,
+            4 => crate::game::profile::TargetScoreSetting::B,
+            5 => crate::game::profile::TargetScoreSetting::BPlus,
+            6 => crate::game::profile::TargetScoreSetting::AMinus,
+            7 => crate::game::profile::TargetScoreSetting::A,
+            8 => crate::game::profile::TargetScoreSetting::APlus,
+            9 => crate::game::profile::TargetScoreSetting::SMinus,
+            10 => crate::game::profile::TargetScoreSetting::S,
+            11 => crate::game::profile::TargetScoreSetting::SPlus,
+            12 => crate::game::profile::TargetScoreSetting::MachineBest,
+            13 => crate::game::profile::TargetScoreSetting::PersonalBest,
+            _ => crate::game::profile::TargetScoreSetting::S,
+        };
+        state.player_profiles[player_idx].target_score = setting;
+        if should_persist {
+            crate::game::profile::update_target_score_for_side(persist_side, setting);
         }
     } else if row_name == "Error Bar" {
         let setting = match row.selected_choice_index[player_idx] {

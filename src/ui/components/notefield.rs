@@ -448,6 +448,10 @@ fn scoring_count(p: &PlayerRuntime, grade: JudgeGrade) -> u32 {
 struct MiniIndicatorProgress {
     kept_percent: f64,
     lost_percent: f64,
+    pace_percent: f64,
+    current_possible_dp: i32,
+    possible_dp: i32,
+    actual_dp: i32,
     w2: u32,
     w3: u32,
     w4: u32,
@@ -496,10 +500,19 @@ fn zmod_mini_indicator_progress(
     let kept_dp = possible_dp.saturating_sub(dp_lost).max(0);
     let kept_percent = ((f64::from(kept_dp) / f64::from(possible_dp)) * 10000.0).floor() / 100.0;
     let lost_percent = (100.0 - kept_percent).max(0.0);
+    let pace_percent = if current_possible_dp > 0 {
+        ((f64::from(actual_dp) / f64::from(current_possible_dp)) * 10000.0).floor() / 100.0
+    } else {
+        0.0
+    };
     let judged_any = tap_rows > 0 || let_go > 0 || mines_hit > 0 || p.is_failing || p.life <= 0.0;
     MiniIndicatorProgress {
         kept_percent,
         lost_percent,
+        pace_percent,
+        current_possible_dp,
+        possible_dp,
+        actual_dp,
         w2,
         w3,
         w4,
@@ -540,6 +553,54 @@ fn zmod_indicator_default_color(score_percent: f64) -> [f32; 4] {
     }
 }
 
+#[inline(always)]
+fn zmod_rival_color(pace: f64, rival_pace: f64) -> [f32; 4] {
+    let r = (1.0 - (pace - rival_pace)).clamp(0.0, 1.0) as f32;
+    let g = (0.5 - (rival_pace - pace)).clamp(0.0, 1.0) as f32;
+    let b = (1.0 - (rival_pace - pace)).clamp(0.0, 1.0) as f32;
+    [r, g, b, 1.0]
+}
+
+#[inline(always)]
+fn zmod_pacemaker_color(pace: f64, rival_pace: f64) -> [f32; 4] {
+    let r = (1.0 - (pace - rival_pace) / 100.0).clamp(0.0, 1.0) as f32;
+    let g = (0.5 - (rival_pace - pace) / 100.0).clamp(0.0, 1.0) as f32;
+    let b = (1.0 - (rival_pace - pace) / 100.0).clamp(0.0, 1.0) as f32;
+    [r, g, b, 1.0]
+}
+
+fn zmod_stream_prog_completion(state: &State, player_idx: usize) -> Option<f64> {
+    let total_stream = state.mini_indicator_total_stream_measures[player_idx] as f64;
+    if total_stream <= 0.0 {
+        return None;
+    }
+    let segs = &state.mini_indicator_stream_segments[player_idx];
+    if segs.is_empty() {
+        return None;
+    }
+
+    let beat_floor = state.current_beat_visible[player_idx].floor();
+    if !beat_floor.is_finite() {
+        return Some(0.0);
+    }
+    let upper_beat = (beat_floor as i32).saturating_add(1).max(0);
+    let mut completed_stream_beats: i64 = 0;
+    for seg in segs {
+        if seg.is_break {
+            continue;
+        }
+        let start_beat = (seg.start as i32).saturating_mul(4);
+        let end_beat = (seg.end as i32).saturating_mul(4);
+        let lo = start_beat.max(0);
+        let hi = upper_beat.min(end_beat);
+        if hi > lo {
+            completed_stream_beats += i64::from(hi - lo);
+        }
+    }
+    let completed_stream_measures = (completed_stream_beats as f64) / 4.0;
+    Some((completed_stream_measures / total_stream).clamp(0.0, 1.0))
+}
+
 fn zmod_mini_indicator_text(
     state: &State,
     p: &PlayerRuntime,
@@ -547,10 +608,7 @@ fn zmod_mini_indicator_text(
     player_idx: usize,
 ) -> Option<(String, [f32; 4])> {
     let mode = zmod_indicator_mode(profile);
-    if !matches!(
-        mode,
-        profile::MiniIndicator::SubtractiveScoring | profile::MiniIndicator::PredictiveScoring
-    ) {
+    if mode == profile::MiniIndicator::None {
         return None;
     }
 
@@ -559,28 +617,82 @@ fn zmod_mini_indicator_text(
         return None;
     }
 
-    if mode == profile::MiniIndicator::SubtractiveScoring {
-        let entered_percent_mode = progress.w3 > 0
-            || progress.w4 > 0
-            || progress.w5 > 0
-            || progress.miss > 0
-            || progress.let_go > 0
-            || progress.mines_hit > 0
-            || p.is_failing
-            || p.life <= 0.0
-            || progress.w2 > 10;
-        if !entered_percent_mode && progress.w2 > 0 {
-            return Some((format!("-{}", progress.w2), color::rgba_hex("#ff55cc")));
-        }
-    }
+    match mode {
+        profile::MiniIndicator::SubtractiveScoring => {
+            let entered_percent_mode = progress.w3 > 0
+                || progress.w4 > 0
+                || progress.w5 > 0
+                || progress.miss > 0
+                || progress.let_go > 0
+                || progress.mines_hit > 0
+                || p.is_failing
+                || p.life <= 0.0
+                || progress.w2 > 10;
+            if !entered_percent_mode && progress.w2 > 0 {
+                return Some((format!("-{}", progress.w2), color::rgba_hex("#ff55cc")));
+            }
 
-    let score = progress.kept_percent.clamp(0.0, 100.0);
-    let text = if mode == profile::MiniIndicator::SubtractiveScoring {
-        format!("-{:.2}%", progress.lost_percent.clamp(0.0, 100.0))
-    } else {
-        format!("{score:.2}%")
-    };
-    Some((text, zmod_indicator_default_color(score)))
+            let score = progress.kept_percent.clamp(0.0, 100.0);
+            Some((
+                format!("-{:.2}%", progress.lost_percent.clamp(0.0, 100.0)),
+                zmod_indicator_default_color(score),
+            ))
+        }
+        profile::MiniIndicator::PredictiveScoring => {
+            let score = progress.kept_percent.clamp(0.0, 100.0);
+            Some((format!("{score:.2}%"), zmod_indicator_default_color(score)))
+        }
+        profile::MiniIndicator::PaceScoring => {
+            let pace = progress.pace_percent.clamp(0.0, 100.0);
+            Some((format!("{pace:.2}%"), zmod_indicator_default_color(pace)))
+        }
+        profile::MiniIndicator::RivalScoring => {
+            let possible = f64::from(progress.possible_dp.max(1));
+            let current_possible = f64::from(progress.current_possible_dp.max(0));
+            let actual = f64::from(progress.actual_dp.max(0));
+            let pace = ((actual / possible) * 10000.0).floor() / 100.0;
+            let rival_score = state.mini_indicator_rival_score_percent[player_idx].clamp(0.0, 100.0);
+            let rival_pace = ((current_possible / possible) * 10000.0 * rival_score).floor() / 10000.0;
+            let diff = (pace - rival_pace).abs();
+            let text = if pace < rival_pace {
+                format!("-{diff:.2}%")
+            } else {
+                format!("+{diff:.2}%")
+            };
+            Some((text, zmod_rival_color(pace, rival_pace)))
+        }
+        profile::MiniIndicator::Pacemaker => {
+            let possible = f64::from(progress.possible_dp.max(1));
+            let current_possible = f64::from(progress.current_possible_dp.max(0));
+            let actual = f64::from(progress.actual_dp.max(0));
+            let pace = (actual / possible * 10000.0).floor();
+            let target_ratio = (state.mini_indicator_target_score_percent[player_idx] / 100.0)
+                .clamp(0.0, 1.0);
+            let rival_pace = ((current_possible / possible) * 1_000_000.0 * target_ratio).floor()
+                / 100.0;
+
+            let text = if pace < rival_pace {
+                let diff = ((rival_pace - pace).floor() / 100.0).max(0.0);
+                format!("-{diff:.2}%")
+            } else {
+                let diff = ((pace - rival_pace).floor() / 100.0).max(0.0);
+                format!("+{diff:.2}%")
+            };
+            Some((text, zmod_pacemaker_color(pace, rival_pace)))
+        }
+        profile::MiniIndicator::StreamProg => {
+            let completion = zmod_stream_prog_completion(state, player_idx)?;
+            let rgba = if completion >= 0.9 {
+                [0.0, 1.0, ((completion - 0.9) * 10.0).clamp(0.0, 1.0) as f32, 1.0]
+            } else if completion >= 0.5 {
+                [((0.9 - completion) * 10.0 / 4.0).clamp(0.0, 1.0) as f32, 1.0, 0.0, 1.0]
+            } else {
+                [1.0, ((completion - 0.2) * 10.0 / 3.0).clamp(0.0, 1.0) as f32, 0.0, 1.0]
+            };
+            Some((format!("{:.2}%", (completion * 100.0).clamp(0.0, 100.0)), rgba))
+        }
+        profile::MiniIndicator::None => None,
+    }
 }
 
 #[inline(always)]
@@ -2447,7 +2559,7 @@ pub fn build(
         }
     }
 
-    // Mini Indicator (zmod SubtractiveScoring.lua parity for Subtractive/Predictive).
+    // Mini Indicator (zmod SubtractiveScoring.lua parity).
     if let Some((text, rgba)) = zmod_mini_indicator_text(state, p, profile, player_idx)
     {
         let column_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
