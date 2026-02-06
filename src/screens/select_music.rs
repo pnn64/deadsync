@@ -213,6 +213,42 @@ fn beat_at_sec(song: &SongData, target_sec: f64) -> f64 {
     beat_at_sec_from_bpms(&song.normalized_bpms, target_sec)
 }
 
+#[inline(always)]
+fn preview_song_sec(state: &State) -> Option<f64> {
+    let start_sec = state.currently_playing_preview_start_sec?;
+    let length_sec = state.currently_playing_preview_length_sec?;
+    let stream_sec = audio::get_music_stream_position_seconds();
+    if !stream_sec.is_finite() || stream_sec < 0.0 {
+        return None;
+    }
+    let rate = profile::get_session_music_rate();
+    let rate = if rate.is_finite() && rate > 0.0 {
+        rate
+    } else {
+        1.0
+    };
+    let mut rel_song_sec = stream_sec * rate;
+    if length_sec.is_finite() && length_sec > 0.0 {
+        rel_song_sec = rel_song_sec.rem_euclid(length_sec);
+    }
+    Some((start_sec + rel_song_sec) as f64)
+}
+
+#[inline(always)]
+fn sl_arrow_bounce01(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 {
+    let beat = match entry_opt {
+        Some(MusicWheelEntry::Song(song)) => {
+            preview_song_sec(state).map_or(state.session_elapsed * song.max_bpm.max(1.0) as f32 / 60.0, |sec| {
+                beat_at_sec(song, sec) as f32
+            })
+        }
+        _ => state.session_elapsed * 2.5, // 150 BPM fallback
+    };
+    let effect_offset = -10.0 * crate::config::get().global_offset_seconds;
+    let t = (beat + effect_offset).rem_euclid(1.0);
+    (t * std::f32::consts::PI).sin().clamp(0.0, 1.0)
+}
+
 fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cut)> {
     let path = song.music_path.clone()?;
     let mut start = song.sample_start.unwrap_or(0.0) as f64;
@@ -368,6 +404,8 @@ pub struct State {
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     currently_playing_preview_path: Option<PathBuf>,
+    currently_playing_preview_start_sec: Option<f32>,
+    currently_playing_preview_length_sec: Option<f32>,
     prev_selected_index: usize,
     time_since_selection_change: f32,
 
@@ -709,6 +747,8 @@ pub fn init() -> State {
         nav_key_held_direction: None,
         nav_key_held_since: None,
         currently_playing_preview_path: None,
+        currently_playing_preview_start_sec: None,
+        currently_playing_preview_length_sec: None,
         session_elapsed: 0.0,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
@@ -1362,6 +1402,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.currently_playing_preview_path = music_path;
             if let Some(song) = &selected_song {
                 if let Some((path, cut)) = compute_preview_cut(song) {
+                    state.currently_playing_preview_start_sec = Some(cut.start_sec as f32);
+                    state.currently_playing_preview_length_sec = Some(cut.length_sec as f32);
                     audio::play_music(
                         path,
                         cut,
@@ -1369,9 +1411,13 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                         crate::game::profile::get_session_music_rate(),
                     );
                 } else {
+                    state.currently_playing_preview_start_sec = None;
+                    state.currently_playing_preview_length_sec = None;
                     audio::stop_music();
                 }
             } else {
+                state.currently_playing_preview_start_sec = None;
+                state.currently_playing_preview_length_sec = None;
                 audio::stop_music();
             }
         }
@@ -1462,6 +1508,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         }
     } else if state.currently_playing_preview_path.is_some() {
         state.currently_playing_preview_path = None;
+        state.currently_playing_preview_start_sec = None;
+        state.currently_playing_preview_length_sec = None;
         audio::stop_music();
     }
 
@@ -1495,6 +1543,8 @@ pub fn trigger_immediate_refresh(state: &mut State) {
 
 pub fn reset_preview_after_gameplay(state: &mut State) {
     state.currently_playing_preview_path = None;
+    state.currently_playing_preview_start_sec = None;
+    state.currently_playing_preview_length_sec = None;
     trigger_immediate_refresh(state);
 }
 
@@ -2327,20 +2377,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());
 
-    // Bouncing Arrow
-    let bpm_val = if let Some(MusicWheelEntry::Song(s)) = entry_opt {
-        s.max_bpm.max(1.0)
-    } else {
-        150.0
-    };
-    let phase = (state.session_elapsed / (60.0 / bpm_val as f32)) * 6.28318;
-    let cos = phase.cos();
+    // Bouncing Arrow (SL parity: bounce + effectperiod(1) + effectoffset(-10*GlobalOffsetSeconds))
+    let bounce = sl_arrow_bounce01(entry_opt, state);
+    let dx_p1 = -3.0 * bounce;
+    let dx_p2 = 3.0 * bounce;
     if is_versus {
         let slot_p1 = (sel_p1.saturating_sub(top_index)).min(VISIBLE_STEPS_SLOTS - 1);
         let y_p1 = lst_cy + (slot_p1 as i32 - 2) as f32 * 30.0 + 1.0;
         actors.push(act!(sprite("meter_arrow.png"):
             align(0.0, 0.5):
-            xy(screen_center_x() - 53.0 + (-1.5 + 1.5 * cos), y_p1):
+            xy(screen_center_x() - 53.0 + dx_p1, y_p1):
             rotationz(0.0):
             zoom(0.575):
             z(122)
@@ -2350,7 +2396,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let y_p2 = lst_cy + (slot_p2 as i32 - 2) as f32 * 30.0 + 1.0;
         actors.push(act!(sprite("meter_arrow.png"):
             align(0.0, 0.5):
-            xy(lst_cx + 8.0 + (1.5 - 1.5 * cos), y_p2):
+            xy(lst_cx + 8.0 + dx_p2, y_p2):
             rotationz(180.0):
             zoom(0.575):
             z(122)
@@ -2360,9 +2406,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let arrow_y = lst_cy + (arrow_slot as i32 - 2) as f32 * 30.0 + 1.0;
         let (arrow_x0, arrow_dx, arrow_rot) = if is_p2_single {
             let x0 = lst_cx + 8.0;
-            (x0, 1.5 - 1.5 * cos, 180.0)
+            (x0, dx_p2, 180.0)
         } else {
-            (screen_center_x() - 53.0, -1.5 + 1.5 * cos, 0.0)
+            (screen_center_x() - 53.0, dx_p1, 0.0)
         };
         actors.push(act!(sprite("meter_arrow.png"):
             align(0.0, 0.5):
