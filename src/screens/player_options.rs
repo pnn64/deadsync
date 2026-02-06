@@ -3553,8 +3553,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let row_width = help_box_w;
     //let row_center_x = row_left + (row_width * 0.5);
     let title_zoom = 0.88;
-    // Title text x: slightly less padding so text sits further left
-    let title_x = row_left + widescale(7.0, 13.0);
+    // Title text x: slightly less padding so text sits further left.
+    let title_left_pad = widescale(7.0, 13.0);
+    let title_x = row_left + title_left_pad;
+    // Keep header labels bounded to the title column so they never overlap option values.
+    let title_max_w = (TITLE_BG_WIDTH - title_left_pad - 4.0).max(0.0);
     let cursor_now = |player_idx: usize| -> Option<(f32, f32, f32, f32)> {
         if player_idx >= PLAYER_SLOTS || !state.cursor_initialized[player_idx] {
             return None;
@@ -3630,14 +3633,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 actors.push(act!(text: font("miso"): settext(lines[0].to_string()):
                     align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                    horizalign(left): maxwidth(widescale(128.0, 120.0)):
+                    horizalign(left): maxwidth(title_max_w):
                     z(101)
                 ));
                 // Second line (e.g., "bpm: 120") - smaller and slightly below
                 actors.push(act!(text: font("miso"): settext(lines[1].to_string()):
                     align(0.0, 0.5): xy(title_x, current_row_y + 7.0): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                    horizalign(left): maxwidth(widescale(128.0, 120.0)):
+                    horizalign(left): maxwidth(title_max_w):
                     z(101)
                 ));
             } else {
@@ -3645,7 +3648,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 actors.push(act!(text: font("miso"): settext(row.name.clone()):
                     align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                    horizalign(left): maxwidth(widescale(128.0, 120.0)):
+                    horizalign(left): maxwidth(title_max_w):
                     z(101)
                 ));
             }
@@ -3654,7 +3657,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             actors.push(act!(text: font("miso"): settext(row.name.clone()):
                 align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
                 diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                horizalign(left): maxwidth(widescale(128.0, 120.0)):
+                horizalign(left): maxwidth(title_max_w):
                 z(101)
             ));
         }
