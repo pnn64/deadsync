@@ -12,14 +12,14 @@ use crate::ui::components::{eval_grades, heart_bg, pad_display, screen_bar};
 
 use crate::assets::AssetManager;
 use crate::game::chart::ChartData;
+use crate::game::gameplay::MAX_PLAYERS;
 use crate::game::judgment::{self, JudgeGrade};
 use crate::game::note::NoteType;
-use crate::game::parsing::noteskin::{Noteskin, Quantization, NUM_QUANTIZATIONS};
+use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::scores;
 use crate::game::scroll::ScrollSpeedSetting;
 use crate::game::song::SongData;
 use crate::game::timing as timing_stats;
-use crate::game::gameplay::MAX_PLAYERS;
 use crate::screens::gameplay;
 use crate::ui::font;
 use std::collections::HashMap;
@@ -42,10 +42,9 @@ const EVAL_STAGE_IN_BLACK_FADE_SECONDS: f32 = 0.5;
 const EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS: f32 = 0.4;
 const EVAL_STAGE_IN_TEXT_HOLD_SECONDS: f32 = 0.6;
 const EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS: f32 = 0.4;
-const EVAL_STAGE_IN_TOTAL_SECONDS: f32 =
-    EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS
-        + EVAL_STAGE_IN_TEXT_HOLD_SECONDS
-        + EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS;
+const EVAL_STAGE_IN_TOTAL_SECONDS: f32 = EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS
+    + EVAL_STAGE_IN_TEXT_HOLD_SECONDS
+    + EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS;
 
 // A struct to hold a snapshot of the final score data from the gameplay screen.
 #[derive(Clone)]
@@ -138,7 +137,9 @@ fn compute_column_judgments(
 
         match j.grade {
             JudgeGrade::Fantastic => match j.window {
-                Some(crate::game::judgment::TimingWindow::W0) => slot.w0 = slot.w0.saturating_add(1),
+                Some(crate::game::judgment::TimingWindow::W0) => {
+                    slot.w0 = slot.w0.saturating_add(1)
+                }
                 _ => slot.w1 = slot.w1.saturating_add(1),
             },
             JudgeGrade::Excellent => slot.w2 = slot.w2.saturating_add(1),
@@ -443,18 +444,18 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
         match play_style {
             profile::PlayStyle::Versus => {
-                active_pane[0] = score_info[0]
-                    .as_ref()
-                    .map_or(EvalPane::Standard, |si| EvalPane::default_for(si.show_fa_plus_pane));
-                active_pane[1] = score_info[1]
-                    .as_ref()
-                    .map_or(EvalPane::Standard, |si| EvalPane::default_for(si.show_fa_plus_pane));
+                active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
+                    EvalPane::default_for(si.show_fa_plus_pane)
+                });
+                active_pane[1] = score_info[1].as_ref().map_or(EvalPane::Standard, |si| {
+                    EvalPane::default_for(si.show_fa_plus_pane)
+                });
             }
             profile::PlayStyle::Single | profile::PlayStyle::Double => {
                 let joined = profile::get_session_player_side();
-                let primary = score_info[0]
-                    .as_ref()
-                    .map_or(EvalPane::Standard, |si| EvalPane::default_for(si.show_fa_plus_pane));
+                let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
+                    EvalPane::default_for(si.show_fa_plus_pane)
+                });
                 let secondary = EvalPane::Timing;
                 active_pane = match joined {
                     profile::PlayerSide::P1 => [primary, secondary],
@@ -662,9 +663,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_back
         | VirtualAction::p1_start
         | VirtualAction::p2_back
-        | VirtualAction::p2_start => {
-            ScreenAction::Navigate(Screen::SelectMusic)
-        }
+        | VirtualAction::p2_start => ScreenAction::Navigate(Screen::SelectMusic),
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             shift_pane_for(profile::PlayerSide::P1, 1);
             ScreenAction::None
@@ -1157,7 +1156,7 @@ fn build_pane_percentage_display(
             } else {
                 percent_x
             };
-            let bottom_label_x = bottom_value_x - 108.0;
+            let bottom_label_x = bottom_value_x - 92.0;
             children.push(act!(text:
                 font("wendy_white"):
                 settext("H.EX"):
@@ -1353,120 +1352,122 @@ fn build_column_judgments_pane(
         }
     };
 
-    asset_manager.with_fonts(|all_fonts| asset_manager.with_font("miso", |miso_font| {
-        let label_zoom: f32 = 0.8;
-        let number_zoom: f32 = 0.9;
-        let small_zoom: f32 = 0.65;
-        let held_label_zoom: f32 = 0.6;
+    asset_manager.with_fonts(|all_fonts| {
+        asset_manager.with_font("miso", |miso_font| {
+            let label_zoom: f32 = 0.8;
+            let number_zoom: f32 = 0.9;
+            let small_zoom: f32 = 0.65;
+            let held_label_zoom: f32 = 0.6;
 
-        // Row labels
-        for (row_idx, row) in rows.iter().enumerate() {
-            let y = labels_frame_y + (row_idx as f32 + 1.0).mul_add(row_height, 0.0);
-            actors.push(act!(text: font("miso"): settext(row.label.to_string()):
+            // Row labels
+            for (row_idx, row) in rows.iter().enumerate() {
+                let y = labels_frame_y + (row_idx as f32 + 1.0).mul_add(row_height, 0.0);
+                actors.push(act!(text: font("miso"): settext(row.label.to_string()):
+                    align(1.0, 0.5):
+                    xy(labels_right_x, y):
+                    zoom(label_zoom):
+                    maxwidth(65.0 / label_zoom):
+                    horizalign(right):
+                    diffuse(row.color[0], row.color[1], row.color[2], row.color[3]):
+                    z(101)
+                ));
+            }
+
+            // "HELD" label at the bottom, aligned relative to the MISS label width.
+            let miss_label_width =
+                font::measure_line_width_logical(miso_font, "MISS", all_fonts) as f32 * label_zoom;
+            let held_label_x = labels_right_x - miss_label_width / 1.15;
+            let held_y = labels_frame_y + 140.0;
+            let miss_color = color::JUDGMENT_RGBA[5];
+            actors.push(act!(text: font("miso"): settext("HELD".to_string()):
                 align(1.0, 0.5):
-                xy(labels_right_x, y):
-                zoom(label_zoom):
-                maxwidth(65.0 / label_zoom):
+                xy(held_label_x, held_y):
+                zoom(held_label_zoom):
                 horizalign(right):
-                diffuse(row.color[0], row.color[1], row.color[2], row.color[3]):
+                diffuse(miss_color[0], miss_color[1], miss_color[2], miss_color[3]):
                 z(101)
             ));
-        }
 
-        // "HELD" label at the bottom, aligned relative to the MISS label width.
-        let miss_label_width =
-            font::measure_line_width_logical(miso_font, "MISS", all_fonts) as f32 * label_zoom;
-        let held_label_x = labels_right_x - miss_label_width / 1.15;
-        let held_y = labels_frame_y + 140.0;
-        let miss_color = color::JUDGMENT_RGBA[5];
-        actors.push(act!(text: font("miso"): settext("HELD".to_string()):
-            align(1.0, 0.5):
-            xy(held_label_x, held_y):
-            zoom(held_label_zoom):
-            horizalign(right):
-            diffuse(miss_color[0], miss_color[1], miss_color[2], miss_color[3]):
-            z(101)
-        ));
+            // Columns: arrows + per-row counts
+            for col_idx in 0..num_cols {
+                let cj = score_info.column_judgments[col_idx];
+                let col_center_x = (col_idx as f32 + 1.0).mul_add(col_width, base_x);
 
-        // Columns: arrows + per-row counts
-        for col_idx in 0..num_cols {
-            let cj = score_info.column_judgments[col_idx];
-            let col_center_x = (col_idx as f32 + 1.0).mul_add(col_width, base_x);
-
-            // Measure Miss number width for this column for alignment of early/held counts.
-            let miss_str = cj.miss.to_string();
-            let miss_width =
-                font::measure_line_width_logical(miso_font, &miss_str, all_fonts) as f32
+                // Measure Miss number width for this column for alignment of early/held counts.
+                let miss_str = cj.miss.to_string();
+                let miss_width = font::measure_line_width_logical(miso_font, &miss_str, all_fonts)
+                    as f32
                     * number_zoom;
-            let right_edge_x = col_center_x - 1.0 - miss_width * 0.5;
+                let right_edge_x = col_center_x - 1.0 - miss_width * 0.5;
 
-            // Noteskin preview arrow (Tap Note, Q4th) above the column.
-            if let Some(ns) = score_info.noteskin.as_ref() {
-                let note_idx = col_idx
-                    .saturating_mul(NUM_QUANTIZATIONS)
-                    .saturating_add(Quantization::Q4th as usize);
-                if let Some(slot) = ns.notes.get(note_idx) {
-                    let uv = slot.uv_for_frame(0);
-                    let size = slot.size();
-                    let w = size[0].max(0) as f32;
-                    let h = size[1].max(0) as f32;
-                    if w > 0.0 && h > 0.0 {
-                        // Match gameplay arrow sizing (target 64px tall), then apply Pane3 zoom(0.4).
-                        const TARGET_ARROW_PX: f32 = 64.0;
-                        let (w_scaled, h_scaled) = if h > 0.0 {
-                            let s = TARGET_ARROW_PX / h;
-                            (w * s, TARGET_ARROW_PX)
-                        } else {
-                            (w, h)
-                        };
+                // Noteskin preview arrow (Tap Note, Q4th) above the column.
+                if let Some(ns) = score_info.noteskin.as_ref() {
+                    let note_idx = col_idx
+                        .saturating_mul(NUM_QUANTIZATIONS)
+                        .saturating_add(Quantization::Q4th as usize);
+                    if let Some(slot) = ns.notes.get(note_idx) {
+                        let uv = slot.uv_for_frame(0);
+                        let size = slot.size();
+                        let w = size[0].max(0) as f32;
+                        let h = size[1].max(0) as f32;
+                        if w > 0.0 && h > 0.0 {
+                            // Match gameplay arrow sizing (target 64px tall), then apply Pane3 zoom(0.4).
+                            const TARGET_ARROW_PX: f32 = 64.0;
+                            let (w_scaled, h_scaled) = if h > 0.0 {
+                                let s = TARGET_ARROW_PX / h;
+                                (w * s, TARGET_ARROW_PX)
+                            } else {
+                                (w, h)
+                            };
 
-                        actors.push(act!(sprite(slot.texture_key().to_string()):
-                            align(0.5, 0.5):
-                            xy(col_center_x, base_y):
-                            setsize(w_scaled, h_scaled):
-                            zoom(0.4):
-                            rotationz(-slot.def.rotation_deg as f32):
-                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                            actors.push(act!(sprite(slot.texture_key().to_string()):
+                                align(0.5, 0.5):
+                                xy(col_center_x, base_y):
+                                setsize(w_scaled, h_scaled):
+                                zoom(0.4):
+                                rotationz(-slot.def.rotation_deg as f32):
+                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                z(101)
+                            ));
+                        }
+                    }
+                }
+
+                for (row_idx, row) in rows.iter().enumerate() {
+                    let (count, early_opt) = count_for(cj, row.kind);
+                    let y = labels_frame_y + (row_idx as f32 + 1.0).mul_add(row_height, 0.0);
+                    actors.push(act!(text: font("miso"): settext(count.to_string()):
+                        align(0.5, 0.5):
+                        xy(col_center_x, y):
+                        zoom(number_zoom):
+                        horizalign(center):
+                        z(101)
+                    ));
+
+                    if let Some(early) = early_opt {
+                        let early_y = y - 10.0;
+                        actors.push(act!(text: font("miso"): settext(early.to_string()):
+                            align(1.0, 0.5):
+                            xy(right_edge_x, early_y):
+                            zoom(small_zoom):
+                            horizalign(right):
                             z(101)
                         ));
                     }
                 }
-            }
 
-            for (row_idx, row) in rows.iter().enumerate() {
-                let (count, early_opt) = count_for(cj, row.kind);
-                let y = labels_frame_y + (row_idx as f32 + 1.0).mul_add(row_height, 0.0);
-                actors.push(act!(text: font("miso"): settext(count.to_string()):
-                    align(0.5, 0.5):
-                    xy(col_center_x, y):
-                    zoom(number_zoom):
-                    horizalign(center):
+                // Held-miss count per column (MissBecauseHeld) at y=144, aligned like early counts.
+                let held_str = cj.held_miss.to_string();
+                actors.push(act!(text: font("miso"): settext(held_str):
+                    align(1.0, 0.5):
+                    xy(right_edge_x, base_y + 144.0):
+                    zoom(small_zoom):
+                    horizalign(right):
                     z(101)
                 ));
-
-                if let Some(early) = early_opt {
-                    let early_y = y - 10.0;
-                    actors.push(act!(text: font("miso"): settext(early.to_string()):
-                        align(1.0, 0.5):
-                        xy(right_edge_x, early_y):
-                        zoom(small_zoom):
-                        horizalign(right):
-                        z(101)
-                    ));
-                }
             }
-
-            // Held-miss count per column (MissBecauseHeld) at y=144, aligned like early counts.
-            let held_str = cj.held_miss.to_string();
-            actors.push(act!(text: font("miso"): settext(held_str):
-                align(1.0, 0.5):
-                xy(right_edge_x, base_y + 144.0):
-                zoom(small_zoom):
-                horizalign(right):
-                z(101)
-            ));
-        }
-    }));
+        })
+    });
 
     actors
 }
@@ -1862,15 +1863,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
 
         let upper_single = [(0, player_side)];
-        let upper_vs = [
-            (0, profile::PlayerSide::P1),
-            (1, profile::PlayerSide::P2),
-        ];
-        let upper_players: &[(usize, profile::PlayerSide)] = if play_style == profile::PlayStyle::Versus {
-            &upper_vs
-        } else {
-            &upper_single
-        };
+        let upper_vs = [(0, profile::PlayerSide::P1), (1, profile::PlayerSide::P2)];
+        let upper_players: &[(usize, profile::PlayerSide)] =
+            if play_style == profile::PlayStyle::Versus {
+                &upper_vs
+            } else {
+                &upper_single
+            };
 
         for &(player_idx, side) in upper_players {
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
@@ -1881,7 +1880,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 profile::PlayerSide::P1 => screen_center_x() - 155.0,
                 profile::PlayerSide::P2 => screen_center_x() + 155.0,
             };
-            let dir = if side == profile::PlayerSide::P1 { -1.0 } else { 1.0 };
+            let dir = if side == profile::PlayerSide::P1 {
+                -1.0
+            } else {
+                1.0
+            };
 
             // Letter Grade
             actors.extend(eval_grades::actors(
@@ -1912,7 +1915,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 let difficulty_text = format!("{style_label} / {difficulty_display_name}");
                 let text_x = upper_origin_x + 115.0 * dir;
                 let box_x = upper_origin_x + 134.5 * dir;
-                let align_x = if side == profile::PlayerSide::P1 { 0.0 } else { 1.0 };
+                let align_x = if side == profile::PlayerSide::P1 {
+                    0.0
+                } else {
+                    1.0
+                };
 
                 if side == profile::PlayerSide::P1 {
                     actors.push(act!(text: font("miso"): settext(difficulty_text):
@@ -1954,7 +1961,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
             {
                 let x = upper_origin_x + 115.0 * dir;
-                let align_x = if side == profile::PlayerSide::P1 { 0.0 } else { 1.0 };
+                let align_x = if side == profile::PlayerSide::P1 {
+                    0.0
+                } else {
+                    1.0
+                };
                 if side == profile::PlayerSide::P1 {
                     actors.push(act!(text: font("miso"): settext(step_artist_text):
                         align(align_x, 0.5): xy(x, cy - 81.0): zoom(0.7): z(101):
@@ -1980,7 +1991,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                             let fits = |text: &str| {
                                 let logical_width =
-                                    font::measure_line_width_logical(miso_font, text, all_fonts) as f32;
+                                    font::measure_line_width_logical(miso_font, text, all_fonts)
+                                        as f32;
                                 logical_width <= max_allowed_logical_width
                             };
 
@@ -2001,7 +2013,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
             {
                 let x = upper_origin_x + 150.0 * dir;
-                let align_x = if side == profile::PlayerSide::P1 { 0.0 } else { 1.0 };
+                let align_x = if side == profile::PlayerSide::P1 {
+                    0.0
+                } else {
+                    1.0
+                };
                 if side == profile::PlayerSide::P1 {
                     actors.push(act!(text: font("miso"): settext(breakdown_text):
                         align(align_x, 0.5): xy(x, cy - 95.0): zoom(0.7):
@@ -2022,7 +2038,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // --- Panes (Simply Love ScreenEvaluation common/Panes) ---
     {
         for controller in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
-            let controller_idx = if controller == profile::PlayerSide::P1 { 0 } else { 1 };
+            let controller_idx = if controller == profile::PlayerSide::P1 {
+                0
+            } else {
+                1
+            };
             let player_idx = if play_style == profile::PlayStyle::Versus {
                 controller_idx
             } else {
@@ -2197,8 +2217,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let mut last_y = -999.0_f32;
 
                         for &(t, life) in &si.life_history {
-                            let x =
-                                ((t - first) / (dur + padding)).clamp(0.0, 1.0) * graph_width;
+                            let x = ((t - first) / (dur + padding)).clamp(0.0, 1.0) * graph_width;
                             let y = (1.0 - life).clamp(0.0, 1.0) * graph_height;
 
                             if (x - last_x).abs() < 0.5 && (y - last_y).abs() < 0.5 {
