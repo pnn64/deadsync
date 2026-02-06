@@ -704,6 +704,55 @@ impl core::fmt::Display for ComboFont {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MiniIndicator {
+    #[default]
+    None,
+    SubtractiveScoring,
+    PredictiveScoring,
+    PaceScoring,
+    RivalScoring,
+    Pacemaker,
+    StreamProg,
+}
+
+impl FromStr for MiniIndicator {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "none" => Ok(Self::None),
+            "subtractivescoring" | "subtractive" => Ok(Self::SubtractiveScoring),
+            "predictivescoring" | "predictive" => Ok(Self::PredictiveScoring),
+            "pacescoring" | "pace" => Ok(Self::PaceScoring),
+            "rivalscoring" | "rival" => Ok(Self::RivalScoring),
+            "pacemaker" => Ok(Self::Pacemaker),
+            "streamprog" | "streamprogress" | "stream" => Ok(Self::StreamProg),
+            other => Err(format!("'{other}' is not a valid MiniIndicator setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for MiniIndicator {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::SubtractiveScoring => write!(f, "SubtractiveScoring"),
+            Self::PredictiveScoring => write!(f, "PredictiveScoring"),
+            Self::PaceScoring => write!(f, "PaceScoring"),
+            Self::RivalScoring => write!(f, "RivalScoring"),
+            Self::Pacemaker => write!(f, "Pacemaker"),
+            Self::StreamProg => write!(f, "StreamProg"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub display_name: String,
@@ -770,6 +819,7 @@ pub struct Profile {
     pub subtractive_scoring: bool,
     pub pacemaker: bool,
     pub nps_graph_at_top: bool,
+    pub mini_indicator: MiniIndicator,
     // Mini modifier as a percentage, mirroring Simply Love semantics.
     // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
     pub mini_percent: i32,
@@ -849,6 +899,7 @@ impl Default for Profile {
             subtractive_scoring: false,
             pacemaker: false,
             nps_graph_at_top: false,
+            mini_indicator: MiniIndicator::None,
             mini_percent: 0,
             perspective: Perspective::default(),
             note_field_offset_x: 0,
@@ -1049,6 +1100,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         content.push_str(&format!(
             "NPSGraphAtTop = {}\n",
             i32::from(default_profile.nps_graph_at_top)
+        ));
+        content.push_str(&format!(
+            "MiniIndicator = {}\n",
+            default_profile.mini_indicator
         ));
         content.push_str(&format!(
             "ReverseScroll = {}\n",
@@ -1257,6 +1312,7 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         "NPSGraphAtTop={}\n",
         i32::from(profile.nps_graph_at_top)
     ));
+    content.push_str(&format!("MiniIndicator={}\n", profile.mini_indicator));
     content.push_str(&format!(
         "ReverseScroll={}\n",
         i32::from(profile.reverse_scroll)
@@ -1643,6 +1699,24 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "NPSGraphAtTop")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.nps_graph_at_top, |v| v != 0);
+            profile.mini_indicator = profile_conf
+                .get("PlayerOptions", "MiniIndicator")
+                .and_then(|s| MiniIndicator::from_str(&s).ok())
+                .unwrap_or_else(|| {
+                    if profile.subtractive_scoring {
+                        MiniIndicator::SubtractiveScoring
+                    } else if profile.pacemaker {
+                        MiniIndicator::Pacemaker
+                    } else {
+                        default_profile.mini_indicator
+                    }
+                });
+            if profile.mini_indicator == MiniIndicator::SubtractiveScoring {
+                profile.subtractive_scoring = true;
+            }
+            if profile.mini_indicator == MiniIndicator::Pacemaker {
+                profile.pacemaker = true;
+            }
             profile.scroll_option = profile_conf
                 .get("PlayerOptions", "Scroll")
                 .and_then(|s| ScrollOption::from_str(&s).ok())
@@ -2326,6 +2400,31 @@ pub fn update_gameplay_extras_for_side(
         profile.subtractive_scoring = subtractive_scoring;
         profile.pacemaker = pacemaker;
         profile.nps_graph_at_top = nps_graph_at_top;
+        if subtractive_scoring {
+            profile.mini_indicator = MiniIndicator::SubtractiveScoring;
+        } else if pacemaker {
+            profile.mini_indicator = MiniIndicator::Pacemaker;
+        } else if matches!(
+            profile.mini_indicator,
+            MiniIndicator::SubtractiveScoring | MiniIndicator::Pacemaker
+        ) {
+            profile.mini_indicator = MiniIndicator::None;
+        }
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_mini_indicator_for_side(side: PlayerSide, setting: MiniIndicator) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.mini_indicator == setting {
+            return;
+        }
+        profile.mini_indicator = setting;
     }
     save_profile_ini_for_side(side);
 }

@@ -444,7 +444,25 @@ fn scoring_count(p: &PlayerRuntime, grade: JudgeGrade) -> u32 {
     p.scoring_counts.get(&grade).copied().unwrap_or(0)
 }
 
-fn zmod_subtractive_text(state: &State, p: &PlayerRuntime, player_idx: usize) -> Option<String> {
+#[derive(Clone, Copy, Debug)]
+struct MiniIndicatorProgress {
+    kept_percent: f64,
+    lost_percent: f64,
+    w2: u32,
+    w3: u32,
+    w4: u32,
+    w5: u32,
+    miss: u32,
+    let_go: u32,
+    mines_hit: u32,
+    judged_any: bool,
+}
+
+fn zmod_mini_indicator_progress(
+    state: &State,
+    p: &PlayerRuntime,
+    player_idx: usize,
+) -> MiniIndicatorProgress {
     let w1 = scoring_count(p, JudgeGrade::Fantastic);
     let w2 = scoring_count(p, JudgeGrade::Excellent);
     let w3 = scoring_count(p, JudgeGrade::Great);
@@ -456,16 +474,6 @@ fn zmod_subtractive_text(state: &State, p: &PlayerRuntime, player_idx: usize) ->
         .holds_let_go_for_score
         .saturating_add(p.rolls_let_go_for_score);
     let mines_hit = p.mines_hit_for_score;
-    let failing = p.is_failing || p.life <= 0.0;
-    if w2 == 0 && w3 == 0 && w4 == 0 && w5 == 0 && miss == 0 && let_go == 0 && mines_hit == 0 && !failing {
-        return None;
-    }
-
-    let entered_percent_mode = w3 > 0 || w4 > 0 || w5 > 0 || miss > 0 || let_go > 0 || mines_hit > 0 || failing || w2 > 10;
-    if !entered_percent_mode && w2 > 0 {
-        return Some(format!("-{w2}"));
-    }
-
     let tap_rows = w1
         .saturating_add(w2)
         .saturating_add(w3)
@@ -488,7 +496,91 @@ fn zmod_subtractive_text(state: &State, p: &PlayerRuntime, player_idx: usize) ->
     let kept_dp = possible_dp.saturating_sub(dp_lost).max(0);
     let kept_percent = ((f64::from(kept_dp) / f64::from(possible_dp)) * 10000.0).floor() / 100.0;
     let lost_percent = (100.0 - kept_percent).max(0.0);
-    Some(format!("-{lost_percent:.2}%"))
+    let judged_any = tap_rows > 0 || let_go > 0 || mines_hit > 0 || p.is_failing || p.life <= 0.0;
+    MiniIndicatorProgress {
+        kept_percent,
+        lost_percent,
+        w2,
+        w3,
+        w4,
+        w5,
+        miss,
+        let_go,
+        mines_hit,
+        judged_any,
+    }
+}
+
+#[inline(always)]
+fn zmod_indicator_mode(profile: &profile::Profile) -> profile::MiniIndicator {
+    if profile.mini_indicator != profile::MiniIndicator::None {
+        return profile.mini_indicator;
+    }
+    if profile.subtractive_scoring {
+        profile::MiniIndicator::SubtractiveScoring
+    } else if profile.pacemaker {
+        profile::MiniIndicator::Pacemaker
+    } else {
+        profile::MiniIndicator::None
+    }
+}
+
+#[inline(always)]
+fn zmod_indicator_default_color(score_percent: f64) -> [f32; 4] {
+    if score_percent >= 96.0 {
+        color::rgba_hex("#21CCE8")
+    } else if score_percent >= 89.0 {
+        color::rgba_hex("#e29c18")
+    } else if score_percent >= 80.0 {
+        color::rgba_hex("#66c955")
+    } else if score_percent >= 68.0 {
+        color::rgba_hex("#b45cff")
+    } else {
+        [1.0, 0.0, 0.0, 1.0]
+    }
+}
+
+fn zmod_mini_indicator_text(
+    state: &State,
+    p: &PlayerRuntime,
+    profile: &profile::Profile,
+    player_idx: usize,
+) -> Option<(String, [f32; 4])> {
+    let mode = zmod_indicator_mode(profile);
+    if !matches!(
+        mode,
+        profile::MiniIndicator::SubtractiveScoring | profile::MiniIndicator::PredictiveScoring
+    ) {
+        return None;
+    }
+
+    let progress = zmod_mini_indicator_progress(state, p, player_idx);
+    if !progress.judged_any {
+        return None;
+    }
+
+    if mode == profile::MiniIndicator::SubtractiveScoring {
+        let entered_percent_mode = progress.w3 > 0
+            || progress.w4 > 0
+            || progress.w5 > 0
+            || progress.miss > 0
+            || progress.let_go > 0
+            || progress.mines_hit > 0
+            || p.is_failing
+            || p.life <= 0.0
+            || progress.w2 > 10;
+        if !entered_percent_mode && progress.w2 > 0 {
+            return Some((format!("-{}", progress.w2), color::rgba_hex("#ff55cc")));
+        }
+    }
+
+    let score = progress.kept_percent.clamp(0.0, 100.0);
+    let text = if mode == profile::MiniIndicator::SubtractiveScoring {
+        format!("-{:.2}%", progress.lost_percent.clamp(0.0, 100.0))
+    } else {
+        format!("{score:.2}%")
+    };
+    Some((text, zmod_indicator_default_color(score)))
 }
 
 #[inline(always)]
@@ -2355,9 +2447,8 @@ pub fn build(
         }
     }
 
-    // Subtractive Scoring (Simply Love SubtractiveScoring.lua parity).
-    if profile.subtractive_scoring
-        && let Some(text) = zmod_subtractive_text(state, p, player_idx)
+    // Mini Indicator (zmod SubtractiveScoring.lua parity for Subtractive/Predictive).
+    if let Some((text, rgba)) = zmod_mini_indicator_text(state, p, profile, player_idx)
     {
         let column_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
         let mut x = playfield_center_x + column_width;
@@ -2371,7 +2462,7 @@ pub fn build(
             font(mc_font_name): settext(text):
             align(h_align, 0.5): xy(x, zmod_layout.subtractive_scoring_y):
             zoom(0.35): shadowlength(1.0):
-            diffuse(1.0, 0.33333334, 0.8, 1.0):
+            diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
             z(85)
         ));
     }

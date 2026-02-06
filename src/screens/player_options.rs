@@ -276,8 +276,7 @@ pub struct State {
     // bit0 = Hide Judgments, bit1 = Hide NoteField Flash.
     pub early_dw_active_mask: [u8; PLAYER_SLOTS],
     // For Gameplay Extras row: bitmask of which options are enabled.
-    // bit0 = Flash Column for Miss, bit1 = Subtractive Scoring,
-    // bit2 = Pacemaker, bit3 = Density Graph at Top.
+    // bit0 = Flash Column for Miss, bit1 = Density Graph at Top.
     pub gameplay_extras_active_mask: [u8; PLAYER_SLOTS],
     // For Gameplay Extras (More) row: bitmask of which options are enabled.
     // bit0 = Judgment Tilt (Simply Love semantics).
@@ -637,18 +636,6 @@ fn build_main_rows(
             choice_difficulty_indices: Some(stepchart_choice_indices),
         },
         Row {
-            name: "Gameplay Extras".to_string(),
-            choices: vec![
-                "Flash Column for Miss".to_string(),
-                "Subtractive Scoring".to_string(),
-                "Pacemaker".to_string(),
-                "Density Graph at Top".to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Extra feedback helpers shown during gameplay.".to_string()],
-            choice_difficulty_indices: None,
-        },
-        Row {
             name: "What comes next?".to_string(),
             choices: what_comes_next_choices(OptionsPane::Main),
             selected_choice_index: [0; PLAYER_SLOTS],
@@ -792,8 +779,6 @@ fn build_advanced_rows() -> Vec<Row> {
             name: "Gameplay Extras".to_string(),
             choices: vec![
                 "Flash Column for Miss".to_string(),
-                "Subtractive Scoring".to_string(),
-                "Pacemaker".to_string(),
                 "Density Graph at Top".to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
@@ -1403,12 +1388,14 @@ fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = if profile.rescore_early_hits { 0 } else { 1 };
     }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Mini Indicator") {
-        row.selected_choice_index[player_idx] = if profile.subtractive_scoring {
-            1
-        } else if profile.pacemaker {
-            5
-        } else {
-            0
+        row.selected_choice_index[player_idx] = match profile.mini_indicator {
+            crate::game::profile::MiniIndicator::None => 0,
+            crate::game::profile::MiniIndicator::SubtractiveScoring => 1,
+            crate::game::profile::MiniIndicator::PredictiveScoring => 2,
+            crate::game::profile::MiniIndicator::PaceScoring => 3,
+            crate::game::profile::MiniIndicator::RivalScoring => 4,
+            crate::game::profile::MiniIndicator::Pacemaker => 5,
+            crate::game::profile::MiniIndicator::StreamProg => 6,
         }
         .min(row.choices.len().saturating_sub(1));
     }
@@ -1460,14 +1447,8 @@ fn apply_profile_defaults(
     if profile.column_flash_on_miss {
         gameplay_extras_active_mask |= 1u8 << 0;
     }
-    if profile.subtractive_scoring {
-        gameplay_extras_active_mask |= 1u8 << 1;
-    }
-    if profile.pacemaker {
-        gameplay_extras_active_mask |= 1u8 << 2;
-    }
     if profile.nps_graph_at_top {
-        gameplay_extras_active_mask |= 1u8 << 3;
+        gameplay_extras_active_mask |= 1u8 << 1;
     }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Gameplay Extras") {
         if gameplay_extras_active_mask != 0 {
@@ -1841,6 +1822,7 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "Background Filter"
         || row_name == "Stepchart"
         || row_name == "What comes next?"
+        || row_name == "Mini Indicator"
         || row_name == "Turn"
         || row_name == "Scroll"
         || row_name == "Hide"
@@ -2184,27 +2166,25 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
             .get(row.selected_choice_index[player_idx])
             .map(|s| s.as_str())
             .unwrap_or("None");
-        let subtractive_scoring = choice == "Subtractive Scoring";
-        let pacemaker = choice == "Pacemaker";
+        let mini_indicator = match choice {
+            "Subtractive Scoring" => crate::game::profile::MiniIndicator::SubtractiveScoring,
+            "Predictive Scoring" => crate::game::profile::MiniIndicator::PredictiveScoring,
+            "Pace Scoring" => crate::game::profile::MiniIndicator::PaceScoring,
+            "Rival Scoring" => crate::game::profile::MiniIndicator::RivalScoring,
+            "Pacemaker" => crate::game::profile::MiniIndicator::Pacemaker,
+            "Stream Progress" => crate::game::profile::MiniIndicator::StreamProg,
+            _ => crate::game::profile::MiniIndicator::None,
+        };
+        let subtractive_scoring =
+            mini_indicator == crate::game::profile::MiniIndicator::SubtractiveScoring;
+        let pacemaker = mini_indicator == crate::game::profile::MiniIndicator::Pacemaker;
+        state.player_profiles[player_idx].mini_indicator = mini_indicator;
         state.player_profiles[player_idx].subtractive_scoring = subtractive_scoring;
         state.player_profiles[player_idx].pacemaker = pacemaker;
 
-        // Keep Gameplay Extras row toggles visually in sync for overlapping options.
-        let mut mask = state.gameplay_extras_active_mask[player_idx];
-        if subtractive_scoring {
-            mask |= 1u8 << 1;
-        } else {
-            mask &= !(1u8 << 1);
-        }
-        if pacemaker {
-            mask |= 1u8 << 2;
-        } else {
-            mask &= !(1u8 << 2);
-        }
-        state.gameplay_extras_active_mask[player_idx] = mask;
-
         if should_persist {
             let profile_ref = &state.player_profiles[player_idx];
+            crate::game::profile::update_mini_indicator_for_side(persist_side, mini_indicator);
             crate::game::profile::update_gameplay_extras_for_side(
                 persist_side,
                 profile_ref.column_flash_on_miss,
@@ -3083,7 +3063,7 @@ fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 4 {
+    let bit = if choice_index < 2 {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -3099,13 +3079,11 @@ fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
     }
 
     let column_flash_on_miss = (state.gameplay_extras_active_mask[idx] & (1u8 << 0)) != 0;
-    let subtractive_scoring = (state.gameplay_extras_active_mask[idx] & (1u8 << 1)) != 0;
-    let pacemaker = (state.gameplay_extras_active_mask[idx] & (1u8 << 2)) != 0;
-    let nps_graph_at_top = (state.gameplay_extras_active_mask[idx] & (1u8 << 3)) != 0;
+    let nps_graph_at_top = (state.gameplay_extras_active_mask[idx] & (1u8 << 1)) != 0;
+    let subtractive_scoring = state.player_profiles[idx].subtractive_scoring;
+    let pacemaker = state.player_profiles[idx].pacemaker;
 
     state.player_profiles[idx].column_flash_on_miss = column_flash_on_miss;
-    state.player_profiles[idx].subtractive_scoring = subtractive_scoring;
-    state.player_profiles[idx].pacemaker = pacemaker;
     state.player_profiles[idx].nps_graph_at_top = nps_graph_at_top;
 
     let play_style = crate::game::profile::get_session_play_style();

@@ -89,7 +89,7 @@ struct Choice {
     avatar_key: Option<String>,
     total_songs: String,
     scroll_option: profile::ScrollOption,
-    subtractive_scoring: bool,
+    mini_indicator: profile::MiniIndicator,
     noteskin: profile::NoteSkin,
     judgment: profile::JudgmentGraphic,
 }
@@ -232,7 +232,7 @@ fn parse_ini_bool(raw: &str) -> Option<bool> {
 fn format_recent_mods(
     speed_mod: &str,
     scroll: profile::ScrollOption,
-    subtractive_scoring: bool,
+    mini_indicator: profile::MiniIndicator,
 ) -> String {
     let mut out = String::new();
     let mut first = true;
@@ -265,8 +265,17 @@ fn format_recent_mods(
         push("Centered");
     }
     push("Overhead");
-    if subtractive_scoring {
-        push("Subtractive Scoring");
+    let mini_indicator_label = match mini_indicator {
+        profile::MiniIndicator::None => None,
+        profile::MiniIndicator::SubtractiveScoring => Some("Subtractive Scoring"),
+        profile::MiniIndicator::PredictiveScoring => Some("Predictive Scoring"),
+        profile::MiniIndicator::PaceScoring => Some("Pace Scoring"),
+        profile::MiniIndicator::RivalScoring => Some("Rival Scoring"),
+        profile::MiniIndicator::Pacemaker => Some("Pacemaker"),
+        profile::MiniIndicator::StreamProg => Some("Stream Progress"),
+    };
+    if let Some(label) = mini_indicator_label {
+        push(label);
     }
     out
 }
@@ -285,7 +294,7 @@ fn build_choices() -> Vec<Choice> {
         avatar_key: None,
         total_songs: String::new(),
         scroll_option: default_scroll_option,
-        subtractive_scoring: false,
+        mini_indicator: profile::MiniIndicator::None,
         noteskin: profile::NoteSkin::default(),
         judgment: profile::JudgmentGraphic::default(),
     });
@@ -293,7 +302,7 @@ fn build_choices() -> Vec<Choice> {
         let total_songs = format_total_songs_played(scores::total_songs_played_for_profile(&p.id));
         let mut speed_mod = default_speed_mod.clone();
         let mut scroll_option = default_scroll_option;
-        let mut subtractive_scoring = false;
+        let mut mini_indicator = profile::MiniIndicator::None;
         let mut noteskin = profile::NoteSkin::default();
         let mut judgment = profile::JudgmentGraphic::default();
         let ini_path = std::path::Path::new("save/profiles")
@@ -324,10 +333,26 @@ fn build_choices() -> Vec<Choice> {
                         default_scroll_option
                     }
                 });
-            subtractive_scoring = ini
-                .get("PlayerOptions", "SubtractiveScoring")
-                .and_then(|v| parse_ini_bool(&v))
-                .unwrap_or(false);
+            mini_indicator = ini
+                .get("PlayerOptions", "MiniIndicator")
+                .and_then(|v| profile::MiniIndicator::from_str(&v).ok())
+                .unwrap_or_else(|| {
+                    let subtractive = ini
+                        .get("PlayerOptions", "SubtractiveScoring")
+                        .and_then(|v| parse_ini_bool(&v))
+                        .unwrap_or(false);
+                    let pacemaker = ini
+                        .get("PlayerOptions", "Pacemaker")
+                        .and_then(|v| parse_ini_bool(&v))
+                        .unwrap_or(false);
+                    if subtractive {
+                        profile::MiniIndicator::SubtractiveScoring
+                    } else if pacemaker {
+                        profile::MiniIndicator::Pacemaker
+                    } else {
+                        profile::MiniIndicator::None
+                    }
+                });
         }
         if let Ok(value) = ini
             .get("PlayerOptions", "NoteSkin")
@@ -353,7 +378,7 @@ fn build_choices() -> Vec<Choice> {
                 .map(|path| path.to_string_lossy().into_owned()),
             total_songs,
             scroll_option,
-            subtractive_scoring,
+            mini_indicator,
             noteskin,
             judgment,
         });
@@ -1222,7 +1247,7 @@ fn push_scroller_frame(
     // NoteSkin + JudgmentGraphic previews (SL-style placement).
     if selected_is_local {
         let selected_mods = selected
-            .map(|c| format_recent_mods(&c.speed_mod, c.scroll_option, c.subtractive_scoring))
+            .map(|c| format_recent_mods(&c.speed_mod, c.scroll_option, c.mini_indicator))
             .unwrap_or_default();
         let preview_y = frame_cy + PREVIEW_Y_OFF;
 
