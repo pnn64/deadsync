@@ -89,6 +89,7 @@ struct Choice {
     avatar_key: Option<String>,
     total_songs: String,
     scroll_option: profile::ScrollOption,
+    subtractive_scoring: bool,
     noteskin: profile::NoteSkin,
     judgment: profile::JudgmentGraphic,
 }
@@ -216,7 +217,23 @@ fn format_total_songs_played(count: u32) -> String {
 }
 
 #[inline(always)]
-fn format_recent_mods(speed_mod: &str, scroll: profile::ScrollOption) -> String {
+fn parse_ini_bool(raw: &str) -> Option<bool> {
+    let v = raw.trim();
+    if v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes") {
+        return Some(true);
+    }
+    if v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("no") {
+        return Some(false);
+    }
+    None
+}
+
+#[inline(always)]
+fn format_recent_mods(
+    speed_mod: &str,
+    scroll: profile::ScrollOption,
+    subtractive_scoring: bool,
+) -> String {
     let mut out = String::new();
     let mut first = true;
 
@@ -248,6 +265,9 @@ fn format_recent_mods(speed_mod: &str, scroll: profile::ScrollOption) -> String 
         push("Centered");
     }
     push("Overhead");
+    if subtractive_scoring {
+        push("Subtractive Scoring");
+    }
     out
 }
 
@@ -265,6 +285,7 @@ fn build_choices() -> Vec<Choice> {
         avatar_key: None,
         total_songs: String::new(),
         scroll_option: default_scroll_option,
+        subtractive_scoring: false,
         noteskin: profile::NoteSkin::default(),
         judgment: profile::JudgmentGraphic::default(),
     });
@@ -272,6 +293,7 @@ fn build_choices() -> Vec<Choice> {
         let total_songs = format_total_songs_played(scores::total_songs_played_for_profile(&p.id));
         let mut speed_mod = default_speed_mod.clone();
         let mut scroll_option = default_scroll_option;
+        let mut subtractive_scoring = false;
         let mut noteskin = profile::NoteSkin::default();
         let mut judgment = profile::JudgmentGraphic::default();
         let ini_path = std::path::Path::new("save/profiles")
@@ -302,6 +324,10 @@ fn build_choices() -> Vec<Choice> {
                         default_scroll_option
                     }
                 });
+            subtractive_scoring = ini
+                .get("PlayerOptions", "SubtractiveScoring")
+                .and_then(|v| parse_ini_bool(&v))
+                .unwrap_or(false);
         }
         if let Ok(value) = ini
             .get("PlayerOptions", "NoteSkin")
@@ -327,6 +353,7 @@ fn build_choices() -> Vec<Choice> {
                 .map(|path| path.to_string_lossy().into_owned()),
             total_songs,
             scroll_option,
+            subtractive_scoring,
             noteskin,
             judgment,
         });
@@ -1195,7 +1222,7 @@ fn push_scroller_frame(
     // NoteSkin + JudgmentGraphic previews (SL-style placement).
     if selected_is_local {
         let selected_mods = selected
-            .map(|c| format_recent_mods(&c.speed_mod, c.scroll_option))
+            .map(|c| format_recent_mods(&c.speed_mod, c.scroll_option, c.subtractive_scoring))
             .unwrap_or_default();
         let preview_y = frame_cy + PREVIEW_Y_OFF;
 

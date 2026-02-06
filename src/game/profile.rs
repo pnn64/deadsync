@@ -765,6 +765,11 @@ pub struct Profile {
     pub hide_score: bool,
     pub hide_danger: bool,
     pub hide_combo_explosions: bool,
+    // Gameplay extras (Simply Love semantics).
+    pub column_flash_on_miss: bool,
+    pub subtractive_scoring: bool,
+    pub pacemaker: bool,
+    pub nps_graph_at_top: bool,
     // Mini modifier as a percentage, mirroring Simply Love semantics.
     // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
     pub mini_percent: i32,
@@ -840,6 +845,10 @@ impl Default for Profile {
             hide_score: false,
             hide_danger: false,
             hide_combo_explosions: false,
+            column_flash_on_miss: false,
+            subtractive_scoring: false,
+            pacemaker: false,
+            nps_graph_at_top: false,
             mini_percent: 0,
             perspective: Perspective::default(),
             note_field_offset_x: 0,
@@ -1024,6 +1033,22 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         content.push_str(&format!(
             "HideComboExplosions = {}\n",
             i32::from(default_profile.hide_combo_explosions)
+        ));
+        content.push_str(&format!(
+            "ColumnFlashOnMiss = {}\n",
+            i32::from(default_profile.column_flash_on_miss)
+        ));
+        content.push_str(&format!(
+            "SubtractiveScoring = {}\n",
+            i32::from(default_profile.subtractive_scoring)
+        ));
+        content.push_str(&format!(
+            "Pacemaker = {}\n",
+            i32::from(default_profile.pacemaker)
+        ));
+        content.push_str(&format!(
+            "NPSGraphAtTop = {}\n",
+            i32::from(default_profile.nps_graph_at_top)
         ));
         content.push_str(&format!(
             "ReverseScroll = {}\n",
@@ -1218,6 +1243,19 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!(
         "HideComboExplosions={}\n",
         i32::from(profile.hide_combo_explosions)
+    ));
+    content.push_str(&format!(
+        "ColumnFlashOnMiss={}\n",
+        i32::from(profile.column_flash_on_miss)
+    ));
+    content.push_str(&format!(
+        "SubtractiveScoring={}\n",
+        i32::from(profile.subtractive_scoring)
+    ));
+    content.push_str(&format!("Pacemaker={}\n", i32::from(profile.pacemaker)));
+    content.push_str(&format!(
+        "NPSGraphAtTop={}\n",
+        i32::from(profile.nps_graph_at_top)
     ));
     content.push_str(&format!(
         "ReverseScroll={}\n",
@@ -1589,6 +1627,22 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "HideComboExplosions")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.hide_combo_explosions, |v| v != 0);
+            profile.column_flash_on_miss = profile_conf
+                .get("PlayerOptions", "ColumnFlashOnMiss")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.column_flash_on_miss, |v| v != 0);
+            profile.subtractive_scoring = profile_conf
+                .get("PlayerOptions", "SubtractiveScoring")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.subtractive_scoring, |v| v != 0);
+            profile.pacemaker = profile_conf
+                .get("PlayerOptions", "Pacemaker")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.pacemaker, |v| v != 0);
+            profile.nps_graph_at_top = profile_conf
+                .get("PlayerOptions", "NPSGraphAtTop")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.nps_graph_at_top, |v| v != 0);
             profile.scroll_option = profile_conf
                 .get("PlayerOptions", "Scroll")
                 .and_then(|s| ScrollOption::from_str(&s).ok())
@@ -2244,6 +2298,34 @@ pub fn update_hide_options_for_side(
         profile.hide_score = hide_score;
         profile.hide_danger = hide_danger;
         profile.hide_combo_explosions = hide_combo_explosions;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_gameplay_extras_for_side(
+    side: PlayerSide,
+    column_flash_on_miss: bool,
+    subtractive_scoring: bool,
+    pacemaker: bool,
+    nps_graph_at_top: bool,
+) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.column_flash_on_miss == column_flash_on_miss
+            && profile.subtractive_scoring == subtractive_scoring
+            && profile.pacemaker == pacemaker
+            && profile.nps_graph_at_top == nps_graph_at_top
+        {
+            return;
+        }
+        profile.column_flash_on_miss = column_flash_on_miss;
+        profile.subtractive_scoring = subtractive_scoring;
+        profile.pacemaker = pacemaker;
+        profile.nps_graph_at_top = nps_graph_at_top;
     }
     save_profile_ini_for_side(side);
 }

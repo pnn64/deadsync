@@ -275,6 +275,10 @@ pub struct State {
     // For Early Decent/Way Off Options row: bitmask of which options are enabled.
     // bit0 = Hide Judgments, bit1 = Hide NoteField Flash.
     pub early_dw_active_mask: [u8; PLAYER_SLOTS],
+    // For Gameplay Extras row: bitmask of which options are enabled.
+    // bit0 = Flash Column for Miss, bit1 = Subtractive Scoring,
+    // bit2 = Pacemaker, bit3 = Density Graph at Top.
+    pub gameplay_extras_active_mask: [u8; PLAYER_SLOTS],
     // For Gameplay Extras (More) row: bitmask of which options are enabled.
     // bit0 = Judgment Tilt (Simply Love semantics).
     pub gameplay_extras_more_active_mask: [u8; PLAYER_SLOTS],
@@ -633,6 +637,18 @@ fn build_main_rows(
             choice_difficulty_indices: Some(stepchart_choice_indices),
         },
         Row {
+            name: "Gameplay Extras".to_string(),
+            choices: vec![
+                "Flash Column for Miss".to_string(),
+                "Subtractive Scoring".to_string(),
+                "Pacemaker".to_string(),
+                "Density Graph at Top".to_string(),
+            ],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec!["Extra feedback helpers shown during gameplay.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
             name: "What comes next?".to_string(),
             choices: what_comes_next_choices(OptionsPane::Main),
             selected_choice_index: [0; PLAYER_SLOTS],
@@ -752,6 +768,24 @@ fn build_advanced_rows() -> Vec<Row> {
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Decide what happens if you fall behind your target score.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Mini Indicator".to_string(),
+            choices: vec![
+                "None".to_string(),
+                "Subtractive Scoring".to_string(),
+                "Predictive Scoring".to_string(),
+                "Pace Scoring".to_string(),
+                "Rival Scoring".to_string(),
+                "Pacemaker".to_string(),
+                "Stream Progress".to_string(),
+            ],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![
+                "Display subtractive, predictive, paced, rival, or stream-progress".to_string(),
+                "mini indicator on-screen.".to_string(),
+            ],
             choice_difficulty_indices: None,
         },
         Row {
@@ -1117,11 +1151,12 @@ fn apply_profile_defaults(
     rows: &mut [Row],
     profile: &crate::game::profile::Profile,
     player_idx: usize,
-) -> (u8, u8, u8, u8, u8, u8, u8) {
+) -> (u8, u8, u8, u8, u8, u8, u8, u8) {
     let mut scroll_active_mask: u8 = 0;
     let mut hide_active_mask: u8 = 0;
     let mut fa_plus_active_mask: u8 = 0;
     let mut early_dw_active_mask: u8 = 0;
+    let mut gameplay_extras_active_mask: u8 = 0;
     let mut gameplay_extras_more_active_mask: u8 = 0;
     let mut error_bar_options_active_mask: u8 = 0;
     let mut measure_counter_options_active_mask: u8 = 0;
@@ -1367,6 +1402,16 @@ fn apply_profile_defaults(
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Rescore Early Hits") {
         row.selected_choice_index[player_idx] = if profile.rescore_early_hits { 0 } else { 1 };
     }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Mini Indicator") {
+        row.selected_choice_index[player_idx] = if profile.subtractive_scoring {
+            1
+        } else if profile.pacemaker {
+            5
+        } else {
+            0
+        }
+        .min(row.choices.len().saturating_sub(1));
+    }
     if let Some(row) = rows
         .iter_mut()
         .find(|r| r.name == "Early Decent/Way Off Options")
@@ -1409,6 +1454,33 @@ fn apply_profile_defaults(
     }
     if profile.fa_plus_10ms_blue_window {
         fa_plus_active_mask |= 1u8 << 4;
+    }
+
+    // Initialize Gameplay Extras row from profile (multi-choice toggle group).
+    if profile.column_flash_on_miss {
+        gameplay_extras_active_mask |= 1u8 << 0;
+    }
+    if profile.subtractive_scoring {
+        gameplay_extras_active_mask |= 1u8 << 1;
+    }
+    if profile.pacemaker {
+        gameplay_extras_active_mask |= 1u8 << 2;
+    }
+    if profile.nps_graph_at_top {
+        gameplay_extras_active_mask |= 1u8 << 3;
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Gameplay Extras") {
+        if gameplay_extras_active_mask != 0 {
+            let first_idx = (0..row.choices.len())
+                .find(|i| {
+                    let bit = 1u8 << (*i as u8);
+                    (gameplay_extras_active_mask & bit) != 0
+                })
+                .unwrap_or(0);
+            row.selected_choice_index[player_idx] = first_idx;
+        } else {
+            row.selected_choice_index[player_idx] = 0;
+        }
     }
 
     // Initialize Gameplay Extras (More) row from profile (multi-choice toggle group).
@@ -1518,6 +1590,7 @@ fn apply_profile_defaults(
         hide_active_mask,
         fa_plus_active_mask,
         early_dw_active_mask,
+        gameplay_extras_active_mask,
         gameplay_extras_more_active_mask,
         error_bar_options_active_mask,
         measure_counter_options_active_mask,
@@ -1589,6 +1662,7 @@ pub fn init(
         hide_active_mask_p1,
         fa_plus_active_mask_p1,
         early_dw_active_mask_p1,
+        gameplay_extras_active_mask_p1,
         gameplay_extras_more_active_mask_p1,
         error_bar_options_active_mask_p1,
         measure_counter_options_active_mask_p1,
@@ -1598,6 +1672,7 @@ pub fn init(
         hide_active_mask_p2,
         fa_plus_active_mask_p2,
         early_dw_active_mask_p2,
+        gameplay_extras_active_mask_p2,
         gameplay_extras_more_active_mask_p2,
         error_bar_options_active_mask_p2,
         measure_counter_options_active_mask_p2,
@@ -1659,6 +1734,7 @@ pub fn init(
         hide_active_mask: [hide_active_mask_p1, hide_active_mask_p2],
         fa_plus_active_mask: [fa_plus_active_mask_p1, fa_plus_active_mask_p2],
         early_dw_active_mask: [early_dw_active_mask_p1, early_dw_active_mask_p2],
+        gameplay_extras_active_mask: [gameplay_extras_active_mask_p1, gameplay_extras_active_mask_p2],
         gameplay_extras_more_active_mask: [
             gameplay_extras_more_active_mask_p1,
             gameplay_extras_more_active_mask_p2,
@@ -2101,6 +2177,41 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         state.player_profiles[player_idx].rescore_early_hits = enabled;
         if should_persist {
             crate::game::profile::update_rescore_early_hits_for_side(persist_side, enabled);
+        }
+    } else if row_name == "Mini Indicator" {
+        let choice = row
+            .choices
+            .get(row.selected_choice_index[player_idx])
+            .map(|s| s.as_str())
+            .unwrap_or("None");
+        let subtractive_scoring = choice == "Subtractive Scoring";
+        let pacemaker = choice == "Pacemaker";
+        state.player_profiles[player_idx].subtractive_scoring = subtractive_scoring;
+        state.player_profiles[player_idx].pacemaker = pacemaker;
+
+        // Keep Gameplay Extras row toggles visually in sync for overlapping options.
+        let mut mask = state.gameplay_extras_active_mask[player_idx];
+        if subtractive_scoring {
+            mask |= 1u8 << 1;
+        } else {
+            mask &= !(1u8 << 1);
+        }
+        if pacemaker {
+            mask |= 1u8 << 2;
+        } else {
+            mask &= !(1u8 << 2);
+        }
+        state.gameplay_extras_active_mask[player_idx] = mask;
+
+        if should_persist {
+            let profile_ref = &state.player_profiles[player_idx];
+            crate::game::profile::update_gameplay_extras_for_side(
+                persist_side,
+                profile_ref.column_flash_on_miss,
+                subtractive_scoring,
+                pacemaker,
+                profile_ref.nps_graph_at_top,
+            );
         }
     } else if row_name == "Background Filter" {
         let setting = match row.selected_choice_index[player_idx] {
@@ -2960,6 +3071,64 @@ fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
+fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.selected_row[idx];
+    if let Some(row) = state.rows.get(row_index) {
+        if row.name != "Gameplay Extras" {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let bit = if choice_index < 4 {
+        1u8 << (choice_index as u8)
+    } else {
+        0
+    };
+    if bit == 0 {
+        return;
+    }
+
+    if (state.gameplay_extras_active_mask[idx] & bit) != 0 {
+        state.gameplay_extras_active_mask[idx] &= !bit;
+    } else {
+        state.gameplay_extras_active_mask[idx] |= bit;
+    }
+
+    let column_flash_on_miss = (state.gameplay_extras_active_mask[idx] & (1u8 << 0)) != 0;
+    let subtractive_scoring = (state.gameplay_extras_active_mask[idx] & (1u8 << 1)) != 0;
+    let pacemaker = (state.gameplay_extras_active_mask[idx] & (1u8 << 2)) != 0;
+    let nps_graph_at_top = (state.gameplay_extras_active_mask[idx] & (1u8 << 3)) != 0;
+
+    state.player_profiles[idx].column_flash_on_miss = column_flash_on_miss;
+    state.player_profiles[idx].subtractive_scoring = subtractive_scoring;
+    state.player_profiles[idx].pacemaker = pacemaker;
+    state.player_profiles[idx].nps_graph_at_top = nps_graph_at_top;
+
+    let play_style = crate::game::profile::get_session_play_style();
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || idx == session_persisted_player_idx();
+    if should_persist {
+        let side = if idx == P1 {
+            crate::game::profile::PlayerSide::P1
+        } else {
+            crate::game::profile::PlayerSide::P2
+        };
+        crate::game::profile::update_gameplay_extras_for_side(
+            side,
+            column_flash_on_miss,
+            subtractive_scoring,
+            pacemaker,
+            nps_graph_at_top,
+        );
+    }
+
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
 fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
@@ -3020,6 +3189,7 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
         hide_active_mask_p1,
         fa_plus_active_mask_p1,
         early_dw_active_mask_p1,
+        gameplay_extras_active_mask_p1,
         gameplay_extras_more_active_mask_p1,
         error_bar_options_active_mask_p1,
         measure_counter_options_active_mask_p1,
@@ -3029,6 +3199,7 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
         hide_active_mask_p2,
         fa_plus_active_mask_p2,
         early_dw_active_mask_p2,
+        gameplay_extras_active_mask_p2,
         gameplay_extras_more_active_mask_p2,
         error_bar_options_active_mask_p2,
         measure_counter_options_active_mask_p2,
@@ -3038,6 +3209,7 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     state.hide_active_mask = [hide_active_mask_p1, hide_active_mask_p2];
     state.fa_plus_active_mask = [fa_plus_active_mask_p1, fa_plus_active_mask_p2];
     state.early_dw_active_mask = [early_dw_active_mask_p1, early_dw_active_mask_p2];
+    state.gameplay_extras_active_mask = [gameplay_extras_active_mask_p1, gameplay_extras_active_mask_p2];
     state.gameplay_extras_more_active_mask = [
         gameplay_extras_more_active_mask_p1,
         gameplay_extras_more_active_mask_p2,
@@ -3119,6 +3291,10 @@ fn handle_start_event(
     }
     if row.name == "Hide" {
         toggle_hide_row(state, player_idx);
+        return None;
+    }
+    if row.name == "Gameplay Extras" {
+        toggle_gameplay_extras_row(state, player_idx);
         return None;
     }
     if row.name == "Gameplay Extras (More)" {
@@ -3669,6 +3845,46 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         continue;
                     }
                     let mask = state.fa_plus_active_mask[player_idx];
+                    if mask == 0 {
+                        continue;
+                    }
+                    let underline_y = underline_y_for(player_idx);
+                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
+                    line_color[3] *= a;
+                    for idx in 0..row.choices.len() {
+                        let bit = 1u8 << (idx as u8);
+                        if (mask & bit) == 0 {
+                            continue;
+                        }
+                        if let Some(sel_x) = x_positions.get(idx).copied() {
+                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                            let underline_w = draw_w.ceil();
+                            actors.push(act!(quad:
+                                align(0.0, 0.5):
+                                xy(sel_x, underline_y):
+                                zoomto(underline_w, line_thickness):
+                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                z(101)
+                            ));
+                        }
+                    }
+                }
+            } else if row.name == "Gameplay Extras" {
+                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                let offset = widescale(3.0, 4.0);
+                let underline_base_y = current_row_y + text_h * 0.5 + offset;
+                let underline_y_for = |player_idx: usize| {
+                    if active[P1] && active[P2] {
+                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
+                    } else {
+                        underline_base_y
+                    }
+                };
+                for player_idx in 0..PLAYER_SLOTS {
+                    if !active[player_idx] {
+                        continue;
+                    }
+                    let mask = state.gameplay_extras_active_mask[player_idx];
                     if mask == 0 {
                         continue;
                     }

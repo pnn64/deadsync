@@ -7,10 +7,10 @@ use crate::game::gameplay::{
     HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION,
     RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
 };
-use crate::game::judgment::{JudgeGrade, TimingWindow};
+use crate::game::judgment::{JudgeGrade, TimingWindow, HOLD_SCORE_HELD};
 use crate::game::note::{HoldResult, NoteType};
 use crate::game::parsing::noteskin::NUM_QUANTIZATIONS;
-use crate::game::{gameplay::State, profile, scroll::ScrollSpeedSetting};
+use crate::game::{gameplay::PlayerRuntime, gameplay::State, profile, scroll::ScrollSpeedSetting};
 use crate::ui::actors::Actor;
 use crate::ui::color;
 use cgmath::{Deg, Matrix4, Point3, Vector3};
@@ -427,6 +427,71 @@ fn zmod_run_timer_fmt(seconds: i32, minute_threshold: i32) -> String {
 }
 
 #[inline(always)]
+fn zmod_small_combo_font(combo_font: profile::ComboFont) -> &'static str {
+    match combo_font {
+        profile::ComboFont::Wendy | profile::ComboFont::WendyCursed => "wendy",
+        profile::ComboFont::ArialRounded => "combo_arial_rounded",
+        profile::ComboFont::Asap => "combo_asap",
+        profile::ComboFont::BebasNeue => "combo_bebas_neue",
+        profile::ComboFont::SourceCode => "combo_source_code",
+        profile::ComboFont::Work => "combo_work",
+        profile::ComboFont::None => "wendy",
+    }
+}
+
+#[inline(always)]
+fn scoring_count(p: &PlayerRuntime, grade: JudgeGrade) -> u32 {
+    p.scoring_counts.get(&grade).copied().unwrap_or(0)
+}
+
+fn zmod_subtractive_text(state: &State, p: &PlayerRuntime, player_idx: usize) -> Option<String> {
+    let w1 = scoring_count(p, JudgeGrade::Fantastic);
+    let w2 = scoring_count(p, JudgeGrade::Excellent);
+    let w3 = scoring_count(p, JudgeGrade::Great);
+    let w4 = scoring_count(p, JudgeGrade::Decent);
+    let w5 = scoring_count(p, JudgeGrade::WayOff);
+    let miss = scoring_count(p, JudgeGrade::Miss);
+
+    let let_go = p
+        .holds_let_go_for_score
+        .saturating_add(p.rolls_let_go_for_score);
+    let mines_hit = p.mines_hit_for_score;
+    let failing = p.is_failing || p.life <= 0.0;
+    if w2 == 0 && w3 == 0 && w4 == 0 && w5 == 0 && miss == 0 && let_go == 0 && mines_hit == 0 && !failing {
+        return None;
+    }
+
+    let entered_percent_mode = w3 > 0 || w4 > 0 || w5 > 0 || miss > 0 || let_go > 0 || mines_hit > 0 || failing || w2 > 10;
+    if !entered_percent_mode && w2 > 0 {
+        return Some(format!("-{w2}"));
+    }
+
+    let tap_rows = w1
+        .saturating_add(w2)
+        .saturating_add(w3)
+        .saturating_add(w4)
+        .saturating_add(w5)
+        .saturating_add(miss);
+    let resolved_holds = p
+        .holds_held_for_score
+        .saturating_add(p.holds_let_go_for_score);
+    let resolved_rolls = p
+        .rolls_held_for_score
+        .saturating_add(p.rolls_let_go_for_score);
+    let current_possible_dp =
+        (tap_rows.saturating_add(resolved_holds).saturating_add(resolved_rolls) as i32)
+            .saturating_mul(HOLD_SCORE_HELD);
+
+    let possible_dp = state.possible_grade_points[player_idx].max(1);
+    let actual_dp = p.earned_grade_points.max(0);
+    let dp_lost = current_possible_dp.saturating_sub(actual_dp);
+    let kept_dp = possible_dp.saturating_sub(dp_lost).max(0);
+    let kept_percent = ((f64::from(kept_dp) / f64::from(possible_dp)) * 10000.0).floor() / 100.0;
+    let lost_percent = (100.0 - kept_percent).max(0.0);
+    Some(format!("-{lost_percent:.2}%"))
+}
+
+#[inline(always)]
 fn rage_frustum(l: f32, r: f32, b: f32, t: f32, zn: f32, zf: f32) -> Matrix4<f32> {
     let a = (r + l) / (r - l);
     let bb = (t + b) / (t - b);
@@ -651,6 +716,7 @@ pub fn build(
         screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
     };
     let zmod_layout = zmod_layout_ys(profile, judgment_y, combo_y_base, reverse_scroll);
+    let mc_font_name = zmod_small_combo_font(profile.combo_font);
 
     if let Some(ns) = &state.noteskin[player_idx] {
         let timing = &state.timing_players[player_idx];
@@ -2113,18 +2179,6 @@ pub fn build(
             let lookahead: u8 = profile.measure_counter_lookahead.min(4);
             let multiplier = profile.measure_counter.multiplier();
 
-            let mc_font_name = match profile.combo_font {
-                crate::game::profile::ComboFont::Wendy | crate::game::profile::ComboFont::WendyCursed => {
-                    "wendy"
-                }
-                crate::game::profile::ComboFont::ArialRounded => "combo_arial_rounded",
-                crate::game::profile::ComboFont::Asap => "combo_asap",
-                crate::game::profile::ComboFont::BebasNeue => "combo_bebas_neue",
-                crate::game::profile::ComboFont::SourceCode => "combo_source_code",
-                crate::game::profile::ComboFont::Work => "combo_work",
-                crate::game::profile::ComboFont::None => "wendy",
-            };
-
             let beat_floor = state.current_beat_visible[player_idx].floor();
             let curr_measure = beat_floor / 4.0;
             let base_index = segs
@@ -2299,6 +2353,27 @@ pub fn build(
                 }
             }
         }
+    }
+
+    // Subtractive Scoring (Simply Love SubtractiveScoring.lua parity).
+    if profile.subtractive_scoring
+        && let Some(text) = zmod_subtractive_text(state, p, player_idx)
+    {
+        let column_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
+        let mut x = playfield_center_x + column_width;
+        let mut h_align = 0.5;
+        if !profile.measure_counter_left {
+            h_align = 0.0;
+            x -= 12.0;
+        }
+
+        hud_actors.push(act!(text:
+            font(mc_font_name): settext(text):
+            align(h_align, 0.5): xy(x, zmod_layout.subtractive_scoring_y):
+            zoom(0.35): shadowlength(1.0):
+            diffuse(1.0, 0.33333334, 0.8, 1.0):
+            z(85)
+        ));
     }
 
     // Judgment Sprite (tap judgments)

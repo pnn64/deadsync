@@ -910,8 +910,10 @@ pub struct PlayerRuntime {
     pub hands_achieved: u32,
     pub holds_held: u32,
     pub holds_held_for_score: u32,
+    pub holds_let_go_for_score: u32,
     pub rolls_held: u32,
     pub rolls_held_for_score: u32,
+    pub rolls_let_go_for_score: u32,
     pub mines_hit: u32,
     pub mines_hit_for_score: u32,
     pub mines_avoided: u32,
@@ -961,8 +963,10 @@ fn init_player_runtime() -> PlayerRuntime {
         hands_achieved: 0,
         holds_held: 0,
         holds_held_for_score: 0,
+        holds_let_go_for_score: 0,
         rolls_held: 0,
         rolls_held_for_score: 0,
+        rolls_let_go_for_score: 0,
         mines_hit: 0,
         mines_hit_for_score: 0,
         mines_avoided: 0,
@@ -2488,6 +2492,7 @@ fn hit_mine_timebased(
 
 fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
     let player = player_for_col(state, column);
+    let mut updated_possible_scoring = false;
     if let Some(hold) = state.notes[note_index].hold.as_mut() {
         if hold.result == Some(HoldResult::LetGo) {
             return;
@@ -2502,6 +2507,21 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
             }
         }
     }
+    if !is_state_dead(state, player) {
+        match state.notes[note_index].note_type {
+            NoteType::Hold => {
+                state.players[player].holds_let_go_for_score =
+                    state.players[player].holds_let_go_for_score.saturating_add(1);
+                updated_possible_scoring = true;
+            }
+            NoteType::Roll => {
+                state.players[player].rolls_let_go_for_score =
+                    state.players[player].rolls_let_go_for_score.saturating_add(1);
+                updated_possible_scoring = true;
+            }
+            _ => {}
+        }
+    }
     if state.players[player].hands_holding_count_for_stats > 0 {
         state.players[player].hands_holding_count_for_stats -= 1;
     }
@@ -2514,7 +2534,7 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
         state.current_music_time,
         LifeChange::LET_GO,
     );
-    if !is_state_dead(state, player) {
+    if updated_possible_scoring && !is_state_dead(state, player) {
         update_itg_grade_totals(&mut state.players[player]);
     }
     state.players[player].combo = 0;
