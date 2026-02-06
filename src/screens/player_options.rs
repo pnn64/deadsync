@@ -3557,7 +3557,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let title_left_pad = widescale(7.0, 13.0);
     let title_x = row_left + title_left_pad;
     // Keep header labels bounded to the title column so they never overlap option values.
-    let title_max_w = (TITLE_BG_WIDTH - title_left_pad - 4.0).max(0.0);
+    let title_max_w = (TITLE_BG_WIDTH - title_left_pad - 5.0).max(0.0);
     let cursor_now = |player_idx: usize| -> Option<(f32, f32, f32, f32)> {
         if player_idx >= PLAYER_SLOTS || !state.cursor_initialized[player_idx] {
             return None;

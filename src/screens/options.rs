@@ -2596,7 +2596,7 @@ pub fn get_actors(
             let label_bg_w = SUB_LABEL_COL_W * s;
             let label_text_x = SUB_LABEL_TEXT_LEFT_PAD.mul_add(s, list_x);
             // Keep submenu header labels bounded to the left label column.
-            let label_text_max_w = (label_bg_w - SUB_LABEL_TEXT_LEFT_PAD * s - 4.0).max(0.0);
+            let label_text_max_w = (label_bg_w - SUB_LABEL_TEXT_LEFT_PAD * s - 5.0).max(0.0);
 
             // Helper to compute the cursor center X for a given submenu row index.
             let calc_row_center_x = |row_idx: usize| -> f32 {
