@@ -34,6 +34,8 @@ use chrono::Local;
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
+// Simply Love metrics.ini [RollingNumbersEvaluation]: ApproachSeconds=1
+const ROLLING_NUMBERS_APPROACH_SECONDS: f32 = 1.0;
 
 // A struct to hold a snapshot of the final score data from the gameplay screen.
 #[derive(Clone)]
@@ -206,6 +208,7 @@ impl EvalPane {
 pub struct State {
     pub active_color_index: i32,
     bg: heart_bg::State,
+    pub screen_elapsed: f32,
     pub session_elapsed: f32, // To display the timer
     pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
@@ -454,6 +457,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // This will be overwritten by app.rs
         bg: heart_bg::State::new(),
+        screen_elapsed: 0.0,
         session_elapsed: 0.0,
         stage_duration_seconds,
         score_info,
@@ -467,9 +471,24 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
-// This screen doesn't have any dynamic state updates yet, but we keep the function for consistency.
-pub const fn update(_state: &mut State, _dt: f32) {
-    //
+pub fn update(state: &mut State, dt: f32) {
+    if dt > 0.0 {
+        state.screen_elapsed += dt;
+    }
+}
+
+#[inline(always)]
+fn rolling_number_value(target: u32, elapsed_s: f32) -> u32 {
+    if target == 0 {
+        return 0;
+    }
+    let approach_s = ROLLING_NUMBERS_APPROACH_SECONDS;
+    if approach_s <= 0.0 || elapsed_s >= approach_s {
+        return target;
+    }
+    let velocity = target as f32 / approach_s;
+    let current = (velocity * elapsed_s).clamp(0.0, target as f32);
+    current.round() as u32
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -651,6 +670,7 @@ fn build_stats_pane(
     pane: EvalPane,
     controller: profile::PlayerSide,
     asset_manager: &AssetManager,
+    elapsed_s: f32,
 ) -> Vec<Actor> {
     let mut actors = Vec::new();
     let cy = screen_center_y();
@@ -721,7 +741,8 @@ fn build_stats_pane(
         if !show_fa_plus_pane {
             for (i, grade) in JUDGMENT_ORDER.iter().enumerate() {
                 let info = JUDGMENT_INFO.get(grade).unwrap();
-                let count = score_info.judgment_counts.get(grade).copied().unwrap_or(0);
+                let target_count = score_info.judgment_counts.get(grade).copied().unwrap_or(0);
+                let count = rolling_number_value(target_count, elapsed_s);
 
                 // Label
                 let label_local_x = (28.0f32).mul_add(1.0, label_shift_x * side_sign) * side_sign;
@@ -791,6 +812,7 @@ fn build_stats_pane(
             ];
 
             for (i, (label, bright_color, dim_color, count)) in rows.iter().enumerate() {
+                let count = rolling_number_value(*count, elapsed_s);
                 // Label: match Simply Love Pane2 labels using 26px spacing.
                 // Original Lua uses 1-based indexing: y = i*26 - 46.
                 // Our rows are 0-based, so use (i+1) here.
@@ -820,7 +842,7 @@ fn build_stats_pane(
                 let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
 
                 for (char_idx, ch) in number_str.chars().enumerate() {
-                    let is_dim = if *count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
+                    let is_dim = if count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
                     let color = if is_dim { *dim_color } else { *bright_color };
                     let index_from_right = digits_to_fmt - 1 - char_idx;
                     let cell_right_x = (index_from_right as f32).mul_add(-digit_width, number_base_x);
@@ -858,6 +880,7 @@ fn build_stats_pane(
 
             let possible_clamped = possible.min(999);
             let achieved_clamped = achieved.min(999);
+            let achieved_rolling = rolling_number_value(achieved_clamped, elapsed_s);
 
             let number_local_y = (i as f32).mul_add(35.0, 53.0);
             let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
@@ -871,11 +894,11 @@ fn build_stats_pane(
             })
             .mul_add(numbers_frame_zoom, numbers_frame_origin_x);
 
-            let achieved_str = format!("{achieved_clamped:03}");
+            let achieved_str = format!("{achieved_rolling:03}");
             let first_nonzero_achieved = achieved_str.find(|c: char| c != '0').unwrap_or(achieved_str.len());
 
             for (char_idx_from_right, ch) in achieved_str.chars().rev().enumerate() {
-                let is_dim = if achieved == 0 {
+                let is_dim = if achieved_rolling == 0 {
                     char_idx_from_right > 0
                 } else {
                     let idx_from_left = 2 - char_idx_from_right;
@@ -1948,7 +1971,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     ));
                 }
                 EvalPane::Standard | EvalPane::FaPlus | EvalPane::HardEx => {
-                    actors.extend(build_stats_pane(si, pane, controller, asset_manager));
+                    actors.extend(build_stats_pane(
+                        si,
+                        pane,
+                        controller,
+                        asset_manager,
+                        state.screen_elapsed,
+                    ));
                 }
             }
         }
