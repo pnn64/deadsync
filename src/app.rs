@@ -374,7 +374,9 @@ impl ScreensState {
                 .as_mut()
                 .map(|gs| gameplay::update(gs, delta_time)),
             CurrentScreen::Init => Some(init::update(&mut self.init_state, delta_time)),
-            CurrentScreen::Options => options::update(&mut self.options_state, delta_time),
+            CurrentScreen::Options => {
+                options::update(&mut self.options_state, delta_time, asset_manager)
+            }
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::update(
                 &mut self.manage_local_profiles_state,
                 delta_time,
