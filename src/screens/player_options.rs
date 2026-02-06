@@ -28,8 +28,13 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 const SL_OPTION_ROW_TWEEN_SECONDS: f32 = 0.1;
 const CURSOR_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 const ROW_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
+// Simply Love [ScreenOptions] uses RowOnCommand/RowOffCommand with linear,0.2.
+const PANE_FADE_SECONDS: f32 = 0.2;
 // Spacing between inline items in OptionRows (pixels at current zoom)
 const INLINE_SPACING: f32 = 15.75;
+const TILT_INTENSITY_MIN: f32 = 0.05;
+const TILT_INTENSITY_MAX: f32 = 3.00;
+const TILT_INTENSITY_STEP: f32 = 0.05;
 
 // Match Simply Love / ScreenOptions defaults.
 const VISIBLE_ROWS: usize = 10;
@@ -219,6 +224,29 @@ pub enum OptionsPane {
     Uncommon,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum PaneTransition {
+    None,
+    FadingOut { target: OptionsPane, t: f32 },
+    FadingIn { t: f32 },
+}
+
+impl PaneTransition {
+    #[inline(always)]
+    fn alpha(self) -> f32 {
+        match self {
+            Self::None => 1.0,
+            Self::FadingOut { t, .. } => (1.0 - t).clamp(0.0, 1.0),
+            Self::FadingIn { t } => t.clamp(0.0, 1.0),
+        }
+    }
+
+    #[inline(always)]
+    fn is_active(self) -> bool {
+        !matches!(self, Self::None)
+    }
+}
+
 pub struct Row {
     pub name: String,
     pub choices: Vec<String>,
@@ -317,6 +345,7 @@ pub struct State {
     cursor_to_h: [f32; PLAYER_SLOTS],
     cursor_t: [f32; PLAYER_SLOTS],
     row_tweens: Vec<RowTween>,
+    pane_transition: PaneTransition,
 }
 
 // Format music rate like Simply Love wants:
@@ -331,6 +360,20 @@ fn fmt_music_rate(rate: f32) -> String {
     } else {
         format!("{int_part}.{frac2:02}")
     }
+}
+
+#[inline(always)]
+fn fmt_tilt_intensity(value: f32) -> String {
+    format!("{value:.2}")
+}
+
+fn tilt_intensity_choices() -> Vec<String> {
+    let count = (TILT_INTENSITY_MAX / TILT_INTENSITY_STEP).round() as usize;
+    let mut out = Vec::with_capacity(count);
+    for i in 1..=count {
+        out.push(fmt_tilt_intensity(i as f32 * TILT_INTENSITY_STEP));
+    }
+    out
 }
 
 // Prefer #DISPLAYBPM for reference BPM (use max of range or single value); fallback to song.max_bpm, then 120.
@@ -798,13 +841,7 @@ fn build_advanced_rows() -> Vec<Row> {
         },
         Row {
             name: "Judgment Tilt Intensity".to_string(),
-            choices: vec![
-                "1".to_string(),
-                "1.5".to_string(),
-                "2".to_string(),
-                "2.5".to_string(),
-                "3".to_string(),
-            ],
+            choices: tilt_intensity_choices(),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["How strongly to tilt judgments left/right.".to_string()],
             choice_difficulty_indices: None,
@@ -1258,10 +1295,20 @@ fn apply_profile_defaults(
         .iter_mut()
         .find(|r| r.name == "Judgment Tilt Intensity")
     {
-        let needle = profile.tilt_multiplier.to_string();
-        if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
-            row.selected_choice_index[player_idx] = idx;
-        }
+        let stepped = round_to_step(
+            profile
+                .tilt_multiplier
+                .clamp(TILT_INTENSITY_MIN, TILT_INTENSITY_MAX),
+            TILT_INTENSITY_STEP,
+        )
+        .clamp(TILT_INTENSITY_MIN, TILT_INTENSITY_MAX);
+        let needle = fmt_tilt_intensity(stepped);
+        row.selected_choice_index[player_idx] = row
+            .choices
+            .iter()
+            .position(|c| c == &needle)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     // Initialize Error Bar rows from profile (Simply Love semantics).
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar") {
@@ -1777,6 +1824,7 @@ pub fn init(
         cursor_to_h: [0.0; PLAYER_SLOTS],
         cursor_t: [1.0; PLAYER_SLOTS],
         row_tweens,
+        pane_transition: PaneTransition::None,
     }
 }
 
@@ -1844,6 +1892,15 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "Background Filter"
         || row_name == "Stepchart"
         || row_name == "What comes next?"
+        || row_name == "Action On Missed Target"
+        || row_name == "Error Bar"
+        || row_name == "Error Bar Trim"
+        || row_name == "Error Bar Options"
+        || row_name == "Measure Counter"
+        || row_name == "Measure Counter Lookahead"
+        || row_name == "Measure Counter Options"
+        || row_name == "Measure Lines"
+        || row_name == "Timing Windows"
         || row_name == "Mini Indicator"
         || row_name == "Turn"
         || row_name == "Scroll"
@@ -1851,7 +1908,6 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "LifeMeter Type"
         || row_name == "Data Visualizations"
         || row_name.starts_with("Gameplay Extras")
-        || row_name == "Judgment Tilt Intensity"
         || row_name == "Rescore Early Hits"
         || row_name == "Early Decent/Way Off Options"
         || row_name == "FA+ Options"
@@ -2046,6 +2102,9 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
     let player_idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
     let row_name = state.rows[row_index].name.clone();
+    if row_name.is_empty() {
+        return;
+    }
     let is_shared = row_is_shared(&row_name);
 
     // Shared row: Music Rate
@@ -2277,6 +2336,8 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(mult) = choice.parse::<f32>()
         {
+            let mult = round_to_step(mult, TILT_INTENSITY_STEP)
+                .clamp(TILT_INTENSITY_MIN, TILT_INTENSITY_MAX);
             state.player_profiles[player_idx].tilt_multiplier = mult;
             if should_persist {
                 crate::game::profile::update_tilt_multiplier_for_side(persist_side, mult);
@@ -2566,6 +2627,36 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
             }
         }
         state.nav_key_last_scrolled_at[player_idx] = Some(now);
+    }
+
+    match state.pane_transition {
+        PaneTransition::None => {}
+        PaneTransition::FadingOut { target, t } => {
+            if PANE_FADE_SECONDS <= 0.0 {
+                apply_pane(state, target);
+                state.pane_transition = PaneTransition::None;
+            } else {
+                let next_t = (t + dt / PANE_FADE_SECONDS).min(1.0);
+                if next_t >= 1.0 {
+                    apply_pane(state, target);
+                    state.pane_transition = PaneTransition::FadingIn { t: 0.0 };
+                } else {
+                    state.pane_transition = PaneTransition::FadingOut { target, t: next_t };
+                }
+            }
+        }
+        PaneTransition::FadingIn { t } => {
+            if PANE_FADE_SECONDS <= 0.0 {
+                state.pane_transition = PaneTransition::None;
+            } else {
+                let next_t = (t + dt / PANE_FADE_SECONDS).min(1.0);
+                if next_t >= 1.0 {
+                    state.pane_transition = PaneTransition::None;
+                } else {
+                    state.pane_transition = PaneTransition::FadingIn { t: next_t };
+                }
+            }
+        }
     }
 
     // Advance help reveal timers.
@@ -3189,10 +3280,7 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
-fn switch_to_pane(state: &mut State, pane: OptionsPane) {
-    if state.current_pane == pane {
-        return;
-    }
+fn apply_pane(state: &mut State, pane: OptionsPane) {
     let speed_mod = &state.speed_mod[session_persisted_player_idx()];
     let mut rows = build_rows(
         &state.song,
@@ -3259,6 +3347,25 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     state.help_anim_time = [0.0; PLAYER_SLOTS];
     let active = session_active_players();
     state.row_tweens = init_row_tweens(state.rows.len(), state.selected_row, active);
+}
+
+fn switch_to_pane(state: &mut State, pane: OptionsPane) {
+    if state.current_pane == pane {
+        return;
+    }
+    audio::play_sfx("assets/sounds/start.ogg");
+
+    state.nav_key_held_direction = [None; PLAYER_SLOTS];
+    state.nav_key_held_since = [None; PLAYER_SLOTS];
+    state.nav_key_last_scrolled_at = [None; PLAYER_SLOTS];
+
+    state.pane_transition = match state.pane_transition {
+        PaneTransition::FadingOut { t, .. } => PaneTransition::FadingOut { target: pane, t },
+        _ => PaneTransition::FadingOut {
+            target: pane,
+            t: 0.0,
+        },
+    };
 }
 
 fn handle_nav_event(
@@ -3361,6 +3468,17 @@ fn handle_start_event(
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     let active = session_active_players();
+    if state.pane_transition.is_active() {
+        return match ev.action {
+            VirtualAction::p1_back if ev.pressed && active[P1] => {
+                ScreenAction::Navigate(Screen::SelectMusic)
+            }
+            VirtualAction::p2_back if ev.pressed && active[P2] => {
+                ScreenAction::Navigate(Screen::SelectMusic)
+            }
+            _ => ScreenAction::None,
+        };
+    }
     match ev.action {
         VirtualAction::p1_back if ev.pressed && active[P1] => {
             return ScreenAction::Navigate(Screen::SelectMusic);
@@ -3412,6 +3530,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let play_style = crate::game::profile::get_session_play_style();
     let show_p2 = play_style == crate::game::profile::PlayStyle::Versus;
     let active = session_active_players();
+    let pane_alpha = state.pane_transition.alpha();
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
@@ -3516,29 +3635,32 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     };
 
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
-        let speed_mod = &state.speed_mod[player_idx];
-        let speed_color = color::simply_love_rgba(player_color_index(player_idx));
-        let speed_text = match speed_mod.mod_type.as_str() {
-            "X" => {
-                // For X-mod, show the effective BPM accounting for music rate
-                // (e.g., "X390" for 3.25x on 120 BPM at 1.0x rate)
-                let effective_bpm = (speed_mod.value * effective_song_bpm as f32).round() as i32;
-                format!("X{effective_bpm}")
+    if state.current_pane == OptionsPane::Main {
+        for player_idx in 0..PLAYER_SLOTS {
+            if !active[player_idx] {
+                continue;
             }
-            "C" => format!("C{}", speed_mod.value as i32),
-            "M" => format!("M{}", speed_mod.value as i32),
-            _ => format!("{:.2}x", speed_mod.value),
-        };
+            let speed_mod = &state.speed_mod[player_idx];
+            let speed_color = color::simply_love_rgba(player_color_index(player_idx));
+            let speed_text = match speed_mod.mod_type.as_str() {
+                "X" => {
+                    // For X-mod, show the effective BPM accounting for music rate
+                    // (e.g., "X390" for 3.25x on 120 BPM at 1.0x rate)
+                    let effective_bpm =
+                        (speed_mod.value * effective_song_bpm as f32).round() as i32;
+                    format!("X{effective_bpm}")
+                }
+                "C" => format!("C{}", speed_mod.value as i32),
+                "M" => format!("M{}", speed_mod.value as i32),
+                _ => format!("{:.2}x", speed_mod.value),
+            };
 
-        actors.push(act!(text: font("wendy"): settext(speed_text):
-            align(0.5, 0.5): xy(speed_x_for(player_idx), speed_mod_y): zoom(0.5):
-            diffuse(speed_color[0], speed_color[1], speed_color[2], 1.0):
-            z(121)
-        ));
+            actors.push(act!(text: font("wendy"): settext(speed_text):
+                align(0.5, 0.5): xy(speed_x_for(player_idx), speed_mod_y): zoom(0.5):
+                diffuse(speed_color[0], speed_color[1], speed_color[2], pane_alpha):
+                z(121)
+            ));
+        }
     }
     /* ---------- SHARED GEOMETRY (rows aligned to help box) ---------- */
     // Help Text Box (from underlay.lua) — define this first so rows can match its width/left.
@@ -3587,7 +3709,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     1.0,
                 )
             });
-        let row_alpha = row_alpha.clamp(0.0, 1.0);
+        let row_alpha = (row_alpha * pane_alpha).clamp(0.0, 1.0);
         if row_alpha <= row_alpha_cutoff {
             continue;
         }
@@ -4535,7 +4657,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     actors.push(act!(quad:
         align(0.0, 1.0): xy(help_box_x, help_box_bottom_y):
         zoomto(help_box_w, help_box_h):
-        diffuse(0.0, 0.0, 0.0, 0.8)
+        diffuse(0.0, 0.0, 0.0, 0.8 * pane_alpha)
     ));
     const REVEAL_DURATION: f32 = 0.5;
     let split_help = active[P1] && active[P2];
@@ -4590,7 +4712,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     align(0.0, 0.5):
                     xy(help_x, line_y):
                     zoom(0.825):
-                    diffuse(help_text_color[0], help_text_color[1], help_text_color[2], 1.0):
+                    diffuse(help_text_color[0], help_text_color[1], help_text_color[2], pane_alpha):
                     maxwidth(wrap_width): horizalign(left):
                     z(101)
                 ));
@@ -4607,7 +4729,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 align(0.0, 0.5):
                 xy(help_x, help_box_bottom_y - (help_box_h * 0.5)):
                 zoom(0.825):
-                diffuse(help_text_color[0], help_text_color[1], help_text_color[2], 1.0):
+                diffuse(help_text_color[0], help_text_color[1], help_text_color[2], pane_alpha):
                 maxwidth(wrap_width): horizalign(left):
                 z(101)
             ));
