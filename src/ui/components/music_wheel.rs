@@ -73,6 +73,7 @@ pub struct MusicWheelParams<'a> {
     pub position_offset_from_selection: f32,
     pub selection_animation_timer: f32,
     pub pack_song_counts: &'a HashMap<String, usize>,
+    pub color_pack_headers: bool,
     pub preferred_difficulty_index: usize,
     pub selected_steps_index: usize,
 }
@@ -165,7 +166,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         original_index,
                         ..
                     }) => {
-                        let c = color::simply_love_rgba(*original_index as i32);
+                        let c = if p.color_pack_headers {
+                            color::simply_love_rgba(*original_index as i32)
+                        } else {
+                            [1.0, 1.0, 1.0, 1.0]
+                        };
                         (
                             true,
                             col_pack_header_box(),
@@ -306,8 +311,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         )
                     };
 
-                    if let Some(chart) = chart
-                    {
+                    if let Some(chart) = chart {
                         let sides = [
                             (profile::PlayerSide::P1, grade_x_p1),
                             (profile::PlayerSide::P2, grade_x_p2),

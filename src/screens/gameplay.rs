@@ -124,33 +124,35 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         const ABORT_FADE_OUT_S: f32 = 0.5;
 
         let y = screen_height() - 116.0;
-        let msg = if let (Some(key), Some(start)) = (state.hold_to_exit_key, state.hold_to_exit_start)
-        {
-            let s = match key {
-                crate::game::gameplay::HoldToExitKey::Start => {
-                    Some("Continue holding &START; to give up")
+        let msg =
+            if let (Some(key), Some(start)) = (state.hold_to_exit_key, state.hold_to_exit_start) {
+                let s = match key {
+                    crate::game::gameplay::HoldToExitKey::Start => {
+                        Some("Continue holding &START; to give up")
+                    }
+                    crate::game::gameplay::HoldToExitKey::Back => {
+                        Some("Continue holding &BACK; to give up")
+                    }
+                };
+                let alpha = (start.elapsed().as_secs_f32() / HOLD_FADE_IN_S).clamp(0.0, 1.0);
+                s.map(|text| (text, alpha))
+            } else if let Some(exit) = &state.exit_transition {
+                let t = exit.started_at.elapsed().as_secs_f32();
+                match exit.kind {
+                    crate::game::gameplay::ExitTransitionKind::Out => {
+                        let alpha = (1.0 - t / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
+                        Some(("Continue holding &START; to give up", alpha))
+                    }
+                    crate::game::gameplay::ExitTransitionKind::Cancel => {
+                        Some(("Continue holding &BACK; to give up", 1.0))
+                    }
                 }
-                crate::game::gameplay::HoldToExitKey::Back => Some("Continue holding &BACK; to give up"),
+            } else if let Some(at) = state.hold_to_exit_aborted_at {
+                let alpha = (1.0 - at.elapsed().as_secs_f32() / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
+                Some(("Don't go back!", alpha))
+            } else {
+                None
             };
-            let alpha = (start.elapsed().as_secs_f32() / HOLD_FADE_IN_S).clamp(0.0, 1.0);
-            s.map(|text| (text, alpha))
-        } else if let Some(exit) = &state.exit_transition {
-            let t = exit.started_at.elapsed().as_secs_f32();
-            match exit.kind {
-                crate::game::gameplay::ExitTransitionKind::Out => {
-                    let alpha = (1.0 - t / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
-                    Some(("Continue holding &START; to give up", alpha))
-                }
-                crate::game::gameplay::ExitTransitionKind::Cancel => {
-                    Some(("Continue holding &BACK; to give up", 1.0))
-                }
-            }
-        } else if let Some(at) = state.hold_to_exit_aborted_at {
-            let alpha = (1.0 - at.elapsed().as_secs_f32() / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
-            Some(("Don't go back!", alpha))
-        } else {
-            None
-        };
 
         if let Some((text, alpha)) = msg
             && alpha > 0.0
@@ -549,10 +551,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
 
         let players: &[(usize, profile::PlayerSide)] = match play_style {
-            profile::PlayStyle::Versus => &[
-                (0, profile::PlayerSide::P1),
-                (1, profile::PlayerSide::P2),
-            ],
+            profile::PlayStyle::Versus => {
+                &[(0, profile::PlayerSide::P1), (1, profile::PlayerSide::P2)]
+            }
             _ if is_p2_single => &[(0, profile::PlayerSide::P2)],
             _ => &[(0, profile::PlayerSide::P1)],
         };

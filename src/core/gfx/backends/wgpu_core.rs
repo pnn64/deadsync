@@ -301,7 +301,8 @@ fn init(api: Api, window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box
         ],
     });
 
-    let (shader, pipeline_layout, pipelines) = build_pipeline_set(&device, &proj, &bind_layout, format);
+    let (shader, pipeline_layout, pipelines) =
+        build_pipeline_set(&device, &proj, &bind_layout, format);
     let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
         build_mesh_pipeline_set(&device, &proj, format);
 
@@ -713,7 +714,10 @@ pub fn draw(
                     if last_kind != Some(false) {
                         pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
                         pass.set_vertex_buffer(1, state.instance_buffer.slice(..));
-                        pass.set_index_buffer(state.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                        pass.set_index_buffer(
+                            state.index_buffer.slice(..),
+                            wgpu::IndexFormat::Uint16,
+                        );
                         last_kind = Some(false);
                         last_blend = None;
                         last_bind = None;
@@ -820,10 +824,7 @@ fn set_camera(
 ) {
     match proj {
         ProjState::Immediates => {
-            let vp = cameras
-                .get(camera as usize)
-                .copied()
-                .unwrap_or(fallback);
+            let vp = cameras.get(camera as usize).copied().unwrap_or(fallback);
             let vp_array: [[f32; 4]; 4] = vp.into();
             pass.set_immediates(0, cast_slice(&vp_array));
         }
@@ -939,8 +940,12 @@ fn reconfigure_surface(state: &mut State) {
     }
 
     if format_changed {
-        let (shader, pipeline_layout, pipelines) =
-            build_pipeline_set(&state.device, &state.proj, &state.bind_layout, state.config.format);
+        let (shader, pipeline_layout, pipelines) = build_pipeline_set(
+            &state.device,
+            &state.proj,
+            &state.bind_layout,
+            state.config.format,
+        );
         let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
             build_mesh_pipeline_set(&state.device, &state.proj, state.config.format);
         state.shader = shader;

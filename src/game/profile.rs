@@ -1227,7 +1227,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             default_profile.data_visualizations
         ));
         content.push_str(&format!("TargetScore = {}\n", default_profile.target_score));
-        content.push_str(&format!("LifeMeterType = {}\n", default_profile.lifemeter_type));
+        content.push_str(&format!(
+            "LifeMeterType = {}\n",
+            default_profile.lifemeter_type
+        ));
         content.push_str(&format!(
             "MeasureCounter = {}\n",
             default_profile.measure_counter
@@ -1256,7 +1259,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             "RunTimer = {}\n",
             i32::from(default_profile.run_timer)
         ));
-        content.push_str(&format!("MeasureLines = {}\n", default_profile.measure_lines));
+        content.push_str(&format!(
+            "MeasureLines = {}\n",
+            default_profile.measure_lines
+        ));
         content.push_str(&format!(
             "HoldJudgmentGraphic = {}\n",
             default_profile.hold_judgment_graphic
@@ -1493,7 +1499,10 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push('\n');
 
     content.push_str("[Stats]\n");
-    content.push_str(&format!("CaloriesBurnedDate={}\n", profile.calories_burned_day));
+    content.push_str(&format!(
+        "CaloriesBurnedDate={}\n",
+        profile.calories_burned_day
+    ));
     content.push_str(&format!(
         "CaloriesBurnedToday={}\n",
         profile.calories_burned_today

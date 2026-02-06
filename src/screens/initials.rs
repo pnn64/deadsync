@@ -47,46 +47,9 @@ const MASK_OUTER_X: f32 = 272.0;
 const MASK_CENTER_HALF_W: f32 = 55.0; // CenterMask is 110px wide
 
 const POSSIBLE_CHARS: [&str; 40] = [
-    "&BACK;",
-    "&OK;",
-    "A",
-    "B",
-    "C",
-    "D",
-    "E",
-    "F",
-    "G",
-    "H",
-    "I",
-    "J",
-    "K",
-    "L",
-    "M",
-    "N",
-    "O",
-    "P",
-    "Q",
-    "R",
-    "S",
-    "T",
-    "U",
-    "V",
-    "W",
-    "X",
-    "Y",
-    "Z",
-    "0",
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "?",
-    "!",
+    "&BACK;", "&OK;", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",
+    "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5", "6", "7",
+    "8", "9", "?", "!",
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -401,11 +364,7 @@ pub fn init() -> State {
 }
 
 fn all_done(state: &State) -> bool {
-    state
-        .players
-        .iter()
-        .filter(|p| p.can_enter)
-        .all(|p| p.done)
+    state.players.iter().filter(|p| p.can_enter).all(|p| p.done)
 }
 
 fn start_finish(state: &mut State) {
@@ -643,10 +602,7 @@ fn fallback_banner_key(active_color_index: i32) -> String {
     format!("banner{banner_num}.png")
 }
 
-fn build_banner_and_title(
-    state: &State,
-    stages: &[stage_stats::StageSummary],
-) -> Vec<Actor> {
+fn build_banner_and_title(state: &State, stages: &[stage_stats::StageSummary]) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(4);
     let cx = screen_center_x();
 
@@ -690,7 +646,9 @@ fn build_banner_and_title(
         z(11)
     ));
 
-    let title = stage.song.display_title(crate::config::get().translated_titles);
+    let title = stage
+        .song
+        .display_title(crate::config::get().translated_titles);
     actors.push(act!(text:
         font("miso"):
         settext(title):
@@ -707,7 +665,12 @@ fn build_banner_and_title(
     actors
 }
 
-fn build_wheel(_side: profile::PlayerSide, player_frame_x: f32, p: &PlayerEntry, alpha: f32) -> Actor {
+fn build_wheel(
+    _side: profile::PlayerSide,
+    player_frame_x: f32,
+    p: &PlayerEntry,
+    alpha: f32,
+) -> Actor {
     let mut children = Vec::with_capacity(WHEEL_NUM_ITEMS);
 
     // Approximate SL's 3-mask "window" by centering a single clip rect on the cursor.

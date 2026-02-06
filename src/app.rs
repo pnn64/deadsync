@@ -7,9 +7,10 @@ use crate::core::space::{self as space, Metrics};
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::{
-    Screen as CurrentScreen, ScreenAction, evaluation, evaluation_summary, gameover, gameplay, init,
-    initials, input as input_screen, manage_local_profiles, mappings, menu, options, player_options,
-    profile_load, sandbox, select_color, select_mode, select_music, select_profile, select_style,
+    Screen as CurrentScreen, ScreenAction, evaluation, evaluation_summary, gameover, gameplay,
+    init, initials, input as input_screen, manage_local_profiles, mappings, menu, options,
+    player_options, profile_load, sandbox, select_color, select_mode, select_music, select_profile,
+    select_style,
 };
 use crate::ui::color;
 use winit::{
@@ -377,10 +378,9 @@ impl ScreensState {
             CurrentScreen::Options => {
                 options::update(&mut self.options_state, delta_time, asset_manager)
             }
-            CurrentScreen::ManageLocalProfiles => manage_local_profiles::update(
-                &mut self.manage_local_profiles_state,
-                delta_time,
-            ),
+            CurrentScreen::ManageLocalProfiles => {
+                manage_local_profiles::update(&mut self.manage_local_profiles_state, delta_time)
+            }
             CurrentScreen::Mappings => {
                 mappings::update(&mut self.mappings_state, delta_time);
                 None
@@ -986,10 +986,12 @@ impl App {
             CurrentScreen::Options => {
                 crate::screens::options::handle_input(&mut self.state.screens.options_state, &ev)
             }
-            CurrentScreen::ManageLocalProfiles => crate::screens::manage_local_profiles::handle_input(
-                &mut self.state.screens.manage_local_profiles_state,
-                &ev,
-            ),
+            CurrentScreen::ManageLocalProfiles => {
+                crate::screens::manage_local_profiles::handle_input(
+                    &mut self.state.screens.manage_local_profiles_state,
+                    &ev,
+                )
+            }
             CurrentScreen::Mappings => {
                 crate::screens::mappings::handle_input(&mut self.state.screens.mappings_state, &ev)
             }
@@ -1016,14 +1018,12 @@ impl App {
                 self.state.session.played_stages.len(),
                 &ev,
             ),
-            CurrentScreen::Initials => crate::screens::initials::handle_input(
-                &mut self.state.screens.initials_state,
-                &ev,
-            ),
-            CurrentScreen::GameOver => crate::screens::gameover::handle_input(
-                &mut self.state.screens.gameover_state,
-                &ev,
-            ),
+            CurrentScreen::Initials => {
+                crate::screens::initials::handle_input(&mut self.state.screens.initials_state, &ev)
+            }
+            CurrentScreen::GameOver => {
+                crate::screens::gameover::handle_input(&mut self.state.screens.gameover_state, &ev)
+            }
             CurrentScreen::Sandbox => {
                 crate::screens::sandbox::handle_input(&mut self.state.screens.sandbox_state, &ev)
             }
@@ -1192,7 +1192,9 @@ impl App {
             });
         }
         if spawned == 0 {
-            warn!("Skipping GrooveStats grade fetch: no joined local profile with GrooveStats configured");
+            warn!(
+                "Skipping GrooveStats grade fetch: no joined local profile with GrooveStats configured"
+            );
         }
     }
 
@@ -2071,9 +2073,15 @@ impl App {
             self.state.screens.profile_load_state.active_color_index = idx;
             self.state.screens.select_music_state.active_color_index = idx;
             self.state.screens.options_state.active_color_index = idx;
-            self.state.screens.manage_local_profiles_state.active_color_index = idx;
+            self.state
+                .screens
+                .manage_local_profiles_state
+                .active_color_index = idx;
             self.state.screens.input_state.active_color_index = idx;
-            self.state.screens.evaluation_summary_state.active_color_index = idx;
+            self.state
+                .screens
+                .evaluation_summary_state
+                .active_color_index = idx;
             self.state.screens.initials_state.active_color_index = idx;
             self.state.screens.gameover_state.active_color_index = idx;
             if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
@@ -2095,7 +2103,10 @@ impl App {
         } else if target == CurrentScreen::ManageLocalProfiles {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.manage_local_profiles_state = manage_local_profiles::init();
-            self.state.screens.manage_local_profiles_state.active_color_index = color_index;
+            self.state
+                .screens
+                .manage_local_profiles_state
+                .active_color_index = color_index;
         } else if target == CurrentScreen::Mappings {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.mappings_state = mappings::init();
@@ -2365,12 +2376,22 @@ impl App {
 
         if target == CurrentScreen::EvaluationSummary {
             let color_idx = match prev {
-                CurrentScreen::SelectMusic => self.state.screens.select_music_state.active_color_index,
+                CurrentScreen::SelectMusic => {
+                    self.state.screens.select_music_state.active_color_index
+                }
                 CurrentScreen::Evaluation => self.state.screens.evaluation_state.active_color_index,
-                _ => self.state.screens.evaluation_summary_state.active_color_index,
+                _ => {
+                    self.state
+                        .screens
+                        .evaluation_summary_state
+                        .active_color_index
+                }
             };
             self.state.screens.evaluation_summary_state = evaluation_summary::init();
-            self.state.screens.evaluation_summary_state.active_color_index = color_idx;
+            self.state
+                .screens
+                .evaluation_summary_state
+                .active_color_index = color_idx;
 
             if let Some(backend) = self.backend.as_mut() {
                 for stage in &self.state.session.played_stages {
@@ -2384,9 +2405,14 @@ impl App {
         if target == CurrentScreen::Initials {
             let color_idx = match prev {
                 CurrentScreen::EvaluationSummary => {
-                    self.state.screens.evaluation_summary_state.active_color_index
+                    self.state
+                        .screens
+                        .evaluation_summary_state
+                        .active_color_index
                 }
-                CurrentScreen::SelectMusic => self.state.screens.select_music_state.active_color_index,
+                CurrentScreen::SelectMusic => {
+                    self.state.screens.select_music_state.active_color_index
+                }
                 CurrentScreen::Evaluation => self.state.screens.evaluation_state.active_color_index,
                 _ => self.state.screens.initials_state.active_color_index,
             };
@@ -2406,9 +2432,14 @@ impl App {
             let color_idx = match prev {
                 CurrentScreen::Initials => self.state.screens.initials_state.active_color_index,
                 CurrentScreen::EvaluationSummary => {
-                    self.state.screens.evaluation_summary_state.active_color_index
+                    self.state
+                        .screens
+                        .evaluation_summary_state
+                        .active_color_index
                 }
-                CurrentScreen::SelectMusic => self.state.screens.select_music_state.active_color_index,
+                CurrentScreen::SelectMusic => {
+                    self.state.screens.select_music_state.active_color_index
+                }
                 CurrentScreen::Evaluation => self.state.screens.evaluation_state.active_color_index,
                 _ => self.state.screens.gameover_state.active_color_index,
             };
@@ -2857,8 +2888,10 @@ impl ApplicationHandler<UserEvent> for App {
                                     self.state.screens.options_state.active_color_index;
                                 self.state.screens.manage_local_profiles_state =
                                     manage_local_profiles::init();
-                                self.state.screens.manage_local_profiles_state.active_color_index =
-                                    color_index;
+                                self.state
+                                    .screens
+                                    .manage_local_profiles_state
+                                    .active_color_index = color_index;
                             } else if target_screen == CurrentScreen::SelectProfile {
                                 let current_color_index =
                                     self.state.screens.select_profile_state.active_color_index;
@@ -2908,8 +2941,10 @@ impl ApplicationHandler<UserEvent> for App {
                                     gs.player_color = color::simply_love_rgba(idx);
                                 }
                                 self.state.screens.options_state.active_color_index = idx;
-                                self.state.screens.manage_local_profiles_state.active_color_index =
-                                    idx;
+                                self.state
+                                    .screens
+                                    .manage_local_profiles_state
+                                    .active_color_index = idx;
                             }
 
                             if target_screen == CurrentScreen::Options {
@@ -2938,11 +2973,12 @@ impl ApplicationHandler<UserEvent> for App {
                         }
                     }
                     TransitionState::Idle => {
-                        if let Some(action) =
-                            self.state
-                                .screens
-                                .step_idle(delta_time, now, &self.state.session, &self.asset_manager)
-                            && !matches!(action, ScreenAction::None)
+                        if let Some(action) = self.state.screens.step_idle(
+                            delta_time,
+                            now,
+                            &self.state.session,
+                            &self.asset_manager,
+                        ) && !matches!(action, ScreenAction::None)
                         {
                             let _ = self.handle_action(action, event_loop);
                         }

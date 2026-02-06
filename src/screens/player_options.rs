@@ -1346,8 +1346,8 @@ fn apply_profile_defaults(
         .iter_mut()
         .find(|r| r.name == "Measure Counter Lookahead")
     {
-        row.selected_choice_index[player_idx] =
-            (profile.measure_counter_lookahead.min(4) as usize).min(row.choices.len().saturating_sub(1));
+        row.selected_choice_index[player_idx] = (profile.measure_counter_lookahead.min(4) as usize)
+            .min(row.choices.len().saturating_sub(1));
     }
     if profile.measure_counter_left {
         measure_counter_options_active_mask |= 1u8 << 0;
@@ -1734,7 +1734,10 @@ pub fn init(
         hide_active_mask: [hide_active_mask_p1, hide_active_mask_p2],
         fa_plus_active_mask: [fa_plus_active_mask_p1, fa_plus_active_mask_p2],
         early_dw_active_mask: [early_dw_active_mask_p1, early_dw_active_mask_p2],
-        gameplay_extras_active_mask: [gameplay_extras_active_mask_p1, gameplay_extras_active_mask_p2],
+        gameplay_extras_active_mask: [
+            gameplay_extras_active_mask_p1,
+            gameplay_extras_active_mask_p2,
+        ],
         gameplay_extras_more_active_mask: [
             gameplay_extras_more_active_mask_p1,
             gameplay_extras_more_active_mask_p2,
@@ -1969,9 +1972,7 @@ fn cursor_dest_for_player(
             return None;
         }
 
-        let sel_idx = row
-            .selected_choice_index[player_idx]
-            .min(widths.len().saturating_sub(1));
+        let sel_idx = row.selected_choice_index[player_idx].min(widths.len().saturating_sub(1));
         let mut left_x = choice_inner_left;
         for w in widths.iter().take(sel_idx) {
             left_x += *w + spacing;
@@ -2018,9 +2019,7 @@ fn cursor_dest_for_player(
         };
         row.choices.get(idx).cloned().unwrap_or_default()
     } else {
-        let idx = row
-            .selected_choice_index[player_idx]
-            .min(row.choices.len().saturating_sub(1));
+        let idx = row.selected_choice_index[player_idx].min(row.choices.len().saturating_sub(1));
         row.choices.get(idx).cloned().unwrap_or_default()
     };
 
@@ -2368,7 +2367,10 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         let lookahead = (row.selected_choice_index[player_idx] as u8).min(4);
         state.player_profiles[player_idx].measure_counter_lookahead = lookahead;
         if should_persist {
-            crate::game::profile::update_measure_counter_lookahead_for_side(persist_side, lookahead);
+            crate::game::profile::update_measure_counter_lookahead_for_side(
+                persist_side,
+                lookahead,
+            );
         }
     } else if row_name == "Measure Lines" {
         let setting = match row.selected_choice_index[player_idx] {
@@ -2674,7 +2676,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
         if !active[player_idx] {
             continue;
         }
-        let Some((to_x, to_y, to_w, to_h)) = cursor_dest_for_player(state, asset_manager, player_idx)
+        let Some((to_x, to_y, to_w, to_h)) =
+            cursor_dest_for_player(state, asset_manager, player_idx)
         else {
             continue;
         };
@@ -2697,18 +2700,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
             let dh = (to_h - state.cursor_to_h[player_idx]).abs();
             if dx > 0.01 || dy > 0.01 || dw > 0.01 || dh > 0.01 {
                 let t = state.cursor_t[player_idx].clamp(0.0, 1.0);
-                let cur_x =
-                    (state.cursor_to_x[player_idx] - state.cursor_from_x[player_idx])
-                        .mul_add(t, state.cursor_from_x[player_idx]);
-                let cur_y =
-                    (state.cursor_to_y[player_idx] - state.cursor_from_y[player_idx])
-                        .mul_add(t, state.cursor_from_y[player_idx]);
-                let cur_w =
-                    (state.cursor_to_w[player_idx] - state.cursor_from_w[player_idx])
-                        .mul_add(t, state.cursor_from_w[player_idx]);
-                let cur_h =
-                    (state.cursor_to_h[player_idx] - state.cursor_from_h[player_idx])
-                        .mul_add(t, state.cursor_from_h[player_idx]);
+                let cur_x = (state.cursor_to_x[player_idx] - state.cursor_from_x[player_idx])
+                    .mul_add(t, state.cursor_from_x[player_idx]);
+                let cur_y = (state.cursor_to_y[player_idx] - state.cursor_from_y[player_idx])
+                    .mul_add(t, state.cursor_from_y[player_idx]);
+                let cur_w = (state.cursor_to_w[player_idx] - state.cursor_from_w[player_idx])
+                    .mul_add(t, state.cursor_from_w[player_idx]);
+                let cur_h = (state.cursor_to_h[player_idx] - state.cursor_from_h[player_idx])
+                    .mul_add(t, state.cursor_from_h[player_idx]);
 
                 state.cursor_from_x[player_idx] = cur_x;
                 state.cursor_from_y[player_idx] = cur_y;
@@ -3228,7 +3227,10 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     state.hide_active_mask = [hide_active_mask_p1, hide_active_mask_p2];
     state.fa_plus_active_mask = [fa_plus_active_mask_p1, fa_plus_active_mask_p2];
     state.early_dw_active_mask = [early_dw_active_mask_p1, early_dw_active_mask_p2];
-    state.gameplay_extras_active_mask = [gameplay_extras_active_mask_p1, gameplay_extras_active_mask_p2];
+    state.gameplay_extras_active_mask = [
+        gameplay_extras_active_mask_p1,
+        gameplay_extras_active_mask_p2,
+    ];
     state.gameplay_extras_more_active_mask = [
         gameplay_extras_more_active_mask_p1,
         gameplay_extras_more_active_mask_p2,
@@ -3579,7 +3581,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             .row_tweens
             .get(item_idx)
             .map(|tw| (tw.y(), tw.a()))
-            .unwrap_or_else(|| ((item_idx as f32).mul_add(fallback_row_step, fallback_y0), 1.0));
+            .unwrap_or_else(|| {
+                (
+                    (item_idx as f32).mul_add(fallback_row_step, fallback_y0),
+                    1.0,
+                )
+            });
         let row_alpha = row_alpha.clamp(0.0, 1.0);
         if row_alpha <= row_alpha_cutoff {
             continue;

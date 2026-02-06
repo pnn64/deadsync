@@ -710,8 +710,7 @@ impl AssetManager {
                     } else {
                         SamplerDesc::default()
                     };
-                    let texture =
-                        backend.create_texture(&fallback_image, sampler)?;
+                    let texture = backend.create_texture(&fallback_image, sampler)?;
                     register_texture_dims(&key, fallback_image.width(), fallback_image.height());
                     self.textures.insert(key, texture);
                 }

@@ -119,7 +119,9 @@ fn build_rows() -> Vec<Row> {
             },
         });
     }
-    out.push(Row { kind: RowKind::Exit });
+    out.push(Row {
+        kind: RowKind::Exit,
+    });
     out
 }
 
@@ -255,7 +257,9 @@ fn validate_new_profile_name(state: &State, name: &str) -> Result<(), &'static s
     }
 
     if name_conflicts(state, trimmed) {
-        return Err("The name you chose conflicts with another profile. Please use a different name.");
+        return Err(
+            "The name you chose conflicts with another profile. Please use a different name.",
+        );
     }
     Ok(())
 }
@@ -431,8 +435,16 @@ fn scaled_block_origin_with_margins() -> (f32, f32, f32) {
     let avail_w = (sw - LEFT_MARGIN_PX - RIGHT_MARGIN_PX).max(0.0);
     let avail_h = (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
 
-    let s_w = if total_w > 0.0 { avail_w / total_w } else { 1.0 };
-    let s_h = if total_h > 0.0 { avail_h / total_h } else { 1.0 };
+    let s_w = if total_w > 0.0 {
+        avail_w / total_w
+    } else {
+        1.0
+    };
+    let s_h = if total_h > 0.0 {
+        avail_h / total_h
+    } else {
+        1.0
+    };
     let s = s_w.min(s_h).max(0.0);
 
     let ox = LEFT_MARGIN_PX + total_w.mul_add(-s, avail_w).max(0.0);
@@ -449,7 +461,10 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
             for v in vertices.iter() {
                 let mut c = v.color;
                 c[3] *= alpha;
-                out.push(crate::core::gfx::MeshVertex { pos: v.pos, color: c });
+                out.push(crate::core::gfx::MeshVertex {
+                    pos: v.pos,
+                    color: c,
+                });
             }
             *vertices = std::sync::Arc::from(out);
         }
@@ -545,7 +560,9 @@ fn push_desc(ui: &mut Vec<Actor>, state: &State, s: f32, desc_x: f32, list_y: f3
 
     let mut cursor_y = DESC_TITLE_TOP_PAD_PX.mul_add(s, list_y);
     let title_x = desc_x + DESC_TITLE_SIDE_PAD_PX * s;
-    let max_title_w = (DESC_W - 2.0 * DESC_TITLE_SIDE_PAD_PX).mul_add(s, 0.0).max(0.0);
+    let max_title_w = (DESC_W - 2.0 * DESC_TITLE_SIDE_PAD_PX)
+        .mul_add(s, 0.0)
+        .max(0.0);
     ui.push(act!(text:
         align(0.0, 0.0):
         xy(title_x, cursor_y):
@@ -564,7 +581,9 @@ fn push_desc(ui: &mut Vec<Actor>, state: &State, s: f32, desc_x: f32, list_y: f3
 
     let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
     let bullet_x = DESC_BULLET_INDENT_PX.mul_add(s, desc_x + bullet_side_pad);
-    let max_bullet_w = (DESC_W - 2.0 * DESC_BULLET_SIDE_PAD_PX).mul_add(s, 0.0).max(0.0);
+    let max_bullet_w = (DESC_W - 2.0 * DESC_BULLET_SIDE_PAD_PX)
+        .mul_add(s, 0.0)
+        .max(0.0);
     ui.push(act!(text:
         align(0.0, 0.0):
         xy(bullet_x, cursor_y):
@@ -688,7 +707,13 @@ fn push_overlay_error(
     ));
 }
 
-fn push_list_chrome(ui: &mut Vec<Actor>, col_active_bg: [f32; 4], s: f32, list_x: f32, list_y: f32) {
+fn push_list_chrome(
+    ui: &mut Vec<Actor>,
+    col_active_bg: [f32; 4],
+    s: f32,
+    list_x: f32,
+    list_y: f32,
+) {
     let list_w = LIST_W * s;
     let sep_w = SEP_W * s;
     let desc_h = DESC_H * s;
@@ -754,7 +779,11 @@ fn row_bg_color(colors: &RowColors, is_active: bool, is_exit: bool) -> [f32; 4] 
 
 fn row_text_color(colors: &RowColors, is_active: bool, is_exit: bool) -> [f32; 4] {
     if is_exit {
-        if is_active { colors.black } else { colors.white }
+        if is_active {
+            colors.black
+        } else {
+            colors.white
+        }
     } else if is_active {
         colors.active_text
     } else {
@@ -790,7 +819,11 @@ fn push_row(
 
     if !is_exit {
         let heart_x = HEART_LEFT_PAD.mul_add(s, list_x);
-        let heart_tint = if is_active { colors.active_text } else { colors.white };
+        let heart_tint = if is_active {
+            colors.active_text
+        } else {
+            colors.white
+        };
         ui.push(act!(sprite("heart.png"):
             align(0.0, 0.5):
             xy(heart_x, row_mid_y):
@@ -875,7 +908,11 @@ fn push_rows(
     }
 }
 
-pub fn get_actors(state: &State, _asset_manager: &AssetManager, alpha_multiplier: f32) -> Vec<Actor> {
+pub fn get_actors(
+    state: &State,
+    _asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(220);
 
     actors.extend(state.bg.build(heart_bg::Params {

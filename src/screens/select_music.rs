@@ -103,6 +103,18 @@ const MUSIC_WHEEL_STOP_SPINDOWN_THRESHOLD: f32 = 0.25;
 
 const CHORD_UP: u8 = 1 << 0;
 const CHORD_DOWN: u8 = 1 << 1;
+const MENU_CHORD_LEFT: u8 = 1 << 0;
+const MENU_CHORD_RIGHT: u8 = 1 << 1;
+
+// Simply Love ScreenSelectMusic SortMenu geometry.
+const SL_SORT_MENU_WIDTH: f32 = 210.0;
+const SL_SORT_MENU_HEIGHT: f32 = 160.0;
+const SL_SORT_MENU_HEADER_Y_OFFSET: f32 = -92.0;
+const SL_SORT_MENU_ITEM_START_Y_OFFSET: f32 = -36.0;
+const SL_SORT_MENU_ITEM_SPACING: f32 = 34.0;
+const SL_SORT_MENU_DIM_ALPHA: f32 = 0.8;
+const SL_SORT_MENU_HINT_Y_OFFSET: f32 = 100.0;
+const SL_SORT_MENU_HINT_TEXT: &str = "Press Esc to cancel";
 
 #[inline(always)]
 const fn chord_bit(dir: PadDir) -> u8 {
@@ -237,11 +249,10 @@ fn preview_song_sec(state: &State) -> Option<f64> {
 #[inline(always)]
 fn sl_arrow_bounce01(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 {
     let beat = match entry_opt {
-        Some(MusicWheelEntry::Song(song)) => {
-            preview_song_sec(state).map_or(state.session_elapsed * song.max_bpm.max(1.0) as f32 / 60.0, |sec| {
-                beat_at_sec(song, sec) as f32
-            })
-        }
+        Some(MusicWheelEntry::Song(song)) => preview_song_sec(state).map_or(
+            state.session_elapsed * song.max_bpm.max(1.0) as f32 / 60.0,
+            |sec| beat_at_sec(song, sec) as f32,
+        ),
         _ => state.session_elapsed * 2.5, // 150 BPM fallback
     };
     let effect_offset = -10.0 * crate::config::get().global_offset_seconds;
@@ -344,6 +355,46 @@ enum ExitPromptState {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SortMenuAction {
+    SortByGroup,
+    SortByTitle,
+    Close,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SortMenuItem {
+    label: &'static str,
+    action: SortMenuAction,
+}
+
+const SORT_MENU_ITEMS: [SortMenuItem; 3] = [
+    SortMenuItem {
+        label: "Sort by Group",
+        action: SortMenuAction::SortByGroup,
+    },
+    SortMenuItem {
+        label: "Sort by Title",
+        action: SortMenuAction::SortByTitle,
+    },
+    SortMenuItem {
+        label: "Close",
+        action: SortMenuAction::Close,
+    },
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SortMenuState {
+    Hidden,
+    Visible { selected_index: usize },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WheelSortMode {
+    Group,
+    Title,
+}
+
 #[derive(Clone, Debug)]
 pub enum MusicWheelEntry {
     PackHeader {
@@ -389,7 +440,11 @@ pub struct State {
     // Internal state
     out_prompt: OutPromptState,
     exit_prompt: ExitPromptState,
+    sort_menu: SortMenuState,
+    sort_mode: WheelSortMode,
     all_entries: Vec<MusicWheelEntry>,
+    group_entries: Vec<MusicWheelEntry>,
+    title_entries: Vec<MusicWheelEntry>,
     expanded_pack_name: Option<String>,
     bg: heart_bg::State,
     last_requested_banner_path: Option<PathBuf>,
@@ -397,6 +452,7 @@ pub struct State {
     last_requested_chart_hash_p2: Option<String>,
     chord_mask_p1: u8,
     chord_mask_p2: u8,
+    menu_chord_mask: u8,
     last_steps_nav_dir_p1: Option<PadDir>,
     last_steps_nav_time_p1: Option<Instant>,
     last_steps_nav_dir_p2: Option<PadDir>,
@@ -418,6 +474,8 @@ pub struct State {
     cached_chart_ix_p2: Option<usize>,
     cached_edits: Option<EditSortCache>,
     pub pack_song_counts: HashMap<String, usize>,
+    group_pack_song_counts: HashMap<String, usize>,
+    title_pack_song_counts: HashMap<String, usize>,
 }
 
 pub(crate) fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usize) -> bool {
@@ -612,6 +670,18 @@ pub(crate) fn steps_len(song: &SongData, chart_type: &str) -> usize {
 }
 
 fn rebuild_displayed_entries(state: &mut State) {
+    let has_pack_headers = state
+        .all_entries
+        .iter()
+        .any(|e| matches!(e, MusicWheelEntry::PackHeader { .. }));
+    if !has_pack_headers {
+        state.entries = state.all_entries.clone();
+        if state.entries.is_empty() {
+            state.wheel_offset_from_selection = 0.0;
+        }
+        return;
+    }
+
     let mut new_entries = Vec::with_capacity(state.all_entries.len());
     let mut current_pack_name: Option<&str> = None;
     let expanded_pack_name = state.expanded_pack_name.as_deref();
@@ -634,6 +704,189 @@ fn rebuild_displayed_entries(state: &mut State) {
     if state.entries.is_empty() {
         state.wheel_offset_from_selection = 0.0;
     }
+}
+
+#[inline(always)]
+fn selected_song_arc(state: &State) -> Option<Arc<SongData>> {
+    match state.entries.get(state.selected_index) {
+        Some(MusicWheelEntry::Song(song)) => Some(song.clone()),
+        _ => None,
+    }
+}
+
+fn song_entry_index(entries: &[MusicWheelEntry], target_song: &Arc<SongData>) -> Option<usize> {
+    entries
+        .iter()
+        .position(|e| matches!(e, MusicWheelEntry::Song(song) if Arc::ptr_eq(song, target_song)))
+}
+
+fn group_name_for_song(
+    grouped_entries: &[MusicWheelEntry],
+    target_song: &Arc<SongData>,
+) -> Option<String> {
+    let mut current_pack_name: Option<&str> = None;
+    for entry in grouped_entries {
+        match entry {
+            MusicWheelEntry::PackHeader { name, .. } => {
+                current_pack_name = Some(name.as_str());
+            }
+            MusicWheelEntry::Song(song) => {
+                if Arc::ptr_eq(song, target_song) {
+                    return current_pack_name.map(str::to_string);
+                }
+            }
+        }
+    }
+    None
+}
+
+#[inline(always)]
+fn song_title_sort_key(song: &SongData) -> (String, String, String) {
+    let title = if song.translit_title.trim().is_empty() {
+        song.title.as_str()
+    } else {
+        song.translit_title.as_str()
+    };
+    let subtitle = if song.translit_subtitle.trim().is_empty() {
+        song.subtitle.as_str()
+    } else {
+        song.translit_subtitle.as_str()
+    };
+    (
+        title.to_ascii_lowercase(),
+        subtitle.to_ascii_lowercase(),
+        song.simfile_path.to_string_lossy().to_ascii_lowercase(),
+    )
+}
+
+#[inline(always)]
+fn title_group_meta(song: &SongData) -> (u8, String) {
+    let title = if song.translit_title.trim().is_empty() {
+        song.title.as_str()
+    } else {
+        song.translit_title.as_str()
+    };
+    // Match expected title bucketing semantics:
+    // classify by the first visible character only (after whitespace),
+    // not by the first alphanumeric found later in the title.
+    let first = title.trim_start().chars().next();
+    match first {
+        Some(ch) if ch.is_ascii_digit() => (1, "0-9".to_string()),
+        Some(ch) if ch.is_ascii_alphabetic() => {
+            let c = ch.to_ascii_uppercase();
+            let rank = (c as u8).saturating_sub(b'A').saturating_add(2);
+            (rank, c.to_string())
+        }
+        _ => (0, "Other".to_string()),
+    }
+}
+
+#[inline(always)]
+fn first_header_name(entries: &[MusicWheelEntry]) -> Option<String> {
+    entries.iter().find_map(|e| {
+        if let MusicWheelEntry::PackHeader { name, .. } = e {
+            Some(name.clone())
+        } else {
+            None
+        }
+    })
+}
+
+fn build_title_grouped_entries(
+    grouped_entries: &[MusicWheelEntry],
+) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+    let mut songs: Vec<Arc<SongData>> = grouped_entries
+        .iter()
+        .filter_map(|e| match e {
+            MusicWheelEntry::Song(song) => Some(song.clone()),
+            MusicWheelEntry::PackHeader { .. } => None,
+        })
+        .collect();
+
+    songs.sort_by(|a, b| {
+        let (a_bucket, _) = title_group_meta(a.as_ref());
+        let (b_bucket, _) = title_group_meta(b.as_ref());
+        a_bucket
+            .cmp(&b_bucket)
+            .then_with(|| song_title_sort_key(a.as_ref()).cmp(&song_title_sort_key(b.as_ref())))
+            .then_with(|| a.title.cmp(&b.title))
+            .then_with(|| a.subtitle.cmp(&b.subtitle))
+    });
+
+    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
+    let mut counts: HashMap<String, usize> = HashMap::with_capacity(32);
+    let mut current_group: Option<String> = None;
+    let mut header_idx = 0usize;
+
+    for song in songs {
+        let (_, group_name) = title_group_meta(song.as_ref());
+        if current_group.as_deref() != Some(group_name.as_str()) {
+            entries.push(MusicWheelEntry::PackHeader {
+                name: group_name.clone(),
+                original_index: header_idx,
+                banner_path: None,
+            });
+            current_group = Some(group_name.clone());
+            header_idx += 1;
+        }
+        *counts.entry(group_name).or_insert(0) += 1;
+        entries.push(MusicWheelEntry::Song(song));
+    }
+
+    (entries, counts)
+}
+
+fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
+    if state.sort_mode == sort_mode {
+        return;
+    }
+
+    let selected_song = selected_song_arc(state);
+
+    match sort_mode {
+        WheelSortMode::Group => {
+            state.all_entries = state.group_entries.clone();
+            state.pack_song_counts = state.group_pack_song_counts.clone();
+            state.expanded_pack_name = selected_song
+                .as_ref()
+                .and_then(|song| group_name_for_song(&state.group_entries, song))
+                .or_else(|| first_header_name(&state.group_entries));
+        }
+        WheelSortMode::Title => {
+            state.all_entries = state.title_entries.clone();
+            state.pack_song_counts = state.title_pack_song_counts.clone();
+            state.expanded_pack_name = selected_song
+                .as_ref()
+                .and_then(|song| group_name_for_song(&state.title_entries, song))
+                .or_else(|| first_header_name(&state.title_entries));
+        }
+    }
+
+    state.sort_mode = sort_mode;
+    rebuild_displayed_entries(state);
+
+    state.selected_index = if let Some(song) = selected_song.as_ref() {
+        song_entry_index(&state.entries, song).unwrap_or_else(|| {
+            state
+                .selected_index
+                .min(state.entries.len().saturating_sub(1))
+        })
+    } else {
+        state
+            .selected_index
+            .min(state.entries.len().saturating_sub(1))
+    };
+
+    state.prev_selected_index = state.selected_index;
+    state.time_since_selection_change = 0.0;
+    state.wheel_offset_from_selection = 0.0;
+    state.last_requested_banner_path = None;
+    state.last_requested_chart_hash = None;
+    state.last_requested_chart_hash_p2 = None;
+    state.cached_song = None;
+    state.cached_chart_ix_p1 = None;
+    state.cached_chart_ix_p2 = None;
+    state.cached_edits = None;
 }
 
 pub fn init() -> State {
@@ -713,8 +966,12 @@ pub fn init() -> State {
         }
     }
 
+    let (title_entries, title_pack_song_counts) = build_title_grouped_entries(&all_entries);
+
     let mut state = State {
-        all_entries,
+        all_entries: all_entries.clone(),
+        group_entries: all_entries,
+        title_entries,
         entries: Vec::new(),
         selected_index: 0,
         selected_steps_index: initial_diff_index,
@@ -726,6 +983,8 @@ pub fn init() -> State {
         wheel_offset_from_selection: 0.0,
         out_prompt: OutPromptState::None,
         exit_prompt: ExitPromptState::None,
+        sort_menu: SortMenuState::Hidden,
+        sort_mode: WheelSortMode::Group,
         expanded_pack_name: last_pack_name,
         bg: heart_bg::State::new(),
         last_requested_banner_path: None,
@@ -740,6 +999,7 @@ pub fn init() -> State {
         last_requested_chart_hash_p2: None,
         chord_mask_p1: 0,
         chord_mask_p2: 0,
+        menu_chord_mask: 0,
         last_steps_nav_dir_p1: None,
         last_steps_nav_time_p1: None,
         last_steps_nav_dir_p2: None,
@@ -759,7 +1019,9 @@ pub fn init() -> State {
         cached_chart_ix_p1: None,
         cached_chart_ix_p2: None,
         cached_edits: None,
-        pack_song_counts,
+        pack_song_counts: pack_song_counts.clone(),
+        group_pack_song_counts: pack_song_counts,
+        title_pack_song_counts,
     };
 
     let built_entries_len = state.all_entries.len();
@@ -889,10 +1151,127 @@ fn music_wheel_update_hold_scroll(state: &mut State, dt: f32, dir: NavDirection)
     music_wheel_change(state, dist);
 }
 
+#[inline(always)]
+fn clear_preview(state: &mut State) {
+    state.currently_playing_preview_path = None;
+    state.currently_playing_preview_start_sec = None;
+    state.currently_playing_preview_length_sec = None;
+    audio::stop_music();
+}
+
+#[inline(always)]
+fn show_sort_menu(state: &mut State) {
+    let selected_index = match state.sort_mode {
+        WheelSortMode::Group => 0,
+        WheelSortMode::Title => 1,
+    };
+    state.sort_menu = SortMenuState::Visible { selected_index };
+    state.menu_chord_mask = 0;
+    state.nav_key_held_direction = None;
+    state.nav_key_held_since = None;
+    clear_preview(state);
+    audio::play_sfx("assets/sounds/start.ogg");
+}
+
+#[inline(always)]
+fn hide_sort_menu(state: &mut State) {
+    state.sort_menu = SortMenuState::Hidden;
+    state.menu_chord_mask = 0;
+    state.nav_key_held_direction = None;
+    state.nav_key_held_since = None;
+}
+
+#[inline(always)]
+fn try_open_sort_menu(state: &mut State) -> bool {
+    if state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
+        == (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
+    {
+        show_sort_menu(state);
+        true
+    } else {
+        false
+    }
+}
+
+fn sort_menu_move(state: &mut State, delta: isize) {
+    let SortMenuState::Visible { selected_index } = &mut state.sort_menu else {
+        return;
+    };
+    let len = SORT_MENU_ITEMS.len();
+    if len == 0 {
+        return;
+    }
+    let old = *selected_index;
+    let next = ((*selected_index as isize + delta).rem_euclid(len as isize)) as usize;
+    if next != old {
+        *selected_index = next;
+        audio::play_sfx("assets/sounds/change.ogg");
+    }
+}
+
+fn sort_menu_activate(state: &mut State) {
+    let SortMenuState::Visible { selected_index } = state.sort_menu else {
+        return;
+    };
+    audio::play_sfx("assets/sounds/start.ogg");
+    match SORT_MENU_ITEMS[selected_index].action {
+        SortMenuAction::SortByGroup => {
+            apply_wheel_sort(state, WheelSortMode::Group);
+            hide_sort_menu(state);
+        }
+        SortMenuAction::SortByTitle => {
+            apply_wheel_sort(state, WheelSortMode::Title);
+            hide_sort_menu(state);
+        }
+        SortMenuAction::Close => {
+            hide_sort_menu(state);
+        }
+    }
+}
+
+fn handle_sort_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if !ev.pressed {
+        return ScreenAction::None;
+    }
+    match ev.action {
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => sort_menu_move(state, -1),
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => sort_menu_move(state, 1),
+        VirtualAction::p1_start | VirtualAction::p2_start => sort_menu_activate(state),
+        VirtualAction::p1_back
+        | VirtualAction::p2_back
+        | VirtualAction::p1_select
+        | VirtualAction::p2_select => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            hide_sort_menu(state);
+        }
+        _ => {}
+    }
+    ScreenAction::None
+}
+
 pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAction {
     if pressed {
         match dir {
             PadDir::Right => {
+                // Simply Love [ScreenSelectMusic]: CodeSortList4 = "Left-Right".
+                state.menu_chord_mask |= MENU_CHORD_RIGHT;
+                if try_open_sort_menu(state) {
+                    return ScreenAction::None;
+                }
                 if state.nav_key_held_direction == Some(NavDirection::Right) {
                     return ScreenAction::None;
                 }
@@ -901,6 +1280,10 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                 state.nav_key_held_since = Some(Instant::now());
             }
             PadDir::Left => {
+                state.menu_chord_mask |= MENU_CHORD_LEFT;
+                if try_open_sort_menu(state) {
+                    return ScreenAction::None;
+                }
                 if state.nav_key_held_direction == Some(NavDirection::Left) {
                     return ScreenAction::None;
                 }
@@ -984,6 +1367,7 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                 state.chord_mask_p1 &= !CHORD_DOWN;
             }
             PadDir::Left => {
+                state.menu_chord_mask &= !MENU_CHORD_LEFT;
                 if state.nav_key_held_direction == Some(NavDirection::Left) {
                     let now = Instant::now();
                     let moving_started = state
@@ -1000,6 +1384,7 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                 }
             }
             PadDir::Right => {
+                state.menu_chord_mask &= !MENU_CHORD_RIGHT;
                 if state.nav_key_held_direction == Some(NavDirection::Right) {
                     let now = Instant::now();
                     let moving_started = state
@@ -1177,6 +1562,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     if state.exit_prompt != ExitPromptState::None {
         return handle_exit_prompt_input(state, ev);
+    }
+
+    if state.sort_menu != SortMenuState::Hidden {
+        return handle_sort_menu_input(state, ev);
     }
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -2152,7 +2541,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             && let Some(sc) = scores::get_cached_score_for_side(&c.short_hash, side)
             && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
         {
-            (player_initials.to_string(), format!("{:.2}%", sc.score_percent * 100.0))
+            (
+                player_initials.to_string(),
+                format!("{:.2}%", sc.score_percent * 100.0),
+            )
         } else {
             placeholder.clone()
         };
@@ -2372,6 +2764,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         position_offset_from_selection: state.wheel_offset_from_selection,
         selection_animation_timer: state.selection_animation_timer,
         pack_song_counts: &state.pack_song_counts, // O(1) Lookup
+        color_pack_headers: state.sort_mode == WheelSortMode::Group,
         preferred_difficulty_index: state.preferred_difficulty_index,
         selected_steps_index: state.selected_steps_index,
     }));
@@ -2416,6 +2809,87 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             rotationz(arrow_rot):
             zoom(0.575):
             z(122)
+        ));
+    }
+
+    if let SortMenuState::Visible { selected_index } = state.sort_menu {
+        let cx = screen_center_x();
+        let cy = screen_center_y();
+        let selected_color = color::simply_love_rgba(state.active_color_index);
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, SL_SORT_MENU_DIM_ALPHA):
+            z(1450)
+        ));
+        actors.push(act!(quad:
+            align(0.5, 0.5): xy(cx, cy + SL_SORT_MENU_HEADER_Y_OFFSET):
+            zoomto(SL_SORT_MENU_WIDTH + 2.0, 22.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(1451)
+        ));
+        actors.push(act!(text:
+            font("wendy"):
+            settext("OPTIONS"):
+            align(0.5, 0.5):
+            xy(cx, cy + SL_SORT_MENU_HEADER_Y_OFFSET):
+            zoom(0.4):
+            diffuse(0.0, 0.0, 0.0, 1.0):
+            z(1452):
+            horizalign(center)
+        ));
+        actors.push(act!(quad:
+            align(0.5, 0.5): xy(cx, cy):
+            zoomto(SL_SORT_MENU_WIDTH + 2.0, SL_SORT_MENU_HEIGHT + 2.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(1451)
+        ));
+        actors.push(act!(quad:
+            align(0.5, 0.5): xy(cx, cy):
+            zoomto(SL_SORT_MENU_WIDTH, SL_SORT_MENU_HEIGHT):
+            diffuse(0.0, 0.0, 0.0, 1.0):
+            z(1452)
+        ));
+        for (i, item) in SORT_MENU_ITEMS.iter().enumerate() {
+            let y = (i as f32).mul_add(
+                SL_SORT_MENU_ITEM_SPACING,
+                cy + SL_SORT_MENU_ITEM_START_Y_OFFSET,
+            );
+            let is_selected = i == selected_index;
+            if is_selected {
+                actors.push(act!(quad:
+                    align(0.5, 0.5):
+                    xy(cx, y):
+                    zoomto(SL_SORT_MENU_WIDTH - 24.0, 24.0):
+                    diffuse(0.133, 0.133, 0.133, 1.0):
+                    z(1453)
+                ));
+            }
+            let text_color = if is_selected {
+                [selected_color[0], selected_color[1], selected_color[2], 1.0]
+            } else {
+                [0.7, 0.7, 0.7, 1.0]
+            };
+            actors.push(act!(text:
+                font("wendy"):
+                settext(item.label):
+                align(0.5, 0.5):
+                xy(cx, y):
+                zoom(0.46):
+                diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
+                z(1454):
+                horizalign(center)
+            ));
+        }
+        actors.push(act!(text:
+            font("wendy"):
+            settext(SL_SORT_MENU_HINT_TEXT):
+            align(0.5, 0.5):
+            xy(cx, cy + SL_SORT_MENU_HINT_Y_OFFSET):
+            zoom(0.26):
+            diffuse(0.7, 0.7, 0.7, 1.0):
+            z(1454):
+            horizalign(center)
         ));
     }
 

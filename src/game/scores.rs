@@ -1,6 +1,6 @@
+use crate::config::SimpleIni;
 use crate::core::input::InputSource;
 use crate::core::network;
-use crate::config::SimpleIni;
 use crate::game::gameplay;
 use crate::game::judgment;
 use crate::game::profile::{self, Profile};
@@ -278,7 +278,10 @@ fn ensure_local_score_cache_loaded(profile_id: &str) {
 
     let loaded = load_local_score_index(&local_scores_root_for_profile(profile_id));
     let mut state = LOCAL_SCORE_CACHE.lock().unwrap();
-    state.loaded_profiles.entry(profile_id.to_string()).or_insert(loaded);
+    state
+        .loaded_profiles
+        .entry(profile_id.to_string())
+        .or_insert(loaded);
 }
 
 fn profile_initials_for_id(profile_id: &str) -> Option<String> {
@@ -632,9 +635,7 @@ fn append_gs_score_on_disk_for_profile(
     entries.push(new_entry.clone());
 
     if let Err(e) = fs::create_dir_all(&dir) {
-        warn!(
-            "Failed to create GrooveStats scores dir for profile {profile_id} at {dir:?}: {e}"
-        );
+        warn!("Failed to create GrooveStats scores dir for profile {profile_id} at {dir:?}: {e}");
         return;
     }
 
@@ -753,9 +754,10 @@ fn compute_local_lamp(counts: [u32; 6], grade: Grade) -> (Option<u8>, Option<u8>
 }
 
 fn decode_local_score_header(bytes: &[u8]) -> Option<LocalScoreEntryHeaderV1> {
-    let Ok((h, _)) =
-        bincode::decode_from_slice::<LocalScoreEntryHeaderV1, _>(bytes, bincode::config::standard())
-    else {
+    let Ok((h, _)) = bincode::decode_from_slice::<LocalScoreEntryHeaderV1, _>(
+        bytes,
+        bincode::config::standard(),
+    ) else {
         return None;
     };
     if h.version != LOCAL_SCORE_VERSION_V1 {

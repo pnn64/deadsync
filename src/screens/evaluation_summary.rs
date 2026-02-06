@@ -94,7 +94,11 @@ fn pages_for(num_stages: usize) -> usize {
 }
 
 fn format_rate_x(rate: f32) -> String {
-    let r = if rate.is_finite() && rate > 0.0 { rate } else { 1.0 };
+    let r = if rate.is_finite() && rate > 0.0 {
+        rate
+    } else {
+        1.0
+    };
     let s = format!("{r:.2}");
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
@@ -199,29 +203,29 @@ fn build_player_stats(
     active_color_index: i32,
     elapsed: f32,
 ) -> Vec<Actor> {
-    let (col1x, col2x, grade_x, align1_x, align2_x, align1_text, align2_text, col1_eps) =
-        match side {
-            profile::PlayerSide::P1 => (
-                -90.0,
-                -(screen_width() / 2.5),
-                -widescale(194.0, 250.0),
-                1.0,
-                0.0,
-                crate::ui::actors::TextAlign::Right,
-                crate::ui::actors::TextAlign::Left,
-                -1.0,
-            ),
-            profile::PlayerSide::P2 => (
-                90.0,
-                screen_width() / 2.5,
-                widescale(194.0, 250.0),
-                0.0,
-                1.0,
-                crate::ui::actors::TextAlign::Left,
-                crate::ui::actors::TextAlign::Right,
-                1.0,
-            ),
-        };
+    let (col1x, col2x, grade_x, align1_x, align2_x, align1_text, align2_text, col1_eps) = match side
+    {
+        profile::PlayerSide::P1 => (
+            -90.0,
+            -(screen_width() / 2.5),
+            -widescale(194.0, 250.0),
+            1.0,
+            0.0,
+            crate::ui::actors::TextAlign::Right,
+            crate::ui::actors::TextAlign::Left,
+            -1.0,
+        ),
+        profile::PlayerSide::P2 => (
+            90.0,
+            screen_width() / 2.5,
+            widescale(194.0, 250.0),
+            0.0,
+            1.0,
+            crate::ui::actors::TextAlign::Left,
+            crate::ui::actors::TextAlign::Right,
+            1.0,
+        ),
+    };
 
     let mut out = Vec::with_capacity(24);
 
@@ -278,11 +282,7 @@ fn build_player_stats(
     if show_w0 {
         let ex_color = color::JUDGMENT_RGBA[0];
         let ex_text = format!("{:.2}", p.ex_score_percent.max(0.0));
-        let (ex_zoom, ex_y) = if showex {
-            (0.48, -32.0)
-        } else {
-            (0.38, -12.0)
-        };
+        let (ex_zoom, ex_y) = if showex { (0.48, -32.0) } else { (0.38, -12.0) };
         let mut ex_actor = act!(text:
             font("wendy"):
             settext(ex_text):
@@ -368,15 +368,7 @@ fn build_player_stats(
 
     // Judgment numbers: W0..W5, Miss
     let wc = p.window_counts;
-    let mut counts: [u32; 7] = [
-        wc.w0,
-        wc.w1,
-        wc.w2,
-        wc.w3,
-        wc.w4,
-        wc.w5,
-        wc.miss,
-    ];
+    let mut counts: [u32; 7] = [wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss];
     if !show_w0 {
         counts[1] = counts[0].saturating_add(counts[1]); // W1 includes W0 when FA+/EX is disabled
     }
@@ -584,13 +576,13 @@ pub fn get_actors(
         horizalign(center)
     ));
 
-	    // --- "ITG" text (top right, no pads) ---
-	    {
-	        let itg_text_x = screen_width() - 10.0;
-	        actors.push(act!(text:
-	            font("wendy"):
-	            settext("ITG"):
-	            align(1.0, 0.5):
+    // --- "ITG" text (top right, no pads) ---
+    {
+        let itg_text_x = screen_width() - 10.0;
+        actors.push(act!(text:
+                font("wendy"):
+                settext("ITG"):
+                align(1.0, 0.5):
             xy(itg_text_x, 15.0):
             zoom(widescale(0.5, 0.6)):
             z(121):

@@ -7,7 +7,7 @@ use crate::game::gameplay::{
     HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION,
     RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
 };
-use crate::game::judgment::{JudgeGrade, TimingWindow, HOLD_SCORE_HELD};
+use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, TimingWindow};
 use crate::game::note::{HoldResult, NoteType};
 use crate::game::parsing::noteskin::NUM_QUANTIZATIONS;
 use crate::game::{gameplay::PlayerRuntime, gameplay::State, profile, scroll::ScrollSpeedSetting};
@@ -386,7 +386,10 @@ fn zmod_broken_run_end(segs: &[StreamSegment], start_index: usize) -> (usize, bo
     (end, broken)
 }
 
-fn zmod_broken_run_segment(segs: &[StreamSegment], curr_measure: f32) -> Option<(usize, usize, bool)> {
+fn zmod_broken_run_segment(
+    segs: &[StreamSegment],
+    curr_measure: f32,
+) -> Option<(usize, usize, bool)> {
     for (i, seg) in segs.iter().copied().enumerate() {
         if seg.is_break {
             if curr_measure < seg.end as f32 {
@@ -490,9 +493,10 @@ fn zmod_mini_indicator_progress(
     let resolved_rolls = p
         .rolls_held_for_score
         .saturating_add(p.rolls_let_go_for_score);
-    let current_possible_dp =
-        (tap_rows.saturating_add(resolved_holds).saturating_add(resolved_rolls) as i32)
-            .saturating_mul(HOLD_SCORE_HELD);
+    let current_possible_dp = (tap_rows
+        .saturating_add(resolved_holds)
+        .saturating_add(resolved_rolls) as i32)
+        .saturating_mul(HOLD_SCORE_HELD);
 
     let possible_dp = state.possible_grade_points[player_idx].max(1);
     let actual_dp = p.earned_grade_points.max(0);
@@ -651,8 +655,10 @@ fn zmod_mini_indicator_text(
             let current_possible = f64::from(progress.current_possible_dp.max(0));
             let actual = f64::from(progress.actual_dp.max(0));
             let pace = ((actual / possible) * 10000.0).floor() / 100.0;
-            let rival_score = state.mini_indicator_rival_score_percent[player_idx].clamp(0.0, 100.0);
-            let rival_pace = ((current_possible / possible) * 10000.0 * rival_score).floor() / 10000.0;
+            let rival_score =
+                state.mini_indicator_rival_score_percent[player_idx].clamp(0.0, 100.0);
+            let rival_pace =
+                ((current_possible / possible) * 10000.0 * rival_score).floor() / 10000.0;
             let diff = (pace - rival_pace).abs();
             let text = if pace < rival_pace {
                 format!("-{diff:.2}%")
@@ -666,10 +672,10 @@ fn zmod_mini_indicator_text(
             let current_possible = f64::from(progress.current_possible_dp.max(0));
             let actual = f64::from(progress.actual_dp.max(0));
             let pace = (actual / possible * 10000.0).floor();
-            let target_ratio = (state.mini_indicator_target_score_percent[player_idx] / 100.0)
-                .clamp(0.0, 1.0);
-            let rival_pace = ((current_possible / possible) * 1_000_000.0 * target_ratio).floor()
-                / 100.0;
+            let target_ratio =
+                (state.mini_indicator_target_score_percent[player_idx] / 100.0).clamp(0.0, 1.0);
+            let rival_pace =
+                ((current_possible / possible) * 1_000_000.0 * target_ratio).floor() / 100.0;
 
             let text = if pace < rival_pace {
                 let diff = ((rival_pace - pace).floor() / 100.0).max(0.0);
@@ -683,13 +689,31 @@ fn zmod_mini_indicator_text(
         profile::MiniIndicator::StreamProg => {
             let completion = zmod_stream_prog_completion(state, player_idx)?;
             let rgba = if completion >= 0.9 {
-                [0.0, 1.0, ((completion - 0.9) * 10.0).clamp(0.0, 1.0) as f32, 1.0]
+                [
+                    0.0,
+                    1.0,
+                    ((completion - 0.9) * 10.0).clamp(0.0, 1.0) as f32,
+                    1.0,
+                ]
             } else if completion >= 0.5 {
-                [((0.9 - completion) * 10.0 / 4.0).clamp(0.0, 1.0) as f32, 1.0, 0.0, 1.0]
+                [
+                    ((0.9 - completion) * 10.0 / 4.0).clamp(0.0, 1.0) as f32,
+                    1.0,
+                    0.0,
+                    1.0,
+                ]
             } else {
-                [1.0, ((completion - 0.2) * 10.0 / 3.0).clamp(0.0, 1.0) as f32, 0.0, 1.0]
+                [
+                    1.0,
+                    ((completion - 0.2) * 10.0 / 3.0).clamp(0.0, 1.0) as f32,
+                    0.0,
+                    1.0,
+                ]
             };
-            Some((format!("{:.2}%", (completion * 100.0).clamp(0.0, 100.0)), rgba))
+            Some((
+                format!("{:.2}%", (completion * 100.0).clamp(0.0, 100.0)),
+                rgba,
+            ))
         }
         profile::MiniIndicator::None => None,
     }
@@ -995,7 +1019,10 @@ pub fn build(
         };
 
         // Measure Lines (Zmod parity: NoteField:SetBeatBarsAlpha)
-        if !matches!(profile.measure_lines, crate::game::profile::MeasureLines::Off) {
+        if !matches!(
+            profile.measure_lines,
+            crate::game::profile::MeasureLines::Off
+        ) {
             let (alpha_measure, alpha_quarter, alpha_eighth) = match profile.measure_lines {
                 crate::game::profile::MeasureLines::Off => (0.0, 0.0, 0.0),
                 crate::game::profile::MeasureLines::Measure => (0.75, 0.0, 0.0),
@@ -2438,7 +2465,11 @@ pub fn build(
                     if profile.measure_counter_vert {
                         y += 20.0 * (j as f32);
                     } else {
-                        let denom = if lookahead == 0 { 1.0 } else { lookahead as f32 };
+                        let denom = if lookahead == 0 {
+                            1.0
+                        } else {
+                            lookahead as f32
+                        };
                         x += (column_width / denom) * 2.0 * (j as f32);
                     }
                     if profile.measure_counter_left {
@@ -2461,8 +2492,7 @@ pub fn build(
                 {
                     let seg0 = segs[broken_index];
                     if !seg0.is_break && is_broken {
-                        let curr_count =
-                            (curr_measure - (seg0.start as f32)).floor() as i32 + 1;
+                        let curr_count = (curr_measure - (seg0.start as f32)).floor() as i32 + 1;
                         let len = (broken_end - seg0.start) as i32;
                         let text = if curr_measure < 0.0 {
                             // BrokenRunCounter.lua special-cases negative time.
@@ -2560,8 +2590,7 @@ pub fn build(
     }
 
     // Mini Indicator (zmod SubtractiveScoring.lua parity).
-    if let Some((text, rgba)) = zmod_mini_indicator_text(state, p, profile, player_idx)
-    {
+    if let Some((text, rgba)) = zmod_mini_indicator_text(state, p, profile, player_idx) {
         let column_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
         let mut x = playfield_center_x + column_width;
         let mut h_align = 0.5;

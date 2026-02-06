@@ -53,7 +53,10 @@ struct SessionStats {
     duration_seconds: f32,
 }
 
-fn session_stats_for_side(side: profile::PlayerSide, stages: &[stage_stats::StageSummary]) -> SessionStats {
+fn session_stats_for_side(
+    side: profile::PlayerSide,
+    stages: &[stage_stats::StageSummary],
+) -> SessionStats {
     let mut out = SessionStats::default();
     for s in stages {
         let Some(p) = s.players.get(side_ix(side)).and_then(|p| p.as_ref()) else {

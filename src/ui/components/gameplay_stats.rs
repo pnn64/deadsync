@@ -413,7 +413,8 @@ pub fn build_double_step_stats(
             4
         };
         let show_fa_plus_window = state.player_profiles[0].show_fa_plus_window;
-        let use_10ms_blue = show_fa_plus_window && state.player_profiles[0].fa_plus_10ms_blue_window;
+        let use_10ms_blue =
+            show_fa_plus_window && state.player_profiles[0].fa_plus_10ms_blue_window;
         let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
         let y_base = -280.0;
 

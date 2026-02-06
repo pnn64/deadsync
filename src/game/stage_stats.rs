@@ -27,4 +27,3 @@ pub struct PlayerStageSummary {
     pub show_w0: bool,
     pub show_ex_score: bool,
 }
-

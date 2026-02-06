@@ -879,9 +879,18 @@ enum HealthState {
 #[derive(Clone, Copy, Debug)]
 enum DangerAnim {
     Hidden,
-    Danger { started_at: f32, alpha_start: f32 },
-    FadeOut { started_at: f32, rgba_start: [f32; 4] },
-    Flash { started_at: f32, rgb: [f32; 3] },
+    Danger {
+        started_at: f32,
+        alpha_start: f32,
+    },
+    FadeOut {
+        started_at: f32,
+        rgba_start: [f32; 4],
+    },
+    Flash {
+        started_at: f32,
+        rgb: [f32; 3],
+    },
 }
 
 impl Default for DangerAnim {
@@ -924,7 +933,9 @@ fn danger_effect_rgba(age: f32, base_alpha: f32) -> [f32; 4] {
         return [0.0, 0.0, 0.0, 0.0];
     }
     let phase = (age.rem_euclid(period) / period).clamp(0.0, 1.0);
-    let f = ((phase + 0.25) * std::f32::consts::TAU).sin().mul_add(0.5, 0.5);
+    let f = ((phase + 0.25) * std::f32::consts::TAU)
+        .sin()
+        .mul_add(0.5, 0.5);
     let inv = 1.0 - f;
 
     let r = DANGER_EC1_RGBA[0] * f + DANGER_EC2_RGBA[0] * inv;
@@ -1281,11 +1292,7 @@ pub fn exit_transition_alpha(exit: &ExitTransition) -> f32 {
     if fade <= 0.0 {
         return 1.0;
     }
-    let a = if t <= delay {
-        0.0
-    } else {
-        (t - delay) / fade
-    };
+    let a = if t <= delay { 0.0 } else { (t - delay) / fade };
     a.clamp(0.0, 1.0)
 }
 
@@ -2205,8 +2212,9 @@ pub fn init(
         .unwrap_or(89.0);
         mini_indicator_target_score_percent[p] = target;
 
-        mini_indicator_rival_score_percent[p] =
-            machine_best.unwrap_or(0.0).max(personal_best.unwrap_or(0.0));
+        mini_indicator_rival_score_percent[p] = machine_best
+            .unwrap_or(0.0)
+            .max(personal_best.unwrap_or(0.0));
     }
 
     let wants_step_stats = player_profiles
@@ -2687,13 +2695,15 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
     if !is_state_dead(state, player) {
         match state.notes[note_index].note_type {
             NoteType::Hold => {
-                state.players[player].holds_let_go_for_score =
-                    state.players[player].holds_let_go_for_score.saturating_add(1);
+                state.players[player].holds_let_go_for_score = state.players[player]
+                    .holds_let_go_for_score
+                    .saturating_add(1);
                 updated_possible_scoring = true;
             }
             NoteType::Roll => {
-                state.players[player].rolls_let_go_for_score =
-                    state.players[player].rolls_let_go_for_score.saturating_add(1);
+                state.players[player].rolls_let_go_for_score = state.players[player]
+                    .rolls_let_go_for_score
+                    .saturating_add(1);
                 updated_possible_scoring = true;
             }
             _ => {}
@@ -4070,7 +4080,8 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
         if music_time_sec - note_time > way_off_window * rate {
             let time_err_music = music_time_sec - note_time;
             let time_err_real = time_err_music / rate;
-            let miss_because_held = state.keyboard_lane_state[col_idx] || state.gamepad_lane_state[col_idx];
+            let miss_because_held =
+                state.keyboard_lane_state[col_idx] || state.gamepad_lane_state[col_idx];
             let miss = Judgment {
                 time_error_ms: time_err_real * 1000.0,
                 grade: JudgeGrade::Miss,

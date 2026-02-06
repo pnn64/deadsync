@@ -1656,7 +1656,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     let (s, list_x, list_y) = scaled_block_origin_with_margins();
     match state.view {
         OptionsView::Main => {
-            update_row_tweens(&mut state.row_tweens, ITEMS.len(), state.selected, s, list_y, dt);
+            update_row_tweens(
+                &mut state.row_tweens,
+                ITEMS.len(),
+                state.selected,
+                s,
+                list_y,
+                dt,
+            );
             state.cursor_initialized = false;
         }
         OptionsView::Submenu(kind) => {
@@ -1691,14 +1698,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     let dh = (to_h - state.cursor_to_h).abs();
                     if dx > 0.01 || dy > 0.01 || dw > 0.01 || dh > 0.01 {
                         let t = state.cursor_t.clamp(0.0, 1.0);
-                        let cur_x =
-                            (state.cursor_to_x - state.cursor_from_x).mul_add(t, state.cursor_from_x);
-                        let cur_y =
-                            (state.cursor_to_y - state.cursor_from_y).mul_add(t, state.cursor_from_y);
-                        let cur_w =
-                            (state.cursor_to_w - state.cursor_from_w).mul_add(t, state.cursor_from_w);
-                        let cur_h =
-                            (state.cursor_to_h - state.cursor_from_h).mul_add(t, state.cursor_from_h);
+                        let cur_x = (state.cursor_to_x - state.cursor_from_x)
+                            .mul_add(t, state.cursor_from_x);
+                        let cur_y = (state.cursor_to_y - state.cursor_from_y)
+                            .mul_add(t, state.cursor_from_y);
+                        let cur_w = (state.cursor_to_w - state.cursor_from_w)
+                            .mul_add(t, state.cursor_from_w);
+                        let cur_h = (state.cursor_to_h - state.cursor_from_h)
+                            .mul_add(t, state.cursor_from_h);
                         state.cursor_from_x = cur_x;
                         state.cursor_from_y = cur_y;
                         state.cursor_from_w = cur_w;
@@ -2292,8 +2299,7 @@ fn submenu_cursor_dest(
             text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
             for text in &choice_texts {
                 let mut w =
-                    font::measure_line_width_logical(metrics_font, text.as_ref(), all_fonts)
-                        as f32;
+                    font::measure_line_width_logical(metrics_font, text.as_ref(), all_fonts) as f32;
                 if !w.is_finite() || w <= 0.0 {
                     w = 1.0;
                 }
@@ -2846,7 +2852,8 @@ pub fn get_actors(
 
                         // Encircling cursor ring around the active option when this row is active.
                         // During submenu fades, hide the ring to avoid exposing its construction.
-                        if is_active && !is_fading_submenu
+                        if is_active
+                            && !is_fading_submenu
                             && let Some((center_x, center_y, ring_w, ring_h)) = cursor_now()
                         {
                             let border_w = widescale(2.0, 2.5);
@@ -2907,7 +2914,8 @@ pub fn get_actors(
 
                     // Draw the selection cursor ring for the Exit row when active.
                     // During submenu fades, hide the ring to avoid exposing its construction.
-                    if is_active && !is_fading_submenu
+                    if is_active
+                        && !is_fading_submenu
                         && let Some((ring_x, ring_y, ring_w, ring_h)) = cursor_now()
                     {
                         let border_w = widescale(2.0, 2.5);
