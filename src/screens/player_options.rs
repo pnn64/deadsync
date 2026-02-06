@@ -23,10 +23,11 @@ const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 
 /* ----------------------------- cursor tweening ----------------------------- */
-// Match Simply Love's CursorTweenSeconds for OptionRow cursor movement
-const CURSOR_TWEEN_SECONDS: f32 = 0.1;
-// Match Simply Love's TweenSeconds for row repositioning (ScreenOptions::PositionRows).
-const ROW_TWEEN_SECONDS: f32 = 0.1;
+// Simply Love metrics.ini uses 0.1 for both [ScreenOptions] TweenSeconds and CursorTweenSeconds.
+// Player Options row/cursor motion should keep this exact parity timing.
+const SL_OPTION_ROW_TWEEN_SECONDS: f32 = 0.1;
+const CURSOR_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
+const ROW_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 // Spacing between inline items in OptionRows (pixels at current zoom)
 const INLINE_SPACING: f32 = 15.75;
 

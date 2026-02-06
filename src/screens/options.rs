@@ -28,10 +28,11 @@ const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(300);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
 
 /* ----------------------------- cursor tweening ----------------------------- */
-// Match Simply Love's CursorTweenSeconds for OptionRow cursor movement
-const CURSOR_TWEEN_SECONDS: f32 = 0.1;
-// Match Simply Love's TweenSeconds for row repositioning (ScreenOptions::PositionRows).
-const ROW_TWEEN_SECONDS: f32 = 0.1;
+// Simply Love metrics.ini uses 0.1 for both [ScreenOptions] TweenSeconds and CursorTweenSeconds.
+// ScreenOptionsService rows inherit OptionRow tween behavior, so keep both aligned at 0.1.
+const SL_OPTION_ROW_TWEEN_SECONDS: f32 = 0.1;
+const CURSOR_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
+const ROW_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 // Spacing between inline items in OptionRows (pixels at current zoom)
 const INLINE_SPACING: f32 = 15.75;
 
