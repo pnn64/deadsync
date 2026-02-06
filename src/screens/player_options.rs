@@ -25,6 +25,8 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 /* ----------------------------- cursor tweening ----------------------------- */
 // Match Simply Love's CursorTweenSeconds for OptionRow cursor movement
 const CURSOR_TWEEN_SECONDS: f32 = 0.1;
+// Match Simply Love's TweenSeconds for row repositioning (ScreenOptions::PositionRows).
+const ROW_TWEEN_SECONDS: f32 = 0.1;
 // Spacing between inline items in OptionRows (pixels at current zoom)
 const INLINE_SPACING: f32 = 15.75;
 
@@ -34,24 +36,39 @@ const ROW_START_OFFSET: f32 = -164.0;
 const ROW_HEIGHT: f32 = 33.0;
 const TITLE_BG_WIDTH: f32 = 127.0;
 
+#[derive(Clone, Copy, Debug)]
+struct RowWindow {
+    first_start: i32,
+    first_end: i32,
+    second_start: i32,
+    second_end: i32,
+}
+
 #[inline(always)]
-fn compute_visible_rows(
+fn compute_row_window(
     total_rows: usize,
     selected_row: [usize; PLAYER_SLOTS],
     active: [bool; PLAYER_SLOTS],
-) -> ([usize; VISIBLE_ROWS], usize) {
-    let mut out = [usize::MAX; VISIBLE_ROWS];
+) -> RowWindow {
     if total_rows == 0 {
-        return (out, 0);
-    }
-    if total_rows <= VISIBLE_ROWS {
-        for i in 0..total_rows {
-            out[i] = i;
-        }
-        return (out, total_rows);
+        return RowWindow {
+            first_start: 0,
+            first_end: 0,
+            second_start: 0,
+            second_end: 0,
+        };
     }
 
     let total_rows_i = total_rows as i32;
+    if total_rows <= VISIBLE_ROWS {
+        return RowWindow {
+            first_start: 0,
+            first_end: total_rows_i,
+            second_start: total_rows_i,
+            second_end: total_rows_i,
+        };
+    }
+
     let total = VISIBLE_ROWS as i32;
     let halfsize = total / 2;
 
@@ -104,33 +121,78 @@ fn compute_visible_rows(
         }
     }
 
-    let mut len = 0usize;
-    for i in 0..total_rows_i {
-        let is_hidden = i < first_start || (i >= first_end && i < second_start) || i >= second_end;
-        if is_hidden {
-            continue;
-        }
-        if len >= VISIBLE_ROWS {
-            break;
-        }
-        out[len] = i as usize;
-        len += 1;
+    RowWindow {
+        first_start,
+        first_end,
+        second_start,
+        second_end,
     }
-
-    (out, len)
 }
 
 #[inline(always)]
-fn ease_out_cubic(t: f32) -> f32 {
-    let clamped = if t < 0.0 {
-        0.0
-    } else if t > 1.0 {
-        1.0
+fn row_layout_params() -> (f32, f32) {
+    // Must match the geometry in get_actors(): rows align to the help box.
+    let frame_h = ROW_HEIGHT;
+    let first_row_center_y = screen_center_y() + ROW_START_OFFSET;
+    let help_box_h = 40.0_f32;
+    let help_box_bottom_y = screen_height() - 36.0;
+    let help_top_y = help_box_bottom_y - help_box_h;
+    let n_rows_f = VISIBLE_ROWS as f32;
+    let mut row_gap = if n_rows_f > 0.0 {
+        (n_rows_f - 0.5).mul_add(-frame_h, help_top_y - first_row_center_y) / n_rows_f
     } else {
-        t
+        0.0
     };
-    let u = 1.0 - clamped;
-    (u * u).mul_add(-u, 1.0)
+    if !row_gap.is_finite() || row_gap < 0.0 {
+        row_gap = 0.0;
+    }
+    (first_row_center_y, frame_h + row_gap)
+}
+
+#[inline(always)]
+fn init_row_tweens(
+    total_rows: usize,
+    selected_row: [usize; PLAYER_SLOTS],
+    active: [bool; PLAYER_SLOTS],
+) -> Vec<RowTween> {
+    let (first_row_center_y, row_step) = row_layout_params();
+    let w = compute_row_window(total_rows, selected_row, active);
+    let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
+    let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
+
+    let mut out: Vec<RowTween> = Vec::with_capacity(total_rows);
+    let mut pos = 0i32;
+    for i in 0..total_rows {
+        let ii = i as i32;
+        let hidden_above = ii < w.first_start;
+        let hidden_mid = ii >= w.first_end && ii < w.second_start;
+        let hidden_below = ii >= w.second_end;
+        let hidden = hidden_above || hidden_mid || hidden_below;
+
+        let f_pos = if hidden_above {
+            -0.5
+        } else if hidden_mid {
+            mid_pos
+        } else if hidden_below {
+            bottom_pos
+        } else {
+            let p = pos as f32;
+            pos += 1;
+            p
+        };
+
+        let y = (row_step * f_pos) + first_row_center_y;
+        let a = if hidden { 0.0 } else { 1.0 };
+        out.push(RowTween {
+            from_y: y,
+            to_y: y,
+            from_a: a,
+            to_a: a,
+            t: 1.0,
+        });
+    }
+
+    out
 }
 
 /* -------------------------- hold-to-scroll timing ------------------------- */
@@ -168,6 +230,27 @@ pub struct Row {
 pub struct SpeedMod {
     pub mod_type: String, // "X", "C", "M"
     pub value: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct RowTween {
+    from_y: f32,
+    to_y: f32,
+    from_a: f32,
+    to_a: f32,
+    t: f32,
+}
+
+impl RowTween {
+    #[inline(always)]
+    fn y(&self) -> f32 {
+        (self.to_y - self.from_y).mul_add(self.t, self.from_y)
+    }
+
+    #[inline(always)]
+    fn a(&self) -> f32 {
+        (self.to_a - self.from_a).mul_add(self.t, self.from_a)
+    }
 }
 
 pub struct State {
@@ -218,15 +301,18 @@ pub struct State {
     // Combo preview state (for Combo Font row)
     combo_preview_count: u32,
     combo_preview_elapsed: f32,
-    // Inline option cursor tween (left/right between items)
-    cursor_anim_row: [Option<usize>; PLAYER_SLOTS],
-    cursor_anim_from_choice: [usize; PLAYER_SLOTS],
-    cursor_anim_to_choice: [usize; PLAYER_SLOTS],
-    cursor_anim_t: [f32; PLAYER_SLOTS],
-    // Vertical tween when changing selected row
-    cursor_row_anim_from_y: [f32; PLAYER_SLOTS],
-    cursor_row_anim_t: [f32; PLAYER_SLOTS],
-    cursor_row_anim_from_row: [Option<usize>; PLAYER_SLOTS],
+    // Cursor ring tween (StopTweening/BeginTweening parity with ITGmania ScreenOptions::TweenCursor).
+    cursor_initialized: [bool; PLAYER_SLOTS],
+    cursor_from_x: [f32; PLAYER_SLOTS],
+    cursor_from_y: [f32; PLAYER_SLOTS],
+    cursor_from_w: [f32; PLAYER_SLOTS],
+    cursor_from_h: [f32; PLAYER_SLOTS],
+    cursor_to_x: [f32; PLAYER_SLOTS],
+    cursor_to_y: [f32; PLAYER_SLOTS],
+    cursor_to_w: [f32; PLAYER_SLOTS],
+    cursor_to_h: [f32; PLAYER_SLOTS],
+    cursor_t: [f32; PLAYER_SLOTS],
+    row_tweens: Vec<RowTween>,
 }
 
 // Format music rate like Simply Love wants:
@@ -1559,6 +1645,8 @@ pub fn init(
             .or_else(|| noteskin::load(Path::new(fallback_noteskin_path), &style).ok())
             .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok())
     });
+    let active = session_active_players();
+    let row_tweens = init_row_tweens(rows.len(), [0; PLAYER_SLOTS], active);
     State {
         song,
         chart_steps_index,
@@ -1598,13 +1686,17 @@ pub fn init(
         help_anim_time: [0.0; PLAYER_SLOTS],
         combo_preview_count: 0,
         combo_preview_elapsed: 0.0,
-        cursor_anim_row: [None; PLAYER_SLOTS],
-        cursor_anim_from_choice: [0; PLAYER_SLOTS],
-        cursor_anim_to_choice: [0; PLAYER_SLOTS],
-        cursor_anim_t: [1.0; PLAYER_SLOTS],
-        cursor_row_anim_from_y: [0.0; PLAYER_SLOTS],
-        cursor_row_anim_t: [1.0; PLAYER_SLOTS],
-        cursor_row_anim_from_row: [None; PLAYER_SLOTS],
+        cursor_initialized: [false; PLAYER_SLOTS],
+        cursor_from_x: [0.0; PLAYER_SLOTS],
+        cursor_from_y: [0.0; PLAYER_SLOTS],
+        cursor_from_w: [0.0; PLAYER_SLOTS],
+        cursor_from_h: [0.0; PLAYER_SLOTS],
+        cursor_to_x: [0.0; PLAYER_SLOTS],
+        cursor_to_y: [0.0; PLAYER_SLOTS],
+        cursor_to_w: [0.0; PLAYER_SLOTS],
+        cursor_to_h: [0.0; PLAYER_SLOTS],
+        cursor_t: [1.0; PLAYER_SLOTS],
+        row_tweens,
     }
 }
 
@@ -1667,7 +1759,7 @@ fn row_is_shared(row_name: &str) -> bool {
 }
 
 #[inline(always)]
-fn row_is_inline(row_name: &str) -> bool {
+fn row_shows_all_choices_inline(row_name: &str) -> bool {
     row_name == "Perspective"
         || row_name == "Background Filter"
         || row_name == "Stepchart"
@@ -1679,16 +1771,8 @@ fn row_is_inline(row_name: &str) -> bool {
         || row_name == "Data Visualizations"
         || row_name.starts_with("Gameplay Extras")
         || row_name == "Judgment Tilt Intensity"
-        || row_name == "Error Bar"
-        || row_name == "Error Bar Trim"
-        || row_name == "Error Bar Options"
-        || row_name == "Measure Counter"
-        || row_name == "Measure Counter Lookahead"
-        || row_name == "Measure Counter Options"
-        || row_name == "Measure Lines"
         || row_name == "Rescore Early Hits"
         || row_name == "Early Decent/Way Off Options"
-        || row_name == "Timing Windows"
         || row_name == "FA+ Options"
         || row_name == "Insert"
         || row_name == "Remove"
@@ -1699,6 +1783,183 @@ fn row_is_inline(row_name: &str) -> bool {
         || row_name == "Attacks"
         || row_name == "Characters"
         || row_name == "Hide Light Type"
+}
+
+#[inline(always)]
+fn measure_option_text(asset_manager: &AssetManager, text: &str, zoom: f32) -> (f32, f32) {
+    let mut out_w = 40.0_f32;
+    let mut out_h = 16.0_f32;
+    asset_manager.with_fonts(|all_fonts| {
+        asset_manager.with_font("miso", |metrics_font| {
+            out_h = (metrics_font.height as f32).max(1.0) * zoom;
+            let mut w =
+                crate::ui::font::measure_line_width_logical(metrics_font, text, all_fonts) as f32;
+            if !w.is_finite() || w <= 0.0 {
+                w = 1.0;
+            }
+            out_w = w * zoom;
+        });
+    });
+    (out_w, out_h)
+}
+
+fn cursor_dest_for_player(
+    state: &State,
+    asset_manager: &AssetManager,
+    player_idx: usize,
+) -> Option<(f32, f32, f32, f32)> {
+    if state.rows.is_empty() {
+        return None;
+    }
+    let player_idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
+    let row = state.rows.get(row_idx)?;
+
+    let y = state
+        .row_tweens
+        .get(row_idx)
+        .map(|tw| tw.to_y)
+        .unwrap_or_else(|| {
+            // Fallback (no windowing) if row tweens aren't initialized yet.
+            let (y0, step) = row_layout_params();
+            (row_idx as f32).mul_add(step, y0)
+        });
+
+    let value_zoom = 0.835_f32;
+    let border_w = widescale(2.0, 2.5);
+    let pad_y = widescale(6.0, 8.0);
+    let min_pad_x = widescale(2.0, 3.0);
+    let max_pad_x = widescale(22.0, 28.0);
+    let width_ref = widescale(180.0, 220.0);
+
+    let speed_mod_x = screen_center_x() + widescale(-77.0, -100.0);
+
+    // Shared geometry for Music Rate centering (must match get_actors()).
+    let help_box_w = widescale(614.0, 792.0);
+    let help_box_x = widescale(13.0, 30.666);
+    let row_left = help_box_x;
+    let row_width = help_box_w;
+    let item_col_left = row_left + TITLE_BG_WIDTH;
+    let item_col_w = row_width - TITLE_BG_WIDTH;
+    let music_rate_center_x = item_col_left + item_col_w * 0.5;
+
+    if row.name.is_empty() {
+        // Exit row is shared (OptionRowExit); its cursor is centered on Speed Mod helper X.
+        let choice_text = row
+            .choices
+            .get(row.selected_choice_index[P1])
+            .or_else(|| row.choices.first())?;
+        let (draw_w, draw_h) = measure_option_text(asset_manager, choice_text, value_zoom);
+        let mut size_t = draw_w / width_ref;
+        if !size_t.is_finite() {
+            size_t = 0.0;
+        }
+        size_t = size_t.clamp(0.0, 1.0);
+        let mut pad_x = (max_pad_x - min_pad_x).mul_add(size_t, min_pad_x);
+        let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
+        if pad_x > max_pad_by_spacing {
+            pad_x = max_pad_by_spacing;
+        }
+        let ring_w = draw_w + pad_x * 2.0;
+        let ring_h = draw_h + pad_y * 2.0;
+        return Some((speed_mod_x, y, ring_w, ring_h));
+    }
+
+    if row_shows_all_choices_inline(&row.name) {
+        if row.choices.is_empty() {
+            return None;
+        }
+        let spacing = INLINE_SPACING;
+        let choice_inner_left = widescale(162.0, 176.0);
+        let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
+        let mut text_h: f32 = 16.0;
+        asset_manager.with_fonts(|all_fonts| {
+            asset_manager.with_font("miso", |metrics_font| {
+                text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
+                for text in &row.choices {
+                    let mut w =
+                        crate::ui::font::measure_line_width_logical(metrics_font, text, all_fonts)
+                            as f32;
+                    if !w.is_finite() || w <= 0.0 {
+                        w = 1.0;
+                    }
+                    widths.push(w * value_zoom);
+                }
+            });
+        });
+        if widths.is_empty() {
+            return None;
+        }
+
+        let sel_idx = row
+            .selected_choice_index[player_idx]
+            .min(widths.len().saturating_sub(1));
+        let mut left_x = choice_inner_left;
+        for w in widths.iter().take(sel_idx) {
+            left_x += *w + spacing;
+        }
+        let draw_w = widths[sel_idx];
+        let center_x = draw_w.mul_add(0.5, left_x);
+
+        let mut size_t = draw_w / width_ref;
+        if !size_t.is_finite() {
+            size_t = 0.0;
+        }
+        size_t = size_t.clamp(0.0, 1.0);
+        let mut pad_x = (max_pad_x - min_pad_x).mul_add(size_t, min_pad_x);
+        let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
+        if pad_x > max_pad_by_spacing {
+            pad_x = max_pad_by_spacing;
+        }
+        let ring_w = draw_w + pad_x * 2.0;
+        let ring_h = text_h + pad_y * 2.0;
+        return Some((center_x, y, ring_w, ring_h));
+    }
+
+    // Single value rows (ShowOneInRow).
+    let mut center_x = speed_mod_x;
+    if row.name.starts_with("Music Rate") {
+        center_x = music_rate_center_x;
+    } else if player_idx == P2 {
+        center_x = screen_center_x().mul_add(2.0, -center_x);
+    }
+
+    let display_text = if row.name == "Speed Mod" {
+        match state.speed_mod[player_idx].mod_type.as_str() {
+            "X" => format!("{:.2}x", state.speed_mod[player_idx].value),
+            "C" => format!("C{}", state.speed_mod[player_idx].value as i32),
+            "M" => format!("M{}", state.speed_mod[player_idx].value as i32),
+            _ => String::new(),
+        }
+    } else if row.name == "Type of Speed Mod" {
+        let idx = match state.speed_mod[player_idx].mod_type.as_str() {
+            "X" => 0,
+            "C" => 1,
+            "M" => 2,
+            _ => 1,
+        };
+        row.choices.get(idx).cloned().unwrap_or_default()
+    } else {
+        let idx = row
+            .selected_choice_index[player_idx]
+            .min(row.choices.len().saturating_sub(1));
+        row.choices.get(idx).cloned().unwrap_or_default()
+    };
+
+    let (draw_w, draw_h) = measure_option_text(asset_manager, &display_text, value_zoom);
+    let mut size_t = draw_w / width_ref;
+    if !size_t.is_finite() {
+        size_t = 0.0;
+    }
+    size_t = size_t.clamp(0.0, 1.0);
+    let mut pad_x = (max_pad_x - min_pad_x).mul_add(size_t, min_pad_x);
+    let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
+    if pad_x > max_pad_by_spacing {
+        pad_x = max_pad_by_spacing;
+    }
+    let ring_w = draw_w + pad_x * 2.0;
+    let ring_h = draw_h + pad_y * 2.0;
+    Some((center_x, y, ring_w, ring_h))
 }
 
 fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) {
@@ -1769,19 +2030,11 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
 
     let current_idx = row.selected_choice_index[player_idx] as isize;
     let new_index = ((current_idx + delta + num_choices as isize) % num_choices as isize) as usize;
-    let prev_choice = row.selected_choice_index[player_idx];
 
     if is_shared {
         row.selected_choice_index = [new_index; PLAYER_SLOTS];
     } else {
         row.selected_choice_index[player_idx] = new_index;
-    }
-
-    if row_is_inline(&row_name) && prev_choice != new_index {
-        state.cursor_anim_row[player_idx] = Some(row_index);
-        state.cursor_anim_from_choice[player_idx] = prev_choice;
-        state.cursor_anim_to_choice[player_idx] = new_index;
-        state.cursor_anim_t[player_idx] = 0.0;
     }
 
     if row_name == "Type of Speed Mod" {
@@ -2121,7 +2374,7 @@ pub fn apply_choice_delta(state: &mut State, player_idx: usize, delta: isize) {
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
-pub fn update(state: &mut State, dt: f32) {
+pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
     // Update preview animation time and beat based on song BPM
     state.preview_time += dt;
 
@@ -2210,35 +2463,62 @@ pub fn update(state: &mut State, dt: f32) {
         state.combo_preview_elapsed = 0.0;
     }
 
-    // Start vertical cursor tween and reset help reveal when a player changes rows.
+    // Row frame tweening: mimic ScreenOptions::PositionRows() + OptionRow::SetDestination()
+    // so rows slide smoothly as the visible window scrolls.
     let total_rows = state.rows.len();
-    // constants must mirror get_actors()
-    let frame_h = ROW_HEIGHT;
-    let first_row_center_y = screen_center_y() + ROW_START_OFFSET;
-    let help_box_h = 40.0_f32;
-    let help_box_bottom_y = screen_height() - 36.0;
-    let help_top_y = help_box_bottom_y - help_box_h;
-    let n_rows_f = VISIBLE_ROWS as f32;
-    let mut row_gap = if n_rows_f > 0.0 {
-        (n_rows_f - 0.5).mul_add(-frame_h, help_top_y - first_row_center_y) / n_rows_f
+    let (first_row_center_y, row_step) = row_layout_params();
+    if total_rows == 0 {
+        state.row_tweens.clear();
+    } else if state.row_tweens.len() != total_rows {
+        state.row_tweens = init_row_tweens(total_rows, state.selected_row, active);
     } else {
-        0.0
-    };
-    if !row_gap.is_finite() || row_gap < 0.0 {
-        row_gap = 0.0;
+        let w = compute_row_window(total_rows, state.selected_row, active);
+        let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
+        let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
+        let mut pos = 0i32;
+        for i in 0..total_rows {
+            let ii = i as i32;
+            let hidden_above = ii < w.first_start;
+            let hidden_mid = ii >= w.first_end && ii < w.second_start;
+            let hidden_below = ii >= w.second_end;
+            let hidden = hidden_above || hidden_mid || hidden_below;
+
+            let f_pos = if hidden_above {
+                -0.5
+            } else if hidden_mid {
+                mid_pos
+            } else if hidden_below {
+                bottom_pos
+            } else {
+                let p = pos as f32;
+                pos += 1;
+                p
+            };
+
+            let dest_y = first_row_center_y + row_step * f_pos;
+            let dest_a = if hidden { 0.0 } else { 1.0 };
+
+            let tw = &mut state.row_tweens[i];
+            let cur_y = tw.y();
+            let cur_a = tw.a();
+            if (dest_y - tw.to_y).abs() > 0.01 || dest_a != tw.to_a {
+                tw.from_y = cur_y;
+                tw.from_a = cur_a;
+                tw.to_y = dest_y;
+                tw.to_a = dest_a;
+                tw.t = 0.0;
+            }
+            if tw.t < 1.0 {
+                if ROW_TWEEN_SECONDS > 0.0 {
+                    tw.t = (tw.t + dt / ROW_TWEEN_SECONDS).min(1.0);
+                } else {
+                    tw.t = 1.0;
+                }
+            }
+        }
     }
 
-    let (visible_row_ids, visible_len) =
-        compute_visible_rows(total_rows, state.selected_row, active);
-    let row_y_for = |row_idx: usize| -> f32 {
-        let pos = visible_row_ids
-            .iter()
-            .take(visible_len)
-            .position(|&i| i == row_idx)
-            .unwrap_or(0);
-        (pos as f32).mul_add(frame_h + row_gap, first_row_center_y)
-    };
-
+    // Reset help reveal and play SFX when a player changes rows.
     for player_idx in 0..PLAYER_SLOTS {
         if !active[player_idx] {
             continue;
@@ -2252,37 +2532,72 @@ pub fn update(state: &mut State, dt: f32) {
             _ => audio::play_sfx("assets/sounds/next_row.ogg"),
         }
 
-        let prev_idx = state.prev_selected_row[player_idx];
-        let from_y = row_y_for(prev_idx);
-        state.cursor_row_anim_from_y[player_idx] = from_y;
-        state.cursor_row_anim_t[player_idx] = 0.0;
-        state.cursor_row_anim_from_row[player_idx] = Some(prev_idx);
         state.help_anim_time[player_idx] = 0.0;
         state.prev_selected_row[player_idx] = state.selected_row[player_idx];
     }
 
-    // Advance cursor tweens.
+    // Retarget cursor tween destinations to match current selection and row destinations.
     for player_idx in 0..PLAYER_SLOTS {
-        if state.cursor_anim_row[player_idx].is_some() && state.cursor_anim_t[player_idx] < 1.0 {
-            if CURSOR_TWEEN_SECONDS > 0.0 {
-                state.cursor_anim_t[player_idx] =
-                    (state.cursor_anim_t[player_idx] + dt / CURSOR_TWEEN_SECONDS).min(1.0);
-            } else {
-                state.cursor_anim_t[player_idx] = 1.0;
-            }
-            if state.cursor_anim_t[player_idx] >= 1.0 {
-                state.cursor_anim_row[player_idx] = None;
+        if !active[player_idx] {
+            continue;
+        }
+        let Some((to_x, to_y, to_w, to_h)) = cursor_dest_for_player(state, asset_manager, player_idx)
+        else {
+            continue;
+        };
+
+        if !state.cursor_initialized[player_idx] {
+            state.cursor_initialized[player_idx] = true;
+            state.cursor_from_x[player_idx] = to_x;
+            state.cursor_from_y[player_idx] = to_y;
+            state.cursor_from_w[player_idx] = to_w;
+            state.cursor_from_h[player_idx] = to_h;
+            state.cursor_to_x[player_idx] = to_x;
+            state.cursor_to_y[player_idx] = to_y;
+            state.cursor_to_w[player_idx] = to_w;
+            state.cursor_to_h[player_idx] = to_h;
+            state.cursor_t[player_idx] = 1.0;
+        } else {
+            let dx = (to_x - state.cursor_to_x[player_idx]).abs();
+            let dy = (to_y - state.cursor_to_y[player_idx]).abs();
+            let dw = (to_w - state.cursor_to_w[player_idx]).abs();
+            let dh = (to_h - state.cursor_to_h[player_idx]).abs();
+            if dx > 0.01 || dy > 0.01 || dw > 0.01 || dh > 0.01 {
+                let t = state.cursor_t[player_idx].clamp(0.0, 1.0);
+                let cur_x =
+                    (state.cursor_to_x[player_idx] - state.cursor_from_x[player_idx])
+                        .mul_add(t, state.cursor_from_x[player_idx]);
+                let cur_y =
+                    (state.cursor_to_y[player_idx] - state.cursor_from_y[player_idx])
+                        .mul_add(t, state.cursor_from_y[player_idx]);
+                let cur_w =
+                    (state.cursor_to_w[player_idx] - state.cursor_from_w[player_idx])
+                        .mul_add(t, state.cursor_from_w[player_idx]);
+                let cur_h =
+                    (state.cursor_to_h[player_idx] - state.cursor_from_h[player_idx])
+                        .mul_add(t, state.cursor_from_h[player_idx]);
+
+                state.cursor_from_x[player_idx] = cur_x;
+                state.cursor_from_y[player_idx] = cur_y;
+                state.cursor_from_w[player_idx] = cur_w;
+                state.cursor_from_h[player_idx] = cur_h;
+                state.cursor_to_x[player_idx] = to_x;
+                state.cursor_to_y[player_idx] = to_y;
+                state.cursor_to_w[player_idx] = to_w;
+                state.cursor_to_h[player_idx] = to_h;
+                state.cursor_t[player_idx] = 0.0;
             }
         }
-        if state.cursor_row_anim_t[player_idx] < 1.0 {
+    }
+
+    // Advance cursor tween.
+    for player_idx in 0..PLAYER_SLOTS {
+        if state.cursor_t[player_idx] < 1.0 {
             if CURSOR_TWEEN_SECONDS > 0.0 {
-                state.cursor_row_anim_t[player_idx] =
-                    (state.cursor_row_anim_t[player_idx] + dt / CURSOR_TWEEN_SECONDS).min(1.0);
+                state.cursor_t[player_idx] =
+                    (state.cursor_t[player_idx] + dt / CURSOR_TWEEN_SECONDS).min(1.0);
             } else {
-                state.cursor_row_anim_t[player_idx] = 1.0;
-            }
-            if state.cursor_row_anim_t[player_idx] >= 1.0 {
-                state.cursor_row_anim_from_row[player_idx] = None;
+                state.cursor_t[player_idx] = 1.0;
             }
         }
     }
@@ -2737,11 +3052,19 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     state.current_pane = pane;
     state.selected_row = [0; PLAYER_SLOTS];
     state.prev_selected_row = [0; PLAYER_SLOTS];
-    state.cursor_anim_row = [None; PLAYER_SLOTS];
-    state.cursor_anim_t = [1.0; PLAYER_SLOTS];
-    state.cursor_row_anim_t = [1.0; PLAYER_SLOTS];
-    state.cursor_row_anim_from_row = [None; PLAYER_SLOTS];
+    state.cursor_initialized = [false; PLAYER_SLOTS];
+    state.cursor_from_x = [0.0; PLAYER_SLOTS];
+    state.cursor_from_y = [0.0; PLAYER_SLOTS];
+    state.cursor_from_w = [0.0; PLAYER_SLOTS];
+    state.cursor_from_h = [0.0; PLAYER_SLOTS];
+    state.cursor_to_x = [0.0; PLAYER_SLOTS];
+    state.cursor_to_y = [0.0; PLAYER_SLOTS];
+    state.cursor_to_w = [0.0; PLAYER_SLOTS];
+    state.cursor_to_h = [0.0; PLAYER_SLOTS];
+    state.cursor_t = [1.0; PLAYER_SLOTS];
     state.help_anim_time = [0.0; PLAYER_SLOTS];
+    let active = session_active_players();
+    state.row_tweens = init_row_tweens(state.rows.len(), state.selected_row, active);
 }
 
 fn handle_nav_event(
@@ -3026,29 +3349,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let help_box_x = widescale(13.0, 30.666);
     let help_box_bottom_y = screen_height() - 36.0;
     let total_rows = state.rows.len();
-    let (visible_row_ids, visible_len) =
-        compute_visible_rows(total_rows, state.selected_row, active);
     let frame_h = ROW_HEIGHT;
-    // Compute dynamic row gap so the space between the last visible
-    // row and the help box equals all other inter-row gaps.
-    // Derivation (using row centers):
-    //   help_top = y0 + (N - 0.5)*H + N*gap  =>  gap = (help_top - y0 - (N - 0.5)*H)/N
-    // where y0 is the first row center, H is row height, N is number of rows.
-    let first_row_center_y = screen_center_y() + ROW_START_OFFSET;
-    let help_top_y = help_box_bottom_y - help_box_h;
-    // Use VISIBLE_ROWS for gap calculation
-    let n_rows_f = VISIBLE_ROWS as f32;
-    let mut row_gap = if n_rows_f > 0.0 {
-        (n_rows_f - 0.5).mul_add(-frame_h, help_top_y - first_row_center_y) / n_rows_f
-    } else {
-        0.0
-    };
-    if !row_gap.is_finite() {
-        row_gap = 0.0;
-    }
-    if row_gap < 0.0 {
-        row_gap = 0.0;
-    }
+    let (fallback_y0, fallback_row_step) = row_layout_params();
+    let row_alpha_cutoff: f32 = 0.001;
     // Make row frame LEFT and WIDTH exactly match the help box.
     let row_left = help_box_x;
     let row_width = help_box_w;
@@ -3056,128 +3359,34 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let title_zoom = 0.88;
     // Title text x: slightly less padding so text sits further left
     let title_x = row_left + widescale(7.0, 13.0);
-    // Helper to compute the cursor center X for a given row index and player.
-    let calc_row_center_x = |row_idx: usize, player_idx: usize| -> f32 {
-        if row_idx >= state.rows.len() {
-            let cx = speed_mod_x;
-            return if player_idx == P2 {
-                screen_center_x().mul_add(2.0, -cx)
-            } else {
-                cx
-            };
+    let cursor_now = |player_idx: usize| -> Option<(f32, f32, f32, f32)> {
+        if player_idx >= PLAYER_SLOTS || !state.cursor_initialized[player_idx] {
+            return None;
         }
-        let r = &state.rows[row_idx];
-        if r.name.is_empty() {
-            // Exit row is shared (OptionRowExit).
-            return speed_mod_x;
-        }
-        let is_inline = r.name == "Perspective"
-            || r.name == "Background Filter"
-            || r.name == "Stepchart"
-            || r.name == "What comes next?"
-            || r.name == "Turn"
-            || r.name == "Scroll"
-            || r.name == "Hide"
-            || r.name == "LifeMeter Type"
-            || r.name == "Data Visualizations"
-            || r.name.starts_with("Gameplay Extras")
-            || r.name == "Judgment Tilt Intensity"
-            || r.name == "Insert"
-            || r.name == "Remove"
-            || r.name == "Holds"
-            || r.name == "Accel Effects"
-            || r.name == "Visual Effects"
-            || r.name == "Appearance Effects"
-            || r.name == "Attacks"
-            || r.name == "Characters"
-            || r.name == "Hide Light Type";
-        if is_inline {
-            let value_zoom = 0.835_f32;
-            let spacing = 15.75_f32;
-            let choice_inner_left = widescale(162.0, 176.0);
-            let mut widths: Vec<f32> = Vec::with_capacity(r.choices.len());
-            asset_manager.with_fonts(|all_fonts| {
-                asset_manager.with_font("miso", |metrics_font| {
-                    for text in &r.choices {
-                        let mut w = crate::ui::font::measure_line_width_logical(
-                            metrics_font,
-                            text,
-                            all_fonts,
-                        ) as f32;
-                        if !w.is_finite() || w <= 0.0 {
-                            w = 1.0;
-                        }
-                        widths.push(w * value_zoom);
-                    }
-                });
-            });
-            if widths.is_empty() {
-                return speed_mod_x;
-            }
-            let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
-            let mut x = choice_inner_left;
-            for w in &widths {
-                x_positions.push(x);
-                x += *w + spacing;
-            }
-            let sel = r.selected_choice_index[player_idx].min(widths.len().saturating_sub(1));
-            let cx = widths[sel].mul_add(0.5, x_positions[sel]);
-            cx
-        } else {
-            // Single value rows: default to Speed Mod helper X, except Music Rate centered in items column
-            let mut cx = speed_mod_x;
-            if r.name.starts_with("Music Rate") {
-                let item_col_left = row_left + TITLE_BG_WIDTH;
-                let item_col_w = row_width - TITLE_BG_WIDTH;
-                cx = item_col_left + item_col_w * 0.5;
-            }
-            if player_idx == P2 {
-                screen_center_x().mul_add(2.0, -cx)
-            } else {
-                cx
-            }
-        }
+        let t = state.cursor_t[player_idx].clamp(0.0, 1.0);
+        let x = (state.cursor_to_x[player_idx] - state.cursor_from_x[player_idx])
+            .mul_add(t, state.cursor_from_x[player_idx]);
+        let y = (state.cursor_to_y[player_idx] - state.cursor_from_y[player_idx])
+            .mul_add(t, state.cursor_from_y[player_idx]);
+        let w = (state.cursor_to_w[player_idx] - state.cursor_from_w[player_idx])
+            .mul_add(t, state.cursor_from_w[player_idx]);
+        let h = (state.cursor_to_h[player_idx] - state.cursor_from_h[player_idx])
+            .mul_add(t, state.cursor_from_h[player_idx]);
+        Some((x, y, w, h))
     };
 
-    // Helper to compute draw_w/draw_h (text box) for the selected item of a row
-    let calc_row_dims = |row_idx: usize, player_idx: usize| -> (f32, f32) {
-        let value_zoom = 0.835_f32;
-        let mut out_w = 40.0_f32;
-        let mut out_h = 16.0_f32;
-        if row_idx >= state.rows.len() {
-            // Fallback; overridden below when font metrics are available
-            return (out_w, out_h);
-        }
-        let r = &state.rows[row_idx];
-        asset_manager.with_fonts(|all_fonts| {
-            asset_manager.with_font("miso", |metrics_font| {
-                out_h = (metrics_font.height as f32).max(1.0) * value_zoom;
-                if r.choices.is_empty() {
-                    out_w = 40.0;
-                    return;
-                }
-                // For inline rows, measure the selected choice; single-value rows do the same
-                let sel = r.selected_choice_index[player_idx].min(r.choices.len() - 1);
-                let mut w = crate::ui::font::measure_line_width_logical(
-                    metrics_font,
-                    &r.choices[sel],
-                    all_fonts,
-                ) as f32;
-                if !w.is_finite() || w <= 0.0 {
-                    w = 1.0;
-                }
-                out_w = w * value_zoom;
-            });
-        });
-        (out_w, out_h)
-    };
-
-    for i_vis in 0..visible_len {
-        let item_idx = visible_row_ids[i_vis];
-        if item_idx == usize::MAX || item_idx >= total_rows {
+    for item_idx in 0..total_rows {
+        let (current_row_y, row_alpha) = state
+            .row_tweens
+            .get(item_idx)
+            .map(|tw| (tw.y(), tw.a()))
+            .unwrap_or_else(|| ((item_idx as f32).mul_add(fallback_row_step, fallback_y0), 1.0));
+        let row_alpha = row_alpha.clamp(0.0, 1.0);
+        if row_alpha <= row_alpha_cutoff {
             continue;
         }
-        let current_row_y = (i_vis as f32).mul_add(frame_h + row_gap, first_row_center_y);
+        let a = row_alpha;
+
         let is_active = (active[P1] && item_idx == state.selected_row[P1])
             || (active[P2] && item_idx == state.selected_row[P2]);
         let row = &state.rows[item_idx];
@@ -3197,25 +3406,26 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.push(act!(quad:
             align(0.0, 0.5): xy(row_left, current_row_y):
             zoomto(row_width, frame_h):
-            diffuse(bg_color[0], bg_color[1], bg_color[2], bg_color[3]):
+            diffuse(bg_color[0], bg_color[1], bg_color[2], bg_color[3] * a):
             z(100)
         ));
         if !row.name.is_empty() {
             actors.push(act!(quad:
                 align(0.0, 0.5): xy(row_left, current_row_y):
                 zoomto(TITLE_BG_WIDTH, frame_h):
-                diffuse(0.0, 0.0, 0.0, 0.25):
+                diffuse(0.0, 0.0, 0.0, 0.25 * a):
                 z(101)
             ));
         }
         // Left column (row titles)
-        let title_color = if is_active {
+        let mut title_color = if is_active {
             let mut c = color::simply_love_rgba(state.active_color_index);
             c[3] = 1.0;
             c
         } else {
             [1.0, 1.0, 1.0, 1.0]
         };
+        title_color[3] *= a;
         // Handle multi-line row titles (e.g., "Music Rate\nbpm: 120")
         if row.name.contains('\n') {
             let lines: Vec<&str> = row.name.split('\n').collect();
@@ -3253,31 +3463,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
         }
         // Inactive option text color should be #808080 (alpha 1.0)
-        let sl_gray = color::rgba_hex("#808080");
+        let mut sl_gray = color::rgba_hex("#808080");
+        sl_gray[3] *= a;
         // Some rows should display all choices inline
-        let show_all_choices_inline = row.name == "Perspective"
-            || row.name == "Background Filter"
-            || row.name == "Stepchart"
-            || row.name == "What comes next?"
-            || row.name == "Turn"
-            || row.name == "Scroll"
-            || row.name == "Hide"
-            || row.name == "LifeMeter Type"
-            || row.name == "Data Visualizations"
-            || row.name.starts_with("Gameplay Extras")
-            || row.name == "Judgment Tilt Intensity"
-            || row.name == "Rescore Early Hits"
-            || row.name == "Early Decent/Way Off Options"
-            || row.name == "FA+ Options"
-            || row.name == "Insert"
-            || row.name == "Remove"
-            || row.name == "Holds"
-            || row.name == "Accel Effects"
-            || row.name == "Visual Effects"
-            || row.name == "Appearance Effects"
-            || row.name == "Attacks"
-            || row.name == "Characters"
-            || row.name == "Hide Light Type";
+        let show_all_choices_inline = row_shows_all_choices_inline(&row.name);
         // Choice area: For single-choice rows (ShowOneInRow), use ItemsLongRowP1X positioning
         // For multi-choice rows (ShowAllInRow), use ItemsStartX positioning
         // ItemsLongRowP1X = WideScale(_screen.cx-100, _screen.cx-130) from Simply Love metrics
@@ -3291,7 +3480,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Special case for the last "Exit" row
             let choice_text = &row.choices[row.selected_choice_index[P1]];
             let choice_color = if is_active {
-                [1.0, 1.0, 1.0, 1.0]
+                [1.0, 1.0, 1.0, a]
             } else {
                 sl_gray
             };
@@ -3304,80 +3493,47 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
             // Draw the selection cursor for the centered "Exit" text when active
             if is_active {
-                let value_zoom = 0.835;
-                asset_manager.with_fonts(|all_fonts| {
-                    asset_manager.with_font("miso", |metrics_font| {
-                        let mut text_w = crate::ui::font::measure_line_width_logical(metrics_font, choice_text, all_fonts) as f32;
-                        if !text_w.is_finite() || text_w <= 0.0 { text_w = 1.0; }
-                        let text_h = (metrics_font.height as f32).max(1.0);
-                        let draw_w = text_w * value_zoom;
-                        let draw_h = text_h * value_zoom;
-                        let pad_y = widescale(6.0, 8.0);
-                        let min_pad_x = widescale(2.0, 3.0);
-                        let max_pad_x = widescale(22.0, 28.0);
-                        let width_ref = widescale(180.0, 220.0);
-                        let t = (draw_w / width_ref).clamp(0.0, 1.0);
-                        let mut pad_x = (max_pad_x - min_pad_x).mul_add(t, min_pad_x);
-                        let border_w = widescale(2.0, 2.5);
-                        // Cap pad so the ring never invades adjacent inline item space
-                        let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
-                        if pad_x > max_pad_by_spacing { pad_x = max_pad_by_spacing; }
-                        let ring_w = draw_w + pad_x * 2.0;
-                        let ring_h = draw_h + pad_y * 2.0;
+                let border_w = widescale(2.0, 2.5);
+                for player_idx in 0..PLAYER_SLOTS {
+                    if !active[player_idx] || state.selected_row[player_idx] != item_idx {
+                        continue;
+                    }
+                    let Some((center_x, center_y, ring_w, ring_h)) = cursor_now(player_idx) else {
+                        continue;
+                    };
 
-                        for player_idx in 0..PLAYER_SLOTS {
-                            if !active[player_idx] || state.selected_row[player_idx] != item_idx {
-                                continue;
-                            }
-                            let mut center_x = choice_center_x;
-                            let mut center_y = current_row_y;
+                    let left = center_x - ring_w * 0.5;
+                    let right = center_x + ring_w * 0.5;
+                    let top = center_y - ring_h * 0.5;
+                    let bottom = center_y + ring_h * 0.5;
+                    let mut ring_color = color::decorative_rgba(player_color_index(player_idx));
+                    ring_color[3] *= a;
 
-                            // Vertical tween for row transitions.
-                            if state.cursor_row_anim_t[player_idx] < 1.0 {
-                                let t = ease_out_cubic(state.cursor_row_anim_t[player_idx]);
-                                if let Some(from_row) = state.cursor_row_anim_from_row[player_idx] {
-                                    let from_x = calc_row_center_x(from_row, player_idx);
-                                    center_x = (center_x - from_x).mul_add(t, from_x);
-                                }
-                                center_y = (current_row_y - state.cursor_row_anim_from_y[player_idx])
-                                    .mul_add(t, state.cursor_row_anim_from_y[player_idx]);
-                            }
-
-                            // Interpolate ring size between previous row and this row when vertically tweening.
-                            let (mut ring_w, mut ring_h) = (ring_w, ring_h);
-                            if state.cursor_row_anim_t[player_idx] < 1.0
-                                && let Some(from_row) = state.cursor_row_anim_from_row[player_idx]
-                            {
-                                let (from_dw, from_dh) = calc_row_dims(from_row, player_idx);
-                                let tsize = (from_dw / width_ref).clamp(0.0, 1.0);
-                                let mut pad_x_from =
-                                    (max_pad_x - min_pad_x).mul_add(tsize, min_pad_x);
-                                let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
-                                if pad_x_from > max_pad_by_spacing {
-                                    pad_x_from = max_pad_by_spacing;
-                                }
-                                let ring_w_from = from_dw + pad_x_from * 2.0;
-                                let ring_h_from = from_dh + pad_y * 2.0;
-                                let t = ease_out_cubic(state.cursor_row_anim_t[player_idx]);
-                                ring_w = (ring_w - ring_w_from).mul_add(t, ring_w_from);
-                                ring_h = (ring_h - ring_h_from).mul_add(t, ring_h_from);
-                            }
-
-                            let left = center_x - ring_w * 0.5;
-                            let right = center_x + ring_w * 0.5;
-                            let top = center_y - ring_h * 0.5;
-                            let bottom = center_y + ring_h * 0.5;
-                            let mut ring_color =
-                                color::decorative_rgba(player_color_index(player_idx));
-                            ring_color[3] = 1.0;
-
-                            actors.push(act!(quad: align(0.5, 0.5): xy(center_x, top + border_w * 0.5): zoomto(ring_w, border_w): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
-                            actors.push(act!(quad: align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5): zoomto(ring_w, border_w): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
-                            actors.push(act!(quad: align(0.5, 0.5): xy(left + border_w * 0.5, center_y): zoomto(border_w, ring_h): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
-                            actors.push(act!(quad: align(0.5, 0.5): xy(right - border_w * 0.5, center_y): zoomto(border_w, ring_h): diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]): z(101)));
-                        }
-                    });
-                });
+                    actors.push(act!(quad:
+                        align(0.5, 0.5): xy((left + right) * 0.5, top + border_w * 0.5):
+                        zoomto(ring_w, border_w):
+                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                        z(101)
+                    ));
+                    actors.push(act!(quad:
+                        align(0.5, 0.5): xy((left + right) * 0.5, bottom - border_w * 0.5):
+                        zoomto(ring_w, border_w):
+                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                        z(101)
+                    ));
+                    actors.push(act!(quad:
+                        align(0.5, 0.5): xy(left + border_w * 0.5, (top + bottom) * 0.5):
+                        zoomto(border_w, ring_h):
+                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                        z(101)
+                    ));
+                    actors.push(act!(quad:
+                        align(0.5, 0.5): xy(right - border_w * 0.5, (top + bottom) * 0.5):
+                        zoomto(border_w, ring_h):
+                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                        z(101)
+                    ));
+                }
             }
         } else if show_all_choices_inline {
             // Render every option horizontally; when active, all options should be white.
@@ -3437,7 +3593,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     let underline_y = underline_y_for(player_idx);
                     let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] = 1.0;
+                    line_color[3] *= a;
                     for idx in 0..row.choices.len() {
                         let bit = 1u8 << (idx as u8);
                         if (mask & bit) == 0 {
@@ -3477,7 +3633,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     let underline_y = underline_y_for(player_idx);
                     let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] = 1.0;
+                    line_color[3] *= a;
                     for idx in 0..row.choices.len() {
                         let bit = 1u8 << (idx as u8);
                         if (mask & bit) == 0 {
@@ -3517,7 +3673,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     let underline_y = underline_y_for(player_idx);
                     let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] = 1.0;
+                    line_color[3] *= a;
                     for idx in 0..row.choices.len() {
                         let bit = 1u8 << (idx as u8);
                         if (mask & bit) == 0 {
@@ -3557,7 +3713,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     let underline_y = underline_y_for(player_idx);
                     let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] = 1.0;
+                    line_color[3] *= a;
                     for idx in 0..row.choices.len() {
                         let bit = 1u8 << (idx as u8);
                         if (mask & bit) == 0 {
@@ -3597,7 +3753,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     let underline_y = underline_y_for(player_idx);
                     let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] = 1.0;
+                    line_color[3] *= a;
                     for idx in 0..row.choices.len() {
                         let bit = 1u8 << (idx as u8);
                         if (mask & bit) == 0 {
@@ -3637,7 +3793,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     let underline_y = underline_y_for(player_idx);
                     let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] = 1.0;
+                    line_color[3] *= a;
                     for idx in 0..row.choices.len() {
                         let bit = 1u8 << (idx as u8);
                         if (mask & bit) == 0 {
@@ -3677,7 +3833,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     let underline_y = underline_y_for(player_idx);
                     let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] = 1.0;
+                    line_color[3] *= a;
                     for idx in 0..row.choices.len() {
                         let bit = 1u8 << (idx as u8);
                         if (mask & bit) == 0 {
@@ -3718,7 +3874,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let underline_w = draw_w.ceil();
                         let underline_y = underline_y_for(player_idx);
                         let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                        line_color[3] = 1.0;
+                        line_color[3] *= a;
                         actors.push(act!(quad:
                             align(0.0, 0.5):
                             xy(sel_x, underline_y):
@@ -3730,102 +3886,22 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
             // Draw the 4-sided cursor ring around the selected option when this row is active.
-            // If a tween is in progress for this row, animate the ring's X position (SL's CursorTweenSeconds).
             if !widths.is_empty() {
-                let pad_y = widescale(6.0, 8.0);
-                let min_pad_x = widescale(2.0, 3.0);
-                let max_pad_x = widescale(22.0, 28.0);
-                let width_ref = widescale(180.0, 220.0);
                 let border_w = widescale(2.0, 2.5);
-                let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
                 for player_idx in 0..PLAYER_SLOTS {
                     if !active[player_idx] || state.selected_row[player_idx] != item_idx {
                         continue;
                     }
-                    let sel_idx =
-                        row.selected_choice_index[player_idx].min(widths.len().saturating_sub(1));
-                    let Some(target_left_x) = x_positions.get(sel_idx).copied() else {
+                    let Some((center_x, center_y, ring_w, ring_h)) = cursor_now(player_idx) else {
                         continue;
                     };
-                    let draw_w = widths.get(sel_idx).copied().unwrap_or(40.0);
-
-                    let mut size_t_to = draw_w / width_ref;
-                    if !size_t_to.is_finite() {
-                        size_t_to = 0.0;
-                    }
-                    size_t_to = size_t_to.clamp(0.0, 1.0);
-                    let mut pad_x_to = (max_pad_x - min_pad_x).mul_add(size_t_to, min_pad_x);
-                    if pad_x_to > max_pad_by_spacing {
-                        pad_x_to = max_pad_by_spacing;
-                    }
-                    let mut ring_w = draw_w + pad_x_to * 2.0;
-                    let mut ring_h = text_h + pad_y * 2.0;
-
-                    let mut center_x = target_left_x + draw_w * 0.5;
-                    let mut center_y = current_row_y;
-                    if state.cursor_row_anim_t[player_idx] < 1.0 {
-                        let t = ease_out_cubic(state.cursor_row_anim_t[player_idx]);
-                        if let Some(from_row) = state.cursor_row_anim_from_row[player_idx] {
-                            let from_x = calc_row_center_x(from_row, player_idx);
-                            center_x = (center_x - from_x).mul_add(t, from_x);
-                        }
-                        center_y = (current_row_y - state.cursor_row_anim_from_y[player_idx])
-                            .mul_add(t, state.cursor_row_anim_from_y[player_idx]);
-                    }
-
-                    if state.cursor_anim_row[player_idx] == Some(item_idx)
-                        && state.cursor_anim_t[player_idx] < 1.0
-                    {
-                        let from_idx = state.cursor_anim_from_choice[player_idx]
-                            .min(widths.len().saturating_sub(1));
-                        let to_idx = sel_idx.min(widths.len().saturating_sub(1));
-                        let from_center_x = widths[from_idx].mul_add(0.5, x_positions[from_idx]);
-                        let to_center_x = widths[to_idx].mul_add(0.5, x_positions[to_idx]);
-                        let t = ease_out_cubic(state.cursor_anim_t[player_idx]);
-                        center_x = (to_center_x - from_center_x).mul_add(t, from_center_x);
-
-                        let from_draw_w = widths[from_idx];
-                        let mut size_t_from = from_draw_w / width_ref;
-                        if !size_t_from.is_finite() {
-                            size_t_from = 0.0;
-                        }
-                        size_t_from = size_t_from.clamp(0.0, 1.0);
-                        let mut pad_x_from =
-                            (max_pad_x - min_pad_x).mul_add(size_t_from, min_pad_x);
-                        if pad_x_from > max_pad_by_spacing {
-                            pad_x_from = max_pad_by_spacing;
-                        }
-                        let ring_w_from = from_draw_w + pad_x_from * 2.0;
-                        let ring_h_from = text_h + pad_y * 2.0;
-                        ring_w = (ring_w - ring_w_from).mul_add(t, ring_w_from);
-                        ring_h = (ring_h - ring_h_from).mul_add(t, ring_h_from);
-                    } else if state.cursor_row_anim_t[player_idx] < 1.0
-                        && let Some(from_row) = state.cursor_row_anim_from_row[player_idx]
-                    {
-                        let (from_dw, from_dh) = calc_row_dims(from_row, player_idx);
-                        let mut size_t_from = from_dw / width_ref;
-                        if !size_t_from.is_finite() {
-                            size_t_from = 0.0;
-                        }
-                        size_t_from = size_t_from.clamp(0.0, 1.0);
-                        let mut pad_x_from =
-                            (max_pad_x - min_pad_x).mul_add(size_t_from, min_pad_x);
-                        if pad_x_from > max_pad_by_spacing {
-                            pad_x_from = max_pad_by_spacing;
-                        }
-                        let ring_w_from = from_dw + pad_x_from * 2.0;
-                        let ring_h_from = from_dh + pad_y * 2.0;
-                        let t = ease_out_cubic(state.cursor_row_anim_t[player_idx]);
-                        ring_w = (ring_w - ring_w_from).mul_add(t, ring_w_from);
-                        ring_h = (ring_h - ring_h_from).mul_add(t, ring_h_from);
-                    }
 
                     let left = center_x - ring_w * 0.5;
                     let right = center_x + ring_w * 0.5;
                     let top = center_y - ring_h * 0.5;
                     let bottom = center_y + ring_h * 0.5;
                     let mut ring_color = color::decorative_rgba(player_color_index(player_idx));
-                    ring_color[3] = 1.0;
+                    ring_color[3] *= a;
                     actors.push(act!(quad:
                         align(0.5, 0.5): xy((left + right) * 0.5, top + border_w * 0.5):
                         zoomto(ring_w, border_w):
@@ -3856,7 +3932,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             for (idx, text) in row.choices.iter().enumerate() {
                 let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
                 let color_rgba = if is_active {
-                    [1.0, 1.0, 1.0, 1.0]
+                    [1.0, 1.0, 1.0, a]
                 } else {
                     sl_gray
                 };
@@ -3886,7 +3962,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 .get(choice_text_idx)
                 .unwrap_or_else(|| row.choices.first().expect("OptionRow must have choices"));
             let choice_color = if is_active {
-                [1.0, 1.0, 1.0, 1.0]
+                [1.0, 1.0, 1.0, a]
             } else {
                 sl_gray
             };
@@ -3926,7 +4002,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let underline_y = current_row_y + draw_h * 0.5 + offset;
                     let underline_left_x = choice_center_x - draw_w * 0.5;
                     let mut line_color = color::decorative_rgba(player_color_index(primary_player_idx));
-                    line_color[3] = 1.0;
+                    line_color[3] *= a;
                     actors.push(act!(quad:
                         align(0.0, 0.5): // start at text's left edge
                         xy(underline_left_x, underline_y):
@@ -3936,76 +4012,42 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     ));
                     // Encircling cursor around the active option value (programmatic border)
                     if active[primary_player_idx] && state.selected_row[primary_player_idx] == item_idx {
-                        let pad_y = widescale(6.0, 8.0);
-                        let min_pad_x = widescale(2.0, 3.0);
-                        let max_pad_x = widescale(22.0, 28.0);
-                        let width_ref = widescale(180.0, 220.0);
-                        let t = (draw_w / width_ref).clamp(0.0, 1.0);
-                        let mut pad_x = (max_pad_x - min_pad_x).mul_add(t, min_pad_x);
                         let border_w = widescale(2.0, 2.5);
-                        // Cap pad for single-value rows too (consistency)
-                        let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
-                        if pad_x > max_pad_by_spacing {
-                            pad_x = max_pad_by_spacing;
-                        }
-                        let mut ring_w = draw_w + pad_x * 2.0;
-                        let mut ring_h = draw_h + pad_y * 2.0;
-                        let mut center_x = choice_center_x;
-                        // Vertical tween for row transitions
-                        let mut center_y = current_row_y;
-                        if state.cursor_row_anim_t[primary_player_idx] < 1.0 {
-                            let t = ease_out_cubic(state.cursor_row_anim_t[primary_player_idx]);
-                            if let Some(from_row) = state.cursor_row_anim_from_row[primary_player_idx] {
-                                let from_x = calc_row_center_x(from_row, primary_player_idx);
-                                center_x = (center_x - from_x).mul_add(t, from_x);
-                            }
-                            center_y = (current_row_y - state.cursor_row_anim_from_y[primary_player_idx])
-                                .mul_add(t, state.cursor_row_anim_from_y[primary_player_idx]);
-                        }
-                        // Interpolate ring size between previous row and this row when vertically tweening
-                        if state.cursor_row_anim_t[primary_player_idx] < 1.0
-                            && let Some(from_row) = state.cursor_row_anim_from_row[primary_player_idx]
+                        if let Some((center_x, center_y, ring_w, ring_h)) =
+                            cursor_now(primary_player_idx)
                         {
-                            let (from_dw, from_dh) = calc_row_dims(from_row, primary_player_idx);
-                            let tsize = (from_dw / width_ref).clamp(0.0, 1.0);
-                            let pad_x_from = (max_pad_x - min_pad_x).mul_add(tsize, min_pad_x);
-                            let ring_w_from = from_dw + pad_x_from * 2.0;
-                            let ring_h_from = from_dh + pad_y * 2.0;
-                            let t = ease_out_cubic(state.cursor_row_anim_t[primary_player_idx]);
-                            ring_w = (ring_w - ring_w_from).mul_add(t, ring_w_from);
-                            ring_h = (ring_h - ring_h_from).mul_add(t, ring_h_from);
+                            let left = center_x - ring_w * 0.5;
+                            let right = center_x + ring_w * 0.5;
+                            let top = center_y - ring_h * 0.5;
+                            let bottom = center_y + ring_h * 0.5;
+                            let mut ring_color =
+                                color::decorative_rgba(player_color_index(primary_player_idx));
+                            ring_color[3] *= a;
+                            actors.push(act!(quad:
+                                align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
+                                zoomto(ring_w, border_w):
+                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                z(101)
+                            ));
+                            actors.push(act!(quad:
+                                align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5):
+                                zoomto(ring_w, border_w):
+                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                z(101)
+                            ));
+                            actors.push(act!(quad:
+                                align(0.5, 0.5): xy(left + border_w * 0.5, center_y):
+                                zoomto(border_w, ring_h):
+                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                z(101)
+                            ));
+                            actors.push(act!(quad:
+                                align(0.5, 0.5): xy(right - border_w * 0.5, center_y):
+                                zoomto(border_w, ring_h):
+                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                z(101)
+                            ));
                         }
-                        let left = center_x - ring_w * 0.5;
-                        let right = center_x + ring_w * 0.5;
-                        let top = center_y - ring_h / 2.0;
-                        let bottom = center_y + ring_h / 2.0;
-                        let mut ring_color =
-                            color::decorative_rgba(player_color_index(primary_player_idx));
-                        ring_color[3] = 1.0;
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
-                            zoomto(ring_w, border_w):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(101)
-                        ));
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5):
-                            zoomto(ring_w, border_w):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(101)
-                        ));
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(left + border_w * 0.5, center_y):
-                            zoomto(border_w, ring_h):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(101)
-                        ));
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(right - border_w * 0.5, center_y):
-                            zoomto(border_w, ring_h):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(101)
-                        ));
                     }
                     if show_p2 && !row.name.starts_with("Music Rate") {
                         let p2_choice_center_x = screen_center_x().mul_add(2.0, -choice_center_x);
@@ -4050,7 +4092,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let underline_y = current_row_y + draw_h * 0.5 + offset;
                         let underline_left_x = p2_choice_center_x - p2_draw_w * 0.5;
                         let mut line_color = color::decorative_rgba(player_color_index(P2));
-                        line_color[3] = 1.0;
+                        line_color[3] *= a;
                         actors.push(act!(quad:
                             align(0.0, 0.5):
                             xy(underline_left_x, underline_y):
@@ -4059,72 +4101,39 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             z(101)
                         ));
                         if active[P2] && state.selected_row[P2] == item_idx {
-                            let pad_y = widescale(6.0, 8.0);
-                            let min_pad_x = widescale(2.0, 3.0);
-                            let max_pad_x = widescale(22.0, 28.0);
-                            let width_ref = widescale(180.0, 220.0);
-                            let t = (p2_draw_w / width_ref).clamp(0.0, 1.0);
-                            let mut pad_x = (max_pad_x - min_pad_x).mul_add(t, min_pad_x);
                             let border_w = widescale(2.0, 2.5);
-                            let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
-                            if pad_x > max_pad_by_spacing {
-                                pad_x = max_pad_by_spacing;
+                            if let Some((center_x, center_y, ring_w, ring_h)) = cursor_now(P2) {
+                                let left = center_x - ring_w * 0.5;
+                                let right = center_x + ring_w * 0.5;
+                                let top = center_y - ring_h * 0.5;
+                                let bottom = center_y + ring_h * 0.5;
+                                let mut ring_color = color::decorative_rgba(player_color_index(P2));
+                                ring_color[3] *= a;
+                                actors.push(act!(quad:
+                                    align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
+                                    zoomto(ring_w, border_w):
+                                    diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                    z(101)
+                                ));
+                                actors.push(act!(quad:
+                                    align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5):
+                                    zoomto(ring_w, border_w):
+                                    diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                    z(101)
+                                ));
+                                actors.push(act!(quad:
+                                    align(0.5, 0.5): xy(left + border_w * 0.5, center_y):
+                                    zoomto(border_w, ring_h):
+                                    diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                    z(101)
+                                ));
+                                actors.push(act!(quad:
+                                    align(0.5, 0.5): xy(right - border_w * 0.5, center_y):
+                                    zoomto(border_w, ring_h):
+                                    diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                    z(101)
+                                ));
                             }
-                            let mut ring_w = p2_draw_w + pad_x * 2.0;
-                            let mut ring_h = draw_h + pad_y * 2.0;
-                            let mut center_x = p2_choice_center_x;
-                            let mut center_y = current_row_y;
-                            if state.cursor_row_anim_t[P2] < 1.0 {
-                                let t = ease_out_cubic(state.cursor_row_anim_t[P2]);
-                                if let Some(from_row) = state.cursor_row_anim_from_row[P2] {
-                                    let from_x = calc_row_center_x(from_row, P2);
-                                    center_x = (center_x - from_x).mul_add(t, from_x);
-                                }
-                                center_y = (current_row_y - state.cursor_row_anim_from_y[P2])
-                                    .mul_add(t, state.cursor_row_anim_from_y[P2]);
-                            }
-                            if state.cursor_row_anim_t[P2] < 1.0
-                                && let Some(from_row) = state.cursor_row_anim_from_row[P2]
-                            {
-                                let (from_dw, from_dh) = calc_row_dims(from_row, P2);
-                                let tsize = (from_dw / width_ref).clamp(0.0, 1.0);
-                                let pad_x_from = (max_pad_x - min_pad_x).mul_add(tsize, min_pad_x);
-                                let ring_w_from = from_dw + pad_x_from * 2.0;
-                                let ring_h_from = from_dh + pad_y * 2.0;
-                                let t = ease_out_cubic(state.cursor_row_anim_t[P2]);
-                                ring_w = (ring_w - ring_w_from).mul_add(t, ring_w_from);
-                                ring_h = (ring_h - ring_h_from).mul_add(t, ring_h_from);
-                            }
-                            let left = center_x - ring_w * 0.5;
-                            let right = center_x + ring_w * 0.5;
-                            let top = center_y - ring_h / 2.0;
-                            let bottom = center_y + ring_h / 2.0;
-                            let mut ring_color = color::decorative_rgba(player_color_index(P2));
-                            ring_color[3] = 1.0;
-                            actors.push(act!(quad:
-                                align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
-                                zoomto(ring_w, border_w):
-                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                                z(101)
-                            ));
-                            actors.push(act!(quad:
-                                align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5):
-                                zoomto(ring_w, border_w):
-                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                                z(101)
-                            ));
-                            actors.push(act!(quad:
-                                align(0.5, 0.5): xy(left + border_w * 0.5, center_y):
-                                zoomto(border_w, ring_h):
-                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                                z(101)
-                            ));
-                            actors.push(act!(quad:
-                                align(0.5, 0.5): xy(right - border_w * 0.5, center_y):
-                                zoomto(border_w, ring_h):
-                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                                z(101)
-                            ));
                         }
                     }
                     // Add previews (centered on a shared vertical line)
@@ -4162,6 +4171,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(preview_center_x, current_row_y):
                                 setstate(0):
                                 zoom(0.225):
+                                diffuse(1.0, 1.0, 1.0, a):
                                 z(102)
                             ));
                         }
@@ -4189,6 +4199,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(preview_center_x - center_offset, current_row_y):
                                 setstate(0):
                                 zoom(zoom):
+                                diffuse(1.0, 1.0, 1.0, a):
                                 z(102)
                             ));
                             actors.push(act!(sprite(texture):
@@ -4196,6 +4207,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(preview_center_x + center_offset, current_row_y):
                                 setstate(1):
                                 zoom(zoom):
+                                diffuse(1.0, 1.0, 1.0, a):
                                 z(102)
                             ));
                         }
@@ -4238,6 +4250,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 setsize(final_width, final_height):
                                 rotationz(-note_slot.def.rotation_deg as f32):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                diffuse(1.0, 1.0, 1.0, a):
                                 z(102)
                             ));
                         }
@@ -4263,7 +4276,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 align(0.5, 0.5):
                                 xy(preview_center_x, current_row_y):
                                 zoom(combo_zoom): horizalign(center):
-                                diffuse(1.0, 1.0, 1.0, 1.0):
+                                diffuse(1.0, 1.0, 1.0, a):
                                 z(102)
                             ));
                         }

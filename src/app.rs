@@ -366,6 +366,7 @@ impl ScreensState {
         delta_time: f32,
         now: Instant,
         session: &SessionState,
+        asset_manager: &AssetManager,
     ) -> Option<ScreenAction> {
         match self.current_screen {
             CurrentScreen::Gameplay => self
@@ -388,7 +389,7 @@ impl ScreensState {
             }
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &mut self.player_options_state {
-                    player_options::update(pos, delta_time);
+                    player_options::update(pos, delta_time, asset_manager);
                 }
                 None
             }
@@ -2938,7 +2939,7 @@ impl ApplicationHandler<UserEvent> for App {
                         if let Some(action) =
                             self.state
                                 .screens
-                                .step_idle(delta_time, now, &self.state.session)
+                                .step_idle(delta_time, now, &self.state.session, &self.asset_manager)
                             && !matches!(action, ScreenAction::None)
                         {
                             let _ = self.handle_action(action, event_loop);
