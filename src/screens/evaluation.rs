@@ -36,6 +36,16 @@ const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 // Simply Love metrics.ini [RollingNumbersEvaluation]: ApproachSeconds=1
 const ROLLING_NUMBERS_APPROACH_SECONDS: f32 = 1.0;
+// Simply Love ScreenEvaluationStage in/default.lua (non-SRPG9 branch)
+const EVAL_STAGE_IN_BLACK_DELAY_SECONDS: f32 = 0.2;
+const EVAL_STAGE_IN_BLACK_FADE_SECONDS: f32 = 0.5;
+const EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS: f32 = 0.4;
+const EVAL_STAGE_IN_TEXT_HOLD_SECONDS: f32 = 0.6;
+const EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS: f32 = 0.4;
+const EVAL_STAGE_IN_TOTAL_SECONDS: f32 =
+    EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS
+        + EVAL_STAGE_IN_TEXT_HOLD_SECONDS
+        + EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS;
 
 // A struct to hold a snapshot of the final score data from the gameplay screen.
 #[derive(Clone)]
@@ -489,6 +499,80 @@ fn rolling_number_value(target: u32, elapsed_s: f32) -> u32 {
     let velocity = target as f32 / approach_s;
     let current = (velocity * elapsed_s).clamp(0.0, target as f32);
     current.round() as u32
+}
+
+fn all_joined_players_failed(state: &State) -> bool {
+    let play_style = profile::get_session_play_style();
+    let side_to_idx = |side: profile::PlayerSide| match (play_style, side) {
+        (profile::PlayStyle::Versus, profile::PlayerSide::P1) => 0,
+        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => 1,
+        _ => 0,
+    };
+
+    let mut found_player = false;
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if !profile::is_session_side_joined(side) {
+            continue;
+        }
+        let idx = side_to_idx(side);
+        let Some(score) = state.score_info.get(idx).and_then(|s| s.as_ref()) else {
+            continue;
+        };
+        found_player = true;
+        if score.grade != scores::Grade::Failed {
+            return false;
+        }
+    }
+
+    if found_player {
+        return true;
+    }
+
+    // Fallback if join-state bookkeeping is unavailable: mirror the same
+    // "any pass means CLEARED" semantics over available score entries.
+    let mut any = false;
+    for score in state.score_info.iter().flatten() {
+        any = true;
+        if score.grade != scores::Grade::Failed {
+            return false;
+        }
+    }
+    any
+}
+
+fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
+    if state.screen_elapsed > EVAL_STAGE_IN_TOTAL_SECONDS {
+        return vec![];
+    }
+
+    let failed = all_joined_players_failed(state);
+    let texture_key = if failed {
+        "evaluation/failed.png"
+    } else {
+        "evaluation/cleared.png"
+    };
+
+    vec![
+        act!(quad:
+            align(0.0, 0.0): xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 1.0): z(1250):
+            sleep(EVAL_STAGE_IN_BLACK_DELAY_SECONDS):
+            linear(EVAL_STAGE_IN_BLACK_FADE_SECONDS): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite(texture_key):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoom(0.8):
+            z(1251):
+            alpha(0.0):
+            accelerate(EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS): alpha(1.0):
+            sleep(EVAL_STAGE_IN_TEXT_HOLD_SECONDS):
+            decelerate(EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+    ]
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -2329,6 +2413,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         horizalign(center):
         z(121) // a bit above the screen bar (z=120)
     ));
+
+    // ScreenEvaluationStage in stinger (standard Simply Love visual style).
+    actors.extend(build_stage_in_stinger(state));
 
     actors
 }

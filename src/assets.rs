@@ -595,6 +595,14 @@ impl AssetManager {
                 "grades/grades 1x19.png".to_string(),
                 "grades/grades 1x19.png".to_string(),
             ),
+            (
+                "evaluation/failed.png".to_string(),
+                "evaluation/failed.png".to_string(),
+            ),
+            (
+                "evaluation/cleared.png".to_string(),
+                "evaluation/cleared.png".to_string(),
+            ),
         ];
 
         // Simply Love-style grade assets (used by `ui::components::eval_grades`).
