@@ -18,7 +18,7 @@ use crate::game::{
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
-use crate::ui::components::density_graph::DensityHistCache;
+use crate::screens::components::density_graph::DensityHistCache;
 use log::{debug, info};
 use rssp::streams::StreamSegment;
 use std::collections::{HashMap, VecDeque};
@@ -2260,7 +2260,7 @@ pub fn init(
             return None;
         }
         let chart = charts[p].as_ref();
-        crate::ui::components::density_graph::build_density_histogram_cache(
+        crate::screens::components::density_graph::build_density_histogram_cache(
             &chart.measure_nps_vec,
             chart.max_nps,
             &timing,

@@ -5,10 +5,10 @@ use crate::core::space::{screen_center_x, screen_center_y, widescale};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use crate::ui::components::screen_bar::{
+use crate::screens::components::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::ui::components::{heart_bg, screen_bar};
+use crate::screens::components::{heart_bg, screen_bar};
 
 /* ------------------------------ layout ------------------------------- */
 const CHOICE_COUNT: usize = 3;

@@ -5,10 +5,10 @@ use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen
 use crate::screens::Screen;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
-use crate::ui::components::screen_bar::{
+use crate::screens::components::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::ui::components::{eval_grades, heart_bg, pad_display, screen_bar};
+use crate::screens::components::{eval_grades, heart_bg, pad_display, screen_bar};
 
 use crate::assets::AssetManager;
 use crate::game::chart::ChartData;
@@ -395,7 +395,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             density_graph_mesh[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
                 let last_second = si.song.total_length_seconds.max(0) as f32;
-                let verts = crate::ui::components::density_graph::build_density_histogram_mesh(
+                let verts = crate::screens::components::density_graph::build_density_histogram_mesh(
                     &si.chart.measure_nps_vec,
                     si.chart.max_nps,
                     &si.chart.timing,
@@ -413,7 +413,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
             scatter_mesh[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::ui::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
@@ -431,7 +431,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 const BOT_H: f32 = 13.0;
 
                 let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-                let verts = crate::ui::components::eval_graphs::build_offset_histogram_mesh(
+                let verts = crate::screens::components::eval_graphs::build_offset_histogram_mesh(
                     &si.histogram,
                     PANE_W,
                     graph_h,

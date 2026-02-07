@@ -1136,7 +1136,7 @@ impl App {
             (276.0_f32, 64.0_f32)
         };
         let mesh = chart_opt.and_then(|chart| {
-            let verts = crate::ui::components::density_graph::build_density_histogram_mesh(
+            let verts = crate::screens::components::density_graph::build_density_histogram_mesh(
                 &chart.measure_nps_vec,
                 chart.max_nps,
                 &chart.timing,
@@ -1330,7 +1330,7 @@ impl App {
         };
 
         if self.state.shell.show_overlay {
-            let overlay = crate::ui::components::stats_overlay::build(
+            let overlay = crate::screens::components::stats_overlay::build(
                 self.backend_type,
                 self.state.shell.last_fps,
                 self.state.shell.last_vpf,
@@ -1340,8 +1340,8 @@ impl App {
 
         // Gamepad connection overlay (always on top of screen, but below transitions)
         if let Some((msg, _)) = &self.state.shell.gamepad_overlay_state {
-            let params = crate::ui::components::gamepad_overlay::Params { message: msg };
-            actors.extend(crate::ui::components::gamepad_overlay::build(params));
+            let params = crate::screens::components::gamepad_overlay::Params { message: msg };
+            actors.extend(crate::screens::components::gamepad_overlay::build(params));
         }
 
         match &self.state.shell.transition {
@@ -1358,7 +1358,7 @@ impl App {
                         || *target == CurrentScreen::SelectColor
                         || *target == CurrentScreen::Options)
                 {
-                    let splash = crate::ui::components::menu_splash::build(
+                    let splash = crate::screens::components::menu_splash::build(
                         self.state.screens.menu_state.active_color_index,
                     );
                     actors.extend(splash);

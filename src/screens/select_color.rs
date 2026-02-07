@@ -4,8 +4,8 @@ use crate::game::profile;
 // Screen navigation handled in app.rs
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use crate::ui::components::screen_bar::{AvatarParams, ScreenBarPosition, ScreenBarTitlePlacement};
-use crate::ui::components::{heart_bg, screen_bar};
+use crate::screens::components::screen_bar::{AvatarParams, ScreenBarPosition, ScreenBarTitlePlacement};
+use crate::screens::components::{heart_bg, screen_bar};
 // Keyboard handling is centralized in app.rs via virtual actions
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::screens::{Screen, ScreenAction};

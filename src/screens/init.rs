@@ -4,7 +4,7 @@ use crate::core::space::{screen_center_x, screen_center_y, screen_width};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use crate::ui::components::heart_bg;
+use crate::screens::components::heart_bg;
 
 /* ----------------------- timing & layout ----------------------- */
 

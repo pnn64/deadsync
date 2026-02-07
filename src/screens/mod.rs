@@ -1,3 +1,4 @@
+pub mod components;
 pub mod evaluation;
 pub mod evaluation_summary;
 pub mod gameover;

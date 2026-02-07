@@ -7,10 +7,10 @@ use crate::game::song::get_song_cache;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use crate::ui::components::logo::{self, LogoParams};
-use crate::ui::components::menu_list::{self};
-use crate::ui::components::menu_splash;
-use crate::ui::components::{heart_bg, screen_bar};
+use crate::screens::components::logo::{self, LogoParams};
+use crate::screens::components::menu_list::{self};
+use crate::screens::components::menu_splash;
+use crate::screens::components::{heart_bg, screen_bar};
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
 

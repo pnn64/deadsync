@@ -9,10 +9,10 @@ use crate::game::stage_stats;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
-use crate::ui::components::screen_bar::{
+use crate::screens::components::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::ui::components::{eval_grades, heart_bg, screen_bar};
+use crate::screens::components::{eval_grades, heart_bg, screen_bar};
 use chrono::Local;
 use std::collections::HashSet;
 

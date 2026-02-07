@@ -10,8 +10,8 @@ use crate::game::song::SongData;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use crate::ui::components::heart_bg;
-use crate::ui::components::screen_bar::{
+use crate::screens::components::heart_bg;
+use crate::screens::components::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use std::path::Path;

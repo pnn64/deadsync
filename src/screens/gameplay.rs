@@ -6,8 +6,8 @@ use crate::game::judgment;
 use crate::game::profile;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
-use crate::ui::components::screen_bar::{self, AvatarParams, ScreenBarParams};
-use crate::ui::components::{gameplay_stats, notefield};
+use crate::screens::components::screen_bar::{self, AvatarParams, ScreenBarParams};
+use crate::screens::components::{gameplay_stats, notefield};
 
 pub use crate::game::gameplay::{State, init, update};
 use crate::game::gameplay::{TRANSITION_IN_DURATION, TRANSITION_OUT_DURATION};

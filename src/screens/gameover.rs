@@ -8,7 +8,7 @@ use crate::game::stage_stats;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use crate::ui::components::heart_bg;
+use crate::screens::components::heart_bg;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;

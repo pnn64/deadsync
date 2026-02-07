@@ -9,10 +9,10 @@ use crate::game::scroll::ScrollSpeedSetting;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{self, Actor};
 use crate::ui::color;
-use crate::ui::components::screen_bar::{
+use crate::screens::components::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::ui::components::{heart_bg, screen_bar};
+use crate::screens::components::{heart_bg, screen_bar};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;

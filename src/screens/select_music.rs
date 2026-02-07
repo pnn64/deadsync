@@ -14,10 +14,10 @@ use crate::rgba_const;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
-use crate::ui::components::screen_bar::{
+use crate::screens::components::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::ui::components::{heart_bg, music_wheel, pad_display};
+use crate::screens::components::{heart_bg, music_wheel, pad_display};
 use crate::ui::font;
 use log::info;
 use rssp::bpm::parse_bpm_map;

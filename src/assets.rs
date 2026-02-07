@@ -605,7 +605,7 @@ impl AssetManager {
             ),
         ];
 
-        // Simply Love-style grade assets (used by `ui::components::eval_grades`).
+        // Simply Love-style grade assets (used by `screens::components::eval_grades`).
         for p in [
             "grades/star.png",
             "grades/s-plus.png",
