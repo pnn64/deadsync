@@ -5,8 +5,10 @@ use crate::game::gameplay;
 use crate::game::judgment;
 use crate::game::profile::{self, Profile};
 use crate::game::song::get_song_cache;
+use chrono::{Local, TimeZone};
 use log::{info, warn};
 use serde::Deserialize;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
@@ -1246,6 +1248,79 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
 
 // --- API Response Structs ---
 
+#[derive(Debug, Clone)]
+pub struct LeaderboardEntry {
+    pub rank: u32,
+    pub name: String,
+    pub score: f64, // 0..10000
+    pub date: String,
+    pub is_rival: bool,
+    pub is_self: bool,
+    pub is_fail: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct LeaderboardPane {
+    pub name: String,
+    pub entries: Vec<LeaderboardEntry>,
+    pub is_ex: bool,
+    pub disabled: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlayerLeaderboardData {
+    pub panes: Vec<LeaderboardPane>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct LeaderboardsApiResponse {
+    player1: Option<LeaderboardApiPlayer>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct LeaderboardApiPlayer {
+    #[serde(default)]
+    is_ranked: bool,
+    #[serde(rename = "gsLeaderboard", default)]
+    gs_leaderboard: Vec<LeaderboardApiEntry>,
+    #[serde(rename = "exLeaderboard", default)]
+    ex_leaderboard: Vec<LeaderboardApiEntry>,
+    rpg: Option<LeaderboardEventData>,
+    itl: Option<LeaderboardEventData>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct LeaderboardEventData {
+    #[serde(default)]
+    name: String,
+    #[serde(rename = "rpgLeaderboard", default)]
+    rpg_leaderboard: Vec<LeaderboardApiEntry>,
+    #[serde(rename = "itlLeaderboard", default)]
+    itl_leaderboard: Vec<LeaderboardApiEntry>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+struct LeaderboardApiEntry {
+    #[serde(default)]
+    rank: u32,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    score: f64, // 0..10000
+    #[serde(default)]
+    date: String,
+    #[serde(default)]
+    is_rival: bool,
+    #[serde(default)]
+    is_self: bool,
+    #[serde(default)]
+    is_fail: bool,
+}
+
 #[derive(Deserialize, Debug)]
 struct ApiResponse {
     player1: Option<Player1>,
@@ -1266,6 +1341,204 @@ struct GrooveScore {
     /// and exposed via the `comments` field in `GrooveStats`' JSON.
     #[serde(default)]
     comments: Option<String>,
+}
+
+fn leaderboard_entries_from_api(entries: Vec<LeaderboardApiEntry>) -> Vec<LeaderboardEntry> {
+    let mut out = Vec::with_capacity(entries.len());
+    for entry in entries {
+        out.push(LeaderboardEntry {
+            rank: entry.rank,
+            name: entry.name,
+            score: entry.score,
+            date: entry.date,
+            is_rival: entry.is_rival,
+            is_self: entry.is_self,
+            is_fail: entry.is_fail,
+        });
+    }
+    out
+}
+
+fn push_leaderboard_pane(
+    out: &mut Vec<LeaderboardPane>,
+    name: &str,
+    entries: Vec<LeaderboardApiEntry>,
+    is_ex: bool,
+) {
+    if entries.is_empty() {
+        return;
+    }
+    out.push(LeaderboardPane {
+        name: name.to_string(),
+        entries: leaderboard_entries_from_api(entries),
+        is_ex,
+        disabled: false,
+    });
+}
+
+pub fn fetch_player_leaderboards(
+    chart_hash: &str,
+    api_key: &str,
+    show_ex_score: bool,
+    max_entries: usize,
+) -> Result<PlayerLeaderboardData, Box<dyn Error + Send + Sync>> {
+    if chart_hash.trim().is_empty() {
+        return Err("Missing chart hash for leaderboard request.".into());
+    }
+    if api_key.trim().is_empty() {
+        return Err("Missing GrooveStats API key for leaderboard request.".into());
+    }
+
+    let max_entries = max_entries.max(1);
+    let max_entries_str = max_entries.to_string();
+    let agent = network::get_agent();
+    let response = agent
+        .get(API_URL)
+        .header("x-api-key-player-1", api_key)
+        .query("chartHashP1", chart_hash)
+        .query("maxLeaderboardResults", &max_entries_str)
+        .call()?;
+
+    if response.status() != 200 {
+        return Err(format!("Leaderboard API returned status {}", response.status()).into());
+    }
+
+    let decoded: LeaderboardsApiResponse = response.into_body().read_json()?;
+    let Some(player) = decoded.player1 else {
+        return Ok(PlayerLeaderboardData { panes: Vec::new() });
+    };
+    let LeaderboardApiPlayer {
+        is_ranked: _is_ranked,
+        gs_leaderboard,
+        ex_leaderboard,
+        rpg,
+        itl,
+    } = player;
+
+    let mut panes = Vec::with_capacity(4);
+    if show_ex_score {
+        push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
+        push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);
+    } else {
+        push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);
+        push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
+    }
+
+    if let Some(rpg) = rpg
+        && !rpg.rpg_leaderboard.is_empty()
+    {
+        let name = if rpg.name.trim().is_empty() {
+            "RPG"
+        } else {
+            rpg.name.as_str()
+        };
+        push_leaderboard_pane(&mut panes, name, rpg.rpg_leaderboard, false);
+    }
+    if let Some(itl) = itl
+        && !itl.itl_leaderboard.is_empty()
+    {
+        let name = if itl.name.trim().is_empty() {
+            "ITL"
+        } else {
+            itl.name.as_str()
+        };
+        push_leaderboard_pane(&mut panes, name, itl.itl_leaderboard, true);
+    }
+
+    Ok(PlayerLeaderboardData { panes })
+}
+
+#[derive(Debug)]
+struct MachineLeaderboardPlay {
+    initials: String,
+    score_percent: f64,
+    played_at_ms: i64,
+    is_fail: bool,
+}
+
+fn push_machine_leaderboard_from_dir(
+    dir: &Path,
+    chart_hash: &str,
+    initials: &str,
+    out: &mut Vec<MachineLeaderboardPlay>,
+) {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let Some((file_hash, played_at_ms)) = parse_local_score_filename(name) else {
+            continue;
+        };
+        if file_hash != chart_hash {
+            continue;
+        }
+        let Some(h) = read_local_score_header(&path) else {
+            continue;
+        };
+        out.push(MachineLeaderboardPlay {
+            initials: initials.to_string(),
+            score_percent: h.score_percent,
+            played_at_ms,
+            is_fail: grade_from_code(h.grade_code) == Grade::Failed || h.fail_time.is_some(),
+        });
+    }
+}
+
+fn local_score_date_string(played_at_ms: i64) -> String {
+    let Some(dt) = Local.timestamp_millis_opt(played_at_ms).single() else {
+        return String::new();
+    };
+    dt.format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
+pub fn get_machine_leaderboard_local(
+    chart_hash: &str,
+    max_entries: usize,
+) -> Vec<LeaderboardEntry> {
+    if chart_hash.trim().is_empty() || max_entries == 0 {
+        return Vec::new();
+    }
+
+    let mut plays: Vec<MachineLeaderboardPlay> = Vec::new();
+    for profile_meta in profile::scan_local_profiles() {
+        let initials =
+            profile_initials_for_id(&profile_meta.id).unwrap_or_else(|| "----".to_string());
+        let root = local_scores_root_for_profile(&profile_meta.id);
+        push_machine_leaderboard_from_dir(&root, chart_hash, &initials, &mut plays);
+        let shard_dir = root.join(shard2_for_hash(chart_hash));
+        push_machine_leaderboard_from_dir(&shard_dir, chart_hash, &initials, &mut plays);
+    }
+
+    plays.sort_by(|a, b| {
+        b.score_percent
+            .partial_cmp(&a.score_percent)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| b.played_at_ms.cmp(&a.played_at_ms))
+            .then_with(|| a.initials.cmp(&b.initials))
+    });
+
+    let take_len = max_entries.min(plays.len());
+    let mut out = Vec::with_capacity(take_len);
+    for (i, play) in plays.into_iter().take(take_len).enumerate() {
+        out.push(LeaderboardEntry {
+            rank: (i as u32).saturating_add(1),
+            name: play.initials,
+            score: (play.score_percent * 10000.0).round(),
+            date: local_score_date_string(play.played_at_ms),
+            is_rival: false,
+            is_self: false,
+            is_fail: play.is_fail,
+        });
+    }
+    out
 }
 
 // --- ITG PercentScore weights (mirror Simply Love SL_Init.lua, ITG mode) ---

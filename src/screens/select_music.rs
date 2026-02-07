@@ -3,6 +3,7 @@ use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::core::audio;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
+use crate::core::network::{self, ConnectionStatus};
 use crate::core::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
@@ -11,19 +12,20 @@ use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
-use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::{Actor, SizeSpec};
-use crate::ui::color;
 use crate::screens::components::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::{heart_bg, music_wheel, pad_display};
+use crate::screens::{Screen, ScreenAction};
+use crate::ui::actors::{Actor, SizeSpec};
+use crate::ui::color;
 use crate::ui::font;
 use log::info;
 use rssp::bpm::parse_bpm_map;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
@@ -122,6 +124,25 @@ const SL_SORT_MENU_FOCUS_TWEEN_SECONDS: f32 = 0.15;
 const SL_SORT_MENU_DIM_ALPHA: f32 = 0.8;
 const SL_SORT_MENU_HINT_Y_OFFSET: f32 = 100.0;
 const SL_SORT_MENU_HINT_TEXT: &str = "PRESS &SELECT; TO CANCEL";
+
+// Simply Love ScreenSelectMusic overlay/Leaderboard.lua geometry.
+const GS_LEADERBOARD_NUM_ENTRIES: usize = 13;
+const GS_LEADERBOARD_ROW_HEIGHT: f32 = 24.0;
+const GS_LEADERBOARD_PANE_HEIGHT: f32 = 360.0;
+const GS_LEADERBOARD_PANE_WIDTH_SINGLE: f32 = 330.0;
+const GS_LEADERBOARD_PANE_WIDTH_MULTI: f32 = 230.0;
+const GS_LEADERBOARD_PANE_SIDE_OFFSET: f32 = 160.0;
+const GS_LEADERBOARD_PANE_CENTER_Y: f32 = -15.0;
+const GS_LEADERBOARD_DIM_ALPHA: f32 = 0.875;
+const GS_LEADERBOARD_Z: i16 = 1480;
+const GS_LEADERBOARD_ERROR_TIMEOUT: &str = "Timed Out";
+const GS_LEADERBOARD_ERROR_FAILED: &str = "Failed to Load 😞";
+const GS_LEADERBOARD_DISABLED_TEXT: &str = "Disabled";
+const GS_LEADERBOARD_NO_SCORES_TEXT: &str = "No Scores";
+const GS_LEADERBOARD_LOADING_TEXT: &str = "Loading ...";
+const GS_LEADERBOARD_MACHINE_BEST: &str = "Machine's  Best";
+const GS_LEADERBOARD_MORE_TEXT: &str = "More Leaderboards";
+const GS_LEADERBOARD_CLOSE_HINT: &str = "PRESS START OR BACK TO CLOSE";
 
 // Simply Love [ScreenSelectMusic] [MusicWheel]: RecentSongsToShow=30.
 const RECENT_SONGS_TO_SHOW: usize = 30;
@@ -371,6 +392,7 @@ enum SortMenuAction {
     SortByGroup,
     SortByTitle,
     SortByRecent,
+    ShowLeaderboard,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -380,7 +402,7 @@ struct SortMenuItem {
     action: SortMenuAction,
 }
 
-const SORT_MENU_ITEMS: [SortMenuItem; 3] = [
+const SORT_MENU_ITEMS: [SortMenuItem; 4] = [
     SortMenuItem {
         top_label: "Sort By",
         bottom_label: "Group",
@@ -396,12 +418,53 @@ const SORT_MENU_ITEMS: [SortMenuItem; 3] = [
         bottom_label: "Recently Played",
         action: SortMenuAction::SortByRecent,
     },
+    SortMenuItem {
+        top_label: "GrooveStats",
+        bottom_label: "Leaderboard",
+        action: SortMenuAction::ShowLeaderboard,
+    },
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SortMenuState {
     Hidden,
     Visible { selected_index: usize },
+}
+
+#[derive(Debug)]
+struct LeaderboardFetchRequest {
+    chart_hash: String,
+    api_key: String,
+    show_ex_score: bool,
+}
+
+#[derive(Debug)]
+struct LeaderboardFetchResult {
+    p1: Option<Result<scores::PlayerLeaderboardData, String>>,
+    p2: Option<Result<scores::PlayerLeaderboardData, String>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct LeaderboardSideState {
+    joined: bool,
+    loading: bool,
+    panes: Vec<scores::LeaderboardPane>,
+    pane_index: usize,
+    error_text: Option<String>,
+    machine_pane: Option<scores::LeaderboardPane>,
+}
+
+#[derive(Debug)]
+struct LeaderboardOverlayStateData {
+    p1: LeaderboardSideState,
+    p2: LeaderboardSideState,
+    rx: Option<mpsc::Receiver<LeaderboardFetchResult>>,
+}
+
+#[derive(Debug)]
+enum LeaderboardOverlayState {
+    Hidden,
+    Visible(LeaderboardOverlayStateData),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -457,6 +520,7 @@ pub struct State {
     out_prompt: OutPromptState,
     exit_prompt: ExitPromptState,
     sort_menu: SortMenuState,
+    leaderboard: LeaderboardOverlayState,
     sort_mode: WheelSortMode,
     all_entries: Vec<MusicWheelEntry>,
     group_entries: Vec<MusicWheelEntry>,
@@ -1071,6 +1135,7 @@ pub fn init() -> State {
         out_prompt: OutPromptState::None,
         exit_prompt: ExitPromptState::None,
         sort_menu: SortMenuState::Hidden,
+        leaderboard: LeaderboardOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: last_pack_name,
         bg: heart_bg::State::new(),
@@ -1286,11 +1351,23 @@ fn try_open_sort_menu(state: &mut State) -> bool {
     }
 }
 
+#[inline(always)]
+fn sort_menu_items(state: &State) -> &[SortMenuItem] {
+    if matches!(
+        state.entries.get(state.selected_index),
+        Some(MusicWheelEntry::Song(_))
+    ) {
+        &SORT_MENU_ITEMS
+    } else {
+        &SORT_MENU_ITEMS[..3]
+    }
+}
+
 fn sort_menu_move(state: &mut State, delta: isize) {
+    let len = sort_menu_items(state).len();
     let SortMenuState::Visible { selected_index } = &mut state.sort_menu else {
         return;
     };
-    let len = SORT_MENU_ITEMS.len();
     if len == 0 {
         return;
     }
@@ -1304,12 +1381,279 @@ fn sort_menu_move(state: &mut State, delta: isize) {
     }
 }
 
+#[inline(always)]
+fn selected_chart_hash_for_side(
+    state: &State,
+    song: &SongData,
+    side: profile::PlayerSide,
+) -> Option<String> {
+    let target_chart_type = profile::get_session_play_style().chart_type();
+    let steps_index = match (profile::get_session_play_style(), side) {
+        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => state.p2_selected_steps_index,
+        _ => state.selected_steps_index,
+    };
+    chart_for_steps_index(song, target_chart_type, steps_index).map(|c| c.short_hash.clone())
+}
+
+fn gs_machine_pane(chart_hash: Option<&str>) -> scores::LeaderboardPane {
+    let entries = chart_hash
+        .map(|h| scores::get_machine_leaderboard_local(h, GS_LEADERBOARD_NUM_ENTRIES))
+        .unwrap_or_default();
+    scores::LeaderboardPane {
+        name: GS_LEADERBOARD_MACHINE_BEST.to_string(),
+        entries,
+        is_ex: false,
+        disabled: false,
+    }
+}
+
+fn gs_disabled_pane() -> scores::LeaderboardPane {
+    scores::LeaderboardPane {
+        name: "GrooveStats".to_string(),
+        entries: Vec::new(),
+        is_ex: false,
+        disabled: true,
+    }
+}
+
+fn gs_error_text(error: &str) -> String {
+    let lower = error.to_ascii_lowercase();
+    if lower.contains("timed out") || lower.contains("timeout") {
+        GS_LEADERBOARD_ERROR_TIMEOUT.to_string()
+    } else {
+        GS_LEADERBOARD_ERROR_FAILED.to_string()
+    }
+}
+
+fn apply_leaderboard_side_fetch_result(
+    side: &mut LeaderboardSideState,
+    fetched: Result<scores::PlayerLeaderboardData, String>,
+) {
+    side.loading = false;
+    match fetched {
+        Ok(data) => {
+            side.error_text = None;
+            side.panes = data.panes;
+            if let Some(machine) = side.machine_pane.clone() {
+                side.panes.push(machine);
+            }
+            if side.panes.is_empty()
+                && let Some(machine) = side.machine_pane.clone()
+            {
+                side.panes.push(machine);
+            }
+            side.pane_index = 0;
+        }
+        Err(error) => {
+            side.error_text = Some(gs_error_text(&error));
+            if side.panes.is_empty()
+                && let Some(machine) = side.machine_pane.clone()
+            {
+                side.panes.push(machine);
+            }
+            side.pane_index = 0;
+        }
+    }
+}
+
+fn show_leaderboard_overlay(state: &mut State) {
+    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+        return;
+    };
+
+    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    if !p1_joined && !p2_joined {
+        return;
+    }
+
+    let chart_hash_p1 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P1);
+    let chart_hash_p2 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P2);
+
+    let mut p1 = LeaderboardSideState {
+        joined: p1_joined,
+        machine_pane: Some(gs_machine_pane(chart_hash_p1.as_deref())),
+        ..Default::default()
+    };
+    let mut p2 = LeaderboardSideState {
+        joined: p2_joined,
+        machine_pane: Some(gs_machine_pane(chart_hash_p2.as_deref())),
+        ..Default::default()
+    };
+
+    let status = network::get_status();
+    let service = matches!(
+        &status,
+        ConnectionStatus::Connected(services) if services.leaderboard
+    );
+    let service_disabled = matches!(
+        &status,
+        ConnectionStatus::Connected(services) if !services.leaderboard
+    );
+
+    let mut req_p1: Option<LeaderboardFetchRequest> = None;
+    if p1_joined {
+        let profile = profile::get_for_side(profile::PlayerSide::P1);
+        if service && !profile.groovestats_api_key.is_empty() && chart_hash_p1.is_some() {
+            req_p1 = Some(LeaderboardFetchRequest {
+                chart_hash: chart_hash_p1.unwrap_or_default(),
+                api_key: profile.groovestats_api_key,
+                show_ex_score: profile.show_ex_score,
+            });
+            p1.loading = true;
+        } else if let Some(machine) = p1.machine_pane.clone() {
+            p1.panes.push(machine);
+            if service_disabled {
+                p1.panes.push(gs_disabled_pane());
+            }
+        }
+    }
+
+    let mut req_p2: Option<LeaderboardFetchRequest> = None;
+    if p2_joined {
+        let profile = profile::get_for_side(profile::PlayerSide::P2);
+        if service && !profile.groovestats_api_key.is_empty() && chart_hash_p2.is_some() {
+            req_p2 = Some(LeaderboardFetchRequest {
+                chart_hash: chart_hash_p2.unwrap_or_default(),
+                api_key: profile.groovestats_api_key,
+                show_ex_score: profile.show_ex_score,
+            });
+            p2.loading = true;
+        } else if let Some(machine) = p2.machine_pane.clone() {
+            p2.panes.push(machine);
+            if service_disabled {
+                p2.panes.push(gs_disabled_pane());
+            }
+        }
+    }
+
+    let mut rx = None;
+    if req_p1.is_some() || req_p2.is_some() {
+        let (tx, thread_rx) = mpsc::channel::<LeaderboardFetchResult>();
+        std::thread::spawn(move || {
+            let p1_res = req_p1.map(|r| {
+                scores::fetch_player_leaderboards(
+                    &r.chart_hash,
+                    &r.api_key,
+                    r.show_ex_score,
+                    GS_LEADERBOARD_NUM_ENTRIES,
+                )
+                .map_err(|e| e.to_string())
+            });
+            let p2_res = req_p2.map(|r| {
+                scores::fetch_player_leaderboards(
+                    &r.chart_hash,
+                    &r.api_key,
+                    r.show_ex_score,
+                    GS_LEADERBOARD_NUM_ENTRIES,
+                )
+                .map_err(|e| e.to_string())
+            });
+            let _ = tx.send(LeaderboardFetchResult {
+                p1: p1_res,
+                p2: p2_res,
+            });
+        });
+        rx = Some(thread_rx);
+    }
+
+    state.leaderboard =
+        LeaderboardOverlayState::Visible(LeaderboardOverlayStateData { p1, p2, rx });
+    clear_preview(state);
+}
+
+#[inline(always)]
+fn hide_leaderboard_overlay(state: &mut State) {
+    state.leaderboard = LeaderboardOverlayState::Hidden;
+}
+
+fn poll_leaderboard_overlay(state: &mut State) {
+    let LeaderboardOverlayState::Visible(overlay) = &mut state.leaderboard else {
+        return;
+    };
+    let Some(rx) = &overlay.rx else {
+        return;
+    };
+    let Ok(result) = rx.try_recv() else {
+        return;
+    };
+
+    if let Some(p1_result) = result.p1 {
+        apply_leaderboard_side_fetch_result(&mut overlay.p1, p1_result);
+    }
+    if let Some(p2_result) = result.p2 {
+        apply_leaderboard_side_fetch_result(&mut overlay.p2, p2_result);
+    }
+    overlay.rx = None;
+}
+
+#[inline(always)]
+fn leaderboard_shift(side: &mut LeaderboardSideState, delta: isize) -> bool {
+    if side.loading || side.error_text.is_some() || side.panes.len() <= 1 {
+        return false;
+    }
+    let prev = side.pane_index;
+    let len = side.panes.len() as isize;
+    side.pane_index = ((side.pane_index as isize + delta).rem_euclid(len)) as usize;
+    side.pane_index != prev
+}
+
+fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if !ev.pressed {
+        return ScreenAction::None;
+    }
+    let LeaderboardOverlayState::Visible(overlay) = &mut state.leaderboard else {
+        return ScreenAction::None;
+    };
+
+    match ev.action {
+        VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+            if overlay.p1.joined && leaderboard_shift(&mut overlay.p1, -1) {
+                audio::play_sfx("assets/sounds/change.ogg");
+            }
+        }
+        VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+            if overlay.p1.joined && leaderboard_shift(&mut overlay.p1, 1) {
+                audio::play_sfx("assets/sounds/change.ogg");
+            }
+        }
+        VirtualAction::p2_left | VirtualAction::p2_menu_left => {
+            if overlay.p2.joined && leaderboard_shift(&mut overlay.p2, -1) {
+                audio::play_sfx("assets/sounds/change.ogg");
+            }
+        }
+        VirtualAction::p2_right | VirtualAction::p2_menu_right => {
+            if overlay.p2.joined && leaderboard_shift(&mut overlay.p2, 1) {
+                audio::play_sfx("assets/sounds/change.ogg");
+            }
+        }
+        VirtualAction::p1_start
+        | VirtualAction::p2_start
+        | VirtualAction::p1_back
+        | VirtualAction::p2_back
+        | VirtualAction::p1_select
+        | VirtualAction::p2_select => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            hide_leaderboard_overlay(state);
+        }
+        _ => {}
+    }
+
+    ScreenAction::None
+}
+
 fn sort_menu_activate(state: &mut State) {
     let SortMenuState::Visible { selected_index } = state.sort_menu else {
         return;
     };
+    let items = sort_menu_items(state);
+    if items.is_empty() {
+        hide_sort_menu(state);
+        return;
+    }
+    let selected_index = selected_index.min(items.len() - 1);
     audio::play_sfx("assets/sounds/start.ogg");
-    match SORT_MENU_ITEMS[selected_index].action {
+    match items[selected_index].action {
         SortMenuAction::SortByGroup => {
             apply_wheel_sort(state, WheelSortMode::Group);
             hide_sort_menu(state);
@@ -1321,6 +1665,10 @@ fn sort_menu_activate(state: &mut State) {
         SortMenuAction::SortByRecent => {
             apply_wheel_sort(state, WheelSortMode::Recent);
             hide_sort_menu(state);
+        }
+        SortMenuAction::ShowLeaderboard => {
+            hide_sort_menu(state);
+            show_leaderboard_overlay(state);
         }
     }
 }
@@ -1660,6 +2008,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return handle_exit_prompt_input(state, ev);
     }
 
+    if !matches!(state.leaderboard, LeaderboardOverlayState::Hidden) {
+        return handle_leaderboard_input(state, ev);
+    }
+
     if state.sort_menu != SortMenuState::Hidden {
         return handle_sort_menu_input(state, ev);
     }
@@ -1791,6 +2143,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         }
     }
 
+    poll_leaderboard_overlay(state);
+
     state.time_since_selection_change += dt;
     if dt > 0.0 {
         state.selection_animation_timer += dt;
@@ -1861,6 +2215,15 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 state.p2_selected_steps_index = b;
             }
         }
+    }
+
+    if state.sort_menu != SortMenuState::Hidden
+        || !matches!(state.leaderboard, LeaderboardOverlayState::Hidden)
+    {
+        if state.currently_playing_preview_path.is_some() {
+            clear_preview(state);
+        }
+        return ScreenAction::None;
     }
 
     // --- Immediate Updates ---
@@ -2090,6 +2453,39 @@ fn format_chart_length(seconds: i32) -> String {
     } else {
         format!("{}:{:02}", m, s)
     }
+}
+
+fn format_groovestats_date(date: &str) -> String {
+    if date.trim().is_empty() {
+        return String::new();
+    }
+    let Some((ymd, _time)) = date.split_once(' ') else {
+        return date.to_string();
+    };
+    let mut parts = ymd.split('-');
+    let (Some(year), Some(month), Some(day)) = (parts.next(), parts.next(), parts.next()) else {
+        return date.to_string();
+    };
+    let month_txt = match month {
+        "01" => "Jan",
+        "02" => "Feb",
+        "03" => "Mar",
+        "04" => "Apr",
+        "05" => "May",
+        "06" => "Jun",
+        "07" => "Jul",
+        "08" => "Aug",
+        "09" => "Sep",
+        "10" => "Oct",
+        "11" => "Nov",
+        "12" => "Dec",
+        _ => return date.to_string(),
+    };
+    let day_num = day.parse::<u32>().unwrap_or(0);
+    if day_num == 0 {
+        return date.to_string();
+    }
+    format!("{month_txt} {day_num}, {year}")
 }
 
 fn sl_select_music_bg_flash() -> Actor {
@@ -2921,6 +3317,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     if let SortMenuState::Visible { selected_index } = state.sort_menu {
+        let sort_items = sort_menu_items(state);
+        let selected_index = selected_index.min(sort_items.len().saturating_sub(1));
         let cx = screen_center_x();
         let cy = screen_center_y();
         let selected_color = color::simply_love_rgba(state.active_color_index);
@@ -2958,7 +3356,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             diffuse(0.0, 0.0, 0.0, 1.0):
             z(1452)
         ));
-        for (i, item) in SORT_MENU_ITEMS.iter().enumerate() {
+        for (i, item) in sort_items.iter().enumerate() {
             let y = (i as f32).mul_add(
                 SL_SORT_MENU_ITEM_SPACING,
                 cy + SL_SORT_MENU_ITEM_START_Y_OFFSET,
@@ -3019,6 +3417,275 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             z(1454):
             horizalign(center)
         ));
+    }
+
+    if let LeaderboardOverlayState::Visible(overlay) = &state.leaderboard {
+        let joined_count = overlay.p1.joined as usize + overlay.p2.joined as usize;
+        let pane_width = if joined_count <= 1 {
+            GS_LEADERBOARD_PANE_WIDTH_SINGLE
+        } else {
+            GS_LEADERBOARD_PANE_WIDTH_MULTI
+        };
+        let show_date = joined_count <= 1;
+        let pane_cy = screen_center_y() + GS_LEADERBOARD_PANE_CENTER_Y;
+        let row_center = (GS_LEADERBOARD_NUM_ENTRIES as f32 + 1.0) * 0.5;
+
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, GS_LEADERBOARD_DIM_ALPHA):
+            z(GS_LEADERBOARD_Z)
+        ));
+        actors.push(act!(text:
+            font("miso"):
+            settext(GS_LEADERBOARD_CLOSE_HINT):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_height() - 50.0):
+            zoom(1.1):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(GS_LEADERBOARD_Z + 1):
+            horizalign(center)
+        ));
+
+        let mut draw_panel = |side: &LeaderboardSideState, center_x: f32| {
+            let pane = side
+                .panes
+                .get(side.pane_index.min(side.panes.len().saturating_sub(1)));
+            let header_text = if side.loading {
+                "GrooveStats".to_string()
+            } else if let Some(p) = pane {
+                p.name.replace("ITL Online", "ITL")
+            } else {
+                "GrooveStats".to_string()
+            };
+            let show_ex = !side.loading
+                && side.error_text.is_none()
+                && pane.is_some_and(|p| p.is_ex && !p.disabled);
+            let is_disabled = !side.loading && pane.is_some_and(|p| p.disabled);
+
+            actors.push(act!(quad:
+                align(0.5, 0.5):
+                xy(center_x, pane_cy):
+                zoomto(pane_width + 2.0, GS_LEADERBOARD_PANE_HEIGHT + 2.0):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(GS_LEADERBOARD_Z + 2)
+            ));
+            actors.push(act!(quad:
+                align(0.5, 0.5):
+                xy(center_x, pane_cy):
+                zoomto(pane_width, GS_LEADERBOARD_PANE_HEIGHT):
+                diffuse(0.0, 0.0, 0.0, 1.0):
+                z(GS_LEADERBOARD_Z + 3)
+            ));
+
+            let header_y =
+                pane_cy - GS_LEADERBOARD_PANE_HEIGHT * 0.5 + GS_LEADERBOARD_ROW_HEIGHT * 0.5;
+            actors.push(act!(quad:
+                align(0.5, 0.5):
+                xy(center_x, header_y):
+                zoomto(pane_width + 2.0, GS_LEADERBOARD_ROW_HEIGHT + 2.0):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(GS_LEADERBOARD_Z + 4)
+            ));
+            actors.push(act!(quad:
+                align(0.5, 0.5):
+                xy(center_x, header_y):
+                zoomto(pane_width, GS_LEADERBOARD_ROW_HEIGHT):
+                diffuse(0.0, 0.0, 1.0, 1.0):
+                z(GS_LEADERBOARD_Z + 5)
+            ));
+            actors.push(act!(text:
+                font("wendy"):
+                settext(header_text):
+                align(0.5, 0.5):
+                xy(center_x, header_y):
+                zoom(0.5):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(GS_LEADERBOARD_Z + 6):
+                horizalign(center)
+            ));
+            if show_ex {
+                actors.push(act!(text:
+                    font("wendy"):
+                    settext("EX"):
+                    align(1.0, 0.5):
+                    xy(center_x + pane_width * 0.5 - 16.0, header_y):
+                    zoom(0.5):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    z(GS_LEADERBOARD_Z + 6):
+                    horizalign(right)
+                ));
+            }
+
+            let rank_x = center_x - pane_width * 0.5 + 32.0;
+            let name_x = center_x - pane_width * 0.5 + 100.0;
+            let score_x = if show_date {
+                center_x + 64.0
+            } else {
+                center_x + pane_width * 0.5 - 2.0
+            };
+            let date_x = center_x + pane_width * 0.5 - 2.0;
+
+            for i in 0..GS_LEADERBOARD_NUM_ENTRIES {
+                let y = pane_cy + GS_LEADERBOARD_ROW_HEIGHT * ((i + 1) as f32 - row_center);
+                let mut rank = String::new();
+                let mut name = String::new();
+                let mut score = String::new();
+                let mut date = String::new();
+                let mut has_highlight = false;
+                let mut highlight_rgb = [0.0, 0.0, 0.0];
+                let mut rank_col = [1.0, 1.0, 1.0, 1.0];
+                let mut name_col = [1.0, 1.0, 1.0, 1.0];
+                let mut score_col = [1.0, 1.0, 1.0, 1.0];
+                let mut date_col = [1.0, 1.0, 1.0, 1.0];
+
+                if side.loading {
+                    if i == 0 {
+                        name = GS_LEADERBOARD_LOADING_TEXT.to_string();
+                    }
+                } else if let Some(err) = &side.error_text {
+                    if i == 0 {
+                        name = err.clone();
+                    }
+                } else if is_disabled {
+                    if i == 0 {
+                        name = GS_LEADERBOARD_DISABLED_TEXT.to_string();
+                    }
+                } else if let Some(current) = pane {
+                    if let Some(entry) = current.entries.get(i) {
+                        rank = format!("{}.", entry.rank);
+                        name = entry.name.clone();
+                        score = format!("{:.2}%", entry.score / 100.0);
+                        date = format_groovestats_date(&entry.date);
+
+                        if entry.is_rival || entry.is_self {
+                            has_highlight = true;
+                            if entry.is_rival {
+                                highlight_rgb = [0.741, 0.580, 1.0];
+                            } else {
+                                highlight_rgb = [0.631, 1.0, 0.580];
+                            }
+                            rank_col = [0.0, 0.0, 0.0, 1.0];
+                            name_col = [0.0, 0.0, 0.0, 1.0];
+                            score_col = [0.0, 0.0, 0.0, 1.0];
+                            date_col = [0.0, 0.0, 0.0, 1.0];
+                        }
+                        if entry.is_fail {
+                            score_col = [1.0, 0.0, 0.0, 1.0];
+                        }
+                    } else if i == 0 && current.entries.is_empty() {
+                        name = GS_LEADERBOARD_NO_SCORES_TEXT.to_string();
+                    }
+                }
+
+                if has_highlight {
+                    actors.push(act!(quad:
+                        align(0.5, 0.5):
+                        xy(center_x, y):
+                        zoomto(pane_width, GS_LEADERBOARD_ROW_HEIGHT):
+                        diffuse(highlight_rgb[0], highlight_rgb[1], highlight_rgb[2], 1.0):
+                        z(GS_LEADERBOARD_Z + 5)
+                    ));
+                }
+
+                actors.push(act!(text:
+                    font("miso"):
+                    settext(rank):
+                    align(1.0, 0.5):
+                    xy(rank_x, y):
+                    zoom(0.8):
+                    maxwidth(30.0):
+                    diffuse(rank_col[0], rank_col[1], rank_col[2], rank_col[3]):
+                    z(GS_LEADERBOARD_Z + 7):
+                    horizalign(right)
+                ));
+                actors.push(act!(text:
+                    font("miso"):
+                    settext(name):
+                    align(0.5, 0.5):
+                    xy(name_x, y):
+                    zoom(0.8):
+                    maxwidth(130.0):
+                    diffuse(name_col[0], name_col[1], name_col[2], name_col[3]):
+                    z(GS_LEADERBOARD_Z + 7):
+                    horizalign(center)
+                ));
+                actors.push(act!(text:
+                    font("miso"):
+                    settext(score):
+                    align(1.0, 0.5):
+                    xy(score_x, y):
+                    zoom(0.8):
+                    diffuse(score_col[0], score_col[1], score_col[2], score_col[3]):
+                    z(GS_LEADERBOARD_Z + 7):
+                    horizalign(right)
+                ));
+                if show_date {
+                    actors.push(act!(text:
+                        font("miso"):
+                        settext(date):
+                        align(1.0, 0.5):
+                        xy(date_x, y):
+                        zoom(0.8):
+                        diffuse(date_col[0], date_col[1], date_col[2], date_col[3]):
+                        z(GS_LEADERBOARD_Z + 7):
+                        horizalign(right)
+                    ));
+                }
+            }
+
+            if !side.loading && side.error_text.is_none() && side.panes.len() > 1 {
+                let icon_y =
+                    pane_cy + GS_LEADERBOARD_PANE_HEIGHT * 0.5 - GS_LEADERBOARD_ROW_HEIGHT * 0.5;
+                actors.push(act!(text:
+                    font("miso"):
+                    settext("&MENULEFT;"):
+                    align(0.5, 0.5):
+                    xy(center_x - pane_width * 0.5 + 10.0, icon_y):
+                    zoom(0.85):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    z(GS_LEADERBOARD_Z + 8):
+                    horizalign(center)
+                ));
+                actors.push(act!(text:
+                    font("miso"):
+                    settext(GS_LEADERBOARD_MORE_TEXT):
+                    align(0.5, 0.5):
+                    xy(center_x, icon_y):
+                    zoom(0.85):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    z(GS_LEADERBOARD_Z + 8):
+                    horizalign(center)
+                ));
+                actors.push(act!(text:
+                    font("miso"):
+                    settext("&MENURIGHT;"):
+                    align(0.5, 0.5):
+                    xy(center_x + pane_width * 0.5 - 10.0, icon_y):
+                    zoom(0.85):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    z(GS_LEADERBOARD_Z + 8):
+                    horizalign(center)
+                ));
+            }
+        };
+
+        if joined_count <= 1 {
+            if overlay.p1.joined {
+                draw_panel(&overlay.p1, screen_center_x());
+            } else if overlay.p2.joined {
+                draw_panel(&overlay.p2, screen_center_x());
+            }
+        } else {
+            draw_panel(
+                &overlay.p1,
+                screen_center_x() - GS_LEADERBOARD_PANE_SIDE_OFFSET,
+            );
+            draw_panel(
+                &overlay.p2,
+                screen_center_x() + GS_LEADERBOARD_PANE_SIDE_OFFSET,
+            );
+        }
     }
 
     // Simply Love ScreenSelectMusic out transition: "Press &START; for options"
