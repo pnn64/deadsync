@@ -120,6 +120,7 @@ pub struct Config {
     pub display_width: u32,
     pub display_height: u32,
     pub video_renderer: BackendType,
+    pub gfx_debug: bool,
     /// Windows-only: choose which gamepad backend to use.
     pub windows_gamepad_backend: WindowsPadBackend,
     // When using the Software video renderer:
@@ -162,6 +163,7 @@ impl Default for Config {
             display_width: 1600,
             display_height: 900,
             video_renderer: BackendType::OpenGL,
+            gfx_debug: false,
             windows_gamepad_backend: WindowsPadBackend::Wgi,
             software_renderer_threads: 1,
             song_parsing_threads: 0,
@@ -225,6 +227,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "GamepadBackend={}\n",
         default.windows_gamepad_backend
+    ));
+    content.push_str(&format!(
+        "GfxDebug={}\n",
+        if default.gfx_debug { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "GlobalOffsetSeconds={}\n",
@@ -406,6 +412,10 @@ pub fn load() {
                     .get("Options", "GamepadBackend")
                     .and_then(|s| WindowsPadBackend::from_str(&s).ok())
                     .unwrap_or(default.windows_gamepad_backend);
+                cfg.gfx_debug = conf
+                    .get("Options", "GfxDebug")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.gfx_debug, |v| v != 0);
                 cfg.global_offset_seconds = conf
                     .get("Options", "GlobalOffsetSeconds")
                     .and_then(|v| v.parse().ok())
@@ -504,6 +514,7 @@ pub fn load() {
                     "FastLoad",
                     "FullscreenType",
                     "GamepadBackend",
+                    "GfxDebug",
                     "GlobalOffsetSeconds",
                     "MasterVolume",
                     "MenuMusic",
@@ -1155,6 +1166,10 @@ fn save_without_keymaps() {
         cfg.fullscreen_type.as_str()
     ));
     content.push_str(&format!("GamepadBackend={}\n", cfg.windows_gamepad_backend));
+    content.push_str(&format!(
+        "GfxDebug={}\n",
+        if cfg.gfx_debug { "1" } else { "0" }
+    ));
     content.push_str(&format!(
         "GlobalOffsetSeconds={}\n",
         cfg.global_offset_seconds

@@ -185,25 +185,50 @@ pub struct State {
     next_texture_id: u64,
 }
 
-pub fn init_vulkan(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
-    init(Api::Vulkan, window, vsync_enabled)
+pub fn init_vulkan(
+    window: Arc<Window>,
+    vsync_enabled: bool,
+    gfx_debug_enabled: bool,
+) -> Result<State, Box<dyn Error>> {
+    init(Api::Vulkan, window, vsync_enabled, gfx_debug_enabled)
 }
 
-pub fn init_opengl(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
-    init(Api::OpenGL, window, vsync_enabled)
+pub fn init_opengl(
+    window: Arc<Window>,
+    vsync_enabled: bool,
+    gfx_debug_enabled: bool,
+) -> Result<State, Box<dyn Error>> {
+    init(Api::OpenGL, window, vsync_enabled, gfx_debug_enabled)
 }
 
 #[cfg(target_os = "windows")]
-pub fn init_dx12(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
-    init(Api::DirectX, window, vsync_enabled)
+pub fn init_dx12(
+    window: Arc<Window>,
+    vsync_enabled: bool,
+    gfx_debug_enabled: bool,
+) -> Result<State, Box<dyn Error>> {
+    init(Api::DirectX, window, vsync_enabled, gfx_debug_enabled)
 }
 
-fn init(api: Api, window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
+fn init(
+    api: Api,
+    window: Arc<Window>,
+    vsync_enabled: bool,
+    gfx_debug_enabled: bool,
+) -> Result<State, Box<dyn Error>> {
     info!("Initializing {} (wgpu) backend...", api.name());
+    if gfx_debug_enabled {
+        info!("{} (wgpu) validation/debug is enabled.", api.name());
+    }
+    let instance_flags = if gfx_debug_enabled {
+        wgpu::InstanceFlags::debugging()
+    } else {
+        wgpu::InstanceFlags::empty()
+    };
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: api.backends(),
-        flags: wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL,
+        flags: instance_flags,
         memory_budget_thresholds: Default::default(),
         backend_options: Default::default(),
     });

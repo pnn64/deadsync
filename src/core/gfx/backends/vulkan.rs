@@ -10,7 +10,7 @@ use ash::{
 };
 use cgmath::{Matrix4, Vector4};
 use image::RgbaImage;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use std::{collections::HashMap, error::Error, ffi, mem, sync::Arc};
 use winit::{
     dpi::PhysicalSize,
@@ -128,11 +128,16 @@ pub struct State {
 }
 
 // --- Main Procedural Functions ---
-pub fn init(window: &Window, vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
+pub fn init(
+    window: &Window,
+    vsync_enabled: bool,
+    gfx_debug_enabled: bool,
+) -> Result<State, Box<dyn Error>> {
     info!("Initializing Vulkan backend...");
     let entry = Entry::linked();
-    let instance = create_instance(&entry, window)?;
-    let (debug_loader, debug_messenger) = setup_debug_messenger(&entry, &instance)?;
+    let (instance, debug_utils_enabled) = create_instance(&entry, window, gfx_debug_enabled)?;
+    let (debug_loader, debug_messenger) =
+        setup_debug_messenger(&entry, &instance, debug_utils_enabled)?;
     let surface = create_surface(&entry, &instance, window)?;
     let surface_loader = surface::Instance::new(&entry, &instance);
     let pdevice = select_physical_device(&instance, &surface_loader, surface)?;
@@ -1720,7 +1725,55 @@ fn find_memory_type(
         .expect("Failed to find suitable memory type!")
 }
 
-fn create_instance(entry: &Entry, window: &Window) -> Result<Instance, Box<dyn Error>> {
+const VALIDATION_LAYER_NAME: &ffi::CStr = c"VK_LAYER_KHRONOS_validation";
+
+unsafe extern "system" fn vulkan_debug_callback(
+    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT<'_>,
+    _p_user_data: *mut ffi::c_void,
+) -> vk::Bool32 {
+    let msg = if p_callback_data.is_null() {
+        std::borrow::Cow::Borrowed("<null callback data>")
+    } else {
+        let p_message = unsafe { (*p_callback_data).p_message };
+        if p_message.is_null() {
+            std::borrow::Cow::Borrowed("<null message>")
+        } else {
+            unsafe { ffi::CStr::from_ptr(p_message) }.to_string_lossy()
+        }
+    };
+    if message_severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::ERROR) {
+        error!("Vulkan validation {message_type:?}: {msg}");
+    } else if message_severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::WARNING) {
+        warn!("Vulkan validation {message_type:?}: {msg}");
+    } else if message_severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::INFO) {
+        info!("Vulkan validation {message_type:?}: {msg}");
+    } else {
+        debug!("Vulkan validation {message_type:?}: {msg}");
+    }
+    vk::FALSE
+}
+
+fn supports_instance_extension(entry: &Entry, extension: &ffi::CStr) -> Result<bool, vk::Result> {
+    let exts = unsafe { entry.enumerate_instance_extension_properties(None)? };
+    Ok(exts.iter().any(|ext| unsafe {
+        ffi::CStr::from_ptr(ext.extension_name.as_ptr()) == extension
+    }))
+}
+
+fn supports_instance_layer(entry: &Entry, layer: &ffi::CStr) -> Result<bool, vk::Result> {
+    let layers = unsafe { entry.enumerate_instance_layer_properties()? };
+    Ok(layers
+        .iter()
+        .any(|prop| unsafe { ffi::CStr::from_ptr(prop.layer_name.as_ptr()) == layer }))
+}
+
+fn create_instance(
+    entry: &Entry,
+    window: &Window,
+    gfx_debug_enabled: bool,
+) -> Result<(Instance, bool), Box<dyn Error>> {
     let app_name = ffi::CStr::from_bytes_with_nul(b"DeadSync\0")?;
     let app_info = vk::ApplicationInfo::default()
         .application_name(app_name)
@@ -1731,8 +1784,29 @@ fn create_instance(entry: &Entry, window: &Window) -> Result<Instance, Box<dyn E
 
     let mut extension_names =
         ash_window::enumerate_required_extensions(window.display_handle()?.as_raw())?.to_vec();
-    if cfg!(debug_assertions) {
-        extension_names.push(ash::ext::debug_utils::NAME.as_ptr());
+    let mut debug_utils_enabled = false;
+    let mut layers_names_raw: Vec<*const ffi::c_char> = vec![];
+    if gfx_debug_enabled {
+        if supports_instance_extension(entry, ash::ext::debug_utils::NAME)? {
+            let debug_ptr = ash::ext::debug_utils::NAME.as_ptr();
+            if !extension_names.contains(&debug_ptr) {
+                extension_names.push(debug_ptr);
+            }
+            debug_utils_enabled = true;
+        } else {
+            warn!(
+                "Vulkan debug requested but VK_EXT_debug_utils is unavailable; debug messenger disabled."
+            );
+        }
+
+        if supports_instance_layer(entry, VALIDATION_LAYER_NAME)? {
+            layers_names_raw.push(VALIDATION_LAYER_NAME.as_ptr());
+        } else {
+            warn!(
+                "Vulkan debug requested but '{}' is unavailable; validation layers disabled.",
+                VALIDATION_LAYER_NAME.to_string_lossy()
+            );
+        }
     }
 
     let mut create_flags = vk::InstanceCreateFlags::empty();
@@ -1741,20 +1815,27 @@ fn create_instance(entry: &Entry, window: &Window) -> Result<Instance, Box<dyn E
         create_flags |= vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR;
     }
 
-    let layers_names_raw: Vec<*const ffi::c_char> = vec![];
-
     let create_info = vk::InstanceCreateInfo::default()
         .application_info(&app_info)
         .enabled_extension_names(&extension_names)
         .enabled_layer_names(&layers_names_raw)
         .flags(create_flags);
 
-    unsafe { Ok(entry.create_instance(&create_info, None)?) }
+    let instance = unsafe { entry.create_instance(&create_info, None)? };
+    if gfx_debug_enabled {
+        info!(
+            "Vulkan debug config: validation_layers={}, debug_messenger={}.",
+            !layers_names_raw.is_empty(),
+            debug_utils_enabled
+        );
+    }
+    Ok((instance, debug_utils_enabled))
 }
 
 fn setup_debug_messenger(
-    _entry: &Entry,
-    _instance: &Instance,
+    entry: &Entry,
+    instance: &Instance,
+    debug_utils_enabled: bool,
 ) -> Result<
     (
         Option<ash::ext::debug_utils::Instance>,
@@ -1762,8 +1843,24 @@ fn setup_debug_messenger(
     ),
     vk::Result,
 > {
-    // validation layers are disabled; return None for the loader and messenger
-    Ok((None, None))
+    if !debug_utils_enabled {
+        return Ok((None, None));
+    }
+    let loader = ash::ext::debug_utils::Instance::new(entry, instance);
+    let create_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
+        .message_severity(
+            vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
+                | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
+                | vk::DebugUtilsMessageSeverityFlagsEXT::INFO,
+        )
+        .message_type(
+            vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
+        )
+        .pfn_user_callback(Some(vulkan_debug_callback));
+    let messenger = unsafe { loader.create_debug_utils_messenger(&create_info, None)? };
+    Ok((Some(loader), Some(messenger)))
 }
 
 fn create_surface(

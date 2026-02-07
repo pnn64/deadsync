@@ -47,10 +47,18 @@ pub struct State {
     instanced_location: UniformLocation,
 }
 
-pub fn init(window: Arc<Window>, vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
+pub fn init(
+    window: Arc<Window>,
+    vsync_enabled: bool,
+    gfx_debug_enabled: bool,
+) -> Result<State, Box<dyn Error>> {
     info!("Initializing OpenGL backend...");
+    if gfx_debug_enabled {
+        info!("OpenGL debug context requested.");
+    }
 
-    let (gl_surface, gl_context, gl) = create_opengl_context(&window, vsync_enabled)?;
+    let (gl_surface, gl_context, gl) =
+        create_opengl_context(&window, vsync_enabled, gfx_debug_enabled)?;
     let (
         program,
         mvp_location,
@@ -448,6 +456,7 @@ pub fn cleanup(state: &mut State) {
 fn create_opengl_context(
     window: &Window,
     vsync_enabled: bool,
+    gfx_debug_enabled: bool,
 ) -> Result<
     (
         Surface<WindowSurface>,
@@ -545,7 +554,9 @@ fn create_opengl_context(
     );
     let surface = unsafe { display.create_window_surface(&config, &surface_attributes)? };
 
-    let context_attributes = ContextAttributesBuilder::new().build(Some(raw_window_handle));
+    let context_attributes = ContextAttributesBuilder::new()
+        .with_debug(gfx_debug_enabled)
+        .build(Some(raw_window_handle));
     let context =
         unsafe { display.create_context(&config, &context_attributes)? }.make_current(&surface)?;
 

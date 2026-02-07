@@ -505,6 +505,7 @@ pub struct App {
     asset_manager: AssetManager,
     state: AppState,
     software_renderer_threads: u8,
+    gfx_debug_enabled: bool,
 }
 
 impl App {
@@ -534,6 +535,7 @@ impl App {
         profile_data: profile::Profile,
     ) -> Self {
         let software_renderer_threads = config.software_renderer_threads;
+        let gfx_debug_enabled = config.gfx_debug;
         let state = AppState::new(config, profile_data, show_overlay, color_index);
         Self {
             window: None,
@@ -542,6 +544,7 @@ impl App {
             asset_manager: AssetManager::new(),
             state,
             software_renderer_threads,
+            gfx_debug_enabled,
         }
     }
 
@@ -1503,6 +1506,7 @@ impl App {
             self.backend_type,
             window.clone(),
             self.state.shell.vsync_enabled,
+            self.gfx_debug_enabled,
         )?;
 
         if self.backend_type == BackendType::Software {

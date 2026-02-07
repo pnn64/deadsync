@@ -65,7 +65,7 @@ Follow these steps to get the game running:
 After running the game for the first time, configuration files and a `save` directory will be generated in the project root.
 
 ### Game Settings
-You can edit `deadsync.ini` to change various settings, including renderer, video resolution, VSync, and the default theme color.
+You can edit `deadsync.ini` to change various settings, including renderer, video resolution, VSync, `GfxDebug` (backend validation/debugging), and the default theme color.
 
 ### Input bindings
 
