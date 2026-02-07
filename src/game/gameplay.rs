@@ -16,9 +16,9 @@ use crate::game::{
     profile,
     scroll::ScrollSpeedSetting,
 };
+use crate::screens::components::density_graph::DensityHistCache;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
-use crate::screens::components::density_graph::DensityHistCache;
 use log::{debug, info};
 use rssp::streams::StreamSegment;
 use std::collections::{HashMap, VecDeque};
@@ -2862,7 +2862,8 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
     match state.notes[note_index].note_type {
         NoteType::Hold => {
             if !scoring_blocked {
-                state.players[player].holds_held = state.players[player].holds_held.saturating_add(1);
+                state.players[player].holds_held =
+                    state.players[player].holds_held.saturating_add(1);
             }
             if !scoring_blocked && !is_state_dead(state, player) {
                 state.players[player].holds_held_for_score =
@@ -2872,7 +2873,8 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
         }
         NoteType::Roll => {
             if !scoring_blocked {
-                state.players[player].rolls_held = state.players[player].rolls_held.saturating_add(1);
+                state.players[player].rolls_held =
+                    state.players[player].rolls_held.saturating_add(1);
             }
             if !scoring_blocked && !is_state_dead(state, player) {
                 state.players[player].rolls_held_for_score =
@@ -3794,14 +3796,7 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
         if state.autoplay_lane_state[col]
             && let Some(lane) = lane_from_column(col)
         {
-            push_input_edge(
-                state,
-                InputSource::Keyboard,
-                lane,
-                false,
-                release_at,
-                false,
-            );
+            push_input_edge(state, InputSource::Keyboard, lane, false, release_at, false);
         }
         state.autoplay_lane_state[col] = false;
         state.autoplay_hold_release_time[col] = None;
@@ -3810,8 +3805,7 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
     let mut roll_cols = [usize::MAX; MAX_COLS];
     let mut roll_count = 0usize;
     for col in 0..state.num_cols {
-        if state
-            .active_holds[col]
+        if state.active_holds[col]
             .as_ref()
             .is_some_and(|active| matches!(active.note_type, NoteType::Roll) && !active.let_go)
             && roll_count < MAX_COLS

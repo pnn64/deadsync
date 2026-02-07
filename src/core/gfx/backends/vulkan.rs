@@ -1757,9 +1757,9 @@ unsafe extern "system" fn vulkan_debug_callback(
 
 fn supports_instance_extension(entry: &Entry, extension: &ffi::CStr) -> Result<bool, vk::Result> {
     let exts = unsafe { entry.enumerate_instance_extension_properties(None)? };
-    Ok(exts.iter().any(|ext| unsafe {
-        ffi::CStr::from_ptr(ext.extension_name.as_ptr()) == extension
-    }))
+    Ok(exts
+        .iter()
+        .any(|ext| unsafe { ffi::CStr::from_ptr(ext.extension_name.as_ptr()) == extension }))
 }
 
 fn supports_instance_layer(entry: &Entry, layer: &ffi::CStr) -> Result<bool, vk::Result> {

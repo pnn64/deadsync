@@ -12,11 +12,11 @@ use crate::screens::{Screen, ScreenAction};
 use std::borrow::Cow;
 use std::time::{Duration, Instant};
 
+use crate::screens::components::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
+use crate::screens::components::{heart_bg, screen_bar};
 use crate::ui::actors;
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use crate::screens::components::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
-use crate::screens::components::{heart_bg, screen_bar};
 use crate::ui::font;
 
 /* ---------------------------- transitions ---------------------------- */

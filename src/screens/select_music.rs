@@ -8,6 +8,7 @@ use crate::core::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use crate::game::chart::ChartData;
+use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
@@ -124,6 +125,7 @@ const SL_SORT_MENU_FOCUS_TWEEN_SECONDS: f32 = 0.15;
 const SL_SORT_MENU_DIM_ALPHA: f32 = 0.8;
 const SL_SORT_MENU_HINT_Y_OFFSET: f32 = 100.0;
 const SL_SORT_MENU_HINT_TEXT: &str = "PRESS &SELECT; TO CANCEL";
+const SL_SORT_MENU_BASE_ITEM_COUNT: usize = 4;
 
 // Simply Love ScreenSelectMusic overlay/Leaderboard.lua geometry.
 const GS_LEADERBOARD_NUM_ENTRIES: usize = 13;
@@ -394,6 +396,7 @@ enum SortMenuAction {
     SortByGroup,
     SortByTitle,
     SortByRecent,
+    ReloadSongsCourses,
     ShowLeaderboard,
 }
 
@@ -404,7 +407,7 @@ struct SortMenuItem {
     action: SortMenuAction,
 }
 
-const SORT_MENU_ITEMS: [SortMenuItem; 4] = [
+const SORT_MENU_ITEMS: [SortMenuItem; 5] = [
     SortMenuItem {
         top_label: "Sort By",
         bottom_label: "Group",
@@ -421,6 +424,11 @@ const SORT_MENU_ITEMS: [SortMenuItem; 4] = [
         action: SortMenuAction::SortByRecent,
     },
     SortMenuItem {
+        top_label: "Take a Breather~",
+        bottom_label: "Load New Songs",
+        action: SortMenuAction::ReloadSongsCourses,
+    },
+    SortMenuItem {
         top_label: "GrooveStats",
         bottom_label: "Leaderboard",
         action: SortMenuAction::ShowLeaderboard,
@@ -431,6 +439,39 @@ const SORT_MENU_ITEMS: [SortMenuItem; 4] = [
 enum SortMenuState {
     Hidden,
     Visible { selected_index: usize },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReloadPhase {
+    Songs,
+    Courses,
+}
+
+enum ReloadMsg {
+    Phase(ReloadPhase),
+    Song { pack: String, song: String },
+    Course { group: String, course: String },
+    Done,
+}
+
+struct ReloadUiState {
+    phase: ReloadPhase,
+    line2: String,
+    line3: String,
+    done: bool,
+    rx: mpsc::Receiver<ReloadMsg>,
+}
+
+impl ReloadUiState {
+    fn new(rx: mpsc::Receiver<ReloadMsg>) -> Self {
+        Self {
+            phase: ReloadPhase::Songs,
+            line2: String::new(),
+            line3: String::new(),
+            done: false,
+            rx,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -523,6 +564,7 @@ pub struct State {
     // Internal state
     out_prompt: OutPromptState,
     exit_prompt: ExitPromptState,
+    reload_ui: Option<ReloadUiState>,
     sort_menu: SortMenuState,
     leaderboard: LeaderboardOverlayState,
     sort_mode: WheelSortMode,
@@ -1138,6 +1180,7 @@ pub fn init() -> State {
         wheel_offset_from_selection: 0.0,
         out_prompt: OutPromptState::None,
         exit_prompt: ExitPromptState::None,
+        reload_ui: None,
         sort_menu: SortMenuState::Hidden,
         leaderboard: LeaderboardOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
@@ -1363,8 +1406,226 @@ fn sort_menu_items(state: &State) -> &[SortMenuItem] {
     ) {
         &SORT_MENU_ITEMS
     } else {
-        &SORT_MENU_ITEMS[..3]
+        &SORT_MENU_ITEMS[..4]
     }
+}
+
+#[inline(always)]
+fn sort_menu_height(item_count: usize) -> f32 {
+    let extra = item_count.saturating_sub(SL_SORT_MENU_BASE_ITEM_COUNT) as f32;
+    SL_SORT_MENU_HEIGHT + extra * SL_SORT_MENU_ITEM_SPACING
+}
+
+fn start_reload_songs_and_courses(state: &mut State) {
+    if state.reload_ui.is_some() {
+        return;
+    }
+
+    clear_preview(state);
+    state.sort_menu = SortMenuState::Hidden;
+    state.leaderboard = LeaderboardOverlayState::Hidden;
+    state.menu_chord_mask = 0;
+    state.chord_mask_p1 = 0;
+    state.chord_mask_p2 = 0;
+    state.nav_key_held_direction = None;
+    state.nav_key_held_since = None;
+    state.last_steps_nav_dir_p1 = None;
+    state.last_steps_nav_time_p1 = None;
+    state.last_steps_nav_dir_p2 = None;
+    state.last_steps_nav_time_p2 = None;
+
+    let (tx, rx) = mpsc::channel::<ReloadMsg>();
+    state.reload_ui = Some(ReloadUiState::new(rx));
+
+    std::thread::spawn(move || {
+        let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Songs));
+
+        let interval = Duration::from_millis(50);
+        let mut last_sent = Instant::now() - interval;
+        let mut on_song = |pack: &str, song: &str| {
+            let now = Instant::now();
+            if now.duration_since(last_sent) < interval {
+                return;
+            }
+            last_sent = now;
+            let _ = tx.send(ReloadMsg::Song {
+                pack: pack.to_owned(),
+                song: song.to_owned(),
+            });
+        };
+        song_loading::scan_and_load_songs_with_progress("songs", &mut on_song);
+
+        let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Courses));
+
+        let mut last_sent = Instant::now() - interval;
+        let mut on_course = |group: &str, course: &str| {
+            let now = Instant::now();
+            if now.duration_since(last_sent) < interval {
+                return;
+            }
+            last_sent = now;
+            let _ = tx.send(ReloadMsg::Course {
+                group: group.to_owned(),
+                course: course.to_owned(),
+            });
+        };
+        song_loading::scan_and_load_courses_with_progress("courses", "songs", &mut on_course);
+
+        let _ = tx.send(ReloadMsg::Done);
+    });
+}
+
+fn poll_reload_ui(reload: &mut ReloadUiState) {
+    while let Ok(msg) = reload.rx.try_recv() {
+        match msg {
+            ReloadMsg::Phase(phase) => {
+                reload.phase = phase;
+                reload.line2.clear();
+                reload.line3.clear();
+            }
+            ReloadMsg::Song { pack, song } => {
+                reload.phase = ReloadPhase::Songs;
+                reload.line2 = pack;
+                reload.line3 = song;
+            }
+            ReloadMsg::Course { group, course } => {
+                reload.phase = ReloadPhase::Courses;
+                reload.line2 = group;
+                reload.line3 = course;
+            }
+            ReloadMsg::Done => {
+                reload.done = true;
+            }
+        }
+    }
+}
+
+fn refresh_after_reload(state: &mut State) {
+    let selected_song = selected_song_arc(state);
+    let selected_simfile_path = selected_song.as_ref().map(|song| song.simfile_path.clone());
+    let selected_pack_name = if let Some(song) = selected_song.as_ref() {
+        group_name_for_song(&state.entries, song)
+    } else {
+        match state.entries.get(state.selected_index) {
+            Some(MusicWheelEntry::PackHeader { name, .. }) => Some(name.clone()),
+            _ => None,
+        }
+    };
+    let target_chart_type = profile::get_session_play_style().chart_type();
+    let selected_hash_p1 = selected_song
+        .as_ref()
+        .and_then(|song| chart_for_steps_index(song, target_chart_type, state.selected_steps_index))
+        .map(|chart| chart.short_hash.clone());
+    let selected_hash_p2 = selected_song
+        .as_ref()
+        .and_then(|song| {
+            chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index)
+        })
+        .map(|chart| chart.short_hash.clone());
+
+    let sort_mode = state.sort_mode;
+    let expanded_pack_name = state.expanded_pack_name.clone();
+    let active_color_index = state.active_color_index;
+    let old_steps_index_p1 = state.selected_steps_index;
+    let old_steps_index_p2 = state.p2_selected_steps_index;
+    let preferred_difficulty_index = state.preferred_difficulty_index;
+    let p2_preferred_difficulty_index = state.p2_preferred_difficulty_index;
+
+    let mut refreshed = init();
+    refreshed.active_color_index = active_color_index;
+    refreshed.preferred_difficulty_index = preferred_difficulty_index;
+    refreshed.p2_preferred_difficulty_index = p2_preferred_difficulty_index;
+
+    if sort_mode != WheelSortMode::Group {
+        apply_wheel_sort(&mut refreshed, sort_mode);
+    }
+
+    if let Some(expanded) = expanded_pack_name
+        && refreshed.all_entries.iter().any(
+            |entry| matches!(entry, MusicWheelEntry::PackHeader { name, .. } if name == &expanded),
+        )
+    {
+        refreshed.expanded_pack_name = Some(expanded);
+        rebuild_displayed_entries(&mut refreshed);
+    }
+
+    let mut restored = false;
+    if let Some(simfile_path) = selected_simfile_path {
+        if let Some(index) = refreshed.entries.iter().position(|entry| {
+            matches!(entry, MusicWheelEntry::Song(song) if song.simfile_path == simfile_path)
+        }) {
+            refreshed.selected_index = index;
+            restored = true;
+        } else if let Some(pack_name) = selected_pack_name.as_ref()
+            && refreshed.expanded_pack_name.as_deref() != Some(pack_name.as_str())
+            && refreshed
+                .all_entries
+                .iter()
+                .any(|entry| matches!(entry, MusicWheelEntry::PackHeader { name, .. } if name == pack_name))
+        {
+            refreshed.expanded_pack_name = Some(pack_name.clone());
+            rebuild_displayed_entries(&mut refreshed);
+            if let Some(index) = refreshed.entries.iter().position(|entry| {
+                matches!(entry, MusicWheelEntry::Song(song) if song.simfile_path == simfile_path)
+            }) {
+                refreshed.selected_index = index;
+                restored = true;
+            }
+        }
+    }
+
+    if !restored
+        && let Some(pack_name) = selected_pack_name
+        && let Some(index) = refreshed.entries.iter().position(
+            |entry| matches!(entry, MusicWheelEntry::PackHeader { name, .. } if name == &pack_name),
+        )
+    {
+        refreshed.selected_index = index;
+    }
+
+    refreshed.selected_index = refreshed
+        .selected_index
+        .min(refreshed.entries.len().saturating_sub(1));
+    refreshed.prev_selected_index = refreshed.selected_index;
+    refreshed.time_since_selection_change = 0.0;
+    refreshed.wheel_offset_from_selection = 0.0;
+
+    if let Some(MusicWheelEntry::Song(song)) = refreshed.entries.get(refreshed.selected_index) {
+        let mut restored_p1 = false;
+        if let Some(hash) = selected_hash_p1.as_deref()
+            && let Some(index) = steps_index_for_chart_hash(song, target_chart_type, hash)
+        {
+            refreshed.selected_steps_index = index;
+            if index < color::FILE_DIFFICULTY_NAMES.len() {
+                refreshed.preferred_difficulty_index = index;
+            }
+            restored_p1 = true;
+        }
+        if !restored_p1
+            && chart_for_steps_index(song, target_chart_type, old_steps_index_p1).is_some()
+        {
+            refreshed.selected_steps_index = old_steps_index_p1;
+        }
+
+        let mut restored_p2 = false;
+        if let Some(hash) = selected_hash_p2.as_deref()
+            && let Some(index) = steps_index_for_chart_hash(song, target_chart_type, hash)
+        {
+            refreshed.p2_selected_steps_index = index;
+            if index < color::FILE_DIFFICULTY_NAMES.len() {
+                refreshed.p2_preferred_difficulty_index = index;
+            }
+            restored_p2 = true;
+        }
+        if !restored_p2
+            && chart_for_steps_index(song, target_chart_type, old_steps_index_p2).is_some()
+        {
+            refreshed.p2_selected_steps_index = old_steps_index_p2;
+        }
+    }
+
+    trigger_immediate_refresh(&mut refreshed);
+    *state = refreshed;
 }
 
 fn sort_menu_move(state: &mut State, delta: isize) {
@@ -1678,6 +1939,10 @@ fn sort_menu_activate(state: &mut State) {
             apply_wheel_sort(state, WheelSortMode::Recent);
             hide_sort_menu(state);
         }
+        SortMenuAction::ReloadSongsCourses => {
+            hide_sort_menu(state);
+            start_reload_songs_and_courses(state);
+        }
         SortMenuAction::ShowLeaderboard => {
             hide_sort_menu(state);
             show_leaderboard_overlay(state);
@@ -1985,6 +2250,9 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
 }
 
 pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
+    if state.reload_ui.is_some() {
+        return ScreenAction::None;
+    }
     if key.state != ElementState::Pressed {
         return ScreenAction::None;
     }
@@ -2002,6 +2270,10 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if state.reload_ui.is_some() {
+        return ScreenAction::None;
+    }
+
     if state.out_prompt != OutPromptState::None {
         if ev.pressed
             && matches!(ev.action, VirtualAction::p1_start | VirtualAction::p2_start)
@@ -2115,6 +2387,19 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 }
 
 pub fn update(state: &mut State, dt: f32) -> ScreenAction {
+    if state.reload_ui.is_some() {
+        let done = {
+            let reload = state.reload_ui.as_mut().unwrap();
+            poll_reload_ui(reload);
+            reload.done
+        };
+        if done {
+            state.reload_ui = None;
+            refresh_after_reload(state);
+        }
+        return ScreenAction::None;
+    }
+
     match state.out_prompt {
         OutPromptState::PressStartForOptions { elapsed } => {
             let elapsed = elapsed + dt.max(0.0);
@@ -3344,11 +3629,47 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
 
+    if let Some(reload) = &state.reload_ui {
+        let header = match reload.phase {
+            ReloadPhase::Songs => "Loading songs...",
+            ReloadPhase::Courses => "Loading courses...",
+        };
+        let text = if reload.line2.is_empty() && reload.line3.is_empty() {
+            header.to_string()
+        } else if reload.line2.is_empty() {
+            format!("{header}\n{}", reload.line3)
+        } else if reload.line3.is_empty() {
+            format!("{header}\n{}", reload.line2)
+        } else {
+            format!("{header}\n{}\n{}", reload.line2, reload.line3)
+        };
+
+        actors.push(act!(quad:
+            align(0.0, 0.0):
+            xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 0.8):
+            z(1450)
+        ));
+        actors.push(act!(text:
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoom(1.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            font("miso"):
+            settext(text):
+            horizalign(center):
+            z(1451)
+        ));
+        return actors;
+    }
+
     if let SortMenuState::Visible { selected_index } = state.sort_menu {
         let sort_items = sort_menu_items(state);
         let selected_index = selected_index.min(sort_items.len().saturating_sub(1));
         let cx = screen_center_x();
         let cy = screen_center_y();
+        let menu_height = sort_menu_height(sort_items.len());
         let selected_color = color::simply_love_rgba(state.active_color_index);
         actors.push(act!(quad:
             align(0.0, 0.0): xy(0.0, 0.0):
@@ -3374,13 +3695,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
         actors.push(act!(quad:
             align(0.5, 0.5): xy(cx, cy):
-            zoomto(SL_SORT_MENU_WIDTH + 2.0, SL_SORT_MENU_HEIGHT + 2.0):
+            zoomto(SL_SORT_MENU_WIDTH + 2.0, menu_height + 2.0):
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(1451)
         ));
         actors.push(act!(quad:
             align(0.5, 0.5): xy(cx, cy):
-            zoomto(SL_SORT_MENU_WIDTH, SL_SORT_MENU_HEIGHT):
+            zoomto(SL_SORT_MENU_WIDTH, menu_height):
             diffuse(0.0, 0.0, 0.0, 1.0):
             z(1452)
         ));
@@ -3439,7 +3760,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             font("wendy"):
             settext(SL_SORT_MENU_HINT_TEXT):
             align(0.5, 0.5):
-            xy(cx, cy + SL_SORT_MENU_HINT_Y_OFFSET):
+            xy(cx, cy + SL_SORT_MENU_HINT_Y_OFFSET + (menu_height - SL_SORT_MENU_HEIGHT) * 0.5):
             zoom(0.26):
             diffuse(0.7, 0.7, 0.7, 1.0):
             z(1454):

@@ -7,13 +7,13 @@ use crate::core::space::{
 };
 use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::song::SongData;
-use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::Actor;
-use crate::ui::color;
 use crate::screens::components::heart_bg;
 use crate::screens::components::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
+use crate::screens::{Screen, ScreenAction};
+use crate::ui::actors::Actor;
+use crate::ui::color;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

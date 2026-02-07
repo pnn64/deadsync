@@ -3,12 +3,12 @@ use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::screens::Screen;
-use crate::ui::actors::{Actor, SizeSpec};
-use crate::ui::color;
 use crate::screens::components::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::{eval_grades, heart_bg, pad_display, screen_bar};
+use crate::ui::actors::{Actor, SizeSpec};
+use crate::ui::color;
 
 use crate::assets::AssetManager;
 use crate::game::chart::ChartData;

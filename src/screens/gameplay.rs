@@ -4,10 +4,10 @@ use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::judgment;
 use crate::game::profile;
-use crate::ui::actors::{Actor, SizeSpec};
-use crate::ui::color;
 use crate::screens::components::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::components::{gameplay_stats, notefield};
+use crate::ui::actors::{Actor, SizeSpec};
+use crate::ui::color;
 
 pub use crate::game::gameplay::{State, init, update};
 use crate::game::gameplay::{TRANSITION_IN_DURATION, TRANSITION_OUT_DURATION};

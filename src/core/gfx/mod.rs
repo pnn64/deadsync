@@ -291,23 +291,19 @@ pub fn create_backend(
         BackendType::Vulkan => {
             BackendImpl::Vulkan(vulkan::init(&window, vsync_enabled, gfx_debug_enabled)?)
         }
-        BackendType::VulkanWgpu => {
-            BackendImpl::VulkanWgpu(wgpu_core::init_vulkan(
-                window,
-                vsync_enabled,
-                gfx_debug_enabled,
-            )?)
-        }
+        BackendType::VulkanWgpu => BackendImpl::VulkanWgpu(wgpu_core::init_vulkan(
+            window,
+            vsync_enabled,
+            gfx_debug_enabled,
+        )?),
         BackendType::OpenGL => {
             BackendImpl::OpenGL(opengl::init(window, vsync_enabled, gfx_debug_enabled)?)
         }
-        BackendType::OpenGLWgpu => {
-            BackendImpl::OpenGLWgpu(wgpu_core::init_opengl(
-                window,
-                vsync_enabled,
-                gfx_debug_enabled,
-            )?)
-        }
+        BackendType::OpenGLWgpu => BackendImpl::OpenGLWgpu(wgpu_core::init_opengl(
+            window,
+            vsync_enabled,
+            gfx_debug_enabled,
+        )?),
         BackendType::Software => BackendImpl::Software(software::init(window, vsync_enabled)?),
         #[cfg(target_os = "windows")]
         BackendType::DirectX => BackendImpl::DirectX(wgpu_core::init_dx12(
