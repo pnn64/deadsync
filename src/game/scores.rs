@@ -1138,6 +1138,11 @@ fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalRepl
 }
 
 pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
+    if gs.autoplay_used {
+        info!("Skipping local score save: autoplay was used during this stage.");
+        return;
+    }
+
     let now_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)

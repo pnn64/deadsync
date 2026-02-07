@@ -100,22 +100,28 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.push(build_background(state, crate::config::get().bg_brightness));
     }
 
-    // Global offset adjustment overlay (centered text with subtle shadow).
-    if let Some(msg) = &state.sync_overlay_message {
-        let zoom = widescale(0.8, 1.0);
-        let y = screen_center_y() + 120.0;
+    // ITGmania/Simply Love parity: ScreenSyncOverlay status text.
+    {
+        let mut status_lines: Vec<String> = Vec::with_capacity(2);
+        if state.autoplay_enabled {
+            status_lines.push("AutoPlay".to_string());
+        }
+        if let Some(msg) = &state.sync_overlay_message {
+            status_lines.push(msg.clone());
+        }
 
-        // Main text
-        actors.push(act!(text:
-            font("miso"):
-            settext(msg.clone()):
-            align(0.5, 0.5):
-            xy(screen_center_x(), y):
-            zoom(zoom):
-            shadowlength(2.0):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            z(901)
-        ));
+        if !status_lines.is_empty() {
+            actors.push(act!(text:
+                font("miso"):
+                settext(status_lines.join("\n")):
+                align(0.5, 0.5):
+                xy(screen_center_x(), screen_center_y() + 150.0):
+                shadowlength(2.0):
+                strokecolor(0.0, 0.0, 0.0, 1.0):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(901)
+            ));
+        }
     }
 
     // Hold START/BACK prompt (Simply Love parity: ScreenGameplay debug text).

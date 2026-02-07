@@ -88,6 +88,9 @@ const GIVE_UP_OUT_FADE_SECONDS: f32 = 1.0;
 const BACK_OUT_TOTAL_SECONDS: f32 = BACK_OUT_FADE_DELAY_SECONDS + BACK_OUT_FADE_SECONDS;
 const BACK_OUT_FADE_DELAY_SECONDS: f32 = 0.1;
 const BACK_OUT_FADE_SECONDS: f32 = 0.4;
+const AUTOPLAY_TAP_RELEASE_SECONDS: f32 = 0.005;
+const AUTOPLAY_HOLD_RELEASE_SECONDS: f32 = 0.001;
+const AUTOPLAY_OFFSET_EPSILON_SECONDS: f32 = 0.000_001;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HoldToExitKey {
@@ -148,6 +151,11 @@ impl TurnRng {
         } else {
             (self.next_u32() as usize) % upper_exclusive
         }
+    }
+
+    #[inline(always)]
+    fn next_f32_unit(&mut self) -> f32 {
+        (self.next_u32() as f32) * (1.0 / 4_294_967_296.0)
     }
 
     fn shuffle<T>(&mut self, slice: &mut [T]) {
@@ -1191,6 +1199,8 @@ pub struct State {
 
     pub possible_grade_points: [i32; MAX_PLAYERS],
     pub song_completed_naturally: bool,
+    pub autoplay_enabled: bool,
+    pub autoplay_used: bool,
 
     pub player_profiles: [profile::Profile; MAX_PLAYERS],
     pub noteskin: [Option<Noteskin>; MAX_PLAYERS],
@@ -1246,6 +1256,11 @@ pub struct State {
     keyboard_lane_state: [bool; MAX_COLS],
     gamepad_lane_state: [bool; MAX_COLS],
     pending_edges: VecDeque<InputEdge>,
+    autoplay_rng: TurnRng,
+    autoplay_cursor: [usize; MAX_PLAYERS],
+    autoplay_pending_row: [Option<(usize, f32)>; MAX_PLAYERS],
+    autoplay_lane_state: [bool; MAX_COLS],
+    autoplay_hold_release_time: [Option<f32>; MAX_COLS],
     pub replay_edges: Vec<RecordedLaneEdge>,
 
     log_timer: f32,
@@ -1259,6 +1274,36 @@ fn is_player_dead(p: &PlayerRuntime) -> bool {
 #[inline(always)]
 fn is_state_dead(state: &State, player: usize) -> bool {
     is_player_dead(&state.players[player])
+}
+
+#[inline(always)]
+fn autoplay_blocks_scoring(state: &State) -> bool {
+    state.autoplay_enabled
+}
+
+#[inline(always)]
+fn autoplay_tap_offset_s(state: &mut State) -> f32 {
+    let w1 = state
+        .timing_profile
+        .windows_s
+        .first()
+        .copied()
+        .unwrap_or(0.0)
+        .max(0.0);
+    if w1 <= 0.0 {
+        return 0.0;
+    }
+
+    let mut offset = (state.autoplay_rng.next_f32_unit() * 2.0 - 1.0) * w1;
+    if offset.abs() < AUTOPLAY_OFFSET_EPSILON_SECONDS {
+        let sign = if state.autoplay_rng.next_u32() & 1 == 0 {
+            -1.0
+        } else {
+            1.0
+        };
+        offset = sign * AUTOPLAY_OFFSET_EPSILON_SECONDS.min(w1);
+    }
+    offset
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1687,6 +1732,9 @@ pub fn queue_input_edge(
     pressed: bool,
     _timestamp: Instant,
 ) {
+    if state.autoplay_enabled {
+        return;
+    }
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
     let lane = match (play_style, player_side, lane) {
@@ -1714,6 +1762,12 @@ pub fn queue_input_edge(
 
     // Map this input edge directly into the gameplay music time using the
     // audio device clock, so judgments are not tied to frame timing.
+    let event_music_time = current_music_time_from_stream(state);
+    push_input_edge(state, source, lane, pressed, event_music_time, true);
+}
+
+#[inline(always)]
+fn current_music_time_from_stream(state: &State) -> f32 {
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -1722,23 +1776,51 @@ pub fn queue_input_edge(
     let lead_in = state.audio_lead_in_seconds.max(0.0);
     let anchor = -state.global_offset_seconds;
     let stream_pos = audio::get_music_stream_position_seconds();
-    let event_music_time = (stream_pos - lead_in).mul_add(rate, anchor * (1.0 - rate));
+    (stream_pos - lead_in).mul_add(rate, anchor * (1.0 - rate))
+}
 
+#[inline(always)]
+fn push_input_edge(
+    state: &mut State,
+    source: InputSource,
+    lane: Lane,
+    pressed: bool,
+    event_music_time: f32,
+    record_replay: bool,
+) {
+    if lane.index() >= state.num_cols {
+        return;
+    }
     state.pending_edges.push_back(InputEdge {
         lane,
         pressed,
         source,
         event_music_time,
     });
-
-    // Record every gameplay lane edge for replay.
-    let lane_index = lane.index() as u8;
+    if !record_replay {
+        return;
+    }
     state.replay_edges.push(RecordedLaneEdge {
-        lane_index,
+        lane_index: lane.index() as u8,
         pressed,
         source,
         event_music_time,
     });
+}
+
+#[inline(always)]
+const fn lane_from_column(column: usize) -> Option<Lane> {
+    match column {
+        0 => Some(Lane::Left),
+        1 => Some(Lane::Down),
+        2 => Some(Lane::Up),
+        3 => Some(Lane::Right),
+        4 => Some(Lane::P2Left),
+        5 => Some(Lane::P2Down),
+        6 => Some(Lane::P2Up),
+        7 => Some(Lane::P2Right),
+        _ => None,
+    }
 }
 
 fn get_reference_bpm_from_display_tag(display_bpm_str: &str) -> Option<f32> {
@@ -1955,13 +2037,14 @@ pub fn init(
         note_ranges[player] = (start, end);
     }
 
+    let song_seed = turn_seed_for_song(&song);
     apply_turn_options(
         &mut notes,
         note_ranges,
         cols_per_player,
         num_players,
         &player_profiles,
-        turn_seed_for_song(&song),
+        song_seed,
     );
 
     let note_player_for_col = |col: usize| -> usize {
@@ -2373,6 +2456,8 @@ pub fn init(
         is_in_delay: false,
         possible_grade_points,
         song_completed_naturally: false,
+        autoplay_enabled: false,
+        autoplay_used: false,
         player_profiles,
         noteskin,
         active_color_index,
@@ -2422,6 +2507,11 @@ pub fn init(
         keyboard_lane_state: [false; MAX_COLS],
         gamepad_lane_state: [false; MAX_COLS],
         pending_edges: VecDeque::new(),
+        autoplay_rng: TurnRng::new(song_seed ^ 0xA0A7_0F8A_1A2B_3C4D),
+        autoplay_cursor: note_range_start,
+        autoplay_pending_row: [None; MAX_PLAYERS],
+        autoplay_lane_state: [false; MAX_COLS],
+        autoplay_hold_release_time: [None; MAX_COLS],
         replay_edges: Vec::with_capacity(4096),
         log_timer: 0.0,
     }
@@ -2513,27 +2603,32 @@ fn handle_mine_hit(
         return false;
     }
 
+    let scoring_blocked = autoplay_blocks_scoring(state);
     state.notes[note_index].mine_result = Some(MineResult::Hit);
-    state.players[player].mines_hit = state.players[player].mines_hit.saturating_add(1);
+    if !scoring_blocked {
+        state.players[player].mines_hit = state.players[player].mines_hit.saturating_add(1);
+    }
     let mut updated_scoring = false;
 
     state.arrows[column].remove(arrow_list_index);
-    apply_life_change(
-        &mut state.players[player],
-        state.current_music_time,
-        LifeChange::HIT_MINE,
-    );
-    if !is_state_dead(state, player) {
-        state.players[player].mines_hit_for_score =
-            state.players[player].mines_hit_for_score.saturating_add(1);
-        updated_scoring = true;
+    if !scoring_blocked {
+        apply_life_change(
+            &mut state.players[player],
+            state.current_music_time,
+            LifeChange::HIT_MINE,
+        );
+        if !is_state_dead(state, player) {
+            state.players[player].mines_hit_for_score =
+                state.players[player].mines_hit_for_score.saturating_add(1);
+            updated_scoring = true;
+        }
+        state.players[player].combo = 0;
+        state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
+        if state.players[player].full_combo_grade.is_some() {
+            state.players[player].first_fc_attempt_broken = true;
+        }
+        state.players[player].full_combo_grade = None;
     }
-    state.players[player].combo = 0;
-    state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
-    if state.players[player].full_combo_grade.is_some() {
-        state.players[player].first_fc_attempt_broken = true;
-    }
-    state.players[player].full_combo_grade = None;
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
     debug!(
@@ -2632,8 +2727,11 @@ fn hit_mine_timebased(
         return false;
     }
 
+    let scoring_blocked = autoplay_blocks_scoring(state);
     state.notes[note_index].mine_result = Some(MineResult::Hit);
-    state.players[player].mines_hit = state.players[player].mines_hit.saturating_add(1);
+    if !scoring_blocked {
+        state.players[player].mines_hit = state.players[player].mines_hit.saturating_add(1);
+    }
     let mut updated_scoring = false;
     if let Some(pos) = state.arrows[column]
         .iter()
@@ -2641,22 +2739,24 @@ fn hit_mine_timebased(
     {
         state.arrows[column].remove(pos);
     }
-    apply_life_change(
-        &mut state.players[player],
-        state.current_music_time,
-        LifeChange::HIT_MINE,
-    );
-    if !is_state_dead(state, player) {
-        state.players[player].mines_hit_for_score =
-            state.players[player].mines_hit_for_score.saturating_add(1);
-        updated_scoring = true;
+    if !scoring_blocked {
+        apply_life_change(
+            &mut state.players[player],
+            state.current_music_time,
+            LifeChange::HIT_MINE,
+        );
+        if !is_state_dead(state, player) {
+            state.players[player].mines_hit_for_score =
+                state.players[player].mines_hit_for_score.saturating_add(1);
+            updated_scoring = true;
+        }
+        state.players[player].combo = 0;
+        state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
+        if state.players[player].full_combo_grade.is_some() {
+            state.players[player].first_fc_attempt_broken = true;
+        }
+        state.players[player].full_combo_grade = None;
     }
-    state.players[player].combo = 0;
-    state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
-    if state.players[player].full_combo_grade.is_some() {
-        state.players[player].first_fc_attempt_broken = true;
-    }
-    state.players[player].full_combo_grade = None;
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
     debug!(
@@ -2677,6 +2777,7 @@ fn hit_mine_timebased(
 
 fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
     let player = player_for_col(state, column);
+    let scoring_blocked = autoplay_blocks_scoring(state);
     let mut updated_possible_scoring = false;
     if let Some(hold) = state.notes[note_index].hold.as_mut() {
         if hold.result == Some(HoldResult::LetGo) {
@@ -2692,7 +2793,7 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
             }
         }
     }
-    if !is_state_dead(state, player) {
+    if !scoring_blocked && !is_state_dead(state, player) {
         match state.notes[note_index].note_type {
             NoteType::Hold => {
                 state.players[player].holds_let_go_for_score = state.players[player]
@@ -2716,25 +2817,30 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
         result: HoldResult::LetGo,
         triggered_at: Instant::now(),
     });
-    apply_life_change(
-        &mut state.players[player],
-        state.current_music_time,
-        LifeChange::LET_GO,
-    );
+    if !scoring_blocked {
+        apply_life_change(
+            &mut state.players[player],
+            state.current_music_time,
+            LifeChange::LET_GO,
+        );
+    }
     if updated_possible_scoring && !is_state_dead(state, player) {
         update_itg_grade_totals(&mut state.players[player]);
     }
-    state.players[player].combo = 0;
-    state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
-    if state.players[player].full_combo_grade.is_some() {
-        state.players[player].first_fc_attempt_broken = true;
+    if !scoring_blocked {
+        state.players[player].combo = 0;
+        state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
+        if state.players[player].full_combo_grade.is_some() {
+            state.players[player].first_fc_attempt_broken = true;
+        }
+        state.players[player].full_combo_grade = None;
     }
-    state.players[player].full_combo_grade = None;
     state.receptor_glow_timers[column] = 0.0;
 }
 
 fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
     let player = player_for_col(state, column);
+    let scoring_blocked = autoplay_blocks_scoring(state);
     if let Some(hold) = state.notes[note_index].hold.as_mut() {
         if hold.result == Some(HoldResult::Held) {
             return;
@@ -2755,16 +2861,20 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
     let mut updated_scoring = false;
     match state.notes[note_index].note_type {
         NoteType::Hold => {
-            state.players[player].holds_held = state.players[player].holds_held.saturating_add(1);
-            if !is_state_dead(state, player) {
+            if !scoring_blocked {
+                state.players[player].holds_held = state.players[player].holds_held.saturating_add(1);
+            }
+            if !scoring_blocked && !is_state_dead(state, player) {
                 state.players[player].holds_held_for_score =
                     state.players[player].holds_held_for_score.saturating_add(1);
                 updated_scoring = true;
             }
         }
         NoteType::Roll => {
-            state.players[player].rolls_held = state.players[player].rolls_held.saturating_add(1);
-            if !is_state_dead(state, player) {
+            if !scoring_blocked {
+                state.players[player].rolls_held = state.players[player].rolls_held.saturating_add(1);
+            }
+            if !scoring_blocked && !is_state_dead(state, player) {
                 state.players[player].rolls_held_for_score =
                     state.players[player].rolls_held_for_score.saturating_add(1);
                 updated_scoring = true;
@@ -2772,15 +2882,19 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
         }
         _ => {}
     }
-    apply_life_change(
-        &mut state.players[player],
-        state.current_music_time,
-        LifeChange::HELD,
-    );
+    if !scoring_blocked {
+        apply_life_change(
+            &mut state.players[player],
+            state.current_music_time,
+            LifeChange::HELD,
+        );
+    }
     if updated_scoring {
         update_itg_grade_totals(&mut state.players[player]);
     }
-    state.players[player].miss_combo = 0;
+    if !scoring_blocked {
+        state.players[player].miss_combo = 0;
+    }
     trigger_tap_explosion(state, column, JudgeGrade::Excellent);
     state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
         result: HoldResult::Held,
@@ -3075,6 +3189,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     let rescore_early_hits = state.player_profiles[player].rescore_early_hits;
     let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
     let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
+    let scoring_blocked = autoplay_blocks_scoring(state);
     let (col_start, col_end) = player_col_range(state, player);
     let mut best: Option<(usize, usize, f32)> = None;
     for (idx, arrow) in state.arrows[column]
@@ -3209,7 +3324,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                         };
                         {
                             let p = &mut state.players[player];
-                            apply_life_change(p, state.current_music_time, life_delta);
+                            if !scoring_blocked {
+                                apply_life_change(p, state.current_music_time, life_delta);
+                            }
                             if !hide_early_dw_judgments {
                                 p.last_judgment = Some(JudgmentRenderInfo {
                                     judgment: judgment.clone(),
@@ -3500,6 +3617,214 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     ScreenAction::None
 }
 
+fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
+    if state.autoplay_enabled == enabled {
+        return;
+    }
+    state.autoplay_enabled = enabled;
+
+    if enabled {
+        state.keyboard_lane_state = [false; MAX_COLS];
+        state.gamepad_lane_state = [false; MAX_COLS];
+        state.prev_inputs = [false; MAX_COLS];
+        state.pending_edges.clear();
+        state.autoplay_lane_state = [false; MAX_COLS];
+        state.autoplay_hold_release_time = [None; MAX_COLS];
+        state.autoplay_pending_row = [None; MAX_PLAYERS];
+        for player in 0..state.num_players {
+            let (note_start, note_end) = player_note_range(state, player);
+            state.autoplay_cursor[player] = state.next_tap_miss_cursor[player]
+                .max(note_start)
+                .min(note_end);
+        }
+        info!("Autoplay enabled (F8). Scores for this stage will not be saved.");
+        return;
+    }
+
+    info!("Autoplay disabled (F8).");
+    for col in 0..state.num_cols {
+        if !state.autoplay_lane_state[col] {
+            continue;
+        }
+        let Some(lane) = lane_from_column(col) else {
+            continue;
+        };
+        push_input_edge(
+            state,
+            InputSource::Keyboard,
+            lane,
+            false,
+            now_music_time,
+            false,
+        );
+        state.autoplay_lane_state[col] = false;
+    }
+    for t in &mut state.autoplay_hold_release_time {
+        *t = None;
+    }
+    state.autoplay_pending_row = [None; MAX_PLAYERS];
+}
+
+fn run_autoplay(state: &mut State, now_music_time: f32) {
+    if !state.autoplay_enabled {
+        return;
+    }
+
+    for player in 0..state.num_players {
+        let (note_start, note_end) = player_note_range(state, player);
+        let mut cursor = state.autoplay_cursor[player].max(note_start);
+        while cursor < note_end {
+            while cursor < note_end && state.notes[cursor].result.is_some() {
+                cursor += 1;
+                state.autoplay_pending_row[player] = None;
+            }
+            if cursor >= note_end {
+                break;
+            }
+
+            let row = state.notes[cursor].row_index;
+            let mut row_end = cursor + 1;
+            while row_end < note_end && state.notes[row_end].row_index == row {
+                row_end += 1;
+            }
+            let row_time = state.note_time_cache[cursor];
+            let row_event_time = match state.autoplay_pending_row[player] {
+                Some((pending_cursor, pending_time)) if pending_cursor == cursor => pending_time,
+                _ => {
+                    let sampled = row_time + autoplay_tap_offset_s(state);
+                    state.autoplay_pending_row[player] = Some((cursor, sampled));
+                    sampled
+                }
+            };
+            if row_event_time > now_music_time {
+                break;
+            }
+
+            let mut tap_releases: [Option<f32>; MAX_COLS] = [None; MAX_COLS];
+            for idx in cursor..row_end {
+                let (result_is_some, is_fake, can_be_judged, note_type, col) = {
+                    let note = &state.notes[idx];
+                    (
+                        note.result.is_some(),
+                        note.is_fake,
+                        note.can_be_judged,
+                        note.note_type,
+                        note.column,
+                    )
+                };
+                if result_is_some
+                    || is_fake
+                    || !can_be_judged
+                    || matches!(note_type, NoteType::Mine)
+                {
+                    continue;
+                }
+
+                if col >= state.num_cols {
+                    continue;
+                }
+                let Some(lane) = lane_from_column(col) else {
+                    continue;
+                };
+
+                if !state.autoplay_lane_state[col] {
+                    push_input_edge(
+                        state,
+                        InputSource::Keyboard,
+                        lane,
+                        true,
+                        row_event_time,
+                        false,
+                    );
+                    state.autoplay_lane_state[col] = true;
+                }
+
+                state.autoplay_used = true;
+                match note_type {
+                    NoteType::Hold => {
+                        let end_time = state.hold_end_time_cache[idx].unwrap_or(row_time);
+                        let release_at = end_time + AUTOPLAY_HOLD_RELEASE_SECONDS;
+                        match state.autoplay_hold_release_time[col] {
+                            Some(prev) => {
+                                if release_at > prev {
+                                    state.autoplay_hold_release_time[col] = Some(release_at);
+                                }
+                            }
+                            None => state.autoplay_hold_release_time[col] = Some(release_at),
+                        }
+                    }
+                    NoteType::Roll | NoteType::Tap => {
+                        tap_releases[col] = Some(row_event_time + AUTOPLAY_TAP_RELEASE_SECONDS);
+                    }
+                    _ => {}
+                }
+            }
+
+            for (col, release_at) in tap_releases.into_iter().enumerate() {
+                if release_at.is_none() || !state.autoplay_lane_state[col] {
+                    continue;
+                }
+                let Some(lane) = lane_from_column(col) else {
+                    continue;
+                };
+                push_input_edge(
+                    state,
+                    InputSource::Keyboard,
+                    lane,
+                    false,
+                    release_at.unwrap_or(row_event_time),
+                    false,
+                );
+                state.autoplay_lane_state[col] = false;
+            }
+
+            state.autoplay_pending_row[player] = None;
+            cursor = row_end;
+        }
+        state.autoplay_cursor[player] = cursor;
+    }
+
+    for col in 0..state.num_cols {
+        let Some(release_at) = state.autoplay_hold_release_time[col] else {
+            continue;
+        };
+        if now_music_time < release_at {
+            continue;
+        }
+        if state.autoplay_lane_state[col]
+            && let Some(lane) = lane_from_column(col)
+        {
+            push_input_edge(
+                state,
+                InputSource::Keyboard,
+                lane,
+                false,
+                release_at,
+                false,
+            );
+        }
+        state.autoplay_lane_state[col] = false;
+        state.autoplay_hold_release_time[col] = None;
+    }
+
+    let mut roll_cols = [usize::MAX; MAX_COLS];
+    let mut roll_count = 0usize;
+    for col in 0..state.num_cols {
+        if state
+            .active_holds[col]
+            .as_ref()
+            .is_some_and(|active| matches!(active.note_type, NoteType::Roll) && !active.let_go)
+            && roll_count < MAX_COLS
+        {
+            roll_cols[roll_count] = col;
+            roll_count += 1;
+        }
+    }
+    for col in roll_cols.into_iter().take(roll_count) {
+        refresh_roll_life_on_step(state, col);
+    }
+}
+
 pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool) -> ScreenAction {
     use winit::event::ElementState;
     use winit::keyboard::PhysicalKey;
@@ -3507,13 +3832,19 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
     if key.state != ElementState::Pressed {
         return ScreenAction::None;
     }
-    if !shift_held {
-        return ScreenAction::None;
-    }
 
     let PhysicalKey::Code(code) = key.physical_key else {
         return ScreenAction::None;
     };
+
+    if code == KeyCode::F8 {
+        let now_music_time = current_music_time_from_stream(state);
+        set_autoplay_enabled(state, !state.autoplay_enabled, now_music_time);
+        return ScreenAction::None;
+    }
+    if !shift_held {
+        return ScreenAction::None;
+    }
 
     let delta = match code {
         KeyCode::F11 => -0.001_f32,
@@ -3604,8 +3935,8 @@ fn finalize_row_judgment(
     if judgments_in_row.is_empty() {
         return;
     }
+    let scoring_blocked = autoplay_blocks_scoring(state);
     let (col_start, col_end) = player_col_range(state, player);
-    let p = &mut state.players[player];
     let row_has_miss = judgments_in_row
         .iter()
         .any(|judgment| judgment.grade == JudgeGrade::Miss);
@@ -3620,6 +3951,14 @@ fn finalize_row_judgment(
         return;
     };
     let final_grade = final_judgment.grade;
+    if scoring_blocked {
+        state.players[player].last_judgment = Some(JudgmentRenderInfo {
+            judgment: final_judgment,
+            judged_at: Instant::now(),
+        });
+        return;
+    }
+    let p = &mut state.players[player];
     *p.judgment_counts.entry(final_grade).or_insert(0) += 1;
     if !is_player_dead(p) {
         *p.scoring_counts.entry(final_grade).or_insert(0) += 1;
@@ -4523,6 +4862,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         return ScreenAction::Navigate(Screen::Evaluation);
     }
 
+    run_autoplay(state, music_time_sec);
     process_input_edges(state);
     let num_cols = state.num_cols;
     let current_inputs: [bool; MAX_COLS] = std::array::from_fn(|i| {

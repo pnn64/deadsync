@@ -243,7 +243,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     if let Some(mut gs) = gameplay_results {
         stage_duration_seconds = gs.total_elapsed_in_screen;
 
-        // Persist one score file per play (per local profile), including fails and replay lane input.
+        // Persist one score file per play (per local profile), including fails and replay lane
+        // input, unless gameplay was disqualified (e.g., autoplay used).
         scores::save_local_scores_from_gameplay(&gs);
 
         let cols_per_player = gs.cols_per_player;
