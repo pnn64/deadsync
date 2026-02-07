@@ -142,7 +142,9 @@ const GS_LEADERBOARD_NO_SCORES_TEXT: &str = "No Scores";
 const GS_LEADERBOARD_LOADING_TEXT: &str = "Loading ...";
 const GS_LEADERBOARD_MACHINE_BEST: &str = "Machine's  Best";
 const GS_LEADERBOARD_MORE_TEXT: &str = "More Leaderboards";
-const GS_LEADERBOARD_CLOSE_HINT: &str = "PRESS START OR BACK TO CLOSE";
+const GS_LEADERBOARD_CLOSE_HINT: &str = "Press &START; to dismiss.";
+rgba_const!(GS_LEADERBOARD_RIVAL_COLOR, "#BD94FF");
+rgba_const!(GS_LEADERBOARD_SELF_COLOR, "#A1FF94");
 
 // Simply Love [ScreenSelectMusic] [MusicWheel]: RecentSongsToShow=30.
 const RECENT_SONGS_TO_SHOW: usize = 30;
@@ -450,12 +452,14 @@ struct LeaderboardSideState {
     loading: bool,
     panes: Vec<scores::LeaderboardPane>,
     pane_index: usize,
+    show_icons: bool,
     error_text: Option<String>,
     machine_pane: Option<scores::LeaderboardPane>,
 }
 
 #[derive(Debug)]
 struct LeaderboardOverlayStateData {
+    elapsed: f32,
     p1: LeaderboardSideState,
     p2: LeaderboardSideState,
     rx: Option<mpsc::Receiver<LeaderboardFetchResult>>,
@@ -1443,6 +1447,7 @@ fn apply_leaderboard_side_fetch_result(
                 side.panes.push(machine);
             }
             side.pane_index = 0;
+            side.show_icons = side.panes.len() > 1;
         }
         Err(error) => {
             side.error_text = Some(gs_error_text(&error));
@@ -1452,6 +1457,7 @@ fn apply_leaderboard_side_fetch_result(
                 side.panes.push(machine);
             }
             side.pane_index = 0;
+            side.show_icons = false;
         }
     }
 }
@@ -1506,6 +1512,7 @@ fn show_leaderboard_overlay(state: &mut State) {
             if service_disabled {
                 p1.panes.push(gs_disabled_pane());
             }
+            p1.show_icons = false;
         }
     }
 
@@ -1524,6 +1531,7 @@ fn show_leaderboard_overlay(state: &mut State) {
             if service_disabled {
                 p2.panes.push(gs_disabled_pane());
             }
+            p2.show_icons = false;
         }
     }
 
@@ -1557,8 +1565,12 @@ fn show_leaderboard_overlay(state: &mut State) {
         rx = Some(thread_rx);
     }
 
-    state.leaderboard =
-        LeaderboardOverlayState::Visible(LeaderboardOverlayStateData { p1, p2, rx });
+    state.leaderboard = LeaderboardOverlayState::Visible(LeaderboardOverlayStateData {
+        elapsed: 0.0,
+        p1,
+        p2,
+        rx,
+    });
     clear_preview(state);
 }
 
@@ -2143,6 +2155,9 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         }
     }
 
+    if let LeaderboardOverlayState::Visible(overlay) = &mut state.leaderboard {
+        overlay.elapsed += dt.max(0.0);
+    }
     poll_leaderboard_overlay(state);
 
     state.time_since_selection_change += dt;
@@ -2486,6 +2501,19 @@ fn format_groovestats_date(date: &str) -> String {
         return date.to_string();
     }
     format!("{month_txt} {day_num}, {year}")
+}
+
+#[inline(always)]
+fn leaderboard_icon_bounce_offset(elapsed: f32, dir: f32) -> f32 {
+    let t = elapsed.rem_euclid(1.0);
+    let phase = if t < 0.5 {
+        let u = t / 0.5;
+        1.0 - (1.0 - u) * (1.0 - u) // decelerate
+    } else {
+        let u = (t - 0.5) / 0.5;
+        1.0 - u * u // accelerate back
+    };
+    dir * 10.0 * phase
 }
 
 fn sl_select_music_bg_flash() -> Actor {
@@ -3420,6 +3448,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     if let LeaderboardOverlayState::Visible(overlay) = &state.leaderboard {
+        let overlay_elapsed = overlay.elapsed;
         let joined_count = overlay.p1.joined as usize + overlay.p2.joined as usize;
         let pane_width = if joined_count <= 1 {
             GS_LEADERBOARD_PANE_WIDTH_SINGLE
@@ -3520,7 +3549,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let rank_x = center_x - pane_width * 0.5 + 32.0;
             let name_x = center_x - pane_width * 0.5 + 100.0;
             let score_x = if show_date {
-                center_x + 64.0
+                center_x + 63.0
             } else {
                 center_x + pane_width * 0.5 - 2.0
             };
@@ -3561,9 +3590,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         if entry.is_rival || entry.is_self {
                             has_highlight = true;
                             if entry.is_rival {
-                                highlight_rgb = [0.741, 0.580, 1.0];
+                                highlight_rgb = [
+                                    GS_LEADERBOARD_RIVAL_COLOR[0],
+                                    GS_LEADERBOARD_RIVAL_COLOR[1],
+                                    GS_LEADERBOARD_RIVAL_COLOR[2],
+                                ];
                             } else {
-                                highlight_rgb = [0.631, 1.0, 0.580];
+                                highlight_rgb = [
+                                    GS_LEADERBOARD_SELF_COLOR[0],
+                                    GS_LEADERBOARD_SELF_COLOR[1],
+                                    GS_LEADERBOARD_SELF_COLOR[2],
+                                ];
                             }
                             rank_col = [0.0, 0.0, 0.0, 1.0];
                             name_col = [0.0, 0.0, 0.0, 1.0];
@@ -3634,15 +3671,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
 
-            if !side.loading && side.error_text.is_none() && side.panes.len() > 1 {
+            if !side.loading && side.error_text.is_none() && side.show_icons {
                 let icon_y =
                     pane_cy + GS_LEADERBOARD_PANE_HEIGHT * 0.5 - GS_LEADERBOARD_ROW_HEIGHT * 0.5;
+                let left_dx = leaderboard_icon_bounce_offset(overlay_elapsed, 1.0);
+                let right_dx = leaderboard_icon_bounce_offset(overlay_elapsed, -1.0);
                 actors.push(act!(text:
                     font("miso"):
                     settext("&MENULEFT;"):
                     align(0.5, 0.5):
-                    xy(center_x - pane_width * 0.5 + 10.0, icon_y):
-                    zoom(0.85):
+                    xy(center_x - pane_width * 0.5 + 10.0 + left_dx, icon_y):
+                    zoom(1.0):
                     diffuse(1.0, 1.0, 1.0, 1.0):
                     z(GS_LEADERBOARD_Z + 8):
                     horizalign(center)
@@ -3652,17 +3691,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     settext(GS_LEADERBOARD_MORE_TEXT):
                     align(0.5, 0.5):
                     xy(center_x, icon_y):
-                    zoom(0.85):
+                    zoom(1.0):
                     diffuse(1.0, 1.0, 1.0, 1.0):
                     z(GS_LEADERBOARD_Z + 8):
                     horizalign(center)
                 ));
                 actors.push(act!(text:
                     font("miso"):
-                    settext("&MENURIGHT;"):
+                    settext("&MENURiGHT;"):
                     align(0.5, 0.5):
-                    xy(center_x + pane_width * 0.5 - 10.0, icon_y):
-                    zoom(0.85):
+                    xy(center_x + pane_width * 0.5 - 10.0 + right_dx, icon_y):
+                    zoom(1.0):
                     diffuse(1.0, 1.0, 1.0, 1.0):
                     z(GS_LEADERBOARD_Z + 8):
                     horizalign(center)
