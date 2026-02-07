@@ -242,6 +242,92 @@ pub fn total_songs_played_for_side(side: profile::PlayerSide) -> u32 {
 }
 
 #[inline(always)]
+fn parse_local_score_filename(name: &str) -> Option<(&str, i64)> {
+    if !name.ends_with(".bin") {
+        return None;
+    }
+    let base = &name[..name.len().saturating_sub(4)];
+    let idx_dash = base.rfind('-')?;
+    if idx_dash == 0 {
+        return None;
+    }
+    let played_at_ms = base[(idx_dash + 1)..].parse::<i64>().ok()?;
+    Some((&base[..idx_dash], played_at_ms))
+}
+
+fn collect_recent_plays_in_dir(dir: &Path, latest_by_chart: &mut HashMap<String, i64>) {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let Some((chart_hash, played_at_ms)) = parse_local_score_filename(name) else {
+            continue;
+        };
+        match latest_by_chart.get_mut(chart_hash) {
+            Some(existing) => {
+                if played_at_ms > *existing {
+                    *existing = played_at_ms;
+                }
+            }
+            None => {
+                latest_by_chart.insert(chart_hash.to_string(), played_at_ms);
+            }
+        }
+    }
+}
+
+fn collect_recent_plays_in_root(root: &Path, latest_by_chart: &mut HashMap<String, i64>) {
+    collect_recent_plays_in_dir(root, latest_by_chart);
+    let Ok(read_dir) = fs::read_dir(root) else {
+        return;
+    };
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_recent_plays_in_dir(&path, latest_by_chart);
+        }
+    }
+}
+
+/// Returns chart hashes ordered by latest local play time (most recent first),
+/// aggregated across all local profiles.
+pub fn recent_played_chart_hashes_for_machine() -> Vec<String> {
+    let profiles_root = PathBuf::from("save/profiles");
+    let Ok(read_dir) = fs::read_dir(&profiles_root) else {
+        return Vec::new();
+    };
+
+    let mut latest_by_chart: HashMap<String, i64> = HashMap::new();
+    for entry in read_dir.flatten() {
+        let profile_dir = entry.path();
+        if !profile_dir.is_dir() {
+            continue;
+        }
+        let local_root = profile_dir.join("scores").join("local");
+        if local_root.is_dir() {
+            collect_recent_plays_in_root(&local_root, &mut latest_by_chart);
+        }
+    }
+
+    let mut ranked: Vec<(i64, String)> = latest_by_chart
+        .into_iter()
+        .map(|(chart_hash, played_at_ms)| (played_at_ms, chart_hash))
+        .collect();
+    ranked.sort_unstable_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    ranked
+        .into_iter()
+        .map(|(_, chart_hash)| chart_hash)
+        .collect()
+}
+
+#[inline(always)]
 fn shard2_for_hash(hash: &str) -> &str {
     if hash.len() >= 2 { &hash[..2] } else { "00" }
 }

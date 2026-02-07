@@ -21,7 +21,7 @@ use crate::ui::components::{heart_bg, music_wheel, pad_display};
 use crate::ui::font;
 use log::info;
 use rssp::bpm::parse_bpm_map;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -111,10 +111,21 @@ const SL_SORT_MENU_WIDTH: f32 = 210.0;
 const SL_SORT_MENU_HEIGHT: f32 = 160.0;
 const SL_SORT_MENU_HEADER_Y_OFFSET: f32 = -92.0;
 const SL_SORT_MENU_ITEM_START_Y_OFFSET: f32 = -36.0;
-const SL_SORT_MENU_ITEM_SPACING: f32 = 34.0;
+const SL_SORT_MENU_ITEM_SPACING: f32 = 36.0;
+const SL_SORT_MENU_ITEM_TOP_Y_OFFSET: f32 = -15.0;
+const SL_SORT_MENU_ITEM_BOTTOM_Y_OFFSET: f32 = 10.0;
+const SL_SORT_MENU_TOP_TEXT_BASE_ZOOM: f32 = 1.15;
+const SL_SORT_MENU_BOTTOM_TEXT_BASE_ZOOM: f32 = 0.85;
+const SL_SORT_MENU_UNFOCUSED_ROW_ZOOM: f32 = 0.5;
+const SL_SORT_MENU_FOCUSED_ROW_ZOOM: f32 = 0.6;
+const SL_SORT_MENU_FOCUS_TWEEN_SECONDS: f32 = 0.15;
 const SL_SORT_MENU_DIM_ALPHA: f32 = 0.8;
 const SL_SORT_MENU_HINT_Y_OFFSET: f32 = 100.0;
-const SL_SORT_MENU_HINT_TEXT: &str = "Press Esc to cancel";
+const SL_SORT_MENU_HINT_TEXT: &str = "PRESS &SELECT; TO CANCEL";
+
+// Simply Love [ScreenSelectMusic] [MusicWheel]: RecentSongsToShow=30.
+const RECENT_SONGS_TO_SHOW: usize = 30;
+const RECENT_SORT_HEADER: &str = "Recently Played";
 
 #[inline(always)]
 const fn chord_bit(dir: PadDir) -> u8 {
@@ -359,27 +370,31 @@ enum ExitPromptState {
 enum SortMenuAction {
     SortByGroup,
     SortByTitle,
-    Close,
+    SortByRecent,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 struct SortMenuItem {
-    label: &'static str,
+    top_label: &'static str,
+    bottom_label: &'static str,
     action: SortMenuAction,
 }
 
 const SORT_MENU_ITEMS: [SortMenuItem; 3] = [
     SortMenuItem {
-        label: "Sort by Group",
+        top_label: "Sort By",
+        bottom_label: "Group",
         action: SortMenuAction::SortByGroup,
     },
     SortMenuItem {
-        label: "Sort by Title",
+        top_label: "Sort By",
+        bottom_label: "Title",
         action: SortMenuAction::SortByTitle,
     },
     SortMenuItem {
-        label: "Close",
-        action: SortMenuAction::Close,
+        top_label: "Sort By",
+        bottom_label: "Recently Played",
+        action: SortMenuAction::SortByRecent,
     },
 ];
 
@@ -393,6 +408,7 @@ enum SortMenuState {
 enum WheelSortMode {
     Group,
     Title,
+    Recent,
 }
 
 #[derive(Clone, Debug)]
@@ -445,6 +461,7 @@ pub struct State {
     all_entries: Vec<MusicWheelEntry>,
     group_entries: Vec<MusicWheelEntry>,
     title_entries: Vec<MusicWheelEntry>,
+    recent_entries: Vec<MusicWheelEntry>,
     expanded_pack_name: Option<String>,
     bg: heart_bg::State,
     last_requested_banner_path: Option<PathBuf>,
@@ -459,6 +476,8 @@ pub struct State {
     last_steps_nav_time_p2: Option<Instant>,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
+    sort_menu_prev_selected_index: usize,
+    sort_menu_focus_anim_elapsed: f32,
     currently_playing_preview_path: Option<PathBuf>,
     currently_playing_preview_start_sec: Option<f32>,
     currently_playing_preview_length_sec: Option<f32>,
@@ -476,6 +495,7 @@ pub struct State {
     pub pack_song_counts: HashMap<String, usize>,
     group_pack_song_counts: HashMap<String, usize>,
     title_pack_song_counts: HashMap<String, usize>,
+    recent_pack_song_counts: HashMap<String, usize>,
 }
 
 pub(crate) fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usize) -> bool {
@@ -836,6 +856,63 @@ fn build_title_grouped_entries(
     (entries, counts)
 }
 
+fn build_recent_grouped_entries(
+    grouped_entries: &[MusicWheelEntry],
+) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+    let mut hash_to_song: HashMap<String, Arc<SongData>> = HashMap::new();
+    for entry in grouped_entries {
+        let MusicWheelEntry::Song(song) = entry else {
+            continue;
+        };
+        for chart in &song.charts {
+            if chart.notes.is_empty() {
+                continue;
+            }
+            hash_to_song
+                .entry(chart.short_hash.clone())
+                .or_insert_with(|| song.clone());
+        }
+    }
+
+    let recent_chart_hashes = scores::recent_played_chart_hashes_for_machine();
+    let mut recent_songs: Vec<Arc<SongData>> = Vec::with_capacity(RECENT_SONGS_TO_SHOW);
+    let mut seen_song_ptrs: HashSet<usize> = HashSet::with_capacity(RECENT_SONGS_TO_SHOW);
+
+    for chart_hash in recent_chart_hashes {
+        let Some(song) = hash_to_song.get(chart_hash.as_str()) else {
+            continue;
+        };
+        let song_ptr = Arc::as_ptr(song) as usize;
+        if !seen_song_ptrs.insert(song_ptr) {
+            continue;
+        }
+        recent_songs.push(song.clone());
+        if recent_songs.len() >= RECENT_SONGS_TO_SHOW {
+            break;
+        }
+    }
+
+    let count = recent_songs.len();
+    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
+    entries.push(MusicWheelEntry::PackHeader {
+        name: RECENT_SORT_HEADER.to_string(),
+        original_index: 0,
+        banner_path: None,
+    });
+    entries.extend(recent_songs.into_iter().map(MusicWheelEntry::Song));
+
+    let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
+    counts.insert(RECENT_SORT_HEADER.to_string(), count);
+    (entries, counts)
+}
+
+fn refresh_recent_cache(state: &mut State) {
+    let (recent_entries, recent_pack_song_counts) =
+        build_recent_grouped_entries(&state.group_entries);
+    state.recent_entries = recent_entries;
+    state.recent_pack_song_counts = recent_pack_song_counts;
+}
+
 fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
     if state.sort_mode == sort_mode {
         return;
@@ -859,6 +936,14 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.title_entries, song))
                 .or_else(|| first_header_name(&state.title_entries));
+        }
+        WheelSortMode::Recent => {
+            state.all_entries = state.recent_entries.clone();
+            state.pack_song_counts = state.recent_pack_song_counts.clone();
+            state.expanded_pack_name = selected_song
+                .as_ref()
+                .and_then(|song| group_name_for_song(&state.recent_entries, song))
+                .or_else(|| first_header_name(&state.recent_entries));
         }
     }
 
@@ -967,11 +1052,13 @@ pub fn init() -> State {
     }
 
     let (title_entries, title_pack_song_counts) = build_title_grouped_entries(&all_entries);
+    let (recent_entries, recent_pack_song_counts) = build_recent_grouped_entries(&all_entries);
 
     let mut state = State {
         all_entries: all_entries.clone(),
         group_entries: all_entries,
         title_entries,
+        recent_entries,
         entries: Vec::new(),
         selected_index: 0,
         selected_steps_index: initial_diff_index,
@@ -1006,6 +1093,8 @@ pub fn init() -> State {
         last_steps_nav_time_p2: None,
         nav_key_held_direction: None,
         nav_key_held_since: None,
+        sort_menu_prev_selected_index: 0,
+        sort_menu_focus_anim_elapsed: SL_SORT_MENU_FOCUS_TWEEN_SECONDS,
         currently_playing_preview_path: None,
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
@@ -1022,6 +1111,7 @@ pub fn init() -> State {
         pack_song_counts: pack_song_counts.clone(),
         group_pack_song_counts: pack_song_counts,
         title_pack_song_counts,
+        recent_pack_song_counts,
     };
 
     let built_entries_len = state.all_entries.len();
@@ -1164,11 +1254,14 @@ fn show_sort_menu(state: &mut State) {
     let selected_index = match state.sort_mode {
         WheelSortMode::Group => 0,
         WheelSortMode::Title => 1,
+        WheelSortMode::Recent => 2,
     };
     state.sort_menu = SortMenuState::Visible { selected_index };
+    state.sort_menu_prev_selected_index = selected_index;
     state.menu_chord_mask = 0;
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
+    state.sort_menu_focus_anim_elapsed = SL_SORT_MENU_FOCUS_TWEEN_SECONDS;
     clear_preview(state);
     audio::play_sfx("assets/sounds/start.ogg");
 }
@@ -1204,7 +1297,9 @@ fn sort_menu_move(state: &mut State, delta: isize) {
     let old = *selected_index;
     let next = ((*selected_index as isize + delta).rem_euclid(len as isize)) as usize;
     if next != old {
+        state.sort_menu_prev_selected_index = old;
         *selected_index = next;
+        state.sort_menu_focus_anim_elapsed = 0.0;
         audio::play_sfx("assets/sounds/change.ogg");
     }
 }
@@ -1223,7 +1318,8 @@ fn sort_menu_activate(state: &mut State) {
             apply_wheel_sort(state, WheelSortMode::Title);
             hide_sort_menu(state);
         }
-        SortMenuAction::Close => {
+        SortMenuAction::SortByRecent => {
+            apply_wheel_sort(state, WheelSortMode::Recent);
             hide_sort_menu(state);
         }
     }
@@ -1698,6 +1794,12 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     state.time_since_selection_change += dt;
     if dt > 0.0 {
         state.selection_animation_timer += dt;
+        if state.sort_menu != SortMenuState::Hidden
+            && state.sort_menu_focus_anim_elapsed < SL_SORT_MENU_FOCUS_TWEEN_SECONDS
+        {
+            state.sort_menu_focus_anim_elapsed =
+                (state.sort_menu_focus_anim_elapsed + dt).min(SL_SORT_MENU_FOCUS_TWEEN_SECONDS);
+        }
     }
 
     let now = Instant::now();
@@ -1931,6 +2033,12 @@ pub fn trigger_immediate_refresh(state: &mut State) {
 }
 
 pub fn reset_preview_after_gameplay(state: &mut State) {
+    let was_recent_sort = state.sort_mode == WheelSortMode::Recent;
+    refresh_recent_cache(state);
+    if was_recent_sort {
+        state.sort_mode = WheelSortMode::Group;
+        apply_wheel_sort(state, WheelSortMode::Recent);
+    }
     state.currently_playing_preview_path = None;
     state.currently_playing_preview_start_sec = None;
     state.currently_playing_preview_length_sec = None;
@@ -2855,27 +2963,47 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 SL_SORT_MENU_ITEM_SPACING,
                 cy + SL_SORT_MENU_ITEM_START_Y_OFFSET,
             );
-            let is_selected = i == selected_index;
-            if is_selected {
-                actors.push(act!(quad:
-                    align(0.5, 0.5):
-                    xy(cx, y):
-                    zoomto(SL_SORT_MENU_WIDTH - 24.0, 24.0):
-                    diffuse(0.133, 0.133, 0.133, 1.0):
-                    z(1453)
-                ));
-            }
-            let text_color = if is_selected {
-                [selected_color[0], selected_color[1], selected_color[2], 1.0]
+            let focus_t = (state.sort_menu_focus_anim_elapsed / SL_SORT_MENU_FOCUS_TWEEN_SECONDS)
+                .clamp(0.0, 1.0);
+            let focus_lerp = if i == selected_index {
+                if state.sort_menu_prev_selected_index == selected_index {
+                    1.0
+                } else {
+                    focus_t
+                }
+            } else if i == state.sort_menu_prev_selected_index
+                && state.sort_menu_prev_selected_index != selected_index
+            {
+                1.0 - focus_t
             } else {
-                [0.7, 0.7, 0.7, 1.0]
+                0.0
             };
+            let row_zoom = (SL_SORT_MENU_FOCUSED_ROW_ZOOM - SL_SORT_MENU_UNFOCUSED_ROW_ZOOM)
+                .mul_add(focus_lerp, SL_SORT_MENU_UNFOCUSED_ROW_ZOOM);
+            let selected_rgba = [selected_color[0], selected_color[1], selected_color[2], 1.0];
+            let text_color = [
+                (selected_rgba[0] - 0.533).mul_add(focus_lerp, 0.533),
+                (selected_rgba[1] - 0.533).mul_add(focus_lerp, 0.533),
+                (selected_rgba[2] - 0.533).mul_add(focus_lerp, 0.533),
+                1.0,
+            ];
+            actors.push(act!(text:
+                font("miso"):
+                settext(item.top_label):
+                align(0.5, 0.5):
+                xy(cx, y + SL_SORT_MENU_ITEM_TOP_Y_OFFSET * row_zoom):
+                zoom(SL_SORT_MENU_TOP_TEXT_BASE_ZOOM * row_zoom):
+                diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
+                z(1454):
+                horizalign(center)
+            ));
             actors.push(act!(text:
                 font("wendy"):
-                settext(item.label):
+                settext(item.bottom_label):
                 align(0.5, 0.5):
-                xy(cx, y):
-                zoom(0.46):
+                xy(cx, y + SL_SORT_MENU_ITEM_BOTTOM_Y_OFFSET * row_zoom):
+                maxwidth(405.0):
+                zoom(SL_SORT_MENU_BOTTOM_TEXT_BASE_ZOOM * row_zoom):
                 diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
                 z(1454):
                 horizalign(center)
