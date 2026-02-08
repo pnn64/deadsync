@@ -113,7 +113,6 @@ const MENU_CHORD_RIGHT: u8 = 1 << 1;
 const SL_SORT_MENU_WIDTH: f32 = 210.0;
 const SL_SORT_MENU_HEIGHT: f32 = 160.0;
 const SL_SORT_MENU_HEADER_Y_OFFSET: f32 = -92.0;
-const SL_SORT_MENU_ITEM_START_Y_OFFSET: f32 = -36.0;
 const SL_SORT_MENU_ITEM_SPACING: f32 = 36.0;
 const SL_SORT_MENU_ITEM_TOP_Y_OFFSET: f32 = -15.0;
 const SL_SORT_MENU_ITEM_BOTTOM_Y_OFFSET: f32 = 10.0;
@@ -125,7 +124,9 @@ const SL_SORT_MENU_FOCUS_TWEEN_SECONDS: f32 = 0.15;
 const SL_SORT_MENU_DIM_ALPHA: f32 = 0.8;
 const SL_SORT_MENU_HINT_Y_OFFSET: f32 = 100.0;
 const SL_SORT_MENU_HINT_TEXT: &str = "PRESS &SELECT; TO CANCEL";
-const SL_SORT_MENU_BASE_ITEM_COUNT: usize = 4;
+const SL_SORT_MENU_WHEEL_SLOTS: usize = 7;
+const SL_SORT_MENU_WHEEL_FOCUS_SLOT: usize = SL_SORT_MENU_WHEEL_SLOTS / 2;
+const SL_SORT_MENU_VISIBLE_ROWS: usize = SL_SORT_MENU_WHEEL_SLOTS - 2;
 
 // Simply Love ScreenSelectMusic overlay/Leaderboard.lua geometry.
 const GS_LEADERBOARD_NUM_ENTRIES: usize = 13;
@@ -1411,9 +1412,26 @@ fn sort_menu_items(state: &State) -> &[SortMenuItem] {
 }
 
 #[inline(always)]
-fn sort_menu_height(item_count: usize) -> f32 {
-    let extra = item_count.saturating_sub(SL_SORT_MENU_BASE_ITEM_COUNT) as f32;
-    SL_SORT_MENU_HEIGHT + extra * SL_SORT_MENU_ITEM_SPACING
+fn set_text_clip_rect(actor: &mut Actor, rect: [f32; 4]) {
+    if let Actor::Text { clip, .. } = actor {
+        *clip = Some(rect);
+    }
+}
+
+#[inline(always)]
+fn sort_menu_scroll_dir(len: usize, prev: usize, selected: usize) -> isize {
+    if len <= 1 {
+        return 0;
+    }
+    let prev = prev % len;
+    let selected = selected % len;
+    if selected == (prev + 1) % len {
+        1
+    } else if prev == (selected + 1) % len {
+        -1
+    } else {
+        0
+    }
 }
 
 fn start_reload_songs_and_courses(state: &mut State) {
@@ -3669,7 +3687,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let selected_index = selected_index.min(sort_items.len().saturating_sub(1));
         let cx = screen_center_x();
         let cy = screen_center_y();
-        let menu_height = sort_menu_height(sort_items.len());
+        let clip_rect = [
+            cx - SL_SORT_MENU_WIDTH * 0.5,
+            cy - SL_SORT_MENU_HEIGHT * 0.5,
+            SL_SORT_MENU_WIDTH,
+            SL_SORT_MENU_HEIGHT,
+        ];
         let selected_color = color::simply_love_rgba(state.active_color_index);
         actors.push(act!(quad:
             align(0.0, 0.0): xy(0.0, 0.0):
@@ -3695,72 +3718,101 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
         actors.push(act!(quad:
             align(0.5, 0.5): xy(cx, cy):
-            zoomto(SL_SORT_MENU_WIDTH + 2.0, menu_height + 2.0):
+            zoomto(SL_SORT_MENU_WIDTH + 2.0, SL_SORT_MENU_HEIGHT + 2.0):
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(1451)
         ));
         actors.push(act!(quad:
             align(0.5, 0.5): xy(cx, cy):
-            zoomto(SL_SORT_MENU_WIDTH, menu_height):
+            zoomto(SL_SORT_MENU_WIDTH, SL_SORT_MENU_HEIGHT):
             diffuse(0.0, 0.0, 0.0, 1.0):
             z(1452)
         ));
-        for (i, item) in sort_items.iter().enumerate() {
-            let y = (i as f32).mul_add(
-                SL_SORT_MENU_ITEM_SPACING,
-                cy + SL_SORT_MENU_ITEM_START_Y_OFFSET,
-            );
-            let focus_t = (state.sort_menu_focus_anim_elapsed / SL_SORT_MENU_FOCUS_TWEEN_SECONDS)
-                .clamp(0.0, 1.0);
-            let focus_lerp = if i == selected_index {
-                if state.sort_menu_prev_selected_index == selected_index {
-                    1.0
-                } else {
-                    focus_t
-                }
-            } else if i == state.sort_menu_prev_selected_index
-                && state.sort_menu_prev_selected_index != selected_index
-            {
-                1.0 - focus_t
-            } else {
-                0.0
-            };
-            let row_zoom = (SL_SORT_MENU_FOCUSED_ROW_ZOOM - SL_SORT_MENU_UNFOCUSED_ROW_ZOOM)
-                .mul_add(focus_lerp, SL_SORT_MENU_UNFOCUSED_ROW_ZOOM);
+        if !sort_items.is_empty() {
+            let focus_t = (state.sort_menu_focus_anim_elapsed
+                / SL_SORT_MENU_FOCUS_TWEEN_SECONDS.max(1e-6))
+            .clamp(0.0, 1.0);
+            let scroll_dir = sort_menu_scroll_dir(
+                sort_items.len(),
+                state
+                    .sort_menu_prev_selected_index
+                    .min(sort_items.len().saturating_sub(1)),
+                selected_index,
+            ) as f32;
+            let scroll_shift = scroll_dir
+                * [1.0 - focus_t, 0.0][(state.sort_menu_focus_anim_elapsed
+                    >= SL_SORT_MENU_FOCUS_TWEEN_SECONDS)
+                    as usize];
             let selected_rgba = [selected_color[0], selected_color[1], selected_color[2], 1.0];
-            let text_color = [
-                (selected_rgba[0] - 0.533).mul_add(focus_lerp, 0.533),
-                (selected_rgba[1] - 0.533).mul_add(focus_lerp, 0.533),
-                (selected_rgba[2] - 0.533).mul_add(focus_lerp, 0.533),
-                1.0,
-            ];
-            actors.push(act!(text:
-                font("miso"):
-                settext(item.top_label):
-                align(0.5, 0.5):
-                xy(cx, y + SL_SORT_MENU_ITEM_TOP_Y_OFFSET * row_zoom):
-                zoom(SL_SORT_MENU_TOP_TEXT_BASE_ZOOM * row_zoom):
-                diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
-                z(1454):
-                horizalign(center)
-            ));
-            actors.push(act!(text:
-                font("wendy"):
-                settext(item.bottom_label):
-                align(0.5, 0.5):
-                xy(cx, y + SL_SORT_MENU_ITEM_BOTTOM_Y_OFFSET * row_zoom):
-                maxwidth(405.0):
-                zoom(SL_SORT_MENU_BOTTOM_TEXT_BASE_ZOOM * row_zoom):
-                diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
-                z(1454):
-                horizalign(center)
-            ));
+            let mut draw_row = |item_idx: usize, slot_pos: f32| {
+                let focus_lerp = (1.0 - slot_pos.abs()).clamp(0.0, 1.0);
+                let row_zoom = (SL_SORT_MENU_FOCUSED_ROW_ZOOM - SL_SORT_MENU_UNFOCUSED_ROW_ZOOM)
+                    .mul_add(focus_lerp, SL_SORT_MENU_UNFOCUSED_ROW_ZOOM);
+                let row_alpha = (3.0 - slot_pos.abs()).clamp(0.0, 1.0);
+                let text_color = [
+                    (selected_rgba[0] - 0.533).mul_add(focus_lerp, 0.533),
+                    (selected_rgba[1] - 0.533).mul_add(focus_lerp, 0.533),
+                    (selected_rgba[2] - 0.533).mul_add(focus_lerp, 0.533),
+                    row_alpha,
+                ];
+                let y = slot_pos.mul_add(SL_SORT_MENU_ITEM_SPACING, cy);
+                let item = &sort_items[item_idx];
+
+                let mut top = act!(text:
+                    font("miso"):
+                    settext(item.top_label):
+                    align(0.5, 0.5):
+                    xy(cx, y + SL_SORT_MENU_ITEM_TOP_Y_OFFSET * row_zoom):
+                    zoom(SL_SORT_MENU_TOP_TEXT_BASE_ZOOM * row_zoom):
+                    diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
+                    z(1454):
+                    horizalign(center)
+                );
+                set_text_clip_rect(&mut top, clip_rect);
+                actors.push(top);
+
+                let mut bottom = act!(text:
+                    font("wendy"):
+                    settext(item.bottom_label):
+                    align(0.5, 0.5):
+                    xy(cx, y + SL_SORT_MENU_ITEM_BOTTOM_Y_OFFSET * row_zoom):
+                    maxwidth(405.0):
+                    zoom(SL_SORT_MENU_BOTTOM_TEXT_BASE_ZOOM * row_zoom):
+                    diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
+                    z(1454):
+                    horizalign(center)
+                );
+                set_text_clip_rect(&mut bottom, clip_rect);
+                actors.push(bottom);
+            };
+
+            if sort_items.len() <= SL_SORT_MENU_VISIBLE_ROWS {
+                let span = sort_items.len();
+                let first_offset = -((span as isize).saturating_sub(1) / 2);
+                for i in 0..span {
+                    let offset = first_offset + i as isize;
+                    let item_idx = ((selected_index as isize + offset)
+                        .rem_euclid(sort_items.len() as isize))
+                        as usize;
+                    let slot_pos = offset as f32 + scroll_shift;
+                    draw_row(item_idx, slot_pos);
+                }
+            } else {
+                for slot_idx in 0..SL_SORT_MENU_WHEEL_SLOTS {
+                    let offset = slot_idx as isize - SL_SORT_MENU_WHEEL_FOCUS_SLOT as isize;
+                    let item_idx = ((selected_index as isize + offset)
+                        .rem_euclid(sort_items.len() as isize))
+                        as usize;
+                    let slot_pos = offset as f32 + scroll_shift;
+                    draw_row(item_idx, slot_pos);
+                }
+            }
         }
         actors.push(act!(text:
             font("wendy"):
             settext(SL_SORT_MENU_HINT_TEXT):
             align(0.5, 0.5):
-            xy(cx, cy + SL_SORT_MENU_HINT_Y_OFFSET + (menu_height - SL_SORT_MENU_HEIGHT) * 0.5):
+            xy(cx, cy + SL_SORT_MENU_HINT_Y_OFFSET):
             zoom(0.26):
             diffuse(0.7, 0.7, 0.7, 1.0):
             z(1454):
