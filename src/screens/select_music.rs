@@ -2708,6 +2708,13 @@ fn format_chart_length(seconds: i32) -> String {
     }
 }
 
+#[inline(always)]
+fn allow_gs_fetch_for_selection(state: &State) -> bool {
+    state.nav_key_held_direction.is_none()
+        && state.wheel_offset_from_selection.abs() < 0.0001
+        && state.time_since_selection_change >= PREVIEW_DELAY_SECONDS
+}
+
 fn sl_select_music_bg_flash() -> Actor {
     act!(quad:
         align(0.0, 0.0):
@@ -2774,6 +2781,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
     let target_chart_type = play_style.chart_type();
     let selected_entry = state.entries.get(state.selected_index);
+    let allow_gs_fetch = allow_gs_fetch_for_selection(state);
 
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
@@ -2861,12 +2869,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         state.selected_steps_index
     };
-    let mode_chart_hash = match selected_entry {
-        Some(MusicWheelEntry::Song(song)) => {
-            chart_for_steps_index(song, target_chart_type, mode_steps_index)
-                .map(|c| c.short_hash.as_str())
+    let mode_chart_hash = if allow_gs_fetch {
+        match selected_entry {
+            Some(MusicWheelEntry::Song(song)) => {
+                chart_for_steps_index(song, target_chart_type, mode_steps_index)
+                    .map(|c| c.short_hash.as_str())
+            }
+            _ => None,
         }
-        _ => None,
+    } else {
+        None
     };
     let score_mode_text = gs_scorebox::select_music_mode_text(mode_side, mode_chart_hash);
 
@@ -3302,7 +3314,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             placeholder
         };
 
-        let chart_hash = chart.map(|c| c.short_hash.as_str());
+        let chart_hash = if allow_gs_fetch {
+            chart.map(|c| c.short_hash.as_str())
+        } else {
+            None
+        };
         let gs_view = gs_scorebox::select_music_scorebox_view(
             side,
             chart_hash,
@@ -3550,12 +3566,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let scorebox_center_p1 = screen_width() * 0.25 - 5.0 + scorebox_side_inset;
         let scorebox_center_p2 = screen_width() * 0.75 + 5.0 - scorebox_side_inset;
         let mut push_scorebox = |side: profile::PlayerSide, steps_idx: usize, center_x: f32| {
-            let chart_hash = match selected_entry {
-                Some(MusicWheelEntry::Song(song)) => {
-                    chart_for_steps_index(song, target_chart_type, steps_idx)
-                        .map(|c| c.short_hash.as_str())
+            let chart_hash = if allow_gs_fetch {
+                match selected_entry {
+                    Some(MusicWheelEntry::Song(song)) => {
+                        chart_for_steps_index(song, target_chart_type, steps_idx)
+                            .map(|c| c.short_hash.as_str())
+                    }
+                    _ => None,
                 }
-                _ => None,
+            } else {
+                None
             };
             actors.extend(gs_scorebox::gameplay_scorebox_actors(
                 side,
