@@ -497,7 +497,10 @@ pub fn is_gs_active_for_side(side: profile::PlayerSide) -> bool {
     if !is_gs_get_scores_service_allowed() || !profile::is_session_side_joined(side) {
         return false;
     }
-    !profile::get_for_side(side).groovestats_api_key.trim().is_empty()
+    !profile::get_for_side(side)
+        .groovestats_api_key
+        .trim()
+        .is_empty()
 }
 
 pub fn get_machine_record_local(chart_hash: &str) -> Option<(String, CachedScore)> {
@@ -1417,6 +1420,8 @@ struct LeaderboardApiEntry {
     is_self: bool,
     #[serde(default)]
     is_fail: bool,
+    #[serde(default)]
+    comments: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -1475,12 +1480,87 @@ fn push_leaderboard_pane(
     });
 }
 
-pub fn fetch_player_leaderboards(
+struct FetchedPlayerLeaderboards {
+    data: PlayerLeaderboardData,
+    gs_entries: Vec<LeaderboardApiEntry>,
+}
+
+#[inline(always)]
+const fn cached_failed_gs_score() -> CachedScore {
+    CachedScore {
+        grade: Grade::Failed,
+        score_percent: 0.0,
+        lamp_index: None,
+        lamp_judge_count: None,
+    }
+}
+
+#[inline(always)]
+fn cached_score_from_gs(
+    score_10000: f64,
+    comments: Option<&str>,
+    chart_hash: &str,
+    is_fail: bool,
+) -> CachedScore {
+    if is_fail {
+        return cached_failed_gs_score();
+    }
+    let lamp_index = compute_lamp_index(score_10000, comments, chart_hash);
+    let lamp_judge_count = compute_lamp_judge_count(lamp_index, comments);
+    CachedScore {
+        grade: score_to_grade(score_10000),
+        score_percent: score_10000 / 10000.0,
+        lamp_index,
+        lamp_judge_count,
+    }
+}
+
+fn cache_gs_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score: CachedScore,
+    username: &str,
+) {
+    set_cached_gs_score_for_profile(profile_id, chart_hash.to_string(), score);
+    if !username.trim().is_empty() {
+        append_gs_score_on_disk_for_profile(profile_id, chart_hash, score, username);
+    }
+}
+
+fn cache_gs_score_from_leaderboard(
+    profile_id: &str,
+    username: &str,
+    chart_hash: &str,
+    gs_entries: &[LeaderboardApiEntry],
+) {
+    let self_entry = gs_entries.iter().find(|entry| entry.is_self).or_else(|| {
+        gs_entries
+            .iter()
+            .find(|entry| entry.name.eq_ignore_ascii_case(username))
+    });
+    let Some(entry) = self_entry else {
+        set_cached_gs_score_for_profile(
+            profile_id,
+            chart_hash.to_string(),
+            cached_failed_gs_score(),
+        );
+        return;
+    };
+    let score = cached_score_from_gs(
+        entry.score,
+        entry.comments.as_deref(),
+        chart_hash,
+        entry.is_fail,
+    );
+    cache_gs_score_for_profile(profile_id, chart_hash, score, username);
+}
+
+fn fetch_player_leaderboards_internal(
     chart_hash: &str,
     api_key: &str,
     show_ex_score: bool,
     max_entries: usize,
-) -> Result<PlayerLeaderboardData, Box<dyn Error + Send + Sync>> {
+) -> Result<FetchedPlayerLeaderboards, Box<dyn Error + Send + Sync>> {
     if chart_hash.trim().is_empty() {
         return Err("Missing chart hash for leaderboard request.".into());
     }
@@ -1504,7 +1584,10 @@ pub fn fetch_player_leaderboards(
 
     let decoded: LeaderboardsApiResponse = response.into_body().read_json()?;
     let Some(player) = decoded.player1 else {
-        return Ok(PlayerLeaderboardData { panes: Vec::new() });
+        return Ok(FetchedPlayerLeaderboards {
+            data: PlayerLeaderboardData { panes: Vec::new() },
+            gs_entries: Vec::new(),
+        });
     };
     let LeaderboardApiPlayer {
         is_ranked: _is_ranked,
@@ -1514,6 +1597,7 @@ pub fn fetch_player_leaderboards(
         itl,
     } = player;
 
+    let gs_entries = gs_leaderboard.clone();
     let mut panes = Vec::with_capacity(4);
     if show_ex_score {
         push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
@@ -1544,7 +1628,20 @@ pub fn fetch_player_leaderboards(
         push_leaderboard_pane(&mut panes, name, itl.itl_leaderboard, true);
     }
 
-    Ok(PlayerLeaderboardData { panes })
+    Ok(FetchedPlayerLeaderboards {
+        data: PlayerLeaderboardData { panes },
+        gs_entries,
+    })
+}
+
+pub fn fetch_player_leaderboards(
+    chart_hash: &str,
+    api_key: &str,
+    show_ex_score: bool,
+    max_entries: usize,
+) -> Result<PlayerLeaderboardData, Box<dyn Error + Send + Sync>> {
+    fetch_player_leaderboards_internal(chart_hash, api_key, show_ex_score, max_entries)
+        .map(|fetched| fetched.data)
 }
 
 #[inline(always)]
@@ -1573,7 +1670,8 @@ pub fn get_or_fetch_player_leaderboards_for_side(
     side: profile::PlayerSide,
     max_entries: usize,
 ) -> Option<CachedPlayerLeaderboardData> {
-    if !crate::config::get().enable_groovestats {
+    let cfg = crate::config::get();
+    if !cfg.enable_groovestats {
         return None;
     }
     let chart_hash = chart_hash.trim();
@@ -1584,10 +1682,19 @@ pub fn get_or_fetch_player_leaderboards_for_side(
         return None;
     }
 
-    let profile = profile::get_for_side(side);
-    if profile.groovestats_api_key.trim().is_empty() {
+    let side_profile = profile::get_for_side(side);
+    if side_profile.groovestats_api_key.trim().is_empty() {
         return None;
     }
+    let auto_populate = cfg.auto_populate_gs_scores;
+    let auto_profile_id = if auto_populate {
+        profile::active_local_profile_id_for_side(side)
+    } else {
+        None
+    };
+    let auto_username = side_profile.groovestats_username.trim().to_string();
+    let should_auto_populate =
+        auto_populate && auto_profile_id.is_some() && !auto_username.is_empty();
 
     match network::get_status() {
         network::ConnectionStatus::Pending => {
@@ -1616,8 +1723,8 @@ pub fn get_or_fetch_player_leaderboards_for_side(
 
     let key = PlayerLeaderboardCacheKey {
         chart_hash: chart_hash.to_string(),
-        api_key: profile.groovestats_api_key.clone(),
-        show_ex_score: profile.show_ex_score,
+        api_key: side_profile.groovestats_api_key.clone(),
+        show_ex_score: side_profile.show_ex_score,
         max_entries,
     };
 
@@ -1641,13 +1748,23 @@ pub fn get_or_fetch_player_leaderboards_for_side(
 
     if should_spawn {
         std::thread::spawn(move || {
-            let result = fetch_player_leaderboards(
+            let result = fetch_player_leaderboards_internal(
                 &key.chart_hash,
                 &key.api_key,
                 key.show_ex_score,
                 key.max_entries,
             )
-            .map(PlayerLeaderboardCacheValue::Ready)
+            .map(|fetched| {
+                if should_auto_populate && let Some(profile_id) = auto_profile_id.as_deref() {
+                    cache_gs_score_from_leaderboard(
+                        profile_id,
+                        auto_username.as_str(),
+                        key.chart_hash.as_str(),
+                        fetched.gs_entries.as_slice(),
+                    );
+                }
+                PlayerLeaderboardCacheValue::Ready(fetched.data)
+            })
             .unwrap_or_else(|e| PlayerLeaderboardCacheValue::Error(e.to_string()));
 
             let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
@@ -2242,21 +2359,13 @@ pub fn fetch_and_store_grade(
         });
 
     if let Some(score_data) = player_score {
-        let grade = score_to_grade(score_data.score);
-        let lamp_index = compute_lamp_index(
+        let cached_score = cached_score_from_gs(
             score_data.score,
             score_data.comments.as_deref(),
             &chart_hash,
+            false,
         );
-        let lamp_judge_count = compute_lamp_judge_count(lamp_index, score_data.comments.as_deref());
-        let cached_score = CachedScore {
-            grade,
-            score_percent: score_data.score / 10000.0,
-            lamp_index,
-            lamp_judge_count,
-        };
-        set_cached_gs_score_for_profile(&profile_id, chart_hash.clone(), cached_score);
-        append_gs_score_on_disk_for_profile(
+        cache_gs_score_for_profile(
             &profile_id,
             &chart_hash,
             cached_score,
@@ -2267,14 +2376,7 @@ pub fn fetch_and_store_grade(
             "No score found for player '{}' on chart '{}'. Caching as Failed.",
             profile.groovestats_username, chart_hash
         );
-        let cached_score = CachedScore {
-            grade: Grade::Failed,
-            score_percent: 0.0,
-            // No lamp when there is no score for this chart.
-            lamp_index: None,
-            lamp_judge_count: None,
-        };
-        set_cached_gs_score_for_profile(&profile_id, chart_hash, cached_score);
+        set_cached_gs_score_for_profile(&profile_id, chart_hash, cached_failed_gs_score());
     }
 
     Ok(())

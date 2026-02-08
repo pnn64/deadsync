@@ -142,6 +142,7 @@ pub struct Config {
     pub sfx_volume: u8,
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
+    pub auto_populate_gs_scores: bool,
     pub rate_mod_preserves_pitch: bool,
     pub enable_groovestats: bool,
     pub fastload: bool,
@@ -176,6 +177,7 @@ impl Default for Config {
             music_volume: 100,
             sfx_volume: 100,
             audio_sample_rate_hz: None,
+            auto_populate_gs_scores: false,
             rate_mod_preserves_pitch: false,
             enable_groovestats: false,
             fastload: true,
@@ -210,6 +212,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     // [Options] section - keys in alphabetical order
     content.push_str("[Options]\n");
     content.push_str("AudioSampleRateHz=Auto\n");
+    content.push_str(&format!(
+        "AutoPopulateGrooveStatsScores={}\n",
+        if default.auto_populate_gs_scores {
+            "1"
+        } else {
+            "0"
+        }
+    ));
     content.push_str(&format!("BGBrightness={}\n", default.bg_brightness));
     content.push_str(&format!(
         "CacheSongs={}\n",
@@ -368,6 +378,10 @@ pub fn load() {
                     .get("Options", "DisplayMonitor")
                     .and_then(|v| v.parse::<usize>().ok())
                     .unwrap_or(default.display_monitor);
+                cfg.auto_populate_gs_scores = conf
+                    .get("Options", "AutoPopulateGrooveStatsScores")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.auto_populate_gs_scores, |v| v != 0);
                 cfg.enable_groovestats = conf
                     .get("Options", "EnableGrooveStats")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -517,6 +531,7 @@ pub fn load() {
                 let mut miss = false;
                 let options_keys = [
                     "AudioSampleRateHz",
+                    "AutoPopulateGrooveStatsScores",
                     "BGBrightness",
                     "CacheSongs",
                     "DisplayHeight",
@@ -1159,6 +1174,14 @@ fn save_without_keymaps() {
     };
     content.push_str(&format!("AudioSampleRateHz={audio_rate_str}\n"));
     content.push_str(&format!(
+        "AutoPopulateGrooveStatsScores={}\n",
+        if cfg.auto_populate_gs_scores {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "BGBrightness={}\n",
         cfg.bg_brightness.clamp(0.0, 1.0)
     ));
@@ -1464,6 +1487,17 @@ pub fn update_enable_groovestats(enabled: bool) {
             return;
         }
         cfg.enable_groovestats = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_auto_populate_gs_scores(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.auto_populate_gs_scores == enabled {
+            return;
+        }
+        cfg.auto_populate_gs_scores = enabled;
     }
     save_without_keymaps();
 }

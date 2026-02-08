@@ -300,6 +300,7 @@ pub const ITEMS: &[Item] = &[
         help: &[
             "Manage GrooveStats settings.",
             "Enable GrooveStats",
+            "Auto Populate GS Scores",
             "Auto-Download Unlocks",
             "Separate Unlocks By Player",
             "Display GrooveStats QR Login",
@@ -674,16 +675,27 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-pub const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[SubRow {
-    label: "Enable GrooveStats",
-    choices: &["No", "Yes"],
-    inline: true,
-}];
+pub const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: "Enable GrooveStats",
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
+        label: "Auto Populate GS Scores",
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+];
 
 pub const GROOVESTATS_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: "Enable GrooveStats",
         help: &["Enable connection to GrooveStats services."],
+    },
+    Item {
+        name: "Auto Populate GS Scores",
+        help: &["Import GS grade/lamp/score when scorebox leaderboard requests complete."],
     },
     Item {
         name: "Exit",
@@ -1264,6 +1276,12 @@ pub fn init() -> State {
         GROOVESTATS_OPTIONS_ROWS,
         "Enable GrooveStats",
         usize::from(cfg.enable_groovestats),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_groovestats,
+        GROOVESTATS_OPTIONS_ROWS,
+        "Auto Populate GS Scores",
+        usize::from(cfg.auto_populate_gs_scores),
     );
     state
 }
@@ -1919,6 +1937,8 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
             config::update_enable_groovestats(enabled);
             // Re-run connectivity logic so toggling this option applies immediately.
             crate::core::network::init();
+        } else if row.label == "Auto Populate GS Scores" {
+            config::update_auto_populate_gs_scores(new_index == 1);
         }
     }
     action

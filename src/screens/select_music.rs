@@ -3542,12 +3542,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // GrooveStats scorebox above footer, on the wheel side.
     if is_wide() {
-        // Align with SL PaneDisplay geometry: just above pane top (pane_top = h - 92).
-        let pane_top = screen_height() - 92.0;
-        let scorebox_center_y = pane_top - 44.0;
-        let scorebox_side_offset_x = 70.0;
-        let scorebox_center_p1 = screen_width() * 0.75 + 5.0 + scorebox_side_offset_x;
-        let scorebox_center_p2 = screen_width() * 0.25 - 5.0 - scorebox_side_offset_x;
+        // Keep the box close to the footer and pull it toward screen middle,
+        // so it starts just before the wheel lane (Simply Love-like placement).
+        let footer_top = screen_height() - 32.0;
+        let scorebox_center_y = footer_top - 44.0; // 80px box: 40px half-height + 4px gap.
+        let scorebox_side_inset = 320.0;
+        let scorebox_center_p1 = screen_width() * 0.25 - 5.0 + scorebox_side_inset;
+        let scorebox_center_p2 = screen_width() * 0.75 + 5.0 - scorebox_side_inset;
         let mut push_scorebox = |side: profile::PlayerSide, steps_idx: usize, center_x: f32| {
             let chart_hash = match selected_entry {
                 Some(MusicWheelEntry::Song(song)) => {

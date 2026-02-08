@@ -333,11 +333,7 @@ fn gameplay_row_from_entry(
 
     let name = {
         let trimmed = entry.name.trim();
-        if trimmed.is_empty() {
-            "----"
-        } else {
-            trimmed
-        }
+        if trimmed.is_empty() { "----" } else { trimmed }
     };
 
     GameplayScoreboxRow {

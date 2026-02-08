@@ -212,50 +212,50 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         ("❌ GrooveStats".to_string(), vec!["Disabled".to_string()])
     } else {
         match status {
-        ConnectionStatus::Pending => ("     GrooveStats".to_string(), Vec::new()),
-        ConnectionStatus::Error(msg) => {
-            let simplified_msg = match msg.as_str() {
-                "Machine Offline" => "Machine Offline".to_string(),
-                "Cannot Connect" => "Cannot Connect".to_string(),
-                "Timed Out" => "Timed Out".to_string(),
-                "Disabled" => "Disabled".to_string(),
-                _ => "Failed to Load 😞".to_string(),
-            };
-            // When there is a connection error, SL shows the error message in Service1 and "❌ GrooveStats" as main text.
-            (
-                "GrooveStats not connected".to_string(),
-                vec![simplified_msg],
-            )
+            ConnectionStatus::Pending => ("     GrooveStats".to_string(), Vec::new()),
+            ConnectionStatus::Error(msg) => {
+                let simplified_msg = match msg.as_str() {
+                    "Machine Offline" => "Machine Offline".to_string(),
+                    "Cannot Connect" => "Cannot Connect".to_string(),
+                    "Timed Out" => "Timed Out".to_string(),
+                    "Disabled" => "Disabled".to_string(),
+                    _ => "Failed to Load 😞".to_string(),
+                };
+                // When there is a connection error, SL shows the error message in Service1 and "❌ GrooveStats" as main text.
+                (
+                    "GrooveStats not connected".to_string(),
+                    vec![simplified_msg],
+                )
+            }
+            ConnectionStatus::Connected(services) => {
+                let mut disabled_services = Vec::new();
+                if !services.get_scores {
+                    disabled_services.push("❌ Get Scores".to_string());
+                }
+                if !services.leaderboard {
+                    disabled_services.push("❌ Leaderboard".to_string());
+                }
+                if !services.auto_submit {
+                    disabled_services.push("❌ Auto-Submit".to_string());
+                }
+
+                let text = if disabled_services.is_empty() {
+                    "✔ GrooveStats".to_string()
+                } else if disabled_services.len() == 3 {
+                    "❌ GrooveStats".to_string()
+                } else {
+                    "⚠ GrooveStats".to_string()
+                };
+
+                let services_to_show = if disabled_services.len() == 3 {
+                    Vec::new()
+                } else {
+                    disabled_services
+                };
+
+                (text, services_to_show)
+            }
         }
-        ConnectionStatus::Connected(services) => {
-            let mut disabled_services = Vec::new();
-            if !services.get_scores {
-                disabled_services.push("❌ Get Scores".to_string());
-            }
-            if !services.leaderboard {
-                disabled_services.push("❌ Leaderboard".to_string());
-            }
-            if !services.auto_submit {
-                disabled_services.push("❌ Auto-Submit".to_string());
-            }
-
-            let text = if disabled_services.is_empty() {
-                "✔ GrooveStats".to_string()
-            } else if disabled_services.len() == 3 {
-                "❌ GrooveStats".to_string()
-            } else {
-                "⚠ GrooveStats".to_string()
-            };
-
-            let services_to_show = if disabled_services.len() == 3 {
-                Vec::new()
-            } else {
-                disabled_services
-            };
-
-            (text, services_to_show)
-        }
-    }
     };
 
     // Main status text

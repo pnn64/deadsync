@@ -699,10 +699,8 @@ fn build_main_rows(
 }
 
 fn build_advanced_rows() -> Vec<Row> {
-    let mut gameplay_extras_more_choices = vec![
-        "Judgment Tilt".to_string(),
-        "Column Cues".to_string(),
-    ];
+    let mut gameplay_extras_more_choices =
+        vec!["Judgment Tilt".to_string(), "Column Cues".to_string()];
     if crate::game::scores::is_gs_get_scores_service_allowed() {
         gameplay_extras_more_choices.push("Display Scorebox".to_string());
     }
