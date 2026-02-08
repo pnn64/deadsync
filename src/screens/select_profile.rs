@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::AssetManager;
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -13,6 +14,7 @@ use crate::screens::components::{heart_bg, screen_bar};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{self, Actor};
 use crate::ui::color;
+use crate::ui::font;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -278,6 +280,74 @@ fn format_recent_mods(
         push(label);
     }
     out
+}
+
+#[inline(always)]
+fn wrap_profile_mods_text(asset_manager: &AssetManager, text: &str, max_width_px: f32) -> String {
+    if text.trim().is_empty() || max_width_px <= 0.0 {
+        return text.to_string();
+    }
+    asset_manager
+        .with_fonts(|all_fonts| {
+            asset_manager.with_font("miso", |miso_font| {
+                let space_w =
+                    font::measure_line_width_logical(miso_font, " ", all_fonts) as f32 * MODS_ZOOM;
+                let mut out = String::new();
+                let mut wrote_line = false;
+                for segment in text.split('\n') {
+                    let segment = segment.trim_end();
+                    if segment.is_empty() {
+                        if wrote_line {
+                            out.push('\n');
+                        }
+                        wrote_line = true;
+                        continue;
+                    }
+                    let mut line = String::new();
+                    let mut line_w = 0.0;
+                    for word in segment.split_whitespace() {
+                        let word_w = font::measure_line_width_logical(miso_font, word, all_fonts)
+                            as f32
+                            * MODS_ZOOM;
+                        let next_w = if line.is_empty() {
+                            word_w
+                        } else {
+                            line_w + space_w + word_w
+                        };
+                        if !line.is_empty() && next_w > max_width_px {
+                            if wrote_line {
+                                out.push('\n');
+                            }
+                            out.push_str(&line);
+                            wrote_line = true;
+                            line.clear();
+                            line.push_str(word);
+                            line_w = word_w;
+                        } else {
+                            if !line.is_empty() {
+                                line.push(' ');
+                                line_w += space_w;
+                            }
+                            line.push_str(word);
+                            line_w += word_w;
+                        }
+                    }
+                    if !line.is_empty() {
+                        if wrote_line {
+                            out.push('\n');
+                        }
+                        out.push_str(&line);
+                        wrote_line = true;
+                    }
+                }
+                if out.is_empty() {
+                    text.to_string()
+                } else {
+                    out
+                }
+            })
+        })
+        .unwrap_or_else(|| text.to_string())
 }
 
 fn build_choices() -> Vec<Choice> {
@@ -1058,6 +1128,7 @@ fn push_join_prompt(
 #[allow(clippy::too_many_arguments)]
 fn push_scroller_frame(
     out: &mut Vec<Actor>,
+    asset_manager: &AssetManager,
     choices: &[Choice],
     selected_index: usize,
     preview_noteskin: Option<&Noteskin>,
@@ -1249,6 +1320,7 @@ fn push_scroller_frame(
         let selected_mods = selected
             .map(|c| format_recent_mods(&c.speed_mod, c.scroll_option, c.mini_indicator))
             .unwrap_or_default();
+        let wrapped_mods = wrap_profile_mods_text(asset_manager, &selected_mods, info_max_w);
         let preview_y = frame_cy + PREVIEW_Y_OFF;
 
         if let Some(ns) = preview_noteskin {
@@ -1331,20 +1403,26 @@ fn push_scroller_frame(
             ));
         }
 
-        out.push(act!(text:
+        let mut mods_actor = act!(text:
             align(0.0, 0.0):
             xy(info_text_x, frame_cy + MODS_Y_OFF):
             font("miso"):
             zoom(MODS_ZOOM):
             maxwidth(info_max_w):
-            settext(selected_mods):
+            settext(wrapped_mods):
             diffuse(1.0, 1.0, 1.0, inner_alpha):
             z(103)
-        ));
+        );
+        apply_clip_rect_to_actor(&mut mods_actor, [info_x0, frame_y0, INFO_W, frame_h]);
+        out.push(mods_actor);
     }
 }
 
-pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
+pub fn get_actors(
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(128);
 
     actors.extend(state.bg.build(heart_bg::Params {
@@ -1427,6 +1505,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         let mut scroller_ui: Vec<Actor> = Vec::new();
         push_scroller_frame(
             &mut scroller_ui,
+            asset_manager,
             &state.choices,
             state.p1_selected_index,
             state.p1_preview_noteskin.as_deref(),
@@ -1511,6 +1590,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         let mut scroller_ui: Vec<Actor> = Vec::new();
         push_scroller_frame(
             &mut scroller_ui,
+            asset_manager,
             &state.choices,
             state.p2_selected_index,
             state.p2_preview_noteskin.as_deref(),

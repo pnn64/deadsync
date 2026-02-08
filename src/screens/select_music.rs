@@ -127,18 +127,6 @@ const SL_SORT_MENU_HINT_TEXT: &str = "PRESS &SELECT; TO CANCEL";
 const SL_SORT_MENU_WHEEL_SLOTS: usize = 7;
 const SL_SORT_MENU_WHEEL_FOCUS_SLOT: usize = SL_SORT_MENU_WHEEL_SLOTS / 2;
 const SL_SORT_MENU_VISIBLE_ROWS: usize = SL_SORT_MENU_WHEEL_SLOTS - 2;
-const SL_SONG_SEARCH_PROMPT_TITLE: &str = "Song Search";
-const SL_SONG_SEARCH_PROMPT_HINT: &str = "'pack/song' format will search for songs in specific packs\n'[###]' format will search for BPMs/Difficulties";
-const SL_SONG_SEARCH_PROMPT_MAX_LEN: usize = 30;
-const SL_SONG_SEARCH_PANE_W: f32 = 319.0;
-const SL_SONG_SEARCH_PANE_H: f32 = 319.0;
-const SL_SONG_SEARCH_PANE_BORDER: f32 = 2.0;
-const SL_SONG_SEARCH_TEXT_H: f32 = 15.0;
-const SL_SONG_SEARCH_ROW_SPACING: f32 = 30.0;
-const SL_SONG_SEARCH_WHEEL_SLOTS: usize = 12;
-const SL_SONG_SEARCH_WHEEL_FOCUS_SLOT: usize = SL_SONG_SEARCH_WHEEL_SLOTS / 2 - 1;
-const SL_SONG_SEARCH_FOCUS_TWEEN_SECONDS: f32 = 0.1;
-const SL_SONG_SEARCH_INPUT_LOCK_SECONDS: f32 = 0.25;
 
 // Simply Love ScreenSelectMusic overlay/Leaderboard.lua geometry.
 const GS_LEADERBOARD_NUM_ENTRIES: usize = 13;
@@ -409,7 +397,6 @@ enum SortMenuAction {
     SortByGroup,
     SortByTitle,
     SortByRecent,
-    SongSearch,
     ReloadSongsCourses,
     ShowLeaderboard,
 }
@@ -421,7 +408,7 @@ struct SortMenuItem {
     action: SortMenuAction,
 }
 
-const SORT_MENU_ITEMS: [SortMenuItem; 6] = [
+const SORT_MENU_ITEMS: [SortMenuItem; 5] = [
     SortMenuItem {
         top_label: "Sort By",
         bottom_label: "Group",
@@ -436,11 +423,6 @@ const SORT_MENU_ITEMS: [SortMenuItem; 6] = [
         top_label: "Sort By",
         bottom_label: "Recently Played",
         action: SortMenuAction::SortByRecent,
-    },
-    SortMenuItem {
-        top_label: "Wherefore Art Thou?",
-        bottom_label: "Song Search",
-        action: SortMenuAction::SongSearch,
     },
     SortMenuItem {
         top_label: "Take a Breather~",
@@ -458,29 +440,6 @@ const SORT_MENU_ITEMS: [SortMenuItem; 6] = [
 enum SortMenuState {
     Hidden,
     Visible { selected_index: usize },
-}
-
-#[derive(Clone, Debug)]
-struct SongSearchCandidate {
-    pack_name: String,
-    song: Arc<SongData>,
-}
-
-#[derive(Clone, Debug)]
-struct SongSearchResultsState {
-    search_text: String,
-    candidates: Vec<SongSearchCandidate>,
-    selected_index: usize,
-    prev_selected_index: usize,
-    focus_anim_elapsed: f32,
-    input_lock: f32,
-}
-
-#[derive(Clone, Debug)]
-enum SongSearchState {
-    Hidden,
-    Prompt { query: String },
-    Results(SongSearchResultsState),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -607,7 +566,6 @@ pub struct State {
     out_prompt: OutPromptState,
     exit_prompt: ExitPromptState,
     reload_ui: Option<ReloadUiState>,
-    song_search: SongSearchState,
     sort_menu: SortMenuState,
     leaderboard: LeaderboardOverlayState,
     sort_mode: WheelSortMode,
@@ -1224,7 +1182,6 @@ pub fn init() -> State {
         out_prompt: OutPromptState::None,
         exit_prompt: ExitPromptState::None,
         reload_ui: None,
-        song_search: SongSearchState::Hidden,
         sort_menu: SortMenuState::Hidden,
         leaderboard: LeaderboardOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
@@ -1458,7 +1415,7 @@ fn sort_menu_items(state: &State) -> &[SortMenuItem] {
     ) {
         &SORT_MENU_ITEMS
     } else {
-        &SORT_MENU_ITEMS[..5]
+        &SORT_MENU_ITEMS[..4]
     }
 }
 
@@ -1483,264 +1440,6 @@ fn sort_menu_scroll_dir(len: usize, prev: usize, selected: usize) -> isize {
     } else {
         0
     }
-}
-
-#[derive(Default)]
-struct SongSearchFilter {
-    pack_term: Option<String>,
-    song_term: Option<String>,
-    difficulty: Option<u8>,
-    bpm_tier: Option<i32>,
-}
-
-#[inline(always)]
-fn song_search_total_items(results: &SongSearchResultsState) -> usize {
-    results.candidates.len() + 1
-}
-
-fn song_search_move(results: &mut SongSearchResultsState, delta: isize) -> bool {
-    let len = song_search_total_items(results);
-    if len == 0 || delta == 0 {
-        return false;
-    }
-    let old = results.selected_index.min(len - 1);
-    let next = ((old as isize + delta).rem_euclid(len as isize)) as usize;
-    if next == old {
-        return false;
-    }
-    results.prev_selected_index = old;
-    results.selected_index = next;
-    results.focus_anim_elapsed = 0.0;
-    true
-}
-
-#[inline(always)]
-fn song_search_focused_candidate(results: &SongSearchResultsState) -> Option<&SongSearchCandidate> {
-    results.candidates.get(results.selected_index)
-}
-
-#[inline(always)]
-fn song_search_bpm_tier(bpm: f64) -> i32 {
-    (((bpm + 0.5) / 10.0).floor() as i32) * 10
-}
-
-fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> String {
-    const ORDER: [&str; 5] = ["beginner", "easy", "medium", "hard", "challenge"];
-    let mut out = String::new();
-    for diff in ORDER {
-        if let Some(chart) = song.charts.iter().find(|c| {
-            c.chart_type.eq_ignore_ascii_case(chart_type)
-                && c.difficulty.eq_ignore_ascii_case(diff)
-                && !c.notes.is_empty()
-        }) {
-            if !out.is_empty() {
-                out.push_str("   ");
-            }
-            out.push_str(&chart.meter.to_string());
-        }
-    }
-    if out.is_empty() { "-".to_string() } else { out }
-}
-
-fn parse_song_search_filter(input: &str) -> SongSearchFilter {
-    let lower = input.to_ascii_lowercase();
-    let chars: Vec<char> = lower.chars().collect();
-    let mut filter = SongSearchFilter::default();
-    let mut stripped = String::with_capacity(lower.len());
-    let mut i = 0usize;
-    while i < chars.len() {
-        if chars[i] == '[' {
-            let mut j = i + 1;
-            let mut value: u32 = 0;
-            let mut has_digit = false;
-            while j < chars.len() {
-                let Some(d) = chars[j].to_digit(10) else {
-                    break;
-                };
-                has_digit = true;
-                value = value.saturating_mul(10).saturating_add(d);
-                j += 1;
-            }
-            if has_digit && j < chars.len() && chars[j] == ']' {
-                if value <= 35 {
-                    filter.difficulty = Some(value as u8);
-                } else {
-                    filter.bpm_tier = Some(song_search_bpm_tier(value as f64));
-                }
-                i = j + 1;
-                continue;
-            }
-        }
-        stripped.push(chars[i]);
-        i += 1;
-    }
-
-    let stripped = stripped.trim();
-    if let Some((left, right)) = stripped.split_once('/') {
-        let pack = left.trim();
-        let song = right.trim();
-        if !pack.is_empty() {
-            filter.pack_term = Some(pack.to_string());
-        }
-        if !song.is_empty() {
-            filter.song_term = Some(song.to_string());
-        }
-    } else if !stripped.is_empty() {
-        filter.song_term = Some(stripped.to_string());
-    }
-    filter
-}
-
-fn build_song_search_candidates(state: &State, search_text: &str) -> Vec<SongSearchCandidate> {
-    let filter = parse_song_search_filter(search_text);
-    let chart_type = profile::get_session_play_style().chart_type();
-    let mut out = Vec::new();
-    let mut current_pack_name: Option<&str> = None;
-
-    for entry in &state.group_entries {
-        match entry {
-            MusicWheelEntry::PackHeader { name, .. } => {
-                current_pack_name = Some(name.as_str());
-            }
-            MusicWheelEntry::Song(song) => {
-                if !song
-                    .charts
-                    .iter()
-                    .any(|c| c.chart_type.eq_ignore_ascii_case(chart_type) && !c.notes.is_empty())
-                {
-                    continue;
-                }
-
-                let pack_name = current_pack_name.unwrap_or_default();
-                if let Some(pack_term) = &filter.pack_term
-                    && !pack_name.to_ascii_lowercase().contains(pack_term)
-                {
-                    continue;
-                }
-
-                if let Some(song_term) = &filter.song_term {
-                    let display = song.display_full_title(false).to_ascii_lowercase();
-                    let translit = song.display_full_title(true).to_ascii_lowercase();
-                    if !display.contains(song_term) && !translit.contains(song_term) {
-                        continue;
-                    }
-                }
-
-                if let Some(diff) = filter.difficulty
-                    && !song.charts.iter().any(|c| {
-                        c.chart_type.eq_ignore_ascii_case(chart_type)
-                            && !c.difficulty.eq_ignore_ascii_case("edit")
-                            && !c.notes.is_empty()
-                            && c.meter == diff as u32
-                    })
-                {
-                    continue;
-                }
-
-                if let Some(want_tier) = filter.bpm_tier {
-                    let mut lo = song_search_bpm_tier(song.min_bpm);
-                    let mut hi = song_search_bpm_tier(song.max_bpm);
-                    if lo > hi {
-                        std::mem::swap(&mut lo, &mut hi);
-                    }
-                    if lo == hi {
-                        if want_tier != lo {
-                            continue;
-                        }
-                    } else if want_tier < lo || want_tier > hi {
-                        continue;
-                    }
-                }
-
-                out.push(SongSearchCandidate {
-                    pack_name: pack_name.to_string(),
-                    song: song.clone(),
-                });
-            }
-        }
-    }
-
-    out
-}
-
-fn start_song_search_prompt(state: &mut State) {
-    clear_preview(state);
-    state.sort_menu = SortMenuState::Hidden;
-    state.leaderboard = LeaderboardOverlayState::Hidden;
-    state.menu_chord_mask = 0;
-    state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
-    state.song_search = SongSearchState::Prompt {
-        query: String::new(),
-    };
-}
-
-#[inline(always)]
-fn close_song_search(state: &mut State) {
-    state.song_search = SongSearchState::Hidden;
-}
-
-fn start_song_search_results(state: &mut State, search_text: String) {
-    let trimmed = search_text.trim().to_string();
-    if trimmed.is_empty() {
-        close_song_search(state);
-        return;
-    }
-    let candidates = build_song_search_candidates(state, &trimmed);
-    state.song_search = SongSearchState::Results(SongSearchResultsState {
-        search_text: trimmed,
-        candidates,
-        selected_index: 0,
-        prev_selected_index: 0,
-        focus_anim_elapsed: SL_SONG_SEARCH_FOCUS_TWEEN_SECONDS,
-        input_lock: SL_SONG_SEARCH_INPUT_LOCK_SECONDS,
-    });
-}
-
-fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
-    if let Some(index) = song_entry_index(&state.entries, song) {
-        state.selected_index = index;
-        state.time_since_selection_change = 0.0;
-        state.wheel_offset_from_selection = 0.0;
-        state.last_requested_banner_path = None;
-        state.last_requested_chart_hash = None;
-        state.last_requested_chart_hash_p2 = None;
-        return;
-    }
-
-    if let Some(group_name) = group_name_for_song(&state.all_entries, song) {
-        state.expanded_pack_name = Some(group_name);
-        rebuild_displayed_entries(state);
-        if let Some(index) = song_entry_index(&state.entries, song) {
-            state.selected_index = index;
-            state.time_since_selection_change = 0.0;
-            state.wheel_offset_from_selection = 0.0;
-            state.last_requested_banner_path = None;
-            state.last_requested_chart_hash = None;
-            state.last_requested_chart_hash_p2 = None;
-            return;
-        }
-    }
-
-    if state.sort_mode != WheelSortMode::Group {
-        apply_wheel_sort(state, WheelSortMode::Group);
-    }
-    if let Some(group_name) = group_name_for_song(&state.group_entries, song) {
-        state.expanded_pack_name = Some(group_name);
-        rebuild_displayed_entries(state);
-    }
-    if let Some(index) = song_entry_index(&state.entries, song) {
-        state.selected_index = index;
-    } else {
-        state.selected_index = state
-            .selected_index
-            .min(state.entries.len().saturating_sub(1));
-    }
-    state.time_since_selection_change = 0.0;
-    state.wheel_offset_from_selection = 0.0;
-    state.last_requested_banner_path = None;
-    state.last_requested_chart_hash = None;
-    state.last_requested_chart_hash_p2 = None;
 }
 
 fn start_reload_songs_and_courses(state: &mut State) {
@@ -2266,10 +1965,6 @@ fn sort_menu_activate(state: &mut State) {
             apply_wheel_sort(state, WheelSortMode::Recent);
             hide_sort_menu(state);
         }
-        SortMenuAction::SongSearch => {
-            hide_sort_menu(state);
-            start_song_search_prompt(state);
-        }
         SortMenuAction::ReloadSongsCourses => {
             hide_sort_menu(state);
             start_reload_songs_and_courses(state);
@@ -2312,90 +2007,6 @@ fn handle_sort_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         _ => {}
     }
-    ScreenAction::None
-}
-
-fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed {
-        return ScreenAction::None;
-    }
-
-    let mut prompt_start: Option<String> = None;
-    let mut prompt_close = false;
-    match &mut state.song_search {
-        SongSearchState::Prompt { query } => match ev.action {
-            VirtualAction::p1_start | VirtualAction::p2_start => {
-                audio::play_sfx("assets/sounds/start.ogg");
-                prompt_start = Some(query.clone());
-            }
-            VirtualAction::p1_back
-            | VirtualAction::p2_back
-            | VirtualAction::p1_select
-            | VirtualAction::p2_select => {
-                audio::play_sfx("assets/sounds/start.ogg");
-                prompt_close = true;
-            }
-            _ => {}
-        },
-        SongSearchState::Results(results) => {
-            if results.input_lock > 0.0 {
-                return ScreenAction::None;
-            }
-            match ev.action {
-                VirtualAction::p1_up
-                | VirtualAction::p1_menu_up
-                | VirtualAction::p1_left
-                | VirtualAction::p1_menu_left
-                | VirtualAction::p2_up
-                | VirtualAction::p2_menu_up
-                | VirtualAction::p2_left
-                | VirtualAction::p2_menu_left => {
-                    if song_search_move(results, -1) {
-                        audio::play_sfx("assets/sounds/change.ogg");
-                    }
-                }
-                VirtualAction::p1_down
-                | VirtualAction::p1_menu_down
-                | VirtualAction::p1_right
-                | VirtualAction::p1_menu_right
-                | VirtualAction::p2_down
-                | VirtualAction::p2_menu_down
-                | VirtualAction::p2_right
-                | VirtualAction::p2_menu_right => {
-                    if song_search_move(results, 1) {
-                        audio::play_sfx("assets/sounds/change.ogg");
-                    }
-                }
-                VirtualAction::p1_start | VirtualAction::p2_start => {
-                    let picked = song_search_focused_candidate(results).map(|c| c.song.clone());
-                    audio::play_sfx("assets/sounds/start.ogg");
-                    close_song_search(state);
-                    if let Some(song) = picked {
-                        focus_song_from_search(state, &song);
-                    }
-                }
-                VirtualAction::p1_back
-                | VirtualAction::p2_back
-                | VirtualAction::p1_select
-                | VirtualAction::p2_select => {
-                    audio::play_sfx("assets/sounds/start.ogg");
-                    close_song_search(state);
-                }
-                _ => {}
-            }
-        }
-        SongSearchState::Hidden => {}
-    }
-
-    if let Some(search_text) = prompt_start {
-        start_song_search_results(state, search_text);
-        return ScreenAction::None;
-    }
-    if prompt_close {
-        close_song_search(state);
-        return ScreenAction::None;
-    }
-
     ScreenAction::None
 }
 
@@ -2668,65 +2279,6 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
     if state.reload_ui.is_some() {
         return ScreenAction::None;
     }
-
-    if key.state == ElementState::Pressed {
-        if matches!(state.song_search, SongSearchState::Results(_))
-            && let winit::keyboard::PhysicalKey::Code(KeyCode::Escape) = key.physical_key
-        {
-            audio::play_sfx("assets/sounds/start.ogg");
-            close_song_search(state);
-            return ScreenAction::None;
-        }
-        let mut prompt_start: Option<String> = None;
-        let mut prompt_close = false;
-        if let SongSearchState::Prompt { query } = &mut state.song_search {
-            if let winit::keyboard::PhysicalKey::Code(code) = key.physical_key {
-                match code {
-                    KeyCode::Backspace => {
-                        let _ = query.pop();
-                        return ScreenAction::None;
-                    }
-                    KeyCode::Escape => {
-                        audio::play_sfx("assets/sounds/start.ogg");
-                        prompt_close = true;
-                    }
-                    KeyCode::Enter | KeyCode::NumpadEnter => {
-                        audio::play_sfx("assets/sounds/start.ogg");
-                        prompt_start = Some(query.clone());
-                    }
-                    _ => {}
-                }
-            }
-
-            if !prompt_close
-                && prompt_start.is_none()
-                && let Some(text) = key.text.as_ref()
-            {
-                let mut len = query.chars().count();
-                for ch in text.chars() {
-                    if ch.is_control() {
-                        continue;
-                    }
-                    if len >= SL_SONG_SEARCH_PROMPT_MAX_LEN {
-                        break;
-                    }
-                    query.push(ch);
-                    len += 1;
-                }
-            }
-
-            if let Some(search_text) = prompt_start {
-                start_song_search_results(state, search_text);
-                return ScreenAction::None;
-            }
-            if prompt_close {
-                close_song_search(state);
-                return ScreenAction::None;
-            }
-            return ScreenAction::None;
-        }
-    }
-
     if key.state != ElementState::Pressed {
         return ScreenAction::None;
     }
@@ -2760,10 +2312,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.out_prompt = OutPromptState::EnteringOptions { elapsed: 0.0 };
         }
         return ScreenAction::None;
-    }
-
-    if !matches!(state.song_search, SongSearchState::Hidden) {
-        return handle_song_search_input(state, ev);
     }
 
     if state.exit_prompt != ExitPromptState::None {
@@ -2875,19 +2423,6 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.reload_ui = None;
             refresh_after_reload(state);
         }
-        return ScreenAction::None;
-    }
-
-    if let SongSearchState::Results(results) = &mut state.song_search {
-        let dt = dt.max(0.0);
-        results.input_lock = (results.input_lock - dt).max(0.0);
-        if results.focus_anim_elapsed < SL_SONG_SEARCH_FOCUS_TWEEN_SECONDS {
-            results.focus_anim_elapsed =
-                (results.focus_anim_elapsed + dt).min(SL_SONG_SEARCH_FOCUS_TWEEN_SECONDS);
-        }
-        return ScreenAction::None;
-    }
-    if matches!(state.song_search, SongSearchState::Prompt { .. }) {
         return ScreenAction::None;
     }
 
@@ -4152,253 +3687,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             horizalign(center):
             z(1451)
         ));
-        return actors;
-    }
-
-    if !matches!(state.song_search, SongSearchState::Hidden) {
-        actors.push(act!(quad:
-            align(0.0, 0.0):
-            xy(0.0, 0.0):
-            zoomto(screen_width(), screen_height()):
-            diffuse(0.0, 0.0, 0.0, 0.8):
-            z(1450)
-        ));
-        match &state.song_search {
-            SongSearchState::Prompt { query } => {
-                let cx = screen_center_x();
-                let cy = screen_center_y();
-                let panel_w = 720.0;
-                let panel_h = 220.0;
-                let query_text = format!("> {query}");
-
-                actors.push(act!(quad:
-                    align(0.5, 0.5):
-                    xy(cx, cy):
-                    zoomto(panel_w + 2.0, panel_h + 2.0):
-                    diffuse(1.0, 1.0, 1.0, 1.0):
-                    z(1451)
-                ));
-                actors.push(act!(quad:
-                    align(0.5, 0.5):
-                    xy(cx, cy):
-                    zoomto(panel_w, panel_h):
-                    diffuse(0.0, 0.0, 0.0, 1.0):
-                    z(1452)
-                ));
-                actors.push(act!(text:
-                    font("wendy"):
-                    settext(SL_SONG_SEARCH_PROMPT_TITLE):
-                    align(0.5, 0.5):
-                    xy(cx, cy - 78.0):
-                    zoom(0.52):
-                    diffuse(1.0, 1.0, 1.0, 1.0):
-                    z(1453):
-                    horizalign(center)
-                ));
-                actors.push(act!(text:
-                    font("miso"):
-                    settext(SL_SONG_SEARCH_PROMPT_HINT):
-                    align(0.5, 0.5):
-                    xy(cx, cy - 20.0):
-                    zoom(0.8):
-                    maxwidth(670.0):
-                    diffuse(0.8, 0.8, 0.8, 1.0):
-                    z(1453):
-                    horizalign(center)
-                ));
-                actors.push(act!(text:
-                    font("miso"):
-                    settext(query_text):
-                    align(0.5, 0.5):
-                    xy(cx, cy + 48.0):
-                    zoom(0.95):
-                    maxwidth(650.0):
-                    diffuse(0.4, 1.0, 0.4, 1.0):
-                    z(1453):
-                    horizalign(center)
-                ));
-                actors.push(act!(text:
-                    font("wendy"):
-                    settext("Press ENTER/START to search, BACK/SELECT to cancel"):
-                    align(0.5, 0.5):
-                    xy(cx, cy + 88.0):
-                    zoom(0.24):
-                    diffuse(0.75, 0.75, 0.75, 1.0):
-                    z(1453):
-                    horizalign(center)
-                ));
-            }
-            SongSearchState::Results(results) => {
-                let pane_cx = screen_center_x();
-                let pane_cy = screen_center_y() + 40.0;
-                let list_base_y =
-                    pane_cy - SL_SONG_SEARCH_PANE_H * 0.5 - SL_SONG_SEARCH_TEXT_H * 2.5;
-                let list_x = pane_cx - SL_SONG_SEARCH_PANE_W * 0.25;
-                let list_clip = [
-                    pane_cx - SL_SONG_SEARCH_PANE_W * 0.5,
-                    pane_cy - SL_SONG_SEARCH_PANE_H * 0.5,
-                    SL_SONG_SEARCH_PANE_W * 0.5,
-                    SL_SONG_SEARCH_PANE_H,
-                ];
-                let selected_color = color::simply_love_rgba(state.active_color_index);
-                let total_items = song_search_total_items(results).max(1);
-                let focus_t = (results.focus_anim_elapsed
-                    / SL_SONG_SEARCH_FOCUS_TWEEN_SECONDS.max(1e-6))
-                .clamp(0.0, 1.0);
-                let scroll_dir = sort_menu_scroll_dir(
-                    total_items,
-                    results.prev_selected_index,
-                    results.selected_index,
-                ) as f32;
-                let scroll_shift = scroll_dir
-                    * [1.0 - focus_t, 0.0][(results.focus_anim_elapsed
-                        >= SL_SONG_SEARCH_FOCUS_TWEEN_SECONDS)
-                        as usize];
-
-                actors.push(act!(quad:
-                    align(0.5, 0.5):
-                    xy(pane_cx, pane_cy):
-                    zoomto(
-                        SL_SONG_SEARCH_PANE_W + SL_SONG_SEARCH_PANE_BORDER,
-                        SL_SONG_SEARCH_PANE_H + SL_SONG_SEARCH_PANE_BORDER
-                    ):
-                    diffuse(1.0, 1.0, 1.0, 1.0):
-                    z(1451)
-                ));
-                actors.push(act!(quad:
-                    align(0.5, 0.5):
-                    xy(pane_cx, pane_cy):
-                    zoomto(SL_SONG_SEARCH_PANE_W, SL_SONG_SEARCH_PANE_H):
-                    diffuse(0.0, 0.0, 0.0, 1.0):
-                    z(1452)
-                ));
-                actors.push(act!(quad:
-                    align(0.5, 0.5):
-                    xy(pane_cx, pane_cy):
-                    zoomto(SL_SONG_SEARCH_PANE_BORDER, SL_SONG_SEARCH_PANE_H - 10.0):
-                    diffuse(0.2, 0.2, 0.2, 1.0):
-                    z(1453)
-                ));
-                actors.push(act!(text:
-                    font("miso"):
-                    settext("Search Results For:"):
-                    align(0.5, 0.5):
-                    xy(pane_cx, pane_cy - SL_SONG_SEARCH_PANE_H * 0.5 - SL_SONG_SEARCH_TEXT_H * 5.0):
-                    zoom(0.8):
-                    diffuse(1.0, 1.0, 1.0, 1.0):
-                    z(1454):
-                    horizalign(center)
-                ));
-                actors.push(act!(text:
-                    font("miso"):
-                    settext(format!("\"{}\"", results.search_text)):
-                    align(0.5, 0.5):
-                    xy(pane_cx, pane_cy - SL_SONG_SEARCH_PANE_H * 0.5 - SL_SONG_SEARCH_TEXT_H * 3.0):
-                    zoom(0.8):
-                    maxwidth(SL_SONG_SEARCH_PANE_W):
-                    diffuse(0.4, 1.0, 0.4, 1.0):
-                    z(1454):
-                    horizalign(center)
-                ));
-                actors.push(act!(text:
-                    font("miso"):
-                    settext(format!("{} Results Found", results.candidates.len())):
-                    align(0.5, 0.5):
-                    xy(pane_cx, pane_cy - SL_SONG_SEARCH_PANE_H * 0.5 - SL_SONG_SEARCH_TEXT_H):
-                    zoom(0.8):
-                    diffuse(1.0, 1.0, 1.0, 1.0):
-                    z(1454):
-                    horizalign(center)
-                ));
-
-                for slot_idx in 0..SL_SONG_SEARCH_WHEEL_SLOTS {
-                    let offset = slot_idx as isize - SL_SONG_SEARCH_WHEEL_FOCUS_SLOT as isize;
-                    let row_idx = ((results.selected_index as isize + offset)
-                        .rem_euclid(total_items as isize))
-                        as usize;
-                    let slot_pos = offset as f32 + scroll_shift;
-                    let y = (slot_pos + SL_SONG_SEARCH_WHEEL_FOCUS_SLOT as f32 + 1.0)
-                        .mul_add(SL_SONG_SEARCH_ROW_SPACING, list_base_y);
-                    let focused = slot_pos.abs() < 0.5;
-                    let mut text = "Exit".to_string();
-                    let mut color_rgba = [1.0, 0.2, 0.2, 1.0];
-                    if row_idx < results.candidates.len() {
-                        let song = &results.candidates[row_idx].song;
-                        text = song.display_title(false).to_string();
-                        color_rgba = [1.0, 1.0, 1.0, 1.0];
-                    }
-                    if focused {
-                        color_rgba[0] = selected_color[0];
-                        color_rgba[1] = selected_color[1];
-                        color_rgba[2] = selected_color[2];
-                    } else {
-                        color_rgba[0] *= 0.533;
-                        color_rgba[1] *= 0.533;
-                        color_rgba[2] *= 0.533;
-                    }
-                    let alpha = [0.0, 1.0]
-                        [(slot_idx > 0 && slot_idx + 1 < SL_SONG_SEARCH_WHEEL_SLOTS) as usize];
-                    color_rgba[3] *= alpha;
-                    let mut row = act!(text:
-                        font("miso"):
-                        settext(text):
-                        align(0.5, 0.5):
-                        xy(list_x, y):
-                        maxwidth(310.0):
-                        zoom([0.9, 1.0][focused as usize]):
-                        diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3]):
-                        z(1454):
-                        horizalign(center)
-                    );
-                    set_text_clip_rect(&mut row, list_clip);
-                    actors.push(row);
-                }
-
-                if let Some(candidate) = song_search_focused_candidate(results) {
-                    let chart_type = profile::get_session_play_style().chart_type();
-                    let details = [
-                        ("Pack", candidate.pack_name.clone()),
-                        ("Song", candidate.song.display_title(false).to_string()),
-                        (
-                            "Subtitle",
-                            candidate.song.display_subtitle(false).to_string(),
-                        ),
-                        ("BPMs", candidate.song.formatted_display_bpm()),
-                        (
-                            "Difficulties",
-                            song_search_difficulties_text(candidate.song.as_ref(), chart_type),
-                        ),
-                    ];
-                    for (i, (label, value)) in details.iter().enumerate() {
-                        let y = pane_cy - SL_SONG_SEARCH_PANE_H * 0.5
-                            + (SL_SONG_SEARCH_TEXT_H * 0.8 + 8.0) * (i as f32 * 2.0 + 1.0);
-                        actors.push(act!(text:
-                            font("miso"):
-                            settext(format!("{label}:")):
-                            align(0.0, 0.5):
-                            xy(pane_cx + 10.0, y):
-                            zoom(0.64):
-                            maxwidth(180.0):
-                            diffuse(0.67, 0.67, 1.0, 1.0):
-                            z(1454):
-                            horizalign(left)
-                        ));
-                        actors.push(act!(text:
-                            font("miso"):
-                            settext(value):
-                            align(0.0, 0.5):
-                            xy(pane_cx + 40.0, y + 13.0):
-                            zoom(0.64):
-                            maxwidth(210.0):
-                            diffuse(1.0, 1.0, 1.0, 1.0):
-                            z(1454):
-                            horizalign(left)
-                        ));
-                    }
-                }
-            }
-            SongSearchState::Hidden => {}
-        }
         return actors;
     }
 
