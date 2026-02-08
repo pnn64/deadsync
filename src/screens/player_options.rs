@@ -307,7 +307,7 @@ pub struct State {
     // bit0 = Flash Column for Miss, bit1 = Density Graph at Top.
     pub gameplay_extras_active_mask: [u8; PLAYER_SLOTS],
     // For Gameplay Extras (More) row: bitmask of which options are enabled.
-    // bit0 = Judgment Tilt (Simply Love semantics).
+    // bit0 = Judgment Tilt, bit1 = Column Cues, bit2 = Display Scorebox.
     pub gameplay_extras_more_active_mask: [u8; PLAYER_SLOTS],
     // For Error Bar Options row: bitmask of which options are enabled.
     // bit0 = Move Up, bit1 = Multi-Tick (Simply Love semantics).
@@ -1535,6 +1535,9 @@ fn apply_profile_defaults(
     // Initialize Gameplay Extras (More) row from profile (multi-choice toggle group).
     if profile.judgment_tilt {
         gameplay_extras_more_active_mask |= 1u8 << 0;
+    }
+    if profile.column_cues {
+        gameplay_extras_more_active_mask |= 1u8 << 1;
     }
     if profile.display_scorebox {
         gameplay_extras_more_active_mask |= 1u8 << 2;
@@ -3257,6 +3260,7 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
     let choice_index = state.rows[row_index].selected_choice_index[idx];
     let bit = match choice_index {
         0 => 1u8 << 0, // Judgment Tilt
+        1 => 1u8 << 1, // Column Cues
         2 => 1u8 << 2, // Display Scorebox
         _ => return,
     };
@@ -3268,8 +3272,10 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
     }
 
     let judgment_tilt = (state.gameplay_extras_more_active_mask[idx] & (1u8 << 0)) != 0;
+    let column_cues = (state.gameplay_extras_more_active_mask[idx] & (1u8 << 1)) != 0;
     let display_scorebox = (state.gameplay_extras_more_active_mask[idx] & (1u8 << 2)) != 0;
     state.player_profiles[idx].judgment_tilt = judgment_tilt;
+    state.player_profiles[idx].column_cues = column_cues;
     state.player_profiles[idx].display_scorebox = display_scorebox;
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -3282,6 +3288,7 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
             crate::game::profile::PlayerSide::P2
         };
         crate::game::profile::update_judgment_tilt_for_side(side, judgment_tilt);
+        crate::game::profile::update_column_cues_for_side(side, column_cues);
         crate::game::profile::update_display_scorebox_for_side(side, display_scorebox);
     }
 

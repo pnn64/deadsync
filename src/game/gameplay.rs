@@ -44,6 +44,7 @@ const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
 // ScreenEvaluation matches ITGmania/Simply Love.
 const POST_SONG_DISPLAY_SECONDS: f32 = 5.0;
 const M_MOD_HIGH_CAP: f32 = 600.0;
+const COLUMN_CUE_MIN_SECONDS: f32 = 1.5;
 
 // Timing windows now sourced from game::timing
 
@@ -568,6 +569,19 @@ pub struct RowEntry {
     nonmine_note_indices: Vec<usize>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct ColumnCueColumn {
+    pub column: usize,
+    pub is_mine: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct ColumnCue {
+    pub start_time: f32,
+    pub duration: f32,
+    pub columns: Vec<ColumnCueColumn>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Arrow {
     #[allow(dead_code)]
@@ -626,6 +640,80 @@ pub struct ActiveHold {
 #[inline(always)]
 pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
     !active.let_go && active.life > 0.0
+}
+
+#[inline(always)]
+const fn column_cue_is_mine(note_type: NoteType) -> Option<bool> {
+    match note_type {
+        NoteType::Tap | NoteType::Hold | NoteType::Roll => Some(false),
+        NoteType::Mine => Some(true),
+        NoteType::Fake => None,
+    }
+}
+
+fn build_column_cues_for_player(
+    notes: &[Note],
+    note_range: (usize, usize),
+    note_time_cache: &[f32],
+    col_start: usize,
+    col_end: usize,
+    first_visible_time: f32,
+) -> Vec<ColumnCue> {
+    let (start, end) = note_range;
+    if start >= end || col_start >= col_end {
+        return Vec::new();
+    }
+
+    let mut column_times: Vec<(f32, Vec<ColumnCueColumn>)> = Vec::with_capacity(end - start);
+    let mut i = start;
+    while i < end {
+        let row = notes[i].row_index;
+        let mut row_time = 0.0_f32;
+        let mut has_row_time = false;
+        let mut columns = Vec::with_capacity(4);
+        while i < end && notes[i].row_index == row {
+            let note = &notes[i];
+            if note.column >= col_start
+                && note.column < col_end
+                && let Some(is_mine) = column_cue_is_mine(note.note_type)
+            {
+                if !has_row_time {
+                    row_time = note_time_cache[i];
+                    has_row_time = true;
+                }
+                columns.push(ColumnCueColumn {
+                    column: note.column,
+                    is_mine,
+                });
+            }
+            i += 1;
+        }
+        if has_row_time {
+            columns.sort_unstable_by_key(|c| c.column);
+            columns.dedup_by_key(|c| c.column);
+            column_times.push((row_time, columns));
+        }
+    }
+
+    let mut cues = Vec::with_capacity(column_times.len());
+    let mut prev_time = 0.0_f32;
+    for (time, columns) in column_times {
+        let duration = time - prev_time;
+        if duration >= COLUMN_CUE_MIN_SECONDS || prev_time == 0.0 {
+            cues.push(ColumnCue {
+                start_time: prev_time,
+                duration,
+                columns,
+            });
+        }
+        prev_time = time;
+    }
+
+    if first_visible_time < 0.0 && let Some(first) = cues.first_mut() {
+        first.duration -= first_visible_time;
+        first.start_time += first_visible_time;
+    }
+    cues
 }
 
 #[inline(always)]
@@ -1194,6 +1282,7 @@ pub struct State {
     pub next_mine_avoid_cursor: [usize; MAX_PLAYERS],
     pub row_entries: Vec<RowEntry>,
     pub measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS],
+    pub column_cues: [Vec<ColumnCue>; MAX_PLAYERS],
     pub mini_indicator_stream_segments: [Vec<StreamSegment>; MAX_PLAYERS],
     pub mini_indicator_total_stream_measures: [f32; MAX_PLAYERS],
     pub mini_indicator_target_score_percent: [f64; MAX_PLAYERS],
@@ -2320,6 +2409,22 @@ pub fn init(
         }
         player_profiles[player].reverse_scroll
     });
+    let mut column_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+    for player in 0..num_players {
+        let col_start = player.saturating_mul(cols_per_player);
+        let col_end = (col_start + cols_per_player).min(num_cols);
+        column_cues[player] = build_column_cues_for_player(
+            &notes,
+            note_ranges[player],
+            &note_time_cache,
+            col_start,
+            col_end,
+            current_music_time_visible[player],
+        );
+    }
+    if num_players == 1 {
+        column_cues[1] = column_cues[0].clone();
+    }
 
     let measure_densities: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|p| {
         if p >= num_players {
@@ -2514,6 +2619,7 @@ pub fn init(
         next_mine_avoid_cursor: note_range_start,
         row_entries,
         measure_counter_segments,
+        column_cues,
         mini_indicator_stream_segments,
         mini_indicator_total_stream_measures,
         mini_indicator_target_score_percent,

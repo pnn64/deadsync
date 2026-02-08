@@ -860,6 +860,7 @@ pub struct Profile {
     pub fa_plus_10ms_blue_window: bool,
     // Judgment tilt (Simply Love semantics).
     pub judgment_tilt: bool,
+    pub column_cues: bool,
     pub display_scorebox: bool,
     pub tilt_multiplier: f32,
     // Error bar (Simply Love semantics).
@@ -945,6 +946,7 @@ impl Default for Profile {
             show_fa_plus_pane: false,
             fa_plus_10ms_blue_window: false,
             judgment_tilt: false,
+            column_cues: false,
             display_scorebox: true,
             tilt_multiplier: 1.0,
             error_bar: ErrorBarStyle::default(),
@@ -1208,6 +1210,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             i32::from(default_profile.judgment_tilt)
         ));
         content.push_str(&format!(
+            "ColumnCues = {}\n",
+            i32::from(default_profile.column_cues)
+        ));
+        content.push_str(&format!(
             "DisplayScorebox = {}\n",
             i32::from(default_profile.display_scorebox)
         ));
@@ -1426,6 +1432,7 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         "JudgmentTilt={}\n",
         i32::from(profile.judgment_tilt)
     ));
+    content.push_str(&format!("ColumnCues={}\n", i32::from(profile.column_cues)));
     content.push_str(&format!(
         "DisplayScorebox={}\n",
         i32::from(profile.display_scorebox)
@@ -1666,6 +1673,10 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "JudgmentTilt")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.judgment_tilt, |v| v != 0);
+            profile.column_cues = profile_conf
+                .get("PlayerOptions", "ColumnCues")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.column_cues, |v| v != 0);
             profile.display_scorebox = profile_conf
                 .get("PlayerOptions", "DisplayScorebox")
                 .and_then(|s| s.parse::<u8>().ok())
@@ -2709,6 +2720,21 @@ pub fn update_judgment_tilt_for_side(side: PlayerSide, enabled: bool) {
             return;
         }
         profile.judgment_tilt = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_column_cues_for_side(side: PlayerSide, enabled: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.column_cues == enabled {
+            return;
+        }
+        profile.column_cues = enabled;
     }
     save_profile_ini_for_side(side);
 }
