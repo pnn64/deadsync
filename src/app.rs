@@ -2376,6 +2376,11 @@ impl App {
                     replay_status_text,
                 );
 
+                if let (Some(backend), Some(path)) =
+                    (self.backend.as_mut(), gs.song.banner_path.as_ref())
+                {
+                    self.asset_manager.ensure_texture_from_path(backend, path);
+                }
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
                 commands.push(Command::SetDynamicBackground(
                     gs.song.background_path.clone(),
