@@ -11,4 +11,5 @@ pub mod music_wheel;
 pub mod notefield;
 pub mod pad_display;
 pub mod screen_bar;
+pub mod sort_menu;
 pub mod stats_overlay;
