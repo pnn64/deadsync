@@ -2233,6 +2233,29 @@ impl App {
     ) -> Vec<Command> {
         let mut commands = Vec::new();
         if target == CurrentScreen::Gameplay {
+            let replay_pending =
+                select_music::take_pending_replay(&mut self.state.screens.select_music_state);
+            let replay_edges = replay_pending.as_ref().map(|payload| {
+                payload
+                    .replay
+                    .iter()
+                    .copied()
+                    .map(|e| crate::game::gameplay::ReplayInputEdge {
+                        lane_index: e.lane_index,
+                        pressed: e.pressed,
+                        source: e.source,
+                        event_music_time: e.event_music_time,
+                    })
+                    .collect::<Vec<_>>()
+            });
+            let replay_offsets = replay_pending.as_ref().map(|payload| {
+                crate::game::gameplay::ReplayOffsetSnapshot {
+                    beat0_time_seconds: payload.replay_beat0_time_seconds,
+                }
+            });
+            let replay_status_text = replay_pending.as_ref().map(|payload| {
+                format!("Autoplay - {} {:.2}%", payload.name, payload.score / 100.0)
+            });
             if let Some(po_state) = self.state.screens.player_options_state.take() {
                 let song_arc = po_state.song;
                 let play_style = profile::get_session_play_style();
@@ -2348,6 +2371,9 @@ impl App {
                     po_state.music_rate,
                     scroll_speeds,
                     po_state.player_profiles,
+                    replay_edges,
+                    replay_offsets,
+                    replay_status_text,
                 );
 
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
@@ -2362,6 +2388,11 @@ impl App {
 
         if target == CurrentScreen::Evaluation {
             let gameplay_results = self.state.screens.gameplay_state.take();
+            if let (Some(backend), Some(gs)) = (self.backend.as_mut(), gameplay_results.as_ref())
+                && let Some(path) = gs.song.banner_path.as_ref()
+            {
+                self.asset_manager.ensure_texture_from_path(backend, path);
+            }
             let color_idx = gameplay_results.as_ref().map_or(
                 self.state.screens.evaluation_state.active_color_index,
                 |gs| gs.active_color_index,

@@ -104,7 +104,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     {
         let mut status_lines: Vec<String> = Vec::with_capacity(2);
         if state.autoplay_enabled {
-            status_lines.push("AutoPlay".to_string());
+            if let Some(replay_text) = &state.replay_status_text {
+                status_lines.push(replay_text.clone());
+            } else {
+                status_lines.push("AutoPlay".to_string());
+            }
         }
         if let Some(msg) = &state.sync_overlay_message {
             status_lines.push(msg.clone());

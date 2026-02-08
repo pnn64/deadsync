@@ -1141,6 +1141,19 @@ pub struct RecordedLaneEdge {
     pub event_music_time: f32,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct ReplayInputEdge {
+    pub lane_index: u8,
+    pub pressed: bool,
+    pub source: InputSource,
+    pub event_music_time: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ReplayOffsetSnapshot {
+    pub beat0_time_seconds: f32,
+}
+
 pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
@@ -1201,6 +1214,7 @@ pub struct State {
     pub song_completed_naturally: bool,
     pub autoplay_enabled: bool,
     pub autoplay_used: bool,
+    replay_mode: bool,
 
     pub player_profiles: [profile::Profile; MAX_PLAYERS],
     pub noteskin: [Option<Noteskin>; MAX_PLAYERS],
@@ -1228,6 +1242,7 @@ pub struct State {
     pub total_elapsed_in_screen: f32,
 
     pub sync_overlay_message: Option<String>,
+    pub replay_status_text: Option<String>,
     danger_fx: [DangerFx; MAX_PLAYERS],
 
     pub density_graph_first_second: f32,
@@ -1261,6 +1276,8 @@ pub struct State {
     autoplay_pending_row: [Option<(usize, f32)>; MAX_PLAYERS],
     autoplay_lane_state: [bool; MAX_COLS],
     autoplay_hold_release_time: [Option<f32>; MAX_COLS],
+    replay_input: Vec<RecordedLaneEdge>,
+    replay_cursor: usize,
     pub replay_edges: Vec<RecordedLaneEdge>,
 
     log_timer: f32,
@@ -1278,7 +1295,7 @@ fn is_state_dead(state: &State, player: usize) -> bool {
 
 #[inline(always)]
 fn autoplay_blocks_scoring(state: &State) -> bool {
-    state.autoplay_enabled
+    state.autoplay_enabled && !state.replay_mode
 }
 
 #[inline(always)]
@@ -1841,6 +1858,9 @@ pub fn init(
     music_rate: f32,
     mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
     mut player_profiles: [profile::Profile; MAX_PLAYERS],
+    replay_edges: Option<Vec<ReplayInputEdge>>,
+    replay_offsets: Option<ReplayOffsetSnapshot>,
+    replay_status_text: Option<String>,
 ) -> State {
     info!("Initializing Gameplay Screen...");
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
@@ -1856,6 +1876,7 @@ pub fn init(
         profile::PlayStyle::Double => (8, 1, 8),
         profile::PlayStyle::Versus => (4, 2, 8),
     };
+    let replay_edges = replay_edges.unwrap_or_default();
     let mut charts = charts;
     if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
         scroll_speed[0] = scroll_speed[1];
@@ -1948,6 +1969,56 @@ pub fn init(
     });
     if num_players == 1 {
         timing_players[1] = timing_players[0].clone();
+    }
+    let mut replay_input = Vec::with_capacity(replay_edges.len());
+    let replay_offsets = replay_offsets.unwrap_or(ReplayOffsetSnapshot {
+        beat0_time_seconds: timing_players[0].get_time_for_beat(0.0),
+    });
+    let mut replay_out_of_order = false;
+    let mut replay_prev_time = f32::NEG_INFINITY;
+    for edge in replay_edges {
+        let lane = edge.lane_index as usize;
+        if lane >= num_cols || !edge.event_music_time.is_finite() {
+            continue;
+        }
+        let player = if num_players <= 1 || cols_per_player == 0 {
+            0
+        } else {
+            (lane / cols_per_player).min(num_players.saturating_sub(1))
+        };
+        let replay_beat0_shift = if replay_offsets.beat0_time_seconds.is_finite() {
+            timing_players[player].get_time_for_beat(0.0) - replay_offsets.beat0_time_seconds
+        } else {
+            0.0
+        };
+        let event_music_time = edge.event_music_time + replay_beat0_shift;
+        if !event_music_time.is_finite() {
+            continue;
+        }
+        if event_music_time < replay_prev_time {
+            replay_out_of_order = true;
+        }
+        replay_prev_time = event_music_time;
+        replay_input.push(RecordedLaneEdge {
+            lane_index: edge.lane_index,
+            pressed: edge.pressed,
+            source: edge.source,
+            event_music_time,
+        });
+    }
+    if replay_out_of_order {
+        replay_input.sort_by(|a, b| {
+            a.event_music_time
+                .partial_cmp(&b.event_music_time)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+    }
+    let replay_mode = !replay_input.is_empty();
+    if replay_mode {
+        info!(
+            "Gameplay replay mode enabled: {} recorded edges loaded.",
+            replay_input.len(),
+        );
     }
     let beat_info_cache = BeatInfoCache::new(&timing);
 
@@ -2456,8 +2527,9 @@ pub fn init(
         is_in_delay: false,
         possible_grade_points,
         song_completed_naturally: false,
-        autoplay_enabled: false,
-        autoplay_used: false,
+        autoplay_enabled: replay_mode,
+        autoplay_used: replay_mode,
+        replay_mode,
         player_profiles,
         noteskin,
         active_color_index,
@@ -2481,6 +2553,7 @@ pub fn init(
         mines_total,
         total_elapsed_in_screen: 0.0,
         sync_overlay_message: None,
+        replay_status_text,
         danger_fx: std::array::from_fn(|_| DangerFx::default()),
         density_graph_first_second,
         density_graph_last_second,
@@ -2512,6 +2585,8 @@ pub fn init(
         autoplay_pending_row: [None; MAX_PLAYERS],
         autoplay_lane_state: [false; MAX_COLS],
         autoplay_hold_release_time: [None; MAX_COLS],
+        replay_input,
+        replay_cursor: 0,
         replay_edges: Vec::with_capacity(4096),
         log_timer: 0.0,
     }
@@ -3819,6 +3894,35 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
     }
 }
 
+fn run_replay(state: &mut State, now_music_time: f32) {
+    if !state.autoplay_enabled || !state.replay_mode {
+        return;
+    }
+    while state.replay_cursor < state.replay_input.len() {
+        let edge = state.replay_input[state.replay_cursor];
+        if edge.event_music_time > now_music_time {
+            break;
+        }
+        state.replay_cursor += 1;
+        let col = edge.lane_index as usize;
+        if col >= state.num_cols {
+            continue;
+        }
+        let Some(lane) = lane_from_column(col) else {
+            continue;
+        };
+        push_input_edge(
+            state,
+            edge.source,
+            lane,
+            edge.pressed,
+            edge.event_music_time,
+            false,
+        );
+        state.autoplay_used = true;
+    }
+}
+
 pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool) -> ScreenAction {
     use winit::event::ElementState;
     use winit::keyboard::PhysicalKey;
@@ -4856,7 +4960,11 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         return ScreenAction::Navigate(Screen::Evaluation);
     }
 
-    run_autoplay(state, music_time_sec);
+    if state.replay_mode {
+        run_replay(state, music_time_sec);
+    } else {
+        run_autoplay(state, music_time_sec);
+    }
     process_input_edges(state);
     let num_cols = state.num_cols;
     let current_inputs: [bool; MAX_COLS] = std::array::from_fn(|i| {

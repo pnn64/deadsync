@@ -750,7 +750,7 @@ const LOCAL_SCORE_VERSION_V1: u16 = 1;
 
 #[derive(Debug, Clone, Copy, Encode, Decode)]
 struct LocalReplayEdgeV1 {
-    time_s: f32,
+    event_music_time: f32,
     lane: u8,
     pressed: bool,
     // 0 = Keyboard, 1 = Gamepad
@@ -778,6 +778,7 @@ struct LocalScoreEntryHeaderV1 {
     mines_total: u32,
     hands_achieved: u32,
     fail_time: Option<f32>,
+    beat0_time_seconds: f32,
 }
 
 #[derive(Debug, Clone, Encode, Decode)]
@@ -800,6 +801,7 @@ struct LocalScoreEntryV1 {
     mines_total: u32,
     hands_achieved: u32,
     fail_time: Option<f32>,
+    beat0_time_seconds: f32,
     replay: Vec<LocalReplayEdgeV1>,
 }
 
@@ -863,6 +865,17 @@ fn read_local_score_header(path: &Path) -> Option<LocalScoreEntryHeaderV1> {
         return None;
     }
     decode_local_score_header(&buf)
+}
+
+fn read_local_score_entry(path: &Path) -> Option<LocalScoreEntryV1> {
+    let bytes = fs::read(path).ok()?;
+    let (entry, _) =
+        bincode::decode_from_slice::<LocalScoreEntryV1, _>(&bytes, bincode::config::standard())
+            .ok()?;
+    if entry.version != LOCAL_SCORE_VERSION_V1 {
+        return None;
+    }
+    Some(entry)
 }
 
 fn scan_local_scores_dir(dir: &Path, index: &mut LocalScoreIndex) {
@@ -1077,6 +1090,7 @@ fn append_local_score_on_disk(
         mines_total: entry.mines_total,
         hands_achieved: entry.hands_achieved,
         fail_time: entry.fail_time,
+        beat0_time_seconds: entry.beat0_time_seconds,
     };
     let mut state = LOCAL_SCORE_CACHE.lock().unwrap();
     if let Some(idx) = state.loaded_profiles.get_mut(profile_id) {
@@ -1120,7 +1134,7 @@ fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalRepl
     out.reserve(gs.replay_edges.len().min(4096));
     for e in &gs.replay_edges {
         let lane = e.lane_index as usize;
-        if lane < col_start || lane >= col_end {
+        if lane < col_start || lane >= col_end || !e.event_music_time.is_finite() {
             continue;
         }
         let source = match e.source {
@@ -1128,7 +1142,7 @@ fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalRepl
             InputSource::Gamepad => 1,
         };
         out.push(LocalReplayEdgeV1 {
-            time_s: e.event_music_time,
+            event_music_time: e.event_music_time,
             lane: (lane - col_start) as u8,
             pressed: e.pressed,
             source,
@@ -1239,6 +1253,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             mines_total: gs.mines_total[player_idx],
             hands_achieved: p.hands_achieved,
             fail_time: p.fail_time,
+            beat0_time_seconds: gs.timing_players[player_idx].get_time_for_beat(0.0),
             replay,
         };
 
@@ -1262,6 +1277,25 @@ pub struct LeaderboardEntry {
     pub is_rival: bool,
     pub is_self: bool,
     pub is_fail: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ReplayEdge {
+    pub event_music_time: f32,
+    pub lane_index: u8,
+    pub pressed: bool,
+    pub source: InputSource,
+}
+
+#[derive(Debug, Clone)]
+pub struct MachineReplayEntry {
+    pub rank: u32,
+    pub name: String,
+    pub score: f64, // 0..10000
+    pub date: String,
+    pub is_fail: bool,
+    pub replay_beat0_time_seconds: f32,
+    pub replay: Vec<ReplayEdge>,
 }
 
 #[derive(Debug, Clone)]
@@ -1461,6 +1495,16 @@ struct MachineLeaderboardPlay {
     is_fail: bool,
 }
 
+#[derive(Debug)]
+struct MachineReplayPlay {
+    initials: String,
+    score_percent: f64,
+    played_at_ms: i64,
+    is_fail: bool,
+    replay_beat0_time_seconds: f32,
+    replay: Vec<LocalReplayEdgeV1>,
+}
+
 fn push_machine_leaderboard_from_dir(
     dir: &Path,
     chart_hash: &str,
@@ -1493,6 +1537,44 @@ fn push_machine_leaderboard_from_dir(
             score_percent: h.score_percent,
             played_at_ms,
             is_fail: grade_from_code(h.grade_code) == Grade::Failed || h.fail_time.is_some(),
+        });
+    }
+}
+
+fn push_machine_replays_from_dir(
+    dir: &Path,
+    chart_hash: &str,
+    initials: &str,
+    out: &mut Vec<MachineReplayPlay>,
+) {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let Some((file_hash, played_at_ms)) = parse_local_score_filename(name) else {
+            continue;
+        };
+        if file_hash != chart_hash {
+            continue;
+        }
+        let Some(full) = read_local_score_entry(&path) else {
+            continue;
+        };
+        out.push(MachineReplayPlay {
+            initials: initials.to_string(),
+            score_percent: full.score_percent,
+            played_at_ms,
+            is_fail: grade_from_code(full.grade_code) == Grade::Failed || full.fail_time.is_some(),
+            replay_beat0_time_seconds: full.beat0_time_seconds,
+            replay: full.replay,
         });
     }
 }
@@ -1541,6 +1623,62 @@ pub fn get_machine_leaderboard_local(
             is_rival: false,
             is_self: false,
             is_fail: play.is_fail,
+        });
+    }
+    out
+}
+
+pub fn get_machine_replays_local(chart_hash: &str, max_entries: usize) -> Vec<MachineReplayEntry> {
+    if chart_hash.trim().is_empty() || max_entries == 0 {
+        return Vec::new();
+    }
+
+    let mut plays: Vec<MachineReplayPlay> = Vec::new();
+    for profile_meta in profile::scan_local_profiles() {
+        let initials =
+            profile_initials_for_id(&profile_meta.id).unwrap_or_else(|| "----".to_string());
+        let root = local_scores_root_for_profile(&profile_meta.id);
+        push_machine_replays_from_dir(&root, chart_hash, &initials, &mut plays);
+        let shard_dir = root.join(shard2_for_hash(chart_hash));
+        push_machine_replays_from_dir(&shard_dir, chart_hash, &initials, &mut plays);
+    }
+
+    plays.sort_by(|a, b| {
+        b.score_percent
+            .partial_cmp(&a.score_percent)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| b.played_at_ms.cmp(&a.played_at_ms))
+            .then_with(|| a.initials.cmp(&b.initials))
+    });
+
+    let take_len = max_entries.min(plays.len());
+    let mut out = Vec::with_capacity(take_len);
+    for (i, play) in plays.into_iter().take(take_len).enumerate() {
+        let mut replay = Vec::with_capacity(play.replay.len());
+        for edge in play.replay {
+            if !edge.event_music_time.is_finite() {
+                continue;
+            }
+            let source = if edge.source == 1 {
+                InputSource::Gamepad
+            } else {
+                InputSource::Keyboard
+            };
+            replay.push(ReplayEdge {
+                event_music_time: edge.event_music_time,
+                lane_index: edge.lane,
+                pressed: edge.pressed,
+                source,
+            });
+        }
+        out.push(MachineReplayEntry {
+            rank: (i as u32).saturating_add(1),
+            name: play.initials,
+            score: (play.score_percent * 10000.0).round(),
+            date: local_score_date_string(play.played_at_ms),
+            is_fail: play.is_fail,
+            replay_beat0_time_seconds: play.replay_beat0_time_seconds,
+            replay,
         });
     }
     out

@@ -439,6 +439,8 @@ pub struct State {
     reload_ui: Option<ReloadUiState>,
     song_search: sort_menu::SongSearchState,
     song_search_ignore_next_back_select: bool,
+    replay_overlay: sort_menu::ReplayOverlayState,
+    pending_replay: Option<sort_menu::ReplayStartPayload>,
     sort_menu: sort_menu::State,
     leaderboard: sort_menu::LeaderboardOverlayState,
     sort_mode: WheelSortMode,
@@ -1057,6 +1059,8 @@ pub fn init() -> State {
         reload_ui: None,
         song_search: sort_menu::SongSearchState::Hidden,
         song_search_ignore_next_back_select: false,
+        replay_overlay: sort_menu::ReplayOverlayState::Hidden,
+        pending_replay: None,
         sort_menu: sort_menu::State::Hidden,
         leaderboard: sort_menu::LeaderboardOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
@@ -1298,6 +1302,7 @@ fn start_song_search_prompt(state: &mut State) {
     clear_preview(state);
     state.sort_menu = sort_menu::State::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.menu_chord_mask = 0;
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
@@ -1373,6 +1378,7 @@ fn start_reload_songs_and_courses(state: &mut State) {
     clear_preview(state);
     state.sort_menu = sort_menu::State::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.menu_chord_mask = 0;
     state.chord_mask_p1 = 0;
     state.chord_mask_p2 = 0;
@@ -1617,9 +1623,27 @@ fn show_leaderboard_overlay(state: &mut State) {
     let chart_hash_p1 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P1);
     let chart_hash_p2 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P2);
     if let Some(overlay) = sort_menu::show_leaderboard_overlay(chart_hash_p1, chart_hash_p2) {
+        state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
         state.leaderboard = overlay;
         clear_preview(state);
     }
+}
+
+fn show_replay_overlay(state: &mut State) {
+    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+        return;
+    };
+    let side = profile::get_session_player_side();
+    let Some(chart_hash) = selected_chart_hash_for_side(state, song, side) else {
+        return;
+    };
+    let overlay = sort_menu::begin_replay_overlay(&chart_hash);
+    if matches!(overlay, sort_menu::ReplayOverlayState::Hidden) {
+        return;
+    }
+    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.replay_overlay = overlay;
+    clear_preview(state);
 }
 
 fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -1634,6 +1658,26 @@ fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
     }
 
     ScreenAction::None
+}
+
+fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    match sort_menu::handle_replay_input(&mut state.replay_overlay, ev) {
+        sort_menu::ReplayInputOutcome::ChangedSelection => {
+            audio::play_sfx("assets/sounds/change.ogg");
+            ScreenAction::None
+        }
+        sort_menu::ReplayInputOutcome::Closed => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            ScreenAction::None
+        }
+        sort_menu::ReplayInputOutcome::StartGameplay(payload) => {
+            state.pending_replay = Some(payload);
+            state.out_prompt = OutPromptState::None;
+            audio::play_sfx("assets/sounds/start.ogg");
+            ScreenAction::Navigate(Screen::Gameplay)
+        }
+        sort_menu::ReplayInputOutcome::None => ScreenAction::None,
+    }
 }
 
 fn sort_menu_activate(state: &mut State) {
@@ -1667,6 +1711,10 @@ fn sort_menu_activate(state: &mut State) {
         sort_menu::Action::ReloadSongsCourses => {
             hide_sort_menu(state);
             start_reload_songs_and_courses(state);
+        }
+        sort_menu::Action::PlayReplay => {
+            hide_sort_menu(state);
+            show_replay_overlay(state);
         }
         sort_menu::Action::ShowLeaderboard => {
             hide_sort_menu(state);
@@ -2057,6 +2105,20 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
+    if !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden) {
+        if key.state == ElementState::Pressed
+            && matches!(
+                key.physical_key,
+                winit::keyboard::PhysicalKey::Code(KeyCode::Escape)
+            )
+        {
+            state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+            state.song_search_ignore_next_back_select = true;
+            return ScreenAction::None;
+        }
+        return ScreenAction::None;
+    }
+
     if key.state == ElementState::Pressed {
         if matches!(state.song_search, sort_menu::SongSearchState::Results(_))
             && let winit::keyboard::PhysicalKey::Code(KeyCode::Escape) = key.physical_key
@@ -2158,6 +2220,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     if !matches!(state.song_search, sort_menu::SongSearchState::Hidden) {
         return handle_song_search_input(state, ev);
+    }
+
+    if !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden) {
+        return handle_replay_overlay_input(state, ev);
     }
 
     if state.exit_prompt != ExitPromptState::None {
@@ -2276,6 +2342,9 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
 
     if sort_menu::update_song_search(&mut state.song_search, dt) {
+        return ScreenAction::None;
+    }
+    if sort_menu::update_replay_overlay(&mut state.replay_overlay, dt) {
         return ScreenAction::None;
     }
 
@@ -2398,6 +2467,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.leaderboard,
             sort_menu::LeaderboardOverlayState::Hidden
         )
+        || !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden)
     {
         if state.currently_playing_preview_path.is_some() {
             clear_preview(state);
@@ -2608,6 +2678,10 @@ pub fn prime_displayed_chart_data(state: &mut State) {
     }
     state.displayed_chart_p1 = None;
     state.displayed_chart_p2 = None;
+}
+
+pub fn take_pending_replay(state: &mut State) -> Option<sort_menu::ReplayStartPayload> {
+    state.pending_replay.take()
 }
 
 // Fast non-allocating formatters where possible
@@ -3501,6 +3575,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         sort_menu::build_song_search_overlay(&state.song_search, state.active_color_index)
     {
         actors.extend(song_search_overlay);
+        return actors;
+    }
+    if let Some(replay_overlay) =
+        sort_menu::build_replay_overlay(&state.replay_overlay, state.active_color_index)
+    {
+        actors.extend(replay_overlay);
         return actors;
     }
 
