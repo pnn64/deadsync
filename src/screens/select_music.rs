@@ -130,6 +130,10 @@ const SL_SORT_MENU_VISIBLE_ROWS: usize = SL_SORT_MENU_WHEEL_SLOTS - 2;
 const SL_SONG_SEARCH_PROMPT_TITLE: &str = "Song Search";
 const SL_SONG_SEARCH_PROMPT_HINT: &str = "'pack/song' format will search for songs in specific packs\n'[###]' format will search for BPMs/Difficulties";
 const SL_SONG_SEARCH_PROMPT_MAX_LEN: usize = 30;
+const SL_SONG_SEARCH_TEXT_ENTRY_W: f32 = 620.0;
+const SL_SONG_SEARCH_TEXT_ENTRY_H: f32 = 190.0;
+const SL_SONG_SEARCH_TEXT_ENTRY_CURSOR_PERIOD: f32 = 1.0;
+const SL_SONG_SEARCH_TEXT_ENTRY_FOOTER: &str = "START/ENTER: SEARCH    BACK/SELECT/ESC: CANCEL";
 const SL_SONG_SEARCH_PANE_W: f32 = 319.0;
 const SL_SONG_SEARCH_PANE_H: f32 = 319.0;
 const SL_SONG_SEARCH_PANE_BORDER: f32 = 2.0;
@@ -477,9 +481,15 @@ struct SongSearchResultsState {
 }
 
 #[derive(Clone, Debug)]
+struct SongSearchTextEntryState {
+    query: String,
+    blink_t: f32,
+}
+
+#[derive(Clone, Debug)]
 enum SongSearchState {
     Hidden,
-    Prompt { query: String },
+    TextEntry(SongSearchTextEntryState),
     Results(SongSearchResultsState),
 }
 
@@ -608,6 +618,7 @@ pub struct State {
     exit_prompt: ExitPromptState,
     reload_ui: Option<ReloadUiState>,
     song_search: SongSearchState,
+    song_search_ignore_next_back_select: bool,
     sort_menu: SortMenuState,
     leaderboard: LeaderboardOverlayState,
     sort_mode: WheelSortMode,
@@ -1225,6 +1236,7 @@ pub fn init() -> State {
         exit_prompt: ExitPromptState::None,
         reload_ui: None,
         song_search: SongSearchState::Hidden,
+        song_search_ignore_next_back_select: false,
         sort_menu: SortMenuState::Hidden,
         leaderboard: LeaderboardOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
@@ -1696,14 +1708,21 @@ fn start_song_search_prompt(state: &mut State) {
     state.menu_chord_mask = 0;
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
-    state.song_search = SongSearchState::Prompt {
+    state.song_search = SongSearchState::TextEntry(SongSearchTextEntryState {
         query: String::new(),
-    };
+        blink_t: 0.0,
+    });
 }
 
 #[inline(always)]
 fn close_song_search(state: &mut State) {
     state.song_search = SongSearchState::Hidden;
+}
+
+#[inline(always)]
+fn cancel_song_search(state: &mut State) {
+    state.song_search = SongSearchState::Hidden;
+    state.song_search_ignore_next_back_select = true;
 }
 
 fn start_song_search_results(state: &mut State, search_text: String) {
@@ -2349,16 +2368,14 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
     let mut prompt_start: Option<String> = None;
     let mut prompt_close = false;
     match &mut state.song_search {
-        SongSearchState::Prompt { query } => match ev.action {
+        SongSearchState::TextEntry(entry) => match ev.action {
             VirtualAction::p1_start | VirtualAction::p2_start => {
-                audio::play_sfx("assets/sounds/start.ogg");
-                prompt_start = Some(query.clone());
+                prompt_start = Some(entry.query.clone());
             }
             VirtualAction::p1_back
             | VirtualAction::p2_back
             | VirtualAction::p1_select
             | VirtualAction::p2_select => {
-                audio::play_sfx("assets/sounds/start.ogg");
                 prompt_close = true;
             }
             _ => {}
@@ -2400,7 +2417,7 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
                 | VirtualAction::p2_back
                 | VirtualAction::p1_select
                 | VirtualAction::p2_select => {
-                    close_song_search(state);
+                    cancel_song_search(state);
                 }
                 _ => {}
             }
@@ -2413,7 +2430,7 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         return ScreenAction::None;
     }
     if prompt_close {
-        close_song_search(state);
+        cancel_song_search(state);
         return ScreenAction::None;
     }
 
@@ -2694,26 +2711,23 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         if matches!(state.song_search, SongSearchState::Results(_))
             && let winit::keyboard::PhysicalKey::Code(KeyCode::Escape) = key.physical_key
         {
-            audio::play_sfx("assets/sounds/start.ogg");
-            close_song_search(state);
+            cancel_song_search(state);
             return ScreenAction::None;
         }
         let mut prompt_start: Option<String> = None;
         let mut prompt_close = false;
-        if let SongSearchState::Prompt { query } = &mut state.song_search {
+        if let SongSearchState::TextEntry(entry) = &mut state.song_search {
             if let winit::keyboard::PhysicalKey::Code(code) = key.physical_key {
                 match code {
                     KeyCode::Backspace => {
-                        let _ = query.pop();
+                        let _ = entry.query.pop();
                         return ScreenAction::None;
                     }
                     KeyCode::Escape => {
-                        audio::play_sfx("assets/sounds/start.ogg");
                         prompt_close = true;
                     }
                     KeyCode::Enter | KeyCode::NumpadEnter => {
-                        audio::play_sfx("assets/sounds/start.ogg");
-                        prompt_start = Some(query.clone());
+                        prompt_start = Some(entry.query.clone());
                     }
                     _ => {}
                 }
@@ -2723,7 +2737,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
                 && prompt_start.is_none()
                 && let Some(text) = key.text.as_ref()
             {
-                let mut len = query.chars().count();
+                let mut len = entry.query.chars().count();
                 for ch in text.chars() {
                     if ch.is_control() {
                         continue;
@@ -2731,7 +2745,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
                     if len >= SL_SONG_SEARCH_PROMPT_MAX_LEN {
                         break;
                     }
-                    query.push(ch);
+                    entry.query.push(ch);
                     len += 1;
                 }
             }
@@ -2741,7 +2755,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
                 return ScreenAction::None;
             }
             if prompt_close {
-                close_song_search(state);
+                cancel_song_search(state);
                 return ScreenAction::None;
             }
             return ScreenAction::None;
@@ -2781,6 +2795,25 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.out_prompt = OutPromptState::EnteringOptions { elapsed: 0.0 };
         }
         return ScreenAction::None;
+    }
+
+    if matches!(state.song_search, SongSearchState::Hidden)
+        && state.song_search_ignore_next_back_select
+    {
+        if matches!(
+            ev.action,
+            VirtualAction::p1_back
+                | VirtualAction::p2_back
+                | VirtualAction::p1_select
+                | VirtualAction::p2_select
+        ) {
+            state.song_search_ignore_next_back_select = false;
+            if ev.pressed {
+                return ScreenAction::None;
+            }
+        } else if ev.pressed {
+            state.song_search_ignore_next_back_select = false;
+        }
     }
 
     if !matches!(state.song_search, SongSearchState::Hidden) {
@@ -2908,7 +2941,9 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         }
         return ScreenAction::None;
     }
-    if matches!(state.song_search, SongSearchState::Prompt { .. }) {
+    if let SongSearchState::TextEntry(entry) = &mut state.song_search {
+        let dt = dt.max(0.0);
+        entry.blink_t = (entry.blink_t + dt) % SL_SONG_SEARCH_TEXT_ENTRY_CURSOR_PERIOD;
         return ScreenAction::None;
     }
 
@@ -4185,12 +4220,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             z(1450)
         ));
         match &state.song_search {
-            SongSearchState::Prompt { query } => {
+            SongSearchState::TextEntry(entry) => {
                 let cx = screen_center_x();
                 let cy = screen_center_y();
-                let panel_w = 720.0;
-                let panel_h = 220.0;
-                let query_text = format!("> {query}");
+                let panel_w = SL_SONG_SEARCH_TEXT_ENTRY_W.min(screen_width() * 0.9);
+                let panel_h = SL_SONG_SEARCH_TEXT_ENTRY_H;
+                let cursor = if entry.blink_t < SL_SONG_SEARCH_TEXT_ENTRY_CURSOR_PERIOD * 0.5 {
+                    "▮"
+                } else {
+                    " "
+                };
+                let mut value = entry.query.clone();
+                if value.chars().count() < SL_SONG_SEARCH_PROMPT_MAX_LEN {
+                    value.push_str(cursor);
+                }
+                let query_text = format!("> {value}");
 
                 actors.push(act!(quad:
                     align(0.5, 0.5):
@@ -4203,15 +4247,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     align(0.5, 0.5):
                     xy(cx, cy):
                     zoomto(panel_w, panel_h):
-                    diffuse(0.0, 0.0, 0.0, 1.0):
+                    diffuse(0.12, 0.12, 0.12, 1.0):
                     z(1452)
                 ));
                 actors.push(act!(text:
                     font("wendy"):
                     settext(SL_SONG_SEARCH_PROMPT_TITLE):
                     align(0.5, 0.5):
-                    xy(cx, cy - 78.0):
-                    zoom(0.52):
+                    xy(cx, cy - panel_h * 0.5 + 22.0):
+                    zoom(0.42):
                     diffuse(1.0, 1.0, 1.0, 1.0):
                     z(1453):
                     horizalign(center)
@@ -4220,9 +4264,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     font("miso"):
                     settext(SL_SONG_SEARCH_PROMPT_HINT):
                     align(0.5, 0.5):
-                    xy(cx, cy - 20.0):
-                    zoom(0.8):
-                    maxwidth(670.0):
+                    xy(cx, cy - 28.0):
+                    zoom(0.78):
+                    maxwidth(panel_w - 40.0):
                     diffuse(0.8, 0.8, 0.8, 1.0):
                     z(1453):
                     horizalign(center)
@@ -4231,19 +4275,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     font("miso"):
                     settext(query_text):
                     align(0.5, 0.5):
-                    xy(cx, cy + 48.0):
-                    zoom(0.95):
-                    maxwidth(650.0):
+                    xy(cx, cy + 30.0):
+                    zoom(1.05):
+                    maxwidth(panel_w - 36.0):
                     diffuse(0.4, 1.0, 0.4, 1.0):
                     z(1453):
                     horizalign(center)
                 ));
                 actors.push(act!(text:
-                    font("wendy"):
-                    settext("Press ENTER/START to search, BACK/SELECT to cancel"):
+                    font("miso"):
+                    settext(SL_SONG_SEARCH_TEXT_ENTRY_FOOTER):
                     align(0.5, 0.5):
-                    xy(cx, cy + 88.0):
-                    zoom(0.24):
+                    xy(cx, cy + panel_h * 0.5 - 16.0):
+                    zoom(0.78):
                     diffuse(0.75, 0.75, 0.75, 1.0):
                     z(1453):
                     horizalign(center)
