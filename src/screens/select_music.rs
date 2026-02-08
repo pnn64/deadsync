@@ -1392,6 +1392,14 @@ fn try_open_sort_menu(state: &mut State) -> bool {
     if state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
         == (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
     {
+        // Simply Love parity: Left+Right / MenuLeft+MenuRight code opens SortMenu
+        // without leaving the current wheel selection. Our input path moves on the
+        // first press, so cancel that first move before opening the menu.
+        match state.nav_key_held_direction {
+            Some(NavDirection::Left) => music_wheel_change(state, 1),
+            Some(NavDirection::Right) => music_wheel_change(state, -1),
+            None => {}
+        }
         show_sort_menu(state);
         true
     } else {
