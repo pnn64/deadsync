@@ -1524,14 +1524,40 @@ fn song_search_bpm_tier(bpm: f64) -> i32 {
     (((bpm + 0.5) / 10.0).floor() as i32) * 10
 }
 
+fn song_search_display_bpm_range(song: &SongData) -> Option<(f64, f64)> {
+    let s = song.display_bpm.trim();
+    if !s.is_empty() && s != "*" {
+        let parts: Vec<&str> = s.split([':', '-']).map(str::trim).collect();
+        if parts.len() == 2 {
+            if let (Ok(a), Ok(b)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
+                let lo = a.min(b);
+                let hi = a.max(b);
+                if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
+                    return Some((lo, hi));
+                }
+            }
+        } else if let Ok(v) = s.parse::<f64>()
+            && v.is_finite()
+            && v > 0.0
+        {
+            return Some((v, v));
+        }
+    }
+    let lo = song.min_bpm;
+    let hi = song.max_bpm;
+    if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
+        Some((lo.min(hi), lo.max(hi)))
+    } else {
+        None
+    }
+}
+
 fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> String {
     const ORDER: [&str; 5] = ["beginner", "easy", "medium", "hard", "challenge"];
     let mut out = String::new();
     for diff in ORDER {
         if let Some(chart) = song.charts.iter().find(|c| {
-            c.chart_type.eq_ignore_ascii_case(chart_type)
-                && c.difficulty.eq_ignore_ascii_case(diff)
-                && !c.notes.is_empty()
+            c.chart_type.eq_ignore_ascii_case(chart_type) && c.difficulty.eq_ignore_ascii_case(diff)
         }) {
             if !out.is_empty() {
                 out.push_str("   ");
@@ -1577,13 +1603,11 @@ fn parse_song_search_filter(input: &str) -> SongSearchFilter {
 
     let stripped = stripped.trim();
     if let Some((left, right)) = stripped.split_once('/') {
-        let pack = left.trim();
-        let song = right.trim();
-        if !pack.is_empty() {
-            filter.pack_term = Some(pack.to_string());
+        if !left.is_empty() {
+            filter.pack_term = Some(left.to_string());
         }
-        if !song.is_empty() {
-            filter.song_term = Some(song.to_string());
+        if !right.is_empty() {
+            filter.song_term = Some(right.to_string());
         }
     } else if !stripped.is_empty() {
         filter.song_term = Some(stripped.to_string());
@@ -1606,7 +1630,7 @@ fn build_song_search_candidates(state: &State, search_text: &str) -> Vec<SongSea
                 if !song
                     .charts
                     .iter()
-                    .any(|c| c.chart_type.eq_ignore_ascii_case(chart_type) && !c.notes.is_empty())
+                    .any(|c| c.chart_type.eq_ignore_ascii_case(chart_type))
                 {
                     continue;
                 }
@@ -1630,7 +1654,6 @@ fn build_song_search_candidates(state: &State, search_text: &str) -> Vec<SongSea
                     && !song.charts.iter().any(|c| {
                         c.chart_type.eq_ignore_ascii_case(chart_type)
                             && !c.difficulty.eq_ignore_ascii_case("edit")
-                            && !c.notes.is_empty()
                             && c.meter == diff as u32
                     })
                 {
@@ -1638,8 +1661,11 @@ fn build_song_search_candidates(state: &State, search_text: &str) -> Vec<SongSea
                 }
 
                 if let Some(want_tier) = filter.bpm_tier {
-                    let mut lo = song_search_bpm_tier(song.min_bpm);
-                    let mut hi = song_search_bpm_tier(song.max_bpm);
+                    let Some((bpm_lo, bpm_hi)) = song_search_display_bpm_range(song) else {
+                        continue;
+                    };
+                    let mut lo = song_search_bpm_tier(bpm_lo);
+                    let mut hi = song_search_bpm_tier(bpm_hi);
                     if lo > hi {
                         std::mem::swap(&mut lo, &mut hi);
                     }
@@ -2350,9 +2376,7 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
                 | VirtualAction::p2_menu_up
                 | VirtualAction::p2_left
                 | VirtualAction::p2_menu_left => {
-                    if song_search_move(results, -1) {
-                        audio::play_sfx("assets/sounds/change.ogg");
-                    }
+                    let _ = song_search_move(results, -1);
                 }
                 VirtualAction::p1_down
                 | VirtualAction::p1_menu_down
@@ -2362,23 +2386,20 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
                 | VirtualAction::p2_menu_down
                 | VirtualAction::p2_right
                 | VirtualAction::p2_menu_right => {
-                    if song_search_move(results, 1) {
-                        audio::play_sfx("assets/sounds/change.ogg");
-                    }
+                    let _ = song_search_move(results, 1);
                 }
                 VirtualAction::p1_start | VirtualAction::p2_start => {
                     let picked = song_search_focused_candidate(results).map(|c| c.song.clone());
-                    audio::play_sfx("assets/sounds/start.ogg");
                     close_song_search(state);
                     if let Some(song) = picked {
                         focus_song_from_search(state, &song);
+                        refresh_after_reload(state);
                     }
                 }
                 VirtualAction::p1_back
                 | VirtualAction::p2_back
                 | VirtualAction::p1_select
                 | VirtualAction::p2_select => {
-                    audio::play_sfx("assets/sounds/start.ogg");
                     close_song_search(state);
                 }
                 _ => {}
@@ -4321,21 +4342,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         .mul_add(SL_SONG_SEARCH_ROW_SPACING, list_base_y);
                     let focused = slot_pos.abs() < 0.5;
                     let mut text = "Exit".to_string();
-                    let mut color_rgba = [1.0, 0.2, 0.2, 1.0];
+                    let mut base_rgb = [1.0, 0.2, 0.2];
                     if row_idx < results.candidates.len() {
                         let song = &results.candidates[row_idx].song;
                         text = song.display_title(false).to_string();
-                        color_rgba = [1.0, 1.0, 1.0, 1.0];
+                        base_rgb = [1.0, 1.0, 1.0];
                     }
-                    if focused {
-                        color_rgba[0] = selected_color[0];
-                        color_rgba[1] = selected_color[1];
-                        color_rgba[2] = selected_color[2];
+                    let focus_tint = if focused {
+                        [selected_color[0], selected_color[1], selected_color[2]]
                     } else {
-                        color_rgba[0] *= 0.533;
-                        color_rgba[1] *= 0.533;
-                        color_rgba[2] *= 0.533;
-                    }
+                        [0.533, 0.533, 0.533]
+                    };
+                    let mut color_rgba = [
+                        base_rgb[0] * focus_tint[0],
+                        base_rgb[1] * focus_tint[1],
+                        base_rgb[2] * focus_tint[2],
+                        1.0,
+                    ];
                     let alpha = [0.0, 1.0]
                         [(slot_idx > 0 && slot_idx + 1 < SL_SONG_SEARCH_WHEEL_SLOTS) as usize];
                     color_rgba[3] *= alpha;
@@ -4344,8 +4367,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         settext(text):
                         align(0.5, 0.5):
                         xy(list_x, y):
-                        maxwidth(310.0):
-                        zoom([0.9, 1.0][focused as usize]):
+                        maxwidth(155.0):
+                        zoom(1.0):
                         diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3]):
                         z(1454):
                         horizalign(center)
@@ -4370,15 +4393,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         ),
                     ];
                     for (i, (label, value)) in details.iter().enumerate() {
-                        let y = pane_cy - SL_SONG_SEARCH_PANE_H * 0.5
-                            + (SL_SONG_SEARCH_TEXT_H * 0.8 + 8.0) * (i as f32 * 2.0 + 1.0);
+                        let zoom = 0.8;
+                        let row_i = i as f32;
+                        let label_row = row_i * 2.0 + 1.0;
+                        let value_row = row_i * 2.0 + 2.0;
+                        let label_y = pane_cy - SL_SONG_SEARCH_PANE_H * 0.5
+                            + SL_SONG_SEARCH_TEXT_H * zoom * label_row
+                            + 8.0 * label_row;
+                        let value_y = pane_cy - SL_SONG_SEARCH_PANE_H * 0.5
+                            + SL_SONG_SEARCH_TEXT_H * zoom * value_row
+                            + 8.0 * value_row;
                         actors.push(act!(text:
                             font("miso"):
                             settext(format!("{label}:")):
                             align(0.0, 0.5):
-                            xy(pane_cx + 10.0, y):
-                            zoom(0.64):
-                            maxwidth(180.0):
+                            xy(pane_cx + 10.0, label_y):
+                            zoom(zoom):
+                            maxwidth(145.0 / zoom):
                             diffuse(0.67, 0.67, 1.0, 1.0):
                             z(1454):
                             horizalign(left)
@@ -4387,9 +4418,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             font("miso"):
                             settext(value):
                             align(0.0, 0.5):
-                            xy(pane_cx + 40.0, y + 13.0):
-                            zoom(0.64):
-                            maxwidth(210.0):
+                            xy(pane_cx + 40.0, value_y):
+                            zoom(zoom):
+                            maxwidth(115.0 / zoom):
                             diffuse(1.0, 1.0, 1.0, 1.0):
                             z(1454):
                             horizalign(left)
