@@ -407,6 +407,13 @@ impl AssetManager {
             ("circle.png".to_string(), "circle.png".to_string()),
             ("swoosh.png".to_string(), "swoosh.png".to_string()),
             ("heart.png".to_string(), "heart.png".to_string()),
+            ("GrooveStats.png".to_string(), "GrooveStats.png".to_string()),
+            ("ITL.png".to_string(), "ITL.png".to_string()),
+            ("crown.png".to_string(), "crown.png".to_string()),
+            (
+                "SRPG9_logo_alt (doubleres).png".to_string(),
+                "SRPG9_logo_alt (doubleres).png".to_string(),
+            ),
             (
                 "combo_explosion.png".to_string(),
                 "combo_explosion.png".to_string(),

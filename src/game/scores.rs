@@ -457,14 +457,7 @@ pub fn get_cached_score_for_side(
     chart_hash: &str,
     side: profile::PlayerSide,
 ) -> Option<CachedScore> {
-    let profile_id = profile::active_local_profile_id_for_side(side)?;
-    ensure_local_score_cache_loaded(&profile_id);
-    let local = LOCAL_SCORE_CACHE
-        .lock()
-        .unwrap()
-        .loaded_profiles
-        .get(&profile_id)
-        .and_then(|idx| idx.best_itg.get(chart_hash).copied());
+    let local = get_cached_local_score_for_side(chart_hash, side);
     let gs = get_cached_gs_score_for_side(chart_hash, side);
     match (local, gs) {
         (None, None) => None,
@@ -472,6 +465,39 @@ pub fn get_cached_score_for_side(
         (None, Some(b)) => Some(b),
         (Some(a), Some(b)) => Some(if is_better_itg(&a, &b) { a } else { b }),
     }
+}
+
+pub fn get_cached_local_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<CachedScore> {
+    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    ensure_local_score_cache_loaded(&profile_id);
+    LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(&profile_id)
+        .and_then(|idx| idx.best_itg.get(chart_hash).copied())
+}
+
+#[inline(always)]
+pub fn is_gs_get_scores_service_allowed() -> bool {
+    if !crate::config::get().enable_groovestats {
+        return false;
+    }
+    matches!(
+        network::get_status(),
+        network::ConnectionStatus::Connected(services) if services.get_scores
+    )
+}
+
+#[inline(always)]
+pub fn is_gs_active_for_side(side: profile::PlayerSide) -> bool {
+    if !is_gs_get_scores_service_allowed() || !profile::is_session_side_joined(side) {
+        return false;
+    }
+    !profile::get_for_side(side).groovestats_api_key.trim().is_empty()
 }
 
 pub fn get_machine_record_local(chart_hash: &str) -> Option<(String, CachedScore)> {
@@ -1272,6 +1298,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
 pub struct LeaderboardEntry {
     pub rank: u32,
     pub name: String,
+    pub machine_tag: Option<String>,
     pub score: f64, // 0..10000
     pub date: String,
     pub is_rival: bool,
@@ -1311,6 +1338,36 @@ pub struct PlayerLeaderboardData {
     pub panes: Vec<LeaderboardPane>,
 }
 
+#[derive(Debug, Clone)]
+pub struct CachedPlayerLeaderboardData {
+    pub loading: bool,
+    pub data: Option<PlayerLeaderboardData>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct PlayerLeaderboardCacheKey {
+    chart_hash: String,
+    api_key: String,
+    show_ex_score: bool,
+    max_entries: usize,
+}
+
+#[derive(Debug, Clone)]
+enum PlayerLeaderboardCacheValue {
+    Loading,
+    Ready(PlayerLeaderboardData),
+    Error(String),
+}
+
+#[derive(Default)]
+struct PlayerLeaderboardCacheState {
+    by_key: HashMap<PlayerLeaderboardCacheKey, PlayerLeaderboardCacheValue>,
+}
+
+static PLAYER_LEADERBOARD_CACHE: std::sync::LazyLock<Mutex<PlayerLeaderboardCacheState>> =
+    std::sync::LazyLock::new(|| Mutex::new(PlayerLeaderboardCacheState::default()));
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct LeaderboardsApiResponse {
@@ -1348,6 +1405,8 @@ struct LeaderboardApiEntry {
     rank: u32,
     #[serde(default)]
     name: String,
+    #[serde(default)]
+    machine_tag: Option<String>,
     #[serde(default)]
     score: f64, // 0..10000
     #[serde(default)]
@@ -1388,6 +1447,7 @@ fn leaderboard_entries_from_api(entries: Vec<LeaderboardApiEntry>) -> Vec<Leader
         out.push(LeaderboardEntry {
             rank: entry.rank,
             name: entry.name,
+            machine_tag: entry.machine_tag,
             score: entry.score,
             date: entry.date,
             is_rival: entry.is_rival,
@@ -1485,6 +1545,117 @@ pub fn fetch_player_leaderboards(
     }
 
     Ok(PlayerLeaderboardData { panes })
+}
+
+#[inline(always)]
+fn cache_snapshot_from_value(value: &PlayerLeaderboardCacheValue) -> CachedPlayerLeaderboardData {
+    match value {
+        PlayerLeaderboardCacheValue::Loading => CachedPlayerLeaderboardData {
+            loading: true,
+            data: None,
+            error: None,
+        },
+        PlayerLeaderboardCacheValue::Ready(data) => CachedPlayerLeaderboardData {
+            loading: false,
+            data: Some(data.clone()),
+            error: None,
+        },
+        PlayerLeaderboardCacheValue::Error(error) => CachedPlayerLeaderboardData {
+            loading: false,
+            data: None,
+            error: Some(error.clone()),
+        },
+    }
+}
+
+pub fn get_or_fetch_player_leaderboards_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+    max_entries: usize,
+) -> Option<CachedPlayerLeaderboardData> {
+    if !crate::config::get().enable_groovestats {
+        return None;
+    }
+    let chart_hash = chart_hash.trim();
+    if chart_hash.is_empty() || max_entries == 0 {
+        return None;
+    }
+    if !profile::is_session_side_joined(side) {
+        return None;
+    }
+
+    let profile = profile::get_for_side(side);
+    if profile.groovestats_api_key.trim().is_empty() {
+        return None;
+    }
+
+    match network::get_status() {
+        network::ConnectionStatus::Pending => {
+            return Some(CachedPlayerLeaderboardData {
+                loading: true,
+                data: None,
+                error: None,
+            });
+        }
+        network::ConnectionStatus::Connected(services) if !services.get_scores => {
+            return Some(CachedPlayerLeaderboardData {
+                loading: false,
+                data: None,
+                error: Some("Disabled".to_string()),
+            });
+        }
+        network::ConnectionStatus::Error(error) => {
+            return Some(CachedPlayerLeaderboardData {
+                loading: false,
+                data: None,
+                error: Some(error),
+            });
+        }
+        _ => {}
+    }
+
+    let key = PlayerLeaderboardCacheKey {
+        chart_hash: chart_hash.to_string(),
+        api_key: profile.groovestats_api_key.clone(),
+        show_ex_score: profile.show_ex_score,
+        max_entries,
+    };
+
+    let mut should_spawn = false;
+    let snapshot = {
+        let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+        if let Some(value) = cache.by_key.get(&key) {
+            cache_snapshot_from_value(value)
+        } else {
+            cache
+                .by_key
+                .insert(key.clone(), PlayerLeaderboardCacheValue::Loading);
+            should_spawn = true;
+            CachedPlayerLeaderboardData {
+                loading: true,
+                data: None,
+                error: None,
+            }
+        }
+    };
+
+    if should_spawn {
+        std::thread::spawn(move || {
+            let result = fetch_player_leaderboards(
+                &key.chart_hash,
+                &key.api_key,
+                key.show_ex_score,
+                key.max_entries,
+            )
+            .map(PlayerLeaderboardCacheValue::Ready)
+            .unwrap_or_else(|e| PlayerLeaderboardCacheValue::Error(e.to_string()));
+
+            let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+            cache.by_key.insert(key, result);
+        });
+    }
+
+    Some(snapshot)
 }
 
 #[derive(Debug)]
@@ -1618,6 +1789,7 @@ pub fn get_machine_leaderboard_local(
         out.push(LeaderboardEntry {
             rank: (i as u32).saturating_add(1),
             name: play.initials,
+            machine_tag: None,
             score: (play.score_percent * 10000.0).round(),
             date: local_score_date_string(play.played_at_ms),
             is_rival: false,

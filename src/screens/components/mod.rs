@@ -3,6 +3,7 @@ pub mod eval_grades;
 pub mod eval_graphs;
 pub mod gamepad_overlay;
 pub mod gameplay_stats;
+pub mod gs_scorebox;
 pub mod heart_bg;
 pub mod logo;
 pub mod menu_list;

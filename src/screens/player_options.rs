@@ -699,6 +699,14 @@ fn build_main_rows(
 }
 
 fn build_advanced_rows() -> Vec<Row> {
+    let mut gameplay_extras_more_choices = vec![
+        "Judgment Tilt".to_string(),
+        "Column Cues".to_string(),
+    ];
+    if crate::game::scores::is_gs_get_scores_service_allowed() {
+        gameplay_extras_more_choices.push("Display Scorebox".to_string());
+    }
+
     vec![
         Row {
             name: "Turn".to_string(),
@@ -830,11 +838,7 @@ fn build_advanced_rows() -> Vec<Row> {
         },
         Row {
             name: "Gameplay Extras (More)".to_string(),
-            choices: vec![
-                "Judgment Tilt".to_string(),
-                "Column Cues".to_string(),
-                "Display Scorebox".to_string(),
-            ],
+            choices: gameplay_extras_more_choices,
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Additional visual effects, cues, and score display options.".to_string()],
             choice_difficulty_indices: None,
@@ -1533,6 +1537,9 @@ fn apply_profile_defaults(
     // Initialize Gameplay Extras (More) row from profile (multi-choice toggle group).
     if profile.judgment_tilt {
         gameplay_extras_more_active_mask |= 1u8 << 0;
+    }
+    if profile.display_scorebox {
+        gameplay_extras_more_active_mask |= 1u8 << 2;
     }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Gameplay Extras (More)") {
         if gameplay_extras_more_active_mask != 0 {
@@ -3250,11 +3257,11 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    // Only Judgment Tilt (index 0) is wired up today.
-    if choice_index != 0 {
-        return;
-    }
-    let bit = 1u8 << 0;
+    let bit = match choice_index {
+        0 => 1u8 << 0, // Judgment Tilt
+        2 => 1u8 << 2, // Display Scorebox
+        _ => return,
+    };
 
     if (state.gameplay_extras_more_active_mask[idx] & bit) != 0 {
         state.gameplay_extras_more_active_mask[idx] &= !bit;
@@ -3263,7 +3270,9 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
     }
 
     let judgment_tilt = (state.gameplay_extras_more_active_mask[idx] & (1u8 << 0)) != 0;
+    let display_scorebox = (state.gameplay_extras_more_active_mask[idx] & (1u8 << 2)) != 0;
     state.player_profiles[idx].judgment_tilt = judgment_tilt;
+    state.player_profiles[idx].display_scorebox = display_scorebox;
 
     let play_style = crate::game::profile::get_session_play_style();
     let should_persist = play_style == crate::game::profile::PlayStyle::Versus
@@ -3275,6 +3284,7 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
             crate::game::profile::PlayerSide::P2
         };
         crate::game::profile::update_judgment_tilt_for_side(side, judgment_tilt);
+        crate::game::profile::update_display_scorebox_for_side(side, display_scorebox);
     }
 
     audio::play_sfx("assets/sounds/change_value.ogg");

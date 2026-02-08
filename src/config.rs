@@ -143,6 +143,7 @@ pub struct Config {
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
     pub rate_mod_preserves_pitch: bool,
+    pub enable_groovestats: bool,
     pub fastload: bool,
     pub cachesongs: bool,
     // Whether to apply Gaussian smoothing to the eval histogram (Simply Love style)
@@ -176,6 +177,7 @@ impl Default for Config {
             sfx_volume: 100,
             audio_sample_rate_hz: None,
             rate_mod_preserves_pitch: false,
+            enable_groovestats: false,
             fastload: true,
             cachesongs: true,
             smooth_histogram: true,
@@ -216,6 +218,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!("DisplayHeight={}\n", default.display_height));
     content.push_str(&format!("DisplayWidth={}\n", default.display_width));
     content.push_str(&format!("DisplayMonitor={}\n", default.display_monitor));
+    content.push_str(&format!(
+        "EnableGrooveStats={}\n",
+        if default.enable_groovestats { "1" } else { "0" }
+    ));
     content.push_str(&format!(
         "FastLoad={}\n",
         if default.fastload { "1" } else { "0" }
@@ -362,6 +368,10 @@ pub fn load() {
                     .get("Options", "DisplayMonitor")
                     .and_then(|v| v.parse::<usize>().ok())
                     .unwrap_or(default.display_monitor);
+                cfg.enable_groovestats = conf
+                    .get("Options", "EnableGrooveStats")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.enable_groovestats, |v| v != 0);
                 cfg.mine_hit_sound = conf
                     .get("Options", "MineHitSound")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -512,6 +522,7 @@ pub fn load() {
                     "DisplayHeight",
                     "DisplayWidth",
                     "FastLoad",
+                    "EnableGrooveStats",
                     "FullscreenType",
                     "GamepadBackend",
                     "GfxDebug",
@@ -1158,6 +1169,10 @@ fn save_without_keymaps() {
     content.push_str(&format!("DisplayHeight={}\n", cfg.display_height));
     content.push_str(&format!("DisplayWidth={}\n", cfg.display_width));
     content.push_str(&format!(
+        "EnableGrooveStats={}\n",
+        if cfg.enable_groovestats { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
         "FastLoad={}\n",
         if cfg.fastload { "1" } else { "0" }
     ));
@@ -1438,6 +1453,17 @@ pub fn update_rate_mod_preserves_pitch(enabled: bool) {
             return;
         }
         cfg.rate_mod_preserves_pitch = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_enable_groovestats(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.enable_groovestats == enabled {
+            return;
+        }
+        cfg.enable_groovestats = enabled;
     }
     save_without_keymaps();
 }

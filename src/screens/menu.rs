@@ -201,19 +201,24 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     // --- GrooveStats Info Pane (top-left) ---
     let mut groovestats_actors = Vec::new();
     let status = network::get_status();
+    let gs_enabled = crate::config::get().enable_groovestats;
 
     // Mimic the ActorFrame's zoom(0.8) which affects both size and position offsets.
     let frame_zoom = 0.8;
     let base_x = 10.0;
     let base_y = 15.0;
 
-    let (main_text, services_to_list) = match status {
+    let (main_text, services_to_list) = if !gs_enabled {
+        ("❌ GrooveStats".to_string(), vec!["Disabled".to_string()])
+    } else {
+        match status {
         ConnectionStatus::Pending => ("     GrooveStats".to_string(), Vec::new()),
         ConnectionStatus::Error(msg) => {
             let simplified_msg = match msg.as_str() {
                 "Machine Offline" => "Machine Offline".to_string(),
                 "Cannot Connect" => "Cannot Connect".to_string(),
                 "Timed Out" => "Timed Out".to_string(),
+                "Disabled" => "Disabled".to_string(),
                 _ => "Failed to Load 😞".to_string(),
             };
             // When there is a connection error, SL shows the error message in Service1 and "❌ GrooveStats" as main text.
@@ -250,6 +255,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
             (text, services_to_show)
         }
+    }
     };
 
     // Main status text

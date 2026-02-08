@@ -15,7 +15,7 @@ use crate::rgba_const;
 use crate::screens::components::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::{heart_bg, music_wheel, pad_display, sort_menu};
+use crate::screens::components::{gs_scorebox, heart_bg, music_wheel, pad_display, sort_menu};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -2773,6 +2773,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         && side == crate::game::profile::PlayerSide::P2;
     let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
     let target_chart_type = play_style.chart_type();
+    let selected_entry = state.entries.get(state.selected_index);
 
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
@@ -2850,6 +2851,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         right_avatar,
     }));
 
+    let mode_side = if is_p2_single {
+        profile::PlayerSide::P2
+    } else {
+        profile::PlayerSide::P1
+    };
+    let mode_steps_index = if mode_side == profile::PlayerSide::P2 && is_versus {
+        state.p2_selected_steps_index
+    } else {
+        state.selected_steps_index
+    };
+    let mode_chart_hash = match selected_entry {
+        Some(MusicWheelEntry::Song(song)) => {
+            chart_for_steps_index(song, target_chart_type, mode_steps_index)
+                .map(|c| c.short_hash.as_str())
+        }
+        _ => None,
+    };
+    let score_mode_text = gs_scorebox::select_music_mode_text(mode_side, mode_chart_hash);
+
     let preferred_idx_p1 = state
         .preferred_difficulty_index
         .min(color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
@@ -2883,7 +2903,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Pads
     {
-        actors.push(act!(text: font("wendy"): settext("ITG"): align(1.0, 0.5): xy(screen_width() - widescale(55.0, 62.0), 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+        actors.push(act!(text: font("wendy"): settext(score_mode_text): align(1.0, 0.5): xy(screen_width() - widescale(55.0, 62.0), 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
         let pad_zoom = 0.24 * widescale(0.435, 0.525);
         actors.push(pad_display::build(pad_display::PadDisplayParams {
             center_x: screen_width() - widescale(35.0, 41.0),
@@ -2922,7 +2942,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         (310.0, screen_center_x() - 165.0, screen_center_y() - 55.0)
     };
-    let entry_opt = state.entries.get(state.selected_index);
+    let entry_opt = selected_entry;
     let (artist, bpm, len_text) = match entry_opt {
         Some(MusicWheelEntry::Song(s)) => (
             s.artist.clone(),
@@ -3261,8 +3281,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         // Scores
         let placeholder = ("----".to_string(), "??.??%".to_string());
-        let (p_name, p_pct) = if let Some(c) = chart
-            && let Some(sc) = scores::get_cached_score_for_side(&c.short_hash, side)
+        let fallback_player = if let Some(c) = chart
+            && let Some(sc) = scores::get_cached_local_score_for_side(&c.short_hash, side)
             && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
         {
             (
@@ -3273,7 +3293,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             placeholder.clone()
         };
 
-        let (m_name, m_pct) = if let Some(c) = chart
+        let fallback_machine = if let Some(c) = chart
             && let Some((initials, sc)) = scores::get_machine_record_local(&c.short_hash)
             && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
         {
@@ -3282,22 +3302,48 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             placeholder
         };
 
+        let chart_hash = chart.map(|c| c.short_hash.as_str());
+        let gs_view = gs_scorebox::select_music_scorebox_view(
+            side,
+            chart_hash,
+            fallback_machine,
+            fallback_player,
+        );
+
         // Simply Love PaneDisplay order: Machine/World first, then Player.
-        let lines = [(m_name, m_pct), (p_name, p_pct)];
+        let lines = [
+            (
+                gs_view.machine_name.as_str(),
+                gs_view.machine_score.as_str(),
+            ),
+            (gs_view.player_name.as_str(), gs_view.player_score.as_str()),
+        ];
         for i in 0..2 {
-            let (name, pct) = &lines[i];
+            let (name, pct) = lines[i];
             out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
             out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
         }
-
-        // Difficulty Meter
-        let mut m_actor = act!(text: font("wendy"): settext(meter): align(1.0, 0.5): horizalign(right): xy(pane_cx + cols[3], pane_top + rows[1]): z(121): diffuse(0.0, 0.0, 0.0, 1.0));
-        if !is_wide() {
-            if let Actor::Text { max_width, .. } = &mut m_actor {
-                *max_width = Some(66.0);
+        if let Some(status) = gs_view.loading_text {
+            out.push(act!(text: font("miso"): settext(status): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
+        }
+        if gs_view.show_rivals {
+            for i in 0..3 {
+                let (name, pct) = (&gs_view.rivals[i].0, &gs_view.rivals[i].1);
+                out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] + 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 125.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
             }
         }
-        out.push(m_actor);
+
+        // Difficulty Meter
+        if !gs_view.show_rivals {
+            let mut m_actor = act!(text: font("wendy"): settext(meter): align(1.0, 0.5): horizalign(right): xy(pane_cx + cols[3], pane_top + rows[1]): z(121): diffuse(0.0, 0.0, 0.0, 1.0));
+            if !is_wide() {
+                if let Actor::Text { max_width, .. } = &mut m_actor {
+                    *max_width = Some(66.0);
+                }
+            }
+            out.push(m_actor);
+        }
         out
     };
 
@@ -3493,6 +3539,58 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         selected_steps_index: state.selected_steps_index,
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());
+
+    // GrooveStats scorebox above footer, on the wheel side.
+    if is_wide() {
+        // Align with SL PaneDisplay geometry: just above pane top (pane_top = h - 92).
+        let pane_top = screen_height() - 92.0;
+        let scorebox_center_y = pane_top - 44.0;
+        let scorebox_side_offset_x = 70.0;
+        let scorebox_center_p1 = screen_width() * 0.75 + 5.0 + scorebox_side_offset_x;
+        let scorebox_center_p2 = screen_width() * 0.25 - 5.0 - scorebox_side_offset_x;
+        let mut push_scorebox = |side: profile::PlayerSide, steps_idx: usize, center_x: f32| {
+            let chart_hash = match selected_entry {
+                Some(MusicWheelEntry::Song(song)) => {
+                    chart_for_steps_index(song, target_chart_type, steps_idx)
+                        .map(|c| c.short_hash.as_str())
+                }
+                _ => None,
+            };
+            actors.extend(gs_scorebox::gameplay_scorebox_actors(
+                side,
+                chart_hash,
+                center_x,
+                scorebox_center_y,
+                widescale(0.95, 1.0),
+                state.selection_animation_timer,
+            ));
+        };
+
+        if is_versus {
+            push_scorebox(
+                profile::PlayerSide::P1,
+                state.selected_steps_index,
+                scorebox_center_p1,
+            );
+            push_scorebox(
+                profile::PlayerSide::P2,
+                state.p2_selected_steps_index,
+                scorebox_center_p2,
+            );
+        } else if is_p2_single {
+            push_scorebox(
+                profile::PlayerSide::P2,
+                state.p2_selected_steps_index,
+                scorebox_center_p2,
+            );
+        } else {
+            push_scorebox(
+                profile::PlayerSide::P1,
+                state.selected_steps_index,
+                scorebox_center_p1,
+            );
+        }
+    }
 
     // Bouncing Arrow (SL parity: bounce + effectperiod(1) + effectoffset(-10*GlobalOffsetSeconds))
     let bounce = sl_arrow_bounce01(entry_opt, state);

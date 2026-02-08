@@ -334,6 +334,7 @@ pub enum SubmenuKind {
     System,
     Graphics,
     Sound,
+    GrooveStats,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -673,11 +674,29 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
+pub const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[SubRow {
+    label: "Enable GrooveStats",
+    choices: &["No", "Yes"],
+    inline: true,
+}];
+
+pub const GROOVESTATS_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: "Enable GrooveStats",
+        help: &["Enable connection to GrooveStats services."],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
+
 const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
     match kind {
         SubmenuKind::System => SYSTEM_OPTIONS_ROWS,
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ROWS,
         SubmenuKind::Sound => SOUND_OPTIONS_ROWS,
+        SubmenuKind::GrooveStats => GROOVESTATS_OPTIONS_ROWS,
     }
 }
 
@@ -686,6 +705,7 @@ const fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
         SubmenuKind::System => SYSTEM_OPTIONS_ITEMS,
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ITEMS,
         SubmenuKind::Sound => SOUND_OPTIONS_ITEMS,
+        SubmenuKind::GrooveStats => GROOVESTATS_OPTIONS_ITEMS,
     }
 }
 
@@ -694,6 +714,7 @@ const fn submenu_title(kind: SubmenuKind) -> &'static str {
         SubmenuKind::System => "SYSTEM OPTIONS",
         SubmenuKind::Graphics => "GRAPHICS OPTIONS",
         SubmenuKind::Sound => "SOUND OPTIONS",
+        SubmenuKind::GrooveStats => "GROOVESTATS OPTIONS",
     }
 }
 
@@ -1101,6 +1122,7 @@ pub struct State {
     sub_choice_indices_system: Vec<usize>,
     sub_choice_indices_graphics: Vec<usize>,
     sub_choice_indices_sound: Vec<usize>,
+    sub_choice_indices_groovestats: Vec<usize>,
     global_offset_ms: i32,
     visual_delay_ms: i32,
     video_renderer_at_load: BackendType,
@@ -1153,6 +1175,7 @@ pub fn init() -> State {
         sub_choice_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_choice_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         sub_choice_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
+        sub_choice_indices_groovestats: vec![0; GROOVESTATS_OPTIONS_ROWS.len()],
         global_offset_ms: {
             let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
             ms.clamp(GLOBAL_OFFSET_MIN_MS, GLOBAL_OFFSET_MAX_MS)
@@ -1236,6 +1259,12 @@ pub fn init() -> State {
         "RateMod Preserves Pitch",
         usize::from(cfg.rate_mod_preserves_pitch),
     );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_groovestats,
+        GROOVESTATS_OPTIONS_ROWS,
+        "Enable GrooveStats",
+        usize::from(cfg.enable_groovestats),
+    );
     state
 }
 
@@ -1244,6 +1273,7 @@ fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::System => &state.sub_choice_indices_system,
         SubmenuKind::Graphics => &state.sub_choice_indices_graphics,
         SubmenuKind::Sound => &state.sub_choice_indices_sound,
+        SubmenuKind::GrooveStats => &state.sub_choice_indices_groovestats,
     }
 }
 
@@ -1252,6 +1282,7 @@ const fn submenu_choice_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::System => &mut state.sub_choice_indices_system,
         SubmenuKind::Graphics => &mut state.sub_choice_indices_graphics,
         SubmenuKind::Sound => &mut state.sub_choice_indices_sound,
+        SubmenuKind::GrooveStats => &mut state.sub_choice_indices_groovestats,
     }
 }
 
@@ -1881,6 +1912,14 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
             }
             _ => {}
         }
+    } else if matches!(kind, SubmenuKind::GrooveStats) {
+        let row = &rows[row_index];
+        if row.label == "Enable GrooveStats" {
+            let enabled = new_index == 1;
+            config::update_enable_groovestats(enabled);
+            // Re-run connectivity logic so toggling this option applies immediately.
+            crate::core::network::init();
+        }
     }
     action
 }
@@ -2007,6 +2046,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         "Sound Options" => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::Sound);
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                            state.submenu_fade_t = 0.0;
+                        }
+                        "GrooveStats Options" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            state.pending_submenu_kind = Some(SubmenuKind::GrooveStats);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }

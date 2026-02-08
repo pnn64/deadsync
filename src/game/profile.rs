@@ -860,6 +860,7 @@ pub struct Profile {
     pub fa_plus_10ms_blue_window: bool,
     // Judgment tilt (Simply Love semantics).
     pub judgment_tilt: bool,
+    pub display_scorebox: bool,
     pub tilt_multiplier: f32,
     // Error bar (Simply Love semantics).
     pub error_bar: ErrorBarStyle,
@@ -944,6 +945,7 @@ impl Default for Profile {
             show_fa_plus_pane: false,
             fa_plus_10ms_blue_window: false,
             judgment_tilt: false,
+            display_scorebox: true,
             tilt_multiplier: 1.0,
             error_bar: ErrorBarStyle::default(),
             error_bar_up: false,
@@ -1206,6 +1208,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             i32::from(default_profile.judgment_tilt)
         ));
         content.push_str(&format!(
+            "DisplayScorebox = {}\n",
+            i32::from(default_profile.display_scorebox)
+        ));
+        content.push_str(&format!(
             "TiltMultiplier = {}\n",
             default_profile.tilt_multiplier
         ));
@@ -1419,6 +1425,10 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!(
         "JudgmentTilt={}\n",
         i32::from(profile.judgment_tilt)
+    ));
+    content.push_str(&format!(
+        "DisplayScorebox={}\n",
+        i32::from(profile.display_scorebox)
     ));
     content.push_str(&format!("TiltMultiplier={}\n", profile.tilt_multiplier));
     content.push_str(&format!("ErrorBar={}\n", profile.error_bar));
@@ -1656,6 +1666,10 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "JudgmentTilt")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.judgment_tilt, |v| v != 0);
+            profile.display_scorebox = profile_conf
+                .get("PlayerOptions", "DisplayScorebox")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.display_scorebox, |v| v != 0);
             profile.tilt_multiplier = profile_conf
                 .get("PlayerOptions", "TiltMultiplier")
                 .and_then(|s| s.parse::<f32>().ok())
@@ -2695,6 +2709,21 @@ pub fn update_judgment_tilt_for_side(side: PlayerSide, enabled: bool) {
             return;
         }
         profile.judgment_tilt = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_display_scorebox_for_side(side: PlayerSide, enabled: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.display_scorebox == enabled {
+            return;
+        }
+        profile.display_scorebox = enabled;
     }
     save_profile_ini_for_side(side);
 }

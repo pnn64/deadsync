@@ -56,6 +56,10 @@ pub fn get_agent() -> ureq::Agent {
 }
 
 pub fn init() {
+    if !crate::config::get().enable_groovestats {
+        set_status(ConnectionStatus::Error("Disabled".into()));
+        return;
+    }
     info!("Initializing network check...");
     thread::spawn(|| {
         perform_check();

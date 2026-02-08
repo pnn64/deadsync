@@ -5,6 +5,7 @@ use crate::core::space::*;
 use crate::game::gameplay::State;
 use crate::game::judgment::JudgeGrade;
 use crate::game::{profile, timing as timing_stats};
+use crate::screens::components::gs_scorebox;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use crate::ui::font;
@@ -33,6 +34,7 @@ pub fn build(
         playfield_center_x,
         player_side,
     ));
+    actors.extend(build_scorebox_pane(state, playfield_center_x, player_side));
     actors
 }
 
@@ -565,6 +567,23 @@ pub fn build_double_step_stats(
             frame_cx,
             frame_cy,
             frame_zoom,
+        ));
+    }
+
+    // Scorebox.lua (double): x(GetNotefieldWidth() - 140), y(-115)
+    {
+        let frame_cx = pane_cx + ((notefield_width - 140.0) * banner_data_zoom);
+        let frame_cy = pane_cy + (-115.0 * banner_data_zoom);
+        let frame_zoom = banner_data_zoom;
+        let side = profile::get_session_player_side();
+        let chart_hash = Some(state.charts[0].short_hash.as_str());
+        actors.extend(gs_scorebox::gameplay_scorebox_actors(
+            side,
+            chart_hash,
+            frame_cx,
+            frame_cy,
+            frame_zoom,
+            state.current_music_time,
         ));
     }
 
@@ -1307,6 +1326,60 @@ fn build_holds_mines_rolls_pane(
         z: 70,
     });
     actors
+}
+
+fn build_scorebox_pane(
+    state: &State,
+    playfield_center_x: f32,
+    player_side: profile::PlayerSide,
+) -> Vec<Actor> {
+    if !is_wide() {
+        return Vec::new();
+    }
+    let sidepane_center_x = match player_side {
+        profile::PlayerSide::P1 => screen_width() * 0.75,
+        profile::PlayerSide::P2 => screen_width() * 0.25,
+    };
+    let sidepane_center_y = screen_center_y() + 80.0;
+    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
+    let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
+    let banner_data_zoom = if note_field_is_centered && is_wide() && !is_ultrawide {
+        let ar = screen_width() / screen_height();
+        let t = ((ar - (16.0 / 10.0)) / ((16.0 / 9.0) - (16.0 / 10.0))).clamp(0.0, 1.0);
+        0.825 + (0.925 - 0.825) * t
+    } else {
+        1.0
+    };
+
+    let x_sign = match player_side {
+        profile::PlayerSide::P1 => 1.0,
+        profile::PlayerSide::P2 => -1.0,
+    };
+    let mut local_x = 70.0 * x_sign;
+    if note_field_is_centered && is_wide() {
+        local_x += 2.0 * x_sign;
+    }
+    if is_ultrawide && state.num_players > 1 {
+        local_x = -local_x;
+    }
+    let frame_cx = sidepane_center_x + (local_x * banner_data_zoom);
+    let frame_cy = sidepane_center_y + (-115.0 * banner_data_zoom);
+
+    let player_idx = if state.num_players >= 2 && player_side == profile::PlayerSide::P2 {
+        1
+    } else {
+        0
+    };
+    let chart_hash = Some(state.charts[player_idx].short_hash.as_str());
+
+    gs_scorebox::gameplay_scorebox_actors(
+        player_side,
+        chart_hash,
+        frame_cx,
+        frame_cy,
+        banner_data_zoom,
+        state.current_music_time,
+    )
 }
 
 fn build_side_pane(
