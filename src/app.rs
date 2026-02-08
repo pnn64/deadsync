@@ -1290,6 +1290,7 @@ impl App {
             }
             CurrentScreen::SelectProfile => select_profile::get_actors(
                 &self.state.screens.select_profile_state,
+                &self.asset_manager,
                 screen_alpha_multiplier,
             ),
             CurrentScreen::SelectColor => select_color::get_actors(
