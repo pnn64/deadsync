@@ -188,8 +188,15 @@ pub struct ReplayStartPayload {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
+    OpenSorts,
+    BackToMain,
     SortByGroup,
     SortByTitle,
+    SortByArtist,
+    SortByBpm,
+    SortByLength,
+    SortByMeter,
+    SortByPopularity,
     SortByRecent,
     SwitchToSingle,
     SwitchToDouble,
@@ -207,6 +214,11 @@ pub struct Item {
     pub action: Action,
 }
 
+const ITEM_CATEGORY_SORTS: Item = Item {
+    top_label: "",
+    bottom_label: "SORTS...",
+    action: Action::OpenSorts,
+};
 const ITEM_SORT_BY_GROUP: Item = Item {
     top_label: "Sort By",
     bottom_label: "Group",
@@ -216,6 +228,31 @@ const ITEM_SORT_BY_TITLE: Item = Item {
     top_label: "Sort By",
     bottom_label: "Title",
     action: Action::SortByTitle,
+};
+const ITEM_SORT_BY_ARTIST: Item = Item {
+    top_label: "Sort By",
+    bottom_label: "Artist",
+    action: Action::SortByArtist,
+};
+const ITEM_SORT_BY_BPM: Item = Item {
+    top_label: "Sort By",
+    bottom_label: "BPM",
+    action: Action::SortByBpm,
+};
+const ITEM_SORT_BY_LENGTH: Item = Item {
+    top_label: "Sort By",
+    bottom_label: "Length",
+    action: Action::SortByLength,
+};
+const ITEM_SORT_BY_METER: Item = Item {
+    top_label: "Sort By",
+    bottom_label: "Level",
+    action: Action::SortByMeter,
+};
+const ITEM_SORT_BY_POPULARITY: Item = Item {
+    top_label: "Sort By",
+    bottom_label: "Most Popular",
+    action: Action::SortByPopularity,
 };
 const ITEM_SORT_BY_RECENT: Item = Item {
     top_label: "Sort By",
@@ -257,11 +294,14 @@ const ITEM_SHOW_LEADERBOARD: Item = Item {
     bottom_label: "Leaderboard",
     action: Action::ShowLeaderboard,
 };
+const ITEM_GO_BACK: Item = Item {
+    top_label: "Options",
+    bottom_label: "Go Back",
+    action: Action::BackToMain,
+};
 
-pub const ITEMS: [Item; 8] = [
-    ITEM_SORT_BY_GROUP,
-    ITEM_SORT_BY_TITLE,
-    ITEM_SORT_BY_RECENT,
+pub const ITEMS_MAIN: [Item; 6] = [
+    ITEM_CATEGORY_SORTS,
     ITEM_TEST_INPUT,
     ITEM_SONG_SEARCH,
     ITEM_RELOAD_SONGS_COURSES,
@@ -269,10 +309,8 @@ pub const ITEMS: [Item; 8] = [
     ITEM_SHOW_LEADERBOARD,
 ];
 
-pub const ITEMS_WITH_SWITCH_TO_SINGLE: [Item; 9] = [
-    ITEM_SORT_BY_GROUP,
-    ITEM_SORT_BY_TITLE,
-    ITEM_SORT_BY_RECENT,
+pub const ITEMS_MAIN_WITH_SWITCH_TO_SINGLE: [Item; 7] = [
+    ITEM_CATEGORY_SORTS,
     ITEM_SWITCH_TO_SINGLE,
     ITEM_TEST_INPUT,
     ITEM_SONG_SEARCH,
@@ -281,10 +319,8 @@ pub const ITEMS_WITH_SWITCH_TO_SINGLE: [Item; 9] = [
     ITEM_SHOW_LEADERBOARD,
 ];
 
-pub const ITEMS_WITH_SWITCH_TO_DOUBLE: [Item; 9] = [
-    ITEM_SORT_BY_GROUP,
-    ITEM_SORT_BY_TITLE,
-    ITEM_SORT_BY_RECENT,
+pub const ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE: [Item; 7] = [
+    ITEM_CATEGORY_SORTS,
     ITEM_SWITCH_TO_DOUBLE,
     ITEM_TEST_INPUT,
     ITEM_SONG_SEARCH,
@@ -293,10 +329,28 @@ pub const ITEMS_WITH_SWITCH_TO_DOUBLE: [Item; 9] = [
     ITEM_SHOW_LEADERBOARD,
 ];
 
+pub const ITEMS_SORTS: [Item; 9] = [
+    ITEM_SORT_BY_GROUP,
+    ITEM_SORT_BY_TITLE,
+    ITEM_SORT_BY_ARTIST,
+    ITEM_SORT_BY_BPM,
+    ITEM_SORT_BY_LENGTH,
+    ITEM_SORT_BY_METER,
+    ITEM_SORT_BY_POPULARITY,
+    ITEM_SORT_BY_RECENT,
+    ITEM_GO_BACK,
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Page {
+    Main,
+    Sorts,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
     Hidden,
-    Visible { selected_index: usize },
+    Visible { page: Page, selected_index: usize },
 }
 
 #[inline(always)]
@@ -1844,14 +1898,25 @@ pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
             let row_zoom =
                 (FOCUSED_ROW_ZOOM - UNFOCUSED_ROW_ZOOM).mul_add(focus_lerp, UNFOCUSED_ROW_ZOOM);
             let row_alpha = (3.0 - slot_pos.abs()).clamp(0.0, 1.0);
-            let text_color = [
+            let row_tint = [
                 (selected_rgba[0] - 0.533).mul_add(focus_lerp, 0.533),
                 (selected_rgba[1] - 0.533).mul_add(focus_lerp, 0.533),
                 (selected_rgba[2] - 0.533).mul_add(focus_lerp, 0.533),
-                row_alpha,
             ];
+            let top_color = [row_tint[0], row_tint[1], row_tint[2], row_alpha];
             let y = slot_pos.mul_add(ITEM_SPACING, cy);
             let item = &p.items[item_idx];
+            let bottom_base = match item.action {
+                Action::OpenSorts => [0.0, 0.0, 1.0],
+                Action::BackToMain => [1.0, 0.0, 0.0],
+                _ => [1.0, 1.0, 1.0],
+            };
+            let bottom_color = [
+                row_tint[0] * bottom_base[0],
+                row_tint[1] * bottom_base[1],
+                row_tint[2] * bottom_base[2],
+                row_alpha,
+            ];
 
             let mut top = act!(text:
                 font(FONT_TOP):
@@ -1859,7 +1924,7 @@ pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
                 align(0.5, 0.5):
                 xy(cx, y + ITEM_TOP_Y_OFFSET * row_zoom):
                 zoom(TOP_TEXT_BASE_ZOOM * row_zoom):
-                diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
+                diffuse(top_color[0], top_color[1], top_color[2], top_color[3]):
                 z(1454):
                 horizalign(center)
             );
@@ -1873,7 +1938,12 @@ pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
                 xy(cx, y + ITEM_BOTTOM_Y_OFFSET * row_zoom):
                 maxwidth(405.0):
                 zoom(BOTTOM_TEXT_BASE_ZOOM * row_zoom):
-                diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
+                diffuse(
+                    bottom_color[0],
+                    bottom_color[1],
+                    bottom_color[2],
+                    bottom_color[3]
+                ):
                 z(1454):
                 horizalign(center)
             );

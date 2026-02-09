@@ -329,6 +329,66 @@ pub fn recent_played_chart_hashes_for_machine() -> Vec<String> {
         .collect()
 }
 
+fn collect_play_counts_in_dir(dir: &Path, counts_by_chart: &mut HashMap<String, u32>) {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let Some((chart_hash, _played_at_ms)) = parse_local_score_filename(name) else {
+            continue;
+        };
+        counts_by_chart
+            .entry(chart_hash.to_string())
+            .and_modify(|count| *count = count.saturating_add(1))
+            .or_insert(1);
+    }
+}
+
+fn collect_play_counts_in_root(root: &Path, counts_by_chart: &mut HashMap<String, u32>) {
+    collect_play_counts_in_dir(root, counts_by_chart);
+    let Ok(read_dir) = fs::read_dir(root) else {
+        return;
+    };
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_play_counts_in_dir(&path, counts_by_chart);
+        }
+    }
+}
+
+/// Returns `(chart_hash, play_count)` pairs ordered by play count descending,
+/// aggregated across all local profiles.
+pub fn played_chart_counts_for_machine() -> Vec<(String, u32)> {
+    let profiles_root = PathBuf::from("save/profiles");
+    let Ok(read_dir) = fs::read_dir(&profiles_root) else {
+        return Vec::new();
+    };
+
+    let mut counts_by_chart: HashMap<String, u32> = HashMap::new();
+    for entry in read_dir.flatten() {
+        let profile_dir = entry.path();
+        if !profile_dir.is_dir() {
+            continue;
+        }
+        let local_root = profile_dir.join("scores").join("local");
+        if local_root.is_dir() {
+            collect_play_counts_in_root(&local_root, &mut counts_by_chart);
+        }
+    }
+
+    let mut ranked: Vec<(String, u32)> = counts_by_chart.into_iter().collect();
+    ranked.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    ranked
+}
+
 #[inline(always)]
 fn shard2_for_hash(hash: &str) -> &str {
     if hash.len() >= 2 { &hash[..2] } else { "00" }

@@ -163,7 +163,7 @@ pub(crate) fn open_image_fallback(path: &Path) -> image::ImageResult<image::Dyna
     if let (Some(hint_fmt), Some(real_fmt)) = (hint, guessed_fmt)
         && hint_fmt != real_fmt
     {
-        info!(
+        warn!(
             "Graphic file '{}' is really {:?}",
             path.to_string_lossy(),
             real_fmt
