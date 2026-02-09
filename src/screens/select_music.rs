@@ -94,6 +94,8 @@ rgba_const!(UI_BOX_BG_COLOR, "#1E282F");
 // ITGmania WheelBase::Move() uses `m_TimeBeforeMovingBegins = 1/4.0f` before auto-scrolling.
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
+// ITGmania InputQueue: g_fSimultaneousThreshold = 0.05f.
+const CHORD_SIMULTANEOUS_WINDOW: Duration = Duration::from_millis(50);
 const PREVIEW_DELAY_SECONDS: f32 = 0.25;
 const PREVIEW_FADE_OUT_SECONDS: f64 = 1.5;
 const DEFAULT_PREVIEW_LENGTH: f64 = 12.0;
@@ -120,6 +122,20 @@ const fn chord_bit(dir: PadDir) -> u8 {
         PadDir::Up => CHORD_UP,
         PadDir::Down => CHORD_DOWN,
         _ => 0,
+    }
+}
+
+#[inline(always)]
+fn chord_times_are_simultaneous(a: Option<Instant>, b: Option<Instant>) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            if a >= b {
+                a.duration_since(b) <= CHORD_SIMULTANEOUS_WINDOW
+            } else {
+                b.duration_since(a) <= CHORD_SIMULTANEOUS_WINDOW
+            }
+        }
+        _ => false,
     }
 }
 
@@ -460,6 +476,12 @@ pub struct State {
     chord_mask_p1: u8,
     chord_mask_p2: u8,
     menu_chord_mask: u8,
+    p1_chord_up_pressed_at: Option<Instant>,
+    p1_chord_down_pressed_at: Option<Instant>,
+    p2_chord_up_pressed_at: Option<Instant>,
+    p2_chord_down_pressed_at: Option<Instant>,
+    menu_chord_left_pressed_at: Option<Instant>,
+    menu_chord_right_pressed_at: Option<Instant>,
     last_steps_nav_dir_p1: Option<PadDir>,
     last_steps_nav_time_p1: Option<Instant>,
     last_steps_nav_dir_p2: Option<PadDir>,
@@ -1085,6 +1107,12 @@ pub fn init() -> State {
         chord_mask_p1: 0,
         chord_mask_p2: 0,
         menu_chord_mask: 0,
+        p1_chord_up_pressed_at: None,
+        p1_chord_down_pressed_at: None,
+        p2_chord_up_pressed_at: None,
+        p2_chord_down_pressed_at: None,
+        menu_chord_left_pressed_at: None,
+        menu_chord_right_pressed_at: None,
         last_steps_nav_dir_p1: None,
         last_steps_nav_time_p1: None,
         last_steps_nav_dir_p2: None,
@@ -1248,6 +1276,27 @@ fn clear_preview(state: &mut State) {
 }
 
 #[inline(always)]
+fn clear_menu_chord(state: &mut State) {
+    state.menu_chord_mask = 0;
+    state.menu_chord_left_pressed_at = None;
+    state.menu_chord_right_pressed_at = None;
+}
+
+#[inline(always)]
+fn clear_p1_ud_chord(state: &mut State) {
+    state.chord_mask_p1 = 0;
+    state.p1_chord_up_pressed_at = None;
+    state.p1_chord_down_pressed_at = None;
+}
+
+#[inline(always)]
+fn clear_p2_ud_chord(state: &mut State) {
+    state.chord_mask_p2 = 0;
+    state.p2_chord_up_pressed_at = None;
+    state.p2_chord_down_pressed_at = None;
+}
+
+#[inline(always)]
 fn show_sort_menu(state: &mut State) {
     let selected_index = match state.sort_mode {
         WheelSortMode::Group => 0,
@@ -1256,7 +1305,7 @@ fn show_sort_menu(state: &mut State) {
     };
     state.sort_menu = sort_menu::State::Visible { selected_index };
     state.sort_menu_prev_selected_index = selected_index;
-    state.menu_chord_mask = 0;
+    clear_menu_chord(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.sort_menu_focus_anim_elapsed = sort_menu::FOCUS_TWEEN_SECONDS;
@@ -1267,7 +1316,7 @@ fn show_sort_menu(state: &mut State) {
 #[inline(always)]
 fn hide_sort_menu(state: &mut State) {
     state.sort_menu = sort_menu::State::Hidden;
-    state.menu_chord_mask = 0;
+    clear_menu_chord(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
 }
@@ -1276,6 +1325,10 @@ fn hide_sort_menu(state: &mut State) {
 fn try_open_sort_menu(state: &mut State) -> bool {
     if state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
         == (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
+        && chord_times_are_simultaneous(
+            state.menu_chord_left_pressed_at,
+            state.menu_chord_right_pressed_at,
+        )
     {
         // Simply Love parity: Left+Right / MenuLeft+MenuRight code opens SortMenu
         // without leaving the current wheel selection. Our input path moves on the
@@ -1310,7 +1363,7 @@ fn show_test_input_overlay(state: &mut State) {
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
-    state.menu_chord_mask = 0;
+    clear_menu_chord(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.test_input_overlay_visible = true;
@@ -1328,7 +1381,7 @@ fn start_song_search_prompt(state: &mut State) {
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     hide_test_input_overlay(state);
-    state.menu_chord_mask = 0;
+    clear_menu_chord(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.song_search = sort_menu::begin_song_search_prompt();
@@ -1405,9 +1458,9 @@ fn start_reload_songs_and_courses(state: &mut State) {
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     hide_test_input_overlay(state);
-    state.menu_chord_mask = 0;
-    state.chord_mask_p1 = 0;
-    state.chord_mask_p2 = 0;
+    clear_menu_chord(state);
+    clear_p1_ud_chord(state);
+    clear_p2_ud_chord(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.last_steps_nav_dir_p1 = None;
@@ -1881,13 +1934,27 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
     ScreenAction::None
 }
 
-pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAction {
+pub fn handle_pad_dir(
+    state: &mut State,
+    dir: PadDir,
+    pressed: bool,
+    timestamp: Instant,
+) -> ScreenAction {
     if pressed {
         match dir {
             PadDir::Right => {
                 // Simply Love [ScreenSelectMusic]: CodeSortList4 = "Left-Right".
                 state.menu_chord_mask |= MENU_CHORD_RIGHT;
+                state.menu_chord_right_pressed_at = Some(timestamp);
                 if try_open_sort_menu(state) {
+                    return ScreenAction::None;
+                }
+                if state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
+                    == (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
+                {
+                    // ITGmania parity: if both directions are held, neutralize wheel movement.
+                    state.nav_key_held_direction = None;
+                    state.nav_key_held_since = None;
                     return ScreenAction::None;
                 }
                 if state.nav_key_held_direction == Some(NavDirection::Right) {
@@ -1895,11 +1962,20 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                 }
                 music_wheel_change(state, 1);
                 state.nav_key_held_direction = Some(NavDirection::Right);
-                state.nav_key_held_since = Some(Instant::now());
+                state.nav_key_held_since = Some(timestamp);
             }
             PadDir::Left => {
                 state.menu_chord_mask |= MENU_CHORD_LEFT;
+                state.menu_chord_left_pressed_at = Some(timestamp);
                 if try_open_sort_menu(state) {
+                    return ScreenAction::None;
+                }
+                if state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
+                    == (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
+                {
+                    // ITGmania parity: if both directions are held, neutralize wheel movement.
+                    state.nav_key_held_direction = None;
+                    state.nav_key_held_since = None;
                     return ScreenAction::None;
                 }
                 if state.nav_key_held_direction == Some(NavDirection::Left) {
@@ -1907,12 +1983,12 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                 }
                 music_wheel_change(state, -1);
                 state.nav_key_held_direction = Some(NavDirection::Left);
-                state.nav_key_held_since = Some(Instant::now());
+                state.nav_key_held_since = Some(timestamp);
             }
             PadDir::Up | PadDir::Down => {
                 if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
                     let is_up = matches!(dir, PadDir::Up);
-                    let now = Instant::now();
+                    let now = timestamp;
 
                     if state.last_steps_nav_dir_p1 == Some(dir)
                         && state
@@ -1960,9 +2036,19 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                     }
 
                     state.chord_mask_p1 |= chord_bit(dir);
+                    if is_up {
+                        state.p1_chord_up_pressed_at = Some(timestamp);
+                    } else {
+                        state.p1_chord_down_pressed_at = Some(timestamp);
+                    }
 
                     // Combo check
-                    if state.chord_mask_p1 & (CHORD_UP | CHORD_DOWN) == (CHORD_UP | CHORD_DOWN) {
+                    if state.chord_mask_p1 & (CHORD_UP | CHORD_DOWN) == (CHORD_UP | CHORD_DOWN)
+                        && chord_times_are_simultaneous(
+                            state.p1_chord_up_pressed_at,
+                            state.p1_chord_down_pressed_at,
+                        )
+                    {
                         if let Some(pack) = state.expanded_pack_name.take() {
                             info!("Up+Down combo: Collapsing pack '{}'.", pack);
                             rebuild_displayed_entries(state);
@@ -1980,14 +2066,17 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
         match dir {
             PadDir::Up => {
                 state.chord_mask_p1 &= !CHORD_UP;
+                state.p1_chord_up_pressed_at = None;
             }
             PadDir::Down => {
                 state.chord_mask_p1 &= !CHORD_DOWN;
+                state.p1_chord_down_pressed_at = None;
             }
             PadDir::Left => {
                 state.menu_chord_mask &= !MENU_CHORD_LEFT;
+                state.menu_chord_left_pressed_at = None;
                 if state.nav_key_held_direction == Some(NavDirection::Left) {
-                    let now = Instant::now();
+                    let now = timestamp;
                     let moving_started = state
                         .nav_key_held_since
                         .is_some_and(|t| now.duration_since(t) >= NAV_INITIAL_HOLD_DELAY);
@@ -1999,12 +2088,17 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                     }
                     state.nav_key_held_direction = None;
                     state.nav_key_held_since = None;
+                } else if state.menu_chord_mask & MENU_CHORD_RIGHT != 0 {
+                    // After releasing one side of a held-opposite pair, resume remaining hold.
+                    state.nav_key_held_direction = Some(NavDirection::Right);
+                    state.nav_key_held_since = Some(timestamp);
                 }
             }
             PadDir::Right => {
                 state.menu_chord_mask &= !MENU_CHORD_RIGHT;
+                state.menu_chord_right_pressed_at = None;
                 if state.nav_key_held_direction == Some(NavDirection::Right) {
-                    let now = Instant::now();
+                    let now = timestamp;
                     let moving_started = state
                         .nav_key_held_since
                         .is_some_and(|t| now.duration_since(t) >= NAV_INITIAL_HOLD_DELAY);
@@ -2016,6 +2110,10 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
                     }
                     state.nav_key_held_direction = None;
                     state.nav_key_held_since = None;
+                } else if state.menu_chord_mask & MENU_CHORD_LEFT != 0 {
+                    // After releasing one side of a held-opposite pair, resume remaining hold.
+                    state.nav_key_held_direction = Some(NavDirection::Left);
+                    state.nav_key_held_since = Some(timestamp);
                 }
             }
         }
@@ -2023,14 +2121,19 @@ pub fn handle_pad_dir(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAc
     ScreenAction::None
 }
 
-fn handle_pad_dir_p2(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAction {
+fn handle_pad_dir_p2(
+    state: &mut State,
+    dir: PadDir,
+    pressed: bool,
+    timestamp: Instant,
+) -> ScreenAction {
     if !(matches!(dir, PadDir::Up | PadDir::Down)) {
         return ScreenAction::None;
     }
     if pressed {
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
             let is_up = matches!(dir, PadDir::Up);
-            let now = Instant::now();
+            let now = timestamp;
 
             if state.last_steps_nav_dir_p2 == Some(dir)
                 && state
@@ -2080,9 +2183,19 @@ fn handle_pad_dir_p2(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAct
             }
 
             state.chord_mask_p2 |= chord_bit(dir);
+            if is_up {
+                state.p2_chord_up_pressed_at = Some(timestamp);
+            } else {
+                state.p2_chord_down_pressed_at = Some(timestamp);
+            }
 
             // Combo check
-            if state.chord_mask_p2 & (CHORD_UP | CHORD_DOWN) == (CHORD_UP | CHORD_DOWN) {
+            if state.chord_mask_p2 & (CHORD_UP | CHORD_DOWN) == (CHORD_UP | CHORD_DOWN)
+                && chord_times_are_simultaneous(
+                    state.p2_chord_up_pressed_at,
+                    state.p2_chord_down_pressed_at,
+                )
+            {
                 if let Some(pack) = state.expanded_pack_name.take() {
                     info!("Up+Down combo: Collapsing pack '{}'.", pack);
                     rebuild_displayed_entries(state);
@@ -2098,8 +2211,14 @@ fn handle_pad_dir_p2(state: &mut State, dir: PadDir, pressed: bool) -> ScreenAct
         }
     } else {
         match dir {
-            PadDir::Up => state.chord_mask_p2 &= !CHORD_UP,
-            PadDir::Down => state.chord_mask_p2 &= !CHORD_DOWN,
+            PadDir::Up => {
+                state.chord_mask_p2 &= !CHORD_UP;
+                state.p2_chord_up_pressed_at = None;
+            }
+            PadDir::Down => {
+                state.chord_mask_p2 &= !CHORD_DOWN;
+                state.p2_chord_down_pressed_at = None;
+            }
             _ => {}
         }
     }
@@ -2297,16 +2416,16 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if play_style == crate::game::profile::PlayStyle::Versus {
         return match ev.action {
             VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-                handle_pad_dir(state, PadDir::Left, ev.pressed)
+                handle_pad_dir(state, PadDir::Left, ev.pressed, ev.timestamp)
             }
             VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-                handle_pad_dir(state, PadDir::Right, ev.pressed)
+                handle_pad_dir(state, PadDir::Right, ev.pressed, ev.timestamp)
             }
             VirtualAction::p1_up | VirtualAction::p1_menu_up => {
-                handle_pad_dir(state, PadDir::Up, ev.pressed)
+                handle_pad_dir(state, PadDir::Up, ev.pressed, ev.timestamp)
             }
             VirtualAction::p1_down | VirtualAction::p1_menu_down => {
-                handle_pad_dir(state, PadDir::Down, ev.pressed)
+                handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
             VirtualAction::p1_start if ev.pressed => handle_confirm(state),
             VirtualAction::p1_back if ev.pressed => {
@@ -2315,16 +2434,16 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
 
             VirtualAction::p2_left | VirtualAction::p2_menu_left => {
-                handle_pad_dir(state, PadDir::Left, ev.pressed)
+                handle_pad_dir(state, PadDir::Left, ev.pressed, ev.timestamp)
             }
             VirtualAction::p2_right | VirtualAction::p2_menu_right => {
-                handle_pad_dir(state, PadDir::Right, ev.pressed)
+                handle_pad_dir(state, PadDir::Right, ev.pressed, ev.timestamp)
             }
             VirtualAction::p2_up | VirtualAction::p2_menu_up => {
-                handle_pad_dir_p2(state, PadDir::Up, ev.pressed)
+                handle_pad_dir_p2(state, PadDir::Up, ev.pressed, ev.timestamp)
             }
             VirtualAction::p2_down | VirtualAction::p2_menu_down => {
-                handle_pad_dir_p2(state, PadDir::Down, ev.pressed)
+                handle_pad_dir_p2(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
             VirtualAction::p2_start if ev.pressed => handle_confirm(state),
             VirtualAction::p2_back if ev.pressed => {
@@ -2338,16 +2457,16 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match crate::game::profile::get_session_player_side() {
         crate::game::profile::PlayerSide::P2 => match ev.action {
             VirtualAction::p2_left | VirtualAction::p2_menu_left => {
-                handle_pad_dir(state, PadDir::Left, ev.pressed)
+                handle_pad_dir(state, PadDir::Left, ev.pressed, ev.timestamp)
             }
             VirtualAction::p2_right | VirtualAction::p2_menu_right => {
-                handle_pad_dir(state, PadDir::Right, ev.pressed)
+                handle_pad_dir(state, PadDir::Right, ev.pressed, ev.timestamp)
             }
             VirtualAction::p2_up | VirtualAction::p2_menu_up => {
-                handle_pad_dir(state, PadDir::Up, ev.pressed)
+                handle_pad_dir(state, PadDir::Up, ev.pressed, ev.timestamp)
             }
             VirtualAction::p2_down | VirtualAction::p2_menu_down => {
-                handle_pad_dir(state, PadDir::Down, ev.pressed)
+                handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
             VirtualAction::p2_start if ev.pressed => handle_confirm(state),
             VirtualAction::p2_back if ev.pressed => {
@@ -2358,16 +2477,16 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         },
         crate::game::profile::PlayerSide::P1 => match ev.action {
             VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-                handle_pad_dir(state, PadDir::Left, ev.pressed)
+                handle_pad_dir(state, PadDir::Left, ev.pressed, ev.timestamp)
             }
             VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-                handle_pad_dir(state, PadDir::Right, ev.pressed)
+                handle_pad_dir(state, PadDir::Right, ev.pressed, ev.timestamp)
             }
             VirtualAction::p1_up | VirtualAction::p1_menu_up => {
-                handle_pad_dir(state, PadDir::Up, ev.pressed)
+                handle_pad_dir(state, PadDir::Up, ev.pressed, ev.timestamp)
             }
             VirtualAction::p1_down | VirtualAction::p1_menu_down => {
-                handle_pad_dir(state, PadDir::Down, ev.pressed)
+                handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
             VirtualAction::p1_start if ev.pressed => handle_confirm(state),
             VirtualAction::p1_back if ev.pressed => {
