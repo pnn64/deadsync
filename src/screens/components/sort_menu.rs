@@ -71,6 +71,8 @@ const GS_LEADERBOARD_MORE_TEXT: &str = "More Leaderboards";
 const GS_LEADERBOARD_CLOSE_HINT: &str = "Press &START; to dismiss.";
 const GS_LEADERBOARD_RIVAL_COLOR: [f32; 4] = color::rgba_hex("#BD94FF");
 const GS_LEADERBOARD_SELF_COLOR: [f32; 4] = color::rgba_hex("#A1FF94");
+const SORTS_INACTIVE_COLOR: [f32; 4] = color::rgba_hex("#005D7F");
+const SORTS_ACTIVE_COLOR: [f32; 4] = color::rgba_hex("#0030A8");
 const REPLAY_MAX_ENTRIES: usize = 1024;
 
 #[derive(Clone, Debug)]
@@ -1906,17 +1908,19 @@ pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
             let top_color = [row_tint[0], row_tint[1], row_tint[2], row_alpha];
             let y = slot_pos.mul_add(ITEM_SPACING, cy);
             let item = &p.items[item_idx];
-            let bottom_base = match item.action {
-                Action::OpenSorts => [0.0, 0.0, 1.0],
-                Action::BackToMain => [1.0, 0.0, 0.0],
-                _ => [1.0, 1.0, 1.0],
+            let bottom_color = match item.action {
+                Action::OpenSorts => [
+                    (SORTS_ACTIVE_COLOR[0] - SORTS_INACTIVE_COLOR[0])
+                        .mul_add(focus_lerp, SORTS_INACTIVE_COLOR[0]),
+                    (SORTS_ACTIVE_COLOR[1] - SORTS_INACTIVE_COLOR[1])
+                        .mul_add(focus_lerp, SORTS_INACTIVE_COLOR[1]),
+                    (SORTS_ACTIVE_COLOR[2] - SORTS_INACTIVE_COLOR[2])
+                        .mul_add(focus_lerp, SORTS_INACTIVE_COLOR[2]),
+                    row_alpha,
+                ],
+                Action::BackToMain => [row_tint[0], 0.0, 0.0, row_alpha],
+                _ => [row_tint[0], row_tint[1], row_tint[2], row_alpha],
             };
-            let bottom_color = [
-                row_tint[0] * bottom_base[0],
-                row_tint[1] * bottom_base[1],
-                row_tint[2] * bottom_base[2],
-                row_alpha,
-            ];
 
             let mut top = act!(text:
                 font(FONT_TOP):
