@@ -39,7 +39,7 @@ const WHEEL_Y_IN_FRAME: f32 = 58.0;
 const PLAYERNAME_X: f32 = -80.0;
 const CURSOR_Y_IN_FRAME: f32 = 58.0;
 const HIGHSCORE_LIST_ZOOM: f32 = 0.95; // SL: HighScoreList.lua list:zoom(0.95)
-const HIGHSCORE_Y_IN_FRAME: f32 = 80.0; // SL parity: (cy-20) + 80 == cy+60
+const HIGHSCORE_Y_GLOBAL: f32 = 68.0;
 const HIGHSCORE_ROW_HEIGHT: f32 = 22.0 * HIGHSCORE_LIST_ZOOM;
 const HIGHSCORE_ROW_COUNT: usize = 5;
 const HIGHSCORE_TEXT_ZOOM: f32 = HIGHSCORE_LIST_ZOOM;
@@ -949,6 +949,15 @@ fn build_wheel(
 }
 
 #[inline(always)]
+fn player_frame_x(side: profile::PlayerSide) -> f32 {
+    let cx = screen_center_x();
+    match side {
+        profile::PlayerSide::P1 => cx - PLAYER_FRAME_X_OFF,
+        profile::PlayerSide::P2 => cx + PLAYER_FRAME_X_OFF,
+    }
+}
+
+#[inline(always)]
 fn highlight_row_color(
     side: profile::PlayerSide,
     active_color_index: i32,
@@ -1043,24 +1052,19 @@ fn build_highscore_list(
 
     Some(Actor::Frame {
         align: [0.5, 0.5],
-        offset: [0.0, HIGHSCORE_Y_IN_FRAME],
+        offset: [player_frame_x(side), screen_center_y() + HIGHSCORE_Y_GLOBAL],
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         children,
         background: None,
-        z: 11,
+        z: 100,
     })
 }
 
-fn build_player_frame(side: profile::PlayerSide, state: &State, stages_len: usize) -> Actor {
+fn build_player_frame(side: profile::PlayerSide, state: &State) -> Actor {
     let ix = side_ix(side);
     let p = &state.players[ix];
-    let cx = screen_center_x();
+    let px = player_frame_x(side);
     let cy = screen_center_y();
-
-    let px = match side {
-        profile::PlayerSide::P1 => cx - PLAYER_FRAME_X_OFF,
-        profile::PlayerSide::P2 => cx + PLAYER_FRAME_X_OFF,
-    };
 
     let mut children: Vec<Actor> = Vec::with_capacity(32);
 
@@ -1134,10 +1138,6 @@ fn build_player_frame(side: profile::PlayerSide, state: &State, stages_len: usiz
         ));
     }
 
-    if let Some(list) = build_highscore_list(side, state, stages_len) {
-        children.push(list);
-    }
-
     Actor::Frame {
         align: [0.5, 0.5],
         offset: [px, cy + PLAYER_FRAME_Y_OFF],
@@ -1169,7 +1169,16 @@ pub fn get_actors(
         if !state.players[side_ix(side)].joined {
             continue;
         }
-        actors.push(build_player_frame(side, state, stages.len()));
+        actors.push(build_player_frame(side, state));
+    }
+
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if !state.players[side_ix(side)].joined {
+            continue;
+        }
+        if let Some(list) = build_highscore_list(side, state, stages.len()) {
+            actors.push(list);
+        }
     }
 
     actors
