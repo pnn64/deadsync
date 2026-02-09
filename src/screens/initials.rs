@@ -4,6 +4,7 @@ use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
+use crate::game::scores;
 use crate::game::stage_stats;
 use crate::screens::components::heart_bg;
 use crate::screens::{Screen, ScreenAction};
@@ -37,6 +38,12 @@ const WHEEL_X_IN_FRAME: f32 = 40.0;
 const WHEEL_Y_IN_FRAME: f32 = 58.0;
 const PLAYERNAME_X: f32 = -80.0;
 const CURSOR_Y_IN_FRAME: f32 = 58.0;
+const HIGHSCORE_LIST_ZOOM: f32 = 0.95; // SL: HighScoreList.lua list:zoom(0.95)
+const HIGHSCORE_Y_IN_FRAME: f32 = 80.0; // SL parity: (cy-20) + 80 == cy+60
+const HIGHSCORE_ROW_HEIGHT: f32 = 22.0 * HIGHSCORE_LIST_ZOOM;
+const HIGHSCORE_ROW_COUNT: usize = 5;
+const HIGHSCORE_TEXT_ZOOM: f32 = HIGHSCORE_LIST_ZOOM;
+const HIGHSCORE_HIGHLIGHT_PERIOD: f32 = 4.0 / 3.0;
 
 // Cursor.png (Simply Love): 496x92, zoom(0.5)
 const NAME_ENTRY_CURSOR_TEX: &str = "name_entry_cursor.png";
@@ -86,12 +93,34 @@ struct PlayerEntry {
     nav_key_last_scrolled_at: Option<Instant>,
 }
 
+#[derive(Clone, Debug)]
+struct ChartScoreCache {
+    chart_hash: String,
+    entries: Vec<scores::LeaderboardEntry>,
+    used: Vec<bool>,
+}
+
+#[derive(Clone, Debug)]
+struct HighScoreRow {
+    rank: String,
+    name: String,
+    score: String,
+    date: String,
+    is_highlight: bool,
+}
+
+#[derive(Clone, Debug)]
+struct StageHighScores {
+    rows: Vec<HighScoreRow>,
+}
+
 pub struct State {
     pub active_color_index: i32,
     bg: heart_bg::State,
     elapsed: f32,
     finish_hold_elapsed: Option<f32>,
     players: [PlayerEntry; 2],
+    highscore_lists: [Vec<Option<StageHighScores>>; 2],
 }
 
 #[inline(always)]
@@ -268,6 +297,199 @@ impl Wheel {
     }
 }
 
+const MONTH_ABBR: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+fn format_highscore_date(date: &str) -> String {
+    let trimmed = date.trim();
+    if trimmed.is_empty() {
+        return "----------".to_string();
+    }
+
+    let ymd = trimmed.split_once(' ').map_or(trimmed, |(d, _)| d);
+    let mut parts = ymd.split('-');
+    let (Some(year), Some(month), Some(day)) = (parts.next(), parts.next(), parts.next()) else {
+        return trimmed.to_string();
+    };
+
+    let Some(month_idx) = month
+        .parse::<usize>()
+        .ok()
+        .and_then(|m| m.checked_sub(1))
+        .filter(|m| *m < MONTH_ABBR.len())
+    else {
+        return trimmed.to_string();
+    };
+    let Some(day_num) = day.parse::<u32>().ok().filter(|d| *d > 0) else {
+        return trimmed.to_string();
+    };
+
+    format!("{} {}, {}", MONTH_ABBR[month_idx], day_num, year)
+}
+
+#[inline(always)]
+fn highscore_text_score(score_10000: f64) -> String {
+    format!("{:.2}%", (score_10000 / 100.0).clamp(0.0, 100.0))
+}
+
+#[inline(always)]
+fn stage_score_10000(score_percent: f64) -> f64 {
+    (score_percent * 10000.0).round()
+}
+
+#[inline(always)]
+fn is_matching_stage_score(entry_score: f64, stage_score: f64) -> bool {
+    (entry_score - stage_score).abs() <= 0.5
+}
+
+#[inline(always)]
+fn highscore_rank_window(highlight_rank: Option<u32>) -> (u32, u32) {
+    let mut lower: u32 = 1;
+    let mut upper: u32 = HIGHSCORE_ROW_COUNT as u32;
+    if let Some(rank) = highlight_rank
+        && rank > upper
+    {
+        lower = lower.saturating_add(rank - upper);
+        upper = rank;
+    }
+    (lower, upper)
+}
+
+fn find_chart_score_cache<'a>(
+    chart_caches: &'a mut Vec<ChartScoreCache>,
+    chart_hash: &str,
+) -> &'a mut ChartScoreCache {
+    if let Some(idx) = chart_caches
+        .iter()
+        .position(|cache| cache.chart_hash == chart_hash)
+    {
+        return &mut chart_caches[idx];
+    }
+
+    let entries = scores::get_machine_leaderboard_local(chart_hash, usize::MAX);
+    chart_caches.push(ChartScoreCache {
+        chart_hash: chart_hash.to_string(),
+        used: vec![false; entries.len()],
+        entries,
+    });
+
+    let last = chart_caches.len().saturating_sub(1);
+    &mut chart_caches[last]
+}
+
+fn consume_highlight_rank(
+    entries: &[scores::LeaderboardEntry],
+    used: &mut [bool],
+    initials: &str,
+    target_score_10000: f64,
+) -> Option<u32> {
+    if initials.trim().is_empty() {
+        return None;
+    }
+
+    for (idx, entry) in entries.iter().enumerate() {
+        if used.get(idx).copied().unwrap_or(false) {
+            continue;
+        }
+        if entry.name != initials || !is_matching_stage_score(entry.score, target_score_10000) {
+            continue;
+        }
+        if let Some(flag) = used.get_mut(idx) {
+            *flag = true;
+        }
+        return Some(entry.rank.max(1));
+    }
+
+    None
+}
+
+fn build_stage_highscores(
+    entries: &[scores::LeaderboardEntry],
+    highlight_rank: Option<u32>,
+) -> StageHighScores {
+    let (lower, upper) = highscore_rank_window(highlight_rank);
+    let mut rows = Vec::with_capacity(HIGHSCORE_ROW_COUNT);
+
+    for rank in lower..=upper {
+        let entry = entries.get(rank.saturating_sub(1) as usize);
+        let (name, score, date) = if let Some(entry) = entry {
+            let name = {
+                let trimmed = entry.name.trim();
+                if trimmed.is_empty() {
+                    "----".to_string()
+                } else {
+                    entry.name.clone()
+                }
+            };
+            (
+                name,
+                highscore_text_score(entry.score),
+                format_highscore_date(&entry.date),
+            )
+        } else {
+            (
+                "----".to_string(),
+                "------".to_string(),
+                "----------".to_string(),
+            )
+        };
+
+        rows.push(HighScoreRow {
+            rank: format!("{rank}."),
+            name,
+            score,
+            date,
+            is_highlight: highlight_rank == Some(rank),
+        });
+    }
+
+    StageHighScores { rows }
+}
+
+fn build_side_highscore_lists(
+    side: profile::PlayerSide,
+    initials: &str,
+    stages: &[stage_stats::StageSummary],
+) -> Vec<Option<StageHighScores>> {
+    let mut out = vec![None; stages.len()];
+    let mut chart_caches: Vec<ChartScoreCache> = Vec::with_capacity(stages.len());
+    let side_idx = side_ix(side);
+
+    for stage_idx in (0..stages.len()).rev() {
+        let Some(player_stage) = stages
+            .get(stage_idx)
+            .and_then(|s| s.players.get(side_idx))
+            .and_then(|p| p.as_ref())
+        else {
+            continue;
+        };
+
+        let cache =
+            find_chart_score_cache(&mut chart_caches, player_stage.chart.short_hash.as_str());
+        let highlight = consume_highlight_rank(
+            cache.entries.as_slice(),
+            cache.used.as_mut_slice(),
+            initials,
+            stage_score_10000(player_stage.score_percent),
+        );
+
+        out[stage_idx] = Some(build_stage_highscores(cache.entries.as_slice(), highlight));
+    }
+
+    out
+}
+
+pub fn set_highscore_lists(state: &mut State, stages: &[stage_stats::StageSummary]) {
+    let p1_initials = state.players[side_ix(profile::PlayerSide::P1)].name.clone();
+    let p2_initials = state.players[side_ix(profile::PlayerSide::P2)].name.clone();
+
+    state.highscore_lists[side_ix(profile::PlayerSide::P1)] =
+        build_side_highscore_lists(profile::PlayerSide::P1, p1_initials.as_str(), stages);
+    state.highscore_lists[side_ix(profile::PlayerSide::P2)] =
+        build_side_highscore_lists(profile::PlayerSide::P2, p2_initials.as_str(), stages);
+}
+
 fn player_entry_for(side: profile::PlayerSide) -> PlayerEntry {
     let joined = profile::is_session_side_joined(side);
     let persistent = joined && !profile::is_session_side_guest(side);
@@ -360,6 +582,7 @@ pub fn init() -> State {
             player_entry_for(profile::PlayerSide::P1),
             player_entry_for(profile::PlayerSide::P2),
         ],
+        highscore_lists: [Vec::new(), Vec::new()],
     }
 }
 
@@ -725,7 +948,110 @@ fn build_wheel(
     }
 }
 
-fn build_player_frame(side: profile::PlayerSide, state: &State) -> Actor {
+#[inline(always)]
+fn highlight_row_color(
+    side: profile::PlayerSide,
+    active_color_index: i32,
+    elapsed: f32,
+) -> [f32; 4] {
+    let base = player_color_rgba(side, active_color_index);
+    let phase =
+        ((elapsed / HIGHSCORE_HIGHLIGHT_PERIOD) * (std::f32::consts::TAU)).sin() * 0.5 + 0.5;
+    let inv = 1.0 - phase;
+    [
+        base[0] * inv + phase,
+        base[1] * inv + phase,
+        base[2] * inv + phase,
+        1.0,
+    ]
+}
+
+fn build_highscore_list(
+    side: profile::PlayerSide,
+    state: &State,
+    stages_len: usize,
+) -> Option<Actor> {
+    if stages_len == 0 {
+        return None;
+    }
+
+    let stage_idx = stage_index_for(state.elapsed, stages_len);
+    let list = state
+        .highscore_lists
+        .get(side_ix(side))
+        .and_then(|all| all.get(stage_idx))
+        .and_then(|list| list.as_ref())?;
+
+    let hl = highlight_row_color(side, state.active_color_index, state.elapsed);
+    let mut children = Vec::with_capacity(HIGHSCORE_ROW_COUNT * 4);
+    let rank_x = -120.0 * HIGHSCORE_LIST_ZOOM;
+    let name_x = -110.0 * HIGHSCORE_LIST_ZOOM;
+    let score_x = -24.0 * HIGHSCORE_LIST_ZOOM;
+    let date_x = 50.0 * HIGHSCORE_LIST_ZOOM;
+    let date_maxw = 165.0 * HIGHSCORE_LIST_ZOOM;
+
+    for (i, row) in list.rows.iter().enumerate() {
+        let y = i as f32 * HIGHSCORE_ROW_HEIGHT;
+        let col = if row.is_highlight {
+            hl
+        } else {
+            [1.0, 1.0, 1.0, 1.0]
+        };
+
+        children.push(act!(text:
+            font("miso"):
+            settext(row.rank.clone()):
+            align(1.0, 0.0):
+            xy(rank_x, y):
+            zoom(HIGHSCORE_TEXT_ZOOM):
+            z(11):
+            diffuse(col[0], col[1], col[2], col[3]):
+            horizalign(right)
+        ));
+        children.push(act!(text:
+            font("miso"):
+            settext(row.name.clone()):
+            align(0.0, 0.0):
+            xy(name_x, y):
+            zoom(HIGHSCORE_TEXT_ZOOM):
+            z(11):
+            diffuse(col[0], col[1], col[2], col[3]):
+            horizalign(left)
+        ));
+        children.push(act!(text:
+            font("miso"):
+            settext(row.score.clone()):
+            align(0.0, 0.0):
+            xy(score_x, y):
+            zoom(HIGHSCORE_TEXT_ZOOM):
+            z(11):
+            diffuse(col[0], col[1], col[2], col[3]):
+            horizalign(left)
+        ));
+        children.push(act!(text:
+            font("miso"):
+            settext(row.date.clone()):
+            align(0.0, 0.0):
+            xy(date_x, y):
+            zoom(HIGHSCORE_TEXT_ZOOM):
+            maxwidth(date_maxw):
+            z(11):
+            diffuse(col[0], col[1], col[2], col[3]):
+            horizalign(left)
+        ));
+    }
+
+    Some(Actor::Frame {
+        align: [0.5, 0.5],
+        offset: [0.0, HIGHSCORE_Y_IN_FRAME],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        children,
+        background: None,
+        z: 11,
+    })
+}
+
+fn build_player_frame(side: profile::PlayerSide, state: &State, stages_len: usize) -> Actor {
     let ix = side_ix(side);
     let p = &state.players[ix];
     let cx = screen_center_x();
@@ -738,7 +1064,7 @@ fn build_player_frame(side: profile::PlayerSide, state: &State) -> Actor {
 
     let mut children: Vec<Actor> = Vec::with_capacity(32);
 
-    // Quads: behind name, wheel, and (future) high score list.
+    // Quads: behind name, wheel, and high score list.
     children.push(act!(quad:
         align(0.5, 0.5):
         xy(0.0, 0.0):
@@ -808,6 +1134,10 @@ fn build_player_frame(side: profile::PlayerSide, state: &State) -> Actor {
         ));
     }
 
+    if let Some(list) = build_highscore_list(side, state, stages_len) {
+        children.push(list);
+    }
+
     Actor::Frame {
         align: [0.5, 0.5],
         offset: [px, cy + PLAYER_FRAME_Y_OFF],
@@ -839,7 +1169,7 @@ pub fn get_actors(
         if !state.players[side_ix(side)].joined {
             continue;
         }
-        actors.push(build_player_frame(side, state));
+        actors.push(build_player_frame(side, state, stages.len()));
     }
 
     actors

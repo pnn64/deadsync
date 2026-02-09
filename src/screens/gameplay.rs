@@ -10,7 +10,9 @@ use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 
 pub use crate::game::gameplay::{State, init, update};
-use crate::game::gameplay::{TRANSITION_IN_DURATION, TRANSITION_OUT_DURATION, assist_clap_is_enabled};
+use crate::game::gameplay::{
+    TRANSITION_IN_DURATION, TRANSITION_OUT_DURATION, assist_clap_is_enabled,
+};
 
 // --- TRANSITIONS ---
 pub fn in_transition() -> (Vec<Actor>, f32) {

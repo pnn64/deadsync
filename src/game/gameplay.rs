@@ -317,7 +317,10 @@ fn build_assist_clap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usi
             let note = &notes[i];
             if note.can_be_judged
                 && !note.is_fake
-                && matches!(note.note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll)
+                && matches!(
+                    note.note_type,
+                    NoteType::Tap | NoteType::Hold | NoteType::Roll
+                )
             {
                 has_clap = true;
             }
@@ -4022,7 +4025,10 @@ fn set_assist_clap_enabled(state: &mut State, enabled: bool, now_music_time: f32
     state.assist_last_crossed_row = song_row;
     state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
 
-    info!("Assist clap {} (F7).", if enabled { "enabled" } else { "disabled" });
+    info!(
+        "Assist clap {} (F7).",
+        if enabled { "enabled" } else { "disabled" }
+    );
 }
 
 fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {

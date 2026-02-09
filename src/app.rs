@@ -2466,6 +2466,10 @@ impl App {
             };
             self.state.screens.initials_state = initials::init();
             self.state.screens.initials_state.active_color_index = color_idx;
+            initials::set_highscore_lists(
+                &mut self.state.screens.initials_state,
+                &self.state.session.played_stages,
+            );
 
             if let Some(backend) = self.backend.as_mut() {
                 for stage in &self.state.session.played_stages {
