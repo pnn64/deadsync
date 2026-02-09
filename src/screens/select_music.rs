@@ -1347,13 +1347,24 @@ fn try_open_sort_menu(state: &mut State) -> bool {
 
 #[inline(always)]
 fn sort_menu_items(state: &State) -> &[sort_menu::Item] {
-    if matches!(
+    let has_song_selected = matches!(
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::Song(_))
+    );
+    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    let single_player_joined = p1_joined ^ p2_joined;
+    match (
+        profile::get_session_play_style(),
+        single_player_joined,
+        has_song_selected,
     ) {
-        &sort_menu::ITEMS
-    } else {
-        &sort_menu::ITEMS[..6]
+        (profile::PlayStyle::Single, true, true) => &sort_menu::ITEMS_WITH_SWITCH_TO_DOUBLE,
+        (profile::PlayStyle::Single, true, false) => &sort_menu::ITEMS_WITH_SWITCH_TO_DOUBLE[..7],
+        (profile::PlayStyle::Double, true, true) => &sort_menu::ITEMS_WITH_SWITCH_TO_SINGLE,
+        (profile::PlayStyle::Double, true, false) => &sort_menu::ITEMS_WITH_SWITCH_TO_SINGLE[..7],
+        (_, _, true) => &sort_menu::ITEMS,
+        (_, _, false) => &sort_menu::ITEMS[..6],
     }
 }
 
@@ -1727,6 +1738,27 @@ fn show_replay_overlay(state: &mut State) {
     clear_preview(state);
 }
 
+fn switch_single_player_style(state: &mut State, new_style: profile::PlayStyle) {
+    hide_sort_menu(state);
+
+    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    let side = match (p1_joined, p2_joined) {
+        (true, false) => profile::PlayerSide::P1,
+        (false, true) => profile::PlayerSide::P2,
+        _ => profile::get_session_player_side(),
+    };
+    match side {
+        profile::PlayerSide::P1 => profile::set_session_joined(true, false),
+        profile::PlayerSide::P2 => profile::set_session_joined(false, true),
+    }
+    profile::set_session_player_side(side);
+    profile::set_session_play_style(new_style);
+    refresh_after_reload(state);
+    state.selection_animation_timer = 0.0;
+    crate::ui::runtime::clear_all();
+}
+
 fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match sort_menu::handle_leaderboard_input(&mut state.leaderboard, ev) {
         sort_menu::LeaderboardInputOutcome::ChangedPane => {
@@ -1798,6 +1830,12 @@ fn sort_menu_activate(state: &mut State) {
         sort_menu::Action::SortByRecent => {
             apply_wheel_sort(state, WheelSortMode::Recent);
             hide_sort_menu(state);
+        }
+        sort_menu::Action::SwitchToSingle => {
+            switch_single_player_style(state, profile::PlayStyle::Single);
+        }
+        sort_menu::Action::SwitchToDouble => {
+            switch_single_player_style(state, profile::PlayStyle::Double);
         }
         sort_menu::Action::TestInput => {
             hide_sort_menu(state);

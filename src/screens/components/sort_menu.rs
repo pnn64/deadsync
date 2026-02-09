@@ -191,6 +191,8 @@ pub enum Action {
     SortByGroup,
     SortByTitle,
     SortByRecent,
+    SwitchToSingle,
+    SwitchToDouble,
     TestInput,
     SongSearch,
     ReloadSongsCourses,
@@ -205,47 +207,90 @@ pub struct Item {
     pub action: Action,
 }
 
+const ITEM_SORT_BY_GROUP: Item = Item {
+    top_label: "Sort By",
+    bottom_label: "Group",
+    action: Action::SortByGroup,
+};
+const ITEM_SORT_BY_TITLE: Item = Item {
+    top_label: "Sort By",
+    bottom_label: "Title",
+    action: Action::SortByTitle,
+};
+const ITEM_SORT_BY_RECENT: Item = Item {
+    top_label: "Sort By",
+    bottom_label: "Recently Played",
+    action: Action::SortByRecent,
+};
+const ITEM_SWITCH_TO_SINGLE: Item = Item {
+    top_label: "Change Style To",
+    bottom_label: "Single",
+    action: Action::SwitchToSingle,
+};
+const ITEM_SWITCH_TO_DOUBLE: Item = Item {
+    top_label: "Change Style To",
+    bottom_label: "Double",
+    action: Action::SwitchToDouble,
+};
+const ITEM_TEST_INPUT: Item = Item {
+    top_label: "Feeling salty?",
+    bottom_label: "Test Input",
+    action: Action::TestInput,
+};
+const ITEM_SONG_SEARCH: Item = Item {
+    top_label: "Wherefore Art Thou?",
+    bottom_label: "Song Search",
+    action: Action::SongSearch,
+};
+const ITEM_RELOAD_SONGS_COURSES: Item = Item {
+    top_label: "Take a Breather~",
+    bottom_label: "Load New Songs",
+    action: Action::ReloadSongsCourses,
+};
+const ITEM_PLAY_REPLAY: Item = Item {
+    top_label: "Machine Data",
+    bottom_label: "Play Replay",
+    action: Action::PlayReplay,
+};
+const ITEM_SHOW_LEADERBOARD: Item = Item {
+    top_label: "GrooveStats",
+    bottom_label: "Leaderboard",
+    action: Action::ShowLeaderboard,
+};
+
 pub const ITEMS: [Item; 8] = [
-    Item {
-        top_label: "Sort By",
-        bottom_label: "Group",
-        action: Action::SortByGroup,
-    },
-    Item {
-        top_label: "Sort By",
-        bottom_label: "Title",
-        action: Action::SortByTitle,
-    },
-    Item {
-        top_label: "Sort By",
-        bottom_label: "Recently Played",
-        action: Action::SortByRecent,
-    },
-    Item {
-        top_label: "Feeling salty?",
-        bottom_label: "Test Input",
-        action: Action::TestInput,
-    },
-    Item {
-        top_label: "Wherefore Art Thou?",
-        bottom_label: "Song Search",
-        action: Action::SongSearch,
-    },
-    Item {
-        top_label: "Take a Breather~",
-        bottom_label: "Load New Songs",
-        action: Action::ReloadSongsCourses,
-    },
-    Item {
-        top_label: "Machine Data",
-        bottom_label: "Play Replay",
-        action: Action::PlayReplay,
-    },
-    Item {
-        top_label: "GrooveStats",
-        bottom_label: "Leaderboard",
-        action: Action::ShowLeaderboard,
-    },
+    ITEM_SORT_BY_GROUP,
+    ITEM_SORT_BY_TITLE,
+    ITEM_SORT_BY_RECENT,
+    ITEM_TEST_INPUT,
+    ITEM_SONG_SEARCH,
+    ITEM_RELOAD_SONGS_COURSES,
+    ITEM_PLAY_REPLAY,
+    ITEM_SHOW_LEADERBOARD,
+];
+
+pub const ITEMS_WITH_SWITCH_TO_SINGLE: [Item; 9] = [
+    ITEM_SORT_BY_GROUP,
+    ITEM_SORT_BY_TITLE,
+    ITEM_SORT_BY_RECENT,
+    ITEM_SWITCH_TO_SINGLE,
+    ITEM_TEST_INPUT,
+    ITEM_SONG_SEARCH,
+    ITEM_RELOAD_SONGS_COURSES,
+    ITEM_PLAY_REPLAY,
+    ITEM_SHOW_LEADERBOARD,
+];
+
+pub const ITEMS_WITH_SWITCH_TO_DOUBLE: [Item; 9] = [
+    ITEM_SORT_BY_GROUP,
+    ITEM_SORT_BY_TITLE,
+    ITEM_SORT_BY_RECENT,
+    ITEM_SWITCH_TO_DOUBLE,
+    ITEM_TEST_INPUT,
+    ITEM_SONG_SEARCH,
+    ITEM_RELOAD_SONGS_COURSES,
+    ITEM_PLAY_REPLAY,
+    ITEM_SHOW_LEADERBOARD,
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
