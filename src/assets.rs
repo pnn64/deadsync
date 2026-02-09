@@ -1,7 +1,7 @@
 use crate::core::gfx::{Backend, SamplerDesc, SamplerFilter, SamplerWrap, Texture as GfxTexture};
 use crate::game::profile;
 use crate::ui::font::{self, Font, FontLoadData};
-use image::RgbaImage;
+use image::{ImageFormat, ImageReader, RgbaImage};
 use log::{info, warn};
 use std::{
     collections::HashMap,
@@ -144,6 +144,32 @@ pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
     let p = p.as_ref();
     let rel = p.strip_prefix(Path::new("assets")).unwrap_or(p);
     rel.to_string_lossy().replace('\\', "/")
+}
+
+pub(crate) fn open_image_fallback(path: &Path) -> image::ImageResult<image::DynamicImage> {
+    let hint = ImageFormat::from_path(path).ok();
+    if let Some(fmt) = hint {
+        let mut reader = ImageReader::open(path).map_err(image::ImageError::IoError)?;
+        reader.set_format(fmt);
+        if let Ok(img) = reader.decode() {
+            return Ok(img);
+        }
+    }
+
+    let guessed = ImageReader::open(path)
+        .map_err(image::ImageError::IoError)?
+        .with_guessed_format()?;
+    let guessed_fmt = guessed.format();
+    if let (Some(hint_fmt), Some(real_fmt)) = (hint, guessed_fmt)
+        && hint_fmt != real_fmt
+    {
+        info!(
+            "Graphic file '{}' is really {:?}",
+            path.to_string_lossy(),
+            real_fmt
+        );
+    }
+    guessed.decode()
 }
 
 #[inline(always)]
@@ -651,7 +677,7 @@ impl AssetManager {
             } else {
                 Path::new("assets/graphics").join(&relative_path)
             };
-            match image::open(&path) {
+            match open_image_fallback(&path) {
                 Ok(img) => Ok((key, img.to_rgba8())),
                 Err(e) => Err((key, e.to_string())),
             }
@@ -806,7 +832,7 @@ impl AssetManager {
                         .get(&key)
                         .map(|s| parse_texture_hints(s))
                         .unwrap_or_default();
-                    let mut image_data = image::open(tex_path)?.to_rgba8();
+                    let mut image_data = open_image_fallback(tex_path)?.to_rgba8();
                     if !hints.is_default() {
                         apply_texture_hints(&mut image_data, &hints);
                     }
@@ -861,7 +887,7 @@ impl AssetManager {
                 self.textures.remove(&key);
             }
 
-            match image::open(&path) {
+            match open_image_fallback(&path) {
                 Ok(img) => {
                     let rgba = img.to_rgba8();
                     match backend.create_texture(&rgba, SamplerDesc::default()) {
@@ -906,7 +932,7 @@ impl AssetManager {
 
             self.destroy_current_dynamic_banner(backend);
 
-            match image::open(&path) {
+            match open_image_fallback(&path) {
                 Ok(img) => {
                     let rgba = img.to_rgba8();
                     match backend.create_texture(&rgba, SamplerDesc::default()) {
@@ -954,7 +980,7 @@ impl AssetManager {
 
             self.destroy_current_dynamic_background(backend);
 
-            match image::open(&path) {
+            match open_image_fallback(&path) {
                 Ok(img) => {
                     let rgba = img.to_rgba8();
                     match backend.create_texture(&rgba, SamplerDesc::default()) {
@@ -1048,7 +1074,7 @@ impl AssetManager {
             return;
         }
 
-        match image::open(path) {
+        match open_image_fallback(path) {
             Ok(img) => {
                 let rgba = img.to_rgba8();
                 match backend.create_texture(&rgba, SamplerDesc::default()) {

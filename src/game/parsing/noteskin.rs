@@ -512,7 +512,7 @@ fn mine_fill_gradients(mines: &[Option<SpriteSlot>]) -> Vec<Option<Vec<[f32; 4]>
 fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
     let texture_key = slot.texture_key();
     let path = Path::new("assets").join(texture_key);
-    let image = image::open(&path).ok()?.to_rgba8();
+    let image = assets::open_image_fallback(&path).ok()?.to_rgba8();
 
     let mut width = slot.def.size[0];
     let mut height = slot.def.size[1];
