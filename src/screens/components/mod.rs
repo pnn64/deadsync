@@ -14,3 +14,4 @@ pub mod pad_display;
 pub mod screen_bar;
 pub mod sort_menu;
 pub mod stats_overlay;
+pub mod test_input;

@@ -1,108 +1,27 @@
 use crate::act;
-use crate::core::input::{InputEvent, PadDir, PadEvent, VirtualAction, with_keymap};
-use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::core::input::{InputEvent, PadEvent, VirtualAction};
+use crate::core::space::{screen_height, screen_width};
 use crate::screens::components::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
-use crate::screens::components::{heart_bg, screen_bar};
+use crate::screens::components::{heart_bg, screen_bar, test_input};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use std::collections::HashMap;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 
-const UNMAPPED_AXIS_HELD_THRESHOLD: f32 = 0.5;
-
-/// Logical buttons we visualize on the pad/menu HUD.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum LogicalButton {
-    // Dance pad directions (P1/P2 share layout; highlight per side).
-    Up,
-    Down,
-    Left,
-    Right,
-    // Menu buttons (center cluster below pad).
-    MenuLeft,
-    MenuRight,
-    Start,
-    Select,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum PlayerSlot {
-    P1,
-    P2,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct PadVisualState {
-    pub buttons_held: HashMap<(PlayerSlot, LogicalButton), bool>,
-}
-
-#[derive(Clone, Debug, Default)]
-struct UnmappedTracker {
-    held: HashMap<UnmappedKey, bool>,
-    axis_value: HashMap<UnmappedKey, f32>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum UnmappedKey {
-    Dir { dev: usize, dir: PadDir },
-    RawButton { dev: usize, code_u32: u32 },
-    RawAxis { dev: usize, code_u32: u32 },
-}
-
-impl UnmappedTracker {
-    #[inline(always)]
-    fn set(&mut self, key: UnmappedKey, pressed: bool) {
-        self.held.insert(key, pressed);
-    }
-
-    #[inline(always)]
-    fn set_axis(&mut self, key: UnmappedKey, value: f32) {
-        self.axis_value.insert(key, value);
-        self.held
-            .insert(key, value.abs() >= UNMAPPED_AXIS_HELD_THRESHOLD);
-    }
-
-    #[inline(always)]
-    fn active_lines(&self) -> Vec<String> {
-        let mut out = Vec::new();
-        for (k, pressed) in &self.held {
-            if !*pressed {
-                continue;
-            }
-            let line = match *k {
-                UnmappedKey::Dir { dev, dir } => format!("Gamepad {dev}: Dir::{dir:?}"),
-                UnmappedKey::RawButton { dev, code_u32 } => {
-                    format!("Gamepad {dev}: RawButton [0x{code_u32:08X}]")
-                }
-                UnmappedKey::RawAxis { dev, code_u32 } => {
-                    let value = self.axis_value.get(k).copied().unwrap_or(0.0);
-                    format!("Gamepad {dev}: RawAxis [0x{code_u32:08X}] ({value:.3})")
-                }
-            };
-            out.push(format!("{line} (not mapped)"));
-        }
-        out.sort();
-        out
-    }
-}
-
 pub struct State {
     pub active_color_index: i32,
     bg: heart_bg::State,
-    pad_visual: PadVisualState,
-    unmapped: UnmappedTracker,
+    test_input: test_input::State,
 }
 
 pub fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: heart_bg::State::new(),
-        pad_visual: PadVisualState::default(),
-        unmapped: UnmappedTracker::default(),
+        test_input: test_input::State::default(),
     }
 }
 
@@ -139,43 +58,6 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 /* ------------------------------- input -------------------------------- */
 
-const fn player_from_action(act: VirtualAction) -> Option<PlayerSlot> {
-    use VirtualAction::{
-        p1_back, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
-        p1_operator, p1_restart, p1_right, p1_select, p1_start, p1_up, p2_back, p2_down, p2_left,
-        p2_menu_down, p2_menu_left, p2_menu_right, p2_menu_up, p2_operator, p2_restart, p2_right,
-        p2_select, p2_start, p2_up,
-    };
-    match act {
-        p1_up | p1_down | p1_left | p1_right | p1_menu_up | p1_menu_down | p1_menu_left
-        | p1_menu_right | p1_start | p1_select | p1_back | p1_operator | p1_restart => {
-            Some(PlayerSlot::P1)
-        }
-        p2_up | p2_down | p2_left | p2_right | p2_menu_up | p2_menu_down | p2_menu_left
-        | p2_menu_right | p2_start | p2_select | p2_back | p2_operator | p2_restart => {
-            Some(PlayerSlot::P2)
-        }
-    }
-}
-
-const fn logical_button_from_action(act: VirtualAction) -> Option<LogicalButton> {
-    use VirtualAction::{
-        p1_down, p1_left, p1_menu_left, p1_menu_right, p1_right, p1_select, p1_start, p1_up,
-        p2_down, p2_left, p2_menu_left, p2_menu_right, p2_right, p2_select, p2_start, p2_up,
-    };
-    match act {
-        p1_up | p2_up => Some(LogicalButton::Up),
-        p1_down | p2_down => Some(LogicalButton::Down),
-        p1_left | p2_left => Some(LogicalButton::Left),
-        p1_right | p2_right => Some(LogicalButton::Right),
-        p1_menu_left | p2_menu_left => Some(LogicalButton::MenuLeft),
-        p1_menu_right | p2_menu_right => Some(LogicalButton::MenuRight),
-        p1_start | p2_start => Some(LogicalButton::Start),
-        p1_select | p2_select => Some(LogicalButton::Select),
-        _ => None,
-    }
-}
-
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     // Back or Start returns to Options, matching the operator menu behavior.
     if ev.pressed {
@@ -190,72 +72,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
     }
 
-    // Update pad highlight state from virtual actions (for mapped inputs).
-    if let Some(player) = player_from_action(ev.action)
-        && let Some(btn) = logical_button_from_action(ev.action)
-    {
-        state
-            .pad_visual
-            .buttons_held
-            .insert((player, btn), ev.pressed);
-    }
-
+    test_input::apply_virtual_input(&mut state.test_input, ev);
     ScreenAction::None
 }
 
-/// Raw pad events are used to approximate Simply Love's \"unmapped\" device list.
+/// Raw pad events are used to approximate Simply Love's "unmapped" device list.
 pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
-    use crate::core::input::PadEvent as PE;
-
-    // Determine a stable, human-readable label for this device element.
-    let (key, pressed_opt, axis_value_opt) = match pad_event {
-        PE::Dir {
-            id, dir, pressed, ..
-        } => {
-            let dev = usize::from(*id);
-            (UnmappedKey::Dir { dev, dir: *dir }, Some(*pressed), None)
-        }
-        PE::RawButton {
-            id, code, pressed, ..
-        } => {
-            let dev = usize::from(*id);
-            (
-                UnmappedKey::RawButton {
-                    dev,
-                    code_u32: code.into_u32(),
-                },
-                Some(*pressed),
-                None,
-            )
-        }
-        PE::RawAxis {
-            id, code, value, ..
-        } => {
-            let dev = usize::from(*id);
-            (
-                UnmappedKey::RawAxis {
-                    dev,
-                    code_u32: code.into_u32(),
-                },
-                None,
-                Some(*value),
-            )
-        }
-    };
-
-    // Use the same mapping logic as the main input system to decide whether this
-    // element corresponds to any virtual action. If not, show it as \"not mapped\".
-    let mapped = with_keymap(|km| !km.actions_for_pad_event(pad_event).is_empty());
-
-    if !mapped {
-        if let Some(pressed) = pressed_opt {
-            state.unmapped.set(key, pressed);
-            return;
-        }
-        if let Some(value) = axis_value_opt {
-            state.unmapped.set_axis(key, value);
-        }
-    }
+    test_input::apply_raw_pad_event(&mut state.test_input, pad_event);
 }
 
 /* ------------------------------- drawing ------------------------------- */
@@ -263,14 +86,12 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
 
-    /* -------------------------- HEART BACKGROUND -------------------------- */
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
     }));
 
-    /* ------------------------------ TOP BAR ------------------------------- */
     const FG: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
     actors.push(screen_bar::build(screen_bar::ScreenBarParams {
         title: "TEST INPUT",
@@ -285,206 +106,6 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         fg_color: FG,
     }));
 
-    /* --------------------------- PAD VISUALS --------------------------- */
-
-    // Basic layout: two pads centered horizontally, unmapped list below.
-    let cx = screen_center_x();
-    let cy = screen_center_y() - 20.0;
-    let pad_spacing = 150.0;
-
-    // NOTE: The textures below assume you'll copy the Simply Love assets to:
-    // - deadsync/assets/graphics/test_input/dance.png
-    // - deadsync/assets/graphics/test_input/buttons.png
-    // - deadsync/assets/graphics/test_input/highlight.png
-    // - deadsync/assets/graphics/test_input/highlightgreen.png
-    // - deadsync/assets/graphics/test_input/highlightred.png
-    // - deadsync/assets/graphics/test_input/highlightarrow.png
-    //
-    // and optionally pump/techno variants later.
-
-    // Draw pad backgrounds for P1 and P2 using the dance pad image for now.
-    // Positions are chosen to mirror Simply Love's TestInput Pad offsets
-    // relative to the pad center as closely as possible.
-    let arrow_h_offset = 67.0_f32;
-    let arrow_v_offset = 68.0_f32;
-    let buttons_y = cy + 160.0;
-    let start_y = cy + 146.0;
-    let select_y = cy + 175.0;
-    let menu_y = cy + 160.0;
-    let menu_x_offset = 37.0_f32;
-
-    for (slot, x_offset) in [
-        (PlayerSlot::P1, -pad_spacing),
-        (PlayerSlot::P2, pad_spacing),
-    ] {
-        let pad_x = cx + x_offset as f32;
-        actors.push(act!(sprite("test_input/dance.png"):
-            align(0.5, 0.5):
-            xy(pad_x, cy):
-            zoom(0.8)
-        ));
-
-        // Player label above pad.
-        let label = match slot {
-            PlayerSlot::P1 => "P1",
-            PlayerSlot::P2 => "P2",
-        };
-        actors.push(act!(text:
-            align(0.5, 0.5):
-            xy(pad_x, cy - 150.0):
-            zoom(0.7):
-            font("miso"):
-            settext(label):
-            horizalign(center)
-        ));
-
-        // Simple four-direction highlights roughly matching Simply Love layout.
-        let held = &state.pad_visual.buttons_held;
-        let alpha_up = if *held.get(&(slot, LogicalButton::Up)).unwrap_or(&false) {
-            1.0
-        } else {
-            0.0
-        };
-        let alpha_down = if *held.get(&(slot, LogicalButton::Down)).unwrap_or(&false) {
-            1.0
-        } else {
-            0.0
-        };
-        let alpha_left = if *held.get(&(slot, LogicalButton::Left)).unwrap_or(&false) {
-            1.0
-        } else {
-            0.0
-        };
-        let alpha_right = if *held.get(&(slot, LogicalButton::Right)).unwrap_or(&false) {
-            1.0
-        } else {
-            0.0
-        };
-
-        actors.push(act!(sprite("test_input/highlight.png"):
-            align(0.5, 0.5):
-            xy(pad_x, cy - arrow_v_offset):
-            zoom(0.8):
-            diffuse(1.0, 1.0, 1.0, alpha_up)
-        ));
-        actors.push(act!(sprite("test_input/highlight.png"):
-            align(0.5, 0.5):
-            xy(pad_x, cy + arrow_v_offset):
-            zoom(0.8):
-            diffuse(1.0, 1.0, 1.0, alpha_down)
-        ));
-        actors.push(act!(sprite("test_input/highlight.png"):
-            align(0.5, 0.5):
-            xy(pad_x - arrow_h_offset, cy):
-            zoom(0.8):
-            diffuse(1.0, 1.0, 1.0, alpha_left)
-        ));
-        actors.push(act!(sprite("test_input/highlight.png"):
-            align(0.5, 0.5):
-            xy(pad_x + arrow_h_offset, cy):
-            zoom(0.8):
-            diffuse(1.0, 1.0, 1.0, alpha_right)
-        ));
-
-        // Menu button cluster below pad (Start/Select/MenuLeft/MenuRight).
-        let alpha_start = if *held.get(&(slot, LogicalButton::Start)).unwrap_or(&false) {
-            1.0
-        } else {
-            0.0
-        };
-        let alpha_select = if *held.get(&(slot, LogicalButton::Select)).unwrap_or(&false) {
-            1.0
-        } else {
-            0.0
-        };
-        let alpha_mleft = if *held.get(&(slot, LogicalButton::MenuLeft)).unwrap_or(&false) {
-            1.0
-        } else {
-            0.0
-        };
-        let alpha_mright = if *held
-            .get(&(slot, LogicalButton::MenuRight))
-            .unwrap_or(&false)
-        {
-            1.0
-        } else {
-            0.0
-        };
-
-        // Buttons background sprite (mirrors Simply Love's buttons.png).
-        actors.push(act!(sprite("test_input/buttons.png"):
-            align(0.5, 0.5):
-            xy(pad_x, buttons_y):
-            zoom(0.5)
-        ));
-
-        // Start (green circle)
-        actors.push(act!(sprite("test_input/highlightgreen.png"):
-            align(0.5, 0.5):
-            xy(pad_x, start_y):
-            zoom(0.5):
-            diffuse(1.0, 1.0, 1.0, alpha_start)
-        ));
-        // Select (red circle)
-        actors.push(act!(sprite("test_input/highlightred.png"):
-            align(0.5, 0.5):
-            xy(pad_x, select_y):
-            zoom(0.5):
-            diffuse(1.0, 1.0, 1.0, alpha_select)
-        ));
-        // MenuLeft arrow
-        actors.push(act!(sprite("test_input/highlightarrow.png"):
-            align(0.5, 0.5):
-            xy(pad_x - menu_x_offset, menu_y):
-            zoom(0.5):
-            rotationz(180.0):
-            diffuse(1.0, 1.0, 1.0, alpha_mleft)
-        ));
-        // MenuRight arrow
-        actors.push(act!(sprite("test_input/highlightarrow.png"):
-            align(0.5, 0.5):
-            xy(pad_x + menu_x_offset, menu_y):
-            zoom(0.5):
-            diffuse(1.0, 1.0, 1.0, alpha_mright)
-        ));
-    }
-
-    /* ---------------------- Unmapped device list text --------------------- */
-
-    let lines = state.unmapped.active_lines();
-    if !lines.is_empty() {
-        let start_y = cy + 210.0;
-        let line_h = 16.0;
-        for (i, line) in lines.iter().enumerate() {
-            actors.push(act!(text:
-                font("miso"):
-                settext(line.clone()):
-                align(0.5, 0.0):
-                xy(cx, (i as f32).mul_add(line_h, start_y)):
-                zoom(0.8):
-                horizalign(center)
-            ));
-        }
-    } else {
-        actors.push(act!(text:
-            font("miso"):
-            settext("Press any button on your dance pad or gamepad to test input."):
-            align(0.5, 0.0):
-            xy(cx, cy + 150.0):
-            zoom(0.8):
-            horizalign(center)
-        ));
-    }
-
-    // Footer hint
-    actors.push(act!(text:
-        font("miso"):
-        settext("Press START or BACK to return to Options."):
-        align(0.5, 0.0):
-        xy(cx, screen_height() - 40.0):
-        zoom(0.8):
-        horizalign(center)
-    ));
-
+    actors.extend(test_input::build_test_input_screen_content(&state.test_input));
     actors
 }

@@ -191,6 +191,7 @@ pub enum Action {
     SortByGroup,
     SortByTitle,
     SortByRecent,
+    TestInput,
     SongSearch,
     ReloadSongsCourses,
     PlayReplay,
@@ -204,7 +205,7 @@ pub struct Item {
     pub action: Action,
 }
 
-pub const ITEMS: [Item; 7] = [
+pub const ITEMS: [Item; 8] = [
     Item {
         top_label: "Sort By",
         bottom_label: "Group",
@@ -219,6 +220,11 @@ pub const ITEMS: [Item; 7] = [
         top_label: "Sort By",
         bottom_label: "Recently Played",
         action: Action::SortByRecent,
+    },
+    Item {
+        top_label: "Feeling salty?",
+        bottom_label: "Test Input",
+        action: Action::TestInput,
     },
     Item {
         top_label: "Wherefore Art Thou?",

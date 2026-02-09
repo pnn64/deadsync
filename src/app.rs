@@ -920,6 +920,11 @@ impl App {
         ) {
             return false;
         }
+        if screen == CurrentScreen::SelectMusic
+            && !crate::screens::select_music::allows_late_join(&self.state.screens.select_music_state)
+        {
+            return false;
+        }
 
         if profile::get_session_play_style() == profile::PlayStyle::Double {
             return false;
