@@ -964,6 +964,13 @@ pub struct ErrorBarText {
     pub early: bool,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct OffsetIndicatorText {
+    pub started_at: f32,
+    pub offset_ms: f32,
+    pub window: TimingWindow,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum HealthState {
     #[default]
@@ -1167,6 +1174,7 @@ pub struct PlayerRuntime {
     pub error_bar_color_flash_early: [Option<f32>; 6],
     pub error_bar_color_flash_late: [Option<f32>; 6],
     pub error_bar_text: Option<ErrorBarText>,
+    pub offset_indicator_text: Option<OffsetIndicatorText>,
 }
 
 fn init_player_runtime() -> PlayerRuntime {
@@ -1218,6 +1226,7 @@ fn init_player_runtime() -> PlayerRuntime {
         error_bar_color_flash_early: [None; 6],
         error_bar_color_flash_late: [None; 6],
         error_bar_text: None,
+        offset_indicator_text: None,
     }
 }
 
@@ -3277,9 +3286,11 @@ fn error_bar_push_tick<const N: usize>(
 fn error_bar_register_tap(state: &mut State, player: usize, judgment: &Judgment) {
     let prof = &state.player_profiles[player];
     let style = prof.error_bar;
-    if style == profile::ErrorBarStyle::None {
-        return;
-    }
+    let show_text = prof.error_bar_text || style == profile::ErrorBarStyle::Text;
+    let show_fa_plus_window = prof.show_fa_plus_window;
+    let error_bar_trim = prof.error_bar_trim;
+    let error_bar_multi_tick = prof.error_bar_multi_tick;
+    let error_ms_display = prof.error_ms_display;
     let Some(window) = judgment.window else {
         return;
     };
@@ -3288,8 +3299,16 @@ fn error_bar_register_tap(state: &mut State, player: usize, judgment: &Judgment)
     let offset_s = judgment.time_error_ms / 1000.0;
     let p = &mut state.players[player];
 
-    if style == profile::ErrorBarStyle::Text {
-        let threshold_s = if prof.show_fa_plus_window {
+    if error_ms_display {
+        p.offset_indicator_text = Some(OffsetIndicatorText {
+            started_at: now,
+            offset_ms: judgment.time_error_ms,
+            window,
+        });
+    }
+
+    if show_text {
+        let threshold_s = if show_fa_plus_window {
             state
                 .timing_profile
                 .fa_plus_window_s
@@ -3305,10 +3324,18 @@ fn error_bar_register_tap(state: &mut State, player: usize, judgment: &Judgment)
         } else {
             p.error_bar_text = None;
         }
+    } else {
+        p.error_bar_text = None;
+    }
+
+    if matches!(
+        style,
+        profile::ErrorBarStyle::None | profile::ErrorBarStyle::Text
+    ) {
         return;
     }
 
-    if !error_bar_trim_allows(prof.error_bar_trim, window) {
+    if !error_bar_trim_allows(error_bar_trim, window) {
         return;
     }
 
@@ -3323,7 +3350,7 @@ fn error_bar_register_tap(state: &mut State, player: usize, judgment: &Judgment)
             error_bar_push_tick(
                 &mut p.error_bar_mono_ticks,
                 &mut p.error_bar_mono_next,
-                prof.error_bar_multi_tick,
+                error_bar_multi_tick,
                 tick,
             );
         }
@@ -3331,12 +3358,12 @@ fn error_bar_register_tap(state: &mut State, player: usize, judgment: &Judgment)
             error_bar_push_tick(
                 &mut p.error_bar_color_ticks,
                 &mut p.error_bar_color_next,
-                prof.error_bar_multi_tick,
+                error_bar_multi_tick,
                 tick,
             );
             p.error_bar_color_bar_started_at = Some(now);
 
-            let is_top = if prof.show_fa_plus_window {
+            let is_top = if show_fa_plus_window {
                 window == TimingWindow::W0
             } else {
                 window == TimingWindow::W1

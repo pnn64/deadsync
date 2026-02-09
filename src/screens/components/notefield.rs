@@ -55,6 +55,7 @@ const ERROR_BAR_LINES_FADE_START_S: f32 = 2.5;
 const ERROR_BAR_LINES_FADE_DUR_S: f32 = 0.5;
 const ERROR_BAR_LABEL_FADE_DUR_S: f32 = 0.5;
 const ERROR_BAR_LABEL_HOLD_S: f32 = 2.0;
+const OFFSET_INDICATOR_DUR_S: f32 = 0.5;
 
 const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
 
@@ -276,8 +277,15 @@ fn zmod_layout_ys(
     let mut top_y = judgment_y - ERROR_BAR_JUDGMENT_HEIGHT * 0.5;
     let mut bottom_y = judgment_y + ERROR_BAR_JUDGMENT_HEIGHT * 0.5;
 
-    // Zmod SL-Layout.lua: hasErrorBar checks multiple flags; deadsync models this as one enum.
-    if profile.error_bar != crate::game::profile::ErrorBarStyle::None {
+    // Zmod SL-Layout.lua: hasErrorBar checks multiple flags.
+    let has_error_bar = profile.error_bar_text
+        || matches!(
+            profile.error_bar,
+            crate::game::profile::ErrorBarStyle::Colorful
+                | crate::game::profile::ErrorBarStyle::Monochrome
+                | crate::game::profile::ErrorBarStyle::Text
+        );
+    if has_error_bar {
         if matches!(
             profile.judgment_graphic,
             crate::game::profile::JudgmentGraphic::None
@@ -2268,19 +2276,53 @@ pub fn build(
         }
     }
 
-    // Error Bar (Simply Love parity)
-    if profile.error_bar != crate::game::profile::ErrorBarStyle::None {
-        let (error_bar_y, error_bar_max_h) = if matches!(
-            profile.judgment_graphic,
-            crate::game::profile::JudgmentGraphic::None
-        ) {
-            (judgment_y, 30.0_f32)
-        } else if profile.error_bar_up {
-            (judgment_y - ERROR_BAR_OFFSET_FROM_JUDGMENT, 10.0_f32)
-        } else {
-            (judgment_y + ERROR_BAR_OFFSET_FROM_JUDGMENT, 10.0_f32)
-        };
+    let show_error_bar_text = profile.error_bar_text
+        || matches!(
+            profile.error_bar,
+            crate::game::profile::ErrorBarStyle::Text
+        );
+    let show_error_bar = show_error_bar_text
+        || !matches!(
+            profile.error_bar,
+            crate::game::profile::ErrorBarStyle::None
+        );
+    let (error_bar_y, error_bar_max_h) = if matches!(
+        profile.judgment_graphic,
+        crate::game::profile::JudgmentGraphic::None
+    ) {
+        (judgment_y, 30.0_f32)
+    } else if profile.error_bar_up {
+        (judgment_y - ERROR_BAR_OFFSET_FROM_JUDGMENT, 10.0_f32)
+    } else {
+        (judgment_y + ERROR_BAR_OFFSET_FROM_JUDGMENT, 10.0_f32)
+    };
 
+    // zmod ExtraAesthetics: offset indicator text (ErrorMSDisplay).
+    if profile.error_ms_display
+        && let Some(text) = p.offset_indicator_text
+    {
+        let age = elapsed_screen - text.started_at;
+        if age >= 0.0 && age < OFFSET_INDICATOR_DUR_S {
+            let mut offset_y = screen_center_y() + notefield_offset_y;
+            if show_error_bar {
+                let min_sep = error_bar_max_h * 0.5 + 6.0;
+                if (offset_y - error_bar_y).abs() < min_sep {
+                    offset_y = error_bar_y + min_sep;
+                }
+            }
+            let c = error_bar_color_for_window(text.window, profile.show_fa_plus_window);
+            hud_actors.push(act!(text:
+                font("wendy"): settext(format!("{:.2}ms", text.offset_ms)):
+                align(0.5, 0.5): xy(playfield_center_x, offset_y):
+                zoom(0.25): shadowlength(1.0):
+                diffuse(c[0], c[1], c[2], 1.0):
+                z(184)
+            ));
+        }
+    }
+
+    // Error Bar (Simply Love parity)
+    if show_error_bar {
         match profile.error_bar {
             crate::game::profile::ErrorBarStyle::Monochrome => {
                 let bar_h = error_bar_max_h;
@@ -2511,23 +2553,24 @@ pub fn build(
                     }
                 }
             }
-            crate::game::profile::ErrorBarStyle::Text => {
-                if let Some(text) = p.error_bar_text {
-                    let age = elapsed_screen - text.started_at;
-                    if age >= 0.0 && age < ERROR_BAR_TICK_DUR_COLORFUL {
-                        let x = if text.early { -40.0 } else { 40.0 };
-                        let s = if text.early { "EARLY" } else { "LATE" };
-                        hud_actors.push(act!(text:
-                            font("wendy"): settext(s):
-                            align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
-                            zoom(0.25): shadowlength(1.0):
-                            diffuse(1.0, 1.0, 1.0, 1.0):
-                            z(184)
-                        ));
-                    }
-                }
-            }
+            crate::game::profile::ErrorBarStyle::Text => {}
             crate::game::profile::ErrorBarStyle::None => {}
+        }
+        if show_error_bar_text
+            && let Some(text) = p.error_bar_text
+        {
+            let age = elapsed_screen - text.started_at;
+            if age >= 0.0 && age < ERROR_BAR_TICK_DUR_COLORFUL {
+                let x = if text.early { -40.0 } else { 40.0 };
+                let s = if text.early { "EARLY" } else { "LATE" };
+                hud_actors.push(act!(text:
+                    font("wendy"): settext(s):
+                    align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
+                    zoom(0.25): shadowlength(1.0):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    z(184)
+                ));
+            }
         }
     }
 

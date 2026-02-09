@@ -861,10 +861,14 @@ pub struct Profile {
     // Judgment tilt (Simply Love semantics).
     pub judgment_tilt: bool,
     pub column_cues: bool,
+    // zmod ExtraAesthetics: offset indicator (ErrorMSDisplay).
+    pub error_ms_display: bool,
     pub display_scorebox: bool,
     pub tilt_multiplier: f32,
     // Error bar (Simply Love semantics).
     pub error_bar: ErrorBarStyle,
+    // zmod semantics: allow Text early/late indicator alongside Colorful/Monochrome.
+    pub error_bar_text: bool,
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
@@ -947,9 +951,11 @@ impl Default for Profile {
             fa_plus_10ms_blue_window: false,
             judgment_tilt: false,
             column_cues: false,
+            error_ms_display: false,
             display_scorebox: true,
             tilt_multiplier: 1.0,
             error_bar: ErrorBarStyle::default(),
+            error_bar_text: false,
             error_bar_up: false,
             error_bar_multi_tick: false,
             error_bar_trim: ErrorBarTrim::default(),
@@ -1214,6 +1220,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             i32::from(default_profile.column_cues)
         ));
         content.push_str(&format!(
+            "ErrorMSDisplay = {}\n",
+            i32::from(default_profile.error_ms_display)
+        ));
+        content.push_str(&format!(
             "DisplayScorebox = {}\n",
             i32::from(default_profile.display_scorebox)
         ));
@@ -1222,6 +1232,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             default_profile.tilt_multiplier
         ));
         content.push_str(&format!("ErrorBar = {}\n", default_profile.error_bar));
+        content.push_str(&format!(
+            "ErrorBarText = {}\n",
+            i32::from(default_profile.error_bar_text)
+        ));
         content.push_str(&format!(
             "ErrorBarUp = {}\n",
             i32::from(default_profile.error_bar_up)
@@ -1434,11 +1448,19 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     ));
     content.push_str(&format!("ColumnCues={}\n", i32::from(profile.column_cues)));
     content.push_str(&format!(
+        "ErrorMSDisplay={}\n",
+        i32::from(profile.error_ms_display)
+    ));
+    content.push_str(&format!(
         "DisplayScorebox={}\n",
         i32::from(profile.display_scorebox)
     ));
     content.push_str(&format!("TiltMultiplier={}\n", profile.tilt_multiplier));
     content.push_str(&format!("ErrorBar={}\n", profile.error_bar));
+    content.push_str(&format!(
+        "ErrorBarText={}\n",
+        i32::from(profile.error_bar_text)
+    ));
     content.push_str(&format!("ErrorBarUp={}\n", i32::from(profile.error_bar_up)));
     content.push_str(&format!(
         "ErrorBarMultiTick={}\n",
@@ -1677,6 +1699,10 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "ColumnCues")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.column_cues, |v| v != 0);
+            profile.error_ms_display = profile_conf
+                .get("PlayerOptions", "ErrorMSDisplay")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.error_ms_display, |v| v != 0);
             profile.display_scorebox = profile_conf
                 .get("PlayerOptions", "DisplayScorebox")
                 .and_then(|s| s.parse::<u8>().ok())
@@ -1690,6 +1716,14 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "ErrorBar")
                 .and_then(|s| ErrorBarStyle::from_str(&s).ok())
                 .unwrap_or(default_profile.error_bar);
+            profile.error_bar_text = profile_conf
+                .get("PlayerOptions", "ErrorBarText")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.error_bar_text, |v| v != 0);
+            if profile.error_bar == ErrorBarStyle::Text {
+                profile.error_bar = ErrorBarStyle::None;
+                profile.error_bar_text = true;
+            }
             profile.error_bar_up = profile_conf
                 .get("PlayerOptions", "ErrorBarUp")
                 .and_then(|s| s.parse::<u8>().ok())
@@ -2739,6 +2773,21 @@ pub fn update_column_cues_for_side(side: PlayerSide, enabled: bool) {
     save_profile_ini_for_side(side);
 }
 
+pub fn update_error_ms_display_for_side(side: PlayerSide, enabled: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.error_ms_display == enabled {
+            return;
+        }
+        profile.error_ms_display = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
 pub fn update_display_scorebox_for_side(side: PlayerSide, enabled: bool) {
     if session_side_is_guest(side) {
         return;
@@ -2772,17 +2821,18 @@ pub fn update_tilt_multiplier_for_side(side: PlayerSide, multiplier: f32) {
     save_profile_ini_for_side(side);
 }
 
-pub fn update_error_bar_for_side(side: PlayerSide, setting: ErrorBarStyle) {
+pub fn update_error_bar_config_for_side(side: PlayerSide, setting: ErrorBarStyle, text: bool) {
     if session_side_is_guest(side) {
         return;
     }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
-        if profile.error_bar == setting {
+        if profile.error_bar == setting && profile.error_bar_text == text {
             return;
         }
         profile.error_bar = setting;
+        profile.error_bar_text = text;
     }
     save_profile_ini_for_side(side);
 }

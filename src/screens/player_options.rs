@@ -309,6 +309,9 @@ pub struct State {
     // For Gameplay Extras (More) row: bitmask of which options are enabled.
     // bit0 = Judgment Tilt, bit1 = Column Cues, bit2 = Display Scorebox.
     pub gameplay_extras_more_active_mask: [u8; PLAYER_SLOTS],
+    // For Error Bar row: bitmask of which options are enabled.
+    // bit0 = Colorful, bit1 = Monochrome, bit2 = Text.
+    pub error_bar_active_mask: [u8; PLAYER_SLOTS],
     // For Error Bar Options row: bitmask of which options are enabled.
     // bit0 = Move Up, bit1 = Multi-Tick (Simply Love semantics).
     pub error_bar_options_active_mask: [u8; PLAYER_SLOTS],
@@ -849,15 +852,23 @@ fn build_advanced_rows() -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
+            name: "Offset Indicator".to_string(),
+            choices: vec!["Off".to_string(), "On".to_string()],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec!["Show zmod-style per-tap offset text (e.g. -4.52ms).".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
             name: "Error Bar".to_string(),
             choices: vec![
-                "None".to_string(),
                 "Colorful".to_string(),
                 "Monochrome".to_string(),
                 "Text".to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Choose the style for the timing error bar or disable it.".to_string()],
+            help: vec![
+                "Toggle Colorful/Monochrome bars and Text early/late indicator.".to_string(),
+            ],
             choice_difficulty_indices: None,
         },
         Row {
@@ -1175,13 +1186,14 @@ fn apply_profile_defaults(
     rows: &mut [Row],
     profile: &crate::game::profile::Profile,
     player_idx: usize,
-) -> (u8, u8, u8, u8, u8, u8, u8, u8) {
+) -> (u8, u8, u8, u8, u8, u8, u8, u8, u8) {
     let mut scroll_active_mask: u8 = 0;
     let mut hide_active_mask: u8 = 0;
     let mut fa_plus_active_mask: u8 = 0;
     let mut early_dw_active_mask: u8 = 0;
     let mut gameplay_extras_active_mask: u8 = 0;
     let mut gameplay_extras_more_active_mask: u8 = 0;
+    let mut error_bar_active_mask: u8 = 0;
     let mut error_bar_options_active_mask: u8 = 0;
     let mut measure_counter_options_active_mask: u8 = 0;
     // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
@@ -1313,13 +1325,31 @@ fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     // Initialize Error Bar rows from profile (Simply Love semantics).
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Offset Indicator") {
+        row.selected_choice_index[player_idx] = if profile.error_ms_display { 1 } else { 0 };
+    }
+    if profile.error_bar == crate::game::profile::ErrorBarStyle::Colorful {
+        error_bar_active_mask |= 1u8 << 0;
+    } else if profile.error_bar == crate::game::profile::ErrorBarStyle::Monochrome {
+        error_bar_active_mask |= 1u8 << 1;
+    } else if profile.error_bar == crate::game::profile::ErrorBarStyle::Text {
+        error_bar_active_mask |= 1u8 << 2;
+    }
+    if profile.error_bar_text {
+        error_bar_active_mask |= 1u8 << 2;
+    }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar") {
-        row.selected_choice_index[player_idx] = match profile.error_bar {
-            crate::game::profile::ErrorBarStyle::None => 0,
-            crate::game::profile::ErrorBarStyle::Colorful => 1,
-            crate::game::profile::ErrorBarStyle::Monochrome => 2,
-            crate::game::profile::ErrorBarStyle::Text => 3,
-        };
+        if error_bar_active_mask != 0 {
+            let first_idx = (0..row.choices.len())
+                .find(|i| {
+                    let bit = 1u8 << (*i as u8);
+                    (error_bar_active_mask & bit) != 0
+                })
+                .unwrap_or(0);
+            row.selected_choice_index[player_idx] = first_idx;
+        } else {
+            row.selected_choice_index[player_idx] = 0;
+        }
     }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Data Visualizations") {
         row.selected_choice_index[player_idx] = match profile.data_visualizations {
@@ -1647,6 +1677,7 @@ fn apply_profile_defaults(
         early_dw_active_mask,
         gameplay_extras_active_mask,
         gameplay_extras_more_active_mask,
+        error_bar_active_mask,
         error_bar_options_active_mask,
         measure_counter_options_active_mask,
     )
@@ -1719,6 +1750,7 @@ pub fn init(
         early_dw_active_mask_p1,
         gameplay_extras_active_mask_p1,
         gameplay_extras_more_active_mask_p1,
+        error_bar_active_mask_p1,
         error_bar_options_active_mask_p1,
         measure_counter_options_active_mask_p1,
     ) = apply_profile_defaults(&mut rows, &player_profiles[P1], P1);
@@ -1729,6 +1761,7 @@ pub fn init(
         early_dw_active_mask_p2,
         gameplay_extras_active_mask_p2,
         gameplay_extras_more_active_mask_p2,
+        error_bar_active_mask_p2,
         error_bar_options_active_mask_p2,
         measure_counter_options_active_mask_p2,
     ) = apply_profile_defaults(&mut rows, &player_profiles[P2], P2);
@@ -1797,6 +1830,7 @@ pub fn init(
             gameplay_extras_more_active_mask_p1,
             gameplay_extras_more_active_mask_p2,
         ],
+        error_bar_active_mask: [error_bar_active_mask_p1, error_bar_active_mask_p2],
         error_bar_options_active_mask: [
             error_bar_options_active_mask_p1,
             error_bar_options_active_mask_p2,
@@ -1904,6 +1938,7 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "Error Bar"
         || row_name == "Error Bar Trim"
         || row_name == "Error Bar Options"
+        || row_name == "Offset Indicator"
         || row_name == "Measure Counter"
         || row_name == "Measure Counter Lookahead"
         || row_name == "Measure Counter Options"
@@ -2395,18 +2430,14 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         if should_persist {
             crate::game::profile::update_target_score_for_side(persist_side, setting);
         }
-    } else if row_name == "Error Bar" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::ErrorBarStyle::None,
-            1 => crate::game::profile::ErrorBarStyle::Colorful,
-            2 => crate::game::profile::ErrorBarStyle::Monochrome,
-            3 => crate::game::profile::ErrorBarStyle::Text,
-            _ => crate::game::profile::ErrorBarStyle::None,
-        };
-        state.player_profiles[player_idx].error_bar = setting;
+    } else if row_name == "Offset Indicator" {
+        let enabled = row.selected_choice_index[player_idx] != 0;
+        state.player_profiles[player_idx].error_ms_display = enabled;
         if should_persist {
-            crate::game::profile::update_error_bar_for_side(persist_side, setting);
+            crate::game::profile::update_error_ms_display_for_side(persist_side, enabled);
         }
+    } else if row_name == "Error Bar" {
+        // Multi-select row toggled with Start; Left/Right only moves cursor.
     } else if row_name == "Error Bar Trim" {
         let setting = match row.selected_choice_index[player_idx] {
             0 => crate::game::profile::ErrorBarTrim::Off,
@@ -3040,6 +3071,66 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
+fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.selected_row[idx];
+    if let Some(row) = state.rows.get(row_index) {
+        if row.name != "Error Bar" {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let bit = if choice_index < 3 {
+        1u8 << (choice_index as u8)
+    } else {
+        0
+    };
+    if bit == 0 {
+        return;
+    }
+
+    if (state.error_bar_active_mask[idx] & bit) != 0 {
+        state.error_bar_active_mask[idx] &= !bit;
+    } else {
+        state.error_bar_active_mask[idx] |= bit;
+        if bit == (1u8 << 0) {
+            state.error_bar_active_mask[idx] &= !(1u8 << 1);
+        } else if bit == (1u8 << 1) {
+            state.error_bar_active_mask[idx] &= !(1u8 << 0);
+        }
+    }
+
+    let colorful = (state.error_bar_active_mask[idx] & (1u8 << 0)) != 0;
+    let monochrome = (state.error_bar_active_mask[idx] & (1u8 << 1)) != 0;
+    let text = (state.error_bar_active_mask[idx] & (1u8 << 2)) != 0;
+    let style = if colorful {
+        crate::game::profile::ErrorBarStyle::Colorful
+    } else if monochrome {
+        crate::game::profile::ErrorBarStyle::Monochrome
+    } else {
+        crate::game::profile::ErrorBarStyle::None
+    };
+    state.player_profiles[idx].error_bar = style;
+    state.player_profiles[idx].error_bar_text = text;
+
+    let play_style = crate::game::profile::get_session_play_style();
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || idx == session_persisted_player_idx();
+    if should_persist {
+        let side = if idx == P1 {
+            crate::game::profile::PlayerSide::P1
+        } else {
+            crate::game::profile::PlayerSide::P2
+        };
+        crate::game::profile::update_error_bar_config_for_side(side, style, text);
+    }
+
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
 fn toggle_error_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
@@ -3312,6 +3403,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         early_dw_active_mask_p1,
         gameplay_extras_active_mask_p1,
         gameplay_extras_more_active_mask_p1,
+        error_bar_active_mask_p1,
         error_bar_options_active_mask_p1,
         measure_counter_options_active_mask_p1,
     ) = apply_profile_defaults(&mut rows, &state.player_profiles[P1], P1);
@@ -3322,6 +3414,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         early_dw_active_mask_p2,
         gameplay_extras_active_mask_p2,
         gameplay_extras_more_active_mask_p2,
+        error_bar_active_mask_p2,
         error_bar_options_active_mask_p2,
         measure_counter_options_active_mask_p2,
     ) = apply_profile_defaults(&mut rows, &state.player_profiles[P2], P2);
@@ -3338,6 +3431,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         gameplay_extras_more_active_mask_p1,
         gameplay_extras_more_active_mask_p2,
     ];
+    state.error_bar_active_mask = [error_bar_active_mask_p1, error_bar_active_mask_p2];
     state.error_bar_options_active_mask = [
         error_bar_options_active_mask_p1,
         error_bar_options_active_mask_p2,
@@ -3442,6 +3536,10 @@ fn handle_start_event(
     }
     if row.name == "Gameplay Extras (More)" {
         toggle_gameplay_extras_more_row(state, player_idx);
+        return None;
+    }
+    if row.name == "Error Bar" {
+        toggle_error_bar_row(state, player_idx);
         return None;
     }
     if row.name == "Error Bar Options" {
@@ -4131,6 +4229,46 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         continue;
                     }
                     let mask = state.measure_counter_options_active_mask[player_idx];
+                    if mask == 0 {
+                        continue;
+                    }
+                    let underline_y = underline_y_for(player_idx);
+                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
+                    line_color[3] *= a;
+                    for idx in 0..row.choices.len() {
+                        let bit = 1u8 << (idx as u8);
+                        if (mask & bit) == 0 {
+                            continue;
+                        }
+                        if let Some(sel_x) = x_positions.get(idx).copied() {
+                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                            let underline_w = draw_w.ceil();
+                            actors.push(act!(quad:
+                                align(0.0, 0.5):
+                                xy(sel_x, underline_y):
+                                zoomto(underline_w, line_thickness):
+                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                z(101)
+                            ));
+                        }
+                    }
+                }
+            } else if row.name == "Error Bar" {
+                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                let offset = widescale(3.0, 4.0);
+                let underline_base_y = current_row_y + text_h * 0.5 + offset;
+                let underline_y_for = |player_idx: usize| {
+                    if active[P1] && active[P2] {
+                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
+                    } else {
+                        underline_base_y
+                    }
+                };
+                for player_idx in 0..PLAYER_SLOTS {
+                    if !active[player_idx] {
+                        continue;
+                    }
+                    let mask = state.error_bar_active_mask[player_idx];
                     if mask == 0 {
                         continue;
                     }
