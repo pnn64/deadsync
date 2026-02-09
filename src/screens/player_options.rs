@@ -329,7 +329,8 @@ pub struct State {
     pub nav_key_held_since: [Option<Instant>; PLAYER_SLOTS],
     pub nav_key_last_scrolled_at: [Option<Instant>; PLAYER_SLOTS],
     pub player_profiles: [crate::game::profile::Profile; PLAYER_SLOTS],
-    noteskin: [Option<Noteskin>; PLAYER_SLOTS],
+    noteskin_cache: [Option<Arc<Noteskin>>; 4],
+    noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
     preview_time: f32,
     preview_beat: f32,
     help_anim_time: [f32; PLAYER_SLOTS],
@@ -407,6 +408,92 @@ fn round_to_step(x: f32, step: f32) -> f32 {
         return x;
     }
     (x / step).round() * step
+}
+
+#[inline(always)]
+fn noteskin_cols_per_player(play_style: crate::game::profile::PlayStyle) -> usize {
+    match play_style {
+        crate::game::profile::PlayStyle::Double => 8,
+        crate::game::profile::PlayStyle::Single | crate::game::profile::PlayStyle::Versus => 4,
+    }
+}
+
+#[inline(always)]
+fn noteskin_idx(kind: crate::game::profile::NoteSkin) -> usize {
+    match kind {
+        crate::game::profile::NoteSkin::Cel => 0,
+        crate::game::profile::NoteSkin::Metal => 1,
+        crate::game::profile::NoteSkin::EnchantmentV2 => 2,
+        crate::game::profile::NoteSkin::DevCel2024V3 => 3,
+    }
+}
+
+#[inline(always)]
+fn noteskin_from_idx(idx: usize) -> crate::game::profile::NoteSkin {
+    match idx {
+        0 => crate::game::profile::NoteSkin::Cel,
+        1 => crate::game::profile::NoteSkin::Metal,
+        2 => crate::game::profile::NoteSkin::EnchantmentV2,
+        3 => crate::game::profile::NoteSkin::DevCel2024V3,
+        _ => crate::game::profile::NoteSkin::Cel,
+    }
+}
+
+#[inline(always)]
+fn noteskin_path(kind: crate::game::profile::NoteSkin, cols_per_player: usize) -> &'static str {
+    match (kind, cols_per_player) {
+        (crate::game::profile::NoteSkin::Cel, 8) => "assets/noteskins/cel/dance-double.txt",
+        (crate::game::profile::NoteSkin::Cel, _) => "assets/noteskins/cel/dance-single.txt",
+        (crate::game::profile::NoteSkin::Metal, 8) => "assets/noteskins/metal/dance-double.txt",
+        (crate::game::profile::NoteSkin::Metal, _) => "assets/noteskins/metal/dance-single.txt",
+        (crate::game::profile::NoteSkin::EnchantmentV2, 8) => {
+            "assets/noteskins/enchantment-v2/dance-double.txt"
+        }
+        (crate::game::profile::NoteSkin::EnchantmentV2, _) => {
+            "assets/noteskins/enchantment-v2/dance-single.txt"
+        }
+        (crate::game::profile::NoteSkin::DevCel2024V3, 8) => {
+            "assets/noteskins/devcel-2024-v3/dance-double.txt"
+        }
+        (crate::game::profile::NoteSkin::DevCel2024V3, _) => {
+            "assets/noteskins/devcel-2024-v3/dance-single.txt"
+        }
+    }
+}
+
+fn load_noteskin_cached(
+    kind: crate::game::profile::NoteSkin,
+    cols_per_player: usize,
+) -> Option<Arc<Noteskin>> {
+    let style = noteskin::Style {
+        num_cols: cols_per_player,
+        num_players: 1,
+    };
+    let fallback_noteskin_path = if cols_per_player == 8 {
+        "assets/noteskins/cel/dance-double.txt"
+    } else {
+        "assets/noteskins/cel/dance-single.txt"
+    };
+    noteskin::load(Path::new(noteskin_path(kind, cols_per_player)), &style)
+        .ok()
+        .or_else(|| noteskin::load(Path::new(fallback_noteskin_path), &style).ok())
+        .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok())
+        .map(Arc::new)
+}
+
+fn build_noteskin_cache(cols_per_player: usize) -> [Option<Arc<Noteskin>>; 4] {
+    [
+        load_noteskin_cached(crate::game::profile::NoteSkin::Cel, cols_per_player),
+        load_noteskin_cached(crate::game::profile::NoteSkin::Metal, cols_per_player),
+        load_noteskin_cached(
+            crate::game::profile::NoteSkin::EnchantmentV2,
+            cols_per_player,
+        ),
+        load_noteskin_cached(
+            crate::game::profile::NoteSkin::DevCel2024V3,
+            cols_per_player,
+        ),
+    ]
 }
 
 fn what_comes_next_choices(pane: OptionsPane) -> Vec<String> {
@@ -1199,8 +1286,10 @@ fn apply_profile_defaults(
     let mut error_bar_active_mask: u8 =
         crate::game::profile::normalize_error_bar_mask(profile.error_bar_active_mask);
     if error_bar_active_mask == 0 {
-        error_bar_active_mask =
-            crate::game::profile::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
+        error_bar_active_mask = crate::game::profile::error_bar_mask_from_style(
+            profile.error_bar,
+            profile.error_bar_text,
+        );
     }
     let mut error_bar_options_active_mask: u8 = 0;
     let mut measure_counter_options_active_mask: u8 = 0;
@@ -1765,49 +1854,10 @@ pub fn init(
         measure_counter_options_active_mask_p2,
     ) = apply_profile_defaults(&mut rows, &player_profiles[P2], P2);
 
-    // Load noteskin previews based on profile setting.
-    let play_style = crate::game::profile::get_session_play_style();
-    let cols_per_player = match play_style {
-        crate::game::profile::PlayStyle::Double => 8,
-        crate::game::profile::PlayStyle::Single | crate::game::profile::PlayStyle::Versus => 4,
-    };
-    let style = noteskin::Style {
-        num_cols: cols_per_player,
-        num_players: 1,
-    };
-    let noteskin_paths: [&'static str; PLAYER_SLOTS] = std::array::from_fn(|i| {
-        let p = &player_profiles[i];
-        match (p.noteskin, cols_per_player) {
-            (crate::game::profile::NoteSkin::Cel, 8) => "assets/noteskins/cel/dance-double.txt",
-            (crate::game::profile::NoteSkin::Cel, _) => "assets/noteskins/cel/dance-single.txt",
-            (crate::game::profile::NoteSkin::Metal, 8) => "assets/noteskins/metal/dance-double.txt",
-            (crate::game::profile::NoteSkin::Metal, _) => "assets/noteskins/metal/dance-single.txt",
-            (crate::game::profile::NoteSkin::EnchantmentV2, 8) => {
-                "assets/noteskins/enchantment-v2/dance-double.txt"
-            }
-            (crate::game::profile::NoteSkin::EnchantmentV2, _) => {
-                "assets/noteskins/enchantment-v2/dance-single.txt"
-            }
-            (crate::game::profile::NoteSkin::DevCel2024V3, 8) => {
-                "assets/noteskins/devcel-2024-v3/dance-double.txt"
-            }
-            (crate::game::profile::NoteSkin::DevCel2024V3, _) => {
-                "assets/noteskins/devcel-2024-v3/dance-single.txt"
-            }
-        }
-    });
-    let fallback_noteskin_path = if cols_per_player == 8 {
-        "assets/noteskins/cel/dance-double.txt"
-    } else {
-        "assets/noteskins/cel/dance-single.txt"
-    };
-    let noteskin_previews: [Option<Noteskin>; PLAYER_SLOTS] = std::array::from_fn(|i| {
-        let path = noteskin_paths[i];
-        noteskin::load(Path::new(path), &style)
-            .ok()
-            .or_else(|| noteskin::load(Path::new(fallback_noteskin_path), &style).ok())
-            .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok())
-    });
+    let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
+    let noteskin_cache = build_noteskin_cache(cols_per_player);
+    let noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] =
+        std::array::from_fn(|i| noteskin_cache[noteskin_idx(player_profiles[i].noteskin)].clone());
     let active = session_active_players();
     let row_tweens = init_row_tweens(rows.len(), [0; PLAYER_SLOTS], active);
     State {
@@ -1848,6 +1898,7 @@ pub fn init(
         nav_key_held_since: [None; PLAYER_SLOTS],
         nav_key_last_scrolled_at: [None; PLAYER_SLOTS],
         player_profiles,
+        noteskin_cache,
         noteskin: noteskin_previews,
         preview_time: 0.0,
         preview_beat: 0.0,
@@ -2542,54 +2593,12 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
             crate::game::profile::update_hold_judgment_graphic_for_side(persist_side, setting);
         }
     } else if row_name == "NoteSkin" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::NoteSkin::Cel,
-            1 => crate::game::profile::NoteSkin::Metal,
-            2 => crate::game::profile::NoteSkin::EnchantmentV2,
-            3 => crate::game::profile::NoteSkin::DevCel2024V3,
-            _ => crate::game::profile::NoteSkin::Cel,
-        };
+        let setting = noteskin_from_idx(row.selected_choice_index[player_idx]);
         state.player_profiles[player_idx].noteskin = setting;
         if should_persist {
             crate::game::profile::update_noteskin_for_side(persist_side, setting);
         }
-
-        let play_style = crate::game::profile::get_session_play_style();
-        let cols_per_player = match play_style {
-            crate::game::profile::PlayStyle::Double => 8,
-            crate::game::profile::PlayStyle::Single | crate::game::profile::PlayStyle::Versus => 4,
-        };
-        let style = noteskin::Style {
-            num_cols: cols_per_player,
-            num_players: 1,
-        };
-        let path_str = match (setting, cols_per_player) {
-            (crate::game::profile::NoteSkin::Cel, 8) => "assets/noteskins/cel/dance-double.txt",
-            (crate::game::profile::NoteSkin::Cel, _) => "assets/noteskins/cel/dance-single.txt",
-            (crate::game::profile::NoteSkin::Metal, 8) => "assets/noteskins/metal/dance-double.txt",
-            (crate::game::profile::NoteSkin::Metal, _) => "assets/noteskins/metal/dance-single.txt",
-            (crate::game::profile::NoteSkin::EnchantmentV2, 8) => {
-                "assets/noteskins/enchantment-v2/dance-double.txt"
-            }
-            (crate::game::profile::NoteSkin::EnchantmentV2, _) => {
-                "assets/noteskins/enchantment-v2/dance-single.txt"
-            }
-            (crate::game::profile::NoteSkin::DevCel2024V3, 8) => {
-                "assets/noteskins/devcel-2024-v3/dance-double.txt"
-            }
-            (crate::game::profile::NoteSkin::DevCel2024V3, _) => {
-                "assets/noteskins/devcel-2024-v3/dance-single.txt"
-            }
-        };
-        let fallback_noteskin_path = if cols_per_player == 8 {
-            "assets/noteskins/cel/dance-double.txt"
-        } else {
-            "assets/noteskins/cel/dance-single.txt"
-        };
-        state.noteskin[player_idx] = noteskin::load(Path::new(path_str), &style)
-            .ok()
-            .or_else(|| noteskin::load(Path::new(fallback_noteskin_path), &style).ok())
-            .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok());
+        state.noteskin[player_idx] = state.noteskin_cache[noteskin_idx(setting)].clone();
     } else if row_name == "Stepchart" {
         if let Some(diff_indices) = &row.choice_difficulty_indices
             && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index[player_idx])
@@ -3102,7 +3111,8 @@ fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
     let mask = state.error_bar_active_mask[idx];
     state.player_profiles[idx].error_bar_active_mask = mask;
     state.player_profiles[idx].error_bar = crate::game::profile::error_bar_style_from_mask(mask);
-    state.player_profiles[idx].error_bar_text = crate::game::profile::error_bar_text_from_mask(mask);
+    state.player_profiles[idx].error_bar_text =
+        crate::game::profile::error_bar_text_from_mask(mask);
 
     let play_style = crate::game::profile::get_session_play_style();
     let should_persist = play_style == crate::game::profile::PlayStyle::Versus
@@ -3735,6 +3745,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             speed_mod_x
         }
     };
+    let preview_dx = preview_center_x - speed_mod_x;
+    let preview_x_for = |player_idx: usize| speed_x_for(player_idx) + preview_dx;
 
     if state.current_pane == OptionsPane::Main {
         for player_idx in 0..PLAYER_SLOTS {
@@ -4558,9 +4570,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             ));
                         }
                     }
-                    if show_p2 && !row.name.starts_with("Music Rate") {
-                        let p2_choice_center_x = screen_center_x().mul_add(2.0, -choice_center_x);
-                        let p2_text = if row.name == "Speed Mod" {
+                    let p2_text = if show_p2 && !row.name.starts_with("Music Rate") {
+                        if row.name == "Speed Mod" {
                             match state.speed_mod[P2].mod_type.as_str() {
                                 "X" => format!("{:.2}x", state.speed_mod[P2].value),
                                 "C" => format!("C{}", state.speed_mod[P2].value as i32),
@@ -4580,7 +4591,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 .selected_choice_index[P2]
                                 .min(row.choices.len().saturating_sub(1));
                             row.choices.get(idx).cloned().unwrap_or_default()
-                        };
+                        }
+                    } else {
+                        String::new()
+                    };
+                    if show_p2 && !row.name.starts_with("Music Rate") {
+                        let p2_choice_center_x = screen_center_x().mul_add(2.0, -choice_center_x);
                         let mut p2_w = crate::ui::font::measure_line_width_logical(
                             metrics_font,
                             &p2_text,
@@ -4590,7 +4606,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             p2_w = 1.0;
                         }
                         let p2_draw_w = p2_w * value_zoom;
-                        actors.push(act!(text: font("miso"): settext(p2_text):
+                        actors.push(act!(text: font("miso"): settext(p2_text.clone()):
                             align(0.5, 0.5): xy(p2_choice_center_x, current_row_y): zoom(value_zoom):
                             diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                             z(101)
@@ -4645,10 +4661,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             }
                         }
                     }
-                    // Add previews (centered on a shared vertical line)
-                    // Add judgment preview for "Judgment Font" row showing Fantastic frame of the selected font
+                    // Add previews for the selected value on each side.
                     if row.name == "Judgment Font" {
-                        let texture_key = match choice_text.as_str() {
+                        let texture_for = |text: &str| -> Option<&'static str> {
+                            match text {
                             "Love" => Some("judgements/Love 2x7 (doubleres).png"),
                             "Love Chroma" => Some("judgements/Love Chroma 2x7 (doubleres).png"),
                             "Rainbowmatic" => Some("judgements/Rainbowmatic 2x7 (doubleres).png"),
@@ -4671,13 +4687,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             "Wendy Chroma" => Some("judgements/Wendy Chroma 2x7 (doubleres).png"),
                             "None" => None,
                             _ => None,
+                            }
                         };
-                        if let Some(texture) = texture_key {
-                            // Fantastic is the first frame (top-left, column 0, row 0)
-                            // Scale to 0.2x: Simply Love uses 0.4x, but our texture is doubleres, so 0.4 / 2 = 0.2
+                        if let Some(texture) = texture_for(choice_text.as_str()) {
                             actors.push(act!(sprite(texture):
                                 align(0.5, 0.5):
-                                xy(preview_center_x, current_row_y):
+                                xy(preview_x_for(primary_player_idx), current_row_y):
+                                setstate(0):
+                                zoom(0.225):
+                                diffuse(1.0, 1.0, 1.0, a):
+                                z(102)
+                            ));
+                        }
+                        if show_p2 && primary_player_idx != P2
+                            && let Some(texture) = texture_for(p2_text.as_str())
+                        {
+                            actors.push(act!(sprite(texture):
+                                align(0.5, 0.5):
+                                xy(preview_x_for(P2), current_row_y):
                                 setstate(0):
                                 zoom(0.225):
                                 diffuse(1.0, 1.0, 1.0, a):
@@ -4687,17 +4714,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     // Add hold judgment preview for "Hold Judgment" row showing both frames (Held and Let Go)
                     if row.name == "Hold Judgment" {
-                        let texture_key = match choice_text.as_str() {
+                        let texture_for = |text: &str| -> Option<&'static str> {
+                            match text {
                             "Love" => Some("hold_judgements/Love 1x2 (doubleres).png"),
                             "mute" => Some("hold_judgements/mute 1x2 (doubleres).png"),
                             "ITG2" => Some("hold_judgements/ITG2 1x2 (doubleres).png"),
                             "None" => None,
                             _ => None,
+                            }
                         };
-                        if let Some(texture) = texture_key {
-                            // 1x2 doubleres: row 0 = Held, row 1 = Let Go.
-                            // Match Simply Love's spacing: each sprite is offset horizontally by
-                            // width * 0.4 from the center, after applying our preview zoom.
+                        let draw_hold_preview = |texture: &str, center_x: f32, actors: &mut Vec<Actor>| {
                             let zoom = 0.225;
                             let tex_w = crate::assets::texture_dims(texture)
                                 .map_or(128.0, |meta| meta.w.max(1) as f32);
@@ -4705,7 +4731,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                             actors.push(act!(sprite(texture):
                                 align(0.5, 0.5):
-                                xy(preview_center_x - center_offset, current_row_y):
+                                xy(center_x - center_offset, current_row_y):
                                 setstate(0):
                                 zoom(zoom):
                                 diffuse(1.0, 1.0, 1.0, a):
@@ -4713,62 +4739,71 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             ));
                             actors.push(act!(sprite(texture):
                                 align(0.5, 0.5):
-                                xy(preview_center_x + center_offset, current_row_y):
+                                xy(center_x + center_offset, current_row_y):
                                 setstate(1):
                                 zoom(zoom):
                                 diffuse(1.0, 1.0, 1.0, a):
                                 z(102)
                             ));
+                        };
+                        if let Some(texture) = texture_for(choice_text.as_str()) {
+                            draw_hold_preview(texture, preview_x_for(primary_player_idx), &mut actors);
+                        }
+                        if show_p2 && primary_player_idx != P2
+                            && let Some(texture) = texture_for(p2_text.as_str())
+                        {
+                            draw_hold_preview(texture, preview_x_for(P2), &mut actors);
                         }
                     }
                     // Add noteskin preview for "NoteSkin" row showing animated 4th note
-                    if row.name == "NoteSkin"
-                        && let Some(ns) = &state.noteskin[session_persisted_player_idx()]
-                    {
-                        // Render a 4th note (Quantization::Q4th = 0) for column 2 (Up arrow)
-                        // In dance-single: Left=0, Down=1, Up=2, Right=3
-                        let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
-                        if let Some(note_slot) = ns.notes.get(note_idx) {
-                            // Get the current animation frame using preview_time and preview_beat
-                            let frame =
-                                note_slot.frame_index(state.preview_time, state.preview_beat);
-                            let uv = note_slot.uv_for_frame(frame);
-
-                            // Scale the note to match Simply Love's 0.4x preview zoom
-                            // Note: cel noteskin textures are NOT doubleres, so we use 0.4x directly
-                            let size = note_slot.size();
-                            let width = size[0].max(1) as f32;
-                            let height = size[1].max(1) as f32;
-
-                            // Target size: 64px is the gameplay size, so 0.4x of that is 25.6px
-                            const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
-                            const PREVIEW_SCALE: f32 = 0.45;
-                            let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
-
-                            let scale = if height > 0.0 {
-                                target_height / height
-                            } else {
-                                PREVIEW_SCALE
+                    if row.name == "NoteSkin" {
+                        let draw_noteskin_preview =
+                            |ns: &Noteskin, center_x: f32, actors: &mut Vec<Actor>| {
+                                let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+                                let Some(note_slot) = ns.notes.get(note_idx) else {
+                                    return;
+                                };
+                                let frame =
+                                    note_slot.frame_index(state.preview_time, state.preview_beat);
+                                let uv = note_slot.uv_for_frame(frame);
+                                let size = note_slot.size();
+                                let width = size[0].max(1) as f32;
+                                let height = size[1].max(1) as f32;
+                                const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
+                                const PREVIEW_SCALE: f32 = 0.45;
+                                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                                let scale = if height > 0.0 {
+                                    target_height / height
+                                } else {
+                                    PREVIEW_SCALE
+                                };
+                                let final_width = width * scale;
+                                let final_height = target_height;
+                                actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                    align(0.5, 0.5):
+                                    xy(center_x, current_row_y):
+                                    setsize(final_width, final_height):
+                                    rotationz(-note_slot.def.rotation_deg as f32):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    diffuse(1.0, 1.0, 1.0, a):
+                                    z(102)
+                                ));
                             };
-                            let final_width = width * scale;
-                            let final_height = target_height;
-
-                            actors.push(act!(sprite(note_slot.texture_key().to_string()):
-                                align(0.5, 0.5):
-                                xy(preview_center_x, current_row_y):
-                                setsize(final_width, final_height):
-                                rotationz(-note_slot.def.rotation_deg as f32):
-                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                diffuse(1.0, 1.0, 1.0, a):
-                                z(102)
-                            ));
+                        if let Some(ns) = state.noteskin[primary_player_idx].as_ref() {
+                            draw_noteskin_preview(ns, preview_x_for(primary_player_idx), &mut actors);
+                        }
+                        if show_p2 && primary_player_idx != P2
+                            && let Some(ns) = state.noteskin[P2].as_ref()
+                        {
+                            draw_noteskin_preview(ns, preview_x_for(P2), &mut actors);
                         }
                     }
                     // Add combo preview for "Combo Font" row showing ticking numbers
                     if row.name == "Combo Font" {
                         let combo_text = state.combo_preview_count.to_string();
                         let combo_zoom = 0.45;
-                        let font_name_opt = match choice_text.as_str() {
+                        let combo_font_for = |text: &str| -> Option<&'static str> {
+                            match text {
                             "Wendy" => Some("wendy_combo"),
                             "Arial Rounded" => Some("combo_arial_rounded"),
                             "Asap" => Some("combo_asap"),
@@ -4778,12 +4813,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             "Wendy (Cursed)" => Some("combo_wendy_cursed"),
                             "None" => None,
                             _ => Some("wendy_combo"),
+                            }
                         };
-                        if let Some(font_name) = font_name_opt {
+                        if let Some(font_name) = combo_font_for(choice_text.as_str()) {
+                            actors.push(act!(text:
+                                font(font_name): settext(combo_text.clone()):
+                                align(0.5, 0.5):
+                                xy(preview_x_for(primary_player_idx), current_row_y):
+                                zoom(combo_zoom): horizalign(center):
+                                diffuse(1.0, 1.0, 1.0, a):
+                                z(102)
+                            ));
+                        }
+                        if show_p2 && primary_player_idx != P2
+                            && let Some(font_name) = combo_font_for(p2_text.as_str())
+                        {
                             actors.push(act!(text:
                                 font(font_name): settext(combo_text):
                                 align(0.5, 0.5):
-                                xy(preview_center_x, current_row_y):
+                                xy(preview_x_for(P2), current_row_y):
                                 zoom(combo_zoom): horizalign(center):
                                 diffuse(1.0, 1.0, 1.0, a):
                                 z(102)

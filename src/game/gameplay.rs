@@ -709,7 +709,9 @@ fn build_column_cues_for_player(
         prev_time = time;
     }
 
-    if first_visible_time < 0.0 && let Some(first) = cues.first_mut() {
+    if first_visible_time < 0.0
+        && let Some(first) = cues.first_mut()
+    {
         first.duration -= first_visible_time;
         first.start_time += first_visible_time;
     }
@@ -3272,7 +3274,11 @@ fn error_bar_push_tick<const N: usize>(
 }
 
 #[inline(always)]
-fn error_bar_average_offset_s(samples: &mut VecDeque<(f32, f32)>, music_time_s: f32, offset_s: f32) -> f32 {
+fn error_bar_average_offset_s(
+    samples: &mut VecDeque<(f32, f32)>,
+    music_time_s: f32,
+    offset_s: f32,
+) -> f32 {
     let now_ms = ((music_time_s * 100.0).round() * 10.0).max(0.0);
     samples.push_back((now_ms, offset_s));
 
@@ -3298,7 +3304,8 @@ fn error_bar_average_offset_s(samples: &mut VecDeque<(f32, f32)>, music_time_s: 
     if count == 0 {
         return offset_s;
     }
-    if count > 1 && (count & 1) == 1
+    if count > 1
+        && (count & 1) == 1
         && let Some(oldest) = oldest_in_window
     {
         sum -= oldest;
@@ -3312,7 +3319,12 @@ fn error_bar_average_offset_s(samples: &mut VecDeque<(f32, f32)>, music_time_s: 
 }
 
 #[inline(always)]
-fn error_bar_register_tap(state: &mut State, player: usize, judgment: &Judgment, tap_music_time_s: f32) {
+fn error_bar_register_tap(
+    state: &mut State,
+    player: usize,
+    judgment: &Judgment,
+    tap_music_time_s: f32,
+) {
     let prof = &state.player_profiles[player];
     let mut error_bar_mask = profile::normalize_error_bar_mask(prof.error_bar_active_mask);
     if error_bar_mask == 0 {
@@ -3435,7 +3447,8 @@ fn error_bar_register_tap(state: &mut State, player: usize, judgment: &Judgment,
     }
 
     if show_average {
-        let avg = error_bar_average_offset_s(&mut p.error_bar_avg_samples, tap_music_time_s, offset_s);
+        let avg =
+            error_bar_average_offset_s(&mut p.error_bar_avg_samples, tap_music_time_s, offset_s);
         let avg_clamped = if max_offset_s.is_finite() && max_offset_s > 0.0 {
             avg.clamp(-max_offset_s, max_offset_s)
         } else {

@@ -921,7 +921,9 @@ impl App {
             return false;
         }
         if screen == CurrentScreen::SelectMusic
-            && !crate::screens::select_music::allows_late_join(&self.state.screens.select_music_state)
+            && !crate::screens::select_music::allows_late_join(
+                &self.state.screens.select_music_state,
+            )
         {
             return false;
         }

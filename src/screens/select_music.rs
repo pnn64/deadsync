@@ -1715,9 +1715,7 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
         VirtualAction::p2_start | VirtualAction::p2_back => Some(profile::PlayerSide::P2),
         _ => None,
     };
-    if ev.pressed
-        && close_side.is_some_and(profile::is_session_side_joined)
-    {
+    if ev.pressed && close_side.is_some_and(profile::is_session_side_joined) {
         hide_test_input_overlay(state);
         audio::play_sfx("assets/sounds/start.ogg");
     }
@@ -2747,7 +2745,10 @@ pub fn allows_late_join(state: &State) -> bool {
         && state.sort_menu == sort_menu::State::Hidden
         && matches!(state.song_search, sort_menu::SongSearchState::Hidden)
         && matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden)
-        && matches!(state.leaderboard, sort_menu::LeaderboardOverlayState::Hidden)
+        && matches!(
+            state.leaderboard,
+            sort_menu::LeaderboardOverlayState::Hidden
+        )
         && !state.test_input_overlay_visible
 }
 

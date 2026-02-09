@@ -106,6 +106,8 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         fg_color: FG,
     }));
 
-    actors.extend(test_input::build_test_input_screen_content(&state.test_input));
+    actors.extend(test_input::build_test_input_screen_content(
+        &state.test_input,
+    ));
     actors
 }

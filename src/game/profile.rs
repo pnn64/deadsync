@@ -1879,9 +1879,10 @@ fn load_for_side(side: PlayerSide) {
             } else {
                 None
             };
-            profile.error_bar_active_mask = mask_from_key
-                .or(mask_from_flags)
-                .unwrap_or_else(|| error_bar_mask_from_style(profile.error_bar, profile.error_bar_text));
+            profile.error_bar_active_mask =
+                mask_from_key.or(mask_from_flags).unwrap_or_else(|| {
+                    error_bar_mask_from_style(profile.error_bar, profile.error_bar_text)
+                });
             profile.error_bar = error_bar_style_from_mask(profile.error_bar_active_mask);
             profile.error_bar_text = error_bar_text_from_mask(profile.error_bar_active_mask);
             profile.error_bar_up = profile_conf
