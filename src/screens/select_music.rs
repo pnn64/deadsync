@@ -2056,6 +2056,9 @@ pub fn handle_pad_dir(
                                 state.selected_index = new_sel;
                                 state.prev_selected_index = new_sel;
                                 state.time_since_selection_change = 0.0;
+                                // Clear delayed chart-driven panels immediately on folder close.
+                                state.displayed_chart_p1 = None;
+                                state.displayed_chart_p2 = None;
                             }
                         }
                     }
@@ -2205,6 +2208,9 @@ fn handle_pad_dir_p2(
                         state.selected_index = new_sel;
                         state.prev_selected_index = new_sel;
                         state.time_since_selection_change = 0.0;
+                        // Clear delayed chart-driven panels immediately on folder close.
+                        state.displayed_chart_p1 = None;
+                        state.displayed_chart_p2 = None;
                     }
                 }
             }
@@ -2696,7 +2702,14 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 audio::stop_music();
             }
         }
+    } else if state.currently_playing_preview_path.is_some() {
+        state.currently_playing_preview_path = None;
+        state.currently_playing_preview_start_sec = None;
+        state.currently_playing_preview_length_sec = None;
+        audio::stop_music();
+    }
 
+    if allow_gs_fetch_for_selection(state) {
         let play_style = profile::get_session_play_style();
         let target_chart_type = play_style.chart_type();
 
@@ -2781,11 +2794,6 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.cached_chart_ix_p2 = None;
             state.cached_edits = None;
         }
-    } else if state.currently_playing_preview_path.is_some() {
-        state.currently_playing_preview_path = None;
-        state.currently_playing_preview_start_sec = None;
-        state.currently_playing_preview_length_sec = None;
-        audio::stop_music();
     }
 
     ScreenAction::None
