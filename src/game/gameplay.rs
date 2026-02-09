@@ -291,6 +291,17 @@ fn timing_row_floor(timing: &TimingData, beat: f32) -> usize {
     row
 }
 
+#[inline(always)]
+fn assist_row_no_offset(state: &State, music_time: f32) -> i32 {
+    // ITG parity: assist clap/metronome uses *no global offset* timing.
+    // TimingData::get_beat_for_time() applies global offset internally, so
+    // feed (time - offset) to cancel it out.
+    let beat_no_offset = state
+        .timing
+        .get_beat_for_time(music_time - state.global_offset_seconds);
+    timing_row_floor(&state.timing, beat_no_offset).min(i32::MAX as usize) as i32
+}
+
 fn build_assist_clap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
     let (start, end) = note_range;
     if start >= end {
@@ -4007,8 +4018,7 @@ fn set_assist_clap_enabled(state: &mut State, enabled: bool, now_music_time: f32
     }
     state.assist_clap_enabled = enabled;
 
-    let song_beat = state.timing.get_beat_for_time(now_music_time);
-    let song_row = timing_row_floor(&state.timing, song_beat).min(i32::MAX as usize) as i32;
+    let song_row = assist_row_no_offset(state, now_music_time);
     state.assist_last_crossed_row = song_row;
     state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
 
@@ -5215,7 +5225,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     state.current_beat = beat_info.beat;
     state.is_in_freeze = beat_info.is_in_freeze;
     state.is_in_delay = beat_info.is_in_delay;
-    let song_row = timing_row_floor(&state.timing, state.current_beat).min(i32::MAX as usize) as i32;
+    let song_row = assist_row_no_offset(state, music_time_sec);
     run_assist_clap(state, song_row);
 
     for player in 0..state.num_players {
