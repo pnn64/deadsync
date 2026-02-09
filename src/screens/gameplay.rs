@@ -10,7 +10,7 @@ use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 
 pub use crate::game::gameplay::{State, init, update};
-use crate::game::gameplay::{TRANSITION_IN_DURATION, TRANSITION_OUT_DURATION};
+use crate::game::gameplay::{TRANSITION_IN_DURATION, TRANSITION_OUT_DURATION, assist_clap_is_enabled};
 
 // --- TRANSITIONS ---
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -109,6 +109,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 status_lines.push("AutoPlay".to_string());
             }
+        }
+        if assist_clap_is_enabled(state) {
+            status_lines.push("Assist Clap".to_string());
         }
         if let Some(msg) = &state.sync_overlay_message {
             status_lines.push(msg.clone());

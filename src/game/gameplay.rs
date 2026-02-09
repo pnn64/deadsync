@@ -92,6 +92,7 @@ const BACK_OUT_FADE_SECONDS: f32 = 0.4;
 const AUTOPLAY_TAP_RELEASE_SECONDS: f32 = 0.005;
 const AUTOPLAY_HOLD_RELEASE_SECONDS: f32 = 0.001;
 const AUTOPLAY_OFFSET_EPSILON_SECONDS: f32 = 0.000_001;
+const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HoldToExitKey {
@@ -264,6 +265,58 @@ fn build_row_grid(
     let mut rows: Vec<usize> = map.keys().copied().collect();
     rows.sort_unstable();
     (rows, map)
+}
+
+#[inline(always)]
+fn assist_clap_cursor_for_row(rows: &[usize], row: i32) -> usize {
+    if row < 0 {
+        0
+    } else {
+        rows.partition_point(|&r| r <= row as usize)
+    }
+}
+
+#[inline(always)]
+fn timing_row_floor(timing: &TimingData, beat: f32) -> usize {
+    let Some(mut row) = timing.get_row_for_beat(beat) else {
+        return 0;
+    };
+    if row > 0
+        && timing
+            .get_beat_for_row(row)
+            .is_some_and(|row_beat| row_beat > beat)
+    {
+        row -= 1;
+    }
+    row
+}
+
+fn build_assist_clap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
+    let (start, end) = note_range;
+    if start >= end {
+        return Vec::new();
+    }
+
+    let mut rows = Vec::with_capacity(end - start);
+    let mut i = start;
+    while i < end {
+        let row = notes[i].row_index;
+        let mut has_clap = false;
+        while i < end && notes[i].row_index == row {
+            let note = &notes[i];
+            if note.can_be_judged
+                && !note.is_fake
+                && matches!(note.note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll)
+            {
+                has_clap = true;
+            }
+            i += 1;
+        }
+        if has_clap {
+            rows.push(row);
+        }
+    }
+    rows
 }
 
 fn update_active_holds_for_row(
@@ -1384,6 +1437,10 @@ pub struct State {
     autoplay_pending_row: [Option<(usize, f32)>; MAX_PLAYERS],
     autoplay_lane_state: [bool; MAX_COLS],
     autoplay_hold_release_time: [Option<f32>; MAX_COLS],
+    assist_clap_enabled: bool,
+    assist_clap_rows: Vec<usize>,
+    assist_clap_cursor: usize,
+    assist_last_crossed_row: i32,
     replay_input: Vec<RecordedLaneEdge>,
     replay_cursor: usize,
     pub replay_edges: Vec<RecordedLaneEdge>,
@@ -1399,6 +1456,11 @@ fn is_player_dead(p: &PlayerRuntime) -> bool {
 #[inline(always)]
 fn is_state_dead(state: &State, player: usize) -> bool {
     is_player_dead(&state.players[player])
+}
+
+#[inline(always)]
+pub fn assist_clap_is_enabled(state: &State) -> bool {
+    state.assist_clap_enabled
 }
 
 #[inline(always)]
@@ -2597,6 +2659,7 @@ pub fn init(
         let life = players[p].life;
         players[p].life_history.push((init_music_time, life));
     }
+    let assist_clap_rows = build_assist_clap_rows(&notes, note_ranges[0]);
 
     State {
         song,
@@ -2710,6 +2773,10 @@ pub fn init(
         autoplay_pending_row: [None; MAX_PLAYERS],
         autoplay_lane_state: [false; MAX_COLS],
         autoplay_hold_release_time: [None; MAX_COLS],
+        assist_clap_enabled: false,
+        assist_clap_rows,
+        assist_clap_cursor: 0,
+        assist_last_crossed_row: -1,
         replay_input,
         replay_cursor: 0,
         replay_edges: Vec::with_capacity(4096),
@@ -3912,6 +3979,42 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     ScreenAction::None
 }
 
+#[inline(always)]
+fn run_assist_clap(state: &mut State, current_row: i32) {
+    let song_row = current_row.max(0);
+    if song_row < state.assist_last_crossed_row {
+        state.assist_last_crossed_row = song_row;
+        state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
+        return;
+    }
+
+    let crossed_cursor =
+        assist_clap_cursor_for_row(&state.assist_clap_rows, state.assist_last_crossed_row);
+    if state.assist_clap_enabled
+        && crossed_cursor < state.assist_clap_rows.len()
+        && state.assist_clap_rows[crossed_cursor] <= song_row as usize
+    {
+        audio::play_sfx(ASSIST_TICK_SFX_PATH);
+    }
+
+    state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
+    state.assist_last_crossed_row = song_row;
+}
+
+fn set_assist_clap_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
+    if state.assist_clap_enabled == enabled {
+        return;
+    }
+    state.assist_clap_enabled = enabled;
+
+    let song_beat = state.timing.get_beat_for_time(now_music_time);
+    let song_row = timing_row_floor(&state.timing, song_beat).min(i32::MAX as usize) as i32;
+    state.assist_last_crossed_row = song_row;
+    state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
+
+    info!("Assist clap {} (F7).", if enabled { "enabled" } else { "disabled" });
+}
+
 fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
     if state.autoplay_enabled == enabled {
         return;
@@ -4152,6 +4255,12 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
     let PhysicalKey::Code(code) = key.physical_key else {
         return ScreenAction::None;
     };
+
+    if code == KeyCode::F7 {
+        let now_music_time = current_music_time_from_stream(state);
+        set_assist_clap_enabled(state, !state.assist_clap_enabled, now_music_time);
+        return ScreenAction::None;
+    }
 
     if code == KeyCode::F8 {
         let now_music_time = current_music_time_from_stream(state);
@@ -5106,6 +5215,8 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     state.current_beat = beat_info.beat;
     state.is_in_freeze = beat_info.is_in_freeze;
     state.is_in_delay = beat_info.is_in_delay;
+    let song_row = timing_row_floor(&state.timing, state.current_beat).min(i32::MAX as usize) as i32;
+    run_assist_clap(state, song_row);
 
     for player in 0..state.num_players {
         let delay = state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
