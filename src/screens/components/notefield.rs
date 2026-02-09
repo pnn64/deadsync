@@ -44,10 +44,14 @@ const ERROR_BAR_OFFSET_FROM_JUDGMENT: f32 = ERROR_BAR_JUDGMENT_HEIGHT * 0.5 + 5.
 
 const ERROR_BAR_WIDTH_COLORFUL: f32 = 160.0;
 const ERROR_BAR_HEIGHT_COLORFUL: f32 = 10.0;
+const ERROR_BAR_WIDTH_AVERAGE: f32 = 325.0;
+const ERROR_BAR_HEIGHT_AVERAGE: f32 = 7.0;
 const ERROR_BAR_WIDTH_MONOCHROME: f32 = 240.0;
 const ERROR_BAR_TICK_WIDTH: f32 = 2.0;
 const ERROR_BAR_TICK_DUR_COLORFUL: f32 = 0.5;
 const ERROR_BAR_TICK_DUR_MONOCHROME: f32 = 0.75;
+const ERROR_BAR_AVERAGE_Y_OFFSET: f32 = -70.0;
+const ERROR_BAR_AVERAGE_TICK_EXTRA_H: f32 = 75.0;
 const ERROR_BAR_SEG_ALPHA_BASE: f32 = 0.3;
 const ERROR_BAR_MONO_BG_ALPHA: f32 = 0.5;
 const ERROR_BAR_LINE_ALPHA: f32 = 0.3;
@@ -225,8 +229,9 @@ fn error_bar_flash_alpha(now: f32, started_at: Option<f32>, dur: f32) -> f32 {
 fn error_bar_trim_max_window_ix(trim: profile::ErrorBarTrim) -> usize {
     match trim {
         profile::ErrorBarTrim::Off => 4,       // W5
-        profile::ErrorBarTrim::Great => 2,     // W3
+        profile::ErrorBarTrim::Fantastic => 0, // W1
         profile::ErrorBarTrim::Excellent => 1, // W2
+        profile::ErrorBarTrim::Great => 2,     // W3
     }
 }
 
@@ -278,13 +283,11 @@ fn zmod_layout_ys(
     let mut bottom_y = judgment_y + ERROR_BAR_JUDGMENT_HEIGHT * 0.5;
 
     // Zmod SL-Layout.lua: hasErrorBar checks multiple flags.
-    let has_error_bar = profile.error_bar_text
-        || matches!(
-            profile.error_bar,
-            crate::game::profile::ErrorBarStyle::Colorful
-                | crate::game::profile::ErrorBarStyle::Monochrome
-                | crate::game::profile::ErrorBarStyle::Text
-        );
+    let mut error_bar_mask = profile::normalize_error_bar_mask(profile.error_bar_active_mask);
+    if error_bar_mask == 0 {
+        error_bar_mask = profile::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
+    }
+    let has_error_bar = error_bar_mask != 0;
     if has_error_bar {
         if matches!(
             profile.judgment_graphic,
@@ -2276,16 +2279,16 @@ pub fn build(
         }
     }
 
-    let show_error_bar_text = profile.error_bar_text
-        || matches!(
-            profile.error_bar,
-            crate::game::profile::ErrorBarStyle::Text
-        );
-    let show_error_bar = show_error_bar_text
-        || !matches!(
-            profile.error_bar,
-            crate::game::profile::ErrorBarStyle::None
-        );
+    let mut error_bar_mask = profile::normalize_error_bar_mask(profile.error_bar_active_mask);
+    if error_bar_mask == 0 {
+        error_bar_mask = profile::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
+    }
+    let show_error_bar_colorful = (error_bar_mask & profile::ERROR_BAR_BIT_COLORFUL) != 0;
+    let show_error_bar_monochrome = (error_bar_mask & profile::ERROR_BAR_BIT_MONOCHROME) != 0;
+    let show_error_bar_text = (error_bar_mask & profile::ERROR_BAR_BIT_TEXT) != 0;
+    let show_error_bar_highlight = (error_bar_mask & profile::ERROR_BAR_BIT_HIGHLIGHT) != 0;
+    let show_error_bar_average = (error_bar_mask & profile::ERROR_BAR_BIT_AVERAGE) != 0;
+    let show_error_bar = error_bar_mask != 0;
     let (error_bar_y, error_bar_max_h) = if matches!(
         profile.judgment_graphic,
         crate::game::profile::JudgmentGraphic::None
@@ -2323,7 +2326,27 @@ pub fn build(
 
     // Error Bar (Simply Love parity)
     if show_error_bar {
-        match profile.error_bar {
+        let mut styles = [profile::ErrorBarStyle::None; 4];
+        let mut style_count = 0usize;
+        if show_error_bar_colorful {
+            styles[style_count] = profile::ErrorBarStyle::Colorful;
+            style_count += 1;
+        }
+        if show_error_bar_monochrome {
+            styles[style_count] = profile::ErrorBarStyle::Monochrome;
+            style_count += 1;
+        }
+        if show_error_bar_highlight {
+            styles[style_count] = profile::ErrorBarStyle::Highlight;
+            style_count += 1;
+        }
+        if show_error_bar_average {
+            styles[style_count] = profile::ErrorBarStyle::Average;
+            style_count += 1;
+        }
+
+        for style in styles.into_iter().take(style_count) {
+            match style {
             crate::game::profile::ErrorBarStyle::Monochrome => {
                 let bar_h = error_bar_max_h;
                 let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
@@ -2492,6 +2515,99 @@ pub fn build(
                             lastx = x;
                             continue;
                         }
+                        let window = timing_window_from_num(base + i);
+                        let c = error_bar_color_for_window(window, profile.show_fa_plus_window);
+
+                        let cx_early = -0.5 * (lastx + x);
+                        let cx_late = 0.5 * (lastx + x);
+                        hud_actors.push(act!(quad:
+                            align(0.5, 0.5): xy(playfield_center_x + cx_early, error_bar_y):
+                            zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
+                            diffuse(c[0], c[1], c[2], 1.0):
+                            z(181)
+                        ));
+                        hud_actors.push(act!(quad:
+                            align(0.5, 0.5): xy(playfield_center_x + cx_late, error_bar_y):
+                            zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
+                            diffuse(c[0], c[1], c[2], 1.0):
+                            z(181)
+                        ));
+
+                        lastx = x;
+                    }
+                }
+
+                if wscale.is_finite() && wscale > 0.0 {
+                    let multi_tick = profile.error_bar_multi_tick;
+                    for tick_opt in &p.error_bar_color_ticks {
+                        let Some(tick) = tick_opt else {
+                            continue;
+                        };
+                        let alpha = error_bar_tick_alpha(
+                            elapsed_screen - tick.started_at,
+                            ERROR_BAR_TICK_DUR_COLORFUL,
+                            multi_tick,
+                        );
+                        if alpha <= 0.0 {
+                            continue;
+                        }
+                        let x = tick.offset_s * wscale;
+                        if !x.is_finite() {
+                            continue;
+                        }
+                        hud_actors.push(act!(quad:
+                            align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
+                            zoomto(ERROR_BAR_TICK_WIDTH, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
+                            diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
+                            z(182)
+                        ));
+                    }
+                }
+            }
+            crate::game::profile::ErrorBarStyle::Highlight => {
+                let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
+                let max_offset_s = state.timing_profile.windows_s[max_window_ix];
+                let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
+                    (ERROR_BAR_WIDTH_COLORFUL * 0.5) / max_offset_s
+                } else {
+                    0.0
+                };
+                let (bounds_s, bounds_len) = error_bar_boundaries_s(
+                    state.timing_profile.windows_s,
+                    state.timing_profile.fa_plus_window_s,
+                    profile.show_fa_plus_window,
+                    profile.error_bar_trim,
+                );
+
+                let bar_visible = p
+                    .error_bar_color_bar_started_at
+                    .map(|t0| {
+                        let age = elapsed_screen - t0;
+                        age >= 0.0 && age < ERROR_BAR_TICK_DUR_COLORFUL
+                    })
+                    .unwrap_or(false);
+
+                if bar_visible && wscale.is_finite() && wscale > 0.0 {
+                    hud_actors.push(act!(quad:
+                        align(0.5, 0.5): xy(playfield_center_x, error_bar_y):
+                        zoomto(ERROR_BAR_WIDTH_COLORFUL + 4.0, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
+                        diffuse(0.0, 0.0, 0.0, 1.0):
+                        z(180)
+                    ));
+
+                    let base = if profile.show_fa_plus_window {
+                        0usize
+                    } else {
+                        1usize
+                    };
+                    let mut lastx = 0.0_f32;
+                    for i in 0..bounds_len {
+                        let x = bounds_s[i] * wscale;
+                        let width = x - lastx;
+                        if !x.is_finite() || !width.is_finite() || width <= 0.0 {
+                            lastx = x;
+                            continue;
+                        }
                         let window_num = base + i;
                         let window = timing_window_from_num(window_num);
                         let wi = window_num.min(5);
@@ -2553,8 +2669,53 @@ pub fn build(
                     }
                 }
             }
+            crate::game::profile::ErrorBarStyle::Average => {
+                let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
+                let max_offset_s = state.timing_profile.windows_s[max_window_ix];
+                let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
+                    (ERROR_BAR_WIDTH_AVERAGE * 0.5) / max_offset_s
+                } else {
+                    0.0
+                };
+                let avg_y = error_bar_y + ERROR_BAR_AVERAGE_Y_OFFSET;
+                let bar_visible = p
+                    .error_bar_avg_bar_started_at
+                    .map(|t0| {
+                        let age = elapsed_screen - t0;
+                        age >= 0.0 && age < ERROR_BAR_TICK_DUR_COLORFUL
+                    })
+                    .unwrap_or(false);
+                if bar_visible && wscale.is_finite() && wscale > 0.0 {
+                    let tick_h = ERROR_BAR_HEIGHT_AVERAGE + 4.0 + ERROR_BAR_AVERAGE_TICK_EXTRA_H;
+                    let multi_tick = profile.error_bar_multi_tick;
+                    for tick_opt in &p.error_bar_avg_ticks {
+                        let Some(tick) = tick_opt else {
+                            continue;
+                        };
+                        let alpha = error_bar_tick_alpha(
+                            elapsed_screen - tick.started_at,
+                            ERROR_BAR_TICK_DUR_COLORFUL,
+                            multi_tick,
+                        );
+                        if alpha <= 0.0 {
+                            continue;
+                        }
+                        let x = tick.offset_s * wscale;
+                        if !x.is_finite() {
+                            continue;
+                        }
+                        hud_actors.push(act!(quad:
+                            align(0.5, 0.5): xy(playfield_center_x + x, avg_y):
+                            zoomto(ERROR_BAR_TICK_WIDTH, tick_h):
+                            diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
+                            z(182)
+                        ));
+                    }
+                }
+            }
             crate::game::profile::ErrorBarStyle::Text => {}
             crate::game::profile::ErrorBarStyle::None => {}
+        }
         }
         if show_error_bar_text
             && let Some(text) = p.error_bar_text

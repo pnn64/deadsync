@@ -310,7 +310,7 @@ pub struct State {
     // bit0 = Judgment Tilt, bit1 = Column Cues, bit2 = Display Scorebox.
     pub gameplay_extras_more_active_mask: [u8; PLAYER_SLOTS],
     // For Error Bar row: bitmask of which options are enabled.
-    // bit0 = Colorful, bit1 = Monochrome, bit2 = Text.
+    // bit0 = Colorful, bit1 = Monochrome, bit2 = Text, bit3 = Highlight, bit4 = Average.
     pub error_bar_active_mask: [u8; PLAYER_SLOTS],
     // For Error Bar Options row: bitmask of which options are enabled.
     // bit0 = Move Up, bit1 = Multi-Tick (Simply Love semantics).
@@ -864,6 +864,8 @@ fn build_advanced_rows() -> Vec<Row> {
                 "Colorful".to_string(),
                 "Monochrome".to_string(),
                 "Text".to_string(),
+                "Highlight".to_string(),
+                "Average".to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![
@@ -875,8 +877,9 @@ fn build_advanced_rows() -> Vec<Row> {
             name: "Error Bar Trim".to_string(),
             choices: vec![
                 "Off".to_string(),
-                "Great".to_string(),
+                "Fantastic".to_string(),
                 "Excellent".to_string(),
+                "Great".to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Set the worst timing window that the error bar will show.".to_string()],
@@ -1193,7 +1196,12 @@ fn apply_profile_defaults(
     let mut early_dw_active_mask: u8 = 0;
     let mut gameplay_extras_active_mask: u8 = 0;
     let mut gameplay_extras_more_active_mask: u8 = 0;
-    let mut error_bar_active_mask: u8 = 0;
+    let mut error_bar_active_mask: u8 =
+        crate::game::profile::normalize_error_bar_mask(profile.error_bar_active_mask);
+    if error_bar_active_mask == 0 {
+        error_bar_active_mask =
+            crate::game::profile::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
+    }
     let mut error_bar_options_active_mask: u8 = 0;
     let mut measure_counter_options_active_mask: u8 = 0;
     // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
@@ -1328,16 +1336,6 @@ fn apply_profile_defaults(
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Offset Indicator") {
         row.selected_choice_index[player_idx] = if profile.error_ms_display { 1 } else { 0 };
     }
-    if profile.error_bar == crate::game::profile::ErrorBarStyle::Colorful {
-        error_bar_active_mask |= 1u8 << 0;
-    } else if profile.error_bar == crate::game::profile::ErrorBarStyle::Monochrome {
-        error_bar_active_mask |= 1u8 << 1;
-    } else if profile.error_bar == crate::game::profile::ErrorBarStyle::Text {
-        error_bar_active_mask |= 1u8 << 2;
-    }
-    if profile.error_bar_text {
-        error_bar_active_mask |= 1u8 << 2;
-    }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar") {
         if error_bar_active_mask != 0 {
             let first_idx = (0..row.choices.len())
@@ -1387,8 +1385,9 @@ fn apply_profile_defaults(
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar Trim") {
         row.selected_choice_index[player_idx] = match profile.error_bar_trim {
             crate::game::profile::ErrorBarTrim::Off => 0,
-            crate::game::profile::ErrorBarTrim::Great => 1,
+            crate::game::profile::ErrorBarTrim::Fantastic => 1,
             crate::game::profile::ErrorBarTrim::Excellent => 2,
+            crate::game::profile::ErrorBarTrim::Great => 3,
         };
     }
     if profile.error_bar_up {
@@ -2441,8 +2440,9 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
     } else if row_name == "Error Bar Trim" {
         let setting = match row.selected_choice_index[player_idx] {
             0 => crate::game::profile::ErrorBarTrim::Off,
-            1 => crate::game::profile::ErrorBarTrim::Great,
+            1 => crate::game::profile::ErrorBarTrim::Fantastic,
             2 => crate::game::profile::ErrorBarTrim::Excellent,
+            3 => crate::game::profile::ErrorBarTrim::Great,
             _ => crate::game::profile::ErrorBarTrim::Off,
         };
         state.player_profiles[player_idx].error_bar_trim = setting;
@@ -3083,7 +3083,7 @@ fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 3 {
+    let bit = if choice_index < 5 {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -3096,25 +3096,13 @@ fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
         state.error_bar_active_mask[idx] &= !bit;
     } else {
         state.error_bar_active_mask[idx] |= bit;
-        if bit == (1u8 << 0) {
-            state.error_bar_active_mask[idx] &= !(1u8 << 1);
-        } else if bit == (1u8 << 1) {
-            state.error_bar_active_mask[idx] &= !(1u8 << 0);
-        }
     }
-
-    let colorful = (state.error_bar_active_mask[idx] & (1u8 << 0)) != 0;
-    let monochrome = (state.error_bar_active_mask[idx] & (1u8 << 1)) != 0;
-    let text = (state.error_bar_active_mask[idx] & (1u8 << 2)) != 0;
-    let style = if colorful {
-        crate::game::profile::ErrorBarStyle::Colorful
-    } else if monochrome {
-        crate::game::profile::ErrorBarStyle::Monochrome
-    } else {
-        crate::game::profile::ErrorBarStyle::None
-    };
-    state.player_profiles[idx].error_bar = style;
-    state.player_profiles[idx].error_bar_text = text;
+    state.error_bar_active_mask[idx] =
+        crate::game::profile::normalize_error_bar_mask(state.error_bar_active_mask[idx]);
+    let mask = state.error_bar_active_mask[idx];
+    state.player_profiles[idx].error_bar_active_mask = mask;
+    state.player_profiles[idx].error_bar = crate::game::profile::error_bar_style_from_mask(mask);
+    state.player_profiles[idx].error_bar_text = crate::game::profile::error_bar_text_from_mask(mask);
 
     let play_style = crate::game::profile::get_session_play_style();
     let should_persist = play_style == crate::game::profile::PlayStyle::Versus
@@ -3125,7 +3113,7 @@ fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
         } else {
             crate::game::profile::PlayerSide::P2
         };
-        crate::game::profile::update_error_bar_config_for_side(side, style, text);
+        crate::game::profile::update_error_bar_mask_for_side(side, mask);
     }
 
     audio::play_sfx("assets/sounds/change_value.ogg");

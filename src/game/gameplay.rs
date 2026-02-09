@@ -1175,6 +1175,10 @@ pub struct PlayerRuntime {
     pub error_bar_color_flash_late: [Option<f32>; 6],
     pub error_bar_text: Option<ErrorBarText>,
     pub offset_indicator_text: Option<OffsetIndicatorText>,
+    pub error_bar_avg_ticks: [Option<ErrorBarTick>; 5],
+    pub error_bar_avg_next: usize,
+    pub error_bar_avg_bar_started_at: Option<f32>,
+    pub error_bar_avg_samples: VecDeque<(f32, f32)>,
 }
 
 fn init_player_runtime() -> PlayerRuntime {
@@ -1227,6 +1231,10 @@ fn init_player_runtime() -> PlayerRuntime {
         error_bar_color_flash_late: [None; 6],
         error_bar_text: None,
         offset_indicator_text: None,
+        error_bar_avg_ticks: [None; 5],
+        error_bar_avg_next: 0,
+        error_bar_avg_bar_started_at: None,
+        error_bar_avg_samples: VecDeque::with_capacity(64),
     }
 }
 
@@ -3244,25 +3252,6 @@ const fn error_bar_window_ix(window: TimingWindow) -> usize {
 }
 
 #[inline(always)]
-fn error_bar_trim_allows(trim: profile::ErrorBarTrim, window: TimingWindow) -> bool {
-    match trim {
-        profile::ErrorBarTrim::Off => true,
-        profile::ErrorBarTrim::Great => {
-            matches!(
-                window,
-                TimingWindow::W0 | TimingWindow::W1 | TimingWindow::W2 | TimingWindow::W3
-            )
-        }
-        profile::ErrorBarTrim::Excellent => {
-            matches!(
-                window,
-                TimingWindow::W0 | TimingWindow::W1 | TimingWindow::W2
-            )
-        }
-    }
-}
-
-#[inline(always)]
 fn error_bar_push_tick<const N: usize>(
     ticks: &mut [Option<ErrorBarTick>; N],
     next: &mut usize,
@@ -3283,10 +3272,57 @@ fn error_bar_push_tick<const N: usize>(
 }
 
 #[inline(always)]
-fn error_bar_register_tap(state: &mut State, player: usize, judgment: &Judgment) {
+fn error_bar_average_offset_s(samples: &mut VecDeque<(f32, f32)>, music_time_s: f32, offset_s: f32) -> f32 {
+    let now_ms = ((music_time_s * 100.0).round() * 10.0).max(0.0);
+    samples.push_back((now_ms, offset_s));
+
+    const WINDOW_MS: f32 = 400.0;
+    while let Some((t, _)) = samples.front() {
+        if now_ms - *t <= WINDOW_MS {
+            break;
+        }
+        samples.pop_front();
+    }
+
+    let mut sum = 0.0_f32;
+    let mut count: usize = 0;
+    let mut oldest_in_window: Option<f32> = None;
+    for &(t, v) in samples.iter().rev() {
+        if now_ms - t > WINDOW_MS {
+            break;
+        }
+        sum += v;
+        count += 1;
+        oldest_in_window = Some(v);
+    }
+    if count == 0 {
+        return offset_s;
+    }
+    if count > 1 && (count & 1) == 1
+        && let Some(oldest) = oldest_in_window
+    {
+        sum -= oldest;
+        count -= 1;
+    }
+    let mut avg = sum / (count.max(1) as f32);
+    if count == 1 {
+        avg *= 0.75;
+    }
+    avg
+}
+
+#[inline(always)]
+fn error_bar_register_tap(state: &mut State, player: usize, judgment: &Judgment, tap_music_time_s: f32) {
     let prof = &state.player_profiles[player];
-    let style = prof.error_bar;
-    let show_text = prof.error_bar_text || style == profile::ErrorBarStyle::Text;
+    let mut error_bar_mask = profile::normalize_error_bar_mask(prof.error_bar_active_mask);
+    if error_bar_mask == 0 {
+        error_bar_mask = profile::error_bar_mask_from_style(prof.error_bar, prof.error_bar_text);
+    }
+    let show_text = (error_bar_mask & profile::ERROR_BAR_BIT_TEXT) != 0;
+    let show_monochrome = (error_bar_mask & profile::ERROR_BAR_BIT_MONOCHROME) != 0;
+    let show_colorful = (error_bar_mask & profile::ERROR_BAR_BIT_COLORFUL) != 0;
+    let show_highlight = (error_bar_mask & profile::ERROR_BAR_BIT_HIGHLIGHT) != 0;
+    let show_average = (error_bar_mask & profile::ERROR_BAR_BIT_AVERAGE) != 0;
     let show_fa_plus_window = prof.show_fa_plus_window;
     let error_bar_trim = prof.error_bar_trim;
     let error_bar_multi_tick = prof.error_bar_multi_tick;
@@ -3328,58 +3364,94 @@ fn error_bar_register_tap(state: &mut State, player: usize, judgment: &Judgment)
         p.error_bar_text = None;
     }
 
-    if matches!(
-        style,
-        profile::ErrorBarStyle::None | profile::ErrorBarStyle::Text
-    ) {
+    if !(show_monochrome || show_colorful || show_highlight || show_average) {
         return;
     }
 
-    if !error_bar_trim_allows(error_bar_trim, window) {
-        return;
-    }
+    let max_window_ix = match error_bar_trim {
+        profile::ErrorBarTrim::Off => 4,
+        profile::ErrorBarTrim::Fantastic => 0,
+        profile::ErrorBarTrim::Excellent => 1,
+        profile::ErrorBarTrim::Great => 2,
+    };
+    let max_offset_s = state.timing_profile.windows_s[max_window_ix];
+    let clamped_offset_s = if max_offset_s.is_finite() && max_offset_s > 0.0 {
+        offset_s.clamp(-max_offset_s, max_offset_s)
+    } else {
+        offset_s
+    };
 
     let tick = ErrorBarTick {
         started_at: now,
-        offset_s,
+        offset_s: clamped_offset_s,
         window,
     };
 
-    match style {
-        profile::ErrorBarStyle::Monochrome => {
-            error_bar_push_tick(
-                &mut p.error_bar_mono_ticks,
-                &mut p.error_bar_mono_next,
-                error_bar_multi_tick,
-                tick,
-            );
-        }
-        profile::ErrorBarStyle::Colorful => {
-            error_bar_push_tick(
-                &mut p.error_bar_color_ticks,
-                &mut p.error_bar_color_next,
-                error_bar_multi_tick,
-                tick,
-            );
-            p.error_bar_color_bar_started_at = Some(now);
+    if show_monochrome {
+        error_bar_push_tick(
+            &mut p.error_bar_mono_ticks,
+            &mut p.error_bar_mono_next,
+            error_bar_multi_tick,
+            tick,
+        );
+    }
 
-            let is_top = if show_fa_plus_window {
-                window == TimingWindow::W0
-            } else {
-                window == TimingWindow::W1
-            };
-            let wi = error_bar_window_ix(window);
-            if is_top {
-                p.error_bar_color_flash_early[wi] = Some(now);
-                p.error_bar_color_flash_late[wi] = Some(now);
-            } else if offset_s < 0.0 {
-                p.error_bar_color_flash_early[wi] = Some(now);
-            } else {
-                p.error_bar_color_flash_late[wi] = Some(now);
+    if show_colorful || show_highlight {
+        error_bar_push_tick(
+            &mut p.error_bar_color_ticks,
+            &mut p.error_bar_color_next,
+            error_bar_multi_tick,
+            tick,
+        );
+        p.error_bar_color_bar_started_at = Some(now);
+    }
+
+    if show_highlight {
+        let is_top = if show_fa_plus_window {
+            window == TimingWindow::W0
+        } else {
+            window == TimingWindow::W1
+        };
+        let flash_window = if offset_s.abs() > max_offset_s {
+            match max_window_ix {
+                0 => TimingWindow::W1,
+                1 => TimingWindow::W2,
+                2 => TimingWindow::W3,
+                3 => TimingWindow::W4,
+                _ => TimingWindow::W5,
             }
+        } else {
+            window
+        };
+        let wi = error_bar_window_ix(flash_window);
+        if is_top {
+            p.error_bar_color_flash_early[wi] = Some(now);
+            p.error_bar_color_flash_late[wi] = Some(now);
+        } else if offset_s < 0.0 {
+            p.error_bar_color_flash_early[wi] = Some(now);
+        } else {
+            p.error_bar_color_flash_late[wi] = Some(now);
         }
-        profile::ErrorBarStyle::None => {}
-        profile::ErrorBarStyle::Text => {}
+    }
+
+    if show_average {
+        let avg = error_bar_average_offset_s(&mut p.error_bar_avg_samples, tap_music_time_s, offset_s);
+        let avg_clamped = if max_offset_s.is_finite() && max_offset_s > 0.0 {
+            avg.clamp(-max_offset_s, max_offset_s)
+        } else {
+            avg
+        };
+        error_bar_push_tick(
+            &mut p.error_bar_avg_ticks,
+            &mut p.error_bar_avg_next,
+            error_bar_multi_tick,
+            ErrorBarTick {
+                started_at: now,
+                offset_s: avg_clamped,
+                window,
+            },
+        );
+        p.error_bar_avg_bar_started_at = Some(now);
     }
 }
 
@@ -3544,7 +3616,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                                 });
                             }
                         }
-                        error_bar_register_tap(state, player, &judgment);
+                        error_bar_register_tap(state, player, &judgment, current_time);
                         let expected_stream_for_note_s = row_note_time / rate
                             + lead_in_s
                             + global_offset_s * (1.0 - rate) / rate;
@@ -3621,7 +3693,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     window: Some(window),
                     miss_because_held: false,
                 };
-                error_bar_register_tap(state, player, &judgment);
+                error_bar_register_tap(state, player, &judgment, current_time);
                 state.notes[idx].result = Some(judgment);
 
                 let expected_stream_for_note_s =
@@ -3695,7 +3767,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     window: Some(window),
                     miss_because_held: false,
                 };
-                error_bar_register_tap(state, player, &judgment);
+                error_bar_register_tap(state, player, &judgment, current_time);
                 state.notes[idx].result = Some(judgment);
 
                 // Map chart times into the shared audio device clock space to

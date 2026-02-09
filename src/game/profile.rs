@@ -402,6 +402,8 @@ pub enum ErrorBarStyle {
     Colorful,
     Monochrome,
     Text,
+    Highlight,
+    Average,
 }
 
 impl FromStr for ErrorBarStyle {
@@ -412,6 +414,8 @@ impl FromStr for ErrorBarStyle {
             "colorful" => Ok(Self::Colorful),
             "monochrome" => Ok(Self::Monochrome),
             "text" => Ok(Self::Text),
+            "highlight" => Ok(Self::Highlight),
+            "average" => Ok(Self::Average),
             other => Err(format!("'{other}' is not a valid ErrorBar setting")),
         }
     }
@@ -424,16 +428,70 @@ impl core::fmt::Display for ErrorBarStyle {
             Self::Colorful => write!(f, "Colorful"),
             Self::Monochrome => write!(f, "Monochrome"),
             Self::Text => write!(f, "Text"),
+            Self::Highlight => write!(f, "Highlight"),
+            Self::Average => write!(f, "Average"),
         }
     }
+}
+
+pub const ERROR_BAR_BIT_COLORFUL: u8 = 1 << 0;
+pub const ERROR_BAR_BIT_MONOCHROME: u8 = 1 << 1;
+pub const ERROR_BAR_BIT_TEXT: u8 = 1 << 2;
+pub const ERROR_BAR_BIT_HIGHLIGHT: u8 = 1 << 3;
+pub const ERROR_BAR_BIT_AVERAGE: u8 = 1 << 4;
+pub const ERROR_BAR_ACTIVE_BITS: u8 = ERROR_BAR_BIT_COLORFUL
+    | ERROR_BAR_BIT_MONOCHROME
+    | ERROR_BAR_BIT_TEXT
+    | ERROR_BAR_BIT_HIGHLIGHT
+    | ERROR_BAR_BIT_AVERAGE;
+
+#[inline(always)]
+pub const fn normalize_error_bar_mask(mask: u8) -> u8 {
+    mask & ERROR_BAR_ACTIVE_BITS
+}
+
+#[inline(always)]
+pub const fn error_bar_mask_from_style(style: ErrorBarStyle, text: bool) -> u8 {
+    let mut mask = if text { ERROR_BAR_BIT_TEXT } else { 0 };
+    mask |= match style {
+        ErrorBarStyle::None => 0,
+        ErrorBarStyle::Colorful => ERROR_BAR_BIT_COLORFUL,
+        ErrorBarStyle::Monochrome => ERROR_BAR_BIT_MONOCHROME,
+        ErrorBarStyle::Text => ERROR_BAR_BIT_TEXT,
+        ErrorBarStyle::Highlight => ERROR_BAR_BIT_HIGHLIGHT,
+        ErrorBarStyle::Average => ERROR_BAR_BIT_AVERAGE,
+    };
+    normalize_error_bar_mask(mask)
+}
+
+#[inline(always)]
+pub const fn error_bar_style_from_mask(mask: u8) -> ErrorBarStyle {
+    let mask = normalize_error_bar_mask(mask);
+    if (mask & ERROR_BAR_BIT_COLORFUL) != 0 {
+        ErrorBarStyle::Colorful
+    } else if (mask & ERROR_BAR_BIT_MONOCHROME) != 0 {
+        ErrorBarStyle::Monochrome
+    } else if (mask & ERROR_BAR_BIT_HIGHLIGHT) != 0 {
+        ErrorBarStyle::Highlight
+    } else if (mask & ERROR_BAR_BIT_AVERAGE) != 0 {
+        ErrorBarStyle::Average
+    } else {
+        ErrorBarStyle::None
+    }
+}
+
+#[inline(always)]
+pub const fn error_bar_text_from_mask(mask: u8) -> bool {
+    (normalize_error_bar_mask(mask) & ERROR_BAR_BIT_TEXT) != 0
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ErrorBarTrim {
     #[default]
     Off,
-    Great,
+    Fantastic,
     Excellent,
+    Great,
 }
 
 impl FromStr for ErrorBarTrim {
@@ -441,8 +499,9 @@ impl FromStr for ErrorBarTrim {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_lowercase().as_str() {
             "off" => Ok(Self::Off),
-            "great" => Ok(Self::Great),
+            "fantastic" => Ok(Self::Fantastic),
             "excellent" => Ok(Self::Excellent),
+            "great" => Ok(Self::Great),
             other => Err(format!("'{other}' is not a valid ErrorBarTrim setting")),
         }
     }
@@ -452,8 +511,9 @@ impl core::fmt::Display for ErrorBarTrim {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Off => write!(f, "Off"),
-            Self::Great => write!(f, "Great"),
+            Self::Fantastic => write!(f, "Fantastic"),
             Self::Excellent => write!(f, "Excellent"),
+            Self::Great => write!(f, "Great"),
         }
     }
 }
@@ -865,9 +925,12 @@ pub struct Profile {
     pub error_ms_display: bool,
     pub display_scorebox: bool,
     pub tilt_multiplier: f32,
-    // Error bar (Simply Love semantics).
+    // Error bar (zmod semantics): each bit toggles one submodule in the
+    // SelectMultiple row (Colorful/Monochrome/Text/Highlight/Average).
+    pub error_bar_active_mask: u8,
+    // Backward-compatible primary style string written to profile.ini.
     pub error_bar: ErrorBarStyle,
-    // zmod semantics: allow Text early/late indicator alongside Colorful/Monochrome.
+    // Backward-compatible text flag written to profile.ini.
     pub error_bar_text: bool,
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
@@ -955,6 +1018,7 @@ impl Default for Profile {
             display_scorebox: true,
             tilt_multiplier: 1.0,
             error_bar: ErrorBarStyle::default(),
+            error_bar_active_mask: error_bar_mask_from_style(ErrorBarStyle::default(), false),
             error_bar_text: false,
             error_bar_up: false,
             error_bar_multi_tick: false,
@@ -1237,6 +1301,30 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             i32::from(default_profile.error_bar_text)
         ));
         content.push_str(&format!(
+            "ErrorBarMask = {}\n",
+            default_profile.error_bar_active_mask
+        ));
+        content.push_str(&format!(
+            "Colorful = {}\n",
+            i32::from((default_profile.error_bar_active_mask & ERROR_BAR_BIT_COLORFUL) != 0)
+        ));
+        content.push_str(&format!(
+            "Monochrome = {}\n",
+            i32::from((default_profile.error_bar_active_mask & ERROR_BAR_BIT_MONOCHROME) != 0)
+        ));
+        content.push_str(&format!(
+            "Text = {}\n",
+            i32::from((default_profile.error_bar_active_mask & ERROR_BAR_BIT_TEXT) != 0)
+        ));
+        content.push_str(&format!(
+            "Highlight = {}\n",
+            i32::from((default_profile.error_bar_active_mask & ERROR_BAR_BIT_HIGHLIGHT) != 0)
+        ));
+        content.push_str(&format!(
+            "Average = {}\n",
+            i32::from((default_profile.error_bar_active_mask & ERROR_BAR_BIT_AVERAGE) != 0)
+        ));
+        content.push_str(&format!(
             "ErrorBarUp = {}\n",
             i32::from(default_profile.error_bar_up)
         ));
@@ -1460,6 +1548,27 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!(
         "ErrorBarText={}\n",
         i32::from(profile.error_bar_text)
+    ));
+    content.push_str(&format!("ErrorBarMask={}\n", profile.error_bar_active_mask));
+    content.push_str(&format!(
+        "Colorful={}\n",
+        i32::from((profile.error_bar_active_mask & ERROR_BAR_BIT_COLORFUL) != 0)
+    ));
+    content.push_str(&format!(
+        "Monochrome={}\n",
+        i32::from((profile.error_bar_active_mask & ERROR_BAR_BIT_MONOCHROME) != 0)
+    ));
+    content.push_str(&format!(
+        "Text={}\n",
+        i32::from((profile.error_bar_active_mask & ERROR_BAR_BIT_TEXT) != 0)
+    ));
+    content.push_str(&format!(
+        "Highlight={}\n",
+        i32::from((profile.error_bar_active_mask & ERROR_BAR_BIT_HIGHLIGHT) != 0)
+    ));
+    content.push_str(&format!(
+        "Average={}\n",
+        i32::from((profile.error_bar_active_mask & ERROR_BAR_BIT_AVERAGE) != 0)
     ));
     content.push_str(&format!("ErrorBarUp={}\n", i32::from(profile.error_bar_up)));
     content.push_str(&format!(
@@ -1720,10 +1829,61 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "ErrorBarText")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.error_bar_text, |v| v != 0);
-            if profile.error_bar == ErrorBarStyle::Text {
-                profile.error_bar = ErrorBarStyle::None;
-                profile.error_bar_text = true;
-            }
+            let mask_from_key = profile_conf
+                .get("PlayerOptions", "ErrorBarMask")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map(normalize_error_bar_mask);
+            let colorful = profile_conf
+                .get("PlayerOptions", "Colorful")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map(|v| v != 0);
+            let monochrome = profile_conf
+                .get("PlayerOptions", "Monochrome")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map(|v| v != 0);
+            let text = profile_conf
+                .get("PlayerOptions", "Text")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map(|v| v != 0);
+            let highlight = profile_conf
+                .get("PlayerOptions", "Highlight")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map(|v| v != 0);
+            let average = profile_conf
+                .get("PlayerOptions", "Average")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map(|v| v != 0);
+            let mask_from_flags = if colorful.is_some()
+                || monochrome.is_some()
+                || text.is_some()
+                || highlight.is_some()
+                || average.is_some()
+            {
+                let mut mask: u8 = 0;
+                if colorful.unwrap_or(false) {
+                    mask |= ERROR_BAR_BIT_COLORFUL;
+                }
+                if monochrome.unwrap_or(false) {
+                    mask |= ERROR_BAR_BIT_MONOCHROME;
+                }
+                if text.unwrap_or(false) {
+                    mask |= ERROR_BAR_BIT_TEXT;
+                }
+                if highlight.unwrap_or(false) {
+                    mask |= ERROR_BAR_BIT_HIGHLIGHT;
+                }
+                if average.unwrap_or(false) {
+                    mask |= ERROR_BAR_BIT_AVERAGE;
+                }
+                Some(normalize_error_bar_mask(mask))
+            } else {
+                None
+            };
+            profile.error_bar_active_mask = mask_from_key
+                .or(mask_from_flags)
+                .unwrap_or_else(|| error_bar_mask_from_style(profile.error_bar, profile.error_bar_text));
+            profile.error_bar = error_bar_style_from_mask(profile.error_bar_active_mask);
+            profile.error_bar_text = error_bar_text_from_mask(profile.error_bar_active_mask);
             profile.error_bar_up = profile_conf
                 .get("PlayerOptions", "ErrorBarUp")
                 .and_then(|s| s.parse::<u8>().ok())
@@ -2821,17 +2981,21 @@ pub fn update_tilt_multiplier_for_side(side: PlayerSide, multiplier: f32) {
     save_profile_ini_for_side(side);
 }
 
-pub fn update_error_bar_config_for_side(side: PlayerSide, setting: ErrorBarStyle, text: bool) {
+pub fn update_error_bar_mask_for_side(side: PlayerSide, mask: u8) {
     if session_side_is_guest(side) {
         return;
     }
+    let mask = normalize_error_bar_mask(mask);
+    let style = error_bar_style_from_mask(mask);
+    let text = error_bar_text_from_mask(mask);
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
-        if profile.error_bar == setting && profile.error_bar_text == text {
+        if profile.error_bar_active_mask == mask {
             return;
         }
-        profile.error_bar = setting;
+        profile.error_bar_active_mask = mask;
+        profile.error_bar = style;
         profile.error_bar_text = text;
     }
     save_profile_ini_for_side(side);
