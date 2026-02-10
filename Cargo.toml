@@ -17,6 +17,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 rand = "0.9.2"
 chrono = "0.4.43"
+qrcodegen = "1.8.0"
 
 # Software renderer
 softbuffer = "0.4.8"

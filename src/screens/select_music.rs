@@ -3767,17 +3767,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Step Artist & Steps
     let base_y = (screen_center_y() - 9.0) - 0.5 * (screen_height() / 28.0);
     let mut push_step_artist = |y_cen: f32, x0: f32, sel_col: [f32; 4], step_artist: &str| {
-        actors.extend(step_artist_bar::build(step_artist_bar::StepArtistBarParams {
-            x0,
-            center_y: y_cen,
-            accent_color: sel_col,
-            label_text: "STEPS",
-            label_max_width: 40.0,
-            artist_text: step_artist,
-            artist_x_offset: 75.0,
-            artist_max_width: 124.0,
-            artist_color: [0.0, 0.0, 0.0, 1.0],
-        }));
+        actors.extend(step_artist_bar::build(
+            step_artist_bar::StepArtistBarParams {
+                x0,
+                center_y: y_cen,
+                accent_color: sel_col,
+                label_text: "STEPS",
+                label_max_width: 40.0,
+                artist_text: step_artist,
+                artist_x_offset: 75.0,
+                artist_max_width: 124.0,
+                artist_color: [0.0, 0.0, 0.0, 1.0],
+            },
+        ));
     };
 
     if is_versus {

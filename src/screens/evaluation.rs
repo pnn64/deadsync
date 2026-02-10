@@ -6,7 +6,7 @@ use crate::screens::Screen;
 use crate::screens::components::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::{eval_grades, heart_bg, pad_display, screen_bar};
+use crate::screens::components::{eval_grades, heart_bg, pad_display, qr_code, screen_bar};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 
@@ -62,6 +62,11 @@ const GS_ROW_PLACEHOLDER_RANK: &str = "---";
 const GS_ROW_PLACEHOLDER_NAME: &str = "----";
 const GS_ROW_PLACEHOLDER_SCORE: &str = "------";
 const GS_ROW_PLACEHOLDER_DATE: &str = "----------";
+const GS_QR_URL: &str = "https://www.groovestats.com";
+const GS_QR_TITLE: &str = "GrooveStats QR";
+const GS_QR_HELP_TEXT: &str =
+    "Scan with your phone\nto upload this score\nto your GrooveStats\naccount.";
+const GS_QR_FALLBACK_TEXT: &str = "QR Unavailable";
 const GS_RIVAL_COLOR: [f32; 4] = color::rgba_hex("#BD94FF");
 const GS_SELF_COLOR: [f32; 4] = color::rgba_hex("#A1FF94");
 const MONTH_ABBR: [&str; 12] = [
@@ -202,6 +207,7 @@ enum EvalPane {
     HardEx,
     Column,
     MachineRecords,
+    QrCode,
     GrooveStats,
     Timing,
 }
@@ -219,7 +225,7 @@ impl EvalPane {
     #[inline(always)]
     fn next(self, has_hard_ex: bool, has_gs: bool) -> Self {
         // Order (per user parity request):
-        // ITG -> EX -> H.EX -> Arrow breakdown -> Machine records -> GS -> Timing -> ITG
+        // ITG -> EX -> H.EX -> Arrow breakdown -> Machine -> QR -> GS -> Timing -> ITG
         match (self, has_hard_ex, has_gs) {
             (Self::Standard, _, _) => Self::FaPlus,
             (Self::FaPlus, true, _) => Self::HardEx,
@@ -227,8 +233,9 @@ impl EvalPane {
             (Self::HardEx, true, _) => Self::Column,
             (Self::HardEx, false, _) => Self::Standard,
             (Self::Column, _, _) => Self::MachineRecords,
-            (Self::MachineRecords, _, true) => Self::GrooveStats,
-            (Self::MachineRecords, _, false) => Self::Timing,
+            (Self::MachineRecords, _, _) => Self::QrCode,
+            (Self::QrCode, _, true) => Self::GrooveStats,
+            (Self::QrCode, _, false) => Self::Timing,
             (Self::GrooveStats, _, _) => Self::Timing,
             (Self::Timing, _, _) => Self::Standard,
         }
@@ -239,8 +246,9 @@ impl EvalPane {
         match (self, has_hard_ex, has_gs) {
             (Self::Standard, _, _) => Self::Timing,
             (Self::Timing, _, true) => Self::GrooveStats,
-            (Self::Timing, _, false) => Self::MachineRecords,
-            (Self::GrooveStats, _, _) => Self::MachineRecords,
+            (Self::Timing, _, false) => Self::QrCode,
+            (Self::GrooveStats, _, _) => Self::QrCode,
+            (Self::QrCode, _, _) => Self::MachineRecords,
             (Self::MachineRecords, _, _) => Self::Column,
             (Self::Column, true, _) => Self::HardEx,
             (Self::Column, false, _) => Self::FaPlus,
@@ -340,8 +348,10 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             {
                 records.clone()
             } else {
-                let records =
-                    scores::get_machine_leaderboard_local(&gs.charts[player_idx].short_hash, usize::MAX);
+                let records = scores::get_machine_leaderboard_local(
+                    &gs.charts[player_idx].short_hash,
+                    usize::MAX,
+                );
                 machine_records_by_hash
                     .insert(gs.charts[player_idx].short_hash.clone(), records.clone());
                 records
@@ -361,10 +371,9 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 &prof.player_initials,
                 score_percent,
             );
-            let earned_machine_record =
-                machine_record_highlight_rank.is_some_and(|rank| rank <= MACHINE_RECORD_ROWS as u32);
-            let earned_top2_personal =
-                personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+            let earned_machine_record = machine_record_highlight_rank
+                .is_some_and(|rank| rank <= MACHINE_RECORD_ROWS as u32);
+            let earned_top2_personal = personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
             let show_machine_personal_split = !earned_machine_record && earned_top2_personal;
 
             let mut grade = if p.is_failing || !gs.song_completed_naturally {
@@ -673,8 +682,7 @@ fn machine_record_highlight_color(
 ) -> [f32; 4] {
     let base = eval_player_color_rgba(side, active_color_index);
     let phase =
-        ((elapsed_s / MACHINE_RECORD_HIGHLIGHT_PERIOD_SECONDS) * std::f32::consts::TAU).sin()
-            * 0.5
+        ((elapsed_s / MACHINE_RECORD_HIGHLIGHT_PERIOD_SECONDS) * std::f32::consts::TAU).sin() * 0.5
             + 0.5;
     let inv = 1.0 - phase;
     [
@@ -1239,7 +1247,7 @@ fn build_pane_percentage_display(
 ) -> Vec<Actor> {
     if matches!(
         pane,
-        EvalPane::Timing | EvalPane::MachineRecords | EvalPane::GrooveStats
+        EvalPane::Timing | EvalPane::MachineRecords | EvalPane::QrCode | EvalPane::GrooveStats
     ) {
         return vec![];
     }
@@ -1268,6 +1276,7 @@ fn build_pane_percentage_display(
     match pane {
         EvalPane::Timing => {}
         EvalPane::MachineRecords => {}
+        EvalPane::QrCode => {}
         EvalPane::GrooveStats => {}
         EvalPane::Column => {
             // Pane3 percentage container: small and not mirrored.
@@ -1443,8 +1452,8 @@ fn build_machine_records_pane(
             );
         }
 
-        let split_y =
-            first_row_y + MACHINE_RECORD_SPLIT_SEPARATOR_Y_ROWS * MACHINE_RECORD_SPLIT_ROW_HEIGHT * pane_zoom;
+        let split_y = first_row_y
+            + MACHINE_RECORD_SPLIT_SEPARATOR_Y_ROWS * MACHINE_RECORD_SPLIT_ROW_HEIGHT * pane_zoom;
         children.push(act!(quad:
             align(0.5, 0.5):
             xy(0.0, split_y):
@@ -1599,7 +1608,11 @@ fn gs_machine_tag(entry: &scores::LeaderboardEntry) -> String {
     if let Some(tag) = entry.machine_tag.as_deref() {
         let trimmed = tag.trim();
         if !trimmed.is_empty() {
-            return trimmed.chars().take(4).collect::<String>().to_ascii_uppercase();
+            return trimmed
+                .chars()
+                .take(4)
+                .collect::<String>()
+                .to_ascii_uppercase();
         }
     }
     let trimmed_name = entry.name.trim();
@@ -1783,6 +1796,110 @@ fn build_gs_records_pane(
         zoom(0.3 * pane_zoom):
         z(102)
     ));
+
+    vec![Actor::Frame {
+        align: [0.5, 0.5],
+        offset: [pane_origin_x, pane_origin_y],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        background: None,
+        z: 101,
+        children,
+    }]
+}
+
+fn build_gs_qr_pane(score_info: &ScoreInfo, controller: profile::PlayerSide) -> Vec<Actor> {
+    let pane_origin_x = match controller {
+        profile::PlayerSide::P1 => screen_center_x() - 155.0,
+        profile::PlayerSide::P2 => screen_center_x() + 155.0,
+    };
+    let pane_origin_y = screen_center_y() - 62.0;
+    let top_y = MACHINE_RECORD_DEFAULT_ROW_HEIGHT * 0.8;
+    let score_w = 70.0;
+    let score_h = 28.0;
+    let score_bg = color::rgba_hex("#101519");
+    let score_text = format!("{:.2}", score_info.score_percent * 100.0);
+
+    // SL Pane7: keep a fixed left text column and dedicate the right side to the QR.
+    let qr_size = 168.0;
+    let qr_left = -26.0;
+    let qr_top_y = top_y - 6.0;
+    let qr_center_x = qr_left + qr_size * 0.5;
+    let qr_center_y = qr_top_y + qr_size * 0.5;
+    // SL parity: keep QR fixed and shift the full left info column as a unit.
+    let left_col_x = -150.0;
+    let score_y = qr_top_y - 6.0;
+
+    let mut children = Vec::with_capacity(8);
+
+    children.push(act!(quad:
+        align(0.0, 0.0):
+        xy(left_col_x, score_y):
+        setsize(score_w, score_h):
+        z(101):
+        diffuse(score_bg[0], score_bg[1], score_bg[2], 1.0)
+    ));
+    children.push(act!(text:
+        font("wendy_white"):
+        settext(score_text):
+        align(1.0, 0.5):
+        xy(left_col_x + 60.0, score_y + 12.0):
+        zoom(0.25):
+        z(102):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        horizalign(right)
+    ));
+
+    let title_y = top_y + 36.0;
+    children.push(act!(text:
+        font("miso"):
+        settext(GS_QR_TITLE):
+        align(0.0, 0.0):
+        xy(left_col_x + 4.0, title_y + 1.0):
+        zoom(1.0):
+        z(101):
+        diffuse(1.0, 1.0, 1.0, 1.0)
+    ));
+
+    children.push(act!(quad:
+        align(0.0, 0.0):
+        xy(left_col_x + 4.0, title_y + 23.0):
+        setsize(96.0, 1.0):
+        z(101):
+        diffuse(1.0, 1.0, 1.0, 0.33)
+    ));
+
+    children.push(act!(text:
+        font("miso"):
+        settext(GS_QR_HELP_TEXT):
+        align(0.0, 0.0):
+        xy(left_col_x + 1.0, title_y + 31.0):
+        zoom(0.80):
+        z(101):
+        diffuse(1.0, 1.0, 1.0, 1.0)
+    ));
+
+    let qr_actors = qr_code::build(qr_code::QrCodeParams {
+        content: GS_QR_URL,
+        center_x: qr_center_x,
+        center_y: qr_center_y,
+        size: qr_size,
+        border_modules: 1,
+        z: 0,
+    });
+    if qr_actors.is_empty() {
+        children.push(act!(text:
+            font("miso"):
+            settext(GS_QR_FALLBACK_TEXT):
+            align(0.5, 0.5):
+            xy(qr_center_x, qr_center_y):
+            zoom(0.8):
+            z(101):
+            diffuse(1.0, 0.3, 0.3, 1.0):
+            horizalign(center)
+        ));
+    } else {
+        children.extend(qr_actors);
+    }
 
     vec![Actor::Frame {
         align: [0.5, 0.5],
@@ -2656,6 +2773,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     state.timing_hist_mesh[player_idx].as_ref(),
                     controller,
                 )),
+                EvalPane::QrCode => actors.extend(build_gs_qr_pane(si, controller)),
                 EvalPane::GrooveStats => actors.extend(build_gs_records_pane(
                     controller,
                     scores::get_or_fetch_player_leaderboards_for_side(

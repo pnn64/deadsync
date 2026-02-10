@@ -846,7 +846,10 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
                 let meter = if let Some(course_meter) = meta.course_meter {
                     course_meter.to_string()
                 } else if meta.meter_count > 0 {
-                    format!("{}", (meta.meter_sum as f32 / meta.meter_count as f32).round() as i32)
+                    format!(
+                        "{}",
+                        (meta.meter_sum as f32 / meta.meter_count as f32).round() as i32
+                    )
                 } else {
                     "?".to_string()
                 };
@@ -976,22 +979,24 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         screen_center_x() - 345.5
     };
     let step_artist_y = (screen_center_y() - 9.0) - 0.5 * (screen_height() / 28.0);
-    actors.extend(step_artist_bar::build(step_artist_bar::StepArtistBarParams {
-        x0: step_artist_x0,
-        center_y: step_artist_y,
-        accent_color: step_artist_col,
-        label_text: step_idx_text.as_str(),
-        label_max_width: 22.0,
-        artist_text: step_artist_text.as_str(),
-        artist_x_offset: 60.0,
-        artist_max_width: 138.0,
-        artist_color: [
-            UI_BOX_BG_COLOR[0],
-            UI_BOX_BG_COLOR[1],
-            UI_BOX_BG_COLOR[2],
-            1.0,
-        ],
-    }));
+    actors.extend(step_artist_bar::build(
+        step_artist_bar::StepArtistBarParams {
+            x0: step_artist_x0,
+            center_y: step_artist_y,
+            accent_color: step_artist_col,
+            label_text: step_idx_text.as_str(),
+            label_max_width: 22.0,
+            artist_text: step_artist_text.as_str(),
+            artist_x_offset: 60.0,
+            artist_max_width: 138.0,
+            artist_color: [
+                UI_BOX_BG_COLOR[0],
+                UI_BOX_BG_COLOR[1],
+                UI_BOX_BG_COLOR[2],
+                1.0,
+            ],
+        },
+    ));
 
     let list_left_x = panel_cx - panel_w * 0.5 + 8.0;
     let list_start_y = panel_top + 8.0;
