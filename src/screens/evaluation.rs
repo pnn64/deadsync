@@ -52,6 +52,18 @@ const MACHINE_RECORD_DEFAULT_ROW_HEIGHT: f32 = 22.0;
 const MACHINE_RECORD_SPLIT_ROW_HEIGHT: f32 = 20.25;
 const MACHINE_RECORD_SPLIT_SEPARATOR_Y_ROWS: f32 = 9.0;
 const MACHINE_RECORD_HIGHLIGHT_PERIOD_SECONDS: f32 = 4.0 / 3.0;
+const GS_RECORD_ROWS: usize = 10;
+const GS_LOADING_TEXT: &str = "Loading ...";
+const GS_NO_SCORES_TEXT: &str = "No Scores";
+const GS_ERROR_TIMEOUT: &str = "Timed Out";
+const GS_ERROR_FAILED: &str = "Failed to Load 😞";
+const GS_ERROR_DISABLED: &str = "Disabled";
+const GS_ROW_PLACEHOLDER_RANK: &str = "---";
+const GS_ROW_PLACEHOLDER_NAME: &str = "----";
+const GS_ROW_PLACEHOLDER_SCORE: &str = "------";
+const GS_ROW_PLACEHOLDER_DATE: &str = "----------";
+const GS_RIVAL_COLOR: [f32; 4] = color::rgba_hex("#BD94FF");
+const GS_SELF_COLOR: [f32; 4] = color::rgba_hex("#A1FF94");
 const MONTH_ABBR: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
@@ -190,6 +202,7 @@ enum EvalPane {
     HardEx,
     Column,
     MachineRecords,
+    GrooveStats,
     Timing,
 }
 
@@ -204,32 +217,36 @@ impl EvalPane {
     }
 
     #[inline(always)]
-    fn next(self, has_hard_ex: bool) -> Self {
+    fn next(self, has_hard_ex: bool, has_gs: bool) -> Self {
         // Order (per user parity request):
-        // ITG -> EX -> H.EX -> Arrow breakdown -> Machine records -> Timing -> ITG
-        match (self, has_hard_ex) {
-            (Self::Standard, _) => Self::FaPlus,
-            (Self::FaPlus, true) => Self::HardEx,
-            (Self::FaPlus, false) => Self::Column,
-            (Self::HardEx, true) => Self::Column,
-            (Self::HardEx, false) => Self::Standard,
-            (Self::Column, _) => Self::MachineRecords,
-            (Self::MachineRecords, _) => Self::Timing,
-            (Self::Timing, _) => Self::Standard,
+        // ITG -> EX -> H.EX -> Arrow breakdown -> Machine records -> GS -> Timing -> ITG
+        match (self, has_hard_ex, has_gs) {
+            (Self::Standard, _, _) => Self::FaPlus,
+            (Self::FaPlus, true, _) => Self::HardEx,
+            (Self::FaPlus, false, _) => Self::Column,
+            (Self::HardEx, true, _) => Self::Column,
+            (Self::HardEx, false, _) => Self::Standard,
+            (Self::Column, _, _) => Self::MachineRecords,
+            (Self::MachineRecords, _, true) => Self::GrooveStats,
+            (Self::MachineRecords, _, false) => Self::Timing,
+            (Self::GrooveStats, _, _) => Self::Timing,
+            (Self::Timing, _, _) => Self::Standard,
         }
     }
 
     #[inline(always)]
-    fn prev(self, has_hard_ex: bool) -> Self {
-        match (self, has_hard_ex) {
-            (Self::Standard, _) => Self::Timing,
-            (Self::Timing, _) => Self::MachineRecords,
-            (Self::MachineRecords, _) => Self::Column,
-            (Self::Column, true) => Self::HardEx,
-            (Self::Column, false) => Self::FaPlus,
-            (Self::HardEx, true) => Self::FaPlus,
-            (Self::HardEx, false) => Self::Standard,
-            (Self::FaPlus, _) => Self::Standard,
+    fn prev(self, has_hard_ex: bool, has_gs: bool) -> Self {
+        match (self, has_hard_ex, has_gs) {
+            (Self::Standard, _, _) => Self::Timing,
+            (Self::Timing, _, true) => Self::GrooveStats,
+            (Self::Timing, _, false) => Self::MachineRecords,
+            (Self::GrooveStats, _, _) => Self::MachineRecords,
+            (Self::MachineRecords, _, _) => Self::Column,
+            (Self::Column, true, _) => Self::HardEx,
+            (Self::Column, false, _) => Self::FaPlus,
+            (Self::HardEx, true, _) => Self::FaPlus,
+            (Self::HardEx, false, _) => Self::Standard,
+            (Self::FaPlus, _, _) => Self::Standard,
         }
     }
 }
@@ -805,11 +822,22 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             return;
         };
         let has_hard_ex = si.show_hard_ex_score;
+        let gs_side = if play_style == profile::PlayStyle::Versus {
+            controller
+        } else {
+            profile::get_session_player_side()
+        };
+        let has_gs = scores::get_or_fetch_player_leaderboards_for_side(
+            &si.chart.short_hash,
+            gs_side,
+            GS_RECORD_ROWS,
+        )
+        .is_some();
 
         state.active_pane[controller_idx] = if dir >= 0 {
-            state.active_pane[controller_idx].next(has_hard_ex)
+            state.active_pane[controller_idx].next(has_hard_ex, has_gs)
         } else {
-            state.active_pane[controller_idx].prev(has_hard_ex)
+            state.active_pane[controller_idx].prev(has_hard_ex, has_gs)
         };
 
         // Don't allow duplicate panes in single/double.
@@ -817,9 +845,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             let other_idx = 1 - controller_idx;
             if state.active_pane[controller_idx] == state.active_pane[other_idx] {
                 state.active_pane[controller_idx] = if dir >= 0 {
-                    state.active_pane[controller_idx].next(has_hard_ex)
+                    state.active_pane[controller_idx].next(has_hard_ex, has_gs)
                 } else {
-                    state.active_pane[controller_idx].prev(has_hard_ex)
+                    state.active_pane[controller_idx].prev(has_hard_ex, has_gs)
                 };
             }
         }
@@ -1209,7 +1237,10 @@ fn build_pane_percentage_display(
     pane: EvalPane,
     controller: profile::PlayerSide,
 ) -> Vec<Actor> {
-    if matches!(pane, EvalPane::Timing | EvalPane::MachineRecords) {
+    if matches!(
+        pane,
+        EvalPane::Timing | EvalPane::MachineRecords | EvalPane::GrooveStats
+    ) {
         return vec![];
     }
 
@@ -1237,6 +1268,7 @@ fn build_pane_percentage_display(
     match pane {
         EvalPane::Timing => {}
         EvalPane::MachineRecords => {}
+        EvalPane::GrooveStats => {}
         EvalPane::Column => {
             // Pane3 percentage container: small and not mirrored.
             frame_x = pane_origin_x - 115.0;
@@ -1549,6 +1581,217 @@ fn push_machine_record_row(
         diffuse(col[0], col[1], col[2], col[3]):
         horizalign(left)
     ));
+}
+
+fn format_gs_error_text(error: &str) -> String {
+    if error.eq_ignore_ascii_case("disabled") {
+        return GS_ERROR_DISABLED.to_string();
+    }
+    let lower = error.to_ascii_lowercase();
+    if lower.contains("timed out") || lower.contains("timeout") {
+        GS_ERROR_TIMEOUT.to_string()
+    } else {
+        GS_ERROR_FAILED.to_string()
+    }
+}
+
+fn gs_machine_tag(entry: &scores::LeaderboardEntry) -> String {
+    if let Some(tag) = entry.machine_tag.as_deref() {
+        let trimmed = tag.trim();
+        if !trimmed.is_empty() {
+            return trimmed.chars().take(4).collect::<String>().to_ascii_uppercase();
+        }
+    }
+    let trimmed_name = entry.name.trim();
+    if trimmed_name.is_empty() {
+        return GS_ROW_PLACEHOLDER_NAME.to_string();
+    }
+    trimmed_name
+        .chars()
+        .take(4)
+        .collect::<String>()
+        .to_ascii_uppercase()
+}
+
+fn build_gs_records_pane(
+    controller: profile::PlayerSide,
+    snapshot: Option<&scores::CachedPlayerLeaderboardData>,
+) -> Vec<Actor> {
+    let pane_origin_x = match controller {
+        profile::PlayerSide::P1 => screen_center_x() - 155.0,
+        profile::PlayerSide::P2 => screen_center_x() + 155.0,
+    };
+    let pane_origin_y = screen_center_y() - 62.0;
+    let pane_zoom = 0.8_f32;
+    let row_height = 22.0 * pane_zoom;
+    let first_row_y = row_height;
+    let rank_x = -120.0 * pane_zoom;
+    let name_x = -110.0 * pane_zoom;
+    let score_x = -24.0 * pane_zoom;
+    let date_x = 50.0 * pane_zoom;
+    let text_zoom = pane_zoom;
+
+    let mut rows: Vec<(String, String, String, String, [f32; 4], [f32; 4])> =
+        Vec::with_capacity(GS_RECORD_ROWS);
+
+    match snapshot {
+        None => {
+            rows.push((
+                String::new(),
+                GS_ERROR_DISABLED.to_string(),
+                String::new(),
+                String::new(),
+                [1.0, 1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0, 1.0],
+            ));
+        }
+        Some(snapshot) if snapshot.loading => {
+            rows.push((
+                String::new(),
+                GS_LOADING_TEXT.to_string(),
+                String::new(),
+                String::new(),
+                [1.0, 1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0, 1.0],
+            ));
+        }
+        Some(snapshot) if snapshot.error.is_some() => {
+            rows.push((
+                String::new(),
+                format_gs_error_text(snapshot.error.as_deref().unwrap_or_default()),
+                String::new(),
+                String::new(),
+                [1.0, 1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0, 1.0],
+            ));
+        }
+        Some(snapshot) => {
+            let gs_pane = snapshot.data.as_ref().and_then(|data| {
+                data.panes
+                    .iter()
+                    .find(|pane| pane.name.eq_ignore_ascii_case("GrooveStats"))
+            });
+            if let Some(pane) = gs_pane {
+                if pane.entries.is_empty() {
+                    rows.push((
+                        String::new(),
+                        GS_NO_SCORES_TEXT.to_string(),
+                        String::new(),
+                        String::new(),
+                        [1.0, 1.0, 1.0, 1.0],
+                        [1.0, 1.0, 1.0, 1.0],
+                    ));
+                } else {
+                    for entry in pane.entries.iter().take(GS_RECORD_ROWS) {
+                        let base_col = if entry.is_rival {
+                            GS_RIVAL_COLOR
+                        } else if entry.is_self {
+                            GS_SELF_COLOR
+                        } else {
+                            [1.0, 1.0, 1.0, 1.0]
+                        };
+                        let mut score_col = if pane.is_ex {
+                            color::JUDGMENT_RGBA[0]
+                        } else {
+                            base_col
+                        };
+                        if entry.is_fail {
+                            score_col = [1.0, 0.0, 0.0, 1.0];
+                        }
+                        rows.push((
+                            format!("{}.", entry.rank),
+                            gs_machine_tag(entry),
+                            format!("{:.2}%", entry.score / 100.0),
+                            format_machine_record_date(&entry.date),
+                            base_col,
+                            score_col,
+                        ));
+                    }
+                }
+            } else {
+                rows.push((
+                    String::new(),
+                    GS_NO_SCORES_TEXT.to_string(),
+                    String::new(),
+                    String::new(),
+                    [1.0, 1.0, 1.0, 1.0],
+                    [1.0, 1.0, 1.0, 1.0],
+                ));
+            }
+        }
+    }
+
+    while rows.len() < GS_RECORD_ROWS {
+        rows.push((
+            GS_ROW_PLACEHOLDER_RANK.to_string(),
+            GS_ROW_PLACEHOLDER_NAME.to_string(),
+            GS_ROW_PLACEHOLDER_SCORE.to_string(),
+            GS_ROW_PLACEHOLDER_DATE.to_string(),
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+        ));
+    }
+
+    let mut children = Vec::with_capacity(GS_RECORD_ROWS * 4 + 1);
+    for (i, (rank, name, score, date, row_col, score_col)) in rows.into_iter().enumerate() {
+        let y = first_row_y + i as f32 * row_height;
+        children.push(act!(text:
+            font("miso"):
+            settext(rank):
+            align(1.0, 0.5):
+            xy(rank_x, y):
+            zoom(text_zoom):
+            z(101):
+            diffuse(row_col[0], row_col[1], row_col[2], row_col[3]):
+            horizalign(right)
+        ));
+        children.push(act!(text:
+            font("miso"):
+            settext(name):
+            align(0.0, 0.5):
+            xy(name_x, y):
+            zoom(text_zoom):
+            z(101):
+            diffuse(row_col[0], row_col[1], row_col[2], row_col[3]):
+            horizalign(left)
+        ));
+        children.push(act!(text:
+            font("miso"):
+            settext(score):
+            align(0.0, 0.5):
+            xy(score_x, y):
+            zoom(text_zoom):
+            z(101):
+            diffuse(score_col[0], score_col[1], score_col[2], score_col[3]):
+            horizalign(left)
+        ));
+        children.push(act!(text:
+            font("miso"):
+            settext(date):
+            align(0.0, 0.5):
+            xy(date_x, y):
+            zoom(text_zoom):
+            z(101):
+            diffuse(row_col[0], row_col[1], row_col[2], row_col[3]):
+            horizalign(left)
+        ));
+    }
+
+    children.push(act!(sprite("GrooveStats.png"):
+        align(0.5, 0.5):
+        xy(165.0 * pane_zoom, 25.0 * pane_zoom):
+        zoom(0.3 * pane_zoom):
+        z(102)
+    ));
+
+    vec![Actor::Frame {
+        align: [0.5, 0.5],
+        offset: [pane_origin_x, pane_origin_y],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        background: None,
+        z: 101,
+        children,
+    }]
 }
 
 fn build_column_judgments_pane(
@@ -2399,6 +2642,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 continue;
             };
             let pane = state.active_pane[controller_idx];
+            let gs_side = if play_style == profile::PlayStyle::Versus {
+                controller
+            } else {
+                player_side
+            };
 
             actors.extend(build_pane_percentage_display(si, pane, controller));
 
@@ -2407,6 +2655,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     si,
                     state.timing_hist_mesh[player_idx].as_ref(),
                     controller,
+                )),
+                EvalPane::GrooveStats => actors.extend(build_gs_records_pane(
+                    controller,
+                    scores::get_or_fetch_player_leaderboards_for_side(
+                        &si.chart.short_hash,
+                        gs_side,
+                        GS_RECORD_ROWS,
+                    )
+                    .as_ref(),
                 )),
                 EvalPane::MachineRecords => actors.extend(build_machine_records_pane(
                     si,
