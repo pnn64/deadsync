@@ -65,6 +65,7 @@ struct CourseMeta {
     entries: Vec<CourseSongEntry>,
     totals: CourseTotals,
     rated_entry_count: usize,
+    course_meter: Option<u32>,
     meter_sum: u32,
     meter_count: usize,
     min_bpm: Option<f64>,
@@ -338,6 +339,10 @@ fn build_init_data() -> InitData {
         let mut rated_entry_count = 0usize;
         let mut meter_sum = 0u32;
         let mut meter_count = 0usize;
+        let mut course_meter = course
+            .meter_for(rssp::course::Difficulty::Medium)
+            .filter(|v| *v >= 0)
+            .map(|v| v as u32);
         let mut min_bpm = None;
         let mut max_bpm = None;
 
@@ -405,6 +410,7 @@ fn build_init_data() -> InitData {
             entries,
             totals,
             rated_entry_count,
+            course_meter: course_meter.take(),
             meter_sum,
             meter_count,
             min_bpm,
@@ -862,7 +868,9 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     let (steps_text, jumps_text, holds_text, mines_text, hands_text, rolls_text, meter_text) =
         match selected_meta.as_ref() {
             Some(meta) => {
-                let meter = if meta.meter_count > 0 {
+                let meter = if let Some(course_meter) = meta.course_meter {
+                    course_meter.to_string()
+                } else if meta.meter_count > 0 {
                     format!("{}", (meta.meter_sum as f32 / meta.meter_count as f32).round() as i32)
                 } else {
                     "?".to_string()
