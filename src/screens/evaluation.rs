@@ -1394,13 +1394,14 @@ fn build_machine_records_pane(
 
     if score_info.show_machine_personal_split {
         let row_height = MACHINE_RECORD_SPLIT_ROW_HEIGHT * pane_zoom;
+        let first_row_y = row_height;
         for i in 0..MACHINE_RECORD_SPLIT_MACHINE_ROWS {
             let rank = (i as u32).saturating_add(1);
             push_machine_record_row(
                 &mut children,
                 score_info.machine_records.get(i),
                 rank,
-                i as f32 * row_height,
+                first_row_y + i as f32 * row_height,
                 rank_x,
                 name_x,
                 score_x,
@@ -1410,7 +1411,8 @@ fn build_machine_records_pane(
             );
         }
 
-        let split_y = MACHINE_RECORD_SPLIT_SEPARATOR_Y_ROWS * MACHINE_RECORD_SPLIT_ROW_HEIGHT * pane_zoom;
+        let split_y =
+            first_row_y + MACHINE_RECORD_SPLIT_SEPARATOR_Y_ROWS * MACHINE_RECORD_SPLIT_ROW_HEIGHT * pane_zoom;
         children.push(act!(quad:
             align(0.5, 0.5):
             xy(0.0, split_y):
@@ -1441,6 +1443,7 @@ fn build_machine_records_pane(
         }
     } else {
         let row_height = MACHINE_RECORD_DEFAULT_ROW_HEIGHT * pane_zoom;
+        let first_row_y = row_height;
         let (lower, upper) = machine_record_rank_window(score_info.machine_record_highlight_rank);
         for (row_idx, rank) in (lower..=upper).enumerate() {
             let col = if score_info.machine_record_highlight_rank == Some(rank) {
@@ -1454,7 +1457,7 @@ fn build_machine_records_pane(
                     .machine_records
                     .get(rank.saturating_sub(1) as usize),
                 rank,
-                row_idx as f32 * row_height,
+                first_row_y + row_idx as f32 * row_height,
                 rank_x,
                 name_x,
                 score_x,
