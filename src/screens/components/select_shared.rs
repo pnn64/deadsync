@@ -77,11 +77,19 @@ pub fn build_screen_bars(top_title: &'static str) -> Vec<Actor> {
 }
 
 pub fn build_session_timer(text: String) -> Actor {
+    build_header_timer(text, screen_center_x())
+}
+
+pub fn build_gameplay_timer(text: String) -> Actor {
+    build_header_timer(text, screen_center_x() + widescale(150.0, 200.0))
+}
+
+fn build_header_timer(text: String, x: f32) -> Actor {
     act!(text:
         font("wendy_monospace_numbers"):
         settext(text):
         align(0.5, 0.5):
-        xy(screen_center_x(), 10.0):
+        xy(x, 10.0):
         zoom(widescale(0.3, 0.36)):
         z(121):
         diffuse(1.0, 1.0, 1.0, 1.0):

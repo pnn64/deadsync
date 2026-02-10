@@ -134,6 +134,7 @@ pub struct Config {
     // N >= 2 = cap at N threads (clamped to available cores).
     pub song_parsing_threads: u8,
     pub simply_love_color: i32,
+    pub show_select_music_gameplay_timer: bool,
     pub global_offset_seconds: f32,
     pub visual_delay_seconds: f32,
     pub master_volume: u8,
@@ -170,6 +171,7 @@ impl Default for Config {
             software_renderer_threads: 1,
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
+            show_select_music_gameplay_timer: true,
             global_offset_seconds: -0.008,
             visual_delay_seconds: 0.0,
             master_volume: 90,
@@ -339,6 +341,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
 
     // [Theme] section should be last
     content.push_str("[Theme]\n");
+    content.push_str(&format!(
+        "ShowSelectMusicGameplayTimer={}\n",
+        if default.show_select_music_gameplay_timer {
+            "1"
+        } else {
+            "0"
+        }
+    ));
     content.push_str(&format!("SimplyLoveColor={}\n", default.simply_love_color));
     content.push('\n');
 
@@ -517,6 +527,27 @@ pub fn load() {
                     .get("Theme", "SimplyLoveColor")
                     .and_then(|v| v.parse().ok())
                     .unwrap_or(default.simply_love_color);
+                cfg.show_select_music_gameplay_timer = conf
+                    .get("Theme", "ShowSelectMusicGameplayTimer")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.show_select_music_gameplay_timer);
 
                 info!("Configuration loaded from '{CONFIG_PATH}'.");
             } // Lock on CONFIG is released here.
@@ -565,6 +596,9 @@ pub fn load() {
                     }
                 }
                 if !miss && !has("Theme", "SimplyLoveColor") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "ShowSelectMusicGameplayTimer") {
                     miss = true;
                 }
                 miss
@@ -1284,6 +1318,14 @@ fn save_without_keymaps() {
     // [Theme] – last section
     content.push('\n');
     content.push_str("[Theme]\n");
+    content.push_str(&format!(
+        "ShowSelectMusicGameplayTimer={}\n",
+        if cfg.show_select_music_gameplay_timer {
+            "1"
+        } else {
+            "0"
+        }
+    ));
     content.push_str(&format!("SimplyLoveColor={}\n", cfg.simply_love_color));
     content.push('\n');
 

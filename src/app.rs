@@ -215,6 +215,19 @@ const fn side_ix(side: profile::PlayerSide) -> usize {
     }
 }
 
+fn total_gameplay_elapsed(stages: &[stage_stats::StageSummary]) -> f32 {
+    let mut total = 0.0;
+    for stage in stages {
+        let sec = if stage.duration_seconds.is_finite() {
+            stage.duration_seconds.max(0.0)
+        } else {
+            0.0
+        };
+        total += sec;
+    }
+    total
+}
+
 fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::StageSummary> {
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
@@ -475,6 +488,8 @@ impl ScreensState {
                     self.select_music_state.session_elapsed =
                         now.duration_since(start).as_secs_f32();
                 }
+                self.select_music_state.gameplay_elapsed =
+                    total_gameplay_elapsed(&session.played_stages);
                 Some(select_music::update(
                     &mut self.select_music_state,
                     delta_time,

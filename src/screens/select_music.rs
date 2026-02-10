@@ -453,6 +453,7 @@ pub struct State {
     pub current_graph_mesh: Option<Arc<[MeshVertex]>>,
     pub current_graph_mesh_p2: Option<Arc<[MeshVertex]>>,
     pub session_elapsed: f32,
+    pub gameplay_elapsed: f32,
     displayed_chart_p1: Option<DisplayedChart>,
     displayed_chart_p2: Option<DisplayedChart>,
 
@@ -1519,6 +1520,7 @@ pub fn init() -> State {
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
         session_elapsed: 0.0,
+        gameplay_elapsed: 0.0,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
         cached_song: None,
@@ -3408,15 +3410,17 @@ pub fn allows_late_join(state: &State) -> bool {
 
 // Fast non-allocating formatters where possible
 fn format_session_time(seconds: f32) -> String {
-    if seconds < 0.0 {
+    if !seconds.is_finite() || seconds < 0.0 {
         return "00:00".to_string();
     }
     let s = seconds as u64;
-    let (h, m, s) = (s / 3600, (s % 3600) / 60, s % 60);
-    if h > 0 {
-        format!("{}:{:02}:{:02}", h, m, s)
+    let (h, m, sec) = (s / 3600, (s % 3600) / 60, s % 60);
+    if s < 3600 {
+        format!("{m:02}:{sec:02}")
+    } else if s < 36000 {
+        format!("{h}:{m:02}:{sec:02}")
     } else {
-        format!("{:02}:{:02}", m, s)
+        format!("{h:02}:{m:02}:{sec:02}")
     }
 }
 
@@ -3567,10 +3571,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
-    // Timer
+    // Timer (zmod parity: optional gameplay timer to the right of session timer).
     actors.push(select_shared::build_session_timer(format_session_time(
         state.session_elapsed,
     )));
+    if crate::config::get().show_select_music_gameplay_timer {
+        actors.push(select_shared::build_gameplay_timer(format_session_time(
+            state.gameplay_elapsed,
+        )));
+    }
 
     // Pads
     {
@@ -4203,6 +4212,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     actors.extend(sl_select_music_wheel_cascade_mask());
 
     // GrooveStats scorebox placement.
+    // Keep P1 single where it already is, but move P2 single/versus up so they sit above PaneDisplay.
     if is_wide() {
         let scorebox_zoom = widescale(0.95, 1.0);
         let scorebox_side_inset = 320.0;
