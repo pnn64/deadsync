@@ -159,27 +159,6 @@ fn course_name(path: &Path, course: &rssp::course::CourseFile) -> String {
     }
 }
 
-fn resolve_course_banner(
-    course_path: &Path,
-    course: &rssp::course::CourseFile,
-    fallback: Option<PathBuf>,
-) -> Option<PathBuf> {
-    let banner_tag = course.banner.trim();
-    if banner_tag.is_empty() {
-        return fallback;
-    }
-    let rel = Path::new(banner_tag);
-    if rel.is_absolute() && rel.is_file() {
-        return Some(rel.to_path_buf());
-    }
-    let parent = course_path.parent().unwrap_or_else(|| Path::new(""));
-    let joined = parent.join(rel);
-    if joined.is_file() {
-        return Some(joined);
-    }
-    fallback
-}
-
 #[inline(always)]
 fn course_steps_label(steps: &rssp::course::StepsSpec) -> String {
     match steps {
@@ -334,7 +313,6 @@ fn build_init_data() -> InitData {
     for (path, course) in course_cache.iter() {
         let mut entries = Vec::with_capacity(course.entries.len());
         let mut total_seconds = 0i32;
-        let mut first_banner: Option<PathBuf> = None;
         let mut totals = CourseTotals::default();
         let mut rated_entry_count = 0usize;
         let mut meter_sum = 0u32;
@@ -371,9 +349,6 @@ fn build_init_data() -> InitData {
 
             if let Some(song_data) = resolved.as_ref() {
                 title = song_data.display_full_title(translated_titles);
-                if first_banner.is_none() {
-                    first_banner = song_data.banner_path.clone();
-                }
                 let len = if song_data.music_length_seconds > 0.0 {
                     song_data.music_length_seconds.round() as i32
                 } else {
@@ -406,7 +381,7 @@ fn build_init_data() -> InitData {
             name: course_name(path, course),
             scripter: course.scripter.clone(),
             description: course.description.clone(),
-            banner_path: resolve_course_banner(path, course, first_banner),
+            banner_path: rssp::course::resolve_course_banner_path(path, &course.banner),
             entries,
             totals,
             rated_entry_count,
