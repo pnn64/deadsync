@@ -4202,16 +4202,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());
 
-    // GrooveStats scorebox above footer, on the wheel side.
+    // GrooveStats scorebox placement.
     if is_wide() {
-        // Keep the box close to the footer and pull it toward screen middle,
-        // so it starts just before the wheel lane (Simply Love-like placement).
-        let footer_top = screen_height() - 32.0;
-        let scorebox_center_y = footer_top - 44.0; // 80px box: 40px half-height + 4px gap.
+        let scorebox_zoom = widescale(0.95, 1.0);
         let scorebox_side_inset = 320.0;
         let scorebox_center_p1 = screen_width() * 0.25 - 5.0 + scorebox_side_inset;
         let scorebox_center_p2 = screen_width() * 0.75 + 5.0 - scorebox_side_inset;
-        let mut push_scorebox = |side: profile::PlayerSide, steps_idx: usize, center_x: f32| {
+        let footer_top = screen_height() - 32.0;
+        let scorebox_center_y_p1_single = footer_top - 44.0;
+        let tech_box_bottom_y = screen_center_y() + 111.0 + 32.0;
+        let pane_to_tech_gap = pane_layout.pane_top - tech_box_bottom_y;
+        let scorebox_center_y_above_pane =
+            pane_layout.pane_top - (40.0 * scorebox_zoom) - pane_to_tech_gap;
+        let mut push_scorebox =
+            |side: profile::PlayerSide, steps_idx: usize, center_x: f32, center_y: f32| {
             let chart_hash = if allow_gs_fetch {
                 match selected_entry {
                     Some(MusicWheelEntry::Song(song)) => {
@@ -4227,8 +4231,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 side,
                 chart_hash,
                 center_x,
-                scorebox_center_y,
-                widescale(0.95, 1.0),
+                center_y,
+                scorebox_zoom,
                 state.selection_animation_timer,
             ));
         };
@@ -4238,23 +4242,27 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 profile::PlayerSide::P1,
                 state.selected_steps_index,
                 scorebox_center_p1,
+                scorebox_center_y_above_pane,
             );
             push_scorebox(
                 profile::PlayerSide::P2,
                 state.p2_selected_steps_index,
                 scorebox_center_p2,
+                scorebox_center_y_above_pane,
             );
         } else if is_p2_single {
             push_scorebox(
                 profile::PlayerSide::P2,
                 state.p2_selected_steps_index,
-                scorebox_center_p2,
+                scorebox_center_p1,
+                scorebox_center_y_above_pane,
             );
         } else {
             push_scorebox(
                 profile::PlayerSide::P1,
                 state.selected_steps_index,
                 scorebox_center_p1,
+                scorebox_center_y_p1_single,
             );
         }
     }
