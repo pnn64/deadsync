@@ -1,5 +1,6 @@
 use crate::act;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::game::profile;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use std::sync::mpsc;
@@ -14,8 +15,15 @@ const MIN_SHOW_SECS: f32 = TWEENTIME * 3.0 + CONTINUE_DELAY;
 pub struct State {
     pub active_color_index: i32,
     elapsed: f32,
-    rx: Option<mpsc::Receiver<crate::screens::select_music::State>>,
+    rx: Option<mpsc::Receiver<PreparedState>>,
     prepared_select_music: Option<crate::screens::select_music::State>,
+    prepared_select_course: Option<crate::screens::select_course::State>,
+    next_screen: Screen,
+}
+
+enum PreparedState {
+    Music(crate::screens::select_music::State),
+    Course(crate::screens::select_course::State),
 }
 
 pub fn init() -> State {
@@ -24,18 +32,33 @@ pub fn init() -> State {
         elapsed: 0.0,
         rx: None,
         prepared_select_music: None,
+        prepared_select_course: None,
+        next_screen: Screen::SelectMusic,
     }
 }
 
 pub fn on_enter(state: &mut State) {
     state.elapsed = 0.0;
     state.prepared_select_music = None;
+    state.prepared_select_course = None;
     state.rx = None;
+    state.next_screen = match profile::get_session_play_mode() {
+        profile::PlayMode::Marathon => Screen::SelectCourse,
+        profile::PlayMode::Regular => Screen::SelectMusic,
+    };
 
     let (tx, rx) = mpsc::channel();
+    let play_mode = profile::get_session_play_mode();
     std::thread::spawn(move || {
-        let sm = crate::screens::select_music::init();
-        let _ = tx.send(sm);
+        let prepared = match play_mode {
+            profile::PlayMode::Marathon => {
+                PreparedState::Course(crate::screens::select_course::init())
+            }
+            profile::PlayMode::Regular => {
+                PreparedState::Music(crate::screens::select_music::init())
+            }
+        };
+        let _ = tx.send(prepared);
     });
     state.rx = Some(rx);
 }
@@ -46,28 +69,51 @@ pub fn take_prepared_select_music(
     state.prepared_select_music.take()
 }
 
+pub fn take_prepared_select_course(
+    state: &mut State,
+) -> Option<crate::screens::select_course::State> {
+    state.prepared_select_course.take()
+}
+
 pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     state.elapsed += dt.max(0.0);
 
     if state.prepared_select_music.is_none()
+        && state.prepared_select_course.is_none()
         && let Some(rx) = &state.rx
     {
         match rx.try_recv() {
-            Ok(sm) => {
+            Ok(PreparedState::Music(sm)) => {
                 state.prepared_select_music = Some(sm);
+                state.next_screen = Screen::SelectMusic;
+                state.rx = None;
+            }
+            Ok(PreparedState::Course(sc)) => {
+                state.prepared_select_course = Some(sc);
+                state.next_screen = Screen::SelectCourse;
                 state.rx = None;
             }
             Err(mpsc::TryRecvError::Empty) => {}
             Err(mpsc::TryRecvError::Disconnected) => {
                 // Defensive fallback: avoid hanging on a failed loader thread.
-                state.prepared_select_music = Some(crate::screens::select_music::init());
+                match state.next_screen {
+                    Screen::SelectCourse => {
+                        state.prepared_select_course = Some(crate::screens::select_course::init());
+                    }
+                    _ => {
+                        state.prepared_select_music = Some(crate::screens::select_music::init());
+                        state.next_screen = Screen::SelectMusic;
+                    }
+                }
                 state.rx = None;
             }
         }
     }
 
-    if state.elapsed >= MIN_SHOW_SECS && state.prepared_select_music.is_some() {
-        return Some(ScreenAction::Navigate(Screen::SelectMusic));
+    if state.elapsed >= MIN_SHOW_SECS
+        && (state.prepared_select_music.is_some() || state.prepared_select_course.is_some())
+    {
+        return Some(ScreenAction::Navigate(state.next_screen));
     }
     None
 }

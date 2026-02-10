@@ -76,6 +76,8 @@ pub struct MusicWheelParams<'a> {
     pub color_pack_headers: bool,
     pub preferred_difficulty_index: usize,
     pub selected_steps_index: usize,
+    pub song_box_color: Option<[f32; 4]>,
+    pub song_text_color: Option<[f32; 4]>,
 }
 
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
@@ -151,10 +153,12 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 && c.difficulty.eq_ignore_ascii_case("edit")
                                 && !c.notes.is_empty()
                         });
+                        let bg = p.song_box_color.unwrap_or_else(col_music_wheel_box);
+                        let txt = p.song_text_color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
                         (
                             false,
-                            col_music_wheel_box(),
-                            [1.0, 1.0, 1.0, 1.0],
+                            bg,
+                            txt,
                             info.display_title(translated_titles).to_string(),
                             info.display_subtitle(translated_titles).to_string(),
                             None,

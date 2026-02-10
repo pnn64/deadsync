@@ -9,8 +9,8 @@ use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::{
     Screen as CurrentScreen, ScreenAction, evaluation, evaluation_summary, gameover, gameplay,
     init, initials, input as input_screen, manage_local_profiles, mappings, menu, options,
-    player_options, profile_load, sandbox, select_color, select_mode, select_music, select_profile,
-    select_style,
+    player_options, profile_load, sandbox, select_color, select_course, select_mode, select_music,
+    select_profile, select_style,
 };
 use crate::ui::color;
 use winit::{
@@ -136,6 +136,7 @@ pub struct ScreensState {
     select_play_mode_state: select_mode::State,
     profile_load_state: profile_load::State,
     select_music_state: select_music::State,
+    select_course_state: select_course::State,
     sandbox_state: sandbox::State,
     evaluation_state: evaluation::State,
     evaluation_summary_state: evaluation_summary::State,
@@ -302,6 +303,9 @@ impl ScreensState {
         select_music_state.preferred_difficulty_index = preferred_difficulty_index;
         select_music_state.selected_steps_index = preferred_difficulty_index;
 
+        let mut select_course_state = select_course::init();
+        select_course_state.active_color_index = color_index;
+
         let mut select_style_state = select_style::init();
         select_style_state.active_color_index = color_index;
 
@@ -354,6 +358,7 @@ impl ScreensState {
             select_play_mode_state,
             profile_load_state,
             select_music_state,
+            select_course_state,
             sandbox_state: sandbox::init(),
             evaluation_state,
             evaluation_summary_state,
@@ -439,6 +444,16 @@ impl ScreensState {
                     // Treat the initial selection as already "settled" so preview/graphs can start
                     // immediately after the transition, matching ITG/Simply Love behavior.
                     select_music::trigger_immediate_refresh(&mut self.select_music_state);
+                } else if matches!(
+                    action,
+                    Some(ScreenAction::Navigate(CurrentScreen::SelectCourse))
+                ) && let Some(sc) =
+                    profile_load::take_prepared_select_course(&mut self.profile_load_state)
+                {
+                    self.select_course_state = sc;
+                    self.select_course_state.active_color_index =
+                        self.profile_load_state.active_color_index;
+                    select_course::trigger_immediate_refresh(&mut self.select_course_state);
                 }
                 action
             }
@@ -462,6 +477,16 @@ impl ScreensState {
                 }
                 Some(select_music::update(
                     &mut self.select_music_state,
+                    delta_time,
+                ))
+            }
+            CurrentScreen::SelectCourse => {
+                if let Some(start) = session.session_start_time {
+                    self.select_course_state.session_elapsed =
+                        now.duration_since(start).as_secs_f32();
+                }
+                Some(select_course::update(
+                    &mut self.select_course_state,
                     delta_time,
                 ))
             }
@@ -620,6 +645,9 @@ impl App {
                     .select_music_state
                     .p2_selected_steps_index = preferred_p2;
 
+                self.state.screens.select_course_state = select_course::init();
+                self.state.screens.select_course_state.active_color_index = current_color_index;
+
                 self.handle_navigation_action(CurrentScreen::SelectColor);
                 Vec::new()
             }
@@ -733,9 +761,9 @@ impl App {
         let from = self.state.screens.current_screen;
         let mut target = target;
 
-        // Simply Love parity: when exiting ScreenSelectMusic after playing at least one stage
+        // Simply Love parity: when exiting a song/course wheel after at least one stage
         // in Event Mode, go to ScreenEvaluationSummary instead of straight back to TitleMenu.
-        if from == CurrentScreen::SelectMusic
+        if (from == CurrentScreen::SelectMusic || from == CurrentScreen::SelectCourse)
             && target == CurrentScreen::Menu
             && !self.state.session.played_stages.is_empty()
         {
@@ -917,12 +945,20 @@ impl App {
                 | CurrentScreen::SelectStyle
                 | CurrentScreen::SelectPlayMode
                 | CurrentScreen::SelectMusic
+                | CurrentScreen::SelectCourse
         ) {
             return false;
         }
         if screen == CurrentScreen::SelectMusic
             && !crate::screens::select_music::allows_late_join(
                 &self.state.screens.select_music_state,
+            )
+        {
+            return false;
+        }
+        if screen == CurrentScreen::SelectCourse
+            && !crate::screens::select_course::allows_late_join(
+                &self.state.screens.select_course_state,
             )
         {
             return false;
@@ -1010,6 +1046,10 @@ impl App {
             }
             CurrentScreen::SelectMusic => crate::screens::select_music::handle_input(
                 &mut self.state.screens.select_music_state,
+                &ev,
+            ),
+            CurrentScreen::SelectCourse => crate::screens::select_course::handle_input(
+                &mut self.state.screens.select_course_state,
                 &ev,
             ),
             CurrentScreen::PlayerOptions => {
@@ -1117,13 +1157,32 @@ impl App {
         if let Some(backend) = self.backend.as_mut() {
             if let Some(path) = path_opt {
                 let key = self.asset_manager.set_dynamic_banner(backend, Some(path));
-                self.state.screens.select_music_state.current_banner_key = key;
+                match self.state.screens.current_screen {
+                    CurrentScreen::SelectCourse => {
+                        self.state.screens.select_course_state.current_banner_key = key;
+                    }
+                    _ => {
+                        self.state.screens.select_music_state.current_banner_key = key;
+                    }
+                }
             } else {
                 self.asset_manager.destroy_dynamic_banner(backend);
-                let color_index = self.state.screens.select_music_state.active_color_index;
+                let color_index = match self.state.screens.current_screen {
+                    CurrentScreen::SelectCourse => {
+                        self.state.screens.select_course_state.active_color_index
+                    }
+                    _ => self.state.screens.select_music_state.active_color_index,
+                };
                 let banner_num = color_index.rem_euclid(12) + 1;
                 let key = format!("banner{banner_num}.png");
-                self.state.screens.select_music_state.current_banner_key = key;
+                match self.state.screens.current_screen {
+                    CurrentScreen::SelectCourse => {
+                        self.state.screens.select_course_state.current_banner_key = key;
+                    }
+                    _ => {
+                        self.state.screens.select_music_state.current_banner_key = key;
+                    }
+                }
             }
         }
     }
@@ -1318,6 +1377,10 @@ impl App {
                 &self.state.screens.select_music_state,
                 &self.asset_manager,
             ),
+            CurrentScreen::SelectCourse => select_course::get_actors(
+                &self.state.screens.select_course_state,
+                &self.asset_manager,
+            ),
             CurrentScreen::Sandbox => sandbox::get_actors(&self.state.screens.sandbox_state),
             CurrentScreen::Init => init::get_actors(&self.state.screens.init_state),
             CurrentScreen::Evaluation => {
@@ -1402,6 +1465,7 @@ impl App {
             CurrentScreen::SelectPlayMode => select_mode::out_transition(),
             CurrentScreen::ProfileLoad => profile_load::out_transition(),
             CurrentScreen::SelectMusic => select_music::out_transition(),
+            CurrentScreen::SelectCourse => select_course::out_transition(),
             CurrentScreen::Sandbox => sandbox::out_transition(),
             CurrentScreen::Init => init::out_transition(),
             CurrentScreen::Evaluation => evaluation::out_transition(),
@@ -1426,6 +1490,7 @@ impl App {
             CurrentScreen::SelectPlayMode => select_mode::in_transition(),
             CurrentScreen::ProfileLoad => profile_load::in_transition(),
             CurrentScreen::SelectMusic => select_music::in_transition(),
+            CurrentScreen::SelectCourse => select_course::in_transition(),
             CurrentScreen::Sandbox => sandbox::in_transition(),
             CurrentScreen::Evaluation => evaluation::in_transition(),
             CurrentScreen::EvaluationSummary => evaluation_summary::in_transition(),
@@ -2084,6 +2149,7 @@ impl App {
             self.state.screens.select_play_mode_state.active_color_index = idx;
             self.state.screens.profile_load_state.active_color_index = idx;
             self.state.screens.select_music_state.active_color_index = idx;
+            self.state.screens.select_course_state.active_color_index = idx;
             self.state.screens.options_state.active_color_index = idx;
             self.state
                 .screens
@@ -2427,6 +2493,9 @@ impl App {
                 CurrentScreen::SelectMusic => {
                     self.state.screens.select_music_state.active_color_index
                 }
+                CurrentScreen::SelectCourse => {
+                    self.state.screens.select_course_state.active_color_index
+                }
                 CurrentScreen::Evaluation => self.state.screens.evaluation_state.active_color_index,
                 _ => {
                     self.state
@@ -2461,6 +2530,9 @@ impl App {
                 CurrentScreen::SelectMusic => {
                     self.state.screens.select_music_state.active_color_index
                 }
+                CurrentScreen::SelectCourse => {
+                    self.state.screens.select_course_state.active_color_index
+                }
                 CurrentScreen::Evaluation => self.state.screens.evaluation_state.active_color_index,
                 _ => self.state.screens.initials_state.active_color_index,
             };
@@ -2491,6 +2563,9 @@ impl App {
                 }
                 CurrentScreen::SelectMusic => {
                     self.state.screens.select_music_state.active_color_index
+                }
+                CurrentScreen::SelectCourse => {
+                    self.state.screens.select_course_state.active_color_index
                 }
                 CurrentScreen::Evaluation => self.state.screens.evaluation_state.active_color_index,
                 _ => self.state.screens.gameover_state.active_color_index,
@@ -2715,6 +2790,46 @@ impl App {
                     chart_opt: chart_to_graph_p2,
                 });
             }
+        }
+
+        if target == CurrentScreen::SelectCourse {
+            if self.state.session.session_start_time.is_none() {
+                self.state.session.session_start_time = Some(Instant::now());
+                self.state.session.played_stages.clear();
+                info!("Session timer started.");
+            }
+
+            match prev {
+                CurrentScreen::ProfileLoad => {
+                    select_course::trigger_immediate_refresh(
+                        &mut self.state.screens.select_course_state,
+                    );
+                }
+                _ => {
+                    let current_color_index =
+                        self.state.screens.select_course_state.active_color_index;
+                    self.state.screens.select_course_state = select_course::init();
+                    self.state.screens.select_course_state.active_color_index = current_color_index;
+                    select_course::trigger_immediate_refresh(
+                        &mut self.state.screens.select_course_state,
+                    );
+                }
+            }
+
+            let banner_path = match self
+                .state
+                .screens
+                .select_course_state
+                .entries
+                .get(self.state.screens.select_course_state.selected_index)
+            {
+                Some(select_music::MusicWheelEntry::Song(song)) => song.banner_path.clone(),
+                Some(select_music::MusicWheelEntry::PackHeader { banner_path, .. }) => {
+                    banner_path.clone()
+                }
+                None => None,
+            };
+            commands.push(Command::SetBanner(banner_path));
         }
         commands
     }
@@ -2988,6 +3103,7 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.state.screens.select_style_state.active_color_index = idx;
                                 self.state.screens.profile_load_state.active_color_index = idx;
                                 self.state.screens.select_music_state.active_color_index = idx;
+                                self.state.screens.select_course_state.active_color_index = idx;
                                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                                     gs.active_color_index = idx;
                                     gs.player_color = color::simply_love_rgba(idx);

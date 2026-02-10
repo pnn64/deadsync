@@ -12,11 +12,9 @@ use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
-use crate::screens::components::screen_bar::{
-    self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
-};
 use crate::screens::components::{
-    gs_scorebox, heart_bg, music_wheel, pad_display, sort_menu, test_input,
+    gs_scorebox, heart_bg, music_wheel, pad_display, select_pane, select_shared, sort_menu,
+    step_artist_bar, test_input,
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
@@ -3513,75 +3511,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.push(screen_bar::build(ScreenBarParams {
-        title: "SELECT MUSIC",
-        title_placement: ScreenBarTitlePlacement::Left,
-        position: ScreenBarPosition::Top,
-        transparent: false,
-        fg_color: [1.0; 4],
-        left_text: None,
-        center_text: None,
-        right_text: None,
-        left_avatar: None,
-        right_avatar: None,
-    }));
+    actors.extend(select_shared::build_screen_bars("SELECT MUSIC"));
 
     let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
     let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
-    let p1_avatar = p1_profile
-        .avatar_texture_key
-        .as_deref()
-        .map(|k| AvatarParams { texture_key: k });
-    let p2_avatar = p2_profile
-        .avatar_texture_key
-        .as_deref()
-        .map(|k| AvatarParams { texture_key: k });
-
-    let p1_joined =
-        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P1);
-    let p2_joined =
-        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P2);
-    let p1_guest =
-        crate::game::profile::is_session_side_guest(crate::game::profile::PlayerSide::P1);
-    let p2_guest =
-        crate::game::profile::is_session_side_guest(crate::game::profile::PlayerSide::P2);
-
-    let (footer_left, left_avatar) = if p1_joined {
-        (
-            Some(if p1_guest {
-                "INSERT CARD"
-            } else {
-                p1_profile.display_name.as_str()
-            }),
-            if p1_guest { None } else { p1_avatar },
-        )
-    } else {
-        (Some("PRESS START"), None)
-    };
-    let (footer_right, right_avatar) = if p2_joined {
-        (
-            Some(if p2_guest {
-                "INSERT CARD"
-            } else {
-                p2_profile.display_name.as_str()
-            }),
-            if p2_guest { None } else { p2_avatar },
-        )
-    } else {
-        (Some("PRESS START"), None)
-    };
-    actors.push(screen_bar::build(ScreenBarParams {
-        title: "EVENT MODE",
-        title_placement: ScreenBarTitlePlacement::Center,
-        position: ScreenBarPosition::Bottom,
-        transparent: false,
-        fg_color: [1.0; 4],
-        left_text: footer_left,
-        center_text: None,
-        right_text: footer_right,
-        left_avatar,
-        right_avatar,
-    }));
 
     let mode_side = if is_p2_single {
         profile::PlayerSide::P2
@@ -3635,11 +3568,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     // Timer
-    actors.push(act!(text: font("wendy_monospace_numbers"): settext(format_session_time(state.session_elapsed)): align(0.5, 0.5): xy(screen_center_x(), 10.0): zoom(widescale(0.3, 0.36)): z(121): diffuse(1.0, 1.0, 1.0, 1.0): horizalign(center)));
+    actors.push(select_shared::build_session_timer(format_session_time(
+        state.session_elapsed,
+    )));
 
     // Pads
     {
-        actors.push(act!(text: font("wendy"): settext(score_mode_text): align(1.0, 0.5): xy(screen_width() - widescale(55.0, 62.0), 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+        actors.push(select_shared::build_mode_pad_text(score_mode_text.as_str()));
         let pad_zoom = 0.24 * widescale(0.435, 0.525);
         actors.push(pad_display::build(pad_display::PadDisplayParams {
             center_x: screen_width() - widescale(35.0, 41.0),
@@ -3830,16 +3765,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
 
     // Step Artist & Steps
-    let comp_h = screen_height() / 28.0;
-    let base_y = (screen_center_y() - 9.0) - 0.5 * comp_h;
+    let base_y = (screen_center_y() - 9.0) - 0.5 * (screen_height() / 28.0);
     let mut push_step_artist = |y_cen: f32, x0: f32, sel_col: [f32; 4], step_artist: &str| {
-        let q_cx = x0 + 113.0;
-        let s_x = x0 + 30.0;
-        let a_x = x0 + 75.0;
-
-        actors.push(act!(quad: align(0.5, 0.5): xy(q_cx, y_cen): setsize(175.0, comp_h): z(120): diffuse(sel_col[0], sel_col[1], sel_col[2], 1.0)));
-        actors.push(act!(text: font("miso"): settext("STEPS"): align(0.0, 0.5): xy(s_x, y_cen): zoom(0.8): maxwidth(40.0): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-        actors.push(act!(text: font("miso"): settext(step_artist): align(0.0, 0.5): xy(a_x, y_cen): zoom(0.8): maxwidth(124.0): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+        actors.extend(step_artist_bar::build(step_artist_bar::StepArtistBarParams {
+            x0,
+            center_y: y_cen,
+            accent_color: sel_col,
+            label_text: "STEPS",
+            label_max_width: 40.0,
+            artist_text: step_artist,
+            artist_x_offset: 75.0,
+            artist_max_width: 124.0,
+            artist_color: [0.0, 0.0, 0.0, 1.0],
+        }));
     };
 
     if is_versus {
@@ -3974,15 +3912,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     // Pane Display
-    let pane_top = screen_height() - 92.0;
-    let tz = widescale(0.8, 0.9);
-    let cols = [
-        widescale(-104.0, -133.0),
-        widescale(-36.0, -38.0),
-        widescale(54.0, 76.0),
-        widescale(150.0, 190.0),
-    ];
-    let rows = [13.0, 31.0, 49.0];
+    let pane_layout = select_pane::layout();
+    let pane_top = pane_layout.pane_top;
+    let tz = pane_layout.text_zoom;
+    let cols = pane_layout.cols;
+    let rows = pane_layout.rows;
 
     let build_pane = |pane_cx: f32,
                       sel_col: [f32; 4],
@@ -3996,25 +3930,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                       rolls: &str,
                       meter: &str,
                       chart: Option<&ChartData>| {
-        let mut out = Vec::with_capacity(32);
-
-        out.push(act!(quad: align(0.5, 0.0): xy(pane_cx, pane_top): setsize(screen_width() / 2.0 - 10.0, 60.0): z(120): diffuse(sel_col[0], sel_col[1], sel_col[2], 1.0)));
-
-        // Stats Grid
-        let stats = [
-            ("Steps", steps),
-            ("Mines", mines),
-            ("Jumps", jumps),
-            ("Hands", hands),
-            ("Holds", holds),
-            ("Rolls", rolls),
-        ];
-        for (i, (lbl, val)) in stats.iter().enumerate() {
-            let (c, r) = (i % 2, i / 2);
-            out.push(act!(text: font("miso"): settext(*val): align(1.0, 0.5): horizalign(right): xy(pane_cx + cols[c], pane_top + rows[r]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-            out.push(act!(text: font("miso"): settext(*lbl): align(0.0, 0.5): xy(pane_cx + cols[c] + 3.0, pane_top + rows[r]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-        }
-
         // Scores
         let placeholder = ("----".to_string(), "??.??%".to_string());
         let fallback_player = if let Some(c) = chart
@@ -4049,6 +3964,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             fallback_machine,
             fallback_player,
         );
+        let mut out = select_pane::build_base(select_pane::StatsPaneParams {
+            pane_cx,
+            accent_color: sel_col,
+            values: select_pane::StatsValues {
+                steps,
+                mines,
+                jumps,
+                hands,
+                holds,
+                rolls,
+            },
+            meter: (!gs_view.show_rivals).then_some(meter),
+        });
 
         // Simply Love PaneDisplay order: Machine/World first, then Player.
         let lines = [
@@ -4074,16 +4002,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
         }
 
-        // Difficulty Meter
-        if !gs_view.show_rivals {
-            let mut m_actor = act!(text: font("wendy"): settext(meter): align(1.0, 0.5): horizalign(right): xy(pane_cx + cols[3], pane_top + rows[1]): z(121): diffuse(0.0, 0.0, 0.0, 1.0));
-            if !is_wide() {
-                if let Actor::Text { max_width, .. } = &mut m_actor {
-                    *max_width = Some(66.0);
-                }
-            }
-            out.push(m_actor);
-        }
         out
     };
 
@@ -4277,6 +4195,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         color_pack_headers: state.sort_mode == WheelSortMode::Group,
         preferred_difficulty_index: state.preferred_difficulty_index,
         selected_steps_index: state.selected_steps_index,
+        song_box_color: None,
+        song_text_color: None,
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());
 

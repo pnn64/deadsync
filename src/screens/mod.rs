@@ -14,6 +14,7 @@ pub mod player_options;
 pub mod profile_load;
 pub mod sandbox;
 pub mod select_color;
+pub mod select_course;
 pub mod select_mode;
 pub mod select_music;
 pub mod select_profile;
@@ -69,6 +70,7 @@ pub enum Screen {
     SelectPlayMode,
     ProfileLoad,
     SelectMusic,
+    SelectCourse,
     Sandbox,
     Evaluation,
     EvaluationSummary,
