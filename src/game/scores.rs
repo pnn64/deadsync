@@ -1977,6 +1977,51 @@ pub fn get_machine_leaderboard_local(
     out
 }
 
+pub fn get_personal_leaderboard_local_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+    max_entries: usize,
+) -> Vec<LeaderboardEntry> {
+    if chart_hash.trim().is_empty() || max_entries == 0 {
+        return Vec::new();
+    }
+    let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+        return Vec::new();
+    };
+
+    let initials = profile_initials_for_id(&profile_id).unwrap_or_else(|| "----".to_string());
+    let root = local_scores_root_for_profile(&profile_id);
+    let shard_dir = root.join(shard2_for_hash(chart_hash));
+
+    let mut plays: Vec<MachineLeaderboardPlay> = Vec::new();
+    push_machine_leaderboard_from_dir(&root, chart_hash, &initials, &mut plays);
+    push_machine_leaderboard_from_dir(&shard_dir, chart_hash, &initials, &mut plays);
+
+    plays.sort_by(|a, b| {
+        b.score_percent
+            .partial_cmp(&a.score_percent)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| b.played_at_ms.cmp(&a.played_at_ms))
+            .then_with(|| a.initials.cmp(&b.initials))
+    });
+
+    let take_len = max_entries.min(plays.len());
+    let mut out = Vec::with_capacity(take_len);
+    for (i, play) in plays.into_iter().take(take_len).enumerate() {
+        out.push(LeaderboardEntry {
+            rank: (i as u32).saturating_add(1),
+            name: play.initials,
+            machine_tag: None,
+            score: (play.score_percent * 10000.0).round(),
+            date: local_score_date_string(play.played_at_ms),
+            is_rival: false,
+            is_self: false,
+            is_fail: play.is_fail,
+        });
+    }
+    out
+}
+
 pub fn get_machine_replays_local(chart_hash: &str, max_entries: usize) -> Vec<MachineReplayEntry> {
     if chart_hash.trim().is_empty() || max_entries == 0 {
         return Vec::new();
