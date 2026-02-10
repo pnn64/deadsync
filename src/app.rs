@@ -2022,6 +2022,11 @@ impl App {
                     | CurrentScreen::SelectStyle
                     | CurrentScreen::SelectPlayMode
             );
+        let target_course_music = target == CurrentScreen::SelectCourse;
+        let prev_course_music = prev == CurrentScreen::SelectCourse;
+        let keep_preview = (prev == CurrentScreen::SelectMusic
+            && target == CurrentScreen::PlayerOptions)
+            || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic);
 
         if target_menu_music {
             if !prev_menu_music {
@@ -2031,12 +2036,17 @@ impl App {
                     volume: 1.0,
                 });
             }
-        } else if prev_menu_music {
+        } else if target_course_music {
+            if !prev_course_music {
+                commands.push(Command::PlayMusic {
+                    path: PathBuf::from("assets/music/select_course (loop).ogg"),
+                    looped: true,
+                    volume: 1.0,
+                });
+            }
+        } else if prev_menu_music || prev_course_music {
             commands.push(Command::StopMusic);
-        } else if target != CurrentScreen::Gameplay
-            && !((prev == CurrentScreen::SelectMusic && target == CurrentScreen::PlayerOptions)
-                || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic))
-        {
+        } else if target != CurrentScreen::Gameplay && !keep_preview {
             commands.push(Command::StopMusic);
         }
 
@@ -2124,7 +2134,8 @@ impl App {
 
             if !(target == CurrentScreen::SelectMusic
                 || target == CurrentScreen::PlayerOptions
-                || target == CurrentScreen::Gameplay)
+                || target == CurrentScreen::Gameplay
+                || target == CurrentScreen::SelectCourse)
             {
                 commands.push(Command::StopMusic);
             }
