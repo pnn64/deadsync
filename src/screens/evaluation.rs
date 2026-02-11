@@ -6,7 +6,9 @@ use crate::screens::Screen;
 use crate::screens::components::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::{eval_grades, heart_bg, pad_display, qr_code, screen_bar};
+use crate::screens::components::{
+    eval_grades, heart_bg, pad_display, qr_code, screen_bar, select_shared,
+};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 
@@ -264,6 +266,7 @@ pub struct State {
     bg: heart_bg::State,
     pub screen_elapsed: f32,
     pub session_elapsed: f32, // To display the timer
+    pub gameplay_elapsed: f32,
     pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
     pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
@@ -562,6 +565,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         bg: heart_bg::State::new(),
         screen_elapsed: 0.0,
         session_elapsed: 0.0,
+        gameplay_elapsed: 0.0,
         stage_duration_seconds,
         score_info,
         density_graph_mesh,
@@ -790,7 +794,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 }
 
 fn format_session_time(seconds_total: f32) -> String {
-    if seconds_total < 0.0 {
+    if !seconds_total.is_finite() || seconds_total < 0.0 {
         return "00:00".to_string();
     }
     let seconds_total = seconds_total as u64;
@@ -799,10 +803,12 @@ fn format_session_time(seconds_total: f32) -> String {
     let minutes = (seconds_total % 3600) / 60;
     let seconds = seconds_total % 60;
 
-    if hours > 0 {
+    if seconds_total < 3600 {
+        format!("{minutes:02}:{seconds:02}")
+    } else if seconds_total < 36000 {
         format!("{hours}:{minutes:02}:{seconds:02}")
     } else {
-        format!("{minutes:02}:{seconds:02}")
+        format!("{hours:02}:{minutes:02}:{seconds:02}")
     }
 }
 
@@ -2402,18 +2408,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         right_avatar: None,
     }));
 
-    // Session Timer
-    let timer_text = format_session_time(state.session_elapsed);
-    actors.push(act!(text:
-        font("wendy_monospace_numbers"):
-        settext(timer_text):
-        align(0.5, 0.5):
-        xy(screen_center_x(), 10.0):
-        zoom(widescale(0.3, 0.36)):
-        z(121):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        horizalign(center)
-    ));
+    // Header timers (zmod parity): session timer + optional cumulative gameplay timer.
+    actors.push(select_shared::build_session_timer(format_session_time(
+        state.session_elapsed,
+    )));
+    if crate::config::get().show_select_music_gameplay_timer {
+        actors.push(select_shared::build_gameplay_timer(format_session_time(
+            state.gameplay_elapsed,
+        )));
+    }
 
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();

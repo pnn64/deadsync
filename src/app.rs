@@ -474,6 +474,8 @@ impl ScreensState {
                 if let Some(start) = session.session_start_time {
                     self.evaluation_state.session_elapsed = now.duration_since(start).as_secs_f32();
                 }
+                self.evaluation_state.gameplay_elapsed =
+                    total_gameplay_elapsed(&session.played_stages);
                 evaluation::update(&mut self.evaluation_state, delta_time);
                 None
             }
@@ -2512,6 +2514,8 @@ impl App {
                 }
                 self.state.session.played_stages.push(stage);
             }
+            self.state.screens.evaluation_state.gameplay_elapsed =
+                total_gameplay_elapsed(&self.state.session.played_stages);
         }
 
         if target == CurrentScreen::EvaluationSummary {
@@ -2732,6 +2736,8 @@ impl App {
                     );
                 }
             }
+            self.state.screens.select_music_state.gameplay_elapsed =
+                total_gameplay_elapsed(&self.state.session.played_stages);
 
             // Prime the delayed panes (tech counts, breakdown, etc.) for the selected chart so they
             // render immediately on entry (no initial debounce delay).
