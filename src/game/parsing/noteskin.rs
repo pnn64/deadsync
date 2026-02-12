@@ -2931,6 +2931,17 @@ fn itg_parse_sprite_block(block: &str, metrics: &noteskin_itg::IniData) -> Optio
             texture_expr = Some(value.to_string());
             continue;
         }
+        if key.eq_ignore_ascii_case("Frames")
+            && let Some((linear_count, linear_delays)) = itg_parse_linear_frames_expr(value)
+        {
+            frame_count = linear_count.max(1);
+            frame_delays = linear_delays
+                .into_iter()
+                .enumerate()
+                .map(|(idx, delay)| (idx, delay))
+                .collect();
+            continue;
+        }
         let key_lower = key.to_ascii_lowercase();
         if key_lower.starts_with("frame") && key_lower[5..].chars().all(|ch| ch.is_ascii_digit())
         {
@@ -2982,6 +2993,28 @@ fn itg_parse_sprite_block(block: &str, metrics: &noteskin_itg::IniData) -> Optio
         frame_delays,
         commands,
     })
+}
+
+fn itg_parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
+    let value = raw.trim().trim_end_matches(';').trim();
+    if !value.starts_with("Sprite.LinearFrames") {
+        return None;
+    }
+    let open = value.find('(')?;
+    let close = itg_find_matching(value, open, '(', ')')?;
+    let args = itg_split_call_args(&value[open + 1..close]);
+    if args.len() < 2 {
+        return None;
+    }
+    let frame_count = args[0]
+        .trim()
+        .parse::<usize>()
+        .ok()
+        .or_else(|| itg_parse_lua_float_token(&args[0]).map(|v| v as usize))?
+        .max(1);
+    let seconds = itg_parse_lua_float_token(&args[1])?;
+    let delay = (seconds / frame_count as f32).max(0.0);
+    Some((frame_count, vec![delay; frame_count]))
 }
 
 fn itg_parse_model_block(block: &str, metrics: &noteskin_itg::IniData) -> Option<ItgLuaModelDecl> {
@@ -4624,7 +4657,10 @@ fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{load_itg_skin, parse_explosion_animation, AnimationRate, SpriteSource, Style};
+    use super::{
+        load_itg_skin, parse_explosion_animation, AnimationRate, Quantization, SpriteSource, Style,
+        NUM_QUANTIZATIONS,
+    };
     use std::collections::HashSet;
 
     #[test]
@@ -4825,6 +4861,87 @@ mod tests {
         assert_eq!(slot.frame_index(0.0, 0.25), 1);
         assert_eq!(slot.frame_index(0.0, 0.95), 1);
         assert_eq!(slot.frame_index(0.0, 1.05), 0);
+    }
+
+    #[test]
+    fn enchantment_tap_note_uses_linear_frames_animation() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "enchantment")
+            .expect("dance/enchantment should load from assets/noteskins");
+        let idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+        let slot = ns
+            .note_layers
+            .get(idx)
+            .and_then(|layers| layers.first())
+            .expect("enchantment should expose first tap note layer for 4th quant");
+        let SpriteSource::Animated {
+            frame_count,
+            frame_durations,
+            ..
+        } = slot.source.as_ref()
+        else {
+            panic!("enchantment tap note should resolve to animated sprite");
+        };
+        assert_eq!(
+            *frame_count, 16,
+            "enchantment tap note should use 16 linear frames"
+        );
+        let delays = frame_durations
+            .as_ref()
+            .expect("enchantment tap note should preserve linear frame delays");
+        assert_eq!(delays.len(), 16, "expected one delay per linear frame");
+        assert!(
+            (delays[0] - 0.0625).abs() < 1e-4,
+            "expected linear frame delay 1/16 beat, got {}",
+            delays[0]
+        );
+        assert_eq!(slot.frame_index(0.0, 0.00), 0);
+        assert_eq!(slot.frame_index(0.0, 0.06), 0);
+        assert_eq!(slot.frame_index(0.0, 0.07), 1);
+        assert_eq!(slot.frame_index(0.0, 1.01), 0);
+    }
+
+    #[test]
+    fn enchantment_tap_mine_uses_linear_frames_animation() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "enchantment")
+            .expect("dance/enchantment should load from assets/noteskins");
+        let mine = ns
+            .mines
+            .first()
+            .and_then(|slot| slot.as_ref())
+            .expect("enchantment should define first-column mine slot");
+        let SpriteSource::Animated {
+            frame_count,
+            frame_durations,
+            ..
+        } = mine.source.as_ref()
+        else {
+            panic!("enchantment mine should resolve to animated sprite");
+        };
+        assert_eq!(
+            *frame_count, 8,
+            "enchantment mine should use 8 linear frames"
+        );
+        let delays = frame_durations
+            .as_ref()
+            .expect("enchantment mine should preserve linear frame delays");
+        assert_eq!(delays.len(), 8, "expected one delay per mine frame");
+        assert!(
+            (delays[0] - 0.125).abs() < 1e-4,
+            "expected linear frame delay 1/8 beat, got {}",
+            delays[0]
+        );
+        assert_eq!(mine.frame_index(0.0, 0.00), 0);
+        assert_eq!(mine.frame_index(0.0, 0.12), 0);
+        assert_eq!(mine.frame_index(0.0, 0.13), 1);
+        assert_eq!(mine.frame_index(0.0, 1.01), 0);
     }
 
     #[test]
