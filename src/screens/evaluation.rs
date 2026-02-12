@@ -9,6 +9,7 @@ use crate::screens::components::screen_bar::{
 use crate::screens::components::{
     eval_grades, heart_bg, pad_display, qr_code, screen_bar, select_shared,
 };
+use crate::screens::components::notefield::noteskin_model_actor;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 
@@ -2118,30 +2119,132 @@ fn build_column_judgments_pane(
                     let note_idx = col_idx
                         .saturating_mul(NUM_QUANTIZATIONS)
                         .saturating_add(Quantization::Q4th as usize);
-                    if let Some(slot) = ns.notes.get(note_idx) {
-                        let uv = slot.uv_for_frame(0);
+                    const TARGET_ARROW_PX: f32 = 64.0;
+                    const PREVIEW_ZOOM: f32 = 0.4;
+                    let elapsed = 0.0f32;
+                    let beat = 0.0f32;
+                    let note_uv_phase = ns.tap_note_uv_phase(elapsed, beat, 0.0);
+                    if let Some(note_slots) = ns.note_layers.get(note_idx) {
+                        let primary_h = note_slots
+                            .first()
+                            .map(|slot| slot.size()[1].max(1) as f32)
+                            .unwrap_or(1.0);
+                        let note_scale = if primary_h > f32::EPSILON {
+                            (TARGET_ARROW_PX * PREVIEW_ZOOM) / primary_h
+                        } else {
+                            PREVIEW_ZOOM
+                        };
+                        for (layer_idx, slot) in note_slots.iter().enumerate() {
+                            let draw = slot.model_draw_at(elapsed, beat);
+                            if !draw.visible {
+                                continue;
+                            }
+                            let frame = slot.frame_index(elapsed, beat);
+                            let uv_elapsed = if slot.model.is_some() {
+                                note_uv_phase
+                            } else {
+                                elapsed
+                            };
+                            let uv = slot.uv_for_frame_at(frame, uv_elapsed);
+                            let raw = slot.size();
+                            let base_size = [raw[0] as f32 * note_scale, raw[1] as f32 * note_scale];
+                            let rot_rad = (-slot.def.rotation_deg as f32).to_radians();
+                            let (sin_r, cos_r) = rot_rad.sin_cos();
+                            let ox = draw.pos[0] * note_scale;
+                            let oy = draw.pos[1] * note_scale;
+                            let center = [
+                                col_center_x + ox * cos_r - oy * sin_r,
+                                base_y + ox * sin_r + oy * cos_r,
+                            ];
+                            let size = [
+                                base_size[0] * draw.zoom[0].max(0.0),
+                                base_size[1] * draw.zoom[1].max(0.0),
+                            ];
+                            if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+                                continue;
+                            }
+                            let color = draw.tint;
+                            let blend = if draw.blend_add {
+                                BlendMode::Add
+                            } else {
+                                BlendMode::Alpha
+                            };
+                            let z = 101 + layer_idx as i32;
+                            if let Some(model_actor) = noteskin_model_actor(
+                                slot,
+                                center,
+                                size,
+                                uv,
+                                -slot.def.rotation_deg as f32,
+                                elapsed,
+                                beat,
+                                color,
+                                blend,
+                                z as i16,
+                            ) {
+                                actors.push(model_actor);
+                            } else if draw.blend_add {
+                                actors.push(act!(sprite(slot.texture_key().to_string()):
+                                    align(0.5, 0.5):
+                                    xy(center[0], center[1]):
+                                    setsize(size[0], size[1]):
+                                    rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    diffuse(color[0], color[1], color[2], color[3]):
+                                    blend(add):
+                                    z(z)
+                                ));
+                            } else {
+                                actors.push(act!(sprite(slot.texture_key().to_string()):
+                                    align(0.5, 0.5):
+                                    xy(center[0], center[1]):
+                                    setsize(size[0], size[1]):
+                                    rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    diffuse(color[0], color[1], color[2], color[3]):
+                                    blend(normal):
+                                    z(z)
+                                ));
+                            }
+                        }
+                    } else if let Some(slot) = ns.notes.get(note_idx) {
+                        let frame = slot.frame_index(elapsed, beat);
+                        let uv_elapsed = if slot.model.is_some() {
+                            note_uv_phase
+                        } else {
+                            elapsed
+                        };
+                        let uv = slot.uv_for_frame_at(frame, uv_elapsed);
                         let size = slot.size();
                         let w = size[0].max(0) as f32;
                         let h = size[1].max(0) as f32;
                         if w > 0.0 && h > 0.0 {
-                            // Match gameplay arrow sizing (target 64px tall), then apply Pane3 zoom(0.4).
-                            const TARGET_ARROW_PX: f32 = 64.0;
-                            let (w_scaled, h_scaled) = if h > 0.0 {
-                                let s = TARGET_ARROW_PX / h;
-                                (w * s, TARGET_ARROW_PX)
+                            let scale = (TARGET_ARROW_PX * PREVIEW_ZOOM) / h.max(1.0);
+                            let final_size = [w * scale, h * scale];
+                            let center = [col_center_x, base_y];
+                            if let Some(model_actor) = noteskin_model_actor(
+                                slot,
+                                center,
+                                final_size,
+                                uv,
+                                -slot.def.rotation_deg as f32,
+                                elapsed,
+                                beat,
+                                [1.0, 1.0, 1.0, 1.0],
+                                BlendMode::Alpha,
+                                101,
+                            ) {
+                                actors.push(model_actor);
                             } else {
-                                (w, h)
-                            };
-
-                            actors.push(act!(sprite(slot.texture_key().to_string()):
-                                align(0.5, 0.5):
-                                xy(col_center_x, base_y):
-                                setsize(w_scaled, h_scaled):
-                                zoom(0.4):
-                                rotationz(-slot.def.rotation_deg as f32):
-                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                z(101)
-                            ));
+                                actors.push(act!(sprite(slot.texture_key().to_string()):
+                                    align(0.5, 0.5):
+                                    xy(center[0], center[1]):
+                                    setsize(final_size[0], final_size[1]):
+                                    rotationz(-slot.def.rotation_deg as f32):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    z(101)
+                                ));
+                            }
                         }
                     }
                 }

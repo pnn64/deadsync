@@ -79,6 +79,13 @@ fn estimate_object_count(actors: &[Actor]) -> usize {
                     total += 1;
                 }
             }
+            Actor::TexturedMesh {
+                visible, vertices, ..
+            } => {
+                if *visible && !vertices.is_empty() {
+                    total += 1;
+                }
+            }
             Actor::Frame {
                 children,
                 background,
@@ -295,6 +302,59 @@ fn build_actor_recursive<'a>(
             }
         }
 
+        actors::Actor::TexturedMesh {
+            align,
+            offset,
+            size,
+            texture,
+            vertices,
+            mode,
+            visible,
+            blend,
+            z,
+        } => {
+            if !*visible || vertices.is_empty() {
+                return;
+            }
+
+            let rect = place_rect(parent, *align, *offset, *size);
+            let base_x = m.left + rect.x;
+            let base_y = m.top - rect.y;
+
+            let mut world: Vec<renderer::TexturedMeshVertex> = Vec::with_capacity(vertices.len());
+            for v in vertices.iter() {
+                world.push(renderer::TexturedMeshVertex {
+                    pos: [base_x + v.pos[0], base_y - v.pos[1]],
+                    uv: v.uv,
+                    color: v.color,
+                });
+            }
+
+            let before = out.len();
+            out.push(renderer::RenderObject {
+                object_type: renderer::ObjectType::TexturedMesh {
+                    texture_id: std::borrow::Cow::Borrowed(texture.as_str()),
+                    vertices: std::borrow::Cow::Owned(world),
+                    mode: *mode,
+                },
+                transform: Matrix4::from_scale(1.0),
+                blend: *blend,
+                z: 0,
+                order: 0,
+                camera,
+            });
+
+            let layer = base_z.saturating_add(*z);
+            for obj in out.iter_mut().skip(before) {
+                obj.z = layer;
+                obj.order = {
+                    let o = *order_counter;
+                    *order_counter += 1;
+                    o
+                };
+            }
+        }
+
         actors::Actor::Shadow { len, color, child } => {
             // Build the child first to push its objects; then duplicate those objects
             // with a pre-multiplied world translation and shadow tint at z-1.
@@ -334,6 +394,23 @@ fn build_actor_recursive<'a>(
                         for v in vertices.iter() {
                             out.push(renderer::MeshVertex {
                                 pos: v.pos,
+                                color: [
+                                    v.color[0] * sc[0],
+                                    v.color[1] * sc[1],
+                                    v.color[2] * sc[2],
+                                    v.color[3] * sc[3],
+                                ],
+                            });
+                        }
+                        *vertices = std::borrow::Cow::Owned(out);
+                    }
+                    renderer::ObjectType::TexturedMesh { vertices, .. } => {
+                        let sc = *color;
+                        let mut out = Vec::with_capacity(vertices.len());
+                        for v in vertices.iter() {
+                            out.push(renderer::TexturedMeshVertex {
+                                pos: v.pos,
+                                uv: v.uv,
                                 color: [
                                     v.color[0] * sc[0],
                                     v.color[1] * sc[1],

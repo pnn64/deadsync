@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::core::audio;
+use crate::core::gfx::BlendMode;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
@@ -8,13 +9,14 @@ use crate::core::space::{
 use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::song::SongData;
 use crate::screens::components::heart_bg;
+use crate::screens::components::notefield::noteskin_model_actor;
 use crate::screens::components::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use std::path::Path;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -329,7 +331,8 @@ pub struct State {
     pub nav_key_held_since: [Option<Instant>; PLAYER_SLOTS],
     pub nav_key_last_scrolled_at: [Option<Instant>; PLAYER_SLOTS],
     pub player_profiles: [crate::game::profile::Profile; PLAYER_SLOTS],
-    noteskin_cache: [Option<Arc<Noteskin>>; 4],
+    noteskin_names: Vec<String>,
+    noteskin_cache: HashMap<String, Arc<Noteskin>>,
     noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
     preview_time: f32,
     preview_beat: f32,
@@ -418,82 +421,82 @@ fn noteskin_cols_per_player(play_style: crate::game::profile::PlayStyle) -> usiz
     }
 }
 
-#[inline(always)]
-fn noteskin_idx(kind: crate::game::profile::NoteSkin) -> usize {
-    match kind {
-        crate::game::profile::NoteSkin::Cel => 0,
-        crate::game::profile::NoteSkin::Metal => 1,
-        crate::game::profile::NoteSkin::EnchantmentV2 => 2,
-        crate::game::profile::NoteSkin::DevCel2024V3 => 3,
-    }
-}
-
-#[inline(always)]
-fn noteskin_from_idx(idx: usize) -> crate::game::profile::NoteSkin {
-    match idx {
-        0 => crate::game::profile::NoteSkin::Cel,
-        1 => crate::game::profile::NoteSkin::Metal,
-        2 => crate::game::profile::NoteSkin::EnchantmentV2,
-        3 => crate::game::profile::NoteSkin::DevCel2024V3,
-        _ => crate::game::profile::NoteSkin::Cel,
-    }
-}
-
-#[inline(always)]
-fn noteskin_path(kind: crate::game::profile::NoteSkin, cols_per_player: usize) -> &'static str {
-    match (kind, cols_per_player) {
-        (crate::game::profile::NoteSkin::Cel, 8) => "assets/noteskins/cel/dance-double.txt",
-        (crate::game::profile::NoteSkin::Cel, _) => "assets/noteskins/cel/dance-single.txt",
-        (crate::game::profile::NoteSkin::Metal, 8) => "assets/noteskins/metal/dance-double.txt",
-        (crate::game::profile::NoteSkin::Metal, _) => "assets/noteskins/metal/dance-single.txt",
-        (crate::game::profile::NoteSkin::EnchantmentV2, 8) => {
-            "assets/noteskins/enchantment-v2/dance-double.txt"
-        }
-        (crate::game::profile::NoteSkin::EnchantmentV2, _) => {
-            "assets/noteskins/enchantment-v2/dance-single.txt"
-        }
-        (crate::game::profile::NoteSkin::DevCel2024V3, 8) => {
-            "assets/noteskins/devcel-2024-v3/dance-double.txt"
-        }
-        (crate::game::profile::NoteSkin::DevCel2024V3, _) => {
-            "assets/noteskins/devcel-2024-v3/dance-single.txt"
-        }
-    }
-}
-
 fn load_noteskin_cached(
-    kind: crate::game::profile::NoteSkin,
+    skin: &str,
     cols_per_player: usize,
 ) -> Option<Arc<Noteskin>> {
     let style = noteskin::Style {
         num_cols: cols_per_player,
         num_players: 1,
     };
-    let fallback_noteskin_path = if cols_per_player == 8 {
-        "assets/noteskins/cel/dance-double.txt"
-    } else {
-        "assets/noteskins/cel/dance-single.txt"
-    };
-    noteskin::load(Path::new(noteskin_path(kind, cols_per_player)), &style)
-        .ok()
-        .or_else(|| noteskin::load(Path::new(fallback_noteskin_path), &style).ok())
-        .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok())
-        .map(Arc::new)
+    noteskin::load_itg_skin_cached(&style, skin).ok()
 }
 
-fn build_noteskin_cache(cols_per_player: usize) -> [Option<Arc<Noteskin>>; 4] {
-    [
-        load_noteskin_cached(crate::game::profile::NoteSkin::Cel, cols_per_player),
-        load_noteskin_cached(crate::game::profile::NoteSkin::Metal, cols_per_player),
-        load_noteskin_cached(
-            crate::game::profile::NoteSkin::EnchantmentV2,
+fn discover_noteskin_names() -> Vec<String> {
+    noteskin::discover_itg_skins("dance")
+}
+
+fn build_noteskin_cache(
+    cols_per_player: usize,
+    initial_names: &[String],
+) -> HashMap<String, Arc<Noteskin>> {
+    let mut cache = HashMap::with_capacity(initial_names.len());
+    for name in initial_names {
+        if let Some(noteskin) = load_noteskin_cached(name, cols_per_player) {
+            cache.insert(name.clone(), noteskin);
+        }
+    }
+    cache
+}
+
+fn cached_noteskin(
+    cache: &HashMap<String, Arc<Noteskin>>,
+    skin: &crate::game::profile::NoteSkin,
+) -> Option<Arc<Noteskin>> {
+    cache.get(skin.as_str()).cloned()
+}
+
+fn fallback_noteskin(cache: &HashMap<String, Arc<Noteskin>>) -> Option<Arc<Noteskin>> {
+    cache
+        .get(crate::game::profile::NoteSkin::DEFAULT_NAME)
+        .cloned()
+        .or_else(|| cache.values().next().cloned())
+}
+
+fn cached_or_load_noteskin(
+    cache: &mut HashMap<String, Arc<Noteskin>>,
+    skin: &crate::game::profile::NoteSkin,
+    cols_per_player: usize,
+) -> Option<Arc<Noteskin>> {
+    if let Some(ns) = cached_noteskin(cache, skin) {
+        return Some(ns);
+    }
+
+    if let Some(loaded) = load_noteskin_cached(skin.as_str(), cols_per_player) {
+        cache.insert(skin.as_str().to_string(), loaded.clone());
+        return Some(loaded);
+    }
+
+    if let Some(ns) = fallback_noteskin(cache) {
+        return Some(ns);
+    }
+
+    if !skin
+        .as_str()
+        .eq_ignore_ascii_case(crate::game::profile::NoteSkin::DEFAULT_NAME)
+        && let Some(loaded) = load_noteskin_cached(
+            crate::game::profile::NoteSkin::DEFAULT_NAME,
             cols_per_player,
-        ),
-        load_noteskin_cached(
-            crate::game::profile::NoteSkin::DevCel2024V3,
-            cols_per_player,
-        ),
-    ]
+        )
+    {
+        cache.insert(
+            crate::game::profile::NoteSkin::DEFAULT_NAME.to_string(),
+            loaded.clone(),
+        );
+        return Some(loaded);
+    }
+
+    fallback_noteskin(cache)
 }
 
 fn what_comes_next_choices(pane: OptionsPane) -> Vec<String> {
@@ -525,6 +528,7 @@ fn build_main_rows(
     chart_steps_index: [usize; PLAYER_SLOTS],
     preferred_difficulty_index: [usize; PLAYER_SLOTS],
     session_music_rate: f32,
+    noteskin_names: &[String],
 ) -> Vec<Row> {
     let speed_mod_value_str = match speed_mod.mod_type.as_str() {
         "X" => format!("{:.2}x", speed_mod.value),
@@ -633,12 +637,11 @@ fn build_main_rows(
         },
         Row {
             name: "NoteSkin".to_string(),
-            choices: vec![
-                "cel".to_string(),
-                "metal".to_string(),
-                "enchantment-v2".to_string(),
-                "devcel-2024-v3".to_string(),
-            ],
+            choices: if noteskin_names.is_empty() {
+                vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()]
+            } else {
+                noteskin_names.to_vec()
+            },
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Change the appearance of the arrows.".to_string()],
             choice_difficulty_indices: None,
@@ -1258,6 +1261,7 @@ fn build_rows(
     preferred_difficulty_index: [usize; PLAYER_SLOTS],
     session_music_rate: f32,
     pane: OptionsPane,
+    noteskin_names: &[String],
 ) -> Vec<Row> {
     match pane {
         OptionsPane::Main => build_main_rows(
@@ -1266,6 +1270,7 @@ fn build_rows(
             chart_steps_index,
             preferred_difficulty_index,
             session_music_rate,
+            noteskin_names,
         ),
         OptionsPane::Advanced => build_advanced_rows(),
         OptionsPane::Uncommon => build_uncommon_rows(),
@@ -1330,12 +1335,16 @@ fn apply_profile_defaults(
     }
     // Initialize NoteSkin row from profile setting
     if let Some(row) = rows.iter_mut().find(|r| r.name == "NoteSkin") {
-        row.selected_choice_index[player_idx] = match profile.noteskin {
-            crate::game::profile::NoteSkin::Cel => 0,
-            crate::game::profile::NoteSkin::Metal => 1,
-            crate::game::profile::NoteSkin::EnchantmentV2 => 2,
-            crate::game::profile::NoteSkin::DevCel2024V3 => 3,
-        };
+        row.selected_choice_index[player_idx] = row
+            .choices
+            .iter()
+            .position(|c| c.eq_ignore_ascii_case(profile.noteskin.as_str()))
+            .or_else(|| {
+                row.choices
+                    .iter()
+                    .position(|c| c.eq_ignore_ascii_case(crate::game::profile::NoteSkin::DEFAULT_NAME))
+            })
+            .unwrap_or(0);
     }
     // Initialize Combo Font row from profile setting
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Font") {
@@ -1822,6 +1831,7 @@ pub fn init(
         diff_idx
     });
 
+    let noteskin_names = discover_noteskin_names();
     let mut rows = build_rows(
         &song,
         &speed_mod_p1,
@@ -1829,6 +1839,7 @@ pub fn init(
         preferred_difficulty_index,
         session_music_rate,
         OptionsPane::Main,
+        &noteskin_names,
     );
     let player_profiles = [p1_profile.clone(), p2_profile.clone()];
     let (
@@ -1855,9 +1866,18 @@ pub fn init(
     ) = apply_profile_defaults(&mut rows, &player_profiles[P2], P2);
 
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
-    let noteskin_cache = build_noteskin_cache(cols_per_player);
+    let mut initial_noteskin_names = vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()];
+    for profile in &player_profiles {
+        let name = profile.noteskin.as_str().to_string();
+        if !initial_noteskin_names.iter().any(|n| n == &name) {
+            initial_noteskin_names.push(name);
+        }
+    }
+    let mut noteskin_cache = build_noteskin_cache(cols_per_player, &initial_noteskin_names);
     let noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] =
-        std::array::from_fn(|i| noteskin_cache[noteskin_idx(player_profiles[i].noteskin)].clone());
+        std::array::from_fn(|i| {
+            cached_or_load_noteskin(&mut noteskin_cache, &player_profiles[i].noteskin, cols_per_player)
+        });
     let active = session_active_players();
     let row_tweens = init_row_tweens(rows.len(), [0; PLAYER_SLOTS], active);
     State {
@@ -1898,6 +1918,7 @@ pub fn init(
         nav_key_held_since: [None; PLAYER_SLOTS],
         nav_key_last_scrolled_at: [None; PLAYER_SLOTS],
         player_profiles,
+        noteskin_names,
         noteskin_cache,
         noteskin: noteskin_previews,
         preview_time: 0.0,
@@ -2593,12 +2614,19 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
             crate::game::profile::update_hold_judgment_graphic_for_side(persist_side, setting);
         }
     } else if row_name == "NoteSkin" {
-        let setting = noteskin_from_idx(row.selected_choice_index[player_idx]);
-        state.player_profiles[player_idx].noteskin = setting;
+        let setting_name = row
+            .choices
+            .get(row.selected_choice_index[player_idx])
+            .cloned()
+            .unwrap_or_else(|| crate::game::profile::NoteSkin::DEFAULT_NAME.to_string());
+        let setting = crate::game::profile::NoteSkin::new(&setting_name);
+        state.player_profiles[player_idx].noteskin = setting.clone();
         if should_persist {
-            crate::game::profile::update_noteskin_for_side(persist_side, setting);
+            crate::game::profile::update_noteskin_for_side(persist_side, setting.clone());
         }
-        state.noteskin[player_idx] = state.noteskin_cache[noteskin_idx(setting)].clone();
+        let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
+        state.noteskin[player_idx] =
+            cached_or_load_noteskin(&mut state.noteskin_cache, &setting, cols_per_player);
     } else if row_name == "Stepchart" {
         if let Some(diff_indices) = &row.choice_difficulty_indices
             && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index[player_idx])
@@ -3393,6 +3421,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         state.chart_difficulty_index,
         state.music_rate,
         pane,
+        &state.noteskin_names,
     );
     let (
         scroll_active_mask_p1,
@@ -4760,34 +4789,142 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let draw_noteskin_preview =
                             |ns: &Noteskin, center_x: f32, actors: &mut Vec<Actor>| {
                                 let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
-                                let Some(note_slot) = ns.notes.get(note_idx) else {
-                                    return;
-                                };
-                                let frame =
-                                    note_slot.frame_index(state.preview_time, state.preview_beat);
-                                let uv = note_slot.uv_for_frame(frame);
-                                let size = note_slot.size();
-                                let width = size[0].max(1) as f32;
-                                let height = size[1].max(1) as f32;
                                 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
                                 const PREVIEW_SCALE: f32 = 0.45;
                                 let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                                let elapsed = state.preview_time;
+                                let beat = state.preview_beat;
+                                let note_uv_phase = ns.tap_note_uv_phase(elapsed, beat, 0.0);
+                                if let Some(note_slots) = ns.note_layers.get(note_idx) {
+                                    let primary_h = note_slots
+                                        .first()
+                                        .map(|slot| slot.size()[1].max(1) as f32)
+                                        .unwrap_or(1.0);
+                                    let note_scale = if primary_h > f32::EPSILON {
+                                        target_height / primary_h
+                                    } else {
+                                        PREVIEW_SCALE
+                                    };
+                                    for (layer_idx, note_slot) in note_slots.iter().enumerate() {
+                                        let draw = note_slot.model_draw_at(elapsed, beat);
+                                        if !draw.visible {
+                                            continue;
+                                        }
+                                        let frame = note_slot.frame_index(elapsed, beat);
+                                        let uv_elapsed = if note_slot.model.is_some() {
+                                            note_uv_phase
+                                        } else {
+                                            elapsed
+                                        };
+                                        let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
+                                        let slot_size = note_slot.size();
+                                        let base_size =
+                                            [slot_size[0] as f32 * note_scale, slot_size[1] as f32 * note_scale];
+                                        let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
+                                        let (sin_r, cos_r) = rot_rad.sin_cos();
+                                        let ox = draw.pos[0] * note_scale;
+                                        let oy = draw.pos[1] * note_scale;
+                                        let center = [
+                                            center_x + ox * cos_r - oy * sin_r,
+                                            current_row_y + ox * sin_r + oy * cos_r,
+                                        ];
+                                        let size = [
+                                            base_size[0] * draw.zoom[0].max(0.0),
+                                            base_size[1] * draw.zoom[1].max(0.0),
+                                        ];
+                                        if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+                                            continue;
+                                        }
+                                        let color = [draw.tint[0], draw.tint[1], draw.tint[2], draw.tint[3] * a];
+                                        let blend = if draw.blend_add {
+                                            BlendMode::Add
+                                        } else {
+                                            BlendMode::Alpha
+                                        };
+                                        let z = 102 + layer_idx as i32;
+                                        if let Some(model_actor) = noteskin_model_actor(
+                                            note_slot,
+                                            center,
+                                            size,
+                                            uv,
+                                            -note_slot.def.rotation_deg as f32,
+                                            elapsed,
+                                            beat,
+                                            color,
+                                            blend,
+                                            z as i16,
+                                        ) {
+                                            actors.push(model_actor);
+                                        } else if draw.blend_add {
+                                            actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                                align(0.5, 0.5):
+                                                xy(center[0], center[1]):
+                                                setsize(size[0], size[1]):
+                                                rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
+                                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                                diffuse(color[0], color[1], color[2], color[3]):
+                                                blend(add):
+                                                z(z)
+                                            ));
+                                        } else {
+                                            actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                                align(0.5, 0.5):
+                                                xy(center[0], center[1]):
+                                                setsize(size[0], size[1]):
+                                                rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
+                                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                                diffuse(color[0], color[1], color[2], color[3]):
+                                                blend(normal):
+                                                z(z)
+                                            ));
+                                        }
+                                    }
+                                    return;
+                                }
+                                let Some(note_slot) = ns.notes.get(note_idx) else {
+                                    return;
+                                };
+                                let frame = note_slot.frame_index(elapsed, beat);
+                                let uv_elapsed = if note_slot.model.is_some() {
+                                    note_uv_phase
+                                } else {
+                                    elapsed
+                                };
+                                let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
+                                let size_raw = note_slot.size();
+                                let width = size_raw[0].max(1) as f32;
+                                let height = size_raw[1].max(1) as f32;
                                 let scale = if height > 0.0 {
                                     target_height / height
                                 } else {
                                     PREVIEW_SCALE
                                 };
-                                let final_width = width * scale;
-                                let final_height = target_height;
-                                actors.push(act!(sprite(note_slot.texture_key().to_string()):
-                                    align(0.5, 0.5):
-                                    xy(center_x, current_row_y):
-                                    setsize(final_width, final_height):
-                                    rotationz(-note_slot.def.rotation_deg as f32):
-                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                    diffuse(1.0, 1.0, 1.0, a):
-                                    z(102)
-                                ));
+                                let size = [width * scale, target_height];
+                                let center = [center_x, current_row_y];
+                                if let Some(model_actor) = noteskin_model_actor(
+                                    note_slot,
+                                    center,
+                                    size,
+                                    uv,
+                                    -note_slot.def.rotation_deg as f32,
+                                    elapsed,
+                                    beat,
+                                    [1.0, 1.0, 1.0, a],
+                                    BlendMode::Alpha,
+                                    102,
+                                ) {
+                                    actors.push(model_actor);
+                                } else {
+                                    actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                        align(0.5, 0.5):
+                                        xy(center[0], center[1]):
+                                        setsize(size[0], size[1]):
+                                        rotationz(-note_slot.def.rotation_deg as f32):
+                                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                        diffuse(1.0, 1.0, 1.0, a):
+                                        z(102)
+                                    ));
+                                }
                             };
                         if let Some(ns) = state.noteskin[primary_player_idx].as_ref() {
                             draw_noteskin_preview(ns, preview_x_for(primary_player_idx), &mut actors);

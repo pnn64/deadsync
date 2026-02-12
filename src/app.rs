@@ -4,7 +4,7 @@ use crate::core::display;
 use crate::core::gfx::{self as renderer, BackendType, RenderList, create_backend};
 use crate::core::input::{self, InputEvent};
 use crate::core::space::{self as space, Metrics};
-use crate::game::parsing::simfile as song_loading;
+use crate::game::parsing::{noteskin, simfile as song_loading};
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::{
     Screen as CurrentScreen, ScreenAction, evaluation, evaluation_summary, gameover, gameplay,
@@ -3234,8 +3234,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let color_index = config.simply_love_color;
     let profile_data = profile::get();
 
+    let noteskin_prewarm = std::thread::spawn(noteskin::prewarm_itg_preview_cache);
     song_loading::scan_and_load_songs("songs");
     song_loading::scan_and_load_courses("courses", "songs");
+    if noteskin_prewarm.join().is_err() {
+        warn!("noteskin prewarm thread panicked; first-use preview hitches may occur");
+    }
     let event_loop: EventLoop<UserEvent> = EventLoop::<UserEvent>::with_user_event().build()?;
 
     // Spawn background thread to pump pad input and emit user events; decoupled from frame rate.

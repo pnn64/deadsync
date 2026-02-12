@@ -468,6 +468,20 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
             }
             *vertices = std::sync::Arc::from(out);
         }
+        Actor::TexturedMesh { vertices, .. } => {
+            let mut out: Vec<crate::core::gfx::TexturedMeshVertex> =
+                Vec::with_capacity(vertices.len());
+            for v in vertices.iter() {
+                let mut c = v.color;
+                c[3] *= alpha;
+                out.push(crate::core::gfx::TexturedMeshVertex {
+                    pos: v.pos,
+                    uv: v.uv,
+                    color: c,
+                });
+            }
+            *vertices = std::sync::Arc::from(out);
+        }
         Actor::Frame {
             background,
             children,

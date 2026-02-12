@@ -62,6 +62,14 @@ struct InstanceRaw {
     edge_fade: [f32; 4],
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct TexturedMeshVertexRaw {
+    pos: [f32; 2],
+    uv: [f32; 2],
+    color: [f32; 4],
+}
+
 struct PipelineSet {
     alpha: wgpu::RenderPipeline,
     add: wgpu::RenderPipeline,
@@ -117,6 +125,7 @@ pub struct Texture {
     _texture: wgpu::Texture,
     _view: wgpu::TextureView,
     bind_group: Arc<wgpu::BindGroup>,
+    bind_group_repeat: Arc<wgpu::BindGroup>,
 }
 
 struct SpriteRun {
@@ -128,8 +137,19 @@ struct SpriteRun {
     camera: u8,
 }
 
+struct TexturedMeshRun {
+    start: u32,
+    count: u32,
+    mode: MeshMode,
+    blend: BlendMode,
+    bind_group: Arc<wgpu::BindGroup>,
+    key: u64,
+    camera: u8,
+}
+
 enum Op {
     Sprite(SpriteRun),
+    TexturedMesh(TexturedMeshRun),
     Mesh {
         start: u32,
         count: u32,
@@ -170,6 +190,9 @@ pub struct State {
     mesh_shader: wgpu::ShaderModule,
     mesh_pipeline_layout: wgpu::PipelineLayout,
     mesh_pipelines: MeshPipelineSet,
+    tmesh_shader: wgpu::ShaderModule,
+    tmesh_pipeline_layout: wgpu::PipelineLayout,
+    tmesh_pipelines: PipelineSet,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     index_count: u32,
@@ -177,9 +200,12 @@ pub struct State {
     instance_capacity: usize,
     scratch_instances: Vec<InstanceRaw>,
     scratch_mesh_vertices: Vec<crate::core::gfx::MeshVertex>,
+    scratch_tmesh_vertices: Vec<TexturedMeshVertexRaw>,
     scratch_ops: Vec<Op>,
     mesh_vertex_buffer: wgpu::Buffer,
     mesh_vertex_capacity: usize,
+    tmesh_vertex_buffer: wgpu::Buffer,
+    tmesh_vertex_capacity: usize,
     window_size: (u32, u32),
     vsync_enabled: bool,
     next_texture_id: u64,
@@ -330,6 +356,8 @@ fn init(
         build_pipeline_set(&device, &proj, &bind_layout, format);
     let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
         build_mesh_pipeline_set(&device, &proj, format);
+    let (tmesh_shader, tmesh_pipeline_layout, tmesh_pipelines) =
+        build_textured_mesh_pipeline_set(&device, &proj, &bind_layout, format);
 
     let vertex_data = [
         Vertex {
@@ -377,6 +405,13 @@ fn init(
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+    let tmesh_vertex_capacity = 1024usize;
+    let tmesh_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu textured-mesh vertex buffer"),
+        size: (tmesh_vertex_capacity * mem::size_of::<TexturedMeshVertexRaw>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
 
     info!("{} (wgpu) backend initialized.", api.name());
 
@@ -398,6 +433,9 @@ fn init(
         mesh_shader,
         mesh_pipeline_layout,
         mesh_pipelines,
+        tmesh_shader,
+        tmesh_pipeline_layout,
+        tmesh_pipelines,
         vertex_buffer,
         index_buffer,
         index_count: indices.len() as u32,
@@ -405,9 +443,12 @@ fn init(
         instance_capacity,
         scratch_instances: Vec::with_capacity(instance_capacity),
         scratch_mesh_vertices: Vec::with_capacity(mesh_vertex_capacity),
+        scratch_tmesh_vertices: Vec::with_capacity(tmesh_vertex_capacity),
         scratch_ops: Vec::with_capacity(64),
         mesh_vertex_buffer,
         mesh_vertex_capacity,
+        tmesh_vertex_buffer,
+        tmesh_vertex_capacity,
         window_size: (size.width, size.height),
         vsync_enabled,
         next_texture_id: 1,
@@ -469,7 +510,7 @@ fn init_uniform_proj(
 pub fn create_texture(
     state: &mut State,
     image: &RgbaImage,
-    sampler: SamplerDesc,
+    sampler_desc: SamplerDesc,
 ) -> Result<Texture, Box<dyn Error>> {
     let size = wgpu::Extent3d {
         width: image.width(),
@@ -505,7 +546,7 @@ pub fn create_texture(
     );
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let sampler = get_sampler(state, sampler);
+    let sampler = get_sampler(state, sampler_desc);
     let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("wgpu texture bind group"),
         layout: &state.bind_layout,
@@ -513,6 +554,27 @@ pub fn create_texture(
             wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Sampler(&sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(&view),
+            },
+        ],
+    });
+    let sampler_repeat = get_sampler(
+        state,
+        SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..sampler_desc
+        },
+    );
+    let bind_group_repeat = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("wgpu texture bind group repeat"),
+        layout: &state.bind_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Sampler(&sampler_repeat),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
@@ -529,6 +591,7 @@ pub fn create_texture(
         _texture: texture,
         _view: view,
         bind_group: Arc::new(bind_group),
+        bind_group_repeat: Arc::new(bind_group_repeat),
     })
 }
 
@@ -580,6 +643,13 @@ pub fn draw(
         let want_mesh = objects_len.saturating_mul(4);
         if mesh_vertices.capacity() < want_mesh {
             mesh_vertices.reserve(want_mesh - mesh_vertices.capacity());
+        }
+
+        let tmesh_vertices = &mut state.scratch_tmesh_vertices;
+        tmesh_vertices.clear();
+        let want_tmesh = objects_len.saturating_mul(4);
+        if tmesh_vertices.capacity() < want_tmesh {
+            tmesh_vertices.reserve(want_tmesh - tmesh_vertices.capacity());
         }
 
         let ops = &mut state.scratch_ops;
@@ -657,6 +727,51 @@ pub fn draw(
                         camera: obj.camera,
                     });
                 }
+                ObjectType::TexturedMesh {
+                    texture_id,
+                    vertices,
+                    mode,
+                } => {
+                    if vertices.is_empty() {
+                        continue;
+                    }
+                    let tex = textures
+                        .get(texture_id.as_ref())
+                        .and_then(|t| pick_tex(api, t));
+                    let Some(tex) = tex else {
+                        continue;
+                    };
+                    let start = tmesh_vertices.len() as u32;
+                    tmesh_vertices.reserve(vertices.len());
+                    for v in vertices.iter() {
+                        let p = obj.transform * Vector4::new(v.pos[0], v.pos[1], 0.0, 1.0);
+                        tmesh_vertices.push(TexturedMeshVertexRaw {
+                            pos: [p.x, p.y],
+                            uv: v.uv,
+                            color: v.color,
+                        });
+                    }
+                    let key = tex.id.wrapping_shl(1) | 1;
+                    if let Some(Op::TexturedMesh(last)) = ops.last_mut()
+                        && last.key == key
+                        && last.blend == obj.blend
+                        && last.camera == obj.camera
+                        && last.mode == *mode
+                    {
+                        last.count += vertices.len() as u32;
+                        continue;
+                    }
+
+                    ops.push(Op::TexturedMesh(TexturedMeshRun {
+                        start,
+                        count: vertices.len() as u32,
+                        mode: *mode,
+                        blend: obj.blend,
+                        bind_group: tex.bind_group_repeat.clone(),
+                        key,
+                        camera: obj.camera,
+                    }));
+                }
             }
         }
     }
@@ -677,6 +792,15 @@ pub fn draw(
             &state.mesh_vertex_buffer,
             0,
             cast_slice(state.scratch_mesh_vertices.as_slice()),
+        );
+    }
+    let tmesh_len = state.scratch_tmesh_vertices.len();
+    ensure_tmesh_vertex_capacity(state, tmesh_len);
+    if tmesh_len > 0 {
+        state.queue.write_buffer(
+            &state.tmesh_vertex_buffer,
+            0,
+            cast_slice(state.scratch_tmesh_vertices.as_slice()),
         );
     }
     upload_projections(state, &render_list.cameras);
@@ -729,21 +853,21 @@ pub fn draw(
             ProjState::Uniform { .. } => 1,
         };
 
-        let mut last_kind: Option<bool> = None;
+        let mut last_kind: Option<u8> = None; // 0=sprite, 1=mesh, 2=textured mesh
         let mut last_blend: Option<BlendMode> = None;
         let mut last_bind: Option<u64> = None;
         let mut last_camera: Option<u8> = None;
         for op in &state.scratch_ops {
             match op {
                 Op::Sprite(run) => {
-                    if last_kind != Some(false) {
+                    if last_kind != Some(0) {
                         pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
                         pass.set_vertex_buffer(1, state.instance_buffer.slice(..));
                         pass.set_index_buffer(
                             state.index_buffer.slice(..),
                             wgpu::IndexFormat::Uint16,
                         );
-                        last_kind = Some(false);
+                        last_kind = Some(0);
                         last_blend = None;
                         last_bind = None;
                         last_camera = None;
@@ -780,9 +904,9 @@ pub fn draw(
                     if *count == 0 {
                         continue;
                     }
-                    if last_kind != Some(true) {
+                    if last_kind != Some(1) {
                         pass.set_vertex_buffer(0, state.mesh_vertex_buffer.slice(..));
-                        last_kind = Some(true);
+                        last_kind = Some(1);
                         last_blend = None;
                         last_bind = None;
                         last_camera = None;
@@ -806,6 +930,43 @@ pub fn draw(
                         MeshMode::Triangles => pass.draw(*start..(*start + *count), 0..1),
                     }
                 }
+                Op::TexturedMesh(run) => {
+                    if run.count == 0 {
+                        continue;
+                    }
+                    if last_kind != Some(2) {
+                        pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
+                        last_kind = Some(2);
+                        last_blend = None;
+                        last_bind = None;
+                        last_camera = None;
+                    }
+                    if last_blend != Some(run.blend) {
+                        pass.set_pipeline(state.tmesh_pipelines.get(run.blend));
+                        last_blend = Some(run.blend);
+                        last_bind = None;
+                    }
+                    if last_camera != Some(run.camera) {
+                        set_camera(
+                            &mut pass,
+                            &state.proj,
+                            run.camera,
+                            camera_count,
+                            &render_list.cameras,
+                            state.projection,
+                        );
+                        last_camera = Some(run.camera);
+                    }
+                    if last_bind != Some(run.key) {
+                        pass.set_bind_group(texture_group, Some(run.bind_group.as_ref()), &[]);
+                        last_bind = Some(run.key);
+                    }
+                    match run.mode {
+                        MeshMode::Triangles => {
+                            pass.draw(run.start..(run.start + run.count), 0..1)
+                        }
+                    }
+                }
             }
         }
         drop(pass);
@@ -814,7 +975,7 @@ pub fn draw(
     state.queue.submit(Some(encoder.finish()));
     frame.present();
 
-    Ok((instance_len as u32) * 4 + mesh_len as u32)
+    Ok((instance_len as u32) * 4 + mesh_len as u32 + tmesh_len as u32)
 }
 
 fn upload_projections(state: &mut State, cameras: &[Matrix4<f32>]) {
@@ -907,6 +1068,20 @@ fn ensure_mesh_vertex_capacity(state: &mut State, needed: usize) {
     state.mesh_vertex_capacity = new_cap;
 }
 
+fn ensure_tmesh_vertex_capacity(state: &mut State, needed: usize) {
+    if needed <= state.tmesh_vertex_capacity {
+        return;
+    }
+    let new_cap = needed.next_power_of_two().max(1024);
+    state.tmesh_vertex_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu textured-mesh vertex buffer"),
+        size: (new_cap * mem::size_of::<TexturedMeshVertexRaw>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    state.tmesh_vertex_capacity = new_cap;
+}
+
 fn ensure_projection_capacity(state: &mut State, needed: usize) {
     let ProjState::Uniform {
         stride,
@@ -973,12 +1148,21 @@ fn reconfigure_surface(state: &mut State) {
         );
         let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
             build_mesh_pipeline_set(&state.device, &state.proj, state.config.format);
+        let (tmesh_shader, tmesh_pipeline_layout, tmesh_pipelines) = build_textured_mesh_pipeline_set(
+            &state.device,
+            &state.proj,
+            &state.bind_layout,
+            state.config.format,
+        );
         state.shader = shader;
         state.pipeline_layout = pipeline_layout;
         state.pipelines = pipelines;
         state.mesh_shader = mesh_shader;
         state.mesh_pipeline_layout = mesh_pipeline_layout;
         state.mesh_pipelines = mesh_pipelines;
+        state.tmesh_shader = tmesh_shader;
+        state.tmesh_pipeline_layout = tmesh_pipeline_layout;
+        state.tmesh_pipelines = tmesh_pipelines;
     }
 }
 
@@ -1179,6 +1363,62 @@ fn build_mesh_pipeline_set(
     (shader, pipeline_layout, pipelines)
 }
 
+fn build_textured_mesh_pipeline_set(
+    device: &wgpu::Device,
+    proj: &ProjState,
+    bind_layout: &wgpu::BindGroupLayout,
+    format: wgpu::TextureFormat,
+) -> (wgpu::ShaderModule, wgpu::PipelineLayout, PipelineSet) {
+    let shader_src = match proj {
+        ProjState::Immediates => TMESH_SHADER_IMM,
+        ProjState::Uniform { .. } => TMESH_SHADER_UBO,
+    };
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("wgpu textured-mesh shader module"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_src)),
+    });
+
+    let pipeline_layout = match proj {
+        ProjState::Immediates => {
+            let layouts = [bind_layout];
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("wgpu textured-mesh pipeline layout"),
+                bind_group_layouts: &layouts,
+                immediate_size: PROJ_BYTES as u32,
+            })
+        }
+        ProjState::Uniform { layout, .. } => {
+            let layouts = [layout, bind_layout];
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("wgpu textured-mesh pipeline layout"),
+                bind_group_layouts: &layouts,
+                immediate_size: 0,
+            })
+        }
+    };
+
+    let pipelines = PipelineSet {
+        alpha: build_tmesh_pipeline(device, &pipeline_layout, format, BlendMode::Alpha, &shader),
+        add: build_tmesh_pipeline(device, &pipeline_layout, format, BlendMode::Add, &shader),
+        multiply: build_tmesh_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Multiply,
+            &shader,
+        ),
+        subtract: build_tmesh_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Subtract,
+            &shader,
+        ),
+    };
+
+    (shader, pipeline_layout, pipelines)
+}
+
 fn build_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
@@ -1263,6 +1503,48 @@ fn build_mesh_pipeline(
     })
 }
 
+fn build_tmesh_pipeline(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    format: wgpu::TextureFormat,
+    mode: BlendMode,
+    shader: &wgpu::ShaderModule,
+) -> wgpu::RenderPipeline {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("wgpu textured-mesh pipeline"),
+        layout: Some(layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: Some("vs_main"),
+            buffers: &[textured_mesh_vertex_layout()],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: blend_state(mode),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: None,
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
 const fn vertex_layout() -> wgpu::VertexBufferLayout<'static> {
     wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<Vertex>() as u64,
@@ -1287,6 +1569,14 @@ const fn mesh_vertex_layout() -> wgpu::VertexBufferLayout<'static> {
     }
 }
 
+const fn textured_mesh_vertex_layout() -> wgpu::VertexBufferLayout<'static> {
+    wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<TexturedMeshVertexRaw>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &TMESH_ATTRS,
+    }
+}
+
 const VERT_ATTRS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
     0 => Float32x2,
     1 => Float32x2,
@@ -1295,6 +1585,12 @@ const VERT_ATTRS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
 const MESH_ATTRS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
     0 => Float32x2, // pos
     1 => Float32x4, // color
+];
+
+const TMESH_ATTRS: [wgpu::VertexAttribute; 3] = wgpu::vertex_attr_array![
+    0 => Float32x2, // pos
+    1 => Float32x2, // uv
+    2 => Float32x4, // color
 ];
 
 const INSTANCE_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
@@ -1366,5 +1662,7 @@ fn get_sampler(state: &mut State, desc: SamplerDesc) -> wgpu::Sampler {
 
 const SHADER_IMM: &str = include_str!("../shaders/wgpu_sprite.wgsl");
 const MESH_SHADER_IMM: &str = include_str!("../shaders/wgpu_mesh.wgsl");
+const TMESH_SHADER_IMM: &str = include_str!("../shaders/wgpu_tmesh.wgsl");
 const SHADER_UBO: &str = include_str!("../shaders/wgpu_sprite_ubo.wgsl");
 const MESH_SHADER_UBO: &str = include_str!("../shaders/wgpu_mesh_ubo.wgsl");
+const TMESH_SHADER_UBO: &str = include_str!("../shaders/wgpu_tmesh_ubo.wgsl");

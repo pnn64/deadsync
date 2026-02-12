@@ -31,6 +31,14 @@ pub struct MeshVertex {
     pub color: [f32; 4],
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TexturedMeshVertex {
+    pub pos: [f32; 2],
+    pub uv: [f32; 2],
+    pub color: [f32; 4],
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MeshMode {
     Triangles,
@@ -47,6 +55,12 @@ pub enum ObjectType<'a> {
     },
     Mesh {
         vertices: Cow<'a, [MeshVertex]>,
+        mode: MeshMode,
+    },
+    #[allow(dead_code)]
+    TexturedMesh {
+        texture_id: Cow<'a, str>,
+        vertices: Cow<'a, [TexturedMeshVertex]>,
         mode: MeshMode,
     },
 }

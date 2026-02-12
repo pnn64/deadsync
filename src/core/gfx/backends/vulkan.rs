@@ -41,6 +41,14 @@ struct InstanceData {
     edge_fade: [f32; 4],   // offset 56
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct TexturedMeshVertexGpu {
+    pos: [f32; 2],   // offset 0
+    uv: [f32; 2],    // offset 8
+    color: [f32; 4], // offset 16
+}
+
 struct PipelinePair {
     layout: vk::PipelineLayout,
     pipe: vk::Pipeline,
@@ -53,6 +61,7 @@ pub struct Texture {
     memory: vk::DeviceMemory,
     view: vk::ImageView,
     pub descriptor_set: vk::DescriptorSet,
+    pub descriptor_set_repeat: vk::DescriptorSet,
     pool: vk::DescriptorPool,
 }
 
@@ -61,7 +70,7 @@ impl Drop for Texture {
         unsafe {
             let _ = self
                 .device
-                .free_descriptor_sets(self.pool, &[self.descriptor_set]);
+                .free_descriptor_sets(self.pool, &[self.descriptor_set, self.descriptor_set_repeat]);
             self.device.destroy_image_view(self.view, None);
             self.device.destroy_image(self.image, None);
             self.device.free_memory(self.memory, None);
@@ -102,6 +111,8 @@ pub struct State {
     sprite_pipeline: vk::Pipeline,
     mesh_pipeline_layout: vk::PipelineLayout,
     mesh_pipeline: vk::Pipeline,
+    textured_mesh_pipeline_layout: vk::PipelineLayout,
+    textured_mesh_pipeline: vk::Pipeline,
     vertex_buffer: Option<BufferResource>,
     index_buffer: Option<BufferResource>,
     pub descriptor_set_layout: vk::DescriptorSetLayout,
@@ -125,6 +136,10 @@ pub struct State {
     mesh_ring_ptr: *mut MeshVertex,        // persistently mapped pointer
     mesh_capacity_vertices: usize,         // total vertices across ring
     per_frame_stride_vertices: usize,      // vertices reserved per frame
+    tmesh_ring: Option<BufferResource>, // one big VB for all frames (textured mesh)
+    tmesh_ring_ptr: *mut TexturedMeshVertexGpu, // persistently mapped pointer
+    tmesh_capacity_vertices: usize,    // total textured mesh vertices across ring
+    per_frame_stride_tmesh_vertices: usize, // textured mesh vertices reserved per frame
 }
 
 // --- Main Procedural Functions ---
@@ -182,6 +197,15 @@ pub fn init(
         layout: mesh_pipeline_layout,
         pipe: mesh_pipeline,
     } = create_mesh_pipeline(device.as_ref().unwrap(), render_pass, BlendMode::Alpha)?;
+    let PipelinePair {
+        layout: textured_mesh_pipeline_layout,
+        pipe: textured_mesh_pipeline,
+    } = create_textured_mesh_pipeline(
+        device.as_ref().unwrap(),
+        render_pass,
+        descriptor_set_layout,
+        BlendMode::Alpha,
+    )?;
 
     let command_buffers =
         create_command_buffers(device.as_ref().unwrap(), command_pool, MAX_FRAMES_IN_FLIGHT)?;
@@ -208,6 +232,8 @@ pub fn init(
         sprite_pipeline,
         mesh_pipeline_layout,
         mesh_pipeline,
+        textured_mesh_pipeline_layout,
+        textured_mesh_pipeline,
         vertex_buffer: None,
         index_buffer: None,
         descriptor_set_layout,
@@ -231,6 +257,10 @@ pub fn init(
         mesh_ring_ptr: std::ptr::null_mut(),
         mesh_capacity_vertices: 0,
         per_frame_stride_vertices: 0,
+        tmesh_ring: None,
+        tmesh_ring_ptr: std::ptr::null_mut(),
+        tmesh_capacity_vertices: 0,
+        per_frame_stride_tmesh_vertices: 0,
     };
 
     // Static unit quad buffers
@@ -523,6 +553,96 @@ fn create_mesh_pipeline(
     Ok(PipelinePair { layout, pipe })
 }
 
+fn create_textured_mesh_pipeline(
+    device: &Device,
+    render_pass: vk::RenderPass,
+    set_layout: vk::DescriptorSetLayout,
+    mode: BlendMode,
+) -> Result<PipelinePair, Box<dyn Error>> {
+    let vert_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_tmesh.vert.spv"));
+    let frag_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_tmesh.frag.spv"));
+    let vert_module = create_shader_module(device, vert_shader_code)?;
+    let frag_module = create_shader_module(device, frag_shader_code)?;
+    let main_name = ffi::CStr::from_bytes_with_nul(b"main\0")?;
+
+    let shader_stages = [
+        vk::PipelineShaderStageCreateInfo::default()
+            .stage(vk::ShaderStageFlags::VERTEX)
+            .module(vert_module)
+            .name(main_name),
+        vk::PipelineShaderStageCreateInfo::default()
+            .stage(vk::ShaderStageFlags::FRAGMENT)
+            .module(frag_module)
+            .name(main_name),
+    ];
+
+    let (binding_descriptions, attribute_descriptions) = vertex_input_descriptions_tmesh();
+    let vertex_input_info = vk::PipelineVertexInputStateCreateInfo::default()
+        .vertex_binding_descriptions(&binding_descriptions)
+        .vertex_attribute_descriptions(&attribute_descriptions);
+
+    let input_assembly = vk::PipelineInputAssemblyStateCreateInfo::default()
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST);
+
+    let viewport_state = vk::PipelineViewportStateCreateInfo::default()
+        .viewport_count(1)
+        .scissor_count(1);
+
+    let rasterizer = vk::PipelineRasterizationStateCreateInfo::default()
+        .polygon_mode(vk::PolygonMode::FILL)
+        .line_width(1.0)
+        .cull_mode(vk::CullModeFlags::NONE)
+        .front_face(vk::FrontFace::COUNTER_CLOCKWISE);
+
+    let multisampling = vk::PipelineMultisampleStateCreateInfo::default()
+        .rasterization_samples(vk::SampleCountFlags::TYPE_1);
+
+    let color_blend_attachment = color_blend_for(mode);
+    let color_blending = vk::PipelineColorBlendStateCreateInfo::default()
+        .attachments(std::slice::from_ref(&color_blend_attachment));
+
+    let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+    let dynamic_state =
+        vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
+
+    let push_constant_range = vk::PushConstantRange::default()
+        .stage_flags(vk::ShaderStageFlags::VERTEX)
+        .offset(0)
+        .size(std::mem::size_of::<ProjPush>() as u32);
+
+    let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
+        .set_layouts(std::slice::from_ref(&set_layout))
+        .push_constant_ranges(std::slice::from_ref(&push_constant_range));
+
+    let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
+
+    let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
+        .stages(&shader_stages)
+        .vertex_input_state(&vertex_input_info)
+        .input_assembly_state(&input_assembly)
+        .viewport_state(&viewport_state)
+        .rasterization_state(&rasterizer)
+        .multisample_state(&multisampling)
+        .color_blend_state(&color_blending)
+        .dynamic_state(&dynamic_state)
+        .layout(layout)
+        .render_pass(render_pass)
+        .subpass(0);
+
+    let pipe = unsafe {
+        device
+            .create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None)
+            .map_err(|e| e.1)?[0]
+    };
+
+    unsafe {
+        device.destroy_shader_module(vert_module, None);
+        device.destroy_shader_module(frag_module, None);
+    }
+
+    Ok(PipelinePair { layout, pipe })
+}
+
 #[inline(always)]
 const fn next_pow2_usize(x: usize) -> usize {
     let mut v = if x == 0 { 1 } else { x - 1 };
@@ -653,6 +773,60 @@ fn ensure_mesh_ring_capacity(
     }
 
     Ok((state.current_frame * state.per_frame_stride_vertices) as u32)
+}
+
+fn ensure_tmesh_ring_capacity(
+    state: &mut State,
+    needed_vertices: usize,
+) -> Result<u32, Box<dyn Error>> {
+    let requested_stride = next_pow2_usize(needed_vertices.max(1));
+
+    let stride = if state.per_frame_stride_tmesh_vertices == 0 {
+        requested_stride
+    } else {
+        state.per_frame_stride_tmesh_vertices.max(requested_stride)
+    };
+
+    let need_total_vertices = stride * MAX_FRAMES_IN_FLIGHT;
+    let bytes_per_vertex = std::mem::size_of::<TexturedMeshVertexGpu>() as vk::DeviceSize;
+    let need_bytes = (need_total_vertices as u64) * (bytes_per_vertex as u64);
+
+    let dev = state.device.as_ref().unwrap();
+
+    if state.tmesh_ring.is_none() || state.tmesh_capacity_vertices < need_total_vertices {
+        if let Some(old) = state.tmesh_ring.take() {
+            unsafe {
+                dev.device_wait_idle()?;
+                if !state.tmesh_ring_ptr.is_null() {
+                    dev.unmap_memory(old.memory);
+                }
+            }
+            destroy_buffer(dev, &old);
+            state.tmesh_ring_ptr = std::ptr::null_mut();
+        }
+
+        let (buf, mem) = create_gpu_buffer(
+            &state.instance,
+            dev,
+            state.pdevice,
+            need_bytes,
+            vk::BufferUsageFlags::VERTEX_BUFFER,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        )?;
+        let mapped = unsafe { dev.map_memory(mem, 0, need_bytes, vk::MemoryMapFlags::empty())? };
+
+        state.tmesh_ring = Some(BufferResource {
+            buffer: buf,
+            memory: mem,
+        });
+        state.tmesh_ring_ptr = mapped.cast::<TexturedMeshVertexGpu>();
+        state.tmesh_capacity_vertices = need_total_vertices;
+        state.per_frame_stride_tmesh_vertices = stride;
+    } else if state.per_frame_stride_tmesh_vertices != stride {
+        state.per_frame_stride_tmesh_vertices = stride;
+    }
+
+    Ok((state.current_frame * state.per_frame_stride_tmesh_vertices) as u32)
 }
 
 fn transition_image_layout_cmd(
@@ -786,8 +960,16 @@ pub fn create_texture(
 
     destroy_buffer(device, &staging);
     let view = create_image_view(device, tex_image, fmt)?;
-    let sampler = get_sampler(state, sampler)?;
-    let set = create_texture_descriptor_set(state, view, sampler)?;
+    let sampler_default = get_sampler(state, sampler)?;
+    let set = create_texture_descriptor_set(state, view, sampler_default)?;
+    let sampler_repeat = get_sampler(
+        state,
+        SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..sampler
+        },
+    )?;
+    let set_repeat = create_texture_descriptor_set(state, view, sampler_repeat)?;
 
     Ok(Texture {
         device: device_arc.clone(),
@@ -795,6 +977,7 @@ pub fn create_texture(
         memory: tex_mem,
         view,
         descriptor_set: set,
+        descriptor_set_repeat: set_repeat,
         pool: state.descriptor_pool,
     })
 }
@@ -830,9 +1013,10 @@ pub fn draw(
         (center, [sx, sy], [sin_t, cos_t])
     }
 
-    let (needed_instances, needed_mesh_vertices) = {
+    let (needed_instances, needed_mesh_vertices, needed_tmesh_vertices) = {
         let mut inst: usize = 0;
         let mut mesh: usize = 0;
+        let mut tmesh: usize = 0;
         for o in &render_list.objects {
             match &o.object_type {
                 ObjectType::Sprite { .. } => inst += 1,
@@ -841,9 +1025,14 @@ pub fn draw(
                         mesh += vertices.len();
                     }
                 }
+                ObjectType::TexturedMesh { vertices, mode, .. } => {
+                    if *mode == MeshMode::Triangles {
+                        tmesh += vertices.len();
+                    }
+                }
             }
         }
-        (inst, mesh)
+        (inst, mesh, tmesh)
     };
 
     let base_first_instance = if needed_instances > 0 {
@@ -853,6 +1042,11 @@ pub fn draw(
     };
     let base_first_vertex = if needed_mesh_vertices > 0 {
         Some(ensure_mesh_ring_capacity(state, needed_mesh_vertices)?)
+    } else {
+        None
+    };
+    let base_first_tmesh_vertex = if needed_tmesh_vertices > 0 {
+        Some(ensure_tmesh_ring_capacity(state, needed_tmesh_vertices)?)
     } else {
         None
     };
@@ -868,15 +1062,23 @@ pub fn draw(
         count: u32,
         camera: u8,
     }
+    struct TexturedMeshDraw {
+        set: vk::DescriptorSet,
+        start: u32,
+        count: u32,
+        camera: u8,
+    }
 
     enum Op {
         Sprite(SpriteRun),
         Mesh(MeshDraw),
+        TexturedMesh(TexturedMeshDraw),
     }
 
     let mut ops: Vec<Op> = Vec::with_capacity(render_list.objects.len());
     let mut sprite_written: u32 = 0;
     let mut mesh_written: u32 = 0;
+    let mut tmesh_written: u32 = 0;
 
     unsafe {
         let device = state.device.as_ref().unwrap();
@@ -920,6 +1122,9 @@ pub fn draw(
         });
         let mesh_base_ptr = base_first_vertex.map_or(std::ptr::null_mut(), |b| {
             state.mesh_ring_ptr.add(b as usize)
+        });
+        let tmesh_base_ptr = base_first_tmesh_vertex.map_or(std::ptr::null_mut(), |b| {
+            state.tmesh_ring_ptr.add(b as usize)
         });
 
         for obj in &render_list.objects {
@@ -1000,6 +1205,54 @@ pub fn draw(
                         camera: obj.camera,
                     }));
                 }
+                ObjectType::TexturedMesh {
+                    texture_id,
+                    vertices,
+                    mode,
+                } => {
+                    if *mode != MeshMode::Triangles || vertices.is_empty() {
+                        continue;
+                    }
+                    let set_opt = textures.get(texture_id.as_ref()).and_then(|t| {
+                        if let RendererTexture::Vulkan(tex) = t {
+                            Some(tex.descriptor_set_repeat)
+                        } else {
+                            None
+                        }
+                    });
+                    let Some(set) = set_opt else {
+                        continue;
+                    };
+
+                    debug_assert!(!tmesh_base_ptr.is_null(), "textured mesh ring missing");
+                    let start = tmesh_written;
+                    for v in vertices.iter() {
+                        let p = obj.transform * Vector4::new(v.pos[0], v.pos[1], 0.0, 1.0);
+                        std::ptr::write(
+                            tmesh_base_ptr.add(tmesh_written as usize),
+                            TexturedMeshVertexGpu {
+                                pos: [p.x, p.y],
+                                uv: v.uv,
+                                color: v.color,
+                            },
+                        );
+                        tmesh_written += 1;
+                    }
+
+                    if let Some(Op::TexturedMesh(run)) = ops.last_mut()
+                        && run.set == set
+                        && run.camera == obj.camera
+                    {
+                        run.count += tmesh_written - start;
+                    } else {
+                        ops.push(Op::TexturedMesh(TexturedMeshDraw {
+                            set,
+                            start,
+                            count: tmesh_written - start,
+                            camera: obj.camera,
+                        }));
+                    }
+                }
             }
         }
 
@@ -1038,6 +1291,7 @@ pub fn draw(
             None,
             Sprite,
             Mesh,
+            TexturedMesh,
         }
         let mut bound = Bound::None;
         let mut last_set = vk::DescriptorSet::null();
@@ -1126,6 +1380,53 @@ pub fn draw(
                     }
 
                     let first_vertex = base_first_vertex.unwrap_or(0) + draw.start;
+                    device.cmd_draw(cmd, draw.count, 1, first_vertex, 0);
+                    vertices_drawn = vertices_drawn.saturating_add(draw.count);
+                }
+                Op::TexturedMesh(draw) => {
+                    if matches!(bound, Bound::TexturedMesh) == false {
+                        device.cmd_bind_pipeline(
+                            cmd,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            state.textured_mesh_pipeline,
+                        );
+                        let vb = state.tmesh_ring.as_ref().unwrap().buffer;
+                        device.cmd_bind_vertex_buffers(cmd, 0, &[vb], &[0]);
+                        bound = Bound::TexturedMesh;
+                        last_set = vk::DescriptorSet::null();
+                        last_camera = None;
+                    }
+
+                    if last_camera != Some(draw.camera) {
+                        let vp = render_list
+                            .cameras
+                            .get(draw.camera as usize)
+                            .copied()
+                            .unwrap_or(state.projection);
+                        let pc = ProjPush { proj: vp };
+                        device.cmd_push_constants(
+                            cmd,
+                            state.textured_mesh_pipeline_layout,
+                            vk::ShaderStageFlags::VERTEX,
+                            0,
+                            bytes_of(&pc),
+                        );
+                        last_camera = Some(draw.camera);
+                    }
+
+                    if last_set != draw.set {
+                        device.cmd_bind_descriptor_sets(
+                            cmd,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            state.textured_mesh_pipeline_layout,
+                            0,
+                            &[draw.set],
+                            &[],
+                        );
+                        last_set = draw.set;
+                    }
+
+                    let first_vertex = base_first_tmesh_vertex.unwrap_or(0) + draw.start;
                     device.cmd_draw(cmd, draw.count, 1, first_vertex, 0);
                     vertices_drawn = vertices_drawn.saturating_add(draw.count);
                 }
@@ -1222,6 +1523,14 @@ pub fn cleanup(state: &mut State) {
             destroy_buffer(state.device.as_ref().unwrap(), &ring);
         }
 
+        if let Some(ring) = state.tmesh_ring.take() {
+            if !state.tmesh_ring_ptr.is_null() {
+                state.device.as_ref().unwrap().unmap_memory(ring.memory);
+                state.tmesh_ring_ptr = std::ptr::null_mut();
+            }
+            destroy_buffer(state.device.as_ref().unwrap(), &ring);
+        }
+
         for sampler in state.sampler_cache.values() {
             state
                 .device
@@ -1260,6 +1569,16 @@ pub fn cleanup(state: &mut State) {
             .as_ref()
             .unwrap()
             .destroy_pipeline_layout(state.mesh_pipeline_layout, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
+            .destroy_pipeline(state.textured_mesh_pipeline, None);
+        state
+            .device
+            .as_ref()
+            .unwrap()
+            .destroy_pipeline_layout(state.textured_mesh_pipeline_layout, None);
         state
             .device
             .as_ref()
@@ -1554,6 +1873,35 @@ fn vertex_input_descriptions_mesh() -> (
         .offset(8);
 
     ([b0], [a_pos, a_color])
+}
+
+#[inline(always)]
+fn vertex_input_descriptions_tmesh() -> (
+    [vk::VertexInputBindingDescription; 1],
+    [vk::VertexInputAttributeDescription; 3],
+) {
+    let b0 = vk::VertexInputBindingDescription::default()
+        .binding(0)
+        .stride(std::mem::size_of::<TexturedMeshVertexGpu>() as u32)
+        .input_rate(vk::VertexInputRate::VERTEX);
+
+    let a_pos = vk::VertexInputAttributeDescription::default()
+        .binding(0)
+        .location(0)
+        .format(vk::Format::R32G32_SFLOAT)
+        .offset(0);
+    let a_uv = vk::VertexInputAttributeDescription::default()
+        .binding(0)
+        .location(1)
+        .format(vk::Format::R32G32_SFLOAT)
+        .offset(8);
+    let a_color = vk::VertexInputAttributeDescription::default()
+        .binding(0)
+        .location(2)
+        .format(vk::Format::R32G32B32A32_SFLOAT)
+        .offset(16);
+
+    ([b0], [a_pos, a_uv, a_color])
 }
 
 fn begin_single_time_commands(

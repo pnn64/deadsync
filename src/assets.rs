@@ -97,6 +97,10 @@ pub fn parse_texture_hints(raw: &str) -> TextureHints {
     if has(b"clamp") {
         hints.sampler_wrap = Some(SamplerWrap::Clamp);
     }
+    if hints.mipmaps == Some(true) && hints.sampler_wrap.is_none() {
+        // ITG noteskin "(mipmaps)" sheets are typically authored for scrolling/repeating UVs.
+        hints.sampler_wrap = Some(SamplerWrap::Repeat);
+    }
 
     hints
 }
@@ -172,21 +176,26 @@ pub(crate) fn open_image_fallback(path: &Path) -> image::ImageResult<image::Dyna
     guessed.decode()
 }
 
-#[inline(always)]
-fn append_noteskins_pngs(list: &mut Vec<(String, String)>, folder: &str) {
-    let dir = Path::new("assets").join(folder);
-    if let Ok(entries) = fs::read_dir(dir) {
-        let prefix = format!("{folder}/");
+fn append_noteskins_pngs_recursive(list: &mut Vec<(String, String)>, folder: &str) {
+    let mut dirs = vec![Path::new("assets").join(folder)];
+    while let Some(dir) = dirs.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
-            if path
+            if path.is_dir() {
+                dirs.push(path);
+                continue;
+            }
+            if !path
                 .extension()
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
-                && let Ok(name) = entry.file_name().into_string()
             {
-                let mut key = String::with_capacity(prefix.len() + name.len());
-                key.push_str(&prefix);
-                key.push_str(&name);
+                continue;
+            }
+            let key = canonical_texture_key(&path);
+            if key.starts_with("noteskins/") {
                 list.push((key.clone(), key));
             }
         }
@@ -662,10 +671,7 @@ impl AssetManager {
             textures_to_load.push((p.to_string(), p.to_string()));
         }
 
-        append_noteskins_pngs(&mut textures_to_load, "noteskins/cel");
-        append_noteskins_pngs(&mut textures_to_load, "noteskins/metal");
-        append_noteskins_pngs(&mut textures_to_load, "noteskins/enchantment-v2");
-        append_noteskins_pngs(&mut textures_to_load, "noteskins/devcel-2024-v3");
+        append_noteskins_pngs_recursive(&mut textures_to_load, "noteskins");
 
         #[inline(always)]
         fn decode_rgba(
@@ -725,6 +731,8 @@ impl AssetManager {
                             wrap: SamplerWrap::Repeat,
                             ..SamplerDesc::default()
                         }
+                    } else if key.starts_with("noteskins/") {
+                        parse_texture_hints(&key).sampler_desc()
                     } else {
                         SamplerDesc::default()
                     };
@@ -740,6 +748,8 @@ impl AssetManager {
                             wrap: SamplerWrap::Repeat,
                             ..SamplerDesc::default()
                         }
+                    } else if key.starts_with("noteskins/") {
+                        parse_texture_hints(&key).sampler_desc()
                     } else {
                         SamplerDesc::default()
                     };

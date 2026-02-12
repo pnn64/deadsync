@@ -1,12 +1,14 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::core::audio;
+use crate::core::gfx::BlendMode;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::profile::{self, ActiveProfile};
 use crate::game::scores;
 use crate::game::scroll::ScrollSpeedSetting;
+use crate::screens::components::notefield::noteskin_model_actor;
 use crate::screens::components::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
@@ -15,7 +17,7 @@ use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{self, Actor};
 use crate::ui::color;
 use crate::ui::font;
-use std::path::Path;
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -119,84 +121,54 @@ pub struct State {
 }
 
 struct NoteskinCache {
-    cel: Option<Arc<Noteskin>>,
-    metal: Option<Arc<Noteskin>>,
-    enchantment_v2: Option<Arc<Noteskin>>,
-    devcel_2024_v3: Option<Arc<Noteskin>>,
+    cache: HashMap<String, Arc<Noteskin>>,
+    style: noteskin::Style,
 }
 
 impl NoteskinCache {
-    fn new(choices: &[Choice]) -> Self {
-        const CEL: u8 = 1 << 0;
-        const METAL: u8 = 1 << 1;
-        const ENCHANTMENT_V2: u8 = 1 << 2;
-        const DEVCEL_2024_V3: u8 = 1 << 3;
-
-        let mut mask: u8 = 0;
-        for choice in choices {
-            if !matches!(&choice.kind, ActiveProfile::Local { .. }) {
-                continue;
-            }
-            mask |= match choice.noteskin {
-                profile::NoteSkin::Cel => CEL,
-                profile::NoteSkin::Metal => METAL,
-                profile::NoteSkin::EnchantmentV2 => ENCHANTMENT_V2,
-                profile::NoteSkin::DevCel2024V3 => DEVCEL_2024_V3,
-            };
-        }
-
-        let mut cache = Self {
-            cel: None,
-            metal: None,
-            enchantment_v2: None,
-            devcel_2024_v3: None,
+    fn new(_choices: &[Choice]) -> Self {
+        let style = noteskin::Style {
+            num_cols: 4,
+            num_players: 1,
         };
-        if mask & CEL != 0 {
-            cache.cel = load_noteskin(profile::NoteSkin::Cel).map(Arc::new);
+        let mut cache = HashMap::with_capacity(1);
+        if let Ok(default_skin) = noteskin::load_itg_skin_cached(&style, profile::NoteSkin::DEFAULT_NAME) {
+            cache.insert(profile::NoteSkin::DEFAULT_NAME.to_string(), default_skin);
         }
-        if mask & METAL != 0 {
-            cache.metal = load_noteskin(profile::NoteSkin::Metal).map(Arc::new);
-        }
-        if mask & ENCHANTMENT_V2 != 0 {
-            cache.enchantment_v2 = load_noteskin(profile::NoteSkin::EnchantmentV2).map(Arc::new);
-        }
-        if mask & DEVCEL_2024_V3 != 0 {
-            cache.devcel_2024_v3 = load_noteskin(profile::NoteSkin::DevCel2024V3).map(Arc::new);
-        }
-        cache
+        Self { cache, style }
     }
 
-    fn get(&self, kind: profile::NoteSkin) -> Option<&Arc<Noteskin>> {
-        match kind {
-            profile::NoteSkin::Cel => self.cel.as_ref(),
-            profile::NoteSkin::Metal => self.metal.as_ref(),
-            profile::NoteSkin::EnchantmentV2 => self.enchantment_v2.as_ref(),
-            profile::NoteSkin::DevCel2024V3 => self.devcel_2024_v3.as_ref(),
+    fn get(&mut self, kind: &profile::NoteSkin) -> Option<Arc<Noteskin>> {
+        let requested = kind.as_str();
+        if let Some(cached) = self.cache.get(requested) {
+            return Some(cached.clone());
         }
+
+        if let Ok(loaded) = noteskin::load_itg_skin_cached(&self.style, requested) {
+            self.cache.insert(requested.to_string(), loaded.clone());
+            return Some(loaded);
+        }
+
+        if let Some(default_cached) = self.cache.get(profile::NoteSkin::DEFAULT_NAME) {
+            return Some(default_cached.clone());
+        }
+
+        if let Ok(default_loaded) =
+            noteskin::load_itg_skin_cached(&self.style, profile::NoteSkin::DEFAULT_NAME)
+        {
+            self.cache.insert(
+                profile::NoteSkin::DEFAULT_NAME.to_string(),
+                default_loaded.clone(),
+            );
+            return Some(default_loaded);
+        }
+
+        self.cache.values().next().cloned()
     }
-}
-
-fn load_noteskin(kind: profile::NoteSkin) -> Option<Noteskin> {
-    let style = noteskin::Style {
-        num_cols: 4,
-        num_players: 1,
-    };
-
-    let path_str = match kind {
-        profile::NoteSkin::Cel => "assets/noteskins/cel/dance-single.txt",
-        profile::NoteSkin::Metal => "assets/noteskins/metal/dance-single.txt",
-        profile::NoteSkin::EnchantmentV2 => "assets/noteskins/enchantment-v2/dance-single.txt",
-        profile::NoteSkin::DevCel2024V3 => "assets/noteskins/devcel-2024-v3/dance-single.txt",
-    };
-
-    noteskin::load(Path::new(path_str), &style)
-        .ok()
-        .or_else(|| noteskin::load(Path::new("assets/noteskins/cel/dance-single.txt"), &style).ok())
-        .or_else(|| noteskin::load(Path::new("assets/noteskins/fallback.txt"), &style).ok())
 }
 
 fn preview_noteskin_for_choice(
-    cache: &NoteskinCache,
+    cache: &mut NoteskinCache,
     choices: &[Choice],
     selected_index: usize,
 ) -> Option<Arc<Noteskin>> {
@@ -205,7 +177,7 @@ fn preview_noteskin_for_choice(
     };
     match choice.kind {
         ActiveProfile::Guest => None,
-        ActiveProfile::Local { .. } => cache.get(choice.noteskin).cloned(),
+        ActiveProfile::Local { .. } => cache.get(&choice.noteskin),
     }
 }
 
@@ -494,12 +466,12 @@ pub fn init() -> State {
         p2_shake_t: SHAKE_DUR,
     };
     state.p1_preview_noteskin = preview_noteskin_for_choice(
-        &state.noteskin_cache,
+        &mut state.noteskin_cache,
         &state.choices,
         state.p1_selected_index,
     );
     state.p2_preview_noteskin = preview_noteskin_for_choice(
-        &state.noteskin_cache,
+        &mut state.noteskin_cache,
         &state.choices,
         state.p2_selected_index,
     );
@@ -515,12 +487,12 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
     state.p2_join_pulse_t = JOIN_PULSE_DURATION;
 
     state.p1_preview_noteskin = preview_noteskin_for_choice(
-        &state.noteskin_cache,
+        &mut state.noteskin_cache,
         &state.choices,
         state.p1_selected_index,
     );
     state.p2_preview_noteskin = preview_noteskin_for_choice(
-        &state.noteskin_cache,
+        &mut state.noteskin_cache,
         &state.choices,
         state.p2_selected_index,
     );
@@ -606,14 +578,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
 
     match ev.action {
-        VirtualAction::p1_up | VirtualAction::p1_menu_up => {
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p1_left
+        | VirtualAction::p1_menu_left => {
             if !state.p1_joined || state.p1_ready {
                 return ScreenAction::None;
             }
             if state.p1_selected_index > 0 {
                 state.p1_selected_index -= 1;
                 state.p1_preview_noteskin = preview_noteskin_for_choice(
-                    &state.noteskin_cache,
+                    &mut state.noteskin_cache,
                     &state.choices,
                     state.p1_selected_index,
                 );
@@ -621,14 +596,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             ScreenAction::None
         }
-        VirtualAction::p1_down | VirtualAction::p1_menu_down => {
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_right => {
             if !state.p1_joined || state.p1_ready {
                 return ScreenAction::None;
             }
             if state.p1_selected_index + 1 < state.choices.len() {
                 state.p1_selected_index += 1;
                 state.p1_preview_noteskin = preview_noteskin_for_choice(
-                    &state.noteskin_cache,
+                    &mut state.noteskin_cache,
                     &state.choices,
                     state.p1_selected_index,
                 );
@@ -642,7 +620,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 state.p1_ready = false;
                 state.p1_join_pulse_t = 0.0;
                 state.p1_preview_noteskin = preview_noteskin_for_choice(
-                    &state.noteskin_cache,
+                    &mut state.noteskin_cache,
                     &state.choices,
                     state.p1_selected_index,
                 );
@@ -703,14 +681,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             let _ = exit_anim_t(true);
             ScreenAction::Navigate(Screen::Menu)
         }
-        VirtualAction::p2_up | VirtualAction::p2_menu_up => {
+        VirtualAction::p2_up
+        | VirtualAction::p2_menu_up
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => {
             if !state.p2_joined || state.p2_ready {
                 return ScreenAction::None;
             }
             if state.p2_selected_index > 0 {
                 state.p2_selected_index -= 1;
                 state.p2_preview_noteskin = preview_noteskin_for_choice(
-                    &state.noteskin_cache,
+                    &mut state.noteskin_cache,
                     &state.choices,
                     state.p2_selected_index,
                 );
@@ -718,14 +699,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             ScreenAction::None
         }
-        VirtualAction::p2_down | VirtualAction::p2_menu_down => {
+        VirtualAction::p2_down
+        | VirtualAction::p2_menu_down
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => {
             if !state.p2_joined || state.p2_ready {
                 return ScreenAction::None;
             }
             if state.p2_selected_index + 1 < state.choices.len() {
                 state.p2_selected_index += 1;
                 state.p2_preview_noteskin = preview_noteskin_for_choice(
-                    &state.noteskin_cache,
+                    &mut state.noteskin_cache,
                     &state.choices,
                     state.p2_selected_index,
                 );
@@ -739,7 +723,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 state.p2_ready = false;
                 state.p2_join_pulse_t = 0.0;
                 state.p2_preview_noteskin = preview_noteskin_for_choice(
-                    &state.noteskin_cache,
+                    &mut state.noteskin_cache,
                     &state.choices,
                     state.p2_selected_index,
                 );
@@ -815,6 +799,20 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
                 c[3] *= alpha;
                 out.push(crate::core::gfx::MeshVertex {
                     pos: v.pos,
+                    color: c,
+                });
+            }
+            *vertices = std::sync::Arc::from(out);
+        }
+        Actor::TexturedMesh { vertices, .. } => {
+            let mut out: Vec<crate::core::gfx::TexturedMeshVertex> =
+                Vec::with_capacity(vertices.len());
+            for v in vertices.iter() {
+                let mut c = v.color;
+                c[3] *= alpha;
+                out.push(crate::core::gfx::TexturedMeshVertex {
+                    pos: v.pos,
+                    uv: v.uv,
                     color: c,
                 });
             }
@@ -949,6 +947,30 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
             }
             *vertices = std::sync::Arc::from(out);
         }
+        Actor::TexturedMesh {
+            offset,
+            size,
+            vertices,
+            ..
+        } => {
+            offset[0] = scale_about(offset[0], pivot[0], zoom);
+            offset[1] = scale_about(offset[1], pivot[1], zoom);
+            for s in size.iter_mut() {
+                if let actors::SizeSpec::Px(v) = s {
+                    *v *= zoom;
+                }
+            }
+            let mut out: Vec<crate::core::gfx::TexturedMeshVertex> =
+                Vec::with_capacity(vertices.len());
+            for v in vertices.iter() {
+                out.push(crate::core::gfx::TexturedMeshVertex {
+                    pos: [v.pos[0] * zoom, v.pos[1] * zoom],
+                    uv: v.uv,
+                    color: v.color,
+                });
+            }
+            *vertices = std::sync::Arc::from(out);
+        }
         Actor::Text {
             offset,
             scale,
@@ -1018,6 +1040,10 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
             offset[0] += dx;
             offset[1] += dy;
         }
+        Actor::TexturedMesh { offset, .. } => {
+            offset[0] += dx;
+            offset[1] += dy;
+        }
         Actor::Text { offset, clip, .. } => {
             offset[0] += dx;
             offset[1] += dy;
@@ -1055,7 +1081,7 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
             }
         }
         Actor::Shadow { child, .. } => apply_clip_rect_to_actor(child, rect),
-        Actor::Sprite { .. } | Actor::Mesh { .. } => {}
+        Actor::Sprite { .. } | Actor::Mesh { .. } | Actor::TexturedMesh { .. } => {}
     }
 }
 
@@ -1325,34 +1351,137 @@ fn push_scroller_frame(
 
         if let Some(ns) = preview_noteskin {
             let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
-            if let Some(note_slot) = ns.notes.get(note_idx) {
+            const TARGET_ARROW_PIXEL_SIZE: f32 = 40.0;
+            const PREVIEW_SCALE: f32 = 0.4;
+            let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+            let ns_x = INFO_W.mul_add(0.13, info_x0);
+            let ns_y = preview_y - 10.0;
+            let center = [ns_x, ns_y];
+            let note_uv_phase = ns.tap_note_uv_phase(preview_time, preview_beat, 0.0);
+            if let Some(note_slots) = ns.note_layers.get(note_idx) {
+                let primary_h = note_slots
+                    .first()
+                    .map(|slot| slot.size()[1].max(1) as f32)
+                    .unwrap_or(1.0);
+                let note_scale = if primary_h > f32::EPSILON {
+                    target_height / primary_h
+                } else {
+                    PREVIEW_SCALE
+                };
+                for (layer_idx, note_slot) in note_slots.iter().enumerate() {
+                    let draw = note_slot.model_draw_at(preview_time, preview_beat);
+                    if !draw.visible {
+                        continue;
+                    }
+                    let frame = note_slot.frame_index(preview_time, preview_beat);
+                    let uv_elapsed = if note_slot.model.is_some() {
+                        note_uv_phase
+                    } else {
+                        preview_time
+                    };
+                    let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
+                    let slot_size = note_slot.size();
+                    let base_size = [slot_size[0] as f32 * note_scale, slot_size[1] as f32 * note_scale];
+                    let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
+                    let (sin_r, cos_r) = rot_rad.sin_cos();
+                    let ox = draw.pos[0] * note_scale;
+                    let oy = draw.pos[1] * note_scale;
+                    let layer_center = [
+                        center[0] + ox * cos_r - oy * sin_r,
+                        center[1] + ox * sin_r + oy * cos_r,
+                    ];
+                    let size = [
+                        base_size[0] * draw.zoom[0].max(0.0),
+                        base_size[1] * draw.zoom[1].max(0.0),
+                    ];
+                    if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+                        continue;
+                    }
+                    let color = [draw.tint[0], draw.tint[1], draw.tint[2], draw.tint[3] * inner_alpha];
+                    let blend = if draw.blend_add {
+                        BlendMode::Add
+                    } else {
+                        BlendMode::Alpha
+                    };
+                    let z = 104 + layer_idx as i32;
+                    if let Some(model_actor) = noteskin_model_actor(
+                        note_slot,
+                        layer_center,
+                        size,
+                        uv,
+                        -note_slot.def.rotation_deg as f32,
+                        preview_time,
+                        preview_beat,
+                        color,
+                        blend,
+                        z as i16,
+                    ) {
+                        out.push(model_actor);
+                    } else if draw.blend_add {
+                        out.push(act!(sprite(note_slot.texture_key().to_string()):
+                            align(0.5, 0.5):
+                            xy(layer_center[0], layer_center[1]):
+                            setsize(size[0], size[1]):
+                            rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
+                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                            diffuse(color[0], color[1], color[2], color[3]):
+                            blend(add):
+                            z(z)
+                        ));
+                    } else {
+                        out.push(act!(sprite(note_slot.texture_key().to_string()):
+                            align(0.5, 0.5):
+                            xy(layer_center[0], layer_center[1]):
+                            setsize(size[0], size[1]):
+                            rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
+                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                            diffuse(color[0], color[1], color[2], color[3]):
+                            blend(normal):
+                            z(z)
+                        ));
+                    }
+                }
+            } else if let Some(note_slot) = ns.notes.get(note_idx) {
                 let frame = note_slot.frame_index(preview_time, preview_beat);
-                let uv = note_slot.uv_for_frame(frame);
+                let uv_elapsed = if note_slot.model.is_some() {
+                    note_uv_phase
+                } else {
+                    preview_time
+                };
+                let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
                 let size = note_slot.size();
                 let width = size[0].max(1) as f32;
                 let height = size[1].max(1) as f32;
-
-                const TARGET_ARROW_PIXEL_SIZE: f32 = 40.0;
-                const PREVIEW_SCALE: f32 = 0.4;
-                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
                 let scale = if height > 0.0 {
                     target_height / height
                 } else {
                     PREVIEW_SCALE
                 };
-
-                let ns_x = INFO_W.mul_add(0.13, info_x0);
-                let ns_y = preview_y - 10.0;
-
-                out.push(act!(sprite(note_slot.texture_key().to_string()):
-                    align(0.5, 0.5):
-                    xy(ns_x, ns_y):
-                    setsize(width * scale, target_height):
-                    rotationz(-note_slot.def.rotation_deg as f32):
-                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                    diffusealpha(inner_alpha):
-                    z(104)
-                ));
+                let preview_size = [width * scale, target_height];
+                if let Some(model_actor) = noteskin_model_actor(
+                    note_slot,
+                    center,
+                    preview_size,
+                    uv,
+                    -note_slot.def.rotation_deg as f32,
+                    preview_time,
+                    preview_beat,
+                    [1.0, 1.0, 1.0, inner_alpha],
+                    BlendMode::Alpha,
+                    104,
+                ) {
+                    out.push(model_actor);
+                } else {
+                    out.push(act!(sprite(note_slot.texture_key().to_string()):
+                        align(0.5, 0.5):
+                        xy(center[0], center[1]):
+                        setsize(preview_size[0], preview_size[1]):
+                        rotationz(-note_slot.def.rotation_deg as f32):
+                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                        diffusealpha(inner_alpha):
+                        z(104)
+                    ));
+                }
             }
         }
 

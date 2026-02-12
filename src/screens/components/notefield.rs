@@ -1,21 +1,23 @@
 use crate::act;
 use crate::assets;
+use crate::core::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
 use crate::core::space::*;
 use crate::game::gameplay::active_hold_is_engaged;
 use crate::game::gameplay::{
     COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind,
-    HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION,
-    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
+    HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, MINE_EXPLOSION_DURATION, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
 };
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, TimingWindow};
 use crate::game::note::{HoldResult, NoteType};
-use crate::game::parsing::noteskin::NUM_QUANTIZATIONS;
+use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, SpriteSlot};
 use crate::game::{gameplay::PlayerRuntime, gameplay::State, profile, scroll::ScrollSpeedSetting};
-use crate::ui::actors::Actor;
+use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use cgmath::{Deg, Matrix4, Point3, Vector3};
 use rssp::streams::StreamSegment;
 use std::array::from_fn;
+use std::sync::Arc;
 
 // --- CONSTANTS ---
 
@@ -110,6 +112,131 @@ fn mine_fill_state(colors: &[[f32; 4]], beat: f32) -> Option<MineFillState> {
     });
 
     Some(MineFillState { layers })
+}
+
+#[inline(always)]
+pub(crate) fn noteskin_model_actor(
+    slot: &SpriteSlot,
+    xy: [f32; 2],
+    size: [f32; 2],
+    uv_rect: [f32; 4],
+    rotation_deg: f32,
+    elapsed: f32,
+    beat: f32,
+    color: [f32; 4],
+    blend: BlendMode,
+    z: i16,
+) -> Option<Actor> {
+    let model = slot.model.as_ref()?;
+    let draw = slot.model_draw_at(elapsed, beat);
+    if !draw.visible {
+        return None;
+    }
+    if model.vertices.is_empty() {
+        return None;
+    }
+
+    let model_size = model.size();
+    let model_h = model_size[1];
+    let scale = if model_h > f32::EPSILON && size[1] > f32::EPSILON {
+        size[1] / model_h
+    } else {
+        1.0
+    };
+    let zoom = [
+        draw.zoom[0].max(0.0),
+        draw.zoom[1].max(0.0),
+        draw.zoom[2].max(0.0),
+    ];
+    let local_scale = [scale * zoom[0], scale * zoom[1], scale * zoom[2]];
+    let rx = draw.rot[0].to_radians();
+    let ry = draw.rot[1].to_radians();
+    let rz = (draw.rot[2] + rotation_deg).to_radians();
+    let (sin_x, cos_x) = rx.sin_cos();
+    let (sin_y, cos_y) = ry.sin_cos();
+    let (sin_z, cos_z) = rz.sin_cos();
+    let tx = draw.pos[0] * scale;
+    let ty = draw.pos[1] * scale;
+    let tz = draw.pos[2] * scale;
+    let focal = model_size[0].max(model_size[1]).mul_add(6.0, 0.0).max(180.0);
+    let du = uv_rect[2] - uv_rect[0];
+    let dv = uv_rect[3] - uv_rect[1];
+    let (tex_shift_u, tex_shift_v) = match slot.source.as_ref() {
+        crate::game::parsing::noteskin::SpriteSource::Atlas { tex_dims, .. } => {
+            let tw = tex_dims.0.max(1) as f32;
+            let th = tex_dims.1.max(1) as f32;
+            let base_u0 = slot.def.src[0] as f32 / tw;
+            let base_v0 = slot.def.src[1] as f32 / th;
+            (uv_rect[0] - base_u0, uv_rect[1] - base_v0)
+        }
+        crate::game::parsing::noteskin::SpriteSource::Animated { .. } => (0.0, 0.0),
+    };
+    let tint = [
+        color[0] * draw.tint[0],
+        color[1] * draw.tint[1],
+        color[2] * draw.tint[2],
+        color[3] * draw.tint[3],
+    ];
+    let blend = if draw.blend_add { BlendMode::Add } else { blend };
+
+    let mut vertices = Vec::with_capacity(model.vertices.len());
+    for v in model.vertices.iter() {
+        let mut lx = v.pos[0] * local_scale[0];
+        let mut ly = v.pos[1] * local_scale[1];
+        let lz = v.pos[2] * local_scale[2];
+        if slot.def.mirror_h {
+            lx = -lx;
+        }
+        if slot.def.mirror_v {
+            ly = -ly;
+        }
+
+        let x1 = lx;
+        let y1 = ly.mul_add(cos_x, -lz * sin_x);
+        let z1 = ly.mul_add(sin_x, lz * cos_x);
+
+        let x2 = x1.mul_add(cos_y, z1 * sin_y);
+        let y2 = y1;
+        let z2 = z1.mul_add(cos_y, -x1 * sin_y);
+
+        let x3 = x2.mul_add(cos_z, -y2 * sin_z) + tx;
+        let y3 = x2.mul_add(sin_z, y2 * cos_z) + ty;
+        let y_screen = -y3;
+        let z3 = z2 + tz;
+        let perspective = focal / (focal - z3).max(1.0);
+        let mut u = if slot.def.mirror_h {
+            uv_rect[2] - v.uv[0] * du
+        } else {
+            uv_rect[0] + v.uv[0] * du
+        };
+        let mut v_tex = if slot.def.mirror_v {
+            uv_rect[3] - v.uv[1] * dv
+        } else {
+            uv_rect[1] + v.uv[1] * dv
+        };
+        // ITG MilkShape vertex flags can opt vertices out of texture-matrix translation.
+        // Apply the same rule by blending between translated and untranslated UVs.
+        u += tex_shift_u * (v.tex_matrix_scale[0] - 1.0);
+        v_tex += tex_shift_v * (v.tex_matrix_scale[1] - 1.0);
+
+        vertices.push(TexturedMeshVertex {
+            pos: [x3 * perspective, y_screen * perspective],
+            uv: [u, v_tex],
+            color: tint,
+        });
+    }
+
+    Some(Actor::TexturedMesh {
+        align: [0.0, 0.0],
+        offset: xy,
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        texture: slot.texture_key().to_string(),
+        vertices: Arc::from(vertices),
+        mode: MeshMode::Triangles,
+        visible: true,
+        blend,
+        z,
+    })
 }
 
 #[inline(always)]
@@ -1002,7 +1129,6 @@ pub fn build(
     if let Some(ns) = &state.noteskin[player_idx] {
         let timing = &state.timing_players[player_idx];
         let target_arrow_px = TARGET_ARROW_PIXEL_SIZE * field_zoom;
-        let target_explosion_px = TARGET_EXPLOSION_PIXEL_SIZE * field_zoom;
         let scale_sprite = |size: [i32; 2]| -> [f32; 2] {
             let width = size[0].max(0) as f32;
             let height = size[1].max(0) as f32;
@@ -1013,15 +1139,33 @@ pub fn build(
                 [width * scale, target_arrow_px]
             }
         };
-        let scale_explosion = |size: [i32; 2]| -> [f32; 2] {
+        let scale_cap = |size: [i32; 2]| -> [f32; 2] {
             let width = size[0].max(0) as f32;
             let height = size[1].max(0) as f32;
-            if height <= 0.0 || target_explosion_px <= 0.0 {
+            if width <= 0.0 || target_arrow_px <= 0.0 {
                 [width, height]
             } else {
-                let scale = target_explosion_px / height;
-                [width * scale, target_explosion_px]
+                let scale = target_arrow_px / width;
+                [target_arrow_px, height * scale]
             }
+        };
+        let logical_slot_size = |slot: &SpriteSlot| -> [f32; 2] {
+            let mut width = slot.size()[0].max(0) as f32;
+            let mut height = slot.size()[1].max(0) as f32;
+            if crate::assets::parse_texture_hints(slot.texture_key()).doubleres {
+                width *= 0.5;
+                height *= 0.5;
+            }
+            [width, height]
+        };
+        let scale_explosion = |logical_size: [f32; 2]| -> [f32; 2] {
+            [logical_size[0] * field_zoom, logical_size[1] * field_zoom]
+        };
+        let scale_hold_explosion = |slot: &SpriteSlot| -> [f32; 2] {
+            // Match ITG ghost arrow behavior: hold/roll explosions use actor asset size
+            // (including double-res handling) instead of being normalized to arrow size.
+            let logical = logical_slot_size(slot);
+            [logical[0] * field_zoom, logical[1] * field_zoom]
         };
         let current_time = state.current_music_time_visible[player_idx];
         let current_beat = state.current_beat_visible[player_idx];
@@ -1318,7 +1462,8 @@ pub fn build(
                 let receptor_slot = &ns.receptor_off[i];
                 let receptor_frame =
                     receptor_slot.frame_index(state.total_elapsed_in_screen, current_beat);
-                let receptor_uv = receptor_slot.uv_for_frame(receptor_frame);
+                let receptor_uv =
+                    receptor_slot.uv_for_frame_at(receptor_frame, state.total_elapsed_in_screen);
                 let receptor_size = scale_sprite(receptor_slot.size());
                 let receptor_color = ns.receptor_pulse.color_for_beat(current_beat);
                 actors.push(act!(sprite(receptor_slot.texture_key().to_string()):
@@ -1355,24 +1500,69 @@ pub fn build(
                     visuals.explosion.as_ref().or(ns.hold.explosion.as_ref())
                 })
             {
-                let hold_uv = hold_slot.uv_for_frame(0);
-                let hold_size = scale_explosion(hold_slot.size());
+                let draw = hold_slot.model_draw_at(state.total_elapsed_in_screen, current_beat);
+                if !draw.visible {
+                    continue;
+                }
+                let hold_uv = hold_slot.uv_for_frame_at(0, state.total_elapsed_in_screen);
+                let base_size = scale_hold_explosion(hold_slot);
+                let hold_size = [
+                    base_size[0] * draw.zoom[0].max(0.0),
+                    base_size[1] * draw.zoom[1].max(0.0),
+                ];
+                if hold_size[0] <= f32::EPSILON || hold_size[1] <= f32::EPSILON {
+                    continue;
+                }
                 let receptor_rotation = ns
                     .receptor_off
                     .get(i)
                     .map(|slot| slot.def.rotation_deg as f32)
                     .unwrap_or(0.0);
                 let base_rotation = hold_slot.def.rotation_deg as f32;
-                let final_rotation = base_rotation + receptor_rotation;
-                actors.push(act!(sprite(hold_slot.texture_key().to_string()):
-                    align(0.5, 0.5):
-                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                    setsize(hold_size[0], hold_size[1]):
-                    rotationz(-final_rotation):
-                    customtexturerect(hold_uv[0], hold_uv[1], hold_uv[2], hold_uv[3]):
-                    blend(normal):
-                    z(Z_HOLD_EXPLOSION)
-                ));
+                let final_rotation = base_rotation + receptor_rotation - draw.rot[2];
+                let center = [playfield_center_x + col_x_offset, receptor_y_lane];
+                let color = draw.tint;
+                let blend = if draw.blend_add {
+                    BlendMode::Add
+                } else {
+                    BlendMode::Alpha
+                };
+                if let Some(model_actor) = noteskin_model_actor(
+                    hold_slot,
+                    center,
+                    hold_size,
+                    hold_uv,
+                    -final_rotation,
+                    state.total_elapsed_in_screen,
+                    current_beat,
+                    color,
+                    blend,
+                    Z_HOLD_EXPLOSION as i16,
+                ) {
+                    actors.push(model_actor);
+                } else if draw.blend_add {
+                    actors.push(act!(sprite(hold_slot.texture_key().to_string()):
+                        align(0.5, 0.5):
+                        xy(center[0], center[1]):
+                        setsize(hold_size[0], hold_size[1]):
+                        rotationz(-final_rotation):
+                        customtexturerect(hold_uv[0], hold_uv[1], hold_uv[2], hold_uv[3]):
+                        diffuse(color[0], color[1], color[2], color[3]):
+                        blend(add):
+                        z(Z_HOLD_EXPLOSION)
+                    ));
+                } else {
+                    actors.push(act!(sprite(hold_slot.texture_key().to_string()):
+                        align(0.5, 0.5):
+                        xy(center[0], center[1]):
+                        setsize(hold_size[0], hold_size[1]):
+                        rotationz(-final_rotation):
+                        customtexturerect(hold_uv[0], hold_uv[1], hold_uv[2], hold_uv[3]):
+                        diffuse(color[0], color[1], color[2], color[3]):
+                        blend(normal):
+                        z(Z_HOLD_EXPLOSION)
+                    ));
+                }
             }
             if !profile.hide_targets {
                 let glow_timer = state.receptor_glow_timers[col];
@@ -1381,19 +1571,38 @@ pub fn build(
                 {
                     let glow_frame =
                         glow_slot.frame_index(state.total_elapsed_in_screen, current_beat);
-                    let glow_uv = glow_slot.uv_for_frame(glow_frame);
-                    let glow_size = glow_slot.size();
-                    let alpha = (glow_timer / RECEPTOR_GLOW_DURATION).powf(0.75);
-                    actors.push(act!(sprite(glow_slot.texture_key().to_string()):
-                        align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                        setsize(glow_size[0] as f32, glow_size[1] as f32):
-                        rotationz(-glow_slot.def.rotation_deg as f32):
-                        customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
-                        diffuse(1.0, 1.0, 1.0, alpha):
-                        blend(add):
-                        z(Z_HOLD_GLOW)
-                    ));
+                    let glow_uv =
+                        glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen);
+                    let glow_size = scale_sprite(glow_slot.size());
+                    let behavior = ns.receptor_glow_behavior;
+                    let (alpha, zoom) = behavior.sample(glow_timer);
+                    if alpha > f32::EPSILON {
+                        let width = glow_size[0] * zoom;
+                        let height = glow_size[1] * zoom;
+                        if behavior.blend_add {
+                            actors.push(act!(sprite(glow_slot.texture_key().to_string()):
+                                align(0.5, 0.5):
+                                xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                                setsize(width, height):
+                                rotationz(-glow_slot.def.rotation_deg as f32):
+                                customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
+                                diffuse(1.0, 1.0, 1.0, alpha):
+                                blend(add):
+                                z(Z_HOLD_GLOW)
+                            ));
+                        } else {
+                            actors.push(act!(sprite(glow_slot.texture_key().to_string()):
+                                align(0.5, 0.5):
+                                xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                                setsize(width, height):
+                                rotationz(-glow_slot.def.rotation_deg as f32):
+                                customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
+                                diffuse(1.0, 1.0, 1.0, alpha):
+                                blend(normal):
+                                z(Z_HOLD_GLOW)
+                            ));
+                        }
+                    }
                 }
             }
         }
@@ -1414,9 +1623,12 @@ pub fn build(
                         state.current_beat
                     };
                     let frame = slot.frame_index(anim_time, beat_for_anim);
-                    let uv = slot.uv_for_frame(frame);
-                    let size = scale_explosion(slot.size());
+                    let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
+                    let size = scale_explosion(logical_slot_size(slot));
                     let visual = explosion.animation.state_at(active.elapsed);
+                    if !visual.visible {
+                        continue;
+                    }
                     let rotation_deg = ns
                         .receptor_off
                         .get(i)
@@ -1651,19 +1863,21 @@ pub fn build(
             let mut body_top = top;
             let mut body_bottom = bottom;
             if let Some(cap_slot) = tail_slot {
-                let cap_size = scale_sprite(cap_slot.size());
+                let cap_size = scale_cap(cap_slot.size());
                 let cap_height = cap_size[1];
                 if cap_height > f32::EPSILON {
-                    // Keep the body from poking through the bottom cap, but allow
-                    // a tiny overlap so the seam stays hidden like ITGmania.
+                    // ITGmania joins hold body to cap at the tail edge (with a tiny overlap),
+                    // not at the cap midpoint. Keep the body clipped to that join line.
                     if head_is_top {
-                        // Tail visually at the bottom; trim the body bottom.
-                        let cap_top = tail_y - cap_height * 0.5;
-                        body_bottom = body_bottom.min(cap_top + 1.0);
+                        body_bottom = body_bottom.min(tail_y + 1.0);
+                        if body_bottom >= tail_y - 1.0 {
+                            body_bottom = tail_y + 1.0;
+                        }
                     } else {
-                        // Tail visually at the top; trim the body top.
-                        let cap_bottom = tail_y + cap_height * 0.5;
-                        body_top = body_top.max(cap_bottom - 1.0);
+                        body_top = body_top.max(tail_y - 1.0);
+                        if body_top <= tail_y + 1.0 {
+                            body_top = tail_y - 1.0;
+                        }
                     }
                 }
             }
@@ -1691,7 +1905,7 @@ pub fn build(
                     let body_width = TARGET_ARROW_PIXEL_SIZE * field_zoom;
                     let scale = body_width / texture_width;
                     let segment_height = (texture_height * scale).max(f32::EPSILON);
-                    let body_uv = body_slot.uv_for_frame(0);
+                    let body_uv = body_slot.uv_for_frame_at(0, state.total_elapsed_in_screen);
                     let u0 = body_uv[0];
                     let u1 = body_uv[2];
                     let v_top = body_uv[1];
@@ -1805,11 +2019,16 @@ pub fn build(
                             let segment_size_eff = segment_bottom_eff - segment_top_eff;
                             let portion = (segment_size_eff / segment_height).clamp(0.0, 1.0);
 
-                            let is_last_segment = (eff_body_bottom - segment_bottom_eff).abs()
+                            // Tail UV snapping should only happen when this drawn chunk
+                            // actually reaches the tail side. If the tail is offscreen,
+                            // snapping the viewport cut to v_bottom creates a darker seam.
+                            let tail_gap = (eff_natural_bottom - eff_body_bottom).max(0.0);
+                            let body_reaches_tail = eff_head_is_top && tail_gap <= segment_height + 1.0;
+                            let is_last_visible_segment = (eff_body_bottom - segment_bottom_eff).abs()
                                 <= 0.5
                                 || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
 
-                            if is_last_segment {
+                            if body_reaches_tail && is_last_visible_segment {
                                 if v_range >= 0.0 {
                                     v1 = v_bottom;
                                     v0 = v_bottom - v_range.abs() * portion;
@@ -1879,11 +2098,10 @@ pub fn build(
             if let Some(cap_slot) = tail_slot {
                 let tail_position = tail_y;
                 if tail_position > -400.0 && tail_position < screen_height() + 400.0 {
-                    let cap_uv = cap_slot.uv_for_frame(0);
-                    let cap_size = scale_sprite(cap_slot.size());
+                    let cap_uv = cap_slot.uv_for_frame_at(0, state.total_elapsed_in_screen);
+                    let cap_size = scale_cap(cap_slot.size());
                     let cap_width = cap_size[0];
                     let mut cap_height = cap_size[1];
-                    let mut cap_center = tail_position;
                     let u0 = cap_uv[0];
                     let u1 = cap_uv[2];
                     let mut v0 = cap_uv[1];
@@ -1909,9 +2127,19 @@ pub fn build(
                     if !cap_adjacent_ok {
                         continue;
                     }
+                    // Anchor cap join to the actual rendered body edge. This avoids
+                    // sub-pixel drift leaving a 1px seam at the body/cap boundary.
+                    let mut cap_top;
+                    let mut cap_bottom;
+                    if head_is_top {
+                        cap_top = rb;
+                        cap_bottom = cap_top + cap_height;
+                    } else {
+                        cap_bottom = rt;
+                        cap_top = cap_bottom - cap_height;
+                    }
+                    let mut cap_center = (cap_top + cap_bottom) * 0.5;
                     if cap_height > f32::EPSILON {
-                        let mut cap_top = cap_center - cap_height * 0.5;
-                        let mut cap_bottom = cap_center + cap_height * 0.5;
                         let v_span = v1 - v0;
                         if head_is_top {
                             let head_limit = top;
@@ -1961,29 +2189,145 @@ pub fn build(
                     }
                 }
             }
-            if (hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo))
-                && head_y >= lane_receptor_y - state.draw_distance_after_targets
-                && head_y <= lane_receptor_y + state.draw_distance_before_targets
+            let should_draw_hold_head =
+                hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo);
+            let head_draw_y = if engaged { lane_receptor_y } else { head_y };
+            if should_draw_hold_head
+                && head_draw_y >= lane_receptor_y - state.draw_distance_after_targets
+                && head_draw_y <= lane_receptor_y + state.draw_distance_before_targets
             {
                 let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
-                if let Some(note_slot) = ns.notes.get(note_idx) {
-                    let frame = note_slot.frame_index(state.total_elapsed_in_screen, current_beat);
-                    let uv = note_slot.uv_for_frame(frame);
+                let head_center = [playfield_center_x + col_x_offset, head_draw_y];
+                let elapsed = state.total_elapsed_in_screen;
+                let note_uv_phase = ns.tap_note_uv_phase(elapsed, current_beat, note.beat);
+                if let Some(note_slots) = ns.note_layers.get(note_idx) {
+                    let primary_h = note_slots
+                        .first()
+                        .map(|slot| slot.size()[1].max(1) as f32)
+                        .unwrap_or(1.0);
+                    let note_scale = if primary_h > f32::EPSILON {
+                        target_arrow_px / primary_h
+                    } else {
+                        1.0
+                    };
+                    for (layer_idx, note_slot) in note_slots.iter().enumerate() {
+                        let draw = note_slot.model_draw_at(elapsed, current_beat);
+                        if !draw.visible {
+                            continue;
+                        }
+                        let frame = note_slot.frame_index(elapsed, current_beat);
+                        let uv_elapsed = if note_slot.model.is_some() {
+                            note_uv_phase
+                        } else {
+                            elapsed
+                        };
+                        let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
+                        let slot_size = note_slot.size();
+                        let base_size = [slot_size[0] as f32 * note_scale, slot_size[1] as f32 * note_scale];
+                        let offset_scale = note_scale;
+                        let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
+                        let (sin_r, cos_r) = rot_rad.sin_cos();
+                        let ox = draw.pos[0] * offset_scale;
+                        let oy = draw.pos[1] * offset_scale;
+                        let offset = [ox * cos_r - oy * sin_r, ox * sin_r + oy * cos_r];
+                        let center = [
+                            head_center[0] + offset[0],
+                            head_center[1] + offset[1],
+                        ];
+                        let size = [
+                            base_size[0] * draw.zoom[0].max(0.0),
+                            base_size[1] * draw.zoom[1].max(0.0),
+                        ];
+                        if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+                            continue;
+                        }
+                        let color = [
+                            draw.tint[0] * hold_diffuse[0],
+                            draw.tint[1] * hold_diffuse[1],
+                            draw.tint[2] * hold_diffuse[2],
+                            draw.tint[3] * hold_diffuse[3],
+                        ];
+                        let layer_z = Z_TAP_NOTE + layer_idx as i32;
+                        let blend = if draw.blend_add {
+                            BlendMode::Add
+                        } else {
+                            BlendMode::Alpha
+                        };
+                        if let Some(model_actor) = noteskin_model_actor(
+                            note_slot,
+                            center,
+                            size,
+                            uv,
+                            -note_slot.def.rotation_deg as f32,
+                            elapsed,
+                            current_beat,
+                            color,
+                            blend,
+                            layer_z as i16,
+                        ) {
+                            actors.push(model_actor);
+                        } else if draw.blend_add {
+                            actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                align(0.5, 0.5):
+                                xy(center[0], center[1]):
+                                setsize(size[0], size[1]):
+                                rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
+                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                diffuse(color[0], color[1], color[2], color[3]):
+                                blend(add):
+                                z(layer_z)
+                            ));
+                        } else {
+                            actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                align(0.5, 0.5):
+                                xy(center[0], center[1]):
+                                setsize(size[0], size[1]):
+                                rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
+                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                diffuse(color[0], color[1], color[2], color[3]):
+                                blend(normal):
+                                z(layer_z)
+                            ));
+                        }
+                    }
+                } else if let Some(note_slot) = ns.notes.get(note_idx) {
+                    let frame = note_slot.frame_index(elapsed, current_beat);
+                    let uv_elapsed = if note_slot.model.is_some() {
+                        note_uv_phase
+                    } else {
+                        elapsed
+                    };
+                    let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
                     let size = scale_sprite(note_slot.size());
-                    actors.push(act!(sprite(note_slot.texture_key().to_string()):
-                        align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset, head_y):
-                        setsize(size[0], size[1]):
-                        rotationz(-note_slot.def.rotation_deg as f32):
-                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                        diffuse(
-                            hold_diffuse[0],
-                            hold_diffuse[1],
-                            hold_diffuse[2],
-                            hold_diffuse[3]
-                        ):
-                        z(Z_TAP_NOTE)
-                    ));
+                    if let Some(model_actor) = noteskin_model_actor(
+                        note_slot,
+                        head_center,
+                        size,
+                        uv,
+                        -note_slot.def.rotation_deg as f32,
+                        elapsed,
+                        current_beat,
+                        hold_diffuse,
+                        BlendMode::Alpha,
+                        Z_TAP_NOTE as i16,
+                    ) {
+                        actors.push(model_actor);
+                    } else {
+                        actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                            align(0.5, 0.5):
+                            xy(head_center[0], head_center[1]):
+                            setsize(size[0], size[1]):
+                            rotationz(-note_slot.def.rotation_deg as f32):
+                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                            diffuse(
+                                hold_diffuse[0],
+                                hold_diffuse[1],
+                                hold_diffuse[2],
+                                hold_diffuse[3]
+                            ):
+                            z(Z_TAP_NOTE)
+                        ));
+                    }
                 }
             }
         }
@@ -2032,6 +2376,8 @@ pub fn build(
                         .unwrap_or(0.0);
                     let time = state.total_elapsed_in_screen;
                     let beat = current_beat;
+                    let mine_note_beat = state.notes[arrow.note_index].beat;
+                    let mine_uv_phase = ns.tap_mine_uv_phase(time, beat, mine_note_beat);
                     let circle_reference = frame_slot
                         .map(|slot| scale_sprite(slot.size()))
                         .or_else(|| fill_slot.map(|slot| scale_sprite(slot.size())))
@@ -2044,8 +2390,9 @@ pub fn build(
                             .mine_fill_gradients
                             .get(col_idx)
                             .and_then(|colors| colors.as_deref());
-                        if let Some(fill_state) =
-                            fill_gradient.and_then(|colors| mine_fill_state(colors, current_beat))
+                        if slot.model.is_none()
+                            && let Some(fill_state) =
+                                fill_gradient.and_then(|colors| mine_fill_state(colors, current_beat))
                         {
                             let width = circle_reference[0] * MINE_CORE_SIZE_RATIO;
                             let height = circle_reference[1] * MINE_CORE_SIZE_RATIO;
@@ -2067,53 +2414,207 @@ pub fn build(
                             }
                         } else {
                             let frame = slot.frame_index(time, beat);
-                            let uv = slot.uv_for_frame(frame);
+                            let uv_elapsed = if slot.model.is_some() {
+                                mine_uv_phase
+                            } else {
+                                state.total_elapsed_in_screen
+                            };
+                            let uv = slot.uv_for_frame_at(frame, uv_elapsed);
                             let size = scale_sprite(slot.size());
                             let width = size[0];
                             let height = size[1];
                             let rotation = base_rotation - time * 45.0;
-                            actors.push(act!(sprite(slot.texture_key().to_string()):
-                                align(0.5, 0.5):
-                                xy(playfield_center_x + col_x_offset, y_pos):
-                                setsize(width, height):
-                                rotationz(rotation):
-                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                diffuse(1.0, 1.0, 1.0, 0.9):
-                                z(Z_TAP_NOTE - 1)
-                            ));
+                            let center = [playfield_center_x + col_x_offset, y_pos];
+                            if let Some(model_actor) = noteskin_model_actor(
+                                slot,
+                                center,
+                                [width, height],
+                                uv,
+                                rotation,
+                                time,
+                                beat,
+                                [1.0, 1.0, 1.0, 0.9],
+                                BlendMode::Alpha,
+                                (Z_TAP_NOTE - 1) as i16,
+                            ) {
+                                actors.push(model_actor);
+                            } else {
+                                actors.push(act!(sprite(slot.texture_key().to_string()):
+                                    align(0.5, 0.5):
+                                    xy(center[0], center[1]):
+                                    setsize(width, height):
+                                    rotationz(rotation):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    diffuse(1.0, 1.0, 1.0, 0.9):
+                                    z(Z_TAP_NOTE - 1)
+                                ));
+                            }
                         }
                     }
                     if let Some(slot) = frame_slot {
                         let frame = slot.frame_index(time, beat);
-                        let uv = slot.uv_for_frame(frame);
+                        let uv_elapsed = if slot.model.is_some() {
+                            mine_uv_phase
+                        } else {
+                            state.total_elapsed_in_screen
+                        };
+                        let uv = slot.uv_for_frame_at(frame, uv_elapsed);
                         let size = scale_sprite(slot.size());
                         let rotation = base_rotation + time * 120.0;
-                        actors.push(act!(sprite(slot.texture_key().to_string()):
-                            align(0.5, 0.5):
-                            xy(playfield_center_x + col_x_offset, y_pos):
-                            setsize(size[0], size[1]):
-                            rotationz(rotation):
-                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                            z(Z_TAP_NOTE)
-                        ));
+                        let center = [playfield_center_x + col_x_offset, y_pos];
+                        if let Some(model_actor) = noteskin_model_actor(
+                            slot,
+                            center,
+                            size,
+                            uv,
+                            rotation,
+                            time,
+                            beat,
+                            [1.0, 1.0, 1.0, 1.0],
+                            BlendMode::Alpha,
+                            Z_TAP_NOTE as i16,
+                        ) {
+                            actors.push(model_actor);
+                        } else {
+                            actors.push(act!(sprite(slot.texture_key().to_string()):
+                                align(0.5, 0.5):
+                                xy(center[0], center[1]):
+                                setsize(size[0], size[1]):
+                                rotationz(rotation):
+                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                z(Z_TAP_NOTE)
+                            ));
+                        }
                     }
                     continue;
                 }
                 let note = &state.notes[arrow.note_index];
                 let note_idx = col_idx * NUM_QUANTIZATIONS + note.quantization_idx as usize;
-                if let Some(note_slot) = ns.notes.get(note_idx) {
-                    let note_frame =
-                        note_slot.frame_index(state.total_elapsed_in_screen, current_beat);
-                    let note_uv = note_slot.uv_for_frame(note_frame);
+                if let Some(note_slots) = ns.note_layers.get(note_idx) {
+                    let note_center = [playfield_center_x + col_x_offset, y_pos];
+                    let elapsed = state.total_elapsed_in_screen;
+                    let note_uv_phase = ns.tap_note_uv_phase(elapsed, current_beat, note.beat);
+                    let primary_h = note_slots
+                        .first()
+                        .map(|slot| slot.size()[1].max(1) as f32)
+                        .unwrap_or(1.0);
+                    let note_scale = if primary_h > f32::EPSILON {
+                        target_arrow_px / primary_h
+                    } else {
+                        1.0
+                    };
+                    for (layer_idx, note_slot) in note_slots.iter().enumerate() {
+                        let draw = note_slot.model_draw_at(elapsed, current_beat);
+                        if !draw.visible {
+                            continue;
+                        }
+                        let note_frame = note_slot.frame_index(elapsed, current_beat);
+                        let uv_elapsed = if note_slot.model.is_some() {
+                            note_uv_phase
+                        } else {
+                            elapsed
+                        };
+                        let note_uv = note_slot.uv_for_frame_at(note_frame, uv_elapsed);
+                        let slot_size = note_slot.size();
+                        let base_size = [slot_size[0] as f32 * note_scale, slot_size[1] as f32 * note_scale];
+                        let offset_scale = note_scale;
+                        let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
+                        let (sin_r, cos_r) = rot_rad.sin_cos();
+                        let ox = draw.pos[0] * offset_scale;
+                        let oy = draw.pos[1] * offset_scale;
+                        let offset = [ox * cos_r - oy * sin_r, ox * sin_r + oy * cos_r];
+                        let center = [
+                            note_center[0] + offset[0],
+                            note_center[1] + offset[1],
+                        ];
+                        let note_size = [
+                            base_size[0] * draw.zoom[0].max(0.0),
+                            base_size[1] * draw.zoom[1].max(0.0),
+                        ];
+                        if note_size[0] <= f32::EPSILON || note_size[1] <= f32::EPSILON {
+                            continue;
+                        }
+                        let layer_z = Z_TAP_NOTE + layer_idx as i32;
+                        let blend = if draw.blend_add {
+                            BlendMode::Add
+                        } else {
+                            BlendMode::Alpha
+                        };
+                        let color = draw.tint;
+                        if let Some(model_actor) = noteskin_model_actor(
+                            note_slot,
+                            center,
+                            note_size,
+                            note_uv,
+                            -note_slot.def.rotation_deg as f32,
+                            elapsed,
+                            current_beat,
+                            color,
+                            blend,
+                            layer_z as i16,
+                        ) {
+                            actors.push(model_actor);
+                        } else {
+                            if draw.blend_add {
+                                actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                    align(0.5, 0.5):
+                                    xy(center[0], center[1]):
+                                    setsize(note_size[0], note_size[1]):
+                                    rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
+                                    customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
+                                    diffuse(color[0], color[1], color[2], color[3]):
+                                    blend(add):
+                                    z(layer_z)
+                                ));
+                            } else {
+                                actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                    align(0.5, 0.5):
+                                    xy(center[0], center[1]):
+                                    setsize(note_size[0], note_size[1]):
+                                    rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
+                                    customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
+                                    diffuse(color[0], color[1], color[2], color[3]):
+                                    blend(normal):
+                                    z(layer_z)
+                                ));
+                            }
+                        }
+                    }
+                } else if let Some(note_slot) = ns.notes.get(note_idx) {
+                    let elapsed = state.total_elapsed_in_screen;
+                    let note_uv_phase = ns.tap_note_uv_phase(elapsed, current_beat, note.beat);
+                    let note_frame = note_slot.frame_index(elapsed, current_beat);
+                    let uv_elapsed = if note_slot.model.is_some() {
+                        note_uv_phase
+                    } else {
+                        elapsed
+                    };
+                    let note_uv = note_slot.uv_for_frame_at(note_frame, uv_elapsed);
                     let note_size = scale_sprite(note_slot.size());
-                    actors.push(act!(sprite(note_slot.texture_key().to_string()):
-                        align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset, y_pos):
-                        setsize(note_size[0], note_size[1]):
-                        rotationz(-note_slot.def.rotation_deg as f32):
-                        customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
-                        z(Z_TAP_NOTE)
-                    ));
+                    let center = [playfield_center_x + col_x_offset, y_pos];
+                    if let Some(model_actor) = noteskin_model_actor(
+                        note_slot,
+                        center,
+                        note_size,
+                        note_uv,
+                        -note_slot.def.rotation_deg as f32,
+                        elapsed,
+                        current_beat,
+                        [1.0, 1.0, 1.0, 1.0],
+                        BlendMode::Alpha,
+                        Z_TAP_NOTE as i16,
+                    ) {
+                        actors.push(model_actor);
+                    } else {
+                        actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                            align(0.5, 0.5):
+                            xy(center[0], center[1]):
+                            setsize(note_size[0], note_size[1]):
+                            rotationz(-note_slot.def.rotation_deg as f32):
+                            customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
+                            z(Z_TAP_NOTE)
+                        ));
+                    }
                 }
             }
         }

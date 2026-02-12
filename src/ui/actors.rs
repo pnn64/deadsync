@@ -1,4 +1,4 @@
-use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
+use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
 use cgmath::Matrix4;
 use std::sync::Arc;
 
@@ -99,6 +99,19 @@ pub enum Actor {
         offset: [f32; 2],
         size: [SizeSpec; 2],
         vertices: Arc<[MeshVertex]>,
+        mode: MeshMode,
+        visible: bool,
+        blend: BlendMode,
+        z: i16,
+    },
+
+    /// Textured mesh actor (model-style triangles with UVs)
+    TexturedMesh {
+        align: [f32; 2],
+        offset: [f32; 2],
+        size: [SizeSpec; 2],
+        texture: String,
+        vertices: Arc<[TexturedMeshVertex]>,
         mode: MeshMode,
         visible: bool,
         blend: BlendMode,

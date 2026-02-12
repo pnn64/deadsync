@@ -22,14 +22,25 @@ use winit::window::Window;
 #[derive(Debug, Clone, Copy)]
 pub struct Texture(pub glow::Texture);
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct TexturedMeshVertexRaw {
+    pos: [f32; 2],
+    uv: [f32; 2],
+    color: [f32; 4],
+}
+
 pub struct State {
     pub gl: glow::Context,
     gl_surface: Surface<WindowSurface>,
     gl_context: PossiblyCurrentContext,
     program: glow::Program,
     mesh_program: glow::Program,
+    tmesh_program: glow::Program,
     mvp_location: UniformLocation,
     mesh_mvp_location: UniformLocation,
+    tmesh_mvp_location: UniformLocation,
+    tmesh_texture_location: UniformLocation,
     color_location: UniformLocation,
     texture_location: UniformLocation,
     projection: Matrix4<f32>,
@@ -41,6 +52,8 @@ pub struct State {
     index_count: i32,
     mesh_vao: glow::VertexArray,
     mesh_vbo: glow::Buffer,
+    tmesh_vao: glow::VertexArray,
+    tmesh_vbo: glow::Buffer,
     uv_scale_location: UniformLocation,
     uv_offset_location: UniformLocation,
     edge_fade_location: UniformLocation,
@@ -70,6 +83,7 @@ pub fn init(
         instanced_location,
     ) = create_graphics_program(&gl)?;
     let (mesh_program, mesh_mvp_location) = create_mesh_program(&gl)?;
+    let (tmesh_program, tmesh_mvp_location, tmesh_texture_location) = create_tmesh_program(&gl)?;
 
     // Create shared static unit quad + index buffer.
     let (shared_vao, _shared_vbo, _shared_ibo, index_count) = unsafe {
@@ -145,6 +159,40 @@ pub fn init(
         gl.bind_vertex_array(None);
         (vao, vbo)
     };
+    let (tmesh_vao, tmesh_vbo) = unsafe {
+        let vao = gl.create_vertex_array()?;
+        let vbo = gl.create_buffer()?;
+
+        gl.bind_vertex_array(Some(vao));
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+        gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
+
+        // a_pos (location 0), a_uv (location 1), a_color (location 2)
+        let stride = std::mem::size_of::<TexturedMeshVertexRaw>() as i32;
+        gl.enable_vertex_attrib_array(0);
+        gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+        gl.enable_vertex_attrib_array(1);
+        gl.vertex_attrib_pointer_f32(
+            1,
+            2,
+            glow::FLOAT,
+            false,
+            stride,
+            (2 * std::mem::size_of::<f32>()) as i32,
+        );
+        gl.enable_vertex_attrib_array(2);
+        gl.vertex_attrib_pointer_f32(
+            2,
+            4,
+            glow::FLOAT,
+            false,
+            stride,
+            (4 * std::mem::size_of::<f32>()) as i32,
+        );
+
+        gl.bind_vertex_array(None);
+        (vao, vbo)
+    };
 
     let initial_size = window.inner_size();
     let projection = ortho_for_window(initial_size.width, initial_size.height);
@@ -169,8 +217,11 @@ pub fn init(
         gl_context,
         program,
         mesh_program,
+        tmesh_program,
         mvp_location,
         mesh_mvp_location,
+        tmesh_mvp_location,
+        tmesh_texture_location,
         color_location,
         texture_location,
         projection,
@@ -181,6 +232,8 @@ pub fn init(
         index_count,
         mesh_vao,
         mesh_vbo,
+        tmesh_vao,
+        tmesh_vbo,
         uv_scale_location,
         uv_offset_location,
         edge_fade_location,
@@ -310,7 +363,7 @@ pub fn draw(
         let mut last_uv_offset: Option<[f32; 2]> = None;
         let mut last_color: Option<[f32; 4]> = None;
         let mut last_edge_fade: Option<[f32; 4]> = None;
-        let mut last_is_mesh: Option<bool> = None;
+        let mut last_prog: Option<u8> = None; // 0=sprite, 1=mesh, 2=textured mesh
 
         for obj in &render_list.objects {
             apply_blend(gl, obj.blend, &mut last_blend);
@@ -329,12 +382,12 @@ pub fn draw(
                     uv_offset,
                     edge_fade,
                 } => {
-                    if last_is_mesh != Some(false) {
+                    if last_prog != Some(0) {
                         gl.use_program(Some(state.program));
                         gl.bind_vertex_array(Some(state.shared_vao));
                         gl.uniform_1_i32(Some(&state.texture_location), 0);
                         gl.uniform_1_i32(Some(&state.instanced_location), 0);
-                        last_is_mesh = Some(false);
+                        last_prog = Some(0);
                     }
 
                     let mvp_array: [[f32; 4]; 4] = (cam * obj.transform).into();
@@ -387,10 +440,10 @@ pub fn draw(
                     if vs.is_empty() {
                         continue;
                     }
-                    if last_is_mesh != Some(true) {
+                    if last_prog != Some(1) {
                         gl.use_program(Some(state.mesh_program));
                         gl.bind_vertex_array(Some(state.mesh_vao));
-                        last_is_mesh = Some(true);
+                        last_prog = Some(1);
                     }
 
                     let mvp_array: [[f32; 4]; 4] = (cam * obj.transform).into();
@@ -412,6 +465,60 @@ pub fn draw(
                     };
                     gl.draw_arrays(prim, 0, vs.len() as i32);
                     vertices = vertices.saturating_add(vs.len() as u32);
+                }
+                ObjectType::TexturedMesh {
+                    texture_id,
+                    vertices: vs,
+                    mode,
+                } => {
+                    if vs.is_empty() {
+                        continue;
+                    }
+                    if last_prog != Some(2) {
+                        gl.use_program(Some(state.tmesh_program));
+                        gl.bind_vertex_array(Some(state.tmesh_vao));
+                        gl.uniform_1_i32(Some(&state.tmesh_texture_location), 0);
+                        last_prog = Some(2);
+                    }
+
+                    let mvp_array: [[f32; 4]; 4] = (cam * obj.transform).into();
+                    gl.uniform_matrix_4_f32_slice(
+                        Some(&state.tmesh_mvp_location),
+                        false,
+                        bytemuck::cast_slice(&mvp_array),
+                    );
+
+                    let Some(RendererTexture::OpenGL(gl_tex)) = textures.get(texture_id.as_ref())
+                    else {
+                        continue;
+                    };
+                    if last_bound_tex != Some(gl_tex.0) {
+                        gl.bind_texture(glow::TEXTURE_2D, Some(gl_tex.0));
+                        last_bound_tex = Some(gl_tex.0);
+                    }
+
+                    let mut transformed: Vec<TexturedMeshVertexRaw> =
+                        Vec::with_capacity(vs.len());
+                    for v in vs.iter() {
+                        transformed.push(TexturedMeshVertexRaw {
+                            pos: v.pos,
+                            uv: v.uv,
+                            color: v.color,
+                        });
+                    }
+
+                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_vbo));
+                    gl.buffer_data_u8_slice(
+                        glow::ARRAY_BUFFER,
+                        bytemuck::cast_slice(transformed.as_slice()),
+                        glow::DYNAMIC_DRAW,
+                    );
+
+                    let prim = match mode {
+                        MeshMode::Triangles => glow::TRIANGLES,
+                    };
+                    gl.draw_arrays(prim, 0, transformed.len() as i32);
+                    vertices = vertices.saturating_add(transformed.len() as u32);
                 }
             }
         }
@@ -444,11 +551,14 @@ pub fn cleanup(state: &mut State) {
     unsafe {
         state.gl.delete_program(state.program);
         state.gl.delete_program(state.mesh_program);
+        state.gl.delete_program(state.tmesh_program);
         state.gl.delete_vertex_array(state.shared_vao);
         state.gl.delete_buffer(state._shared_vbo);
         state.gl.delete_buffer(state._shared_ibo);
         state.gl.delete_vertex_array(state.mesh_vao);
         state.gl.delete_buffer(state.mesh_vbo);
+        state.gl.delete_vertex_array(state.tmesh_vao);
+        state.gl.delete_buffer(state.tmesh_vbo);
     }
     info!("OpenGL resources cleaned up.");
 }
@@ -697,6 +807,60 @@ fn create_mesh_program(gl: &glow::Context) -> Result<(glow::Program, UniformLoca
             .ok_or_else(|| "u_model_view_proj".to_string())?;
 
         Ok((program, mvp_location))
+    }
+}
+
+fn create_tmesh_program(
+    gl: &glow::Context,
+) -> Result<(glow::Program, UniformLocation, UniformLocation), String> {
+    unsafe {
+        let program = gl.create_program()?;
+        let compile = |ty, src: &str| -> Result<glow::Shader, String> {
+            let sh = gl.create_shader(ty)?;
+            gl.shader_source(sh, src);
+            gl.compile_shader(sh);
+            if !gl.get_shader_compile_status(sh) {
+                let log = gl.get_shader_info_log(sh);
+                gl.delete_shader(sh);
+                return Err(log);
+            }
+            Ok(sh)
+        };
+
+        let vert = compile(
+            glow::VERTEX_SHADER,
+            include_str!("../shaders/opengl_tmesh.vert"),
+        )?;
+        let frag = compile(
+            glow::FRAGMENT_SHADER,
+            include_str!("../shaders/opengl_tmesh.frag"),
+        )?;
+
+        gl.attach_shader(program, vert);
+        gl.attach_shader(program, frag);
+        gl.link_program(program);
+        if !gl.get_program_link_status(program) {
+            let log = gl.get_program_info_log(program);
+            gl.detach_shader(program, vert);
+            gl.detach_shader(program, frag);
+            gl.delete_shader(vert);
+            gl.delete_shader(frag);
+            gl.delete_program(program);
+            return Err(log);
+        }
+        gl.detach_shader(program, vert);
+        gl.detach_shader(program, frag);
+        gl.delete_shader(vert);
+        gl.delete_shader(frag);
+
+        let mvp_location = gl
+            .get_uniform_location(program, "u_model_view_proj")
+            .ok_or_else(|| "u_model_view_proj".to_string())?;
+        let texture_location = gl
+            .get_uniform_location(program, "u_texture")
+            .ok_or_else(|| "u_texture".to_string())?;
+
+        Ok((program, mvp_location, texture_location))
     }
 }
 

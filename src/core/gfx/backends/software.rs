@@ -181,6 +181,32 @@ pub fn draw(
                                     );
                                 }
                             },
+                            ObjectType::TexturedMesh {
+                                texture_id,
+                                vertices,
+                                mode,
+                            } => match mode {
+                                MeshMode::Triangles => {
+                                    let tex_key = texture_id.as_ref();
+                                    let Some(RendererTexture::Software(tex)) = textures.get(tex_key)
+                                    else {
+                                        continue;
+                                    };
+                                    local_vertices += rasterize_textured_mesh_triangles(
+                                        &proj,
+                                        &obj.transform,
+                                        vertices.as_ref(),
+                                        obj.blend,
+                                        &tex.image,
+                                        tex.sampler,
+                                        width,
+                                        height,
+                                        y_start,
+                                        y_end,
+                                        stripe,
+                                    );
+                                }
+                            },
                         }
                     }
 
@@ -234,6 +260,31 @@ pub fn draw(
                         h,
                         &mut buffer,
                     ),
+                },
+                ObjectType::TexturedMesh {
+                    texture_id,
+                    vertices,
+                    mode,
+                } => match mode {
+                    MeshMode::Triangles => {
+                        let tex_key = texture_id.as_ref();
+                        let Some(RendererTexture::Software(tex)) = textures.get(tex_key) else {
+                            continue;
+                        };
+                        rasterize_textured_mesh_triangles(
+                            &proj,
+                            &obj.transform,
+                            vertices.as_ref(),
+                            obj.blend,
+                            &tex.image,
+                            tex.sampler,
+                            w,
+                            h,
+                            0,
+                            h,
+                            &mut buffer,
+                        )
+                    }
                 },
             };
             vertex_counter.fetch_add(v, Ordering::Relaxed);
@@ -289,6 +340,15 @@ struct ScreenVertex {
 struct ScreenVertexColor {
     x: f32,
     y: f32,
+    color: [f32; 4],
+}
+
+#[derive(Clone, Copy)]
+struct ScreenVertexTexColor {
+    x: f32,
+    y: f32,
+    u: f32,
+    v: f32,
     color: [f32; 4],
 }
 
@@ -431,6 +491,78 @@ fn rasterize_mesh_triangles(
             &tri[1],
             &tri[2],
             blend,
+            width,
+            height,
+            stripe_y_start,
+            stripe_y_end,
+            buffer,
+        );
+        verts_drawn = verts_drawn.saturating_add(3);
+    }
+
+    verts_drawn
+}
+
+fn rasterize_textured_mesh_triangles(
+    proj: &Matrix4<f32>,
+    transform: &Matrix4<f32>,
+    vertices: &[crate::core::gfx::TexturedMeshVertex],
+    blend: BlendMode,
+    image: &RgbaImage,
+    sampler: SamplerDesc,
+    width: usize,
+    height: usize,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
+    buffer: &mut [u32],
+) -> u32 {
+    if vertices.len() < 3 || width == 0 || height == 0 || stripe_y_start >= stripe_y_end {
+        return 0;
+    }
+
+    let mvp = *proj * *transform;
+    let mut tri: [ScreenVertexTexColor; 3] = [ScreenVertexTexColor {
+        x: 0.0,
+        y: 0.0,
+        u: 0.0,
+        v: 0.0,
+        color: [0.0; 4],
+    }; 3];
+    let sampler = SamplerDesc {
+        wrap: SamplerWrap::Repeat,
+        ..sampler
+    };
+
+    let mut verts_drawn = 0u32;
+    'tri: for chunk in vertices.chunks_exact(3) {
+        for i in 0..3 {
+            let p = chunk[i].pos;
+            let clip = mvp * Vector4::new(p[0], p[1], 0.0, 1.0);
+            if clip.w == 0.0 {
+                continue 'tri;
+            }
+            let ndc_x = clip.x / clip.w;
+            let ndc_y = clip.y / clip.w;
+            if !ndc_x.is_finite() || !ndc_y.is_finite() {
+                continue 'tri;
+            }
+
+            tri[i] = ScreenVertexTexColor {
+                x: ((ndc_x + 1.0) * 0.5) * width as f32,
+                y: ((1.0 - ndc_y) * 0.5) * height as f32,
+                u: chunk[i].uv[0],
+                v: chunk[i].uv[1],
+                color: chunk[i].color,
+            };
+        }
+
+        rasterize_triangle_tex_color(
+            &tri[0],
+            &tri[1],
+            &tri[2],
+            blend,
+            image,
+            sampler,
             width,
             height,
             stripe_y_start,
@@ -666,6 +798,234 @@ fn rasterize_triangle(
                 }
             };
 
+            buffer[dst_idx] = pack_rgba([out_r, out_g, out_b, out_a]);
+        }
+    }
+}
+
+#[inline(always)]
+fn rasterize_triangle_tex_color(
+    v0: &ScreenVertexTexColor,
+    v1: &ScreenVertexTexColor,
+    v2: &ScreenVertexTexColor,
+    blend: BlendMode,
+    image: &RgbaImage,
+    sampler: SamplerDesc,
+    width: usize,
+    height: usize,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
+    buffer: &mut [u32],
+) {
+    let min_x = v0.x.min(v1.x).min(v2.x).floor().max(0.0) as i32;
+    let max_x = v0.x.max(v1.x).max(v2.x).ceil().min((width - 1) as f32) as i32;
+    let mut min_y = v0.y.min(v1.y).min(v2.y).floor().max(0.0) as i32;
+    let mut max_y = v0.y.max(v1.y).max(v2.y).ceil().min((height - 1) as f32) as i32;
+
+    if min_x > max_x || min_y > max_y {
+        return;
+    }
+
+    let stripe_start = stripe_y_start as i32;
+    let stripe_end = (stripe_y_end as i32) - 1;
+    if stripe_start > stripe_end || max_y < stripe_start || min_y > stripe_end {
+        return;
+    }
+    min_y = min_y.max(stripe_start);
+    max_y = max_y.min(stripe_end);
+
+    let denom = edge_function(v0.x, v0.y, v1.x, v1.y, v2.x, v2.y);
+    if denom == 0.0 {
+        return;
+    }
+    let inv_denom = 1.0 / denom;
+
+    let tex_w = image.width().max(1) as usize;
+    let tex_h = image.height().max(1) as usize;
+    let tex_data = image.as_raw();
+
+    #[inline(always)]
+    fn wrap_uv(u: f32, wrap: SamplerWrap) -> f32 {
+        match wrap {
+            SamplerWrap::Clamp => u.clamp(0.0, 1.0),
+            SamplerWrap::Repeat => {
+                let mut f = u.fract();
+                if f < 0.0 {
+                    f += 1.0;
+                }
+                f
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn wrap_index(i: i32, max: usize, wrap: SamplerWrap) -> usize {
+        match wrap {
+            SamplerWrap::Clamp => i.clamp(0, max.saturating_sub(1) as i32) as usize,
+            SamplerWrap::Repeat => {
+                let m = max as i32;
+                if m == 0 {
+                    0
+                } else {
+                    let mut v = i % m;
+                    if v < 0 {
+                        v += m;
+                    }
+                    v as usize
+                }
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn sample_tex(
+        tex_data: &[u8],
+        tex_w: usize,
+        tex_h: usize,
+        u: f32,
+        v: f32,
+        sampler: SamplerDesc,
+    ) -> Option<[f32; 4]> {
+        let u_norm = wrap_uv(u, sampler.wrap);
+        let v_norm = wrap_uv(v, sampler.wrap);
+        if sampler.filter == SamplerFilter::Nearest {
+            let tx = wrap_index((u_norm * tex_w as f32).floor() as i32, tex_w, sampler.wrap);
+            let ty = wrap_index((v_norm * tex_h as f32).floor() as i32, tex_h, sampler.wrap);
+            let idx = (ty * tex_w + tx) * 4;
+            if idx + 3 >= tex_data.len() {
+                return None;
+            }
+            return Some([
+                f32::from(tex_data[idx]) / 255.0,
+                f32::from(tex_data[idx + 1]) / 255.0,
+                f32::from(tex_data[idx + 2]) / 255.0,
+                f32::from(tex_data[idx + 3]) / 255.0,
+            ]);
+        }
+
+        let x = u_norm * tex_w as f32 - 0.5;
+        let y = v_norm * tex_h as f32 - 0.5;
+        let x0 = x.floor() as i32;
+        let y0 = y.floor() as i32;
+        let x1 = x0 + 1;
+        let y1 = y0 + 1;
+        let fx = (x - x0 as f32).clamp(0.0, 1.0);
+        let fy = (y - y0 as f32).clamp(0.0, 1.0);
+
+        let ix0 = wrap_index(x0, tex_w, sampler.wrap);
+        let ix1 = wrap_index(x1, tex_w, sampler.wrap);
+        let iy0 = wrap_index(y0, tex_h, sampler.wrap);
+        let iy1 = wrap_index(y1, tex_h, sampler.wrap);
+
+        let idx00 = (iy0 * tex_w + ix0) * 4;
+        let idx10 = (iy0 * tex_w + ix1) * 4;
+        let idx01 = (iy1 * tex_w + ix0) * 4;
+        let idx11 = (iy1 * tex_w + ix1) * 4;
+        if idx11 + 3 >= tex_data.len() {
+            return None;
+        }
+
+        let c00 = [
+            f32::from(tex_data[idx00]) / 255.0,
+            f32::from(tex_data[idx00 + 1]) / 255.0,
+            f32::from(tex_data[idx00 + 2]) / 255.0,
+            f32::from(tex_data[idx00 + 3]) / 255.0,
+        ];
+        let c10 = [
+            f32::from(tex_data[idx10]) / 255.0,
+            f32::from(tex_data[idx10 + 1]) / 255.0,
+            f32::from(tex_data[idx10 + 2]) / 255.0,
+            f32::from(tex_data[idx10 + 3]) / 255.0,
+        ];
+        let c01 = [
+            f32::from(tex_data[idx01]) / 255.0,
+            f32::from(tex_data[idx01 + 1]) / 255.0,
+            f32::from(tex_data[idx01 + 2]) / 255.0,
+            f32::from(tex_data[idx01 + 3]) / 255.0,
+        ];
+        let c11 = [
+            f32::from(tex_data[idx11]) / 255.0,
+            f32::from(tex_data[idx11 + 1]) / 255.0,
+            f32::from(tex_data[idx11 + 2]) / 255.0,
+            f32::from(tex_data[idx11 + 3]) / 255.0,
+        ];
+
+        let lerp = |a: f32, b: f32, t: f32| (b - a).mul_add(t, a);
+        let r0 = lerp(c00[0], c10[0], fx);
+        let g0 = lerp(c00[1], c10[1], fx);
+        let b0 = lerp(c00[2], c10[2], fx);
+        let a0 = lerp(c00[3], c10[3], fx);
+        let r1 = lerp(c01[0], c11[0], fx);
+        let g1 = lerp(c01[1], c11[1], fx);
+        let b1 = lerp(c01[2], c11[2], fx);
+        let a1 = lerp(c01[3], c11[3], fx);
+        Some([
+            lerp(r0, r1, fy),
+            lerp(g0, g1, fy),
+            lerp(b0, b1, fy),
+            lerp(a0, a1, fy),
+        ])
+    }
+
+    for y in min_y..=max_y {
+        let py = y as f32 + 0.5;
+        let row = (y - stripe_start) as usize;
+        for x in min_x..=max_x {
+            let px = x as f32 + 0.5;
+
+            let w0 = edge_function(v1.x, v1.y, v2.x, v2.y, px, py) * inv_denom;
+            let w1 = edge_function(v2.x, v2.y, v0.x, v0.y, px, py) * inv_denom;
+            let w2 = 1.0 - w0 - w1;
+            if w0 < 0.0 || w1 < 0.0 || w2 < 0.0 {
+                continue;
+            }
+
+            let u = v0.u.mul_add(w0, v1.u * w1) + v2.u * w2;
+            let v = v0.v.mul_add(w0, v1.v * w1) + v2.v * w2;
+            let Some(sampled) = sample_tex(tex_data, tex_w, tex_h, u, v, sampler) else {
+                continue;
+            };
+            if sampled[3] <= 0.0 {
+                continue;
+            }
+
+            let mut color = [0.0; 4];
+            for (i, out) in color.iter_mut().enumerate() {
+                *out = (v0.color[i] * w0 + v1.color[i] * w1 + v2.color[i] * w2).clamp(0.0, 1.0);
+            }
+
+            let sr = (sampled[0] * color[0]).clamp(0.0, 1.0);
+            let sg = (sampled[1] * color[1]).clamp(0.0, 1.0);
+            let sb = (sampled[2] * color[2]).clamp(0.0, 1.0);
+            let sa = (sampled[3] * color[3]).clamp(0.0, 1.0);
+            if sa <= 0.0 {
+                continue;
+            }
+
+            let dst_idx = row * width + x as usize;
+            let dst = buffer[dst_idx];
+            let dr = ((dst >> 16) & 0xFF) as f32 / 255.0;
+            let dg = ((dst >> 8) & 0xFF) as f32 / 255.0;
+            let db = (dst & 0xFF) as f32 / 255.0;
+            let da = ((dst >> 24) & 0xFF) as f32 / 255.0;
+
+            let (out_r, out_g, out_b, out_a) = match blend {
+                BlendMode::Add => {
+                    let r = sr.mul_add(sa, dr).min(1.0);
+                    let g = sg.mul_add(sa, dg).min(1.0);
+                    let b = sb.mul_add(sa, db).min(1.0);
+                    let a = (da + sa).min(1.0);
+                    (r, g, b, a)
+                }
+                _ => {
+                    let inv = 1.0 - sa;
+                    let r = sr.mul_add(sa, dr * inv);
+                    let g = sg.mul_add(sa, dg * inv);
+                    let b = sb.mul_add(sa, db * inv);
+                    let a = sa + da * inv;
+                    (r, g, b, a)
+                }
+            };
             buffer[dst_idx] = pack_rgba([out_r, out_g, out_b, out_a]);
         }
     }

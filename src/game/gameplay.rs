@@ -23,7 +23,7 @@ use log::{debug, info};
 use rssp::streams::StreamSegment;
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 use twox_hash::XxHash64;
@@ -107,15 +107,42 @@ fn quantize_offset_seconds(v: f32) -> f32 {
 }
 
 #[inline(always)]
+fn receptor_glow_duration_for_col(state: &State, col: usize) -> f32 {
+    let player = if state.num_players <= 1 || state.cols_per_player == 0 {
+        0
+    } else {
+        (col / state.cols_per_player).min(state.num_players.saturating_sub(1))
+    };
+    state.noteskin[player]
+        .as_ref()
+        .map(|ns| ns.receptor_glow_behavior.duration)
+        .filter(|d| *d > f32::EPSILON)
+        .unwrap_or(RECEPTOR_GLOW_DURATION)
+}
+
+#[inline(always)]
 fn quantization_index_from_beat(beat: f32) -> u8 {
-    match (beat.fract() * 192.0).round() as u32 {
-        0 | 192 => noteskin::Quantization::Q4th as u8,
-        96 => noteskin::Quantization::Q8th as u8,
-        48 | 144 => noteskin::Quantization::Q16th as u8,
-        24 | 72 | 120 | 168 => noteskin::Quantization::Q32nd as u8,
-        64 | 128 => noteskin::Quantization::Q12th as u8,
-        32 | 160 => noteskin::Quantization::Q24th as u8,
-        _ => noteskin::Quantization::Q192nd as u8,
+    // Match ITG's BeatToNoteType path: round beat->row at 48 rows/beat,
+    // then classify by measure-subdivision divisibility.
+    let row = (beat * 48.0).round() as i32;
+    if row.rem_euclid(48) == 0 {
+        noteskin::Quantization::Q4th as u8
+    } else if row.rem_euclid(24) == 0 {
+        noteskin::Quantization::Q8th as u8
+    } else if row.rem_euclid(16) == 0 {
+        noteskin::Quantization::Q12th as u8
+    } else if row.rem_euclid(12) == 0 {
+        noteskin::Quantization::Q16th as u8
+    } else if row.rem_euclid(8) == 0 {
+        noteskin::Quantization::Q24th as u8
+    } else if row.rem_euclid(6) == 0 {
+        noteskin::Quantization::Q32nd as u8
+    } else if row.rem_euclid(4) == 0 {
+        noteskin::Quantization::Q48th as u8
+    } else if row.rem_euclid(3) == 0 {
+        noteskin::Quantization::Q64th as u8
+    } else {
+        noteskin::Quantization::Q192nd as u8
     }
 }
 
@@ -2079,37 +2106,12 @@ pub fn init(
         num_players: 1,
     };
 
-    let fallback_cel_path = if cols_per_player == 8 {
-        "assets/noteskins/cel/dance-double.txt"
-    } else {
-        "assets/noteskins/cel/dance-single.txt"
-    };
     let noteskin: [Option<Noteskin>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
             return None;
         }
-        let prof = &player_profiles[player];
-        let noteskin_path = match (prof.noteskin, cols_per_player) {
-            (crate::game::profile::NoteSkin::Cel, 8) => "assets/noteskins/cel/dance-double.txt",
-            (crate::game::profile::NoteSkin::Cel, _) => "assets/noteskins/cel/dance-single.txt",
-            (crate::game::profile::NoteSkin::Metal, 8) => "assets/noteskins/metal/dance-double.txt",
-            (crate::game::profile::NoteSkin::Metal, _) => "assets/noteskins/metal/dance-single.txt",
-            (crate::game::profile::NoteSkin::EnchantmentV2, 8) => {
-                "assets/noteskins/enchantment-v2/dance-double.txt"
-            }
-            (crate::game::profile::NoteSkin::EnchantmentV2, _) => {
-                "assets/noteskins/enchantment-v2/dance-single.txt"
-            }
-            (crate::game::profile::NoteSkin::DevCel2024V3, 8) => {
-                "assets/noteskins/devcel-2024-v3/dance-double.txt"
-            }
-            (crate::game::profile::NoteSkin::DevCel2024V3, _) => {
-                "assets/noteskins/devcel-2024-v3/dance-single.txt"
-            }
-        };
-        noteskin::load(Path::new(noteskin_path), &style)
-            .ok()
-            .or_else(|| noteskin::load(Path::new(fallback_cel_path), &style).ok())
+        let skin = player_profiles[player].noteskin.to_string();
+        noteskin::load_itg_skin(&style, &skin).ok()
     });
 
     let field_zoom: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
@@ -3749,7 +3751,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                         );
 
                         if !hide_early_dw_flash {
-                            state.receptor_glow_timers[note_col] = RECEPTOR_GLOW_DURATION;
+                            state.receptor_glow_timers[note_col] =
+                                receptor_glow_duration_for_col(state, note_col);
                             trigger_tap_explosion(state, note_col, grade);
                         }
 
@@ -3830,7 +3833,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                         break;
                     }
                 }
-                state.receptor_glow_timers[note_col] = RECEPTOR_GLOW_DURATION;
+                state.receptor_glow_timers[note_col] =
+                    receptor_glow_duration_for_col(state, note_col);
                 trigger_tap_explosion(state, note_col, grade);
                 if let Some(end_time) = state.hold_end_time_cache[idx]
                     && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
@@ -3915,7 +3919,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                         break;
                     }
                 }
-                state.receptor_glow_timers[note_col] = RECEPTOR_GLOW_DURATION;
+                state.receptor_glow_timers[note_col] =
+                    receptor_glow_duration_for_col(state, note_col);
                 trigger_tap_explosion(state, note_col, grade);
                 if let Some(end_time) = state.hold_end_time_cache[idx]
                     && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)

@@ -685,36 +685,56 @@ impl core::fmt::Display for LifeMeterType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum NoteSkin {
-    #[default]
-    Cel,
-    Metal,
-    EnchantmentV2,
-    DevCel2024V3,
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct NoteSkin {
+    raw: String,
+}
+
+impl NoteSkin {
+    pub const DEFAULT_NAME: &'static str = "default";
+    pub const CEL_NAME: &'static str = "cel";
+
+    #[inline(always)]
+    fn normalize(raw: &str) -> Option<String> {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        let lower = trimmed.to_ascii_lowercase();
+        Some(lower)
+    }
+
+    #[inline(always)]
+    pub fn new(raw: &str) -> Self {
+        Self::from_str(raw).unwrap_or_default()
+    }
+
+    #[inline(always)]
+    pub fn as_str(&self) -> &str {
+        &self.raw
+    }
+}
+
+impl Default for NoteSkin {
+    fn default() -> Self {
+        Self {
+            raw: Self::CEL_NAME.to_string(),
+        }
+    }
 }
 
 impl FromStr for NoteSkin {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_lowercase().as_str() {
-            "cel" => Ok(Self::Cel),
-            "metal" => Ok(Self::Metal),
-            "enchantment-v2" => Ok(Self::EnchantmentV2),
-            "devcel-2024-v3" => Ok(Self::DevCel2024V3),
-            other => Err(format!("'{other}' is not a valid NoteSkin setting")),
-        }
+        let normalized = Self::normalize(s)
+            .ok_or_else(|| format!("'{}' is not a valid NoteSkin setting", s.trim()))?;
+        Ok(Self { raw: normalized })
     }
 }
 
 impl core::fmt::Display for NoteSkin {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Cel => write!(f, "cel"),
-            Self::Metal => write!(f, "metal"),
-            Self::EnchantmentV2 => write!(f, "enchantment-v2"),
-            Self::DevCel2024V3 => write!(f, "devcel-2024-v3"),
-        }
+        write!(f, "{}", self.raw)
     }
 }
 
@@ -1758,7 +1778,7 @@ fn load_for_side(side: PlayerSide) {
             profile.noteskin = profile_conf
                 .get("PlayerOptions", "NoteSkin")
                 .and_then(|s| NoteSkin::from_str(&s).ok())
-                .unwrap_or(default_profile.noteskin);
+                .unwrap_or_else(|| default_profile.noteskin.clone());
             profile.mini_percent = profile_conf
                 .get("PlayerOptions", "MiniPercent")
                 .and_then(|s| s.parse::<i32>().ok())
