@@ -31,7 +31,10 @@ use winit::event::KeyEvent;
 use winit::keyboard::KeyCode;
 
 pub const TRANSITION_IN_DURATION: f32 = 0.4;
-pub const TRANSITION_OUT_DURATION: f32 = 0.4;
+// Simply Love ScreenGameplay out.lua: sleep(0.5), linear(1.0).
+pub const TRANSITION_OUT_DELAY: f32 = 0.5;
+pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
+pub const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
 pub const MAX_COLS: usize = 8;
 pub const MAX_PLAYERS: usize = 2;
 
@@ -39,10 +42,6 @@ pub const MAX_PLAYERS: usize = 2;
 // Simply Love scales them by MusicRate, so we apply that in init().
 const MIN_SECONDS_TO_STEP: f32 = 6.0;
 const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
-// Additional linger time on ScreenGameplay after the last judgable note,
-// approximating OutTransitionLength (5s) so that the perceived wait before
-// ScreenEvaluation matches ITGmania/Simply Love.
-const POST_SONG_DISPLAY_SECONDS: f32 = 5.0;
 const M_MOD_HIGH_CAP: f32 = 600.0;
 const COLUMN_CUE_MIN_SECONDS: f32 = 1.5;
 
@@ -624,7 +623,7 @@ fn compute_end_times(
 
     let max_step_distance = rate * max_window;
     let notes_end_time = last_judgable_second + max_step_distance;
-    let music_end_time = last_relevant_second + max_step_distance + POST_SONG_DISPLAY_SECONDS;
+    let music_end_time = last_relevant_second + max_step_distance;
     (notes_end_time, music_end_time)
 }
 

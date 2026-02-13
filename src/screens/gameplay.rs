@@ -11,7 +11,8 @@ use crate::ui::color;
 
 pub use crate::game::gameplay::{State, init, update};
 use crate::game::gameplay::{
-    TRANSITION_IN_DURATION, TRANSITION_OUT_DURATION, assist_clap_is_enabled,
+    TRANSITION_IN_DURATION, TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION,
+    TRANSITION_OUT_FADE_DURATION, assist_clap_is_enabled,
 };
 
 // --- TRANSITIONS ---
@@ -33,7 +34,8 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
         zoomto(screen_width(), screen_height()):
         diffuse(0.0, 0.0, 0.0, 0.0):
         z(1200):
-        linear(TRANSITION_OUT_DURATION): alpha(1.0)
+        sleep(TRANSITION_OUT_DELAY):
+        linear(TRANSITION_OUT_FADE_DURATION): alpha(1.0)
     );
     (vec![actor], TRANSITION_OUT_DURATION)
 }
