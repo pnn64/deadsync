@@ -2210,7 +2210,7 @@ pub fn build(
                     } else {
                         1.0
                     };
-                    for (layer_idx, note_slot) in note_slots.iter().enumerate() {
+                    for note_slot in note_slots.iter() {
                         let draw = note_slot.model_draw_at(elapsed, current_beat);
                         if !draw.visible {
                             continue;
@@ -2247,7 +2247,7 @@ pub fn build(
                             draw.tint[2] * hold_diffuse[2],
                             draw.tint[3] * hold_diffuse[3],
                         ];
-                        let layer_z = Z_TAP_NOTE + layer_idx as i32;
+                        let layer_z = Z_TAP_NOTE;
                         let blend = if draw.blend_add {
                             BlendMode::Add
                         } else {
@@ -2504,7 +2504,7 @@ pub fn build(
                     } else {
                         1.0
                     };
-                    for (layer_idx, note_slot) in note_slots.iter().enumerate() {
+                    for note_slot in note_slots.iter() {
                         let draw = note_slot.model_draw_at(elapsed, current_beat);
                         if !draw.visible {
                             continue;
@@ -2535,7 +2535,7 @@ pub fn build(
                         if note_size[0] <= f32::EPSILON || note_size[1] <= f32::EPSILON {
                             continue;
                         }
-                        let layer_z = Z_TAP_NOTE + layer_idx as i32;
+                        let layer_z = Z_TAP_NOTE;
                         let blend = if draw.blend_add {
                             BlendMode::Add
                         } else {
