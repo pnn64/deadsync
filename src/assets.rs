@@ -400,6 +400,13 @@ impl AssetManager {
         register_texture_dims("__white", 1, 1);
         info!("Loaded built-in texture: __white");
 
+        // Load __black texture for missing/background-off fallbacks.
+        let black_img = RgbaImage::from_raw(1, 1, vec![0, 0, 0, 255]).unwrap();
+        let black_tex = backend.create_texture(&black_img, SamplerDesc::default())?;
+        self.textures.insert("__black".to_string(), black_tex);
+        register_texture_dims("__black", 1, 1);
+        info!("Loaded built-in texture: __black");
+
         let mut textures_to_load: Vec<(String, String)> = vec![
             ("logo.png".to_string(), "logo.png".to_string()),
             ("init_arrow.png".to_string(), "init_arrow.png".to_string()),
@@ -977,7 +984,7 @@ impl AssetManager {
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
     ) -> String {
-        const FALLBACK_KEY: &str = "__white";
+        const FALLBACK_KEY: &str = "__black";
 
         if let Some(path) = path_opt {
             if self

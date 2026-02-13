@@ -2683,7 +2683,7 @@ pub fn init(
         pack_group,
         pack_banner_path,
         charts,
-        background_texture_key: "__white".to_string(),
+        background_texture_key: "__black".to_string(),
         num_cols,
         cols_per_player,
         num_players,
