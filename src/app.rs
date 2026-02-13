@@ -1543,7 +1543,10 @@ impl App {
         let mut window_attributes = Window::default_attributes()
             .with_title(format!("DeadSync - {:?}", self.backend_type))
             .with_resizable(true)
-            .with_transparent(false);
+            .with_transparent(false)
+            // Keep the window hidden until startup assets are ready so the first
+            // visible frame starts Init animations at t=0.
+            .with_visible(false);
 
         let window_width = self.state.shell.display_width;
         let window_height = self.state.shell.display_height;
@@ -1608,6 +1611,16 @@ impl App {
         }
 
         self.asset_manager.load_initial_assets(&mut backend)?;
+
+        let now = Instant::now();
+        self.state.shell.start_time = now;
+        self.state.shell.last_frame_time = now;
+        self.state.shell.last_title_update = now;
+        self.state.shell.frame_count = 0;
+        self.state.shell.current_frame_vpf = 0;
+
+        window.set_visible(true);
+        window.request_redraw();
 
         self.window = Some(window);
         self.backend = Some(backend);
