@@ -91,6 +91,8 @@ static DDRVIVID_HOLD_GHOST_DRAW_LOGGED: AtomicBool = AtomicBool::new(false);
 static DDRVIVID_HOLD_GHOST_MISSING_LOGGED: AtomicBool = AtomicBool::new(false);
 static CEL_ROLL_GHOST_DRAW_LOGGED: AtomicBool = AtomicBool::new(false);
 static CEL_ROLL_GHOST_MISSING_LOGGED: AtomicBool = AtomicBool::new(false);
+static DDR_HOLD_HEAD_DRAW_LOGGED: AtomicBool = AtomicBool::new(false);
+static DDR_HOLD_HEAD_MISSING_LOGGED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Copy, Debug)]
 pub enum FieldPlacement {
@@ -1062,6 +1064,7 @@ pub fn build(
     }
     let is_ddr_vivid_skin = profile.noteskin.as_str() == "ddr-vivid";
     let is_cel_skin = profile.noteskin.as_str() == "cel";
+    let is_ddr_skin = profile.noteskin.as_str().starts_with("ddr-");
     // Use the cached field_zoom from gameplay state so visual layout and
     // scroll math share the exact same scaling as gameplay.
     let field_zoom = state.field_zoom[player_idx];
@@ -2761,7 +2764,45 @@ pub fn build(
                             .as_ref()
                             .or(visuals.head_active.as_ref())
                     };
+                    if head_slot.is_none()
+                        && is_ddr_skin
+                        && !DDR_HOLD_HEAD_MISSING_LOGGED.swap(true, Ordering::Relaxed)
+                    {
+                        info!(
+                            "ddr hold head missing: skin={} col={} note_type={:?} note_idx={} hold_head_inactive={} hold_head_active={} tap_layer0={}",
+                            profile.noteskin,
+                            col_idx,
+                            note.note_type,
+                            arrow.note_index,
+                            visuals
+                                .head_inactive
+                                .as_ref()
+                                .map(|slot| slot.texture_key())
+                                .unwrap_or("<none>"),
+                            visuals
+                                .head_active
+                                .as_ref()
+                                .map(|slot| slot.texture_key())
+                                .unwrap_or("<none>"),
+                            ns.note_layers
+                                .get(col_idx * NUM_QUANTIZATIONS + note.quantization_idx as usize)
+                                .and_then(|layers| layers.first())
+                                .map(|slot| slot.texture_key())
+                                .unwrap_or("<none>")
+                        );
+                    }
                     if let Some(head_slot) = head_slot {
+                        if is_ddr_skin && !DDR_HOLD_HEAD_DRAW_LOGGED.swap(true, Ordering::Relaxed) {
+                            info!(
+                                "ddr hold head draw: skin={} col={} note_type={:?} active={} tex={} frames={}",
+                                profile.noteskin,
+                                col_idx,
+                                note.note_type,
+                                head_active,
+                                head_slot.texture_key(),
+                                head_slot.source.frame_count()
+                            );
+                        }
                         let elapsed = state.total_elapsed_in_screen;
                         let note_uv_phase = ns.tap_note_uv_phase(elapsed, current_beat, note.beat);
                         let frame = head_slot.frame_index(elapsed, current_beat);

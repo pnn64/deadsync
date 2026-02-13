@@ -1479,6 +1479,37 @@ fn load_itg_sprite_noteskin(
         hold_columns.push(hold_visual);
         roll_columns.push(roll_visual);
     }
+    if data.name.starts_with("ddr-") {
+        info!(
+            "ddr noteskin '{}': behavior remap_head_to_tap={} remap_tap_fake_to_tap={} keep_hold_non_head_button={}",
+            data.name,
+            behavior.remap_head_to_tap,
+            behavior.remap_tap_fake_to_tap,
+            behavior.keep_hold_non_head_button
+        );
+        for col in 0..style.num_cols {
+            let hold = hold_columns.get(col);
+            let roll = roll_columns.get(col);
+            info!(
+                "ddr noteskin '{}': col={} button={} hold_head_inactive={} hold_head_active={} roll_head_inactive={} roll_head_active={}",
+                data.name,
+                col,
+                itg_button_for_col(col),
+                hold.and_then(|v| v.head_inactive.as_ref())
+                    .map(|slot| slot.texture_key())
+                    .unwrap_or("<none>"),
+                hold.and_then(|v| v.head_active.as_ref())
+                    .map(|slot| slot.texture_key())
+                    .unwrap_or("<none>"),
+                roll.and_then(|v| v.head_inactive.as_ref())
+                    .map(|slot| slot.texture_key())
+                    .unwrap_or("<none>"),
+                roll.and_then(|v| v.head_active.as_ref())
+                    .map(|slot| slot.texture_key())
+                    .unwrap_or("<none>"),
+            );
+        }
+    }
 
     let down_col = (0..style.num_cols)
         .find(|&col| itg_button_for_col(col).eq_ignore_ascii_case("Down"))
@@ -2783,34 +2814,33 @@ fn itg_load_lua_behavior(data: &noteskin_itg::NoteskinData) -> ItgLuaBehavior {
         for name in itg_parse_lua_bool_set(&content, "ret.Blank") {
             behavior.blank.insert(name.to_ascii_lowercase());
         }
-        let assigns_tap_note = content.contains("sElement = \"Tap Note\"")
-            || content.contains("sElement='Tap Note'")
-            || content.contains("sElement = 'Tap Note'")
-            || content.contains("sElement=\"Tap Note\"");
-        if assigns_tap_note
-            && (content.contains("Hold Head")
-                || content.contains("Roll Head")
-                || content.contains("string.find(sElement, \"Head\")")
-                || content.contains("string.find(sElement,'Head')"))
-        {
-            behavior.remap_head_to_tap = true;
-        }
-        if assigns_tap_note
-            && (content.contains("Tap Fake")
-                || content.contains("sElement == \"Tap Fake\"")
-                || content.contains("sElement=='Tap Fake'"))
-        {
-            behavior.remap_tap_fake_to_tap = true;
-        }
-        if (content.contains("if not string.find(sElement, \"Head\")")
-            || content.contains("if not string.find(sElement,'Head')"))
-            && (content.contains("not string.find(sElement, \"Explosion\")")
-                || content.contains("not string.find(sElement,'Explosion')"))
-            && (content.contains("string.find(sElement, \"Hold\")")
-                || content.contains("string.find(sElement,'Hold')"))
-            && content.contains("return sButton, sElement")
-        {
-            behavior.keep_hold_non_head_button = true;
+        let defines_redir =
+            content.contains("ret.Redir = function") || content.contains("ret.Redir=function");
+        if defines_redir {
+            let assigns_tap_note = content.contains("sElement = \"Tap Note\"")
+                || content.contains("sElement='Tap Note'")
+                || content.contains("sElement = 'Tap Note'")
+                || content.contains("sElement=\"Tap Note\"");
+            let remap_head_to_tap = assigns_tap_note
+                && (content.contains("Hold Head")
+                    || content.contains("Roll Head")
+                    || content.contains("string.find(sElement, \"Head\")")
+                    || content.contains("string.find(sElement,'Head')"));
+            let remap_tap_fake_to_tap = assigns_tap_note
+                && (content.contains("Tap Fake")
+                    || content.contains("sElement == \"Tap Fake\"")
+                    || content.contains("sElement=='Tap Fake'"));
+            let keep_hold_non_head_button = (content
+                .contains("if not string.find(sElement, \"Head\")")
+                || content.contains("if not string.find(sElement,'Head')"))
+                && (content.contains("not string.find(sElement, \"Explosion\")")
+                    || content.contains("not string.find(sElement,'Explosion')"))
+                && (content.contains("string.find(sElement, \"Hold\")")
+                    || content.contains("string.find(sElement,'Hold')"))
+                && content.contains("return sButton, sElement");
+            behavior.remap_head_to_tap = remap_head_to_tap;
+            behavior.remap_tap_fake_to_tap = remap_tap_fake_to_tap;
+            behavior.keep_hold_non_head_button = keep_hold_non_head_button;
         }
     }
     behavior
@@ -5093,10 +5123,12 @@ fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AnimationRate, NUM_QUANTIZATIONS, Quantization, SpriteSource, Style, load_itg_skin,
-        parse_explosion_animation,
+        AnimationRate, NUM_QUANTIZATIONS, Quantization, SpriteSource, Style, itg_load_lua_behavior,
+        load_itg_skin, parse_explosion_animation,
     };
+    use crate::game::parsing::noteskin_itg;
     use std::collections::HashSet;
+    use std::path::Path;
 
     #[test]
     fn loads_default_and_cel_itg_noteskins() {
@@ -5376,6 +5408,34 @@ mod tests {
                 "column {col} expected Down hold head active sheet, got '{active}'"
             );
         }
+    }
+
+    #[test]
+    fn ddr_note_redir_overrides_default_head_remap() {
+        let data =
+            noteskin_itg::load_noteskin_data(Path::new("assets/noteskins"), "dance", "ddr-note")
+                .expect("dance/ddr-note noteskin data should load");
+        let behavior = itg_load_lua_behavior(&data);
+        assert!(
+            !behavior.remap_head_to_tap,
+            "ddr-note should not remap hold heads to tap note via fallback behavior"
+        );
+        assert!(
+            behavior.keep_hold_non_head_button,
+            "ddr-note should preserve button on non-head hold parts"
+        );
+    }
+
+    #[test]
+    fn default_skin_still_remaps_hold_head_to_tap() {
+        let data =
+            noteskin_itg::load_noteskin_data(Path::new("assets/noteskins"), "dance", "default")
+                .expect("dance/default noteskin data should load");
+        let behavior = itg_load_lua_behavior(&data);
+        assert!(
+            behavior.remap_head_to_tap,
+            "default noteskin should keep hold-head-to-tap remap behavior"
+        );
     }
 
     #[test]
