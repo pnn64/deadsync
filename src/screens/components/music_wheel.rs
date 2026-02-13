@@ -120,9 +120,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 
     // Selection pulse (Simply Love [MusicWheel] HighlightOnCommand):
     // diffuseshift + effectclock("beatnooffset") + effectperiod(2)
-    let highlight_phase = (p.selection_animation_beat / SELECTION_HIGHLIGHT_BEAT_PERIOD)
-        * std::f32::consts::PI
-        * 2.0;
+    let highlight_phase =
+        (p.selection_animation_beat / SELECTION_HIGHLIGHT_BEAT_PERIOD) * std::f32::consts::PI * 2.0;
     let anim_t = f32::midpoint(highlight_phase.cos(), 1.0);
 
     let lamp_pulse_t_unscaled =

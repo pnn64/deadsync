@@ -96,6 +96,84 @@ enum TransitionState {
     },
 }
 
+const STUTTER_SAMPLE_COUNT: usize = 5;
+const STUTTER_SAMPLE_LIFETIME: f32 = 3.4;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OverlayMode {
+    Off,
+    Fps,
+    FpsAndStutter,
+}
+
+impl OverlayMode {
+    #[inline(always)]
+    const fn from_code(mode: u8) -> Self {
+        match mode {
+            1 => Self::Fps,
+            2 => Self::FpsAndStutter,
+            _ => Self::Off,
+        }
+    }
+
+    #[inline(always)]
+    const fn next(self) -> Self {
+        match self {
+            Self::Off => Self::Fps,
+            Self::Fps => Self::FpsAndStutter,
+            Self::FpsAndStutter => Self::Off,
+        }
+    }
+
+    #[inline(always)]
+    const fn shows_fps(self) -> bool {
+        !matches!(self, Self::Off)
+    }
+
+    #[inline(always)]
+    const fn shows_stutter(self) -> bool {
+        matches!(self, Self::FpsAndStutter)
+    }
+
+    #[inline(always)]
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Off => "OFF",
+            Self::Fps => "FPS",
+            Self::FpsAndStutter => "FPS+STUTTER",
+        }
+    }
+
+    #[inline(always)]
+    const fn code(self) -> u8 {
+        match self {
+            Self::Off => 0,
+            Self::Fps => 1,
+            Self::FpsAndStutter => 2,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct StutterSample {
+    at_seconds: f32,
+    frame_seconds: f32,
+    expected_seconds: f32,
+    severity: u8,
+}
+
+impl StutterSample {
+    #[inline(always)]
+    const fn empty() -> Self {
+        Self {
+            at_seconds: -1.0,
+            frame_seconds: 0.0,
+            expected_seconds: 0.0,
+            severity: 0,
+        }
+    }
+}
+
 /// Shell-level state: timing, window, renderer flags.
 pub struct ShellState {
     frame_count: u32,
@@ -109,7 +187,9 @@ pub struct ShellState {
     last_fps: f32,
     last_vpf: u32,
     current_frame_vpf: u32,
-    show_overlay: bool,
+    overlay_mode: OverlayMode,
+    stutter_samples: [StutterSample; STUTTER_SAMPLE_COUNT],
+    stutter_cursor: usize,
     transition: TransitionState,
     display_width: u32,
     display_height: u32,
@@ -160,7 +240,7 @@ pub struct AppState {
 }
 
 impl ShellState {
-    fn new(cfg: &config::Config, show_overlay: bool) -> Self {
+    fn new(cfg: &config::Config, overlay_mode: u8) -> Self {
         let metrics = space::metrics_for_window(cfg.display_width, cfg.display_height);
         Self {
             frame_count: 0,
@@ -173,7 +253,9 @@ impl ShellState {
             last_fps: 0.0,
             last_vpf: 0,
             current_frame_vpf: 0,
-            show_overlay,
+            overlay_mode: OverlayMode::from_code(overlay_mode),
+            stutter_samples: [StutterSample::empty(); STUTTER_SAMPLE_COUNT],
+            stutter_cursor: 0,
             transition: TransitionState::Idle,
             display_width: cfg.display_width,
             display_height: cfg.display_height,
@@ -183,6 +265,48 @@ impl ShellState {
             pending_exit: false,
             shift_held: false,
         }
+    }
+
+    #[inline(always)]
+    fn set_overlay_mode(&mut self, mode: u8) {
+        let next = OverlayMode::from_code(mode);
+        if self.overlay_mode.shows_stutter() && !next.shows_stutter() {
+            self.clear_stutter_samples();
+        }
+        self.overlay_mode = next;
+    }
+
+    #[inline(always)]
+    fn cycle_overlay_mode(&mut self) -> u8 {
+        let prev = self.overlay_mode;
+        self.overlay_mode = self.overlay_mode.next();
+        if prev.shows_stutter() && !self.overlay_mode.shows_stutter() {
+            self.clear_stutter_samples();
+        }
+        self.overlay_mode.code()
+    }
+
+    #[inline(always)]
+    fn push_stutter_sample(
+        &mut self,
+        at_seconds: f32,
+        frame_seconds: f32,
+        expected_seconds: f32,
+        severity: u8,
+    ) {
+        self.stutter_samples[self.stutter_cursor] = StutterSample {
+            at_seconds,
+            frame_seconds,
+            expected_seconds,
+            severity,
+        };
+        self.stutter_cursor = (self.stutter_cursor + 1) % STUTTER_SAMPLE_COUNT;
+    }
+
+    #[inline(always)]
+    fn clear_stutter_samples(&mut self) {
+        self.stutter_samples = [StutterSample::empty(); STUTTER_SAMPLE_COUNT];
+        self.stutter_cursor = 0;
     }
 
     fn update_gamepad_overlay(&mut self, now: Instant) {
@@ -516,7 +640,7 @@ impl AppState {
     fn new(
         cfg: config::Config,
         profile_data: profile::Profile,
-        show_overlay: bool,
+        overlay_mode: u8,
         color_index: i32,
     ) -> Self {
         let max_diff_index = crate::ui::color::FILE_DIFFICULTY_NAMES
@@ -528,7 +652,7 @@ impl AppState {
             cmp::min(profile_data.last_difficulty_index, max_diff_index)
         };
 
-        let shell = ShellState::new(&cfg, show_overlay);
+        let shell = ShellState::new(&cfg, overlay_mode);
         let session = SessionState::new(preferred);
         let screens = ScreensState::new(color_index, preferred);
 
@@ -571,14 +695,14 @@ impl App {
 
     fn new(
         backend_type: BackendType,
-        show_overlay: bool,
+        overlay_mode: u8,
         color_index: i32,
         config: config::Config,
         profile_data: profile::Profile,
     ) -> Self {
         let software_renderer_threads = config.software_renderer_threads;
         let gfx_debug_enabled = config.gfx_debug;
-        let state = AppState::new(config, profile_data, show_overlay, color_index);
+        let state = AppState::new(config, profile_data, overlay_mode, color_index);
         Self {
             window: None,
             backend: None,
@@ -763,10 +887,10 @@ impl App {
                 }
                 Vec::new()
             }
-            ScreenAction::UpdateShowOverlay(show) => {
-                self.state.shell.show_overlay = show;
-                config::update_show_stats(show);
-                options::sync_show_stats(&mut self.state.screens.options_state, show);
+            ScreenAction::UpdateShowOverlay(mode) => {
+                self.state.shell.set_overlay_mode(mode);
+                config::update_show_stats_mode(mode);
+                options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
                 Vec::new()
             }
             ScreenAction::None => Vec::new(),
@@ -1420,13 +1544,22 @@ impl App {
             ),
         };
 
-        if self.state.shell.show_overlay {
+        if self.state.shell.overlay_mode.shows_fps() {
             let overlay = crate::screens::components::stats_overlay::build(
                 self.backend_type,
                 self.state.shell.last_fps,
                 self.state.shell.last_vpf,
             );
             actors.extend(overlay);
+            if self.state.shell.overlay_mode.shows_stutter() {
+                let now_seconds = Instant::now()
+                    .duration_since(self.state.shell.start_time)
+                    .as_secs_f32();
+                let stutters = self.collect_visible_stutters(now_seconds);
+                actors.extend(crate::screens::components::stats_overlay::build_stutter(
+                    &stutters,
+                ));
+            }
         }
 
         // Gamepad connection overlay (always on top of screen, but below transitions)
@@ -1516,6 +1649,63 @@ impl App {
             CurrentScreen::Input => input_screen::in_transition(),
             CurrentScreen::Init => (vec![], 0.0),
         }
+    }
+
+    fn collect_visible_stutters(
+        &self,
+        now_seconds: f32,
+    ) -> Vec<crate::screens::components::stats_overlay::StutterEvent> {
+        let mut out = Vec::with_capacity(STUTTER_SAMPLE_COUNT);
+        let start = self.state.shell.stutter_cursor;
+        for i in 0..STUTTER_SAMPLE_COUNT {
+            let sample = self.state.shell.stutter_samples[(start + i) % STUTTER_SAMPLE_COUNT];
+            if sample.severity == 0 {
+                continue;
+            }
+            let age_seconds = now_seconds - sample.at_seconds;
+            if !(0.0..=STUTTER_SAMPLE_LIFETIME).contains(&age_seconds) {
+                continue;
+            }
+            let frame_multiple = if sample.expected_seconds > 0.0 {
+                sample.frame_seconds / sample.expected_seconds
+            } else {
+                0.0
+            };
+            out.push(crate::screens::components::stats_overlay::StutterEvent {
+                timestamp_seconds: sample.at_seconds,
+                frame_ms: sample.frame_seconds * 1000.0,
+                frame_multiple,
+                severity: sample.severity,
+                age_seconds,
+            });
+        }
+        out
+    }
+
+    #[inline(always)]
+    fn update_stutter_samples(&mut self, frame_seconds: f32, total_elapsed: f32) {
+        if !self.state.shell.overlay_mode.shows_stutter() {
+            return;
+        }
+        let fps = self.state.shell.last_fps;
+        if fps <= 0.0 {
+            return;
+        }
+        let expected = 1.0 / fps;
+        let thresholds = [expected * 2.0, expected * 4.0, 0.1];
+        let mut severity: usize = 0;
+        while severity < thresholds.len() && frame_seconds > thresholds[severity] {
+            severity += 1;
+        }
+        if severity == 0 {
+            return;
+        }
+        self.state.shell.push_stutter_sample(
+            total_elapsed,
+            frame_seconds,
+            expected,
+            severity as u8,
+        );
     }
 
     #[inline(always)]
@@ -1954,11 +2144,10 @@ impl App {
             && key_event.physical_key
                 == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F3)
         {
-            self.state.shell.show_overlay = !self.state.shell.show_overlay;
-            let show = self.state.shell.show_overlay;
-            log::info!("Overlay {}", if show { "ON" } else { "OFF" });
-            config::update_show_stats(show);
-            options::sync_show_stats(&mut self.state.screens.options_state, show);
+            let mode = self.state.shell.cycle_overlay_mode();
+            log::info!("Overlay {}", self.state.shell.overlay_mode.label());
+            config::update_show_stats_mode(mode);
+            options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
         }
         // Screen-specific Escape handling resides in per-screen raw handlers now
 
@@ -3022,6 +3211,7 @@ impl ApplicationHandler<UserEvent> for App {
 
                 // --- Manage gamepad overlay lifetime ---
                 self.state.shell.update_gamepad_overlay(now);
+                self.update_stutter_samples(delta_time, total_elapsed);
 
                 let mut finished_fading_out_to: Option<CurrentScreen> = None;
 
@@ -3243,7 +3433,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::get();
     let backend_type = config.video_renderer;
     let win_pad_backend = config.windows_gamepad_backend;
-    let show_stats = config.show_stats;
+    let show_stats_mode = config.show_stats_mode.min(2);
     let color_index = config.simply_love_color;
     let profile_data = profile::get();
 
@@ -3270,7 +3460,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         );
     });
 
-    let mut app = App::new(backend_type, show_stats, color_index, config, profile_data);
+    let mut app = App::new(
+        backend_type,
+        show_stats_mode,
+        color_index,
+        config,
+        profile_data,
+    );
     event_loop.run_app(&mut app)?;
     Ok(())
 }

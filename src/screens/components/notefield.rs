@@ -1518,9 +1518,17 @@ pub fn build(
                     &ns.hold
                 };
                 if let Some(slot) = visuals.explosion.as_ref() {
-                    (Some(slot), "note-type explosion", matches!(note_type, NoteType::Roll))
+                    (
+                        Some(slot),
+                        "note-type explosion",
+                        matches!(note_type, NoteType::Roll),
+                    )
                 } else if let Some(slot) = ns.hold.explosion.as_ref() {
-                    (Some(slot), "hold fallback explosion", matches!(note_type, NoteType::Roll))
+                    (
+                        Some(slot),
+                        "hold fallback explosion",
+                        matches!(note_type, NoteType::Roll),
+                    )
                 } else {
                     (None, "<none>", matches!(note_type, NoteType::Roll))
                 }
@@ -1590,11 +1598,8 @@ pub fn build(
                 let final_rotation = base_rotation + receptor_rotation - draw.rot[2];
                 let center = [playfield_center_x + col_x_offset, receptor_y_lane];
                 let color = draw.tint;
-                let glow = hold_slot.model_glow_at(
-                    state.total_elapsed_in_screen,
-                    current_beat,
-                    color[3],
-                );
+                let glow =
+                    hold_slot.model_glow_at(state.total_elapsed_in_screen, current_beat, color[3]);
                 let blend = if draw.blend_add {
                     BlendMode::Add
                 } else {
@@ -1616,7 +1621,10 @@ pub fn build(
                         Z_HOLD_EXPLOSION,
                     );
                 }
-                if is_cel_skin && is_roll_hold && !CEL_ROLL_GHOST_DRAW_LOGGED.swap(true, Ordering::Relaxed) {
+                if is_cel_skin
+                    && is_roll_hold
+                    && !CEL_ROLL_GHOST_DRAW_LOGGED.swap(true, Ordering::Relaxed)
+                {
                     info!(
                         "cel roll ghost draw sample: col={} source={} tex='{}' model={} frame={} uv={:?} size={:?} tint={:?} visible={} blend_add={} z={} ns_hold_tex={} ns_roll_tex={}",
                         col,

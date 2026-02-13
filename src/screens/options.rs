@@ -558,7 +558,7 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         label: "Show Stats",
-        choices: &["Off", "On"],
+        choices: &["Off", "FPS", "FPS+Stutter"],
         inline: true,
     },
     SubRow {
@@ -609,7 +609,7 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         name: "Show Stats",
-        help: &["Display rendering statistics overlay."],
+        help: &["Choose performance overlay mode: Off, FPS only, or FPS with stutter list."],
     },
     Item {
         name: "BG Brightness",
@@ -1238,7 +1238,7 @@ pub fn init() -> State {
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
         "Show Stats",
-        usize::from(cfg.show_stats),
+        cfg.show_stats_mode.min(2) as usize,
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_graphics,
@@ -1342,12 +1342,12 @@ pub fn sync_display_resolution(state: &mut State, width: u32, height: u32) {
     state.display_height_at_load = height;
 }
 
-pub fn sync_show_stats(state: &mut State, show: bool) {
+pub fn sync_show_stats_mode(state: &mut State, mode: u8) {
     set_choice_by_label(
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
         "Show Stats",
-        usize::from(show),
+        mode.min(2) as usize,
     );
 }
 
@@ -1905,8 +1905,8 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
             config::update_vsync(new_index == 1);
         }
         if row.label == "Show Stats" {
-            let show = new_index == 1;
-            action = Some(ScreenAction::UpdateShowOverlay(show));
+            let mode = new_index.min(2) as u8;
+            action = Some(ScreenAction::UpdateShowOverlay(mode));
         }
         if row.label == "BG Brightness" {
             config::update_bg_brightness(bg_brightness_from_choice(new_index));

@@ -111,7 +111,8 @@ pub struct Config {
     pub windowed: bool,
     pub fullscreen_type: FullscreenType,
     pub display_monitor: usize,
-    pub show_stats: bool,
+    /// 0=Off, 1=FPS, 2=FPS+Stutter.
+    pub show_stats_mode: u8,
     pub translated_titles: bool,
     pub mine_hit_sound: bool,
     // Global background brightness during gameplay (ITGmania: Pref "BGBrightness").
@@ -159,7 +160,7 @@ impl Default for Config {
             windowed: true,
             fullscreen_type: FullscreenType::Exclusive,
             display_monitor: 0,
-            show_stats: false,
+            show_stats_mode: 0,
             translated_titles: false,
             mine_hit_sound: true,
             bg_brightness: 0.7,
@@ -278,7 +279,15 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     ));
     content.push_str(&format!(
         "ShowStats={}\n",
-        if default.show_stats { "1" } else { "0" }
+        if default.show_stats_mode != 0 {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "ShowStatsMode={}\n",
+        default.show_stats_mode.min(2)
     ));
     content.push_str(&format!(
         "SmoothHistogram={}\n",
@@ -400,10 +409,16 @@ pub fn load() {
                     .get("Options", "MineHitSound")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.mine_hit_sound, |v| v != 0);
-                cfg.show_stats = conf
-                    .get("Options", "ShowStats")
+                cfg.show_stats_mode = conf
+                    .get("Options", "ShowStatsMode")
                     .and_then(|v| v.parse::<u8>().ok())
-                    .map_or(default.show_stats, |v| v != 0);
+                    .map(|v| v.min(2))
+                    .or_else(|| {
+                        conf.get("Options", "ShowStats")
+                            .and_then(|v| v.parse::<u8>().ok())
+                            .map(|v| if v != 0 { 1 } else { 0 })
+                    })
+                    .unwrap_or(default.show_stats_mode);
                 cfg.translated_titles = conf
                     .get("Options", "TranslatedTitles")
                     .or_else(|| conf.get("Options", "translatedtitles"))
@@ -580,6 +595,7 @@ pub fn load() {
                     "SongParsingThreads",
                     "RateModPreservesPitch",
                     "ShowStats",
+                    "ShowStatsMode",
                     "SmoothHistogram",
                     "SFXVolume",
                     "SoftwareRendererThreads",
@@ -1270,8 +1286,9 @@ fn save_without_keymaps() {
     ));
     content.push_str(&format!(
         "ShowStats={}\n",
-        if cfg.show_stats { "1" } else { "0" }
+        if cfg.show_stats_mode != 0 { "1" } else { "0" }
     ));
+    content.push_str(&format!("ShowStatsMode={}\n", cfg.show_stats_mode.min(2)));
     content.push_str(&format!(
         "SmoothHistogram={}\n",
         if cfg.smooth_histogram { "1" } else { "0" }
@@ -1454,13 +1471,14 @@ pub fn update_vsync(enabled: bool) {
     save_without_keymaps();
 }
 
-pub fn update_show_stats(enabled: bool) {
+pub fn update_show_stats_mode(mode: u8) {
+    let mode = mode.min(2);
     {
         let mut cfg = CONFIG.lock().unwrap();
-        if cfg.show_stats == enabled {
+        if cfg.show_stats_mode == mode {
             return;
         }
-        cfg.show_stats = enabled;
+        cfg.show_stats_mode = mode;
     }
     save_without_keymaps();
 }

@@ -1524,21 +1524,25 @@ fn load_itg_sprite_noteskin(
     let hold_wrapper = find_explosion_wrapper("holdingoncommand", "hold explosion");
     let roll_wrapper = find_explosion_wrapper("rolloncommand", "roll explosion");
 
-    let hold_explosion_sprites = itg_resolve_actor_sprites(data, &behavior, "Down", "Hold Explosion");
+    let hold_explosion_sprites =
+        itg_resolve_actor_sprites(data, &behavior, "Down", "Hold Explosion");
     let hold_source = hold_explosion_sprites
         .iter()
         .find(|sprite| sprite.commands.contains_key("holdingoncommand"))
         .or_else(|| hold_explosion_sprites.first());
-    let hold_wrapper_source = hold_wrapper
-        .filter(|sprite| sprite.commands.contains_key("holdingoncommand"));
+    let hold_wrapper_source =
+        hold_wrapper.filter(|sprite| sprite.commands.contains_key("holdingoncommand"));
     hold.explosion = hold_wrapper_source
         .map(|sprite| slot_with_active_cmd(&sprite.slot, &sprite.commands, "holdingoncommand"))
-        .or_else(|| hold_source
-        .map(|sprite| {
-            let cmd = hold_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
-            slot_with_active_cmd(&sprite.slot, cmd, "holdingoncommand")
-        }))
-        .or_else(|| hold_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "holdingoncommand")))
+        .or_else(|| {
+            hold_source.map(|sprite| {
+                let cmd = hold_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
+                slot_with_active_cmd(&sprite.slot, cmd, "holdingoncommand")
+            })
+        })
+        .or_else(|| {
+            hold_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "holdingoncommand"))
+        })
         .or_else(|| {
             data.resolve_path("Down", "Hold Explosion")
                 .and_then(|p| itg_slot_from_path(&p))
@@ -1555,11 +1559,7 @@ fn load_itg_sprite_noteskin(
         .or_else(|| {
             itg_find_texture_with_prefix(data, "_down hold explosion")
                 .and_then(|p| {
-                    itg_slot_from_path_all_frames(
-                        &p,
-                        Some(0.01),
-                        itg_animation_is_beat_based(data),
-                    )
+                    itg_slot_from_path_all_frames(&p, Some(0.01), itg_animation_is_beat_based(data))
                 })
                 .map(|slot| {
                     hold_wrapper.map_or(slot.clone(), |wrapped| {
@@ -1567,21 +1567,25 @@ fn load_itg_sprite_noteskin(
                     })
                 })
         });
-    let roll_explosion_sprites = itg_resolve_actor_sprites(data, &behavior, "Down", "Roll Explosion");
+    let roll_explosion_sprites =
+        itg_resolve_actor_sprites(data, &behavior, "Down", "Roll Explosion");
     let roll_source = roll_explosion_sprites
         .iter()
         .find(|sprite| sprite.commands.contains_key("rolloncommand"))
         .or_else(|| roll_explosion_sprites.first());
-    let roll_wrapper_source = roll_wrapper
-        .filter(|sprite| sprite.commands.contains_key("rolloncommand"));
+    let roll_wrapper_source =
+        roll_wrapper.filter(|sprite| sprite.commands.contains_key("rolloncommand"));
     let roll_explosion = roll_wrapper_source
         .map(|sprite| slot_with_active_cmd(&sprite.slot, &sprite.commands, "rolloncommand"))
-        .or_else(|| roll_source
-        .map(|sprite| {
-            let cmd = roll_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
-            slot_with_active_cmd(&sprite.slot, cmd, "rolloncommand")
-        }))
-        .or_else(|| roll_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "rolloncommand")))
+        .or_else(|| {
+            roll_source.map(|sprite| {
+                let cmd = roll_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
+                slot_with_active_cmd(&sprite.slot, cmd, "rolloncommand")
+            })
+        })
+        .or_else(|| {
+            roll_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "rolloncommand"))
+        })
         .or_else(|| {
             data.resolve_path("Down", "Roll Explosion")
                 .and_then(|p| itg_slot_from_path(&p))
@@ -1598,11 +1602,7 @@ fn load_itg_sprite_noteskin(
         .or_else(|| {
             itg_find_texture_with_prefix(data, "_down hold explosion")
                 .and_then(|p| {
-                    itg_slot_from_path_all_frames(
-                        &p,
-                        Some(0.01),
-                        itg_animation_is_beat_based(data),
-                    )
+                    itg_slot_from_path_all_frames(&p, Some(0.01), itg_animation_is_beat_based(data))
                 })
                 .map(|slot| {
                     roll_wrapper.map_or(slot.clone(), |wrapped| {
@@ -1669,7 +1669,12 @@ fn load_itg_sprite_noteskin(
                     "{}=>{} keys={}",
                     sprite.element,
                     sprite.slot.texture_key(),
-                    sprite.commands.keys().cloned().collect::<Vec<_>>().join(",")
+                    sprite
+                        .commands
+                        .keys()
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(",")
                 )
             })
             .collect::<Vec<_>>();
@@ -1678,8 +1683,12 @@ fn load_itg_sprite_noteskin(
             search_dirs,
             hold_direct,
             roll_direct,
-            hold_wrapper.map(|s| s.slot.texture_key()).unwrap_or("<none>"),
-            roll_wrapper.map(|s| s.slot.texture_key()).unwrap_or("<none>"),
+            hold_wrapper
+                .map(|s| s.slot.texture_key())
+                .unwrap_or("<none>"),
+            roll_wrapper
+                .map(|s| s.slot.texture_key())
+                .unwrap_or("<none>"),
             hold.explosion
                 .as_ref()
                 .map(|s| s.texture_key())

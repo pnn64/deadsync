@@ -1152,12 +1152,12 @@ pub fn draw(
                 } => {
                     let set_opt = lookup_texture_case_insensitive(textures, texture_id.as_ref())
                         .and_then(|t| {
-                        if let RendererTexture::Vulkan(tex) = t {
-                            Some(tex.descriptor_set)
-                        } else {
-                            None
-                        }
-                    });
+                            if let RendererTexture::Vulkan(tex) = t {
+                                Some(tex.descriptor_set)
+                            } else {
+                                None
+                            }
+                        });
                     let Some(set) = set_opt else {
                         continue;
                     };
@@ -1230,12 +1230,12 @@ pub fn draw(
                     }
                     let set_opt = lookup_texture_case_insensitive(textures, texture_id.as_ref())
                         .and_then(|t| {
-                        if let RendererTexture::Vulkan(tex) = t {
-                            Some(tex.descriptor_set_repeat)
-                        } else {
-                            None
-                        }
-                    });
+                            if let RendererTexture::Vulkan(tex) = t {
+                                Some(tex.descriptor_set_repeat)
+                            } else {
+                                None
+                            }
+                        });
                     let Some(set) = set_opt else {
                         continue;
                     };

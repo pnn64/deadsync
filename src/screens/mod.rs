@@ -50,7 +50,7 @@ pub enum ScreenAction {
         monitor: Option<usize>,
         resolution: Option<(u32, u32)>,
     },
-    UpdateShowOverlay(bool),
+    UpdateShowOverlay(u8),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
