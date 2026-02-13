@@ -78,6 +78,8 @@ const Z_HOLD_BODY: i32 = 110;
 const Z_HOLD_CAP: i32 = 110;
 // ITG draws GhostArrowRow after columns; keep hold/roll ghost arrows above note lanes.
 const Z_HOLD_EXPLOSION: i32 = 145;
+// ITG's Explosion actor declares hold/roll children before tap judgments, so taps render on top.
+const Z_TAP_EXPLOSION: i32 = 150;
 const Z_HOLD_GLOW: i32 = 130;
 const Z_MINE_EXPLOSION: i32 = 101;
 const Z_TAP_NOTE: i32 = 140;
@@ -1697,7 +1699,7 @@ pub fn build(
                         ):
                         rotationz(-(rotation_deg as f32)):
                         blend(normal):
-                        z(101)
+                        z(Z_TAP_EXPLOSION)
                     ));
                     let glow = visual.glow;
                     let glow_strength =
@@ -1712,7 +1714,7 @@ pub fn build(
                             diffuse(glow[0], glow[1], glow[2], glow[3]):
                             rotationz(-(rotation_deg as f32)):
                             blend(add):
-                            z(101)
+                            z(Z_TAP_EXPLOSION)
                         ));
                     }
                 }
