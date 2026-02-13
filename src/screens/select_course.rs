@@ -1073,6 +1073,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         selected_index: state.selected_index,
         position_offset_from_selection: state.wheel_offset_from_selection,
         selection_animation_timer: state.selection_animation_timer,
+        selection_animation_beat: state.session_elapsed * 2.5,
         pack_song_counts: &state.pack_course_counts,
         color_pack_headers: true,
         preferred_difficulty_index: 0,

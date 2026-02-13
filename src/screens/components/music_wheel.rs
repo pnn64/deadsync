@@ -27,7 +27,7 @@ const NUM_VISIBLE_WHEEL_ITEMS: usize = NUM_WHEEL_ITEMS_TO_DRAW - 2; // 17 -> 15 
 const NUM_WHEEL_SLOTS: usize = NUM_WHEEL_ITEMS_TO_DRAW + 2; // 17 -> 19 internal
 const CENTER_WHEEL_SLOT_INDEX: usize = NUM_WHEEL_SLOTS / 2;
 const WHEEL_DRAW_RADIUS: f32 = (NUM_WHEEL_ITEMS_TO_DRAW as f32) * 0.5; // 8.5
-const SELECTION_ANIMATION_CYCLE_DURATION: f32 = 1.0;
+const SELECTION_HIGHLIGHT_BEAT_PERIOD: f32 = 2.0;
 const LAMP_PULSE_PERIOD: f32 = 0.8;
 const LAMP_PULSE_LERP_TO_WHITE: f32 = 0.70;
 
@@ -72,6 +72,7 @@ pub struct MusicWheelParams<'a> {
     pub selected_index: usize,
     pub position_offset_from_selection: f32,
     pub selection_animation_timer: f32,
+    pub selection_animation_beat: f32,
     pub pack_song_counts: &'a HashMap<String, usize>,
     pub color_pack_headers: bool,
     pub preferred_difficulty_index: usize,
@@ -117,11 +118,12 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let line_gap_units: f32 = 6.0;
     let half_item_h: f32 = item_h_full * 0.5; // NEW: Pre-calculate half height for centering children
 
-    // Selection pulse
-    let anim_t_unscaled = (p.selection_animation_timer / SELECTION_ANIMATION_CYCLE_DURATION)
+    // Selection pulse (Simply Love [MusicWheel] HighlightOnCommand):
+    // diffuseshift + effectclock("beatnooffset") + effectperiod(2)
+    let highlight_phase = (p.selection_animation_beat / SELECTION_HIGHLIGHT_BEAT_PERIOD)
         * std::f32::consts::PI
         * 2.0;
-    let anim_t = f32::midpoint(anim_t_unscaled.sin(), 1.0);
+    let anim_t = f32::midpoint(highlight_phase.cos(), 1.0);
 
     let lamp_pulse_t_unscaled =
         (p.selection_animation_timer / LAMP_PULSE_PERIOD) * std::f32::consts::PI * 2.0;

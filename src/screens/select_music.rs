@@ -261,14 +261,19 @@ fn preview_song_sec(state: &State) -> Option<f64> {
 }
 
 #[inline(always)]
-fn sl_arrow_bounce01(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 {
-    let beat = match entry_opt {
+fn sl_selection_anim_beat(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 {
+    match entry_opt {
         Some(MusicWheelEntry::Song(song)) => preview_song_sec(state).map_or(
             state.session_elapsed * song.max_bpm.max(1.0) as f32 / 60.0,
             |sec| beat_at_sec(song, sec) as f32,
         ),
         _ => state.session_elapsed * 2.5, // 150 BPM fallback
-    };
+    }
+}
+
+#[inline(always)]
+fn sl_arrow_bounce01(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 {
+    let beat = sl_selection_anim_beat(entry_opt, state);
     let effect_offset = -10.0 * crate::config::get().global_offset_seconds;
     let t = (beat + effect_offset).rem_euclid(1.0);
     (t * std::f32::consts::PI).sin().clamp(0.0, 1.0)
@@ -4197,11 +4202,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     // Music Wheel
+    let selection_animation_beat = sl_selection_anim_beat(entry_opt, state);
     actors.extend(music_wheel::build(music_wheel::MusicWheelParams {
         entries: &state.entries,
         selected_index: state.selected_index,
         position_offset_from_selection: state.wheel_offset_from_selection,
         selection_animation_timer: state.selection_animation_timer,
+        selection_animation_beat,
         pack_song_counts: &state.pack_song_counts, // O(1) Lookup
         color_pack_headers: state.sort_mode == WheelSortMode::Group,
         preferred_difficulty_index: state.preferred_difficulty_index,
