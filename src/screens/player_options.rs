@@ -421,10 +421,7 @@ fn noteskin_cols_per_player(play_style: crate::game::profile::PlayStyle) -> usiz
     }
 }
 
-fn load_noteskin_cached(
-    skin: &str,
-    cols_per_player: usize,
-) -> Option<Arc<Noteskin>> {
+fn load_noteskin_cached(skin: &str, cols_per_player: usize) -> Option<Arc<Noteskin>> {
     let style = noteskin::Style {
         num_cols: cols_per_player,
         num_players: 1,
@@ -1340,9 +1337,9 @@ fn apply_profile_defaults(
             .iter()
             .position(|c| c.eq_ignore_ascii_case(profile.noteskin.as_str()))
             .or_else(|| {
-                row.choices
-                    .iter()
-                    .position(|c| c.eq_ignore_ascii_case(crate::game::profile::NoteSkin::DEFAULT_NAME))
+                row.choices.iter().position(|c| {
+                    c.eq_ignore_ascii_case(crate::game::profile::NoteSkin::DEFAULT_NAME)
+                })
             })
             .unwrap_or(0);
     }
@@ -1874,10 +1871,13 @@ pub fn init(
         }
     }
     let mut noteskin_cache = build_noteskin_cache(cols_per_player, &initial_noteskin_names);
-    let noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] =
-        std::array::from_fn(|i| {
-            cached_or_load_noteskin(&mut noteskin_cache, &player_profiles[i].noteskin, cols_per_player)
-        });
+    let noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] = std::array::from_fn(|i| {
+        cached_or_load_noteskin(
+            &mut noteskin_cache,
+            &player_profiles[i].noteskin,
+            cols_per_player,
+        )
+    });
     let active = session_active_players();
     let row_tweens = init_row_tweens(rows.len(), [0; PLAYER_SLOTS], active);
     State {
@@ -2624,7 +2624,8 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         if should_persist {
             crate::game::profile::update_noteskin_for_side(persist_side, setting.clone());
         }
-        let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
+        let cols_per_player =
+            noteskin_cols_per_player(crate::game::profile::get_session_play_style());
         state.noteskin[player_idx] =
             cached_or_load_noteskin(&mut state.noteskin_cache, &setting, cols_per_player);
     } else if row_name == "Stepchart" {

@@ -314,6 +314,19 @@ pub fn draw(
     }
 
     #[inline(always)]
+    fn lookup_texture_case_insensitive<'a>(
+        textures: &'a HashMap<String, RendererTexture>,
+        key: &str,
+    ) -> Option<&'a RendererTexture> {
+        if let Some(tex) = textures.get(key) {
+            return Some(tex);
+        }
+        textures
+            .iter()
+            .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
+    }
+
+    #[inline(always)]
     fn apply_blend(gl: &glow::Context, want: BlendMode, last: &mut Option<BlendMode>) {
         if *last == Some(want) {
             return;
@@ -397,7 +410,8 @@ pub fn draw(
                         bytemuck::cast_slice(&mvp_array),
                     );
 
-                    if let Some(RendererTexture::OpenGL(gl_tex)) = textures.get(texture_id.as_ref())
+                    if let Some(RendererTexture::OpenGL(gl_tex)) =
+                        lookup_texture_case_insensitive(textures, texture_id.as_ref())
                     {
                         if last_bound_tex != Some(gl_tex.0) {
                             gl.bind_texture(glow::TEXTURE_2D, Some(gl_tex.0));
@@ -488,7 +502,8 @@ pub fn draw(
                         bytemuck::cast_slice(&mvp_array),
                     );
 
-                    let Some(RendererTexture::OpenGL(gl_tex)) = textures.get(texture_id.as_ref())
+                    let Some(RendererTexture::OpenGL(gl_tex)) =
+                        lookup_texture_case_insensitive(textures, texture_id.as_ref())
                     else {
                         continue;
                     };
@@ -497,8 +512,7 @@ pub fn draw(
                         last_bound_tex = Some(gl_tex.0);
                     }
 
-                    let mut transformed: Vec<TexturedMeshVertexRaw> =
-                        Vec::with_capacity(vs.len());
+                    let mut transformed: Vec<TexturedMeshVertexRaw> = Vec::with_capacity(vs.len());
                     for v in vs.iter() {
                         transformed.push(TexturedMeshVertexRaw {
                             pos: v.pos,

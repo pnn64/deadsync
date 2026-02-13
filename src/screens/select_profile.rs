@@ -132,7 +132,9 @@ impl NoteskinCache {
             num_players: 1,
         };
         let mut cache = HashMap::with_capacity(1);
-        if let Ok(default_skin) = noteskin::load_itg_skin_cached(&style, profile::NoteSkin::DEFAULT_NAME) {
+        if let Ok(default_skin) =
+            noteskin::load_itg_skin_cached(&style, profile::NoteSkin::DEFAULT_NAME)
+        {
             cache.insert(profile::NoteSkin::DEFAULT_NAME.to_string(), default_skin);
         }
         Self { cache, style }
@@ -1381,7 +1383,10 @@ fn push_scroller_frame(
                     };
                     let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
                     let slot_size = note_slot.size();
-                    let base_size = [slot_size[0] as f32 * note_scale, slot_size[1] as f32 * note_scale];
+                    let base_size = [
+                        slot_size[0] as f32 * note_scale,
+                        slot_size[1] as f32 * note_scale,
+                    ];
                     let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
                     let (sin_r, cos_r) = rot_rad.sin_cos();
                     let ox = draw.pos[0] * note_scale;
@@ -1397,7 +1402,12 @@ fn push_scroller_frame(
                     if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
                         continue;
                     }
-                    let color = [draw.tint[0], draw.tint[1], draw.tint[2], draw.tint[3] * inner_alpha];
+                    let color = [
+                        draw.tint[0],
+                        draw.tint[1],
+                        draw.tint[2],
+                        draw.tint[3] * inner_alpha,
+                    ];
                     let blend = if draw.blend_add {
                         BlendMode::Add
                     } else {

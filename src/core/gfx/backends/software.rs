@@ -65,6 +65,19 @@ pub fn draw(
     render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
 ) -> Result<u32, Box<dyn Error>> {
+    #[inline(always)]
+    fn lookup_texture_case_insensitive<'a>(
+        textures: &'a HashMap<String, RendererTexture>,
+        key: &str,
+    ) -> Option<&'a RendererTexture> {
+        if let Some(tex) = textures.get(key) {
+            return Some(tex);
+        }
+        textures
+            .iter()
+            .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
+    }
+
     let PhysicalSize { width, height } = state.window_size;
     if width == 0 || height == 0 {
         return Ok(0);
@@ -146,7 +159,8 @@ pub fn draw(
                                 edge_fade: _,
                             } => {
                                 let tex_key = texture_id.as_ref();
-                                let Some(RendererTexture::Software(tex)) = textures.get(tex_key)
+                                let Some(RendererTexture::Software(tex)) =
+                                    lookup_texture_case_insensitive(textures, tex_key)
                                 else {
                                     continue;
                                 };
@@ -188,7 +202,8 @@ pub fn draw(
                             } => match mode {
                                 MeshMode::Triangles => {
                                     let tex_key = texture_id.as_ref();
-                                    let Some(RendererTexture::Software(tex)) = textures.get(tex_key)
+                                    let Some(RendererTexture::Software(tex)) =
+                                        lookup_texture_case_insensitive(textures, tex_key)
                                     else {
                                         continue;
                                     };
@@ -229,7 +244,9 @@ pub fn draw(
                     edge_fade: _,
                 } => {
                     let tex_key = texture_id.as_ref();
-                    let Some(RendererTexture::Software(tex)) = textures.get(tex_key) else {
+                    let Some(RendererTexture::Software(tex)) =
+                        lookup_texture_case_insensitive(textures, tex_key)
+                    else {
                         continue;
                     };
                     rasterize_sprite(
@@ -268,7 +285,9 @@ pub fn draw(
                 } => match mode {
                     MeshMode::Triangles => {
                         let tex_key = texture_id.as_ref();
-                        let Some(RendererTexture::Software(tex)) = textures.get(tex_key) else {
+                        let Some(RendererTexture::Software(tex)) =
+                            lookup_texture_case_insensitive(textures, tex_key)
+                        else {
                             continue;
                         };
                         rasterize_textured_mesh_triangles(

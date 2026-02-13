@@ -15,9 +15,13 @@ use crate::game::{gameplay::PlayerRuntime, gameplay::State, profile, scroll::Scr
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use cgmath::{Deg, Matrix4, Point3, Vector3};
+use log::info;
 use rssp::streams::StreamSegment;
 use std::array::from_fn;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 // --- CONSTANTS ---
 
@@ -72,7 +76,8 @@ const SHOW_COMBO_AT: u32 = 4; // From Simply Love metrics
 const Z_RECEPTOR: i32 = 100;
 const Z_HOLD_BODY: i32 = 110;
 const Z_HOLD_CAP: i32 = 110;
-const Z_HOLD_EXPLOSION: i32 = 120;
+// ITG draws GhostArrowRow after columns; keep hold/roll ghost arrows above note lanes.
+const Z_HOLD_EXPLOSION: i32 = 145;
 const Z_HOLD_GLOW: i32 = 130;
 const Z_MINE_EXPLOSION: i32 = 101;
 const Z_TAP_NOTE: i32 = 140;
@@ -80,6 +85,8 @@ const Z_COLUMN_CUE: i32 = 90;
 const MINE_CORE_SIZE_RATIO: f32 = 0.45;
 const MINE_FILL_LAYERS: usize = 32;
 const Z_MEASURE_LINES: i32 = 80;
+static DDRVIVID_HOLD_GHOST_DRAW_LOGGED: AtomicBool = AtomicBool::new(false);
+static DDRVIVID_HOLD_GHOST_MISSING_LOGGED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Copy, Debug)]
 pub enum FieldPlacement {
@@ -158,7 +165,10 @@ pub(crate) fn noteskin_model_actor(
     let tx = draw.pos[0] * scale;
     let ty = draw.pos[1] * scale;
     let tz = draw.pos[2] * scale;
-    let focal = model_size[0].max(model_size[1]).mul_add(6.0, 0.0).max(180.0);
+    let focal = model_size[0]
+        .max(model_size[1])
+        .mul_add(6.0, 0.0)
+        .max(180.0);
     let du = uv_rect[2] - uv_rect[0];
     let dv = uv_rect[3] - uv_rect[1];
     let (tex_shift_u, tex_shift_v) = match slot.source.as_ref() {
@@ -177,7 +187,11 @@ pub(crate) fn noteskin_model_actor(
         color[2] * draw.tint[2],
         color[3] * draw.tint[3],
     ];
-    let blend = if draw.blend_add { BlendMode::Add } else { blend };
+    let blend = if draw.blend_add {
+        BlendMode::Add
+    } else {
+        blend
+    };
 
     let mut vertices = Vec::with_capacity(model.vertices.len());
     for v in model.vertices.iter() {
@@ -1042,6 +1056,7 @@ pub fn build(
     if player_idx >= state.num_players {
         return (Vec::new(), screen_center_x());
     }
+    let is_ddr_vivid_skin = profile.noteskin.as_str() == "ddr-vivid";
     // Use the cached field_zoom from gameplay state so visual layout and
     // scroll math share the exact same scaling as gameplay.
     let field_zoom = state.field_zoom[player_idx];
@@ -1487,24 +1502,42 @@ pub fn build(
                     z(Z_RECEPTOR)
                 ));
             }
-            if let Some(hold_slot) = state.active_holds[col]
+            let active_hold = state.active_holds[col]
                 .as_ref()
-                .filter(|active| active_hold_is_engaged(active))
-                .and_then(|active| {
-                    let note_type = &state.notes[active.note_index].note_type;
-                    let visuals = if matches!(note_type, NoteType::Roll) {
-                        &ns.roll
-                    } else {
-                        &ns.hold
-                    };
-                    visuals.explosion.as_ref().or(ns.hold.explosion.as_ref())
-                })
+                .filter(|active| active_hold_is_engaged(active));
+            let hold_slot = active_hold.and_then(|active| {
+                let note_type = &state.notes[active.note_index].note_type;
+                let visuals = if matches!(note_type, NoteType::Roll) {
+                    &ns.roll
+                } else {
+                    &ns.hold
+                };
+                visuals.explosion.as_ref().or(ns.hold.explosion.as_ref())
+            });
+            if hold_slot.is_none()
+                && active_hold.is_some()
+                && is_ddr_vivid_skin
+                && !DDRVIVID_HOLD_GHOST_MISSING_LOGGED.swap(true, Ordering::Relaxed)
             {
+                info!(
+                    "ddr-vivid hold ghost missing slot: col={}, ns.hold.explosion={}, ns.roll.explosion={}",
+                    col,
+                    ns.hold
+                        .explosion
+                        .as_ref()
+                        .map(|slot| slot.texture_key())
+                        .unwrap_or("<none>"),
+                    ns.roll
+                        .explosion
+                        .as_ref()
+                        .map(|slot| slot.texture_key())
+                        .unwrap_or("<none>"),
+                );
+            }
+            if let Some(hold_slot) = hold_slot {
                 let draw = hold_slot.model_draw_at(state.total_elapsed_in_screen, current_beat);
-                if !draw.visible {
-                    continue;
-                }
-                let hold_uv = hold_slot.uv_for_frame_at(0, state.total_elapsed_in_screen);
+                let hold_frame = hold_slot.frame_index(state.total_elapsed_in_screen, current_beat);
+                let hold_uv = hold_slot.uv_for_frame_at(hold_frame, state.total_elapsed_in_screen);
                 let base_size = scale_hold_explosion(hold_slot);
                 let hold_size = [
                     base_size[0] * draw.zoom[0].max(0.0),
@@ -1527,6 +1560,22 @@ pub fn build(
                 } else {
                     BlendMode::Alpha
                 };
+                if is_ddr_vivid_skin
+                    && !DDRVIVID_HOLD_GHOST_DRAW_LOGGED.swap(true, Ordering::Relaxed)
+                {
+                    info!(
+                        "ddr-vivid hold ghost draw sample: tex='{}' model={} frame={} uv={:?} size={:?} tint={:?} visible={} blend_add={} z={}",
+                        hold_slot.texture_key(),
+                        hold_slot.model.is_some(),
+                        hold_frame,
+                        hold_uv,
+                        hold_size,
+                        color,
+                        draw.visible,
+                        draw.blend_add,
+                        Z_HOLD_EXPLOSION,
+                    );
+                }
                 if let Some(model_actor) = noteskin_model_actor(
                     hold_slot,
                     center,
@@ -2023,10 +2072,11 @@ pub fn build(
                             // actually reaches the tail side. If the tail is offscreen,
                             // snapping the viewport cut to v_bottom creates a darker seam.
                             let tail_gap = (eff_natural_bottom - eff_body_bottom).max(0.0);
-                            let body_reaches_tail = eff_head_is_top && tail_gap <= segment_height + 1.0;
-                            let is_last_visible_segment = (eff_body_bottom - segment_bottom_eff).abs()
-                                <= 0.5
-                                || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
+                            let body_reaches_tail =
+                                eff_head_is_top && tail_gap <= segment_height + 1.0;
+                            let is_last_visible_segment =
+                                (eff_body_bottom - segment_bottom_eff).abs() <= 0.5
+                                    || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
 
                             if body_reaches_tail && is_last_visible_segment {
                                 if v_range >= 0.0 {
@@ -2223,17 +2273,17 @@ pub fn build(
                         };
                         let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
                         let slot_size = note_slot.size();
-                        let base_size = [slot_size[0] as f32 * note_scale, slot_size[1] as f32 * note_scale];
+                        let base_size = [
+                            slot_size[0] as f32 * note_scale,
+                            slot_size[1] as f32 * note_scale,
+                        ];
                         let offset_scale = note_scale;
                         let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
                         let (sin_r, cos_r) = rot_rad.sin_cos();
                         let ox = draw.pos[0] * offset_scale;
                         let oy = draw.pos[1] * offset_scale;
                         let offset = [ox * cos_r - oy * sin_r, ox * sin_r + oy * cos_r];
-                        let center = [
-                            head_center[0] + offset[0],
-                            head_center[1] + offset[1],
-                        ];
+                        let center = [head_center[0] + offset[0], head_center[1] + offset[1]];
                         let size = [
                             base_size[0] * draw.zoom[0].max(0.0),
                             base_size[1] * draw.zoom[1].max(0.0),
@@ -2392,8 +2442,8 @@ pub fn build(
                             .and_then(|colors| colors.as_deref());
                         if slot.model.is_none()
                             && slot.source.frame_count() <= 1
-                            && let Some(fill_state) =
-                                fill_gradient.and_then(|colors| mine_fill_state(colors, current_beat))
+                            && let Some(fill_state) = fill_gradient
+                                .and_then(|colors| mine_fill_state(colors, current_beat))
                         {
                             let width = circle_reference[0] * MINE_CORE_SIZE_RATIO;
                             let height = circle_reference[1] * MINE_CORE_SIZE_RATIO;
@@ -2517,17 +2567,17 @@ pub fn build(
                         };
                         let note_uv = note_slot.uv_for_frame_at(note_frame, uv_elapsed);
                         let slot_size = note_slot.size();
-                        let base_size = [slot_size[0] as f32 * note_scale, slot_size[1] as f32 * note_scale];
+                        let base_size = [
+                            slot_size[0] as f32 * note_scale,
+                            slot_size[1] as f32 * note_scale,
+                        ];
                         let offset_scale = note_scale;
                         let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
                         let (sin_r, cos_r) = rot_rad.sin_cos();
                         let ox = draw.pos[0] * offset_scale;
                         let oy = draw.pos[1] * offset_scale;
                         let offset = [ox * cos_r - oy * sin_r, ox * sin_r + oy * cos_r];
-                        let center = [
-                            note_center[0] + offset[0],
-                            note_center[1] + offset[1],
-                        ];
+                        let center = [note_center[0] + offset[0], note_center[1] + offset[1]];
                         let note_size = [
                             base_size[0] * draw.zoom[0].max(0.0),
                             base_size[1] * draw.zoom[1].max(0.0),

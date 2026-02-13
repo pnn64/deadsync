@@ -618,6 +618,19 @@ fn pick_tex<'a>(api: Api, tex: &'a RendererTexture) -> Option<&'a Texture> {
     }
 }
 
+#[inline(always)]
+fn lookup_texture_case_insensitive<'a>(
+    textures: &'a HashMap<String, RendererTexture>,
+    key: &str,
+) -> Option<&'a RendererTexture> {
+    if let Some(tex) = textures.get(key) {
+        return Some(tex);
+    }
+    textures
+        .iter()
+        .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
+}
+
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
@@ -667,8 +680,7 @@ pub fn draw(
                     uv_offset,
                     edge_fade,
                 } => {
-                    let tex = textures
-                        .get(texture_id.as_ref())
+                    let tex = lookup_texture_case_insensitive(textures, texture_id.as_ref())
                         .and_then(|t| pick_tex(api, t));
                     let Some(tex) = tex else {
                         continue;
@@ -735,8 +747,7 @@ pub fn draw(
                     if vertices.is_empty() {
                         continue;
                     }
-                    let tex = textures
-                        .get(texture_id.as_ref())
+                    let tex = lookup_texture_case_insensitive(textures, texture_id.as_ref())
                         .and_then(|t| pick_tex(api, t));
                     let Some(tex) = tex else {
                         continue;
@@ -962,9 +973,7 @@ pub fn draw(
                         last_bind = Some(run.key);
                     }
                     match run.mode {
-                        MeshMode::Triangles => {
-                            pass.draw(run.start..(run.start + run.count), 0..1)
-                        }
+                        MeshMode::Triangles => pass.draw(run.start..(run.start + run.count), 0..1),
                     }
                 }
             }
@@ -1148,12 +1157,13 @@ fn reconfigure_surface(state: &mut State) {
         );
         let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
             build_mesh_pipeline_set(&state.device, &state.proj, state.config.format);
-        let (tmesh_shader, tmesh_pipeline_layout, tmesh_pipelines) = build_textured_mesh_pipeline_set(
-            &state.device,
-            &state.proj,
-            &state.bind_layout,
-            state.config.format,
-        );
+        let (tmesh_shader, tmesh_pipeline_layout, tmesh_pipelines) =
+            build_textured_mesh_pipeline_set(
+                &state.device,
+                &state.proj,
+                &state.bind_layout,
+                state.config.format,
+            );
         state.shader = shader;
         state.pipeline_layout = pipeline_layout;
         state.pipelines = pipelines;

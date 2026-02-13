@@ -68,9 +68,10 @@ pub struct Texture {
 impl Drop for Texture {
     fn drop(&mut self) {
         unsafe {
-            let _ = self
-                .device
-                .free_descriptor_sets(self.pool, &[self.descriptor_set, self.descriptor_set_repeat]);
+            let _ = self.device.free_descriptor_sets(
+                self.pool,
+                &[self.descriptor_set, self.descriptor_set_repeat],
+            );
             self.device.destroy_image_view(self.view, None);
             self.device.destroy_image(self.image, None);
             self.device.free_memory(self.memory, None);
@@ -136,9 +137,9 @@ pub struct State {
     mesh_ring_ptr: *mut MeshVertex,        // persistently mapped pointer
     mesh_capacity_vertices: usize,         // total vertices across ring
     per_frame_stride_vertices: usize,      // vertices reserved per frame
-    tmesh_ring: Option<BufferResource>, // one big VB for all frames (textured mesh)
+    tmesh_ring: Option<BufferResource>,    // one big VB for all frames (textured mesh)
     tmesh_ring_ptr: *mut TexturedMeshVertexGpu, // persistently mapped pointer
-    tmesh_capacity_vertices: usize,    // total textured mesh vertices across ring
+    tmesh_capacity_vertices: usize,        // total textured mesh vertices across ring
     per_frame_stride_tmesh_vertices: usize, // textured mesh vertices reserved per frame
 }
 
@@ -1013,6 +1014,19 @@ pub fn draw(
         (center, [sx, sy], [sin_t, cos_t])
     }
 
+    #[inline(always)]
+    fn lookup_texture_case_insensitive<'a>(
+        textures: &'a HashMap<String, RendererTexture>,
+        key: &str,
+    ) -> Option<&'a RendererTexture> {
+        if let Some(tex) = textures.get(key) {
+            return Some(tex);
+        }
+        textures
+            .iter()
+            .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
+    }
+
     let (needed_instances, needed_mesh_vertices, needed_tmesh_vertices) = {
         let mut inst: usize = 0;
         let mut mesh: usize = 0;
@@ -1136,7 +1150,8 @@ pub fn draw(
                     uv_offset,
                     edge_fade,
                 } => {
-                    let set_opt = textures.get(texture_id.as_ref()).and_then(|t| {
+                    let set_opt = lookup_texture_case_insensitive(textures, texture_id.as_ref())
+                        .and_then(|t| {
                         if let RendererTexture::Vulkan(tex) = t {
                             Some(tex.descriptor_set)
                         } else {
@@ -1213,7 +1228,8 @@ pub fn draw(
                     if *mode != MeshMode::Triangles || vertices.is_empty() {
                         continue;
                     }
-                    let set_opt = textures.get(texture_id.as_ref()).and_then(|t| {
+                    let set_opt = lookup_texture_case_insensitive(textures, texture_id.as_ref())
+                        .and_then(|t| {
                         if let RendererTexture::Vulkan(tex) = t {
                             Some(tex.descriptor_set_repeat)
                         } else {

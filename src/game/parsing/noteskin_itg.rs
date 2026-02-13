@@ -109,8 +109,7 @@ impl NoteskinData {
 
         warn!(
             "noteskin redirect depth exceeded while resolving '{} {}'",
-            button,
-            element
+            button, element
         );
         None
     }
@@ -260,10 +259,9 @@ fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
         .map(|entry| entry.path())
         .filter(|path| path.is_file())
         .filter(|path| {
-            path.file_name().and_then(|s| s.to_str()).is_some_and(|name| {
-                name.to_ascii_lowercase()
-                    .starts_with(want.as_str())
-            })
+            path.file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(|name| name.to_ascii_lowercase().starts_with(want.as_str()))
         })
         .collect();
 

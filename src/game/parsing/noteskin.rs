@@ -1,5 +1,5 @@
-use crate::assets;
 use super::noteskin_itg;
+use crate::assets;
 use image::image_dimensions;
 use log::warn;
 use std::collections::{HashMap, HashSet};
@@ -1026,7 +1026,11 @@ static ITG_SKIN_CACHE: OnceLock<Mutex<HashMap<ItgSkinCacheKey, Arc<Noteskin>>>> 
 #[inline(always)]
 fn itg_skin_cache_key(style: &Style, skin: &str) -> ItgSkinCacheKey {
     let trimmed = skin.trim();
-    let normalized = if trimmed.is_empty() { "default" } else { trimmed };
+    let normalized = if trimmed.is_empty() {
+        "default"
+    } else {
+        trimmed
+    };
     ItgSkinCacheKey {
         num_cols: style.num_cols,
         num_players: style.num_players,
@@ -1047,7 +1051,9 @@ pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, 
     }
 
     let loaded = Arc::new(load_itg_skin(style, skin)?);
-    let mut guard = cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut guard = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let entry = guard.entry(key).or_insert_with(|| loaded.clone());
     Ok(entry.clone())
 }
@@ -1280,8 +1286,10 @@ fn load_itg_sprite_noteskin(
         for q in 0..NUM_QUANTIZATIONS {
             let color_idx = q.min(note_color_count - 1) as f32;
             let note_src = [
-                note_base.def.src[0] + (tex_dims.0 as f32 * note_spacing_x * color_idx).round() as i32,
-                note_base.def.src[1] + (tex_dims.1 as f32 * note_spacing_y * color_idx).round() as i32,
+                note_base.def.src[0]
+                    + (tex_dims.0 as f32 * note_spacing_x * color_idx).round() as i32,
+                note_base.def.src[1]
+                    + (tex_dims.1 as f32 * note_spacing_y * color_idx).round() as i32,
             ];
             let mut layers = Vec::with_capacity(note_sprites.len());
             for raw in &note_sprites {
@@ -1306,13 +1314,19 @@ fn load_itg_sprite_noteskin(
         let receptor_slot = receptor_sprites
             .first()
             .map(|s| s.slot.clone())
-            .or_else(|| itg_find_texture_with_prefix(data, "_receptor").and_then(|p| itg_slot_from_path(&p)))
+            .or_else(|| {
+                itg_find_texture_with_prefix(data, "_receptor").and_then(|p| itg_slot_from_path(&p))
+            })
             .ok_or_else(|| format!("failed to resolve Receptor for button '{button}'"))?;
         let glow_slot = receptor_sprites
             .get(1)
             .map(|s| s.slot.clone())
-            .or_else(|| itg_find_texture_with_prefix(data, "_rflash").and_then(|p| itg_slot_from_path(&p)))
-            .or_else(|| itg_find_texture_with_prefix(data, "_glow").and_then(|p| itg_slot_from_path(&p)));
+            .or_else(|| {
+                itg_find_texture_with_prefix(data, "_rflash").and_then(|p| itg_slot_from_path(&p))
+            })
+            .or_else(|| {
+                itg_find_texture_with_prefix(data, "_glow").and_then(|p| itg_slot_from_path(&p))
+            });
         receptor_off.push(receptor_slot);
         receptor_glow.push(glow_slot);
 
@@ -1336,16 +1350,23 @@ fn load_itg_sprite_noteskin(
         mine_frames.push(mine_frame);
     }
 
-    let hold_body_inactive = itg_resolve_actor_sprites(data, &behavior, "Down", "Hold Body Inactive")
-        .into_iter()
-        .next()
-        .map(|s| s.slot)
-        .or_else(|| data.resolve_path("Down", "Hold Body Inactive").and_then(|p| itg_slot_from_path(&p)));
+    let hold_body_inactive =
+        itg_resolve_actor_sprites(data, &behavior, "Down", "Hold Body Inactive")
+            .into_iter()
+            .next()
+            .map(|s| s.slot)
+            .or_else(|| {
+                data.resolve_path("Down", "Hold Body Inactive")
+                    .and_then(|p| itg_slot_from_path(&p))
+            });
     let hold_body_active = itg_resolve_actor_sprites(data, &behavior, "Down", "Hold Body Active")
         .into_iter()
         .next()
         .map(|s| s.slot)
-        .or_else(|| data.resolve_path("Down", "Hold Body Active").and_then(|p| itg_slot_from_path(&p)));
+        .or_else(|| {
+            data.resolve_path("Down", "Hold Body Active")
+                .and_then(|p| itg_slot_from_path(&p))
+        });
     let hold_bottomcap_inactive =
         itg_resolve_actor_sprites(data, &behavior, "Down", "Hold BottomCap Inactive")
             .into_iter()
@@ -1364,16 +1385,23 @@ fn load_itg_sprite_noteskin(
                 data.resolve_path("Down", "Hold BottomCap Active")
                     .and_then(|p| itg_slot_from_path(&p))
             });
-    let roll_body_inactive = itg_resolve_actor_sprites(data, &behavior, "Down", "Roll Body Inactive")
-        .into_iter()
-        .next()
-        .map(|s| s.slot)
-        .or_else(|| data.resolve_path("Down", "Roll Body Inactive").and_then(|p| itg_slot_from_path(&p)));
+    let roll_body_inactive =
+        itg_resolve_actor_sprites(data, &behavior, "Down", "Roll Body Inactive")
+            .into_iter()
+            .next()
+            .map(|s| s.slot)
+            .or_else(|| {
+                data.resolve_path("Down", "Roll Body Inactive")
+                    .and_then(|p| itg_slot_from_path(&p))
+            });
     let roll_body_active = itg_resolve_actor_sprites(data, &behavior, "Down", "Roll Body Active")
         .into_iter()
         .next()
         .map(|s| s.slot)
-        .or_else(|| data.resolve_path("Down", "Roll Body Active").and_then(|p| itg_slot_from_path(&p)));
+        .or_else(|| {
+            data.resolve_path("Down", "Roll Body Active")
+                .and_then(|p| itg_slot_from_path(&p))
+        });
     let roll_bottomcap_inactive =
         itg_resolve_actor_sprites(data, &behavior, "Down", "Roll BottomCap Inactive")
             .into_iter()
@@ -1419,11 +1447,19 @@ fn load_itg_sprite_noteskin(
     let explosion_sprites = itg_resolve_actor_sprites(data, &behavior, "Down", "Explosion");
     let dim_sprites = explosion_sprites
         .iter()
-        .filter(|s| s.element.to_ascii_lowercase().starts_with("tap explosion dim"))
+        .filter(|s| {
+            s.element
+                .to_ascii_lowercase()
+                .starts_with("tap explosion dim")
+        })
         .collect::<Vec<_>>();
     let bright_sprites = explosion_sprites
         .iter()
-        .filter(|s| s.element.to_ascii_lowercase().starts_with("tap explosion bright"))
+        .filter(|s| {
+            s.element
+                .to_ascii_lowercase()
+                .starts_with("tap explosion bright")
+        })
         .collect::<Vec<_>>();
     let slot_with_active_cmd =
         |slot: &SpriteSlot, commands: &HashMap<String, String>, active_key: &str| {
@@ -1444,21 +1480,83 @@ fn load_itg_sprite_noteskin(
             with_fx
         };
 
-    hold.explosion = explosion_sprites
+    let hold_wrapper = explosion_sprites
         .iter()
-        .find(|s| s.element.to_ascii_lowercase().starts_with("hold explosion"))
-        .map(|s| slot_with_active_cmd(&s.slot, &s.commands, "holdingoncommand"))
+        .find(|s| s.element.to_ascii_lowercase().contains("hold explosion"));
+    let roll_wrapper = explosion_sprites
+        .iter()
+        .find(|s| s.element.to_ascii_lowercase().contains("roll explosion"));
+    hold.explosion = itg_resolve_actor_sprites(data, &behavior, "Down", "Hold Explosion")
+        .into_iter()
+        .next()
+        .map(|sprite| {
+            let cmd = hold_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
+            slot_with_active_cmd(&sprite.slot, cmd, "holdingoncommand")
+        })
+        .or_else(|| hold_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "holdingoncommand")))
         .or_else(|| {
             data.resolve_path("Down", "Hold Explosion")
                 .and_then(|p| itg_slot_from_path(&p))
+        })
+        .or_else(|| {
+            data.resolve_path("Down", "Hold Explosion")
+                .and_then(|p| itg_slot_from_actor_path_first_sprite(data, &p))
+                .map(|slot| {
+                    hold_wrapper.map_or(slot.clone(), |wrapped| {
+                        slot_with_active_cmd(&slot, &wrapped.commands, "holdingoncommand")
+                    })
+                })
+        })
+        .or_else(|| {
+            itg_find_texture_with_prefix(data, "_down hold explosion")
+                .and_then(|p| {
+                    itg_slot_from_path_all_frames(
+                        &p,
+                        Some(0.01),
+                        itg_animation_is_beat_based(data),
+                    )
+                })
+                .map(|slot| {
+                    hold_wrapper.map_or(slot.clone(), |wrapped| {
+                        slot_with_active_cmd(&slot, &wrapped.commands, "holdingoncommand")
+                    })
+                })
         });
-    let roll_explosion = explosion_sprites
-        .iter()
-        .find(|s| s.element.to_ascii_lowercase().starts_with("roll explosion"))
-        .map(|s| slot_with_active_cmd(&s.slot, &s.commands, "rolloncommand"))
+    let roll_explosion = itg_resolve_actor_sprites(data, &behavior, "Down", "Roll Explosion")
+        .into_iter()
+        .next()
+        .map(|sprite| {
+            let cmd = roll_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
+            slot_with_active_cmd(&sprite.slot, cmd, "rolloncommand")
+        })
+        .or_else(|| roll_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "rolloncommand")))
         .or_else(|| {
             data.resolve_path("Down", "Roll Explosion")
                 .and_then(|p| itg_slot_from_path(&p))
+        })
+        .or_else(|| {
+            data.resolve_path("Down", "Roll Explosion")
+                .and_then(|p| itg_slot_from_actor_path_first_sprite(data, &p))
+                .map(|slot| {
+                    roll_wrapper.map_or(slot.clone(), |wrapped| {
+                        slot_with_active_cmd(&slot, &wrapped.commands, "rolloncommand")
+                    })
+                })
+        })
+        .or_else(|| {
+            itg_find_texture_with_prefix(data, "_down hold explosion")
+                .and_then(|p| {
+                    itg_slot_from_path_all_frames(
+                        &p,
+                        Some(0.01),
+                        itg_animation_is_beat_based(data),
+                    )
+                })
+                .map(|slot| {
+                    roll_wrapper.map_or(slot.clone(), |wrapped| {
+                        slot_with_active_cmd(&slot, &wrapped.commands, "rolloncommand")
+                    })
+                })
         });
     roll.explosion = roll_explosion.or(hold.explosion.clone());
     let explosion_slot = dim_sprites
@@ -1636,12 +1734,22 @@ fn itg_receptor_pulse(metrics: &noteskin_itg::IniData) -> ReceptorPulse {
                 }
             }
             "effectperiod" => {
-                if let Ok(v) = raw_args.trim().trim_matches('"').trim_matches('\'').parse::<f32>() {
+                if let Ok(v) = raw_args
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .parse::<f32>()
+                {
                     pulse.effect_period = v.max(f32::EPSILON);
                 }
             }
             "effectoffset" => {
-                if let Ok(v) = raw_args.trim().trim_matches('"').trim_matches('\'').parse::<f32>() {
+                if let Ok(v) = raw_args
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .parse::<f32>()
+                {
                     pulse.effect_offset = v;
                 }
             }
@@ -1841,7 +1949,10 @@ fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
                 }
             }
             "blend" => {
-                if args.iter().any(|a| a.to_ascii_lowercase().contains("blendmode_add")) {
+                if args
+                    .iter()
+                    .any(|a| a.to_ascii_lowercase().contains("blendmode_add"))
+                {
                     out.blend_add = Some(true);
                 } else if !args.is_empty() {
                     out.blend_add = Some(false);
@@ -1878,9 +1989,13 @@ enum ItgActorMod {
 }
 
 fn itg_parse_actor_mod_token(cmd: &str, args: &[&str]) -> Option<ItgActorMod> {
-    let first = args
-        .first()
-        .and_then(|v| v.trim().trim_matches('"').trim_matches('\'').parse::<f32>().ok());
+    let first = args.first().and_then(|v| {
+        v.trim()
+            .trim_matches('"')
+            .trim_matches('\'')
+            .parse::<f32>()
+            .ok()
+    });
     let bool_first = args.first().map(|v| {
         let t = v.trim().trim_matches('"').trim_matches('\'');
         t.eq_ignore_ascii_case("true") || t == "1"
@@ -1908,7 +2023,13 @@ fn itg_parse_actor_mod_token(cmd: &str, args: &[&str]) -> Option<ItgActorMod> {
                 let parsed = args
                     .iter()
                     .take(4)
-                    .map(|v| v.trim().trim_matches('"').trim_matches('\'').parse::<f32>().ok())
+                    .map(|v| {
+                        v.trim()
+                            .trim_matches('"')
+                            .trim_matches('\'')
+                            .parse::<f32>()
+                            .ok()
+                    })
                     .collect::<Option<Vec<f32>>>();
                 if let Some(vals) = parsed {
                     return Some(ItgActorMod::Diffuse([vals[0], vals[1], vals[2], vals[3]]));
@@ -2074,7 +2195,12 @@ fn itg_model_draw_program(
                     );
                     let raw_clock = args
                         .first()
-                        .map(|v| v.trim().trim_matches('"').trim_matches('\'').to_ascii_lowercase())
+                        .map(|v| {
+                            v.trim()
+                                .trim_matches('"')
+                                .trim_matches('\'')
+                                .to_ascii_lowercase()
+                        })
                         .unwrap_or_else(|| "time".to_string());
                     effect.clock = if raw_clock.contains("beat") {
                         ModelEffectClock::Beat
@@ -2210,7 +2336,12 @@ fn itg_model_draw_program(
                         })
                         .collect::<Vec<_>>();
                     if vals.len() == 4 {
-                        effect.timing = [vals[0].max(0.0), vals[1].max(0.0), vals[2].max(0.0), vals[3].max(0.0)];
+                        effect.timing = [
+                            vals[0].max(0.0),
+                            vals[1].max(0.0),
+                            vals[2].max(0.0),
+                            vals[3].max(0.0),
+                        ];
                     }
                 }
                 "effectmagnitude" => {
@@ -2279,7 +2410,13 @@ fn itg_model_draw_program(
 
 fn itg_parse_f32_list(raw: &str) -> Vec<f32> {
     raw.split(',')
-        .filter_map(|part| part.trim().trim_matches('"').trim_matches('\'').parse::<f32>().ok())
+        .filter_map(|part| {
+            part.trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .parse::<f32>()
+                .ok()
+        })
         .collect()
 }
 
@@ -2299,7 +2436,10 @@ fn itg_parse_color(raw: &str) -> Option<[f32; 4]> {
     Some([values[0], values[1], values[2], values[3]])
 }
 
-fn itg_find_texture_with_prefix(data: &noteskin_itg::NoteskinData, prefix: &str) -> Option<PathBuf> {
+fn itg_find_texture_with_prefix(
+    data: &noteskin_itg::NoteskinData,
+    prefix: &str,
+) -> Option<PathBuf> {
     let want = prefix.to_ascii_lowercase();
     for dir in &data.search_dirs {
         let Ok(entries) = fs::read_dir(dir) else {
@@ -2310,10 +2450,12 @@ fn itg_find_texture_with_prefix(data: &noteskin_itg::NoteskinData, prefix: &str)
             .map(|entry| entry.path())
             .filter(|path| path.is_file())
             .filter(|path| {
-                path.file_name().and_then(|s| s.to_str()).is_some_and(|name| {
-                    name.to_ascii_lowercase().starts_with(&want)
-                        && name.to_ascii_lowercase().ends_with(".png")
-                })
+                path.file_name()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|name| {
+                        name.to_ascii_lowercase().starts_with(&want)
+                            && name.to_ascii_lowercase().ends_with(".png")
+                    })
             })
             .collect::<Vec<_>>();
         if matches.is_empty() {
@@ -2469,8 +2611,7 @@ fn itg_load_lua_behavior(data: &noteskin_itg::NoteskinData) -> ItgLuaBehavior {
         {
             behavior.remap_head_to_tap = true;
         }
-        if content.contains("sElement == \"Tap Fake\"")
-            || content.contains("sElement=='Tap Fake'")
+        if content.contains("sElement == \"Tap Fake\"") || content.contains("sElement=='Tap Fake'")
         {
             behavior.remap_tap_fake_to_tap = true;
         }
@@ -2576,7 +2717,11 @@ fn itg_parse_lua_table_key(raw: &str) -> Option<String> {
 }
 
 fn itg_parse_lua_quoted(raw: &str) -> Option<String> {
-    let trimmed = raw.trim().trim_end_matches(',').trim_end_matches(';').trim();
+    let trimmed = raw
+        .trim()
+        .trim_end_matches(',')
+        .trim_end_matches(';')
+        .trim();
     if trimmed.len() < 2 {
         return None;
     }
@@ -2668,9 +2813,7 @@ fn itg_parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
         let frame_override = itg_find_post_call_frame_override(content, close);
         if !args.is_empty() {
             let path_expr = itg_rewrite_arg0_expr(&args[0], &arg0_aliases);
-            let arg_expr = args
-                .get(1)
-                .map(|s| itg_rewrite_arg0_expr(s, &arg0_aliases));
+            let arg_expr = args.get(1).map(|s| itg_rewrite_arg0_expr(s, &arg0_aliases));
             decl.path_refs.push(ItgLuaPathRefDecl {
                 path_expr,
                 arg_expr,
@@ -2811,7 +2954,10 @@ fn itg_find_post_call_commands(
     metrics: &noteskin_itg::IniData,
 ) -> (HashMap<String, String>, usize) {
     let mut after = itg_skip_ws(content, call_close + 1);
-    if !content.get(after..).is_some_and(|tail| tail.starts_with("..")) {
+    if !content
+        .get(after..)
+        .is_some_and(|tail| tail.starts_with(".."))
+    {
         return (HashMap::new(), call_close + 1);
     }
     after += 2;
@@ -2830,7 +2976,10 @@ fn itg_find_post_call_commands(
 
 fn itg_find_post_call_frame_override(content: &str, call_close: usize) -> Option<usize> {
     let mut after = itg_skip_ws(content, call_close + 1);
-    if !content.get(after..).is_some_and(|tail| tail.starts_with("..")) {
+    if !content
+        .get(after..)
+        .is_some_and(|tail| tail.starts_with(".."))
+    {
         return None;
     }
     after += 2;
@@ -2902,7 +3051,10 @@ fn itg_find_enclosing_loadactor_for_noteskin(
     None
 }
 
-fn itg_parse_sprite_block(block: &str, metrics: &noteskin_itg::IniData) -> Option<ItgLuaSpriteDecl> {
+fn itg_parse_sprite_block(
+    block: &str,
+    metrics: &noteskin_itg::IniData,
+) -> Option<ItgLuaSpriteDecl> {
     let mut texture_expr = None;
     let mut frame0 = 0usize;
     let mut frame_count = 1usize;
@@ -2943,8 +3095,7 @@ fn itg_parse_sprite_block(block: &str, metrics: &noteskin_itg::IniData) -> Optio
             continue;
         }
         let key_lower = key.to_ascii_lowercase();
-        if key_lower.starts_with("frame") && key_lower[5..].chars().all(|ch| ch.is_ascii_digit())
-        {
+        if key_lower.starts_with("frame") && key_lower[5..].chars().all(|ch| ch.is_ascii_digit()) {
             if let Ok(parsed) = value.parse::<usize>() {
                 frame_seen = true;
                 frame_max = frame_max.max(parsed);
@@ -2954,8 +3105,7 @@ fn itg_parse_sprite_block(block: &str, metrics: &noteskin_itg::IniData) -> Optio
             }
             continue;
         }
-        if key_lower.starts_with("delay") && key_lower[5..].chars().all(|ch| ch.is_ascii_digit())
-        {
+        if key_lower.starts_with("delay") && key_lower[5..].chars().all(|ch| ch.is_ascii_digit()) {
             if let Ok(idx) = key_lower[5..].parse::<usize>()
                 && let Some(delay) = itg_parse_lua_float_token(value)
             {
@@ -3095,7 +3245,10 @@ fn itg_parse_loadactor_args(args: &str) -> Option<(Option<String>, String)> {
     Some((button_override, element))
 }
 
-fn itg_parse_commands_block(block: &str, metrics: &noteskin_itg::IniData) -> HashMap<String, String> {
+fn itg_parse_commands_block(
+    block: &str,
+    metrics: &noteskin_itg::IniData,
+) -> HashMap<String, String> {
     let mut commands = HashMap::new();
     for raw in block.lines() {
         let mut line = raw.trim();
@@ -3271,7 +3424,11 @@ fn itg_parse_self_chain_commands(body: &str) -> Option<String> {
 }
 
 fn itg_resolve_command_expr(raw: &str, metrics: &noteskin_itg::IniData) -> Option<String> {
-    let value = raw.trim().trim_end_matches(',').trim_end_matches(';').trim();
+    let value = raw
+        .trim()
+        .trim_end_matches(',')
+        .trim_end_matches(';')
+        .trim();
     if value.starts_with("NOTESKIN:GetMetricA(") {
         let args = itg_extract_quoted_strings(value);
         if args.len() >= 2 {
@@ -3352,7 +3509,8 @@ fn itg_resolve_actor_sprites_inner(
     let mut resolved_element = element.to_string();
     if behavior.remap_head_to_tap
         && (resolved_element.contains("Head")
-            || (behavior.remap_tap_fake_to_tap && resolved_element.eq_ignore_ascii_case("Tap Fake")))
+            || (behavior.remap_tap_fake_to_tap
+                && resolved_element.eq_ignore_ascii_case("Tap Fake")))
     {
         resolved_element = "Tap Note".to_string();
     }
@@ -3408,7 +3566,9 @@ fn itg_resolve_actor_file(
         .and_then(|s| s.to_str())
         .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"));
     if !is_lua {
-        if let Some(mut slot) = itg_slot_from_path_with_frame(&path, 0).or_else(|| itg_slot_from_path(&path)) {
+        if let Some(mut slot) =
+            itg_slot_from_path_with_frame(&path, 0).or_else(|| itg_slot_from_path(&path))
+        {
             if behavior.parts_to_rotate.contains(element_lower)
                 && let Some(rot) = behavior.rotate.get(&button.to_ascii_lowercase())
             {
@@ -3443,7 +3603,8 @@ fn itg_resolve_actor_file(
         let Some(texture_path) = texture_path else {
             continue;
         };
-        let anim_is_beat = itg_sprite_animation_is_beat_based(&sprite.commands, default_anim_is_beat);
+        let anim_is_beat =
+            itg_sprite_animation_is_beat_based(&sprite.commands, default_anim_is_beat);
         let mut slot = if sprite.frame_count > 1 {
             itg_slot_from_path_animated(
                 &texture_path,
@@ -3485,8 +3646,9 @@ fn itg_resolve_actor_file(
         if let Some(model_layers) = itg_parse_milkshape_model_layers(data, &model_path) {
             let mut pushed = false;
             for layer in model_layers {
-                let mut slot = itg_slot_from_path_with_frame(&layer.texture.texture_path, model.frame0)
-                    .or_else(|| itg_slot_from_path(&layer.texture.texture_path));
+                let mut slot =
+                    itg_slot_from_path_with_frame(&layer.texture.texture_path, model.frame0)
+                        .or_else(|| itg_slot_from_path(&layer.texture.texture_path));
                 let Some(mut slot) = slot.take() else {
                     continue;
                 };
@@ -3779,11 +3941,10 @@ fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTextu
 
 fn itg_parse_ini_float(raw: &str) -> Option<f32> {
     let trimmed = raw.split_once("//").map_or(raw, |(prefix, _)| prefix);
-    let trimmed = trimmed.split_once(';').map_or(trimmed, |(prefix, _)| prefix);
-    let value = trimmed
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'');
+    let trimmed = trimmed
+        .split_once(';')
+        .map_or(trimmed, |(prefix, _)| prefix);
+    let value = trimmed.trim().trim_matches('"').trim_matches('\'');
     if value.is_empty() {
         return None;
     }
@@ -3877,10 +4038,7 @@ fn itg_parse_milkshape_model_layers(
     path: &Path,
 ) -> Option<Vec<ItgResolvedModelLayer>> {
     let content = fs::read_to_string(path).ok()?;
-    if !content
-        .to_ascii_lowercase()
-        .contains("milkshape 3d ascii")
-    {
+    if !content.to_ascii_lowercase().contains("milkshape 3d ascii") {
         return None;
     }
 
@@ -4038,12 +4196,17 @@ fn itg_parse_milkshape_model_layers(
             material_textures
                 .get(mesh.material_index as usize)
                 .and_then(|(raw, flags)| {
-                    itg_resolve_model_material_texture(data, path, raw).map(|resolved| (resolved, *flags))
+                    itg_resolve_model_material_texture(data, path, raw)
+                        .map(|resolved| (resolved, *flags))
                 })
         } else {
             None
         }
-        .or_else(|| fallback_texture.clone().map(|resolved| (resolved, ItgModelMaterialFlags::default())));
+        .or_else(|| {
+            fallback_texture
+                .clone()
+                .map(|resolved| (resolved, ItgModelMaterialFlags::default()))
+        });
         let Some((texture, flags)) = texture_with_flags else {
             continue;
         };
@@ -4202,7 +4365,13 @@ fn itg_parse_effectclock_from_commands(script: &str) -> Option<bool> {
         }
         let clock = args
             .first()
-            .map(|value| value.trim().trim_matches('"').trim_matches('\'').to_ascii_lowercase())
+            .map(|value| {
+                value
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .to_ascii_lowercase()
+            })
             .unwrap_or_else(|| "time".to_string());
         if clock.contains("beat") {
             out = Some(true);
@@ -4279,14 +4448,16 @@ fn itg_slot_from_path_animated(
     } else {
         AnimationRate::FramesPerSecond(1.0 / default_delay)
     };
-    let frame_durations = frame_delays.map(|delays| {
-        let mut normalized = Vec::with_capacity(anim_frames);
-        let fallback = delays.first().copied().unwrap_or(1.0).max(0.0);
-        for idx in 0..anim_frames {
-            normalized.push(delays.get(idx).copied().unwrap_or(fallback).max(0.0));
-        }
-        Arc::<[f32]>::from(normalized)
-    }).filter(|durations| !durations.is_empty());
+    let frame_durations = frame_delays
+        .map(|delays| {
+            let mut normalized = Vec::with_capacity(anim_frames);
+            let fallback = delays.first().copied().unwrap_or(1.0).max(0.0);
+            for idx in 0..anim_frames {
+                normalized.push(delays.get(idx).copied().unwrap_or(fallback).max(0.0));
+            }
+            Arc::<[f32]>::from(normalized)
+        })
+        .filter(|durations| !durations.is_empty());
     let source = Arc::new(SpriteSource::Animated {
         texture_key: key,
         tex_dims: dims,
@@ -4313,6 +4484,64 @@ fn itg_slot_from_path_animated(
         model_timeline: Arc::from(Vec::<ModelTweenSegment>::new()),
         model_effect: ModelEffectState::default(),
     })
+}
+
+fn itg_slot_from_actor_path_first_sprite(
+    data: &noteskin_itg::NoteskinData,
+    path: &Path,
+) -> Option<SpriteSlot> {
+    let is_lua = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"));
+    if !is_lua {
+        return itg_slot_from_path(path);
+    }
+
+    let content = fs::read_to_string(path).ok()?;
+    let decl = itg_parse_actor_decl(&content, &data.metrics);
+    let default_anim_is_beat = itg_animation_is_beat_based(data);
+    for sprite in decl.sprites {
+        let texture_path = itg_resolve_texture_expr(data, &sprite.texture_expr, None)?;
+        let anim_is_beat =
+            itg_sprite_animation_is_beat_based(&sprite.commands, default_anim_is_beat);
+        let slot = if sprite.frame_count > 1 {
+            itg_slot_from_path_animated(
+                &texture_path,
+                sprite.frame0,
+                sprite.frame_count,
+                sprite.frame_delays.as_deref(),
+                anim_is_beat,
+            )
+            .or_else(|| itg_slot_from_path_with_frame(&texture_path, sprite.frame0))
+        } else {
+            itg_slot_from_path_with_frame(&texture_path, sprite.frame0)
+        }
+        .or_else(|| itg_slot_from_path(&texture_path));
+        if let Some(slot) = slot {
+            return Some(slot);
+        }
+    }
+    None
+}
+
+fn itg_slot_from_path_all_frames(
+    path: &Path,
+    frame_delay: Option<f32>,
+    beat_based: bool,
+) -> Option<SpriteSlot> {
+    let key = itg_texture_key(path)?;
+    let (cols, rows) = assets::sprite_sheet_dims(&key);
+    let frame_count = (cols.max(1) as usize).saturating_mul(rows.max(1) as usize);
+    if frame_count <= 1 {
+        return itg_slot_from_path(path);
+    }
+    let delays = frame_delay.map(|delay| {
+        let d = delay.max(1e-6);
+        vec![d; frame_count]
+    });
+    itg_slot_from_path_animated(path, 0, frame_count, delays.as_deref(), beat_based)
+        .or_else(|| itg_slot_from_path(path))
 }
 
 struct PendingSegment {
@@ -4658,8 +4887,8 @@ fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::{
-        load_itg_skin, parse_explosion_animation, AnimationRate, Quantization, SpriteSource, Style,
-        NUM_QUANTIZATIONS,
+        AnimationRate, NUM_QUANTIZATIONS, Quantization, SpriteSource, Style, load_itg_skin,
+        parse_explosion_animation,
     };
     use std::collections::HashSet;
 
@@ -4734,9 +4963,18 @@ mod tests {
                 saw_nomove = true;
             }
         }
-        assert!(saw_model, "expected at least one model-backed tap-note layer");
-        assert!(saw_moving, "expected at least one scrolling model material in cel tap note");
-        assert!(saw_nomove, "expected at least one nomove model material in cel tap note");
+        assert!(
+            saw_model,
+            "expected at least one model-backed tap-note layer"
+        );
+        assert!(
+            saw_moving,
+            "expected at least one scrolling model material in cel tap note"
+        );
+        assert!(
+            saw_nomove,
+            "expected at least one nomove model material in cel tap note"
+        );
     }
 
     #[test]
@@ -4745,8 +4983,8 @@ mod tests {
             num_cols: 4,
             num_players: 1,
         };
-        let ns =
-            load_itg_skin(&style, "default").expect("dance/default should load from assets/noteskins");
+        let ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
         assert_eq!(ns.notes.len(), ns.note_layers.len());
         assert!(ns.note_layers.iter().any(|layers| layers.len() > 1));
     }
@@ -4945,14 +5183,69 @@ mod tests {
     }
 
     #[test]
+    fn ddr_vivid_hold_explosion_uses_four_animated_frames() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "ddr-vivid")
+            .expect("dance/ddr-vivid should load from assets/noteskins");
+        let hold = ns
+            .hold
+            .explosion
+            .as_ref()
+            .expect("ddr-vivid should define hold explosion slot");
+        let SpriteSource::Animated {
+            frame_count,
+            frame_durations,
+            rate,
+            ..
+        } = hold.source.as_ref()
+        else {
+            panic!("ddr-vivid hold explosion should resolve to animated sprite");
+        };
+        assert_eq!(
+            *frame_count, 4,
+            "ddr-vivid hold explosion should use 4 frames"
+        );
+        let delays = frame_durations
+            .as_ref()
+            .expect("ddr-vivid hold explosion should preserve frame delays");
+        assert_eq!(
+            delays.len(),
+            4,
+            "expected one delay per hold explosion frame"
+        );
+        assert!(
+            delays.iter().all(|delay| (*delay - 0.01).abs() < 1e-4),
+            "expected all hold explosion frame delays to be 0.01, got {delays:?}"
+        );
+        assert_eq!(hold.frame_index(0.0, 0.0), 0);
+        let advanced = match rate {
+            AnimationRate::FramesPerSecond(_) => hold.frame_index(0.011, 0.0),
+            AnimationRate::FramesPerBeat(_) => hold.frame_index(0.0, 0.011),
+        };
+        assert_eq!(
+            advanced, 1,
+            "ddr-vivid hold explosion should advance to frame 1 after one delay"
+        );
+    }
+
+    #[test]
     fn explosion_animation_honors_visible_commands() {
         let anim = parse_explosion_animation("visible,false;sleep,0.1;visible,true");
         let at_start = anim.state_at(0.0);
         let mid_sleep = anim.state_at(0.05);
         let after = anim.state_at(0.11);
         assert!(!at_start.visible, "expected animation to start hidden");
-        assert!(!mid_sleep.visible, "expected sleep segment to keep actor hidden");
-        assert!(after.visible, "expected actor to become visible after final command");
+        assert!(
+            !mid_sleep.visible,
+            "expected sleep segment to keep actor hidden"
+        );
+        assert!(
+            after.visible,
+            "expected actor to become visible after final command"
+        );
     }
 
     #[test]
@@ -5005,7 +5298,10 @@ mod tests {
             num_players: 1,
         };
         let ns = load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
-        assert!(ns.animation_is_beat_based, "cel metrics use beat-based noteskin animation");
+        assert!(
+            ns.animation_is_beat_based,
+            "cel metrics use beat-based noteskin animation"
+        );
         assert!(
             (ns.tap_mine_animation_length - 1.0).abs() <= f32::EPSILON,
             "cel tap mine animation length should be 1 beat"
@@ -5023,8 +5319,8 @@ mod tests {
             num_cols: 4,
             num_players: 1,
         };
-        let ns =
-            load_itg_skin(&style, "ddr-note").expect("dance/ddr-note should load from assets/noteskins");
+        let ns = load_itg_skin(&style, "ddr-note")
+            .expect("dance/ddr-note should load from assets/noteskins");
         let mine = ns
             .mines
             .first()
@@ -5035,7 +5331,10 @@ mod tests {
             .first()
             .and_then(|slot| slot.as_ref())
             .expect("ddr-note should preserve second mine layer");
-        assert!(mine.model.is_some(), "ddr-note mine fill should be model-backed");
+        assert!(
+            mine.model.is_some(),
+            "ddr-note mine fill should be model-backed"
+        );
         assert!(
             frame.model.is_some(),
             "ddr-note mine frame should be model-backed second layer"

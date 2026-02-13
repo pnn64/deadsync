@@ -3,13 +3,13 @@ use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::screens::Screen;
+use crate::screens::components::notefield::noteskin_model_actor;
 use crate::screens::components::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::{
     eval_grades, heart_bg, pad_display, qr_code, screen_bar, select_shared,
 };
-use crate::screens::components::notefield::noteskin_model_actor;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 
@@ -2147,7 +2147,8 @@ fn build_column_judgments_pane(
                             };
                             let uv = slot.uv_for_frame_at(frame, uv_elapsed);
                             let raw = slot.size();
-                            let base_size = [raw[0] as f32 * note_scale, raw[1] as f32 * note_scale];
+                            let base_size =
+                                [raw[0] as f32 * note_scale, raw[1] as f32 * note_scale];
                             let rot_rad = (-slot.def.rotation_deg as f32).to_radians();
                             let (sin_r, cos_r) = rot_rad.sin_cos();
                             let ox = draw.pos[0] * note_scale;

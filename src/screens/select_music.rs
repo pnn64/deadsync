@@ -4226,26 +4226,26 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             pane_layout.pane_top - (40.0 * scorebox_zoom) - pane_to_tech_gap;
         let mut push_scorebox =
             |side: profile::PlayerSide, steps_idx: usize, center_x: f32, center_y: f32| {
-            let chart_hash = if allow_gs_fetch {
-                match selected_entry {
-                    Some(MusicWheelEntry::Song(song)) => {
-                        chart_for_steps_index(song, target_chart_type, steps_idx)
-                            .map(|c| c.short_hash.as_str())
+                let chart_hash = if allow_gs_fetch {
+                    match selected_entry {
+                        Some(MusicWheelEntry::Song(song)) => {
+                            chart_for_steps_index(song, target_chart_type, steps_idx)
+                                .map(|c| c.short_hash.as_str())
+                        }
+                        _ => None,
                     }
-                    _ => None,
-                }
-            } else {
-                None
+                } else {
+                    None
+                };
+                actors.extend(gs_scorebox::gameplay_scorebox_actors(
+                    side,
+                    chart_hash,
+                    center_x,
+                    center_y,
+                    scorebox_zoom,
+                    state.selection_animation_timer,
+                ));
             };
-            actors.extend(gs_scorebox::gameplay_scorebox_actors(
-                side,
-                chart_hash,
-                center_x,
-                center_y,
-                scorebox_zoom,
-                state.selection_animation_timer,
-            ));
-        };
 
         if is_versus {
             push_scorebox(
