@@ -1,11 +1,14 @@
 use super::noteskin_itg;
 use crate::assets;
 use image::image_dimensions;
-use log::warn;
+use log::{info, warn};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{
+    Arc, Mutex, OnceLock,
+    atomic::{AtomicBool, Ordering},
+};
 
 pub const NUM_QUANTIZATIONS: usize = 9;
 const MINE_GRADIENT_SAMPLES: usize = 64;
@@ -207,6 +210,39 @@ pub struct SpriteSlot {
 }
 
 impl SpriteSlot {
+    #[inline(always)]
+    fn model_effect_mix(effect: ModelEffectState, time: f32, beat: f32) -> Option<f32> {
+        if matches!(effect.mode, ModelEffectMode::None) {
+            return None;
+        }
+        let period = effect.period.max(1e-6);
+        let phase_input = match effect.clock {
+            ModelEffectClock::Time => time,
+            ModelEffectClock::Beat => beat,
+        };
+        let phase = (phase_input + effect.offset).rem_euclid(period) / period;
+        let t = effect.timing;
+        let total = (t[0] + t[1] + t[2] + t[3]).max(1e-6);
+        let mut x = phase * total;
+        let mix = if x < t[0] && t[0] > f32::EPSILON {
+            x / t[0]
+        } else {
+            x -= t[0];
+            if x < t[1] {
+                1.0
+            } else {
+                x -= t[1];
+                if x < t[2] && t[2] > f32::EPSILON {
+                    1.0 - (x / t[2])
+                } else {
+                    0.0
+                }
+            }
+        }
+        .clamp(0.0, 1.0);
+        Some(mix)
+    }
+
     pub fn texture_key(&self) -> &str {
         self.source.texture_key()
     }
@@ -324,35 +360,9 @@ impl SpriteSlot {
         }
 
         let effect = self.model_effect;
-        if !matches!(effect.mode, ModelEffectMode::None) {
-            let period = effect.period.max(1e-6);
-            let phase_input = match effect.clock {
-                ModelEffectClock::Time => time,
-                ModelEffectClock::Beat => beat,
-            };
-            let phase = (phase_input + effect.offset).rem_euclid(period) / period;
-            let t = effect.timing;
-            let total = (t[0] + t[1] + t[2] + t[3]).max(1e-6);
-            let mut x = phase * total;
-            let mix = if x < t[0] && t[0] > f32::EPSILON {
-                x / t[0]
-            } else {
-                x -= t[0];
-                if x < t[1] {
-                    1.0
-                } else {
-                    x -= t[1];
-                    if x < t[2] && t[2] > f32::EPSILON {
-                        1.0 - (x / t[2])
-                    } else {
-                        0.0
-                    }
-                }
-            }
-            .clamp(0.0, 1.0);
-
+        if let Some(mix) = Self::model_effect_mix(effect, time, beat) {
             match effect.mode {
-                ModelEffectMode::DiffuseRamp | ModelEffectMode::GlowShift => {
+                ModelEffectMode::DiffuseRamp => {
                     let mut c = [0.0; 4];
                     for (i, out) in c.iter_mut().enumerate() {
                         *out = lerp(effect.color1[i], effect.color2[i], mix).clamp(0.0, 1.0);
@@ -367,6 +377,9 @@ impl SpriteSlot {
                     out.zoom[1] *= lerp(1.0, effect.magnitude[1], mix).max(0.0);
                     out.zoom[2] *= lerp(1.0, effect.magnitude[2], mix).max(0.0);
                 }
+                // ITG applies glowshift to the separate glow channel, not diffuse.
+                // The renderer samples this via `model_glow_at()`.
+                ModelEffectMode::GlowShift => {}
                 ModelEffectMode::None => {}
             }
         }
@@ -379,6 +392,23 @@ impl SpriteSlot {
         out.tint[2] = out.tint[2].clamp(0.0, 1.0);
         out.tint[3] = out.tint[3].clamp(0.0, 1.0);
         out
+    }
+
+    pub fn model_glow_at(&self, time: f32, beat: f32, diffuse_alpha: f32) -> Option<[f32; 4]> {
+        let effect = self.model_effect;
+        if !matches!(effect.mode, ModelEffectMode::GlowShift) {
+            return None;
+        }
+        let mix = Self::model_effect_mix(effect, time, beat)?;
+        let mut glow = [0.0; 4];
+        for (i, out) in glow.iter_mut().enumerate() {
+            *out = (effect.color1[i] - effect.color2[i]).mul_add(mix, effect.color2[i]);
+        }
+        glow[0] = glow[0].clamp(0.0, 1.0);
+        glow[1] = glow[1].clamp(0.0, 1.0);
+        glow[2] = glow[2].clamp(0.0, 1.0);
+        glow[3] = (glow[3] * diffuse_alpha).clamp(0.0, 1.0);
+        (glow[3] > f32::EPSILON).then_some(glow)
     }
 
     pub fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4] {
@@ -1022,6 +1052,7 @@ struct ItgSkinCacheKey {
 }
 
 static ITG_SKIN_CACHE: OnceLock<Mutex<HashMap<ItgSkinCacheKey, Arc<Noteskin>>>> = OnceLock::new();
+static CEL_ROLL_RESOLVE_LOGGED: AtomicBool = AtomicBool::new(false);
 
 #[inline(always)]
 fn itg_skin_cache_key(style: &Style, skin: &str) -> ItgSkinCacheKey {
@@ -1480,19 +1511,33 @@ fn load_itg_sprite_noteskin(
             with_fx
         };
 
-    let hold_wrapper = explosion_sprites
+    let find_explosion_wrapper = |active_key: &str, element_hint: &str| {
+        explosion_sprites
+            .iter()
+            .find(|sprite| sprite.commands.contains_key(active_key))
+            .or_else(|| {
+                explosion_sprites
+                    .iter()
+                    .find(|sprite| sprite.element.to_ascii_lowercase().contains(element_hint))
+            })
+    };
+    let hold_wrapper = find_explosion_wrapper("holdingoncommand", "hold explosion");
+    let roll_wrapper = find_explosion_wrapper("rolloncommand", "roll explosion");
+
+    let hold_explosion_sprites = itg_resolve_actor_sprites(data, &behavior, "Down", "Hold Explosion");
+    let hold_source = hold_explosion_sprites
         .iter()
-        .find(|s| s.element.to_ascii_lowercase().contains("hold explosion"));
-    let roll_wrapper = explosion_sprites
-        .iter()
-        .find(|s| s.element.to_ascii_lowercase().contains("roll explosion"));
-    hold.explosion = itg_resolve_actor_sprites(data, &behavior, "Down", "Hold Explosion")
-        .into_iter()
-        .next()
+        .find(|sprite| sprite.commands.contains_key("holdingoncommand"))
+        .or_else(|| hold_explosion_sprites.first());
+    let hold_wrapper_source = hold_wrapper
+        .filter(|sprite| sprite.commands.contains_key("holdingoncommand"));
+    hold.explosion = hold_wrapper_source
+        .map(|sprite| slot_with_active_cmd(&sprite.slot, &sprite.commands, "holdingoncommand"))
+        .or_else(|| hold_source
         .map(|sprite| {
             let cmd = hold_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
             slot_with_active_cmd(&sprite.slot, cmd, "holdingoncommand")
-        })
+        }))
         .or_else(|| hold_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "holdingoncommand")))
         .or_else(|| {
             data.resolve_path("Down", "Hold Explosion")
@@ -1522,13 +1567,20 @@ fn load_itg_sprite_noteskin(
                     })
                 })
         });
-    let roll_explosion = itg_resolve_actor_sprites(data, &behavior, "Down", "Roll Explosion")
-        .into_iter()
-        .next()
+    let roll_explosion_sprites = itg_resolve_actor_sprites(data, &behavior, "Down", "Roll Explosion");
+    let roll_source = roll_explosion_sprites
+        .iter()
+        .find(|sprite| sprite.commands.contains_key("rolloncommand"))
+        .or_else(|| roll_explosion_sprites.first());
+    let roll_wrapper_source = roll_wrapper
+        .filter(|sprite| sprite.commands.contains_key("rolloncommand"));
+    let roll_explosion = roll_wrapper_source
+        .map(|sprite| slot_with_active_cmd(&sprite.slot, &sprite.commands, "rolloncommand"))
+        .or_else(|| roll_source
         .map(|sprite| {
             let cmd = roll_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
             slot_with_active_cmd(&sprite.slot, cmd, "rolloncommand")
-        })
+        }))
         .or_else(|| roll_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "rolloncommand")))
         .or_else(|| {
             data.resolve_path("Down", "Roll Explosion")
@@ -1559,6 +1611,86 @@ fn load_itg_sprite_noteskin(
                 })
         });
     roll.explosion = roll_explosion.or(hold.explosion.clone());
+    if let (Some(roll_slot), Some(hold_slot)) = (roll.explosion.clone(), hold.explosion.clone()) {
+        let roll_key = roll_slot.texture_key().to_ascii_lowercase();
+        let hold_key = hold_slot.texture_key().to_ascii_lowercase();
+        let roll_is_common_fallback_hold =
+            roll_key.contains("noteskins/common/common/fallback hold explosion");
+        let hold_is_skin_specific = !hold_key.contains("noteskins/common/common/");
+        if roll_is_common_fallback_hold && hold_is_skin_specific {
+            let roll_commands = roll_wrapper
+                .filter(|sprite| sprite.commands.contains_key("rolloncommand"))
+                .map(|sprite| sprite.commands.clone())
+                .or_else(|| {
+                    let mut metrics_commands = HashMap::new();
+                    if let Some(v) = data.metrics.get("HoldGhostArrow", "RollOnCommand") {
+                        metrics_commands.insert("rolloncommand".to_string(), v.to_string());
+                    }
+                    if let Some(v) = data.metrics.get("HoldGhostArrow", "RollOffCommand") {
+                        metrics_commands.insert("rolloffcommand".to_string(), v.to_string());
+                    }
+                    if metrics_commands.is_empty() {
+                        None
+                    } else {
+                        Some(metrics_commands)
+                    }
+                });
+            if let Some(commands) = roll_commands {
+                roll.explosion = Some(slot_with_active_cmd(&hold_slot, &commands, "rolloncommand"));
+            } else {
+                roll.explosion = Some(hold_slot);
+            }
+        }
+    }
+    if data.name.eq_ignore_ascii_case("cel")
+        && !CEL_ROLL_RESOLVE_LOGGED.swap(true, Ordering::Relaxed)
+    {
+        let hold_direct = data
+            .resolve_path("Down", "Hold Explosion")
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "<none>".to_string());
+        let roll_direct = data
+            .resolve_path("Down", "Roll Explosion")
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "<none>".to_string());
+        let search_dirs = data
+            .search_dirs
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>();
+        let wrappers = explosion_sprites
+            .iter()
+            .filter(|sprite| {
+                sprite.commands.contains_key("holdingoncommand")
+                    || sprite.commands.contains_key("rolloncommand")
+            })
+            .map(|sprite| {
+                format!(
+                    "{}=>{} keys={}",
+                    sprite.element,
+                    sprite.slot.texture_key(),
+                    sprite.commands.keys().cloned().collect::<Vec<_>>().join(",")
+                )
+            })
+            .collect::<Vec<_>>();
+        info!(
+            "cel roll resolve debug: search_dirs={:?} down_hold_path={} down_roll_path={} hold_wrapper_tex={} roll_wrapper_tex={} hold_final_tex={} roll_final_tex={} wrappers={:?}",
+            search_dirs,
+            hold_direct,
+            roll_direct,
+            hold_wrapper.map(|s| s.slot.texture_key()).unwrap_or("<none>"),
+            roll_wrapper.map(|s| s.slot.texture_key()).unwrap_or("<none>"),
+            hold.explosion
+                .as_ref()
+                .map(|s| s.texture_key())
+                .unwrap_or("<none>"),
+            roll.explosion
+                .as_ref()
+                .map(|s| s.texture_key())
+                .unwrap_or("<none>"),
+            wrappers,
+        );
+    }
     let explosion_slot = dim_sprites
         .first()
         .map(|s| s.slot.clone())
@@ -5245,6 +5377,48 @@ mod tests {
         assert!(
             after.visible,
             "expected actor to become visible after final command"
+        );
+    }
+
+    #[test]
+    fn cel_roll_glowshift_keeps_diffuse_and_uses_glow_channel() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
+        let roll = ns
+            .roll
+            .explosion
+            .as_ref()
+            .expect("cel should define roll explosion");
+        assert!(
+            roll.texture_key()
+                .to_ascii_lowercase()
+                .contains("down hold explosion"),
+            "cel roll explosion should resolve to down hold explosion texture"
+        );
+
+        let draw_0 = roll.model_draw_at(0.0, 0.0);
+        let draw_1 = roll.model_draw_at(0.0125, 0.0);
+        assert!(
+            draw_0.visible && draw_1.visible,
+            "roll explosion should be visible while active"
+        );
+        assert!(
+            (draw_0.tint[3] - draw_1.tint[3]).abs() <= 1e-6,
+            "glowshift should not modulate diffuse alpha"
+        );
+
+        let glow_0 = roll
+            .model_glow_at(0.0, 0.0, draw_0.tint[3])
+            .expect("glowshift should emit glow color at t=0");
+        let glow_1 = roll
+            .model_glow_at(0.0125, 0.0, draw_1.tint[3])
+            .expect("glowshift should emit glow color at t=0.0125");
+        assert!(
+            (glow_0[3] - glow_1[3]).abs() > 0.05,
+            "glow alpha should animate over time for glowshift"
         );
     }
 

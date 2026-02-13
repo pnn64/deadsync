@@ -89,6 +89,8 @@ const MINE_FILL_LAYERS: usize = 32;
 const Z_MEASURE_LINES: i32 = 80;
 static DDRVIVID_HOLD_GHOST_DRAW_LOGGED: AtomicBool = AtomicBool::new(false);
 static DDRVIVID_HOLD_GHOST_MISSING_LOGGED: AtomicBool = AtomicBool::new(false);
+static CEL_ROLL_GHOST_DRAW_LOGGED: AtomicBool = AtomicBool::new(false);
+static CEL_ROLL_GHOST_MISSING_LOGGED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Copy, Debug)]
 pub enum FieldPlacement {
@@ -1059,6 +1061,7 @@ pub fn build(
         return (Vec::new(), screen_center_x());
     }
     let is_ddr_vivid_skin = profile.noteskin.as_str() == "ddr-vivid";
+    let is_cel_skin = profile.noteskin.as_str() == "cel";
     // Use the cached field_zoom from gameplay state so visual layout and
     // scroll math share the exact same scaling as gameplay.
     let field_zoom = state.field_zoom[player_idx];
@@ -1507,15 +1510,23 @@ pub fn build(
             let active_hold = state.active_holds[col]
                 .as_ref()
                 .filter(|active| active_hold_is_engaged(active));
-            let hold_slot = active_hold.and_then(|active| {
+            let (hold_slot, hold_slot_source, is_roll_hold) = if let Some(active) = active_hold {
                 let note_type = &state.notes[active.note_index].note_type;
                 let visuals = if matches!(note_type, NoteType::Roll) {
                     &ns.roll
                 } else {
                     &ns.hold
                 };
-                visuals.explosion.as_ref().or(ns.hold.explosion.as_ref())
-            });
+                if let Some(slot) = visuals.explosion.as_ref() {
+                    (Some(slot), "note-type explosion", matches!(note_type, NoteType::Roll))
+                } else if let Some(slot) = ns.hold.explosion.as_ref() {
+                    (Some(slot), "hold fallback explosion", matches!(note_type, NoteType::Roll))
+                } else {
+                    (None, "<none>", matches!(note_type, NoteType::Roll))
+                }
+            } else {
+                (None, "<inactive>", false)
+            };
             if hold_slot.is_none()
                 && active_hold.is_some()
                 && is_ddr_vivid_skin
@@ -1524,6 +1535,28 @@ pub fn build(
                 info!(
                     "ddr-vivid hold ghost missing slot: col={}, ns.hold.explosion={}, ns.roll.explosion={}",
                     col,
+                    ns.hold
+                        .explosion
+                        .as_ref()
+                        .map(|slot| slot.texture_key())
+                        .unwrap_or("<none>"),
+                    ns.roll
+                        .explosion
+                        .as_ref()
+                        .map(|slot| slot.texture_key())
+                        .unwrap_or("<none>"),
+                );
+            }
+            if hold_slot.is_none()
+                && active_hold.is_some()
+                && is_cel_skin
+                && is_roll_hold
+                && !CEL_ROLL_GHOST_MISSING_LOGGED.swap(true, Ordering::Relaxed)
+            {
+                info!(
+                    "cel roll ghost missing slot: col={}, source={}, ns.hold.explosion={}, ns.roll.explosion={}",
+                    col,
+                    hold_slot_source,
                     ns.hold
                         .explosion
                         .as_ref()
@@ -1557,6 +1590,11 @@ pub fn build(
                 let final_rotation = base_rotation + receptor_rotation - draw.rot[2];
                 let center = [playfield_center_x + col_x_offset, receptor_y_lane];
                 let color = draw.tint;
+                let glow = hold_slot.model_glow_at(
+                    state.total_elapsed_in_screen,
+                    current_beat,
+                    color[3],
+                );
                 let blend = if draw.blend_add {
                     BlendMode::Add
                 } else {
@@ -1578,6 +1616,32 @@ pub fn build(
                         Z_HOLD_EXPLOSION,
                     );
                 }
+                if is_cel_skin && is_roll_hold && !CEL_ROLL_GHOST_DRAW_LOGGED.swap(true, Ordering::Relaxed) {
+                    info!(
+                        "cel roll ghost draw sample: col={} source={} tex='{}' model={} frame={} uv={:?} size={:?} tint={:?} visible={} blend_add={} z={} ns_hold_tex={} ns_roll_tex={}",
+                        col,
+                        hold_slot_source,
+                        hold_slot.texture_key(),
+                        hold_slot.model.is_some(),
+                        hold_frame,
+                        hold_uv,
+                        hold_size,
+                        color,
+                        draw.visible,
+                        draw.blend_add,
+                        Z_HOLD_EXPLOSION,
+                        ns.hold
+                            .explosion
+                            .as_ref()
+                            .map(|slot| slot.texture_key())
+                            .unwrap_or("<none>"),
+                        ns.roll
+                            .explosion
+                            .as_ref()
+                            .map(|slot| slot.texture_key())
+                            .unwrap_or("<none>"),
+                    );
+                }
                 if let Some(model_actor) = noteskin_model_actor(
                     hold_slot,
                     center,
@@ -1591,6 +1655,22 @@ pub fn build(
                     Z_HOLD_EXPLOSION as i16,
                 ) {
                     actors.push(model_actor);
+                    if let Some(glow_color) = glow
+                        && let Some(glow_actor) = noteskin_model_actor(
+                            hold_slot,
+                            center,
+                            hold_size,
+                            hold_uv,
+                            -final_rotation,
+                            state.total_elapsed_in_screen,
+                            current_beat,
+                            glow_color,
+                            BlendMode::Add,
+                            Z_HOLD_EXPLOSION as i16,
+                        )
+                    {
+                        actors.push(glow_actor);
+                    }
                 } else if draw.blend_add {
                     actors.push(act!(sprite(hold_slot.texture_key().to_string()):
                         align(0.5, 0.5):
@@ -1602,6 +1682,18 @@ pub fn build(
                         blend(add):
                         z(Z_HOLD_EXPLOSION)
                     ));
+                    if let Some(glow_color) = glow {
+                        actors.push(act!(sprite(hold_slot.texture_key().to_string()):
+                            align(0.5, 0.5):
+                            xy(center[0], center[1]):
+                            setsize(hold_size[0], hold_size[1]):
+                            rotationz(-final_rotation):
+                            customtexturerect(hold_uv[0], hold_uv[1], hold_uv[2], hold_uv[3]):
+                            diffuse(glow_color[0], glow_color[1], glow_color[2], glow_color[3]):
+                            blend(add):
+                            z(Z_HOLD_EXPLOSION)
+                        ));
+                    }
                 } else {
                     actors.push(act!(sprite(hold_slot.texture_key().to_string()):
                         align(0.5, 0.5):
@@ -1613,6 +1705,18 @@ pub fn build(
                         blend(normal):
                         z(Z_HOLD_EXPLOSION)
                     ));
+                    if let Some(glow_color) = glow {
+                        actors.push(act!(sprite(hold_slot.texture_key().to_string()):
+                            align(0.5, 0.5):
+                            xy(center[0], center[1]):
+                            setsize(hold_size[0], hold_size[1]):
+                            rotationz(-final_rotation):
+                            customtexturerect(hold_uv[0], hold_uv[1], hold_uv[2], hold_uv[3]):
+                            diffuse(glow_color[0], glow_color[1], glow_color[2], glow_color[3]):
+                            blend(add):
+                            z(Z_HOLD_EXPLOSION)
+                        ));
+                    }
                 }
             }
             if !profile.hide_targets {
