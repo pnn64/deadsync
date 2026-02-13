@@ -2127,7 +2127,7 @@ fn build_column_judgments_pane(
                     if let Some(note_slots) = ns.note_layers.get(note_idx) {
                         let primary_h = note_slots
                             .first()
-                            .map(|slot| slot.size()[1].max(1) as f32)
+                            .map(|slot| slot.logical_size()[1].max(1.0))
                             .unwrap_or(1.0);
                         let note_scale = if primary_h > f32::EPSILON {
                             (TARGET_ARROW_PX * PREVIEW_ZOOM) / primary_h
@@ -2146,9 +2146,8 @@ fn build_column_judgments_pane(
                                 elapsed
                             };
                             let uv = slot.uv_for_frame_at(frame, uv_elapsed);
-                            let raw = slot.size();
-                            let base_size =
-                                [raw[0] as f32 * note_scale, raw[1] as f32 * note_scale];
+                            let raw = slot.logical_size();
+                            let base_size = [raw[0] * note_scale, raw[1] * note_scale];
                             let rot_rad = (-slot.def.rotation_deg as f32).to_radians();
                             let (sin_r, cos_r) = rot_rad.sin_cos();
                             let ox = draw.pos[0] * note_scale;
@@ -2216,9 +2215,9 @@ fn build_column_judgments_pane(
                             elapsed
                         };
                         let uv = slot.uv_for_frame_at(frame, uv_elapsed);
-                        let size = slot.size();
-                        let w = size[0].max(0) as f32;
-                        let h = size[1].max(0) as f32;
+                        let size = slot.logical_size();
+                        let w = size[0].max(0.0);
+                        let h = size[1].max(0.0);
                         if w > 0.0 && h > 0.0 {
                             let scale = (TARGET_ARROW_PX * PREVIEW_ZOOM) / h.max(1.0);
                             let final_size = [w * scale, h * scale];

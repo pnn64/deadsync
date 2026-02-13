@@ -20,7 +20,7 @@ use rssp::streams::StreamSegment;
 use std::array::from_fn;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 // --- CONSTANTS ---
@@ -91,8 +91,8 @@ static DDRVIVID_HOLD_GHOST_DRAW_LOGGED: AtomicBool = AtomicBool::new(false);
 static DDRVIVID_HOLD_GHOST_MISSING_LOGGED: AtomicBool = AtomicBool::new(false);
 static CEL_ROLL_GHOST_DRAW_LOGGED: AtomicBool = AtomicBool::new(false);
 static CEL_ROLL_GHOST_MISSING_LOGGED: AtomicBool = AtomicBool::new(false);
-static DDR_HOLD_HEAD_DRAW_LOGGED: AtomicBool = AtomicBool::new(false);
-static DDR_HOLD_HEAD_MISSING_LOGGED: AtomicBool = AtomicBool::new(false);
+static DEFAULT_TAP_GLOW_DRAW_LOG_COUNT: AtomicUsize = AtomicUsize::new(0);
+static DEFAULT_HOLD_GLOW_DRAW_LOG_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Clone, Copy, Debug)]
 pub enum FieldPlacement {
@@ -1064,7 +1064,6 @@ pub fn build(
     }
     let is_ddr_vivid_skin = profile.noteskin.as_str() == "ddr-vivid";
     let is_cel_skin = profile.noteskin.as_str() == "cel";
-    let is_ddr_skin = profile.noteskin.as_str().starts_with("ddr-");
     // Use the cached field_zoom from gameplay state so visual layout and
     // scroll math share the exact same scaling as gameplay.
     let field_zoom = state.field_zoom[player_idx];
@@ -1173,13 +1172,7 @@ pub fn build(
             }
         };
         let logical_slot_size = |slot: &SpriteSlot| -> [f32; 2] {
-            let mut width = slot.size()[0].max(0) as f32;
-            let mut height = slot.size()[1].max(0) as f32;
-            if crate::assets::parse_texture_hints(slot.texture_key()).doubleres {
-                width *= 0.5;
-                height *= 0.5;
-            }
-            [width, height]
+            slot.logical_size()
         };
         let scale_explosion = |logical_size: [f32; 2]| -> [f32; 2] {
             [logical_size[0] * field_zoom, logical_size[1] * field_zoom]
@@ -1576,11 +1569,11 @@ pub fn build(
                         .unwrap_or("<none>"),
                 );
             }
-            if let Some(hold_slot) = hold_slot {
-                let draw = hold_slot.model_draw_at(state.total_elapsed_in_screen, current_beat);
-                let hold_frame = hold_slot.frame_index(state.total_elapsed_in_screen, current_beat);
-                let hold_uv = hold_slot.uv_for_frame_at(hold_frame, state.total_elapsed_in_screen);
-                let base_size = scale_hold_explosion(hold_slot);
+                if let Some(hold_slot) = hold_slot {
+                    let draw = hold_slot.model_draw_at(state.total_elapsed_in_screen, current_beat);
+                    let hold_frame = hold_slot.frame_index(state.total_elapsed_in_screen, current_beat);
+                    let hold_uv = hold_slot.uv_for_frame_at(hold_frame, state.total_elapsed_in_screen);
+                    let base_size = scale_hold_explosion(hold_slot);
                 let hold_size = [
                     base_size[0] * draw.zoom[0].max(0.0),
                     base_size[1] * draw.zoom[1].max(0.0),
@@ -1596,14 +1589,38 @@ pub fn build(
                 let base_rotation = hold_slot.def.rotation_deg as f32;
                 let final_rotation = base_rotation + receptor_rotation - draw.rot[2];
                 let center = [playfield_center_x + col_x_offset, receptor_y_lane];
-                let color = draw.tint;
-                let glow =
-                    hold_slot.model_glow_at(state.total_elapsed_in_screen, current_beat, color[3]);
-                let blend = if draw.blend_add {
-                    BlendMode::Add
-                } else {
-                    BlendMode::Alpha
-                };
+                    let color = draw.tint;
+                    let glow =
+                        hold_slot.model_glow_at(state.total_elapsed_in_screen, current_beat, color[3]);
+                    if profile.noteskin.as_str().eq_ignore_ascii_case("default") {
+                        let sample = DEFAULT_HOLD_GLOW_DRAW_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
+                        if sample < 24 {
+                            info!(
+                                "default hold glow draw sample#{} col={} roll={} source={} tex={} frame={} uv={:?} logical_size={:?} draw_zoom={:?} hold_size={:?} base_rot={} receptor_rot={} draw_rot_z={} final_rot={} tint={:?} glow={:?}",
+                                sample + 1,
+                                col,
+                                is_roll_hold,
+                                hold_slot_source,
+                                hold_slot.texture_key(),
+                                hold_frame,
+                                hold_uv,
+                                hold_slot.logical_size(),
+                                draw.zoom,
+                                hold_size,
+                                hold_slot.def.rotation_deg,
+                                receptor_rotation,
+                                draw.rot[2],
+                                final_rotation,
+                                color,
+                                glow
+                            );
+                        }
+                    }
+                    let blend = if draw.blend_add {
+                        BlendMode::Add
+                    } else {
+                        BlendMode::Alpha
+                    };
                 if is_ddr_vivid_skin
                     && !DDRVIVID_HOLD_GHOST_DRAW_LOGGED.swap(true, Ordering::Relaxed)
                 {
@@ -1796,6 +1813,31 @@ pub fn build(
                         .get(i)
                         .map(|slot| slot.def.rotation_deg)
                         .unwrap_or(0);
+                    if profile.noteskin.as_str().eq_ignore_ascii_case("default") {
+                        let tex_lower = slot.texture_key().to_ascii_lowercase();
+                        if tex_lower.contains("_glow") {
+                            let sample =
+                                DEFAULT_TAP_GLOW_DRAW_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
+                            if sample < 32 {
+                                info!(
+                                    "default tap glow draw sample#{} col={} window={} tex={} frame={} uv={:?} logical_size={:?} draw_size={:?} visual_zoom={:.3} visual_diffuse={:?} visual_glow={:?} receptor_rot={} blend_add={}",
+                                    sample + 1,
+                                    col,
+                                    active.window,
+                                    slot.texture_key(),
+                                    frame,
+                                    uv,
+                                    slot.logical_size(),
+                                    size,
+                                    visual.zoom,
+                                    visual.diffuse,
+                                    visual.glow,
+                                    rotation_deg,
+                                    false
+                                );
+                            }
+                        }
+                    }
                     actors.push(act!(sprite(slot.texture_key().to_string()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset, receptor_y_lane):
@@ -2349,8 +2391,7 @@ pub fn build(
                     }
                 }
             }
-            let should_draw_hold_head =
-                hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo);
+            let should_draw_hold_head = true;
             let head_draw_y = if engaged { lane_receptor_y } else { head_y };
             if should_draw_hold_head
                 && head_draw_y >= lane_receptor_y - state.draw_distance_after_targets
@@ -2383,9 +2424,9 @@ pub fn build(
                         elapsed
                     };
                     let uv = head_slot.uv_for_frame_at(frame, uv_elapsed);
-                    let slot_size = head_slot.size();
+                    let slot_size = logical_slot_size(head_slot);
                     let note_scale = {
-                        let h = slot_size[1].max(1) as f32;
+                        let h = slot_size[1].max(1.0);
                         if h > f32::EPSILON {
                             target_arrow_px / h
                         } else {
@@ -2393,8 +2434,8 @@ pub fn build(
                         }
                     };
                     let base_size = [
-                        slot_size[0] as f32 * note_scale,
-                        slot_size[1] as f32 * note_scale,
+                        slot_size[0] * note_scale,
+                        slot_size[1] * note_scale,
                     ];
                     let rot_rad = (-head_slot.def.rotation_deg as f32).to_radians();
                     let (sin_r, cos_r) = rot_rad.sin_cos();
@@ -2459,7 +2500,7 @@ pub fn build(
                 } else if let Some(note_slots) = ns.note_layers.get(note_idx) {
                     let primary_h = note_slots
                         .first()
-                        .map(|slot| slot.size()[1].max(1) as f32)
+                        .map(|slot| logical_slot_size(slot)[1].max(1.0))
                         .unwrap_or(1.0);
                     let note_scale = if primary_h > f32::EPSILON {
                         target_arrow_px / primary_h
@@ -2478,10 +2519,10 @@ pub fn build(
                             elapsed
                         };
                         let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
-                        let slot_size = note_slot.size();
+                        let slot_size = logical_slot_size(note_slot);
                         let base_size = [
-                            slot_size[0] as f32 * note_scale,
-                            slot_size[1] as f32 * note_scale,
+                            slot_size[0] * note_scale,
+                            slot_size[1] * note_scale,
                         ];
                         let offset_scale = note_scale;
                         let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
@@ -2620,6 +2661,9 @@ pub fn build(
                     continue;
                 }
                 let col_x_offset = ns.column_xs[col_idx] as f32 * field_zoom;
+                if matches!(arrow.note_type, NoteType::Hold | NoteType::Roll) {
+                    continue;
+                }
                 if matches!(arrow.note_type, NoteType::Mine) {
                     let fill_slot = ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
                     let frame_slot = ns.mine_frames.get(col_idx).and_then(|slot| slot.as_ref());
@@ -2746,150 +2790,6 @@ pub fn build(
                     continue;
                 }
                 let note = &state.notes[arrow.note_index];
-                if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
-                    let visuals =
-                        ns.hold_visuals_for_col(col_idx, matches!(note.note_type, NoteType::Roll));
-                    let head_active = state.active_holds[col]
-                        .as_ref()
-                        .filter(|active| active.note_index == arrow.note_index)
-                        .is_some_and(active_hold_is_engaged);
-                    let head_slot = if head_active {
-                        visuals
-                            .head_active
-                            .as_ref()
-                            .or(visuals.head_inactive.as_ref())
-                    } else {
-                        visuals
-                            .head_inactive
-                            .as_ref()
-                            .or(visuals.head_active.as_ref())
-                    };
-                    if head_slot.is_none()
-                        && is_ddr_skin
-                        && !DDR_HOLD_HEAD_MISSING_LOGGED.swap(true, Ordering::Relaxed)
-                    {
-                        info!(
-                            "ddr hold head missing: skin={} col={} note_type={:?} note_idx={} hold_head_inactive={} hold_head_active={} tap_layer0={}",
-                            profile.noteskin,
-                            col_idx,
-                            note.note_type,
-                            arrow.note_index,
-                            visuals
-                                .head_inactive
-                                .as_ref()
-                                .map(|slot| slot.texture_key())
-                                .unwrap_or("<none>"),
-                            visuals
-                                .head_active
-                                .as_ref()
-                                .map(|slot| slot.texture_key())
-                                .unwrap_or("<none>"),
-                            ns.note_layers
-                                .get(col_idx * NUM_QUANTIZATIONS + note.quantization_idx as usize)
-                                .and_then(|layers| layers.first())
-                                .map(|slot| slot.texture_key())
-                                .unwrap_or("<none>")
-                        );
-                    }
-                    if let Some(head_slot) = head_slot {
-                        if is_ddr_skin && !DDR_HOLD_HEAD_DRAW_LOGGED.swap(true, Ordering::Relaxed) {
-                            info!(
-                                "ddr hold head draw: skin={} col={} note_type={:?} active={} tex={} frames={}",
-                                profile.noteskin,
-                                col_idx,
-                                note.note_type,
-                                head_active,
-                                head_slot.texture_key(),
-                                head_slot.source.frame_count()
-                            );
-                        }
-                        let elapsed = state.total_elapsed_in_screen;
-                        let note_uv_phase = ns.tap_note_uv_phase(elapsed, current_beat, note.beat);
-                        let frame = head_slot.frame_index(elapsed, current_beat);
-                        let uv_elapsed = if head_slot.model.is_some() {
-                            note_uv_phase
-                        } else {
-                            elapsed
-                        };
-                        let uv = head_slot.uv_for_frame_at(frame, uv_elapsed);
-                        let slot_size = head_slot.size();
-                        let note_scale = {
-                            let h = slot_size[1].max(1) as f32;
-                            if h > f32::EPSILON {
-                                target_arrow_px / h
-                            } else {
-                                1.0
-                            }
-                        };
-                        let base_size = [
-                            slot_size[0] as f32 * note_scale,
-                            slot_size[1] as f32 * note_scale,
-                        ];
-                        let draw = head_slot.model_draw_at(elapsed, current_beat);
-                        if !draw.visible {
-                            continue;
-                        }
-                        let rot_rad = (-head_slot.def.rotation_deg as f32).to_radians();
-                        let (sin_r, cos_r) = rot_rad.sin_cos();
-                        let ox = draw.pos[0] * note_scale;
-                        let oy = draw.pos[1] * note_scale;
-                        let offset = [ox * cos_r - oy * sin_r, ox * sin_r + oy * cos_r];
-                        let center = [
-                            playfield_center_x + col_x_offset + offset[0],
-                            y_pos + offset[1],
-                        ];
-                        let note_size = [
-                            base_size[0] * draw.zoom[0].max(0.0),
-                            base_size[1] * draw.zoom[1].max(0.0),
-                        ];
-                        if note_size[0] <= f32::EPSILON || note_size[1] <= f32::EPSILON {
-                            continue;
-                        }
-                        let blend = if draw.blend_add {
-                            BlendMode::Add
-                        } else {
-                            BlendMode::Alpha
-                        };
-                        let color = draw.tint;
-                        if let Some(model_actor) = noteskin_model_actor(
-                            head_slot,
-                            center,
-                            note_size,
-                            uv,
-                            -head_slot.def.rotation_deg as f32,
-                            elapsed,
-                            current_beat,
-                            color,
-                            blend,
-                            Z_TAP_NOTE as i16,
-                        ) {
-                            actors.push(model_actor);
-                        } else if draw.blend_add {
-                            actors.push(act!(sprite(head_slot.texture_key().to_string()):
-                                align(0.5, 0.5):
-                                xy(center[0], center[1]):
-                                setsize(note_size[0], note_size[1]):
-                                rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32):
-                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                diffuse(color[0], color[1], color[2], color[3]):
-                                blend(add):
-                                z(Z_TAP_NOTE)
-                            ));
-                        } else {
-                            actors.push(act!(sprite(head_slot.texture_key().to_string()):
-                                align(0.5, 0.5):
-                                xy(center[0], center[1]):
-                                setsize(note_size[0], note_size[1]):
-                                rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32):
-                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                diffuse(color[0], color[1], color[2], color[3]):
-                                blend(normal):
-                                z(Z_TAP_NOTE)
-                            ));
-                        }
-                        continue;
-                    }
-                }
                 let note_idx = col_idx * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 if let Some(note_slots) = ns.note_layers.get(note_idx) {
                     let note_center = [playfield_center_x + col_x_offset, y_pos];
@@ -2897,7 +2797,7 @@ pub fn build(
                     let note_uv_phase = ns.tap_note_uv_phase(elapsed, current_beat, note.beat);
                     let primary_h = note_slots
                         .first()
-                        .map(|slot| slot.size()[1].max(1) as f32)
+                        .map(|slot| logical_slot_size(slot)[1].max(1.0))
                         .unwrap_or(1.0);
                     let note_scale = if primary_h > f32::EPSILON {
                         target_arrow_px / primary_h
@@ -2916,10 +2816,10 @@ pub fn build(
                             elapsed
                         };
                         let note_uv = note_slot.uv_for_frame_at(note_frame, uv_elapsed);
-                        let slot_size = note_slot.size();
+                        let slot_size = logical_slot_size(note_slot);
                         let base_size = [
-                            slot_size[0] as f32 * note_scale,
-                            slot_size[1] as f32 * note_scale,
+                            slot_size[0] * note_scale,
+                            slot_size[1] * note_scale,
                         ];
                         let offset_scale = note_scale;
                         let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();

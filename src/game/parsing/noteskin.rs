@@ -251,6 +251,17 @@ impl SpriteSlot {
         self.def.size
     }
 
+    #[inline(always)]
+    pub fn logical_size(&self) -> [f32; 2] {
+        let mut width = self.def.size[0].max(0) as f32;
+        let mut height = self.def.size[1].max(0) as f32;
+        if crate::assets::parse_texture_hints(self.texture_key()).doubleres {
+            width *= 0.5;
+            height *= 0.5;
+        }
+        [width, height]
+    }
+
     pub fn frame_index(&self, time: f32, beat: f32) -> usize {
         let frames = self.source.frame_count();
         if frames <= 1 {
@@ -399,7 +410,11 @@ impl SpriteSlot {
         if !matches!(effect.mode, ModelEffectMode::GlowShift) {
             return None;
         }
-        let mix = Self::model_effect_mix(effect, time, beat)?;
+        let through = Self::model_effect_mix(effect, time, beat)?;
+        // Match ITG's glow_shift blending: convert effect-phase percentage to the
+        // sinusoidal color mix used by Actor::PreDraw.
+        let mix = (((through + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5)
+            .clamp(0.0, 1.0);
         let mut glow = [0.0; 4];
         for (i, out) in glow.iter_mut().enumerate() {
             *out = (effect.color1[i] - effect.color2[i]).mul_add(mix, effect.color2[i]);
@@ -1072,6 +1087,7 @@ struct ItgSkinCacheKey {
 
 static ITG_SKIN_CACHE: OnceLock<Mutex<HashMap<ItgSkinCacheKey, Arc<Noteskin>>>> = OnceLock::new();
 static CEL_ROLL_RESOLVE_LOGGED: AtomicBool = AtomicBool::new(false);
+static DEFAULT_EXPLOSION_DEBUG_LOGGED: AtomicBool = AtomicBool::new(false);
 
 #[inline(always)]
 fn itg_skin_cache_key(style: &Style, skin: &str) -> ItgSkinCacheKey {
@@ -1380,15 +1396,20 @@ fn load_itg_sprite_noteskin(
                 itg_find_texture_with_prefix(data, "_receptor").and_then(|p| itg_slot_from_path(&p))
             })
             .ok_or_else(|| format!("failed to resolve Receptor for button '{button}'"))?;
-        let glow_slot = receptor_sprites
-            .get(1)
-            .map(|s| s.slot.clone())
-            .or_else(|| {
+        let glow_slot = receptor_sprites.get(1).map(|s| s.slot.clone()).or_else(|| {
+            if receptor_sprites.is_empty() {
                 itg_find_texture_with_prefix(data, "_rflash").and_then(|p| itg_slot_from_path(&p))
-            })
-            .or_else(|| {
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            if receptor_sprites.is_empty() {
                 itg_find_texture_with_prefix(data, "_glow").and_then(|p| itg_slot_from_path(&p))
-            });
+            } else {
+                None
+            }
+        });
         receptor_off.push(receptor_slot);
         receptor_glow.push(glow_slot);
 
@@ -1582,6 +1603,8 @@ fn load_itg_sprite_noteskin(
     let hold_wrapper = find_explosion_wrapper("holdingoncommand", "hold explosion");
     let roll_wrapper = find_explosion_wrapper("rolloncommand", "roll explosion");
 
+    let hold_explosion_blank = behavior.blank.contains("hold explosion");
+    let roll_explosion_blank = behavior.blank.contains("roll explosion");
     let hold_explosion_sprites =
         itg_resolve_actor_sprites(data, &behavior, "Down", "Hold Explosion");
     let hold_source = hold_explosion_sprites
@@ -1590,41 +1613,49 @@ fn load_itg_sprite_noteskin(
         .or_else(|| hold_explosion_sprites.first());
     let hold_wrapper_source =
         hold_wrapper.filter(|sprite| sprite.commands.contains_key("holdingoncommand"));
-    hold.explosion = hold_wrapper_source
-        .map(|sprite| slot_with_active_cmd(&sprite.slot, &sprite.commands, "holdingoncommand"))
-        .or_else(|| {
-            hold_source.map(|sprite| {
-                let cmd = hold_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
-                slot_with_active_cmd(&sprite.slot, cmd, "holdingoncommand")
+    hold.explosion = if hold_explosion_blank {
+        None
+    } else {
+        hold_wrapper_source
+            .map(|sprite| slot_with_active_cmd(&sprite.slot, &sprite.commands, "holdingoncommand"))
+            .or_else(|| {
+                hold_source.map(|sprite| {
+                    let cmd = hold_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
+                    slot_with_active_cmd(&sprite.slot, cmd, "holdingoncommand")
+                })
             })
-        })
-        .or_else(|| {
-            hold_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "holdingoncommand"))
-        })
-        .or_else(|| {
-            data.resolve_path("Down", "Hold Explosion")
-                .and_then(|p| itg_slot_from_path(&p))
-        })
-        .or_else(|| {
-            data.resolve_path("Down", "Hold Explosion")
-                .and_then(|p| itg_slot_from_actor_path_first_sprite(data, &p))
-                .map(|slot| {
-                    hold_wrapper.map_or(slot.clone(), |wrapped| {
-                        slot_with_active_cmd(&slot, &wrapped.commands, "holdingoncommand")
+            .or_else(|| {
+                hold_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "holdingoncommand"))
+            })
+            .or_else(|| {
+                data.resolve_path("Down", "Hold Explosion")
+                    .and_then(|p| itg_slot_from_path(&p))
+            })
+            .or_else(|| {
+                data.resolve_path("Down", "Hold Explosion")
+                    .and_then(|p| itg_slot_from_actor_path_first_sprite(data, &p))
+                    .map(|slot| {
+                        hold_wrapper.map_or(slot.clone(), |wrapped| {
+                            slot_with_active_cmd(&slot, &wrapped.commands, "holdingoncommand")
+                        })
                     })
-                })
-        })
-        .or_else(|| {
-            itg_find_texture_with_prefix(data, "_down hold explosion")
-                .and_then(|p| {
-                    itg_slot_from_path_all_frames(&p, Some(0.01), itg_animation_is_beat_based(data))
-                })
-                .map(|slot| {
-                    hold_wrapper.map_or(slot.clone(), |wrapped| {
-                        slot_with_active_cmd(&slot, &wrapped.commands, "holdingoncommand")
+            })
+            .or_else(|| {
+                itg_find_texture_with_prefix(data, "_down hold explosion")
+                    .and_then(|p| {
+                        itg_slot_from_path_all_frames(
+                            &p,
+                            Some(0.01),
+                            itg_animation_is_beat_based(data),
+                        )
                     })
-                })
-        });
+                    .map(|slot| {
+                        hold_wrapper.map_or(slot.clone(), |wrapped| {
+                            slot_with_active_cmd(&slot, &wrapped.commands, "holdingoncommand")
+                        })
+                    })
+            })
+    };
     let roll_explosion_sprites =
         itg_resolve_actor_sprites(data, &behavior, "Down", "Roll Explosion");
     let roll_source = roll_explosion_sprites
@@ -1633,42 +1664,54 @@ fn load_itg_sprite_noteskin(
         .or_else(|| roll_explosion_sprites.first());
     let roll_wrapper_source =
         roll_wrapper.filter(|sprite| sprite.commands.contains_key("rolloncommand"));
-    let roll_explosion = roll_wrapper_source
-        .map(|sprite| slot_with_active_cmd(&sprite.slot, &sprite.commands, "rolloncommand"))
-        .or_else(|| {
-            roll_source.map(|sprite| {
-                let cmd = roll_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
-                slot_with_active_cmd(&sprite.slot, cmd, "rolloncommand")
+    let roll_explosion = if roll_explosion_blank {
+        None
+    } else {
+        roll_wrapper_source
+            .map(|sprite| slot_with_active_cmd(&sprite.slot, &sprite.commands, "rolloncommand"))
+            .or_else(|| {
+                roll_source.map(|sprite| {
+                    let cmd = roll_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
+                    slot_with_active_cmd(&sprite.slot, cmd, "rolloncommand")
+                })
             })
-        })
-        .or_else(|| {
-            roll_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "rolloncommand"))
-        })
-        .or_else(|| {
-            data.resolve_path("Down", "Roll Explosion")
-                .and_then(|p| itg_slot_from_path(&p))
-        })
-        .or_else(|| {
-            data.resolve_path("Down", "Roll Explosion")
-                .and_then(|p| itg_slot_from_actor_path_first_sprite(data, &p))
-                .map(|slot| {
-                    roll_wrapper.map_or(slot.clone(), |wrapped| {
-                        slot_with_active_cmd(&slot, &wrapped.commands, "rolloncommand")
+            .or_else(|| {
+                roll_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "rolloncommand"))
+            })
+            .or_else(|| {
+                data.resolve_path("Down", "Roll Explosion")
+                    .and_then(|p| itg_slot_from_path(&p))
+            })
+            .or_else(|| {
+                data.resolve_path("Down", "Roll Explosion")
+                    .and_then(|p| itg_slot_from_actor_path_first_sprite(data, &p))
+                    .map(|slot| {
+                        roll_wrapper.map_or(slot.clone(), |wrapped| {
+                            slot_with_active_cmd(&slot, &wrapped.commands, "rolloncommand")
+                        })
                     })
-                })
-        })
-        .or_else(|| {
-            itg_find_texture_with_prefix(data, "_down hold explosion")
-                .and_then(|p| {
-                    itg_slot_from_path_all_frames(&p, Some(0.01), itg_animation_is_beat_based(data))
-                })
-                .map(|slot| {
-                    roll_wrapper.map_or(slot.clone(), |wrapped| {
-                        slot_with_active_cmd(&slot, &wrapped.commands, "rolloncommand")
+            })
+            .or_else(|| {
+                itg_find_texture_with_prefix(data, "_down hold explosion")
+                    .and_then(|p| {
+                        itg_slot_from_path_all_frames(
+                            &p,
+                            Some(0.01),
+                            itg_animation_is_beat_based(data),
+                        )
                     })
-                })
-        });
-    roll.explosion = roll_explosion.or(hold.explosion.clone());
+                    .map(|slot| {
+                        roll_wrapper.map_or(slot.clone(), |wrapped| {
+                            slot_with_active_cmd(&slot, &wrapped.commands, "rolloncommand")
+                        })
+                    })
+            })
+    };
+    roll.explosion = if roll_explosion_blank {
+        None
+    } else {
+        roll_explosion.or(hold.explosion.clone())
+    };
     if let (Some(roll_slot), Some(hold_slot)) = (roll.explosion.clone(), hold.explosion.clone()) {
         let roll_key = roll_slot.texture_key().to_ascii_lowercase();
         let hold_key = hold_slot.texture_key().to_ascii_lowercase();
@@ -1879,6 +1922,85 @@ fn load_itg_sprite_noteskin(
             .map(|i| (i as i32 * 68) - ((style.num_cols - 1) as i32 * 34))
             .collect()
     };
+    if data.name.eq_ignore_ascii_case("default")
+        && !DEFAULT_EXPLOSION_DEBUG_LOGGED.swap(true, Ordering::Relaxed)
+    {
+        let bright_path = data
+            .resolve_path("Down", "Tap Explosion Bright")
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "<none>".to_string());
+        let dim_path = data
+            .resolve_path("Down", "Tap Explosion Dim")
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "<none>".to_string());
+        let hold_path = data
+            .resolve_path("Down", "Hold Explosion")
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "<none>".to_string());
+        let roll_path = data
+            .resolve_path("Down", "Roll Explosion")
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "<none>".to_string());
+        let hold_tex = hold
+            .explosion
+            .as_ref()
+            .map(|slot| {
+                format!(
+                    "{} frames={} size={:?} rot={} effect={:?}",
+                    slot.texture_key(),
+                    slot.source.frame_count(),
+                    slot.logical_size(),
+                    slot.def.rotation_deg,
+                    slot.model_effect.mode
+                )
+            })
+            .unwrap_or_else(|| "<none>".to_string());
+        let roll_tex = roll
+            .explosion
+            .as_ref()
+            .map(|slot| {
+                format!(
+                    "{} frames={} size={:?} rot={} effect={:?}",
+                    slot.texture_key(),
+                    slot.source.frame_count(),
+                    slot.logical_size(),
+                    slot.def.rotation_deg,
+                    slot.model_effect.mode
+                )
+            })
+            .unwrap_or_else(|| "<none>".to_string());
+        let windows = ["W1", "W2", "W3", "W4", "W5"];
+        let tap_windows = windows
+            .iter()
+            .map(|window| {
+                tap_explosions.get(*window).map_or_else(
+                    || format!("{window}:<none>"),
+                    |explosion| {
+                        format!(
+                            "{window}: tex={} frames={} size={:?} init_visible={} init_alpha={:.3} has_glow={}",
+                            explosion.slot.texture_key(),
+                            explosion.slot.source.frame_count(),
+                            explosion.slot.logical_size(),
+                            explosion.animation.initial.visible,
+                            explosion.animation.initial.color[3],
+                            explosion.animation.glow.is_some()
+                        )
+                    },
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" | ");
+        info!(
+            "default explosion parse debug: down_bright_path={} down_dim_path={} down_hold_path={} down_roll_path={} hold_explosion={} roll_explosion={} tap_windows={}",
+            bright_path,
+            dim_path,
+            hold_path,
+            roll_path,
+            hold_tex,
+            roll_tex,
+            tap_windows
+        );
+    }
 
     Ok(Noteskin {
         notes,
@@ -2802,17 +2924,29 @@ fn itg_load_lua_behavior(data: &noteskin_itg::NoteskinData) -> ItgLuaBehavior {
         let Ok(content) = fs::read_to_string(&path) else {
             continue;
         };
-        for (k, v) in itg_parse_lua_string_map(&content, "ret.RedirTable") {
-            behavior.redir_table.insert(k.to_ascii_lowercase(), v);
+        if itg_extract_lua_table(&content, "ret.RedirTable").is_some() {
+            behavior.redir_table = itg_parse_lua_string_map(&content, "ret.RedirTable")
+                .into_iter()
+                .map(|(k, v)| (k.to_ascii_lowercase(), v))
+                .collect();
         }
-        for (k, v) in itg_parse_lua_int_map(&content, "ret.Rotate") {
-            behavior.rotate.insert(k.to_ascii_lowercase(), v);
+        if itg_extract_lua_table(&content, "ret.Rotate").is_some() {
+            behavior.rotate = itg_parse_lua_int_map(&content, "ret.Rotate")
+                .into_iter()
+                .map(|(k, v)| (k.to_ascii_lowercase(), v))
+                .collect();
         }
-        for name in itg_parse_lua_bool_set(&content, "ret.PartsToRotate") {
-            behavior.parts_to_rotate.insert(name.to_ascii_lowercase());
+        if itg_extract_lua_table(&content, "ret.PartsToRotate").is_some() {
+            behavior.parts_to_rotate = itg_parse_lua_bool_set(&content, "ret.PartsToRotate")
+                .into_iter()
+                .map(|name| name.to_ascii_lowercase())
+                .collect();
         }
-        for name in itg_parse_lua_bool_set(&content, "ret.Blank") {
-            behavior.blank.insert(name.to_ascii_lowercase());
+        if itg_extract_lua_table(&content, "ret.Blank").is_some() {
+            behavior.blank = itg_parse_lua_bool_set(&content, "ret.Blank")
+                .into_iter()
+                .map(|name| name.to_ascii_lowercase())
+                .collect();
         }
         let defines_redir =
             content.contains("ret.Redir = function") || content.contains("ret.Redir=function");
@@ -5225,6 +5359,16 @@ mod tests {
             .expect("dance/default should load from assets/noteskins");
         assert_eq!(ns.notes.len(), ns.note_layers.len());
         assert!(ns.note_layers.iter().any(|layers| layers.len() > 1));
+        let q4_layers = ns
+            .note_layers
+            .first()
+            .expect("default should expose 4th-note tap layers");
+        assert_eq!(q4_layers.len(), 5, "default tap note should have arrow + four circles");
+        let circle_layers = q4_layers
+            .iter()
+            .filter(|slot| slot.texture_key().to_ascii_lowercase().contains("_circle"))
+            .count();
+        assert_eq!(circle_layers, 4, "default tap note should keep four circle layers");
     }
 
     #[test]
@@ -5435,6 +5579,57 @@ mod tests {
         assert!(
             behavior.remap_head_to_tap,
             "default noteskin should keep hold-head-to-tap remap behavior"
+        );
+    }
+
+    #[test]
+    fn default_skin_blanks_hold_and_roll_explosion() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns =
+            load_itg_skin(&style, "default").expect("dance/default should load from assets/noteskins");
+        assert!(
+            ns.hold.explosion.is_none(),
+            "default hold explosion should stay blank per NoteSkin.lua"
+        );
+        assert!(
+            ns.roll.explosion.is_none(),
+            "default roll explosion should stay blank per NoteSkin.lua"
+        );
+        for col in 0..style.num_cols {
+            let hold_visuals = ns.hold_visuals_for_col(col, false);
+            let roll_visuals = ns.hold_visuals_for_col(col, true);
+            assert!(
+                hold_visuals.explosion.is_none(),
+                "default hold visuals should not resolve explosion for col {col}"
+            );
+            assert!(
+                roll_visuals.explosion.is_none(),
+                "default roll visuals should not resolve explosion for col {col}"
+            );
+        }
+    }
+
+    #[test]
+    fn cel_blank_table_does_not_inherit_default_hold_explosion_blank() {
+        let data =
+            noteskin_itg::load_noteskin_data(Path::new("assets/noteskins"), "dance", "cel")
+                .expect("dance/cel noteskin data should load");
+        let behavior = itg_load_lua_behavior(&data);
+        assert!(
+            !behavior.blank.contains("hold explosion"),
+            "cel should not inherit default hold explosion blank"
+        );
+        assert!(
+            !behavior.blank.contains("roll explosion"),
+            "cel should not inherit default roll explosion blank"
+        );
+        assert!(
+            behavior.blank.contains("tap explosion bright")
+                && behavior.blank.contains("tap explosion dim"),
+            "cel should keep its own tap explosion blank entries"
         );
     }
 
@@ -5660,15 +5855,26 @@ mod tests {
             "glowshift should not modulate diffuse alpha"
         );
 
-        let glow_0 = roll
-            .model_glow_at(0.0, 0.0, draw_0.tint[3])
-            .expect("glowshift should emit glow color at t=0");
-        let glow_1 = roll
-            .model_glow_at(0.0125, 0.0, draw_1.tint[3])
-            .expect("glowshift should emit glow color at t=0.0125");
+        let glow_alphas = [0.0f32, 0.0125, 0.025, 0.0375]
+            .iter()
+            .filter_map(|&t| roll.model_glow_at(t, 0.0, draw_0.tint[3]).map(|glow| glow[3]))
+            .collect::<Vec<_>>();
         assert!(
-            (glow_0[3] - glow_1[3]).abs() > 0.05,
-            "glow alpha should animate over time for glowshift"
+            glow_alphas.len() >= 2,
+            "glowshift should emit visible glow for at least part of its cycle"
+        );
+        let min_alpha = glow_alphas
+            .iter()
+            .copied()
+            .fold(f32::INFINITY, f32::min);
+        let max_alpha = glow_alphas
+            .iter()
+            .copied()
+            .fold(f32::NEG_INFINITY, f32::max);
+        assert!(
+            (max_alpha - min_alpha) > 0.05,
+            "glow alpha should animate over time for glowshift; got {:?}",
+            glow_alphas
         );
     }
 

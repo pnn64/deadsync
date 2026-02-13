@@ -1363,7 +1363,7 @@ fn push_scroller_frame(
             if let Some(note_slots) = ns.note_layers.get(note_idx) {
                 let primary_h = note_slots
                     .first()
-                    .map(|slot| slot.size()[1].max(1) as f32)
+                    .map(|slot| slot.logical_size()[1].max(1.0))
                     .unwrap_or(1.0);
                 let note_scale = if primary_h > f32::EPSILON {
                     target_height / primary_h
@@ -1382,11 +1382,8 @@ fn push_scroller_frame(
                         preview_time
                     };
                     let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
-                    let slot_size = note_slot.size();
-                    let base_size = [
-                        slot_size[0] as f32 * note_scale,
-                        slot_size[1] as f32 * note_scale,
-                    ];
+                    let slot_size = note_slot.logical_size();
+                    let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
                     let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
                     let (sin_r, cos_r) = rot_rad.sin_cos();
                     let ox = draw.pos[0] * note_scale;
@@ -1459,9 +1456,9 @@ fn push_scroller_frame(
                     preview_time
                 };
                 let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
-                let size = note_slot.size();
-                let width = size[0].max(1) as f32;
-                let height = size[1].max(1) as f32;
+                let size = note_slot.logical_size();
+                let width = size[0].max(1.0);
+                let height = size[1].max(1.0);
                 let scale = if height > 0.0 {
                     target_height / height
                 } else {
