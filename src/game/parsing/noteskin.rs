@@ -763,6 +763,8 @@ impl Default for ReceptorGlowBehavior {
 
 #[derive(Debug, Clone, Default)]
 pub struct HoldVisuals {
+    pub head_inactive: Option<SpriteSlot>,
+    pub head_active: Option<SpriteSlot>,
     pub body_inactive: Option<SpriteSlot>,
     pub body_active: Option<SpriteSlot>,
     pub bottomcap_inactive: Option<SpriteSlot>,
@@ -791,6 +793,8 @@ pub struct Noteskin {
     pub receptor_glow_behavior: ReceptorGlowBehavior,
     pub receptor_pulse: ReceptorPulse,
     pub hold_let_go_gray_percent: f32,
+    pub hold_columns: Vec<HoldVisuals>,
+    pub roll_columns: Vec<HoldVisuals>,
     pub hold: HoldVisuals,
     pub roll: HoldVisuals,
     pub tap_note_animation_length: f32,
@@ -844,6 +848,21 @@ impl Noteskin {
             self.tap_mine_animation_is_vivid,
             self.animation_is_beat_based,
         )
+    }
+
+    #[inline(always)]
+    pub fn hold_visuals_for_col(&self, col: usize, is_roll: bool) -> &HoldVisuals {
+        if is_roll {
+            self.roll_columns
+                .get(col)
+                .or_else(|| self.roll_columns.first())
+                .unwrap_or(&self.roll)
+        } else {
+            self.hold_columns
+                .get(col)
+                .or_else(|| self.hold_columns.first())
+                .unwrap_or(&self.hold)
+        }
     }
 }
 
@@ -1250,6 +1269,18 @@ fn load_itg_sprite_noteskin(
     let mut receptor_glow = Vec::with_capacity(style.num_cols);
     let mut mines = Vec::with_capacity(style.num_cols);
     let mut mine_frames = Vec::with_capacity(style.num_cols);
+    let mut hold_columns = Vec::with_capacity(style.num_cols);
+    let mut roll_columns = Vec::with_capacity(style.num_cols);
+    let resolve_single_slot = |button: &str, element: &str| {
+        itg_resolve_actor_sprites(data, &behavior, button, element)
+            .into_iter()
+            .next()
+            .map(|s| s.slot)
+            .or_else(|| {
+                data.resolve_path(button, element)
+                    .and_then(|p| itg_slot_from_path(&p))
+            })
+    };
 
     for col in 0..style.num_cols {
         let button = itg_button_for_col(col);
@@ -1379,101 +1410,97 @@ fn load_itg_sprite_noteskin(
         };
         mines.push(mine_fill);
         mine_frames.push(mine_frame);
+
+        let hold_head_inactive = if behavior.remap_head_to_tap {
+            None
+        } else {
+            resolve_single_slot(button, "Hold Head Inactive")
+        };
+        let hold_head_active = if behavior.remap_head_to_tap {
+            None
+        } else {
+            resolve_single_slot(button, "Hold Head Active")
+        };
+        let hold_body_inactive = resolve_single_slot(button, "Hold Body Inactive");
+        let hold_body_active = resolve_single_slot(button, "Hold Body Active");
+        let hold_bottomcap_inactive = resolve_single_slot(button, "Hold BottomCap Inactive");
+        let hold_bottomcap_active = resolve_single_slot(button, "Hold BottomCap Active");
+
+        let hold_visual = HoldVisuals {
+            head_inactive: hold_head_inactive.clone(),
+            head_active: hold_head_active.or(hold_head_inactive.clone()),
+            body_inactive: hold_body_inactive.clone(),
+            body_active: hold_body_active.or(hold_body_inactive.clone()),
+            bottomcap_inactive: hold_bottomcap_inactive.clone(),
+            bottomcap_active: hold_bottomcap_active.or(hold_bottomcap_inactive.clone()),
+            explosion: None,
+        };
+
+        let roll_head_inactive = if behavior.remap_head_to_tap {
+            None
+        } else {
+            resolve_single_slot(button, "Roll Head Inactive")
+        };
+        let roll_head_active = if behavior.remap_head_to_tap {
+            None
+        } else {
+            resolve_single_slot(button, "Roll Head Active")
+        };
+        let roll_body_inactive = resolve_single_slot(button, "Roll Body Inactive");
+        let roll_body_active = resolve_single_slot(button, "Roll Body Active");
+        let roll_bottomcap_inactive = resolve_single_slot(button, "Roll BottomCap Inactive");
+        let roll_bottomcap_active = resolve_single_slot(button, "Roll BottomCap Active");
+
+        let roll_visual = HoldVisuals {
+            head_inactive: roll_head_inactive
+                .clone()
+                .or(hold_visual.head_inactive.clone()),
+            head_active: roll_head_active
+                .or(roll_head_inactive)
+                .or(hold_visual.head_active.clone())
+                .or(hold_visual.head_inactive.clone()),
+            body_inactive: roll_body_inactive
+                .clone()
+                .or(hold_visual.body_inactive.clone()),
+            body_active: roll_body_active
+                .or(roll_body_inactive)
+                .or(hold_visual.body_active.clone())
+                .or(hold_visual.body_inactive.clone()),
+            bottomcap_inactive: roll_bottomcap_inactive
+                .clone()
+                .or(hold_visual.bottomcap_inactive.clone()),
+            bottomcap_active: roll_bottomcap_active
+                .or(roll_bottomcap_inactive)
+                .or(hold_visual.bottomcap_active.clone())
+                .or(hold_visual.bottomcap_inactive.clone()),
+            explosion: None,
+        };
+
+        hold_columns.push(hold_visual);
+        roll_columns.push(roll_visual);
     }
 
-    let hold_body_inactive =
-        itg_resolve_actor_sprites(data, &behavior, "Down", "Hold Body Inactive")
-            .into_iter()
-            .next()
-            .map(|s| s.slot)
-            .or_else(|| {
-                data.resolve_path("Down", "Hold Body Inactive")
-                    .and_then(|p| itg_slot_from_path(&p))
-            });
-    let hold_body_active = itg_resolve_actor_sprites(data, &behavior, "Down", "Hold Body Active")
-        .into_iter()
-        .next()
-        .map(|s| s.slot)
-        .or_else(|| {
-            data.resolve_path("Down", "Hold Body Active")
-                .and_then(|p| itg_slot_from_path(&p))
+    let down_col = (0..style.num_cols)
+        .find(|&col| itg_button_for_col(col).eq_ignore_ascii_case("Down"))
+        .unwrap_or(0);
+    let mut hold = hold_columns
+        .get(down_col)
+        .cloned()
+        .or_else(|| hold_columns.first().cloned())
+        .unwrap_or_default();
+    let mut roll = roll_columns
+        .get(down_col)
+        .cloned()
+        .or_else(|| roll_columns.first().cloned())
+        .unwrap_or_else(|| HoldVisuals {
+            head_inactive: hold.head_inactive.clone(),
+            head_active: hold.head_active.clone(),
+            body_inactive: hold.body_inactive.clone(),
+            body_active: hold.body_active.clone(),
+            bottomcap_inactive: hold.bottomcap_inactive.clone(),
+            bottomcap_active: hold.bottomcap_active.clone(),
+            explosion: None,
         });
-    let hold_bottomcap_inactive =
-        itg_resolve_actor_sprites(data, &behavior, "Down", "Hold BottomCap Inactive")
-            .into_iter()
-            .next()
-            .map(|s| s.slot)
-            .or_else(|| {
-                data.resolve_path("Down", "Hold BottomCap Inactive")
-                    .and_then(|p| itg_slot_from_path(&p))
-            });
-    let hold_bottomcap_active =
-        itg_resolve_actor_sprites(data, &behavior, "Down", "Hold BottomCap Active")
-            .into_iter()
-            .next()
-            .map(|s| s.slot)
-            .or_else(|| {
-                data.resolve_path("Down", "Hold BottomCap Active")
-                    .and_then(|p| itg_slot_from_path(&p))
-            });
-    let roll_body_inactive =
-        itg_resolve_actor_sprites(data, &behavior, "Down", "Roll Body Inactive")
-            .into_iter()
-            .next()
-            .map(|s| s.slot)
-            .or_else(|| {
-                data.resolve_path("Down", "Roll Body Inactive")
-                    .and_then(|p| itg_slot_from_path(&p))
-            });
-    let roll_body_active = itg_resolve_actor_sprites(data, &behavior, "Down", "Roll Body Active")
-        .into_iter()
-        .next()
-        .map(|s| s.slot)
-        .or_else(|| {
-            data.resolve_path("Down", "Roll Body Active")
-                .and_then(|p| itg_slot_from_path(&p))
-        });
-    let roll_bottomcap_inactive =
-        itg_resolve_actor_sprites(data, &behavior, "Down", "Roll BottomCap Inactive")
-            .into_iter()
-            .next()
-            .map(|s| s.slot)
-            .or_else(|| {
-                data.resolve_path("Down", "Roll BottomCap Inactive")
-                    .and_then(|p| itg_slot_from_path(&p))
-            });
-    let roll_bottomcap_active =
-        itg_resolve_actor_sprites(data, &behavior, "Down", "Roll BottomCap Active")
-            .into_iter()
-            .next()
-            .map(|s| s.slot)
-            .or_else(|| {
-                data.resolve_path("Down", "Roll BottomCap Active")
-                    .and_then(|p| itg_slot_from_path(&p))
-            });
-
-    let mut hold = HoldVisuals {
-        body_inactive: hold_body_inactive.clone(),
-        body_active: hold_body_active.or(hold_body_inactive.clone()),
-        bottomcap_inactive: hold_bottomcap_inactive.clone(),
-        bottomcap_active: hold_bottomcap_active.or(hold_bottomcap_inactive.clone()),
-        explosion: None,
-    };
-    let mut roll = HoldVisuals {
-        body_inactive: roll_body_inactive.clone().or(hold.body_inactive.clone()),
-        body_active: roll_body_active
-            .or(roll_body_inactive)
-            .or(hold.body_active.clone())
-            .or(hold.body_inactive.clone()),
-        bottomcap_inactive: roll_bottomcap_inactive
-            .clone()
-            .or(hold.bottomcap_inactive.clone()),
-        bottomcap_active: roll_bottomcap_active
-            .or(roll_bottomcap_inactive)
-            .or(hold.bottomcap_active.clone())
-            .or(hold.bottomcap_inactive.clone()),
-        explosion: None,
-    };
 
     let explosion_sprites = itg_resolve_actor_sprites(data, &behavior, "Down", "Explosion");
     let dim_sprites = explosion_sprites
@@ -1641,6 +1668,12 @@ fn load_itg_sprite_noteskin(
                 roll.explosion = Some(hold_slot);
             }
         }
+    }
+    for visuals in &mut hold_columns {
+        visuals.explosion = hold.explosion.clone();
+    }
+    for visuals in &mut roll_columns {
+        visuals.explosion = roll.explosion.clone();
     }
     if data.name.eq_ignore_ascii_case("cel")
         && !CEL_ROLL_RESOLVE_LOGGED.swap(true, Ordering::Relaxed)
@@ -1829,6 +1862,8 @@ fn load_itg_sprite_noteskin(
         receptor_glow_behavior,
         receptor_pulse,
         hold_let_go_gray_percent,
+        hold_columns,
+        roll_columns,
         hold,
         roll,
         tap_note_animation_length,
@@ -2663,6 +2698,7 @@ struct ItgLuaBehavior {
     blank: HashSet<String>,
     remap_head_to_tap: bool,
     remap_tap_fake_to_tap: bool,
+    keep_hold_non_head_button: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -2747,14 +2783,34 @@ fn itg_load_lua_behavior(data: &noteskin_itg::NoteskinData) -> ItgLuaBehavior {
         for name in itg_parse_lua_bool_set(&content, "ret.Blank") {
             behavior.blank.insert(name.to_ascii_lowercase());
         }
-        if content.contains("string.find(sElement, \"Head\")")
-            || content.contains("string.find(sElement,'Head')")
+        let assigns_tap_note = content.contains("sElement = \"Tap Note\"")
+            || content.contains("sElement='Tap Note'")
+            || content.contains("sElement = 'Tap Note'")
+            || content.contains("sElement=\"Tap Note\"");
+        if assigns_tap_note
+            && (content.contains("Hold Head")
+                || content.contains("Roll Head")
+                || content.contains("string.find(sElement, \"Head\")")
+                || content.contains("string.find(sElement,'Head')"))
         {
             behavior.remap_head_to_tap = true;
         }
-        if content.contains("sElement == \"Tap Fake\"") || content.contains("sElement=='Tap Fake'")
+        if assigns_tap_note
+            && (content.contains("Tap Fake")
+                || content.contains("sElement == \"Tap Fake\"")
+                || content.contains("sElement=='Tap Fake'"))
         {
             behavior.remap_tap_fake_to_tap = true;
+        }
+        if (content.contains("if not string.find(sElement, \"Head\")")
+            || content.contains("if not string.find(sElement,'Head')"))
+            && (content.contains("not string.find(sElement, \"Explosion\")")
+                || content.contains("not string.find(sElement,'Explosion')"))
+            && (content.contains("string.find(sElement, \"Hold\")")
+                || content.contains("string.find(sElement,'Hold')"))
+            && content.contains("return sButton, sElement")
+        {
+            behavior.keep_hold_non_head_button = true;
         }
     }
     behavior
@@ -3655,11 +3711,20 @@ fn itg_resolve_actor_sprites_inner(
     {
         resolved_element = "Tap Note".to_string();
     }
-    let resolved_button = behavior
-        .redir_table
-        .get(&button.to_ascii_lowercase())
-        .cloned()
-        .unwrap_or_else(|| button.to_string());
+    let resolved_element_lower = resolved_element.to_ascii_lowercase();
+    let keep_button = behavior.keep_hold_non_head_button
+        && resolved_element_lower.contains("hold")
+        && !resolved_element_lower.contains("head")
+        && !resolved_element_lower.contains("explosion");
+    let resolved_button = if keep_button {
+        button.to_string()
+    } else {
+        behavior
+            .redir_table
+            .get(&button.to_ascii_lowercase())
+            .cloned()
+            .unwrap_or_else(|| button.to_string())
+    };
     let path = data.resolve_path(&resolved_button, &resolved_element);
     let Some(path) = path else {
         visiting.remove(&visit_key);
@@ -5240,6 +5305,122 @@ mod tests {
         assert_eq!(slot.frame_index(0.0, 0.25), 1);
         assert_eq!(slot.frame_index(0.0, 0.95), 1);
         assert_eq!(slot.frame_index(0.0, 1.05), 0);
+    }
+
+    #[test]
+    fn ddr_note_hold_body_and_cap_use_per_column_assets() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "ddr-note")
+            .expect("dance/ddr-note should load from assets/noteskins");
+
+        let expected = [
+            ("left hold body inactive", "left hold bottomcap inactive"),
+            ("down hold body inactive", "down hold bottomcap inactive"),
+            ("up hold body inactive", "up hold bottomcap inactive"),
+            ("right hold body inactive", "right hold bottomcap inactive"),
+        ];
+
+        for (col, (want_body, want_cap)) in expected.into_iter().enumerate() {
+            let visuals = ns.hold_visuals_for_col(col, false);
+            let body = visuals
+                .body_inactive
+                .as_ref()
+                .map(|slot| slot.texture_key().to_ascii_lowercase())
+                .expect("ddr-note should provide hold body inactive per column");
+            let cap = visuals
+                .bottomcap_inactive
+                .as_ref()
+                .map(|slot| slot.texture_key().to_ascii_lowercase())
+                .expect("ddr-note should provide hold bottomcap inactive per column");
+            assert!(
+                body.contains(want_body),
+                "column {col} expected body containing '{want_body}', got '{body}'"
+            );
+            assert!(
+                cap.contains(want_cap),
+                "column {col} expected cap containing '{want_cap}', got '{cap}'"
+            );
+        }
+    }
+
+    #[test]
+    fn ddr_note_hold_head_uses_down_hold_head_sheet() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "ddr-note")
+            .expect("dance/ddr-note should load from assets/noteskins");
+
+        for col in 0..style.num_cols {
+            let visuals = ns.hold_visuals_for_col(col, false);
+            let inactive = visuals
+                .head_inactive
+                .as_ref()
+                .map(|slot| slot.texture_key().to_ascii_lowercase())
+                .expect("ddr-note should provide hold head inactive");
+            let active = visuals
+                .head_active
+                .as_ref()
+                .map(|slot| slot.texture_key().to_ascii_lowercase())
+                .expect("ddr-note should provide hold head active");
+            assert!(
+                inactive.contains("down hold head inactive"),
+                "column {col} expected Down hold head inactive sheet, got '{inactive}'"
+            );
+            assert!(
+                active.contains("down hold head active"),
+                "column {col} expected Down hold head active sheet, got '{active}'"
+            );
+        }
+    }
+
+    #[test]
+    fn cel_hold_heads_remap_to_tap_layers() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
+        for col in 0..style.num_cols {
+            let visuals = ns.hold_visuals_for_col(col, false);
+            assert!(
+                visuals.head_inactive.is_none() && visuals.head_active.is_none(),
+                "cel hold heads should use tap-note fallback layers, got inactive={:?} active={:?}",
+                visuals
+                    .head_inactive
+                    .as_ref()
+                    .map(|slot| slot.texture_key().to_string()),
+                visuals
+                    .head_active
+                    .as_ref()
+                    .map(|slot| slot.texture_key().to_string())
+            );
+        }
+    }
+
+    #[test]
+    fn cel_hold_body_resolves_for_all_columns() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
+        for col in 0..style.num_cols {
+            let visuals = ns.hold_visuals_for_col(col, false);
+            let body = visuals
+                .body_inactive
+                .as_ref()
+                .map(|slot| slot.texture_key().to_ascii_lowercase())
+                .expect("cel should provide hold body inactive for each column");
+            assert!(
+                body.contains("down hold body inactive"),
+                "column {col} expected down hold body inactive, got '{body}'"
+            );
+        }
     }
 
     #[test]
