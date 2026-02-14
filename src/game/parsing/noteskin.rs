@@ -122,6 +122,8 @@ pub struct ModelDrawState {
     pub rot: [f32; 3],
     pub zoom: [f32; 3],
     pub tint: [f32; 4],
+    pub glow: [f32; 4],
+    pub vert_align: f32,
     pub blend_add: bool,
     pub visible: bool,
 }
@@ -133,6 +135,8 @@ impl Default for ModelDrawState {
             rot: [0.0, 0.0, 0.0],
             zoom: [1.0, 1.0, 1.0],
             tint: [1.0, 1.0, 1.0, 1.0],
+            glow: [1.0, 1.0, 1.0, 0.0],
+            vert_align: 0.5,
             blend_add: false,
             visible: true,
         }
@@ -160,6 +164,7 @@ pub enum ModelEffectMode {
     DiffuseRamp,
     GlowShift,
     Pulse,
+    Spin,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -189,6 +194,12 @@ impl Default for ModelEffectState {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ModelAutoRotKey {
+    pub frame: f32,
+    pub z_deg: f32,
+}
+
 #[derive(Debug, Clone)]
 pub struct SpriteSlot {
     pub def: SpriteDefinition,
@@ -200,12 +211,17 @@ pub struct SpriteSlot {
     pub model_draw: ModelDrawState,
     pub model_timeline: Arc<[ModelTweenSegment]>,
     pub model_effect: ModelEffectState,
+    pub model_auto_rot_total_frames: f32,
+    pub model_auto_rot_z_keys: Arc<[ModelAutoRotKey]>,
 }
 
 impl SpriteSlot {
     #[inline(always)]
     fn model_effect_mix(effect: ModelEffectState, time: f32, beat: f32) -> Option<f32> {
-        if matches!(effect.mode, ModelEffectMode::None) {
+        if !matches!(
+            effect.mode,
+            ModelEffectMode::DiffuseRamp | ModelEffectMode::GlowShift | ModelEffectMode::Pulse
+        ) {
             return None;
         }
         let period = effect.period.max(1e-6);
@@ -234,6 +250,35 @@ impl SpriteSlot {
         }
         .clamp(0.0, 1.0);
         Some(mix)
+    }
+
+    #[inline(always)]
+    fn model_auto_rot_z_at(&self, time: f32) -> Option<f32> {
+        if self.model_auto_rot_total_frames <= f32::EPSILON {
+            return None;
+        }
+        let keys = self.model_auto_rot_z_keys.as_ref();
+        if keys.is_empty() {
+            return None;
+        }
+        let frame = (time * 30.0).rem_euclid(self.model_auto_rot_total_frames);
+        if !frame.is_finite() {
+            return Some(keys[0].z_deg);
+        }
+        let first = keys[0];
+        if frame <= first.frame {
+            return Some(first.z_deg);
+        }
+        let mut prev = first;
+        for key in keys.iter().copied().skip(1) {
+            if frame <= key.frame {
+                let span = (key.frame - prev.frame).max(1e-6);
+                let t = ((frame - prev.frame) / span).clamp(0.0, 1.0);
+                return Some((key.z_deg - prev.z_deg).mul_add(t, prev.z_deg));
+            }
+            prev = key;
+        }
+        Some(prev.z_deg)
     }
 
     pub fn texture_key(&self) -> &str {
@@ -394,7 +439,9 @@ impl SpriteSlot {
             }
             for i in 0..4 {
                 s.tint[i] = lerp(seg.from.tint[i], seg.to.tint[i], p);
+                s.glow[i] = lerp(seg.from.glow[i], seg.to.glow[i], p);
             }
+            s.vert_align = lerp(seg.from.vert_align, seg.to.vert_align, p);
             s.blend_add = if p >= 1.0 {
                 seg.to.blend_add
             } else {
@@ -409,7 +456,21 @@ impl SpriteSlot {
             break;
         }
 
+        if let Some(rot_z) = self.model_auto_rot_z_at(time) {
+            out.rot[2] = (out.rot[2] + rot_z).rem_euclid(360.0);
+        }
+
         let effect = self.model_effect;
+        if matches!(effect.mode, ModelEffectMode::Spin) {
+            let clock = match effect.clock {
+                ModelEffectClock::Time => time,
+                ModelEffectClock::Beat => beat,
+            };
+            let spin_units = clock - effect.offset;
+            out.rot[0] = (out.rot[0] + effect.magnitude[0] * spin_units).rem_euclid(360.0);
+            out.rot[1] = (out.rot[1] + effect.magnitude[1] * spin_units).rem_euclid(360.0);
+            out.rot[2] = (out.rot[2] + effect.magnitude[2] * spin_units).rem_euclid(360.0);
+        }
         if let Some(mix) = Self::model_effect_mix(effect, time, beat) {
             match effect.mode {
                 ModelEffectMode::DiffuseRamp => {
@@ -430,6 +491,7 @@ impl SpriteSlot {
                 // ITG applies glowshift to the separate glow channel, not diffuse.
                 // The renderer samples this via `model_glow_at()`.
                 ModelEffectMode::GlowShift => {}
+                ModelEffectMode::Spin => {}
                 ModelEffectMode::None => {}
             }
         }
@@ -441,27 +503,31 @@ impl SpriteSlot {
         out.tint[1] = out.tint[1].clamp(0.0, 1.0);
         out.tint[2] = out.tint[2].clamp(0.0, 1.0);
         out.tint[3] = out.tint[3].clamp(0.0, 1.0);
+        out.glow[0] = out.glow[0].clamp(0.0, 1.0);
+        out.glow[1] = out.glow[1].clamp(0.0, 1.0);
+        out.glow[2] = out.glow[2].clamp(0.0, 1.0);
+        out.glow[3] = out.glow[3].clamp(0.0, 1.0);
         out
     }
 
     pub fn model_glow_at(&self, time: f32, beat: f32, diffuse_alpha: f32) -> Option<[f32; 4]> {
+        let mut glow = self.model_draw_at(time, beat).glow;
         let effect = self.model_effect;
-        if !matches!(effect.mode, ModelEffectMode::GlowShift) {
-            return None;
-        }
-        let through = Self::model_effect_mix(effect, time, beat)?;
-        // Match ITG's glow_shift blending: convert effect-phase percentage to the
-        // sinusoidal color mix used by Actor::PreDraw.
-        let mix =
-            (((through + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5).clamp(0.0, 1.0);
-        let mut glow = [0.0; 4];
-        for (i, out) in glow.iter_mut().enumerate() {
-            *out = (effect.color1[i] - effect.color2[i]).mul_add(mix, effect.color2[i]);
+        if matches!(effect.mode, ModelEffectMode::GlowShift) {
+            let through = Self::model_effect_mix(effect, time, beat)?;
+            // Match ITG's glow_shift blending: convert effect-phase percentage to the
+            // sinusoidal color mix used by Actor::PreDraw.
+            let mix =
+                (((through + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5).clamp(0.0, 1.0);
+            for (i, out) in glow.iter_mut().enumerate() {
+                *out = (effect.color1[i] - effect.color2[i]).mul_add(mix, effect.color2[i]);
+            }
+            glow[3] *= diffuse_alpha;
         }
         glow[0] = glow[0].clamp(0.0, 1.0);
         glow[1] = glow[1].clamp(0.0, 1.0);
         glow[2] = glow[2].clamp(0.0, 1.0);
-        glow[3] = (glow[3] * diffuse_alpha).clamp(0.0, 1.0);
+        glow[3] = glow[3].clamp(0.0, 1.0);
         (glow[3] > f32::EPSILON).then_some(glow)
     }
 
@@ -1613,7 +1679,13 @@ fn load_itg_sprite_noteskin(
 
         let mut mine_sprites = itg_resolve_actor_sprites(data, &behavior, button, "Tap Mine")
             .into_iter()
-            .map(|s| s.slot)
+            .map(|mut s| {
+                let (draw, timeline, effect) = itg_model_draw_program(&s.commands);
+                s.slot.model_draw = draw;
+                s.slot.model_timeline = timeline;
+                s.slot.model_effect = effect;
+                s.slot
+            })
             .collect::<Vec<_>>();
         let mine_fallback =
             itg_find_texture_with_prefix(data, "_mine").and_then(|p| itg_slot_from_path(&p));
@@ -2596,8 +2668,23 @@ enum ItgActorMod {
     ZoomZ(f32),
     Diffuse([f32; 4]),
     DiffuseAlpha(f32),
+    Glow([f32; 4]),
+    VertAlign(f32),
     BlendAdd(bool),
     Visible(bool),
+}
+
+fn itg_parse_vertalign_token(token: &str) -> Option<f32> {
+    let value = token.trim().trim_matches('"').trim_matches('\'');
+    if let Ok(v) = value.parse::<f32>() {
+        return Some(v);
+    }
+    match value.to_ascii_lowercase().as_str() {
+        "top" => Some(0.0),
+        "middle" | "center" => Some(0.5),
+        "bottom" => Some(1.0),
+        _ => None,
+    }
 }
 
 fn itg_parse_actor_mod_token(cmd: &str, args: &[&str]) -> Option<ItgActorMod> {
@@ -2652,6 +2739,31 @@ fn itg_parse_actor_mod_token(cmd: &str, args: &[&str]) -> Option<ItgActorMod> {
                 .map(ItgActorMod::Diffuse)
         }
         "diffusealpha" => first.map(ItgActorMod::DiffuseAlpha),
+        "glow" => {
+            if args.len() >= 4 {
+                let parsed = args
+                    .iter()
+                    .take(4)
+                    .map(|v| {
+                        v.trim()
+                            .trim_matches('"')
+                            .trim_matches('\'')
+                            .parse::<f32>()
+                            .ok()
+                    })
+                    .collect::<Option<Vec<f32>>>();
+                if let Some(vals) = parsed {
+                    return Some(ItgActorMod::Glow([vals[0], vals[1], vals[2], vals[3]]));
+                }
+            }
+            args.first()
+                .and_then(|v| itg_parse_color(v))
+                .map(ItgActorMod::Glow)
+        }
+        "vertalign" | "valign" => args
+            .first()
+            .and_then(|v| itg_parse_vertalign_token(v))
+            .map(ItgActorMod::VertAlign),
         "blend" => {
             if args
                 .iter()
@@ -2690,6 +2802,8 @@ fn itg_apply_actor_mods(state: &mut ModelDrawState, mods: &[ItgActorMod]) {
             ItgActorMod::ZoomZ(v) => state.zoom[2] = v,
             ItgActorMod::Diffuse(v) => state.tint = v,
             ItgActorMod::DiffuseAlpha(v) => state.tint[3] = v,
+            ItgActorMod::Glow(v) => state.glow = v,
+            ItgActorMod::VertAlign(v) => state.vert_align = v,
             ItgActorMod::BlendAdd(v) => state.blend_add = v,
             ItgActorMod::Visible(v) => state.visible = v,
         }
@@ -2856,6 +2970,17 @@ fn itg_model_draw_program(
                     );
                     effect.mode = ModelEffectMode::Pulse;
                 }
+                "spin" => {
+                    flush_group(
+                        &mut state,
+                        &mut timeline,
+                        &mut cursor_time,
+                        &mut pending_tween,
+                        &mut grouped_mods,
+                    );
+                    effect.mode = ModelEffectMode::Spin;
+                    effect.magnitude = [0.0, 0.0, 180.0];
+                }
                 "effectcolor1" | "effectcolor2" => {
                     flush_group(
                         &mut state,
@@ -3016,6 +3141,10 @@ fn itg_model_draw_program(
     state.tint[1] = state.tint[1].clamp(0.0, 1.0);
     state.tint[2] = state.tint[2].clamp(0.0, 1.0);
     state.tint[3] = state.tint[3].clamp(0.0, 1.0);
+    state.glow[0] = state.glow[0].clamp(0.0, 1.0);
+    state.glow[1] = state.glow[1].clamp(0.0, 1.0);
+    state.glow[2] = state.glow[2].clamp(0.0, 1.0);
+    state.glow[3] = state.glow[3].clamp(0.0, 1.0);
 
     (state, Arc::from(timeline), effect)
 }
@@ -3123,6 +3252,8 @@ fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
         model_draw: ModelDrawState::default(),
         model_timeline: Arc::from(Vec::<ModelTweenSegment>::new()),
         model_effect: ModelEffectState::default(),
+        model_auto_rot_total_frames: 0.0,
+        model_auto_rot_z_keys: Arc::from(Vec::<ModelAutoRotKey>::new()),
     })
 }
 
@@ -4296,6 +4427,7 @@ fn itg_resolve_actor_file(
             continue;
         };
         let (draw, timeline, effect) = itg_model_draw_program(&model.commands);
+        let model_auto_rot = itg_parse_milkshape_model_auto_rot(&model_path);
         if let Some(model_layers) = itg_parse_milkshape_model_layers(data, &model_path) {
             let mut pushed = false;
             for layer in model_layers {
@@ -4309,6 +4441,10 @@ fn itg_resolve_actor_file(
                 slot.model_draw = draw;
                 slot.model_timeline = Arc::clone(&timeline);
                 slot.model_effect = effect;
+                if let Some(auto_rot) = model_auto_rot.as_ref() {
+                    slot.model_auto_rot_total_frames = auto_rot.total_frames;
+                    slot.model_auto_rot_z_keys = Arc::clone(&auto_rot.z_keys);
+                }
                 slot.note_color_translate = !layer.flags.nomove;
                 slot.uv_velocity = if layer.flags.nomove {
                     [0.0, 0.0]
@@ -4349,6 +4485,10 @@ fn itg_resolve_actor_file(
         slot.model_draw = draw;
         slot.model_timeline = timeline;
         slot.model_effect = effect;
+        if let Some(auto_rot) = model_auto_rot.as_ref() {
+            slot.model_auto_rot_total_frames = auto_rot.total_frames;
+            slot.model_auto_rot_z_keys = Arc::clone(&auto_rot.z_keys);
+        }
         slot.uv_velocity = model_texture.tex.uv_velocity;
         slot.uv_offset = model_texture.tex.uv_offset;
         if behavior.parts_to_rotate.contains(element_lower)
@@ -4661,6 +4801,12 @@ struct ItgModelMaterialFlags {
     nomove: bool,
 }
 
+#[derive(Debug, Clone)]
+struct ItgModelAutoRot {
+    total_frames: f32,
+    z_keys: Arc<[ModelAutoRotKey]>,
+}
+
 fn itg_parse_model_material_flags(name: &str) -> ItgModelMaterialFlags {
     let lower = name.to_ascii_lowercase();
     ItgModelMaterialFlags {
@@ -4681,6 +4827,77 @@ fn itg_parse_milkshape_mesh_material_index(header: &str) -> i32 {
         .next()
         .and_then(|raw| raw.parse::<i32>().ok())
         .unwrap_or(0)
+}
+
+fn itg_parse_milkshape_model_auto_rot(path: &Path) -> Option<ItgModelAutoRot> {
+    let content = fs::read_to_string(path).ok()?;
+    if !content.to_ascii_lowercase().contains("milkshape 3d ascii") {
+        return None;
+    }
+    let mut lines = content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("//"));
+    while let Some(line) = lines.next() {
+        let Some(raw_bones) = line.strip_prefix("Bones:") else {
+            continue;
+        };
+        let bone_count = raw_bones.trim().parse::<usize>().ok()?;
+        if bone_count == 0 {
+            return None;
+        }
+        let mut total_frames = 0.0f32;
+        let mut first_bone = Vec::new();
+        for bone_idx in 0..bone_count {
+            let _name = lines.next()?;
+            let _parent = lines.next()?;
+            let _bind = lines.next()?;
+            let pos_count = lines.next()?.trim().parse::<usize>().ok()?;
+            for _ in 0..pos_count {
+                let frame = lines
+                    .next()?
+                    .split_whitespace()
+                    .next()?
+                    .parse::<f32>()
+                    .ok()?;
+                total_frames = total_frames.max(frame);
+            }
+            let rot_count = lines.next()?.trim().parse::<usize>().ok()?;
+            for _ in 0..rot_count {
+                let rot_line = lines.next()?;
+                let mut parts = rot_line.split_whitespace();
+                let frame = parts.next()?.parse::<f32>().ok()?;
+                let _x = parts.next()?.parse::<f32>().ok()?;
+                let _y = parts.next()?.parse::<f32>().ok()?;
+                let z = parts.next()?.parse::<f32>().ok()?;
+                total_frames = total_frames.max(frame);
+                if bone_idx == 0 {
+                    first_bone.push((frame, z.to_degrees()));
+                }
+            }
+        }
+        if first_bone.is_empty() || total_frames <= f32::EPSILON {
+            return None;
+        }
+        first_bone.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        let mut keys: Vec<ModelAutoRotKey> = Vec::with_capacity(first_bone.len());
+        for (frame, mut z_deg) in first_bone {
+            if let Some(prev) = keys.last().copied() {
+                while z_deg - prev.z_deg > 180.0 {
+                    z_deg -= 360.0;
+                }
+                while z_deg - prev.z_deg < -180.0 {
+                    z_deg += 360.0;
+                }
+            }
+            keys.push(ModelAutoRotKey { frame, z_deg });
+        }
+        return Some(ItgModelAutoRot {
+            total_frames,
+            z_keys: Arc::from(keys),
+        });
+    }
+    None
 }
 
 fn itg_resolve_model_material_texture(
@@ -5090,6 +5307,8 @@ fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<SpriteSlot
         model_draw: ModelDrawState::default(),
         model_timeline: Arc::from(Vec::<ModelTweenSegment>::new()),
         model_effect: ModelEffectState::default(),
+        model_auto_rot_total_frames: 0.0,
+        model_auto_rot_z_keys: Arc::from(Vec::<ModelAutoRotKey>::new()),
     })
 }
 
@@ -5159,6 +5378,8 @@ fn itg_slot_from_path_animated(
         model_draw: ModelDrawState::default(),
         model_timeline: Arc::from(Vec::<ModelTweenSegment>::new()),
         model_effect: ModelEffectState::default(),
+        model_auto_rot_total_frames: 0.0,
+        model_auto_rot_z_keys: Arc::from(Vec::<ModelAutoRotKey>::new()),
     })
 }
 
@@ -5563,12 +5784,40 @@ fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AnimationRate, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, Quantization, SpriteSource,
-        Style, itg_load_lua_behavior, load_itg_skin, parse_explosion_animation,
+        AnimationRate, ModelEffectClock, ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart,
+        NoteColorType, Quantization, SpriteSource, Style, itg_load_lua_behavior,
+        itg_model_draw_program, load_itg_skin, parse_explosion_animation,
     };
     use crate::game::parsing::noteskin_itg;
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
     use std::path::Path;
+
+    #[test]
+    fn actor_mod_parser_supports_vertalign_and_glow() {
+        let mut commands = HashMap::new();
+        commands.insert(
+            "initcommand".to_string(),
+            "vertalign,bottom;glow,0.1,0.2,0.3,0.4".to_string(),
+        );
+        let (draw, timeline, effect) = itg_model_draw_program(&commands);
+        assert!(timeline.is_empty(), "expected no tween timeline");
+        assert!(
+            (draw.vert_align - 1.0).abs() <= f32::EPSILON,
+            "vertalign,bottom should map to 1.0"
+        );
+        assert!(
+            (draw.glow[0] - 0.1).abs() <= 1e-6
+                && (draw.glow[1] - 0.2).abs() <= 1e-6
+                && (draw.glow[2] - 0.3).abs() <= 1e-6
+                && (draw.glow[3] - 0.4).abs() <= 1e-6,
+            "glow command should populate base glow color; got {:?}",
+            draw.glow
+        );
+        assert!(
+            matches!(effect.mode, ModelEffectMode::None),
+            "plain actor mods should not set an effect mode"
+        );
+    }
 
     #[test]
     fn loads_default_and_cel_itg_noteskins() {
@@ -6394,6 +6643,83 @@ mod tests {
         assert!(
             phase <= 1e-6,
             "one beat should wrap tap mine phase to 0 for cel; got {phase}"
+        );
+    }
+
+    #[test]
+    fn cel_tap_mine_does_not_set_model_spin_effect() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
+        let mine = ns
+            .mines
+            .first()
+            .and_then(|slot| slot.as_ref())
+            .expect("cel should define first-column mine slot");
+        assert!(
+            matches!(mine.model_effect.mode, ModelEffectMode::None),
+            "cel mine should not set model spin effect via parser commands"
+        );
+    }
+
+    #[test]
+    fn cel_tap_mine_uses_milkshape_bone_rotation_timing() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
+        let mine = ns
+            .mines
+            .first()
+            .and_then(|slot| slot.as_ref())
+            .expect("cel should define first-column mine slot");
+        assert!(
+            (mine.model_auto_rot_total_frames - 120.0).abs() <= f32::EPSILON,
+            "cel mine should use milkshape total frame count for auto-rotation"
+        );
+        assert!(
+            mine.model_auto_rot_z_keys.len() >= 2,
+            "cel mine should expose at least two auto-rotation keys"
+        );
+        let rot_0 = mine.model_draw_at(0.0, 0.0).rot[2];
+        let rot_1 = mine.model_draw_at(1.0, 0.0).rot[2];
+        let delta = (rot_1 - rot_0 + 540.0).rem_euclid(360.0) - 180.0;
+        assert!(
+            (delta - 87.3).abs() <= 0.5,
+            "cel mine should rotate by ~87.3 degrees after one second; got delta={delta}"
+        );
+    }
+
+    #[test]
+    fn lambda_tap_mine_spin_uses_beat_clock_and_magnitude() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "lambda")
+            .expect("dance/lambda should load from assets/noteskins");
+        let mine = ns
+            .mines
+            .first()
+            .and_then(|slot| slot.as_ref())
+            .expect("lambda should define first-column mine slot");
+        assert!(
+            matches!(mine.model_effect.mode, ModelEffectMode::Spin),
+            "lambda mine init command should enable spin effect"
+        );
+        assert!(
+            matches!(mine.model_effect.clock, ModelEffectClock::Beat),
+            "lambda mine spin should run on beat clock"
+        );
+        let rot_0 = mine.model_draw_at(0.0, 0.0).rot[2];
+        let rot_1 = mine.model_draw_at(0.0, 1.0).rot[2];
+        let delta = (rot_1 - rot_0 + 540.0).rem_euclid(360.0) - 180.0;
+        assert!(
+            (delta + 33.0).abs() <= 1e-3,
+            "one beat should rotate lambda mine by -33 degrees; got delta={delta}"
         );
     }
 

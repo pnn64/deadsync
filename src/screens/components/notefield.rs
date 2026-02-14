@@ -10,7 +10,9 @@ use crate::game::gameplay::{
 };
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, TimingWindow};
 use crate::game::note::{HoldResult, NoteType};
-use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot};
+use crate::game::parsing::noteskin::{
+    ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
+};
 use crate::game::{gameplay::PlayerRuntime, gameplay::State, profile, scroll::ScrollSpeedSetting};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -215,11 +217,12 @@ pub(crate) fn noteskin_model_actor(
     } else {
         blend
     };
+    let align_y = (0.5 - draw.vert_align) * size[1];
 
     let mut vertices = Vec::with_capacity(model.vertices.len());
     for v in model.vertices.iter() {
         let mut lx = v.pos[0] * local_scale[0];
-        let mut ly = v.pos[1] * local_scale[1];
+        let mut ly = v.pos[1] * local_scale[1] + align_y;
         let lz = v.pos[2] * local_scale[2];
         if slot.def.mirror_h {
             lx = -lx;
@@ -1200,6 +1203,10 @@ pub fn build(
         };
         let current_time = state.current_music_time_visible[player_idx];
         let current_beat = state.current_beat_visible[player_idx];
+        // ITG NoteField currently advances NoteDisplay resources twice per frame for
+        // the master field (and once per additional field), so model/tween time in
+        // NoteDisplay actors runs faster than wall-clock elapsed.
+        let note_display_time_scale = state.num_players as f32 + 1.0;
         // Precompute per-frame values used for converting beat/time to Y positions
         let (rate, cmod_pps_opt, curr_disp_beat, beatmod_multiplier) = match scroll_speed {
             ScrollSpeedSetting::CMod(c_bpm) => {
@@ -2770,14 +2777,11 @@ pub fn build(
                     if fill_slot.is_none() && frame_slot.is_none() {
                         continue;
                     }
-                    let base_rotation = fill_slot
-                        .map(|slot| -slot.def.rotation_deg as f32)
-                        .or_else(|| frame_slot.map(|slot| -slot.def.rotation_deg as f32))
-                        .unwrap_or(0.0);
-                    let time = state.total_elapsed_in_screen;
+                    let phase_time = state.total_elapsed_in_screen;
+                    let note_display_time = phase_time * note_display_time_scale;
                     let beat = current_beat;
                     let mine_note_beat = state.notes[arrow.note_index].beat;
-                    let mine_uv_phase = ns.tap_mine_uv_phase(time, beat, mine_note_beat);
+                    let mine_uv_phase = ns.tap_mine_uv_phase(phase_time, beat, mine_note_beat);
                     let circle_reference = frame_slot
                         .map(|slot| scale_sprite(slot.size()))
                         .or_else(|| fill_slot.map(|slot| scale_sprite(slot.size())))
@@ -2814,68 +2818,99 @@ pub fn build(
                                 ));
                             }
                         } else {
-                            let frame = slot.frame_index_from_phase(mine_uv_phase);
-                            let uv_elapsed = if slot.model.is_some() {
-                                mine_uv_phase
-                            } else {
-                                state.total_elapsed_in_screen
-                            };
-                            let uv = translated_uv_rect(
-                                slot.uv_for_frame_at(frame, uv_elapsed),
-                                ns.part_uv_translation(NoteAnimPart::Mine, mine_note_beat, false),
-                            );
-                            let size = scale_sprite(slot.size());
-                            let width = size[0];
-                            let height = size[1];
-                            let rotation = base_rotation - time * 45.0;
-                            let center = [playfield_center_x + col_x_offset, y_pos];
-                            if let Some(model_actor) = noteskin_model_actor(
-                                slot,
-                                center,
-                                [width, height],
-                                uv,
-                                rotation,
-                                time,
-                                beat,
-                                [1.0, 1.0, 1.0, 0.9],
-                                BlendMode::Alpha,
-                                (Z_TAP_NOTE - 1) as i16,
-                            ) {
-                                actors.push(model_actor);
-                            } else {
-                                actors.push(act!(sprite(slot.texture_key().to_string()):
-                                    align(0.5, 0.5):
-                                    xy(center[0], center[1]):
-                                    setsize(width, height):
-                                    rotationz(rotation):
-                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                    diffuse(1.0, 1.0, 1.0, 0.9):
-                                    z(Z_TAP_NOTE - 1)
-                                ));
+                            let draw = slot.model_draw_at(note_display_time, beat);
+                            if draw.visible {
+                                let frame = slot.frame_index_from_phase(mine_uv_phase);
+                                let uv_elapsed = if slot.model.is_some() {
+                                    mine_uv_phase
+                                } else {
+                                    phase_time
+                                };
+                                let uv = translated_uv_rect(
+                                    slot.uv_for_frame_at(frame, uv_elapsed),
+                                    ns.part_uv_translation(
+                                        NoteAnimPart::Mine,
+                                        mine_note_beat,
+                                        false,
+                                    ),
+                                );
+                                let size = scale_sprite(slot.size());
+                                let width = size[0];
+                                let height = size[1];
+                                let base_rotation = -slot.def.rotation_deg as f32;
+                                let has_scripted_rot =
+                                    matches!(slot.model_effect.mode, ModelEffectMode::Spin)
+                                        || slot.model_auto_rot_total_frames > f32::EPSILON
+                                        || draw.rot[2].abs() > f32::EPSILON;
+                                let legacy_rot = if has_scripted_rot {
+                                    0.0
+                                } else {
+                                    -note_display_time * 45.0
+                                };
+                                let sprite_rotation = base_rotation + legacy_rot + draw.rot[2];
+                                let center = [playfield_center_x + col_x_offset, y_pos];
+                                if let Some(model_actor) = noteskin_model_actor(
+                                    slot,
+                                    center,
+                                    [width, height],
+                                    uv,
+                                    base_rotation + legacy_rot,
+                                    note_display_time,
+                                    beat,
+                                    [1.0, 1.0, 1.0, 0.9],
+                                    BlendMode::Alpha,
+                                    (Z_TAP_NOTE - 1) as i16,
+                                ) {
+                                    actors.push(model_actor);
+                                } else {
+                                    actors.push(act!(sprite(slot.texture_key().to_string()):
+                                        align(0.5, 0.5):
+                                        xy(center[0], center[1]):
+                                        setsize(width, height):
+                                        rotationz(sprite_rotation):
+                                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                        diffuse(1.0, 1.0, 1.0, 0.9):
+                                        z(Z_TAP_NOTE - 1)
+                                    ));
+                                }
                             }
                         }
                     }
                     if let Some(slot) = frame_slot {
+                        let draw = slot.model_draw_at(note_display_time, beat);
+                        if !draw.visible {
+                            continue;
+                        }
                         let frame = slot.frame_index_from_phase(mine_uv_phase);
                         let uv_elapsed = if slot.model.is_some() {
                             mine_uv_phase
                         } else {
-                            state.total_elapsed_in_screen
+                            phase_time
                         };
                         let uv = translated_uv_rect(
                             slot.uv_for_frame_at(frame, uv_elapsed),
                             ns.part_uv_translation(NoteAnimPart::Mine, mine_note_beat, false),
                         );
                         let size = scale_sprite(slot.size());
-                        let rotation = base_rotation + time * 120.0;
+                        let base_rotation = -slot.def.rotation_deg as f32;
+                        let has_scripted_rot =
+                            matches!(slot.model_effect.mode, ModelEffectMode::Spin)
+                                || slot.model_auto_rot_total_frames > f32::EPSILON
+                                || draw.rot[2].abs() > f32::EPSILON;
+                        let legacy_rot = if has_scripted_rot {
+                            0.0
+                        } else {
+                            note_display_time * 120.0
+                        };
+                        let sprite_rotation = base_rotation + legacy_rot + draw.rot[2];
                         let center = [playfield_center_x + col_x_offset, y_pos];
                         if let Some(model_actor) = noteskin_model_actor(
                             slot,
                             center,
                             size,
                             uv,
-                            rotation,
-                            time,
+                            base_rotation + legacy_rot,
+                            note_display_time,
                             beat,
                             [1.0, 1.0, 1.0, 1.0],
                             BlendMode::Alpha,
@@ -2887,7 +2922,7 @@ pub fn build(
                                 align(0.5, 0.5):
                                 xy(center[0], center[1]):
                                 setsize(size[0], size[1]):
-                                rotationz(rotation):
+                                rotationz(sprite_rotation):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                 z(Z_TAP_NOTE)
                             ));
