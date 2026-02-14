@@ -2794,7 +2794,8 @@ pub fn build(
                             .mine_fill_gradients
                             .get(col_idx)
                             .and_then(|colors| colors.as_deref());
-                        if slot.model.is_none()
+                        if frame_slot.is_some()
+                            && slot.model.is_none()
                             && slot.source.frame_count() <= 1
                             && let Some(fill_state) = fill_gradient
                                 .and_then(|colors| mine_fill_state(colors, current_beat))

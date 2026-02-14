@@ -2620,8 +2620,55 @@ fn parse_script_f32_list(raw: &str) -> Vec<f32> {
 }
 
 #[inline(always)]
+const fn script_rgba8(r: u8, g: u8, b: u8) -> [f32; 4] {
+    [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
+}
+
+#[inline(always)]
+fn parse_script_judgment_line_color(raw: &str) -> Option<[f32; 4]> {
+    let trimmed = raw.trim();
+    let open = trimmed.find('(')?;
+    if !trimmed.ends_with(')') || open + 1 >= trimmed.len() {
+        return None;
+    }
+    let name = trimmed[..open].trim();
+    let stroke = if name.eq_ignore_ascii_case("JudgmentLineToStrokeColor") {
+        true
+    } else if name.eq_ignore_ascii_case("JudgmentLineToColor") {
+        false
+    } else {
+        return None;
+    };
+    let key = trimmed[open + 1..trimmed.len() - 1]
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_ascii_lowercase();
+    let mut color = match key.as_str() {
+        "judgmentline_w1" => script_rgba8(0xbf, 0xea, 0xff),
+        "judgmentline_w2" => script_rgba8(0xff, 0xf5, 0x68),
+        "judgmentline_w3" => script_rgba8(0xa4, 0xff, 0x00),
+        "judgmentline_w4" => script_rgba8(0x34, 0xbf, 0xff),
+        "judgmentline_w5" => script_rgba8(0xe4, 0x4d, 0xff),
+        "judgmentline_held" => script_rgba8(0xff, 0xff, 0xff),
+        "judgmentline_miss" => script_rgba8(0xff, 0x3c, 0x3c),
+        "judgmentline_maxcombo" => script_rgba8(0xff, 0xc6, 0x00),
+        _ => script_rgba8(0x00, 0x00, 0x00),
+    };
+    if stroke {
+        color[0] *= 0.5;
+        color[1] *= 0.5;
+        color[2] *= 0.5;
+    }
+    Some(color)
+}
+
+#[inline(always)]
 fn parse_script_color(raw: &str) -> Option<[f32; 4]> {
     let trimmed = raw.trim();
+    if let Some(color) = parse_script_judgment_line_color(trimmed) {
+        return Some(color);
+    }
     let lower = trimmed.to_ascii_lowercase();
     let value = if lower.starts_with("color(") && trimmed.ends_with(')') {
         let inner = &trimmed[6..trimmed.len().saturating_sub(1)];
@@ -6344,6 +6391,34 @@ mod tests {
         assert!(
             after.visible,
             "expected actor to become visible after final command"
+        );
+    }
+
+    #[test]
+    fn explosion_animation_parses_judgment_line_to_color_diffuse() {
+        let anim = parse_explosion_animation(
+            r#"finishtweening;diffuse,JudgmentLineToColor("JudgmentLine_W5");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0"#,
+        );
+        let color = anim.initial.color;
+        assert!(
+            (color[0] - (228.0 / 255.0)).abs() <= f32::EPSILON,
+            "unexpected W5 red component: {:?}",
+            color
+        );
+        assert!(
+            (color[1] - (77.0 / 255.0)).abs() <= f32::EPSILON,
+            "unexpected W5 green component: {:?}",
+            color
+        );
+        assert!(
+            (color[2] - 1.0).abs() <= f32::EPSILON,
+            "unexpected W5 blue component: {:?}",
+            color
+        );
+        assert!(
+            (color[3] - 1.0).abs() <= f32::EPSILON,
+            "unexpected W5 alpha component: {:?}",
+            color
         );
     }
 
