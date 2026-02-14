@@ -1406,6 +1406,9 @@ pub struct State {
 
     // Optimization: Direct array lookup instead of HashMap
     pub row_map_cache: Vec<u32>,
+    // Bit flags per note index:
+    // bit0 => same row contains a hold start, bit1 => same row contains a roll start.
+    pub tap_row_hold_roll_flags: Vec<u8>,
 
     pub decaying_hold_indices: Vec<usize>,
     pub hold_decay_active: Vec<bool>,
@@ -2385,6 +2388,24 @@ pub fn init(
             row_map_cache[entry.row_index] = pos as u32;
         }
     }
+    let mut row_hold_roll_flags: HashMap<usize, u8> = HashMap::new();
+    for note in &notes {
+        let flag = match note.note_type {
+            NoteType::Hold => 0b01,
+            NoteType::Roll => 0b10,
+            _ => 0,
+        };
+        if flag != 0 {
+            *row_hold_roll_flags.entry(note.row_index).or_insert(0) |= flag;
+        }
+    }
+    let mut tap_row_hold_roll_flags = vec![0u8; notes.len()];
+    for (idx, note) in notes.iter().enumerate() {
+        tap_row_hold_roll_flags[idx] = row_hold_roll_flags
+            .get(&note.row_index)
+            .copied()
+            .unwrap_or(0);
+    }
 
     let first_second = notes
         .iter()
@@ -2726,6 +2747,7 @@ pub fn init(
         mini_indicator_target_score_percent,
         mini_indicator_rival_score_percent,
         row_map_cache,
+        tap_row_hold_roll_flags,
         decaying_hold_indices: Vec::new(),
         hold_decay_active: vec![false; notes_len],
         players,
@@ -4621,7 +4643,8 @@ fn process_input_edges(state: &mut State) {
             let hit_note = judge_a_tap(state, lane_idx, event_music_time);
             refresh_roll_life_on_step(state, lane_idx);
             if !hit_note {
-                state.receptor_glow_timers[lane_idx] = receptor_glow_duration_for_col(state, lane_idx);
+                state.receptor_glow_timers[lane_idx] =
+                    receptor_glow_duration_for_col(state, lane_idx);
                 state.receptor_bop_timers[lane_idx] = 0.11;
             }
         }

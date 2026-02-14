@@ -68,13 +68,6 @@ impl SpriteSource {
         }
     }
 
-    pub const fn tex_dims(&self) -> (u32, u32) {
-        match self {
-            Self::Atlas { tex_dims, .. } => *tex_dims,
-            Self::Animated { tex_dims, .. } => *tex_dims,
-        }
-    }
-
     pub fn frame_count(&self) -> usize {
         match self {
             Self::Atlas { .. } => 1,
@@ -322,6 +315,52 @@ impl SpriteSlot {
         }
     }
 
+    pub fn frame_index_from_phase(&self, phase: f32) -> usize {
+        let frames = self.source.frame_count();
+        if frames <= 1 {
+            return 0;
+        }
+        let p = phase.rem_euclid(1.0);
+        match self.source.as_ref() {
+            SpriteSource::Atlas { .. } => 0,
+            SpriteSource::Animated {
+                frame_durations, ..
+            } => {
+                if let Some(durations) = frame_durations.as_ref() {
+                    let mut total = 0.0f32;
+                    for duration in durations.iter().take(frames) {
+                        if *duration > f32::EPSILON {
+                            total += *duration;
+                        }
+                    }
+                    if total > f32::EPSILON && total.is_finite() {
+                        let mut target = p * total;
+                        for (idx, duration) in durations.iter().take(frames).enumerate() {
+                            let d = (*duration).max(0.0);
+                            if d <= f32::EPSILON {
+                                continue;
+                            }
+                            if target < d {
+                                return idx;
+                            }
+                            target -= d;
+                        }
+                        if let Some(last_idx) = durations
+                            .iter()
+                            .take(frames)
+                            .enumerate()
+                            .rfind(|(_, duration)| **duration > f32::EPSILON)
+                            .map(|(idx, _)| idx)
+                        {
+                            return last_idx;
+                        }
+                    }
+                }
+                ((p * frames as f32).floor() as usize).min(frames - 1)
+            }
+        }
+    }
+
     pub fn model_draw_at(&self, time: f32, beat: f32) -> ModelDrawState {
         #[inline(always)]
         fn lerp(a: f32, b: f32, t: f32) -> f32 {
@@ -413,8 +452,8 @@ impl SpriteSlot {
         let through = Self::model_effect_mix(effect, time, beat)?;
         // Match ITG's glow_shift blending: convert effect-phase percentage to the
         // sinusoidal color mix used by Actor::PreDraw.
-        let mix = (((through + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5)
-            .clamp(0.0, 1.0);
+        let mix =
+            (((through + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5).clamp(0.0, 1.0);
         let mut glow = [0.0; 4];
         for (i, out) in glow.iter_mut().enumerate() {
             *out = (effect.color1[i] - effect.color2[i]).mul_add(mix, effect.color2[i]);
@@ -788,6 +827,160 @@ pub struct HoldVisuals {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct NoteDisplayMetrics {
+    pub draw_hold_head_for_taps_on_same_row: bool,
+    pub draw_roll_head_for_taps_on_same_row: bool,
+    pub tap_hold_roll_on_row_means_hold: bool,
+    pub hold_head_is_above_wavy_parts: bool,
+    pub hold_tail_is_above_wavy_parts: bool,
+    pub start_drawing_hold_body_offset_from_head: f32,
+    pub stop_drawing_hold_body_offset_from_tail: f32,
+    pub hold_let_go_gray_percent: f32,
+    pub flip_head_and_tail_when_reverse: bool,
+    pub flip_hold_body_when_reverse: bool,
+    pub top_hold_anchor_when_reverse: bool,
+    pub hold_active_is_add_layer: bool,
+    pub part_animation: [NotePartAnimation; NOTE_ANIM_PART_COUNT],
+    pub part_texture_translate: [NotePartTextureTranslate; NOTE_ANIM_PART_COUNT],
+}
+
+const NOTE_ANIM_PART_COUNT: usize = 14;
+
+#[derive(Debug, Clone, Copy)]
+#[repr(usize)]
+pub enum NoteAnimPart {
+    Tap = 0,
+    Mine,
+    Lift,
+    Fake,
+    HoldHead,
+    HoldTopCap,
+    HoldBody,
+    HoldBottomCap,
+    HoldTail,
+    RollHead,
+    RollTopCap,
+    RollBody,
+    RollBottomCap,
+    RollTail,
+}
+
+impl NoteAnimPart {
+    const ALL: [Self; NOTE_ANIM_PART_COUNT] = [
+        Self::Tap,
+        Self::Mine,
+        Self::Lift,
+        Self::Fake,
+        Self::HoldHead,
+        Self::HoldTopCap,
+        Self::HoldBody,
+        Self::HoldBottomCap,
+        Self::HoldTail,
+        Self::RollHead,
+        Self::RollTopCap,
+        Self::RollBody,
+        Self::RollBottomCap,
+        Self::RollTail,
+    ];
+
+    const fn metric_prefix(self) -> &'static str {
+        match self {
+            Self::Tap => "TapNote",
+            Self::Mine => "TapMine",
+            Self::Lift => "TapLift",
+            Self::Fake => "TapFake",
+            Self::HoldHead => "HoldHead",
+            Self::HoldTopCap => "HoldTopCap",
+            Self::HoldBody => "HoldBody",
+            Self::HoldBottomCap => "HoldBottomCap",
+            Self::HoldTail => "HoldTail",
+            Self::RollHead => "RollHead",
+            Self::RollTopCap => "RollTopCap",
+            Self::RollBody => "RollBody",
+            Self::RollBottomCap => "RollBottomCap",
+            Self::RollTail => "RollTail",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NotePartAnimation {
+    pub length: f32,
+    pub vivid: bool,
+}
+
+impl Default for NotePartAnimation {
+    fn default() -> Self {
+        Self {
+            length: 1.0,
+            vivid: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoteColorType {
+    Denominator,
+    Progress,
+    ProgressAlternate,
+}
+
+impl NoteColorType {
+    fn from_metric(value: &str) -> Option<Self> {
+        let value = value.trim().trim_matches('"').trim_matches('\'');
+        if value.eq_ignore_ascii_case("Denominator") {
+            Some(Self::Denominator)
+        } else if value.eq_ignore_ascii_case("Progress") {
+            Some(Self::Progress)
+        } else if value.eq_ignore_ascii_case("ProgressAlternate") {
+            Some(Self::ProgressAlternate)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NotePartTextureTranslate {
+    pub addition_offset: [f32; 2],
+    pub note_color_spacing: [f32; 2],
+    pub note_color_count: i32,
+    pub note_color_type: NoteColorType,
+}
+
+impl Default for NotePartTextureTranslate {
+    fn default() -> Self {
+        Self {
+            addition_offset: [0.0, 0.0],
+            note_color_spacing: [0.0, 0.0],
+            note_color_count: 8,
+            note_color_type: NoteColorType::Denominator,
+        }
+    }
+}
+
+impl Default for NoteDisplayMetrics {
+    fn default() -> Self {
+        Self {
+            draw_hold_head_for_taps_on_same_row: true,
+            draw_roll_head_for_taps_on_same_row: true,
+            tap_hold_roll_on_row_means_hold: true,
+            hold_head_is_above_wavy_parts: true,
+            hold_tail_is_above_wavy_parts: true,
+            start_drawing_hold_body_offset_from_head: 0.0,
+            stop_drawing_hold_body_offset_from_tail: 0.0,
+            hold_let_go_gray_percent: 0.25,
+            flip_head_and_tail_when_reverse: false,
+            flip_hold_body_when_reverse: false,
+            top_hold_anchor_when_reverse: false,
+            hold_active_is_add_layer: false,
+            part_animation: [NotePartAnimation::default(); NOTE_ANIM_PART_COUNT],
+            part_texture_translate: [NotePartTextureTranslate::default(); NOTE_ANIM_PART_COUNT],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct Style {
     pub num_cols: usize,
     #[allow(dead_code)]
@@ -812,16 +1005,32 @@ pub struct Noteskin {
     pub roll_columns: Vec<HoldVisuals>,
     pub hold: HoldVisuals,
     pub roll: HoldVisuals,
-    pub tap_note_animation_length: f32,
-    pub tap_note_animation_is_vivid: bool,
-    pub tap_mine_animation_length: f32,
-    pub tap_mine_animation_is_vivid: bool,
     pub animation_is_beat_based: bool,
+    pub note_display_metrics: NoteDisplayMetrics,
 }
 
 impl Noteskin {
     #[inline(always)]
-    fn part_uv_phase(
+    pub fn part_uv_phase(
+        &self,
+        part: NoteAnimPart,
+        song_seconds: f32,
+        song_beat: f32,
+        note_beat: f32,
+    ) -> f32 {
+        let anim = self.note_display_metrics.part_animation[part as usize];
+        Self::part_uv_phase_inner(
+            song_seconds,
+            song_beat,
+            note_beat,
+            anim.length,
+            anim.vivid,
+            self.animation_is_beat_based,
+        )
+    }
+
+    #[inline(always)]
+    fn part_uv_phase_inner(
         song_seconds: f32,
         song_beat: f32,
         note_beat: f32,
@@ -843,26 +1052,80 @@ impl Noteskin {
 
     #[inline(always)]
     pub fn tap_note_uv_phase(&self, song_seconds: f32, song_beat: f32, note_beat: f32) -> f32 {
-        Self::part_uv_phase(
-            song_seconds,
-            song_beat,
-            note_beat,
-            self.tap_note_animation_length,
-            self.tap_note_animation_is_vivid,
-            self.animation_is_beat_based,
-        )
+        self.part_uv_phase(NoteAnimPart::Tap, song_seconds, song_beat, note_beat)
     }
 
     #[inline(always)]
     pub fn tap_mine_uv_phase(&self, song_seconds: f32, song_beat: f32, note_beat: f32) -> f32 {
-        Self::part_uv_phase(
-            song_seconds,
-            song_beat,
-            note_beat,
-            self.tap_mine_animation_length,
-            self.tap_mine_animation_is_vivid,
-            self.animation_is_beat_based,
-        )
+        self.part_uv_phase(NoteAnimPart::Mine, song_seconds, song_beat, note_beat)
+    }
+
+    #[inline(always)]
+    pub fn part_uv_translation(
+        &self,
+        part: NoteAnimPart,
+        note_beat: f32,
+        is_addition: bool,
+    ) -> [f32; 2] {
+        let metrics = self.note_display_metrics.part_texture_translate[part as usize];
+        Self::part_uv_translation_inner(note_beat, metrics, is_addition)
+    }
+
+    #[inline(always)]
+    fn part_uv_translation_inner(
+        note_beat: f32,
+        metrics: NotePartTextureTranslate,
+        is_addition: bool,
+    ) -> [f32; 2] {
+        let count = metrics.note_color_count.max(1);
+        let countf = count as f32;
+        let color = match metrics.note_color_type {
+            NoteColorType::Denominator => {
+                let note_type = Self::beat_to_note_type_index(note_beat) as f32;
+                note_type.clamp(0.0, (count - 1) as f32)
+            }
+            NoteColorType::Progress => (note_beat * countf).ceil() % countf,
+            NoteColorType::ProgressAlternate => {
+                let mut scaled = note_beat * countf;
+                if scaled - (scaled as i64 as f32) == 0.0 {
+                    scaled += countf - 1.0;
+                }
+                scaled.ceil() % countf
+            }
+        };
+        let add = if is_addition {
+            metrics.addition_offset
+        } else {
+            [0.0, 0.0]
+        };
+        [
+            metrics.note_color_spacing[0].mul_add(color, add[0]),
+            metrics.note_color_spacing[1].mul_add(color, add[1]),
+        ]
+    }
+
+    #[inline(always)]
+    fn beat_to_note_type_index(beat: f32) -> i32 {
+        let row = (beat * 48.0).round() as i32;
+        if row.rem_euclid(48) == 0 {
+            0
+        } else if row.rem_euclid(24) == 0 {
+            1
+        } else if row.rem_euclid(16) == 0 {
+            2
+        } else if row.rem_euclid(12) == 0 {
+            3
+        } else if row.rem_euclid(8) == 0 {
+            4
+        } else if row.rem_euclid(6) == 0 {
+            5
+        } else if row.rem_euclid(4) == 0 {
+            6
+        } else if row.rem_euclid(3) == 0 {
+            7
+        } else {
+            8
+        }
     }
 
     #[inline(always)]
@@ -1237,47 +1500,8 @@ fn load_itg_sprite_noteskin(
     style: &Style,
 ) -> Result<Noteskin, String> {
     let behavior = itg_load_lua_behavior(data);
+    let note_display_metrics = itg_note_display_metrics(&data.metrics);
     let animation_is_beat_based = itg_animation_is_beat_based(data);
-    let tap_note_animation_length = data
-        .metrics
-        .get("notedisplay", "tapnoteanimationlength")
-        .and_then(itg_parse_ini_float)
-        .unwrap_or(1.0)
-        .abs()
-        .max(1e-6);
-    let tap_note_animation_is_vivid = data
-        .metrics
-        .get("notedisplay", "tapnoteanimationisvivid")
-        .and_then(itg_parse_ini_float)
-        .is_some_and(|v| v > 0.5);
-    let tap_mine_animation_length = data
-        .metrics
-        .get("notedisplay", "tapmineanimationlength")
-        .and_then(itg_parse_ini_float)
-        .unwrap_or(1.0)
-        .abs()
-        .max(1e-6);
-    let tap_mine_animation_is_vivid = data
-        .metrics
-        .get("notedisplay", "tapmineanimationisvivid")
-        .and_then(itg_parse_ini_float)
-        .is_some_and(|v| v > 0.5);
-    let note_color_count = data
-        .metrics
-        .get("notedisplay", "tapnotenotecolorcount")
-        .and_then(|v| v.parse::<usize>().ok())
-        .unwrap_or(8)
-        .max(1);
-    let note_spacing_x = data
-        .metrics
-        .get("notedisplay", "tapnotenotecolortexturecoordspacingx")
-        .and_then(|v| v.parse::<f32>().ok())
-        .unwrap_or(0.0);
-    let note_spacing_y = data
-        .metrics
-        .get("notedisplay", "tapnotenotecolortexturecoordspacingy")
-        .and_then(|v| v.parse::<f32>().ok())
-        .unwrap_or(0.0);
 
     let mut notes = Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
     let mut note_layers = Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
@@ -1351,38 +1575,8 @@ fn load_itg_sprite_noteskin(
             .cloned()
             .or_else(|| note_sprites.first().cloned())
             .ok_or_else(|| format!("failed to resolve Tap Note for button '{button}'"))?;
-        let note_base_texture = note_base.texture_key().to_string();
-
-        let tex_dims = note_base.source.tex_dims();
-        let mut note_size = note_base.def.size;
-        if note_spacing_x.abs() > f32::EPSILON {
-            note_size[0] = ((tex_dims.0 as f32 * note_spacing_x.abs()).round() as i32).max(1);
-        }
-        if note_spacing_y.abs() > f32::EPSILON {
-            note_size[1] = ((tex_dims.1 as f32 * note_spacing_y.abs()).round() as i32).max(1);
-        }
-        for q in 0..NUM_QUANTIZATIONS {
-            let color_idx = q.min(note_color_count - 1) as f32;
-            let note_src = [
-                note_base.def.src[0]
-                    + (tex_dims.0 as f32 * note_spacing_x * color_idx).round() as i32,
-                note_base.def.src[1]
-                    + (tex_dims.1 as f32 * note_spacing_y * color_idx).round() as i32,
-            ];
-            let mut layers = Vec::with_capacity(note_sprites.len());
-            for raw in &note_sprites {
-                let mut layer = raw.clone();
-                if layer.model.is_some() {
-                    if layer.note_color_translate {
-                        layer.uv_offset[0] += note_spacing_x * color_idx;
-                        layer.uv_offset[1] += note_spacing_y * color_idx;
-                    }
-                } else if layer.texture_key() == note_base_texture {
-                    layer.def.size = note_size;
-                    layer.def.src = note_src;
-                }
-                layers.push(layer);
-            }
+        for _ in 0..NUM_QUANTIZATIONS {
+            let layers = note_sprites.clone();
             let primary = layers.first().cloned().unwrap_or_else(|| note_base.clone());
             notes.push(primary);
             note_layers.push(Arc::from(layers));
@@ -1396,20 +1590,24 @@ fn load_itg_sprite_noteskin(
                 itg_find_texture_with_prefix(data, "_receptor").and_then(|p| itg_slot_from_path(&p))
             })
             .ok_or_else(|| format!("failed to resolve Receptor for button '{button}'"))?;
-        let glow_slot = receptor_sprites.get(1).map(|s| s.slot.clone()).or_else(|| {
-            if receptor_sprites.is_empty() {
-                itg_find_texture_with_prefix(data, "_rflash").and_then(|p| itg_slot_from_path(&p))
-            } else {
-                None
-            }
-        })
-        .or_else(|| {
-            if receptor_sprites.is_empty() {
-                itg_find_texture_with_prefix(data, "_glow").and_then(|p| itg_slot_from_path(&p))
-            } else {
-                None
-            }
-        });
+        let glow_slot = receptor_sprites
+            .get(1)
+            .map(|s| s.slot.clone())
+            .or_else(|| {
+                if receptor_sprites.is_empty() {
+                    itg_find_texture_with_prefix(data, "_rflash")
+                        .and_then(|p| itg_slot_from_path(&p))
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                if receptor_sprites.is_empty() {
+                    itg_find_texture_with_prefix(data, "_glow").and_then(|p| itg_slot_from_path(&p))
+                } else {
+                    None
+                }
+            });
         receptor_off.push(receptor_slot);
         receptor_glow.push(glow_slot);
 
@@ -1905,11 +2103,8 @@ fn load_itg_sprite_noteskin(
         }
     }
 
-    let hold_let_go_gray_percent = data
-        .metrics
-        .get("NoteDisplay", "HoldLetGoGrayPercent")
-        .and_then(|v| v.parse::<f32>().ok())
-        .unwrap_or(0.25)
+    let hold_let_go_gray_percent = note_display_metrics
+        .hold_let_go_gray_percent
         .clamp(0.0, 1.0);
 
     let receptor_glow_behavior = itg_receptor_glow_behavior(data, &behavior);
@@ -1992,13 +2187,7 @@ fn load_itg_sprite_noteskin(
             .join(" | ");
         info!(
             "default explosion parse debug: down_bright_path={} down_dim_path={} down_hold_path={} down_roll_path={} hold_explosion={} roll_explosion={} tap_windows={}",
-            bright_path,
-            dim_path,
-            hold_path,
-            roll_path,
-            hold_tex,
-            roll_tex,
-            tap_windows
+            bright_path, dim_path, hold_path, roll_path, hold_tex, roll_tex, tap_windows
         );
     }
 
@@ -2019,12 +2208,106 @@ fn load_itg_sprite_noteskin(
         roll_columns,
         hold,
         roll,
-        tap_note_animation_length,
-        tap_note_animation_is_vivid,
-        tap_mine_animation_length,
-        tap_mine_animation_is_vivid,
         animation_is_beat_based,
+        note_display_metrics,
     })
+}
+
+fn itg_note_display_metrics(metrics: &noteskin_itg::IniData) -> NoteDisplayMetrics {
+    let mut out = NoteDisplayMetrics::default();
+    let read_bool = |key: &str, default: bool| {
+        metrics
+            .get("NoteDisplay", key)
+            .and_then(itg_parse_ini_int)
+            .map_or(default, |v| v != 0)
+    };
+    let read_float = |key: &str, default: f32| {
+        metrics
+            .get("NoteDisplay", key)
+            .and_then(itg_parse_ini_float)
+            .unwrap_or(default)
+    };
+    let read_int = |key: &str, default: i32| {
+        metrics
+            .get("NoteDisplay", key)
+            .and_then(itg_parse_ini_int)
+            .unwrap_or(default)
+    };
+
+    out.draw_hold_head_for_taps_on_same_row = read_bool(
+        "DrawHoldHeadForTapsOnSameRow",
+        out.draw_hold_head_for_taps_on_same_row,
+    );
+    out.draw_roll_head_for_taps_on_same_row = read_bool(
+        "DrawRollHeadForTapsOnSameRow",
+        out.draw_roll_head_for_taps_on_same_row,
+    );
+    out.tap_hold_roll_on_row_means_hold = read_bool(
+        "TapHoldRollOnRowMeansHold",
+        out.tap_hold_roll_on_row_means_hold,
+    );
+    out.hold_head_is_above_wavy_parts = read_bool(
+        "HoldHeadIsAboveWavyParts",
+        out.hold_head_is_above_wavy_parts,
+    );
+    out.hold_tail_is_above_wavy_parts = read_bool(
+        "HoldTailIsAboveWavyParts",
+        out.hold_tail_is_above_wavy_parts,
+    );
+    out.start_drawing_hold_body_offset_from_head = read_float(
+        "StartDrawingHoldBodyOffsetFromHead",
+        out.start_drawing_hold_body_offset_from_head,
+    );
+    out.stop_drawing_hold_body_offset_from_tail = read_float(
+        "StopDrawingHoldBodyOffsetFromTail",
+        out.stop_drawing_hold_body_offset_from_tail,
+    );
+    out.hold_let_go_gray_percent = read_float("HoldLetGoGrayPercent", out.hold_let_go_gray_percent);
+    out.flip_head_and_tail_when_reverse = read_bool(
+        "FlipHeadAndTailWhenReverse",
+        out.flip_head_and_tail_when_reverse,
+    );
+    out.flip_hold_body_when_reverse =
+        read_bool("FlipHoldBodyWhenReverse", out.flip_hold_body_when_reverse);
+    out.top_hold_anchor_when_reverse =
+        read_bool("TopHoldAnchorWhenReverse", out.top_hold_anchor_when_reverse);
+    out.hold_active_is_add_layer = read_bool("HoldActiveIsAddLayer", out.hold_active_is_add_layer);
+    for part in NoteAnimPart::ALL {
+        let prefix = part.metric_prefix();
+        let length_key = format!("{prefix}AnimationLength");
+        let vivid_key = format!("{prefix}AnimationIsVivid");
+        let add_x_key = format!("{prefix}AdditionTextureCoordOffsetX");
+        let add_y_key = format!("{prefix}AdditionTextureCoordOffsetY");
+        let spacing_x_key = format!("{prefix}NoteColorTextureCoordSpacingX");
+        let spacing_y_key = format!("{prefix}NoteColorTextureCoordSpacingY");
+        let count_key = format!("{prefix}NoteColorCount");
+        let color_type_key = format!("{prefix}NoteColorType");
+        let default_anim = out.part_animation[part as usize];
+        let length = read_float(&length_key, default_anim.length).abs().max(1e-6);
+        let vivid = read_bool(&vivid_key, default_anim.vivid);
+        out.part_animation[part as usize] = NotePartAnimation { length, vivid };
+        let default_translate = out.part_texture_translate[part as usize];
+        let addition_offset = [
+            read_float(&add_x_key, default_translate.addition_offset[0]),
+            read_float(&add_y_key, default_translate.addition_offset[1]),
+        ];
+        let note_color_spacing = [
+            read_float(&spacing_x_key, default_translate.note_color_spacing[0]),
+            read_float(&spacing_y_key, default_translate.note_color_spacing[1]),
+        ];
+        let note_color_count = read_int(&count_key, default_translate.note_color_count);
+        let note_color_type = metrics
+            .get("NoteDisplay", &color_type_key)
+            .and_then(NoteColorType::from_metric)
+            .unwrap_or(default_translate.note_color_type);
+        out.part_texture_translate[part as usize] = NotePartTextureTranslate {
+            addition_offset,
+            note_color_spacing,
+            note_color_count,
+            note_color_type,
+        };
+    }
+    out
 }
 
 fn itg_receptor_pulse(metrics: &noteskin_itg::IniData) -> ReceptorPulse {
@@ -4309,7 +4592,7 @@ fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTextu
     })
 }
 
-fn itg_parse_ini_float(raw: &str) -> Option<f32> {
+fn itg_parse_ini_value(raw: &str) -> Option<&str> {
     let trimmed = raw.split_once("//").map_or(raw, |(prefix, _)| prefix);
     let trimmed = trimmed
         .split_once(';')
@@ -4318,6 +4601,29 @@ fn itg_parse_ini_float(raw: &str) -> Option<f32> {
     if value.is_empty() {
         return None;
     }
+    Some(value)
+}
+
+fn itg_parse_ini_int(raw: &str) -> Option<i32> {
+    let value = itg_parse_ini_value(raw)?;
+    let bytes = value.as_bytes();
+    let mut end = 0usize;
+    if bytes.first().is_some_and(|b| *b == b'+' || *b == b'-') {
+        end = 1;
+    }
+    let digit_start = end;
+    while end < bytes.len() && bytes[end].is_ascii_digit() {
+        end += 1;
+    }
+    if end == digit_start {
+        return None;
+    }
+    let parsed = value[..end].parse::<i64>().ok()?;
+    Some(parsed.clamp(i32::MIN as i64, i32::MAX as i64) as i32)
+}
+
+fn itg_parse_ini_float(raw: &str) -> Option<f32> {
+    let value = itg_parse_ini_value(raw)?;
     value.parse::<f32>().ok()
 }
 
@@ -5257,8 +5563,8 @@ fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AnimationRate, NUM_QUANTIZATIONS, Quantization, SpriteSource, Style, itg_load_lua_behavior,
-        load_itg_skin, parse_explosion_animation,
+        AnimationRate, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, Quantization, SpriteSource,
+        Style, itg_load_lua_behavior, load_itg_skin, parse_explosion_animation,
     };
     use crate::game::parsing::noteskin_itg;
     use std::collections::HashSet;
@@ -5363,12 +5669,159 @@ mod tests {
             .note_layers
             .first()
             .expect("default should expose 4th-note tap layers");
-        assert_eq!(q4_layers.len(), 5, "default tap note should have arrow + four circles");
+        assert_eq!(
+            q4_layers.len(),
+            5,
+            "default tap note should have arrow + four circles"
+        );
         let circle_layers = q4_layers
             .iter()
             .filter(|slot| slot.texture_key().to_ascii_lowercase().contains("_circle"))
             .count();
-        assert_eq!(circle_layers, 4, "default tap note should keep four circle layers");
+        assert_eq!(
+            circle_layers, 4,
+            "default tap note should keep four circle layers"
+        );
+    }
+
+    #[test]
+    fn default_and_cel_parse_notedisplay_flags() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let default_ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        assert!(
+            default_ns
+                .note_display_metrics
+                .draw_hold_head_for_taps_on_same_row
+        );
+        assert!(
+            default_ns
+                .note_display_metrics
+                .draw_roll_head_for_taps_on_same_row
+        );
+        assert!(
+            default_ns
+                .note_display_metrics
+                .tap_hold_roll_on_row_means_hold
+        );
+        assert!(
+            default_ns
+                .note_display_metrics
+                .flip_head_and_tail_when_reverse
+        );
+        assert!(default_ns.note_display_metrics.flip_hold_body_when_reverse);
+
+        let cel_ns =
+            load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
+        assert!(
+            !cel_ns
+                .note_display_metrics
+                .draw_hold_head_for_taps_on_same_row
+        );
+        assert!(
+            !cel_ns
+                .note_display_metrics
+                .draw_roll_head_for_taps_on_same_row
+        );
+        assert!(cel_ns.note_display_metrics.flip_head_and_tail_when_reverse);
+        assert!(cel_ns.note_display_metrics.flip_hold_body_when_reverse);
+        assert!(cel_ns.note_display_metrics.top_hold_anchor_when_reverse);
+    }
+
+    #[test]
+    fn default_and_cel_parse_note_color_translation_metrics() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let default_ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        let default_tap =
+            default_ns.note_display_metrics.part_texture_translate[NoteAnimPart::Tap as usize];
+        assert_eq!(default_tap.note_color_count, 8);
+        assert_eq!(default_tap.note_color_type, NoteColorType::Denominator);
+        assert!((default_tap.note_color_spacing[1] - 0.125).abs() <= 1e-6);
+        let default_tap_8th = default_ns.part_uv_translation(NoteAnimPart::Tap, 0.5, false);
+        assert!(default_tap_8th[0].abs() <= f32::EPSILON);
+        assert!((default_tap_8th[1] - 0.125).abs() <= 1e-6);
+
+        let cel_ns =
+            load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
+        let cel_roll_head =
+            cel_ns.note_display_metrics.part_texture_translate[NoteAnimPart::RollHead as usize];
+        assert_eq!(cel_roll_head.note_color_count, 8);
+        assert_eq!(cel_roll_head.note_color_type, NoteColorType::Denominator);
+        assert!((cel_roll_head.note_color_spacing[0] - 0.03125).abs() <= 1e-6);
+        let cel_roll_head_8th = cel_ns.part_uv_translation(NoteAnimPart::RollHead, 0.5, false);
+        assert!((cel_roll_head_8th[0] - 0.03125).abs() <= 1e-6);
+        assert!(cel_roll_head_8th[1].abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn default_does_not_bake_quantization_uv_shift_into_slots() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        let q4 = ns
+            .note_layers
+            .first()
+            .and_then(|layers| layers.first())
+            .expect("default should expose first 4th-note layer");
+        let q8 = ns
+            .note_layers
+            .get(1)
+            .and_then(|layers| layers.first())
+            .expect("default should expose first 8th-note layer");
+        assert_eq!(q4.def.src, q8.def.src);
+        assert!(
+            (q4.uv_offset[0] - q8.uv_offset[0]).abs() <= f32::EPSILON
+                && (q4.uv_offset[1] - q8.uv_offset[1]).abs() <= f32::EPSILON
+        );
+    }
+
+    #[test]
+    fn ddr_vivid_parses_hold_body_offsets() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "ddr-vivid")
+            .expect("dance/ddr-vivid should load from assets/noteskins");
+        assert!(
+            (ns.note_display_metrics
+                .start_drawing_hold_body_offset_from_head
+                - 0.0)
+                .abs()
+                <= f32::EPSILON
+        );
+        assert!(
+            (ns.note_display_metrics
+                .stop_drawing_hold_body_offset_from_tail
+                + 32.0)
+                .abs()
+                <= 1e-6
+        );
+        assert!((ns.note_display_metrics.hold_let_go_gray_percent - 0.33).abs() <= 1e-6);
+        assert!(
+            (ns.note_display_metrics.part_animation[NoteAnimPart::HoldBody as usize].length - 4.0)
+                .abs()
+                <= 1e-6
+        );
+        assert!(
+            (ns.note_display_metrics.part_animation[NoteAnimPart::RollBody as usize].length - 2.0)
+                .abs()
+                <= 1e-6
+        );
+        assert!(
+            !ns.note_display_metrics.part_animation[NoteAnimPart::HoldBody as usize].vivid
+                && !ns.note_display_metrics.part_animation[NoteAnimPart::RollBody as usize].vivid
+        );
     }
 
     #[test]
@@ -5588,8 +6041,8 @@ mod tests {
             num_cols: 4,
             num_players: 1,
         };
-        let ns =
-            load_itg_skin(&style, "default").expect("dance/default should load from assets/noteskins");
+        let ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
         assert!(
             ns.hold.explosion.is_none(),
             "default hold explosion should stay blank per NoteSkin.lua"
@@ -5614,9 +6067,8 @@ mod tests {
 
     #[test]
     fn cel_blank_table_does_not_inherit_default_hold_explosion_blank() {
-        let data =
-            noteskin_itg::load_noteskin_data(Path::new("assets/noteskins"), "dance", "cel")
-                .expect("dance/cel noteskin data should load");
+        let data = noteskin_itg::load_noteskin_data(Path::new("assets/noteskins"), "dance", "cel")
+            .expect("dance/cel noteskin data should load");
         let behavior = itg_load_lua_behavior(&data);
         assert!(
             !behavior.blank.contains("hold explosion"),
@@ -5857,16 +6309,16 @@ mod tests {
 
         let glow_alphas = [0.0f32, 0.0125, 0.025, 0.0375]
             .iter()
-            .filter_map(|&t| roll.model_glow_at(t, 0.0, draw_0.tint[3]).map(|glow| glow[3]))
+            .filter_map(|&t| {
+                roll.model_glow_at(t, 0.0, draw_0.tint[3])
+                    .map(|glow| glow[3])
+            })
             .collect::<Vec<_>>();
         assert!(
             glow_alphas.len() >= 2,
             "glowshift should emit visible glow for at least part of its cycle"
         );
-        let min_alpha = glow_alphas
-            .iter()
-            .copied()
-            .fold(f32::INFINITY, f32::min);
+        let min_alpha = glow_alphas.iter().copied().fold(f32::INFINITY, f32::min);
         let max_alpha = glow_alphas
             .iter()
             .copied()
@@ -5933,7 +6385,9 @@ mod tests {
             "cel metrics use beat-based noteskin animation"
         );
         assert!(
-            (ns.tap_mine_animation_length - 1.0).abs() <= f32::EPSILON,
+            (ns.note_display_metrics.part_animation[NoteAnimPart::Mine as usize].length - 1.0)
+                .abs()
+                <= f32::EPSILON,
             "cel tap mine animation length should be 1 beat"
         );
         let phase = ns.tap_mine_uv_phase(0.5, 1.0, 0.0);

@@ -10,7 +10,7 @@ use crate::game::gameplay::{
 };
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, TimingWindow};
 use crate::game::note::{HoldResult, NoteType};
-use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, SpriteSlot};
+use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot};
 use crate::game::{gameplay::PlayerRuntime, gameplay::State, profile, scroll::ScrollSpeedSetting};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -125,6 +125,23 @@ fn mine_fill_state(colors: &[[f32; 4]], beat: f32) -> Option<MineFillState> {
     });
 
     Some(MineFillState { layers })
+}
+
+#[inline(always)]
+fn translated_uv_rect(mut uv: [f32; 4], translate: [f32; 2]) -> [f32; 4] {
+    uv[0] += translate[0];
+    uv[1] += translate[1];
+    uv[2] += translate[0];
+    uv[3] += translate[1];
+    uv
+}
+
+#[inline(always)]
+const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
+    match note_type {
+        NoteType::Fake => NoteAnimPart::Fake,
+        _ => NoteAnimPart::Tap,
+    }
 }
 
 #[inline(always)]
@@ -1171,9 +1188,7 @@ pub fn build(
                 [target_arrow_px, height * scale]
             }
         };
-        let logical_slot_size = |slot: &SpriteSlot| -> [f32; 2] {
-            slot.logical_size()
-        };
+        let logical_slot_size = |slot: &SpriteSlot| -> [f32; 2] { slot.logical_size() };
         let scale_explosion = |logical_size: [f32; 2]| -> [f32; 2] {
             [logical_size[0] * field_zoom, logical_size[1] * field_zoom]
         };
@@ -1569,11 +1584,11 @@ pub fn build(
                         .unwrap_or("<none>"),
                 );
             }
-                if let Some(hold_slot) = hold_slot {
-                    let draw = hold_slot.model_draw_at(state.total_elapsed_in_screen, current_beat);
-                    let hold_frame = hold_slot.frame_index(state.total_elapsed_in_screen, current_beat);
-                    let hold_uv = hold_slot.uv_for_frame_at(hold_frame, state.total_elapsed_in_screen);
-                    let base_size = scale_hold_explosion(hold_slot);
+            if let Some(hold_slot) = hold_slot {
+                let draw = hold_slot.model_draw_at(state.total_elapsed_in_screen, current_beat);
+                let hold_frame = hold_slot.frame_index(state.total_elapsed_in_screen, current_beat);
+                let hold_uv = hold_slot.uv_for_frame_at(hold_frame, state.total_elapsed_in_screen);
+                let base_size = scale_hold_explosion(hold_slot);
                 let hold_size = [
                     base_size[0] * draw.zoom[0].max(0.0),
                     base_size[1] * draw.zoom[1].max(0.0),
@@ -1589,38 +1604,38 @@ pub fn build(
                 let base_rotation = hold_slot.def.rotation_deg as f32;
                 let final_rotation = base_rotation + receptor_rotation - draw.rot[2];
                 let center = [playfield_center_x + col_x_offset, receptor_y_lane];
-                    let color = draw.tint;
-                    let glow =
-                        hold_slot.model_glow_at(state.total_elapsed_in_screen, current_beat, color[3]);
-                    if profile.noteskin.as_str().eq_ignore_ascii_case("default") {
-                        let sample = DEFAULT_HOLD_GLOW_DRAW_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
-                        if sample < 24 {
-                            info!(
-                                "default hold glow draw sample#{} col={} roll={} source={} tex={} frame={} uv={:?} logical_size={:?} draw_zoom={:?} hold_size={:?} base_rot={} receptor_rot={} draw_rot_z={} final_rot={} tint={:?} glow={:?}",
-                                sample + 1,
-                                col,
-                                is_roll_hold,
-                                hold_slot_source,
-                                hold_slot.texture_key(),
-                                hold_frame,
-                                hold_uv,
-                                hold_slot.logical_size(),
-                                draw.zoom,
-                                hold_size,
-                                hold_slot.def.rotation_deg,
-                                receptor_rotation,
-                                draw.rot[2],
-                                final_rotation,
-                                color,
-                                glow
-                            );
-                        }
+                let color = draw.tint;
+                let glow =
+                    hold_slot.model_glow_at(state.total_elapsed_in_screen, current_beat, color[3]);
+                if profile.noteskin.as_str().eq_ignore_ascii_case("default") {
+                    let sample = DEFAULT_HOLD_GLOW_DRAW_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
+                    if sample < 24 {
+                        info!(
+                            "default hold glow draw sample#{} col={} roll={} source={} tex={} frame={} uv={:?} logical_size={:?} draw_zoom={:?} hold_size={:?} base_rot={} receptor_rot={} draw_rot_z={} final_rot={} tint={:?} glow={:?}",
+                            sample + 1,
+                            col,
+                            is_roll_hold,
+                            hold_slot_source,
+                            hold_slot.texture_key(),
+                            hold_frame,
+                            hold_uv,
+                            hold_slot.logical_size(),
+                            draw.zoom,
+                            hold_size,
+                            hold_slot.def.rotation_deg,
+                            receptor_rotation,
+                            draw.rot[2],
+                            final_rotation,
+                            color,
+                            glow
+                        );
                     }
-                    let blend = if draw.blend_add {
-                        BlendMode::Add
-                    } else {
-                        BlendMode::Alpha
-                    };
+                }
+                let blend = if draw.blend_add {
+                    BlendMode::Add
+                } else {
+                    BlendMode::Alpha
+                };
                 if is_ddr_vivid_skin
                     && !DDRVIVID_HOLD_GHOST_DRAW_LOGGED.swap(true, Ordering::Relaxed)
                 {
@@ -2009,9 +2024,23 @@ pub fn build(
                 }
             };
 
-            let head_is_top = head_y <= tail_y;
-            let mut top = head_y.min(tail_y);
-            let mut bottom = head_y.max(tail_y);
+            let note_display = ns.note_display_metrics;
+            let lane_reverse = col_dir < 0.0;
+            let body_flipped = lane_reverse && note_display.flip_hold_body_when_reverse;
+            let (body_head_y, body_tail_y) = if body_flipped {
+                (
+                    head_y - note_display.stop_drawing_hold_body_offset_from_tail,
+                    tail_y - note_display.start_drawing_hold_body_offset_from_head,
+                )
+            } else {
+                (
+                    head_y + note_display.start_drawing_hold_body_offset_from_head,
+                    tail_y + note_display.stop_drawing_hold_body_offset_from_tail,
+                )
+            };
+            let head_is_top = body_head_y <= body_tail_y;
+            let mut top = body_head_y.min(body_tail_y);
+            let mut bottom = body_head_y.max(body_tail_y);
             if bottom < -200.0 || top > screen_height() + 200.0 {
                 continue;
             }
@@ -2045,6 +2074,39 @@ pub fn build(
             }
             let visuals =
                 ns.hold_visuals_for_col(local_col, matches!(note.note_type, NoteType::Roll));
+            let hold_head_part = if matches!(note.note_type, NoteType::Roll) {
+                NoteAnimPart::RollHead
+            } else {
+                NoteAnimPart::HoldHead
+            };
+            let hold_body_part = if matches!(note.note_type, NoteType::Roll) {
+                NoteAnimPart::RollBody
+            } else {
+                NoteAnimPart::HoldBody
+            };
+            let hold_bottomcap_part = if matches!(note.note_type, NoteType::Roll) {
+                NoteAnimPart::RollBottomCap
+            } else {
+                NoteAnimPart::HoldBottomCap
+            };
+            let hold_part_phase = ns.part_uv_phase(
+                hold_head_part,
+                state.total_elapsed_in_screen,
+                current_beat,
+                note.beat,
+            );
+            let hold_body_phase = ns.part_uv_phase(
+                hold_body_part,
+                state.total_elapsed_in_screen,
+                current_beat,
+                note.beat,
+            );
+            let hold_cap_phase = ns.part_uv_phase(
+                hold_bottomcap_part,
+                state.total_elapsed_in_screen,
+                current_beat,
+                note.beat,
+            );
             let tail_slot = if use_active {
                 visuals
                     .bottomcap_active
@@ -2070,14 +2132,14 @@ pub fn build(
                     // ITGmania joins hold body to cap at the tail edge (with a tiny overlap),
                     // not at the cap midpoint. Keep the body clipped to that join line.
                     if head_is_top {
-                        body_bottom = body_bottom.min(tail_y + 1.0);
-                        if body_bottom >= tail_y - 1.0 {
-                            body_bottom = tail_y + 1.0;
+                        body_bottom = body_bottom.min(body_tail_y + 1.0);
+                        if body_bottom >= body_tail_y - 1.0 {
+                            body_bottom = body_tail_y + 1.0;
                         }
                     } else {
-                        body_top = body_top.max(tail_y - 1.0);
-                        if body_top <= tail_y + 1.0 {
-                            body_top = tail_y - 1.0;
+                        body_top = body_top.max(body_tail_y - 1.0);
+                        if body_top <= body_tail_y + 1.0 {
+                            body_top = body_tail_y - 1.0;
                         }
                     }
                 }
@@ -2103,21 +2165,37 @@ pub fn build(
                 let texture_width = texture_size[0].max(1) as f32;
                 let texture_height = texture_size[1].max(1) as f32;
                 if texture_width > f32::EPSILON && texture_height > f32::EPSILON {
+                    let body_frame = body_slot.frame_index_from_phase(hold_body_phase);
                     let body_width = TARGET_ARROW_PIXEL_SIZE * field_zoom;
                     let scale = body_width / texture_width;
                     let segment_height = (texture_height * scale).max(f32::EPSILON);
-                    let body_uv = body_slot.uv_for_frame_at(0, state.total_elapsed_in_screen);
+                    let body_uv_elapsed = if body_slot.model.is_some() {
+                        hold_body_phase
+                    } else {
+                        state.total_elapsed_in_screen
+                    };
+                    let body_uv = translated_uv_rect(
+                        body_slot.uv_for_frame_at(body_frame, body_uv_elapsed),
+                        ns.part_uv_translation(hold_body_part, note.beat, false),
+                    );
                     let u0 = body_uv[0];
                     let u1 = body_uv[2];
                     let v_top = body_uv[1];
                     let v_bottom = body_uv[3];
                     let v_range = v_bottom - v_top;
-                    let natural_top = if head_is_top { head_y } else { tail_y };
-                    let natural_bottom = if head_is_top { tail_y } else { head_y };
+                    let natural_top = if head_is_top {
+                        body_head_y
+                    } else {
+                        body_tail_y
+                    };
+                    let natural_bottom = if head_is_top {
+                        body_tail_y
+                    } else {
+                        body_head_y
+                    };
                     let hold_length = (natural_bottom - natural_top).abs();
                     const SEGMENT_PHASE_EPS: f32 = 1e-4;
                     let max_segments = 2048;
-                    let lane_reverse = col_dir < 0.0;
                     let receptor = lane_receptor_y;
 
                     // Unified segmentation path for both normal and reverse scroll.
@@ -2127,13 +2205,13 @@ pub fn build(
                     // Transform to "forward space" if reverse scroll (mirror around receptor)
                     let (eff_head_y, eff_tail_y, eff_body_top, eff_body_bottom) = if lane_reverse {
                         (
-                            2.0 * receptor - head_y,
-                            2.0 * receptor - tail_y,
+                            2.0 * receptor - body_head_y,
+                            2.0 * receptor - body_tail_y,
                             2.0 * receptor - body_bottom,
                             2.0 * receptor - body_top,
                         )
                     } else {
-                        (head_y, tail_y, body_top, body_bottom)
+                        (body_head_y, body_tail_y, body_top, body_bottom)
                     };
 
                     let eff_head_is_top = eff_head_y <= eff_tail_y;
@@ -2164,7 +2242,9 @@ pub fn build(
 
                         // Phase offset: shifts fractional remainder to first segment so the
                         // final segment aligns with the tail cap. Only applies when head is on top.
-                        let phase_offset = if eff_head_is_top {
+                        let anchor_to_top =
+                            lane_reverse && note_display.top_hold_anchor_when_reverse;
+                        let phase_offset = if eff_head_is_top && !anchor_to_top {
                             let total_phase = hold_length / segment_height;
                             if total_phase >= 1.0 + SEGMENT_PHASE_EPS {
                                 let fractional = total_phase.fract();
@@ -2298,9 +2378,18 @@ pub fn build(
                 }
             }
             if let Some(cap_slot) = tail_slot {
-                let tail_position = tail_y;
+                let tail_position = body_tail_y;
                 if tail_position > -400.0 && tail_position < screen_height() + 400.0 {
-                    let cap_uv = cap_slot.uv_for_frame_at(0, state.total_elapsed_in_screen);
+                    let cap_frame = cap_slot.frame_index_from_phase(hold_cap_phase);
+                    let cap_uv_elapsed = if cap_slot.model.is_some() {
+                        hold_cap_phase
+                    } else {
+                        state.total_elapsed_in_screen
+                    };
+                    let cap_uv = translated_uv_rect(
+                        cap_slot.uv_for_frame_at(cap_frame, cap_uv_elapsed),
+                        ns.part_uv_translation(hold_bottomcap_part, note.beat, false),
+                    );
                     let cap_size = scale_cap(cap_slot.size());
                     let cap_width = cap_size[0];
                     let mut cap_height = cap_size[1];
@@ -2319,11 +2408,11 @@ pub fn build(
                     };
                     let cap_adjacent_ok = if head_is_top {
                         // Tail visually below; ensure the drawn body bottom is near the tail.
-                        let dist = tail_y - rb;
+                        let dist = body_tail_y - rb;
                         dist >= -2.0 && dist <= cap_height + 2.0
                     } else {
                         // Tail visually above; ensure the drawn body top is near the tail.
-                        let dist = rt - tail_y;
+                        let dist = rt - body_tail_y;
                         dist >= -2.0 && dist <= cap_height + 2.0
                     };
                     if !cap_adjacent_ok {
@@ -2392,7 +2481,16 @@ pub fn build(
                 }
             }
             let should_draw_hold_head = true;
-            let head_draw_y = if engaged { lane_receptor_y } else { head_y };
+            let head_anchor_y = if lane_reverse && note_display.flip_head_and_tail_when_reverse {
+                tail_y
+            } else {
+                head_y
+            };
+            let head_draw_y = if engaged {
+                lane_receptor_y
+            } else {
+                head_anchor_y
+            };
             if should_draw_hold_head
                 && head_draw_y >= lane_receptor_y - state.draw_distance_after_targets
                 && head_draw_y <= lane_receptor_y + state.draw_distance_before_targets
@@ -2400,7 +2498,6 @@ pub fn build(
                 let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 let head_center = [playfield_center_x + col_x_offset, head_draw_y];
                 let elapsed = state.total_elapsed_in_screen;
-                let note_uv_phase = ns.tap_note_uv_phase(elapsed, current_beat, note.beat);
                 let head_slot = if use_active {
                     visuals
                         .head_active
@@ -2417,13 +2514,16 @@ pub fn build(
                     if !draw.visible {
                         continue;
                     }
-                    let frame = head_slot.frame_index(elapsed, current_beat);
+                    let frame = head_slot.frame_index_from_phase(hold_part_phase);
                     let uv_elapsed = if head_slot.model.is_some() {
-                        note_uv_phase
+                        hold_part_phase
                     } else {
                         elapsed
                     };
-                    let uv = head_slot.uv_for_frame_at(frame, uv_elapsed);
+                    let uv = translated_uv_rect(
+                        head_slot.uv_for_frame_at(frame, uv_elapsed),
+                        ns.part_uv_translation(hold_head_part, note.beat, false),
+                    );
                     let slot_size = logical_slot_size(head_slot);
                     let note_scale = {
                         let h = slot_size[1].max(1.0);
@@ -2433,10 +2533,7 @@ pub fn build(
                             1.0
                         }
                     };
-                    let base_size = [
-                        slot_size[0] * note_scale,
-                        slot_size[1] * note_scale,
-                    ];
+                    let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
                     let rot_rad = (-head_slot.def.rotation_deg as f32).to_radians();
                     let (sin_r, cos_r) = rot_rad.sin_cos();
                     let ox = draw.pos[0] * note_scale;
@@ -2512,18 +2609,18 @@ pub fn build(
                         if !draw.visible {
                             continue;
                         }
-                        let frame = note_slot.frame_index(elapsed, current_beat);
+                        let frame = note_slot.frame_index_from_phase(hold_part_phase);
                         let uv_elapsed = if note_slot.model.is_some() {
-                            note_uv_phase
+                            hold_part_phase
                         } else {
                             elapsed
                         };
-                        let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
+                        let uv = translated_uv_rect(
+                            note_slot.uv_for_frame_at(frame, uv_elapsed),
+                            ns.part_uv_translation(hold_head_part, note.beat, false),
+                        );
                         let slot_size = logical_slot_size(note_slot);
-                        let base_size = [
-                            slot_size[0] * note_scale,
-                            slot_size[1] * note_scale,
-                        ];
+                        let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
                         let offset_scale = note_scale;
                         let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
                         let (sin_r, cos_r) = rot_rad.sin_cos();
@@ -2588,13 +2685,16 @@ pub fn build(
                         }
                     }
                 } else if let Some(note_slot) = ns.notes.get(note_idx) {
-                    let frame = note_slot.frame_index(elapsed, current_beat);
+                    let frame = note_slot.frame_index_from_phase(hold_part_phase);
                     let uv_elapsed = if note_slot.model.is_some() {
-                        note_uv_phase
+                        hold_part_phase
                     } else {
                         elapsed
                     };
-                    let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
+                    let uv = translated_uv_rect(
+                        note_slot.uv_for_frame_at(frame, uv_elapsed),
+                        ns.part_uv_translation(hold_head_part, note.beat, false),
+                    );
                     let size = scale_sprite(note_slot.size());
                     if let Some(model_actor) = noteskin_model_actor(
                         note_slot,
@@ -2714,13 +2814,16 @@ pub fn build(
                                 ));
                             }
                         } else {
-                            let frame = slot.frame_index(time, beat);
+                            let frame = slot.frame_index_from_phase(mine_uv_phase);
                             let uv_elapsed = if slot.model.is_some() {
                                 mine_uv_phase
                             } else {
                                 state.total_elapsed_in_screen
                             };
-                            let uv = slot.uv_for_frame_at(frame, uv_elapsed);
+                            let uv = translated_uv_rect(
+                                slot.uv_for_frame_at(frame, uv_elapsed),
+                                ns.part_uv_translation(NoteAnimPart::Mine, mine_note_beat, false),
+                            );
                             let size = scale_sprite(slot.size());
                             let width = size[0];
                             let height = size[1];
@@ -2753,13 +2856,16 @@ pub fn build(
                         }
                     }
                     if let Some(slot) = frame_slot {
-                        let frame = slot.frame_index(time, beat);
+                        let frame = slot.frame_index_from_phase(mine_uv_phase);
                         let uv_elapsed = if slot.model.is_some() {
                             mine_uv_phase
                         } else {
                             state.total_elapsed_in_screen
                         };
-                        let uv = slot.uv_for_frame_at(frame, uv_elapsed);
+                        let uv = translated_uv_rect(
+                            slot.uv_for_frame_at(frame, uv_elapsed),
+                            ns.part_uv_translation(NoteAnimPart::Mine, mine_note_beat, false),
+                        );
                         let size = scale_sprite(slot.size());
                         let rotation = base_rotation + time * 120.0;
                         let center = [playfield_center_x + col_x_offset, y_pos];
@@ -2790,11 +2896,104 @@ pub fn build(
                     continue;
                 }
                 let note = &state.notes[arrow.note_index];
+                let tap_note_part = tap_part_for_note_type(note.note_type);
+                let tap_row_flags = state
+                    .tap_row_hold_roll_flags
+                    .get(arrow.note_index)
+                    .copied()
+                    .unwrap_or(0);
+                let tap_replacement_roll = if note.note_type == NoteType::Tap {
+                    let same_row_has_hold = tap_row_flags & 0b01 != 0;
+                    let same_row_has_roll = tap_row_flags & 0b10 != 0;
+                    let draw_hold = ns.note_display_metrics.draw_hold_head_for_taps_on_same_row;
+                    let draw_roll = ns.note_display_metrics.draw_roll_head_for_taps_on_same_row;
+                    if same_row_has_hold && same_row_has_roll {
+                        if draw_hold && draw_roll {
+                            Some(!ns.note_display_metrics.tap_hold_roll_on_row_means_hold)
+                        } else if draw_hold {
+                            Some(false)
+                        } else if draw_roll {
+                            Some(true)
+                        } else {
+                            None
+                        }
+                    } else if same_row_has_hold && draw_hold {
+                        Some(false)
+                    } else if same_row_has_roll && draw_roll {
+                        Some(true)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                if let Some(use_roll_head) = tap_replacement_roll {
+                    let visuals = ns.hold_visuals_for_col(col_idx, use_roll_head);
+                    if let Some(head_slot) = visuals
+                        .head_inactive
+                        .as_ref()
+                        .or(visuals.head_active.as_ref())
+                    {
+                        let elapsed = state.total_elapsed_in_screen;
+                        let part = if use_roll_head {
+                            NoteAnimPart::RollHead
+                        } else {
+                            NoteAnimPart::HoldHead
+                        };
+                        let head_phase = ns.part_uv_phase(part, elapsed, current_beat, note.beat);
+                        let note_frame = head_slot.frame_index_from_phase(head_phase);
+                        let uv_elapsed = if head_slot.model.is_some() {
+                            head_phase
+                        } else {
+                            elapsed
+                        };
+                        let note_uv = translated_uv_rect(
+                            head_slot.uv_for_frame_at(note_frame, uv_elapsed),
+                            ns.part_uv_translation(part, note.beat, false),
+                        );
+                        let slot_size = logical_slot_size(head_slot);
+                        let note_scale = {
+                            let h = slot_size[1].max(1.0);
+                            if h > f32::EPSILON {
+                                target_arrow_px / h
+                            } else {
+                                1.0
+                            }
+                        };
+                        let note_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
+                        let center = [playfield_center_x + col_x_offset, y_pos];
+                        if let Some(model_actor) = noteskin_model_actor(
+                            head_slot,
+                            center,
+                            note_size,
+                            note_uv,
+                            -head_slot.def.rotation_deg as f32,
+                            elapsed,
+                            current_beat,
+                            [1.0, 1.0, 1.0, 1.0],
+                            BlendMode::Alpha,
+                            Z_TAP_NOTE as i16,
+                        ) {
+                            actors.push(model_actor);
+                        } else {
+                            actors.push(act!(sprite(head_slot.texture_key().to_string()):
+                                align(0.5, 0.5):
+                                xy(center[0], center[1]):
+                                setsize(note_size[0], note_size[1]):
+                                rotationz(-head_slot.def.rotation_deg as f32):
+                                customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
+                                z(Z_TAP_NOTE)
+                            ));
+                        }
+                        continue;
+                    }
+                }
                 let note_idx = col_idx * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 if let Some(note_slots) = ns.note_layers.get(note_idx) {
                     let note_center = [playfield_center_x + col_x_offset, y_pos];
                     let elapsed = state.total_elapsed_in_screen;
-                    let note_uv_phase = ns.tap_note_uv_phase(elapsed, current_beat, note.beat);
+                    let note_uv_phase =
+                        ns.part_uv_phase(tap_note_part, elapsed, current_beat, note.beat);
                     let primary_h = note_slots
                         .first()
                         .map(|slot| logical_slot_size(slot)[1].max(1.0))
@@ -2809,18 +3008,18 @@ pub fn build(
                         if !draw.visible {
                             continue;
                         }
-                        let note_frame = note_slot.frame_index(elapsed, current_beat);
+                        let note_frame = note_slot.frame_index_from_phase(note_uv_phase);
                         let uv_elapsed = if note_slot.model.is_some() {
                             note_uv_phase
                         } else {
                             elapsed
                         };
-                        let note_uv = note_slot.uv_for_frame_at(note_frame, uv_elapsed);
+                        let note_uv = translated_uv_rect(
+                            note_slot.uv_for_frame_at(note_frame, uv_elapsed),
+                            ns.part_uv_translation(tap_note_part, note.beat, false),
+                        );
                         let slot_size = logical_slot_size(note_slot);
-                        let base_size = [
-                            slot_size[0] * note_scale,
-                            slot_size[1] * note_scale,
-                        ];
+                        let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
                         let offset_scale = note_scale;
                         let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
                         let (sin_r, cos_r) = rot_rad.sin_cos();
@@ -2883,14 +3082,18 @@ pub fn build(
                     }
                 } else if let Some(note_slot) = ns.notes.get(note_idx) {
                     let elapsed = state.total_elapsed_in_screen;
-                    let note_uv_phase = ns.tap_note_uv_phase(elapsed, current_beat, note.beat);
-                    let note_frame = note_slot.frame_index(elapsed, current_beat);
+                    let note_uv_phase =
+                        ns.part_uv_phase(tap_note_part, elapsed, current_beat, note.beat);
+                    let note_frame = note_slot.frame_index_from_phase(note_uv_phase);
                     let uv_elapsed = if note_slot.model.is_some() {
                         note_uv_phase
                     } else {
                         elapsed
                     };
-                    let note_uv = note_slot.uv_for_frame_at(note_frame, uv_elapsed);
+                    let note_uv = translated_uv_rect(
+                        note_slot.uv_for_frame_at(note_frame, uv_elapsed),
+                        ns.part_uv_translation(tap_note_part, note.beat, false),
+                    );
                     let note_size = scale_sprite(note_slot.size());
                     let center = [playfield_center_x + col_x_offset, y_pos];
                     if let Some(model_actor) = noteskin_model_actor(
