@@ -97,6 +97,31 @@ pub enum Mod<'a> {
     ShadowLenY(f32),
     /// `shadowcolor(r,g,b,a)` — sets shadow tint; default is (0,0,0,0.5).
     ShadowColor([f32; 4]),
+
+    // --- Effect family (SM/ITG) ---
+    EffectClock(anim::EffectClock),
+    EffectMode(anim::EffectMode),
+    EffectColor1([f32; 4]),
+    EffectColor2([f32; 4]),
+    EffectPeriod(f32),
+    EffectOffset(f32),
+    EffectTiming([f32; 4]),
+    EffectMagnitude([f32; 3]),
+}
+
+#[doc(hidden)]
+#[inline(always)]
+pub fn __dsl_parse_effect_clock(raw: &str) -> anim::EffectClock {
+    let lower = raw
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_ascii_lowercase();
+    if lower.contains("beat") {
+        anim::EffectClock::Beat
+    } else {
+        anim::EffectClock::Time
+    }
 }
 
 /* ===================== small hashing helpers ===================== */
@@ -201,6 +226,7 @@ fn build_sprite_like<'a>(
     let mut anim_enable = false;
     let mut state_delay = 0.1_f32;
     let (mut tw, _site_ignored): (Option<&[anim::Step]>, u64) = (None, 0);
+    let mut effect = anim::EffectState::default();
 
     // StepMania zoom (scale factors). Keep signs until we fold to flips.
     let (mut sx, mut sy) = (1.0_f32, 1.0_f32);
@@ -401,6 +427,31 @@ fn build_sprite_like<'a>(
             Mod::ShadowColor(c) => {
                 shc = *c;
             }
+
+            Mod::EffectClock(clock) => {
+                effect.clock = *clock;
+            }
+            Mod::EffectMode(mode) => {
+                effect.mode = *mode;
+            }
+            Mod::EffectColor1(color) => {
+                effect.color1 = *color;
+            }
+            Mod::EffectColor2(color) => {
+                effect.color2 = *color;
+            }
+            Mod::EffectPeriod(v) => {
+                effect.period = (*v).max(f32::EPSILON);
+            }
+            Mod::EffectOffset(v) => {
+                effect.offset = *v;
+            }
+            Mod::EffectTiming(v) => {
+                effect.timing = [v[0].max(0.0), v[1].max(0.0), v[2].max(0.0), v[3].max(0.0)];
+            }
+            Mod::EffectMagnitude(v) => {
+                effect.magnitude = *v;
+            }
         }
     }
 
@@ -574,6 +625,7 @@ fn build_sprite_like<'a>(
         animate: anim_enable,
         state_delay,
         scale: scale_carry, // NEW
+        effect,
     };
 
     if shx != 0.0 || shy != 0.0 {
@@ -623,6 +675,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
     // text respects blend mode
     let mut blend = BlendMode::Alpha;
     let mut tw: Option<&[anim::Step]> = None;
+    let mut effect = anim::EffectState::default();
 
     // shadow defaults (StepMania)
     let (mut shx, mut shy) = (0.0_f32, 0.0_f32);
@@ -765,6 +818,31 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
                 shc = *c;
             }
 
+            Mod::EffectClock(clock) => {
+                effect.clock = *clock;
+            }
+            Mod::EffectMode(mode) => {
+                effect.mode = *mode;
+            }
+            Mod::EffectColor1(color1) => {
+                effect.color1 = *color1;
+            }
+            Mod::EffectColor2(color2) => {
+                effect.color2 = *color2;
+            }
+            Mod::EffectPeriod(v) => {
+                effect.period = (*v).max(f32::EPSILON);
+            }
+            Mod::EffectOffset(v) => {
+                effect.offset = *v;
+            }
+            Mod::EffectTiming(v) => {
+                effect.timing = [v[0].max(0.0), v[1].max(0.0), v[2].max(0.0), v[3].max(0.0)];
+            }
+            Mod::EffectMagnitude(v) => {
+                effect.magnitude = *v;
+            }
+
             // ignore sprite-only/text-irrelevant
             _ => {}
         }
@@ -824,6 +902,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
         max_h_pre_zoom,
         clip: None,
         blend,
+        effect,
     };
 
     if shx != 0.0 || shy != 0.0 {
@@ -1089,6 +1168,58 @@ macro_rules! __dsl_apply_one {
     }};
     (shadowcolor ($r:expr, $g:expr, $b:expr, $a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::ShadowColor([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
+    }};
+
+    // --- Effect family (SM/ITG parity) -----------------------------
+    (effectclock (beat) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectClock($crate::ui::anim::EffectClock::Beat));
+    }};
+    (effectclock (time) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectClock($crate::ui::anim::EffectClock::Time));
+    }};
+    (effectclock (music) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectClock($crate::ui::anim::EffectClock::Time));
+    }};
+    (effectclock (seconds) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectClock($crate::ui::anim::EffectClock::Time));
+    }};
+    (effectclock ($raw:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        let __clock_raw = ::std::format!("{}", $raw);
+        let __clock = $crate::ui::dsl::__dsl_parse_effect_clock(__clock_raw.as_str());
+        $mods.push($crate::ui::dsl::Mod::EffectClock(__clock));
+    }};
+
+    (diffuseramp () $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::DiffuseRamp));
+    }};
+    (glowshift () $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::GlowShift));
+    }};
+    (pulse () $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::Pulse));
+    }};
+    (spin () $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::Spin));
+        $mods.push($crate::ui::dsl::Mod::EffectMagnitude([0.0, 0.0, 180.0]));
+    }};
+
+    (effectcolor1 ($r:expr,$g:expr,$b:expr,$a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectColor1([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
+    }};
+    (effectcolor2 ($r:expr,$g:expr,$b:expr,$a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectColor2([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
+    }};
+    (effectperiod ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectPeriod(($v) as f32));
+    }};
+    (effectoffset ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectOffset(($v) as f32));
+    }};
+    (effecttiming ($a:expr,$b:expr,$c:expr,$d:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectTiming([($a) as f32, ($b) as f32, ($c) as f32, ($d) as f32]));
+    }};
+    (effectmagnitude ($x:expr,$y:expr,$z:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectMagnitude([($x) as f32, ($y) as f32, ($z) as f32]));
     }};
 
     // --- StepMania zoom semantics (scale) ---

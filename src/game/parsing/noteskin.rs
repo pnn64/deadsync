@@ -1,5 +1,6 @@
 use super::noteskin_itg;
 use crate::assets;
+use crate::ui::anim as ui_anim;
 use image::image_dimensions;
 use log::{info, warn};
 use std::collections::{HashMap, HashSet};
@@ -152,47 +153,9 @@ pub struct ModelTweenSegment {
     pub to: ModelDrawState,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum ModelEffectClock {
-    Time,
-    Beat,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ModelEffectMode {
-    None,
-    DiffuseRamp,
-    GlowShift,
-    Pulse,
-    Spin,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct ModelEffectState {
-    pub clock: ModelEffectClock,
-    pub mode: ModelEffectMode,
-    pub color1: [f32; 4],
-    pub color2: [f32; 4],
-    pub period: f32,
-    pub offset: f32,
-    pub timing: [f32; 4], // ramp_up, hold_high, ramp_down, hold_low
-    pub magnitude: [f32; 3],
-}
-
-impl Default for ModelEffectState {
-    fn default() -> Self {
-        Self {
-            clock: ModelEffectClock::Time,
-            mode: ModelEffectMode::None,
-            color1: [1.0, 1.0, 1.0, 1.0],
-            color2: [1.0, 1.0, 1.0, 1.0],
-            period: 1.0,
-            offset: 0.0,
-            timing: [0.5, 0.0, 0.5, 0.0],
-            magnitude: [1.0, 1.0, 1.0],
-        }
-    }
-}
+pub type ModelEffectClock = ui_anim::EffectClock;
+pub type ModelEffectMode = ui_anim::EffectMode;
+pub type ModelEffectState = ui_anim::EffectState;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ModelAutoRotKey {
@@ -218,38 +181,7 @@ pub struct SpriteSlot {
 impl SpriteSlot {
     #[inline(always)]
     fn model_effect_mix(effect: ModelEffectState, time: f32, beat: f32) -> Option<f32> {
-        if !matches!(
-            effect.mode,
-            ModelEffectMode::DiffuseRamp | ModelEffectMode::GlowShift | ModelEffectMode::Pulse
-        ) {
-            return None;
-        }
-        let period = effect.period.max(1e-6);
-        let phase_input = match effect.clock {
-            ModelEffectClock::Time => time,
-            ModelEffectClock::Beat => beat,
-        };
-        let phase = (phase_input + effect.offset).rem_euclid(period) / period;
-        let t = effect.timing;
-        let total = (t[0] + t[1] + t[2] + t[3]).max(1e-6);
-        let mut x = phase * total;
-        let mix = if x < t[0] && t[0] > f32::EPSILON {
-            x / t[0]
-        } else {
-            x -= t[0];
-            if x < t[1] {
-                1.0
-            } else {
-                x -= t[1];
-                if x < t[2] && t[2] > f32::EPSILON {
-                    1.0 - (x / t[2])
-                } else {
-                    0.0
-                }
-            }
-        }
-        .clamp(0.0, 1.0);
-        Some(mix)
+        ui_anim::effect_mix(effect, time, beat)
     }
 
     #[inline(always)]
@@ -462,10 +394,7 @@ impl SpriteSlot {
 
         let effect = self.model_effect;
         if matches!(effect.mode, ModelEffectMode::Spin) {
-            let clock = match effect.clock {
-                ModelEffectClock::Time => time,
-                ModelEffectClock::Beat => beat,
-            };
+            let clock = ui_anim::effect_clock_units(effect, time, beat);
             let spin_units = clock - effect.offset;
             out.rot[0] = (out.rot[0] + effect.magnitude[0] * spin_units).rem_euclid(360.0);
             out.rot[1] = (out.rot[1] + effect.magnitude[1] * spin_units).rem_euclid(360.0);
@@ -517,8 +446,7 @@ impl SpriteSlot {
             let through = Self::model_effect_mix(effect, time, beat)?;
             // Match ITG's glow_shift blending: convert effect-phase percentage to the
             // sinusoidal color mix used by Actor::PreDraw.
-            let mix =
-                (((through + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5).clamp(0.0, 1.0);
+            let mix = ui_anim::glowshift_mix(through);
             for (i, out) in glow.iter_mut().enumerate() {
                 *out = (effect.color1[i] - effect.color2[i]).mul_add(mix, effect.color2[i]);
             }
@@ -2393,51 +2321,35 @@ fn itg_receptor_pulse(metrics: &noteskin_itg::IniData) -> ReceptorPulse {
         if token.is_empty() {
             continue;
         }
-        let Some((cmd, raw_args)) = token.split_once(',') else {
+        let Some((cmd, args)) = split_script_token(token) else {
             continue;
         };
-        match cmd.trim().to_ascii_lowercase().as_str() {
-            "effectcolor1" => {
-                if let Some(color) = itg_parse_color(raw_args) {
-                    pulse.effect_color1 = color;
-                }
+        if cmd == "effecttiming" {
+            let values = args
+                .iter()
+                .filter_map(|arg| parse_script_number(arg))
+                .collect::<Vec<_>>();
+            if values.len() >= 4 {
+                pulse.ramp_to_half = values[0].max(0.0);
+                pulse.hold_at_half = values[1].max(0.0);
+                pulse.ramp_to_full = values[2].max(0.0);
+                pulse.hold_at_full = values[3].max(0.0);
+                pulse.hold_at_zero = values.get(4).copied().unwrap_or(0.0).max(0.0);
             }
-            "effectcolor2" => {
-                if let Some(color) = itg_parse_color(raw_args) {
-                    pulse.effect_color2 = color;
-                }
-            }
-            "effecttiming" => {
-                let values = itg_parse_f32_list(raw_args);
-                if values.len() >= 4 {
-                    pulse.ramp_to_half = values[0].max(0.0);
-                    pulse.hold_at_half = values[1].max(0.0);
-                    pulse.ramp_to_full = values[2].max(0.0);
-                    pulse.hold_at_full = values[3].max(0.0);
-                    pulse.hold_at_zero = values.get(4).copied().unwrap_or(0.0).max(0.0);
-                }
-            }
-            "effectperiod" => {
-                if let Ok(v) = raw_args
-                    .trim()
-                    .trim_matches('"')
-                    .trim_matches('\'')
-                    .parse::<f32>()
-                {
+            continue;
+        }
+        if let Some(effect_mod) = parse_script_effect_mod(cmd.as_str(), &args) {
+            match effect_mod {
+                ScriptEffectMod::EffectColor1(color) => pulse.effect_color1 = color,
+                ScriptEffectMod::EffectColor2(color) => pulse.effect_color2 = color,
+                ScriptEffectMod::EffectPeriod(v) => {
                     pulse.effect_period = v.max(f32::EPSILON);
                 }
-            }
-            "effectoffset" => {
-                if let Ok(v) = raw_args
-                    .trim()
-                    .trim_matches('"')
-                    .trim_matches('\'')
-                    .parse::<f32>()
-                {
+                ScriptEffectMod::EffectOffset(v) => {
                     pulse.effect_offset = v;
                 }
+                _ => {}
             }
-            _ => {}
         }
     }
 
@@ -2569,87 +2481,23 @@ fn itg_receptor_glow_behavior(
     out
 }
 
-fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
-    let mut out = ItgCommandEffect::default();
-    let mut pending_duration = 0.0f32;
-    let mut pending_tween = TweenType::Linear;
-    for raw in script.split(';') {
-        let token = raw.trim();
-        if token.is_empty() {
-            continue;
-        }
-        let Some((cmd, args)) = itg_split_command_token(token) else {
-            continue;
-        };
-        match cmd.as_str() {
-            "linear" | "accelerate" | "decelerate" => {
-                if let Some(arg) = args.first()
-                    && let Some(duration) = itg_parse_numeric_token(arg)
-                {
-                    pending_duration = duration.max(0.0);
-                    pending_tween = match cmd.as_str() {
-                        "accelerate" => TweenType::Accelerate,
-                        "decelerate" => TweenType::Decelerate,
-                        _ => TweenType::Linear,
-                    };
-                }
-            }
-            "sleep" => {
-                if let Some(arg) = args.first()
-                    && let Some(duration) = itg_parse_numeric_token(arg)
-                {
-                    pending_duration = duration.max(0.0);
-                    pending_tween = TweenType::Linear;
-                }
-            }
-            "diffusealpha" => {
-                if let Some(arg) = args.first()
-                    && let Some(alpha) = itg_parse_numeric_token(arg)
-                {
-                    if pending_duration > f32::EPSILON {
-                        out.target_alpha = Some(alpha);
-                        out.duration = pending_duration;
-                        out.tween = pending_tween;
-                        pending_duration = 0.0;
-                    } else {
-                        out.start_alpha = Some(alpha);
-                        out.target_alpha = Some(alpha);
-                    }
-                }
-            }
-            "zoom" => {
-                if let Some(arg) = args.first()
-                    && let Some(zoom) = itg_parse_numeric_token(arg)
-                {
-                    if pending_duration > f32::EPSILON {
-                        out.target_zoom = Some(zoom);
-                        out.duration = pending_duration;
-                        out.tween = pending_tween;
-                        pending_duration = 0.0;
-                    } else {
-                        out.start_zoom = Some(zoom);
-                        out.target_zoom = Some(zoom);
-                    }
-                }
-            }
-            "blend" => {
-                if args
-                    .iter()
-                    .any(|a| a.to_ascii_lowercase().contains("blendmode_add"))
-                {
-                    out.blend_add = Some(true);
-                } else if !args.is_empty() {
-                    out.blend_add = Some(false);
-                }
-            }
-            _ => {}
-        }
-    }
-    out
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptTween {
+    Linear,
+    Accelerate,
+    Decelerate,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum ItgActorMod {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptControl {
+    StopTweening,
+    FinishTweening,
+    PlayCommand,
+    Animate,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ScriptActorMod {
     X(f32),
     Y(f32),
     Z(f32),
@@ -2674,8 +2522,145 @@ enum ItgActorMod {
     Visible(bool),
 }
 
-fn itg_parse_vertalign_token(token: &str) -> Option<f32> {
-    let value = token.trim().trim_matches('"').trim_matches('\'');
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ScriptEffectMod {
+    DiffuseRamp,
+    GlowShift,
+    Pulse,
+    Spin,
+    EffectColor1([f32; 4]),
+    EffectColor2([f32; 4]),
+    EffectPeriod(f32),
+    EffectOffset(f32),
+    EffectTiming([f32; 4]),
+    EffectMagnitude([f32; 3]),
+}
+
+#[inline(always)]
+fn split_script_call_args(raw: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    let mut depth = 0usize;
+    let mut quote = 0u8;
+    let bytes = raw.as_bytes();
+    let mut idx = 0usize;
+    while idx < bytes.len() {
+        let b = bytes[idx];
+        if quote != 0 {
+            if b == quote {
+                quote = 0;
+            }
+            idx += 1;
+            continue;
+        }
+        match b {
+            b'"' | b'\'' => {
+                quote = b;
+            }
+            b'(' | b'{' | b'[' => {
+                depth += 1;
+            }
+            b')' | b'}' | b']' => {
+                depth = depth.saturating_sub(1);
+            }
+            b',' if depth == 0 => {
+                let part = raw[start..idx].trim();
+                if !part.is_empty() {
+                    out.push(part.to_string());
+                }
+                start = idx + 1;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    let tail = raw[start..].trim();
+    if !tail.is_empty() {
+        out.push(tail.to_string());
+    }
+    out
+}
+
+#[inline(always)]
+fn split_script_token(token: &str) -> Option<(String, Vec<String>)> {
+    let parts = split_script_call_args(token);
+    if parts.is_empty() {
+        return None;
+    }
+    let command = parts[0].trim().to_ascii_lowercase();
+    if command.is_empty() {
+        return None;
+    }
+    let args = parts
+        .iter()
+        .skip(1)
+        .map(|part| part.trim().to_string())
+        .collect::<Vec<_>>();
+    Some((command, args))
+}
+
+#[inline(always)]
+fn parse_script_number(raw: &str) -> Option<f32> {
+    raw.trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .parse::<f32>()
+        .ok()
+}
+
+#[inline(always)]
+fn parse_script_bool(raw: &str) -> bool {
+    let t = raw.trim().trim_matches('"').trim_matches('\'');
+    t.eq_ignore_ascii_case("true") || t == "1"
+}
+
+#[inline(always)]
+fn parse_script_f32_list(raw: &str) -> Vec<f32> {
+    raw.split(',').filter_map(parse_script_number).collect()
+}
+
+#[inline(always)]
+fn parse_script_color(raw: &str) -> Option<[f32; 4]> {
+    let trimmed = raw.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let value = if lower.starts_with("color(") && trimmed.ends_with(')') {
+        let inner = &trimmed[6..trimmed.len().saturating_sub(1)];
+        inner.trim().trim_matches('"').trim_matches('\'')
+    } else {
+        trimmed.trim_matches('"').trim_matches('\'')
+    };
+    let values = parse_script_f32_list(value);
+    if values.len() < 4 {
+        return None;
+    }
+    Some([values[0], values[1], values[2], values[3]])
+}
+
+#[inline(always)]
+fn parse_script_color_args(args: &[String]) -> Option<[f32; 4]> {
+    if args.len() == 1 {
+        let raw = args[0].as_str();
+        if let Some(color) = parse_script_color(raw) {
+            return Some(color);
+        }
+        let values = parse_script_f32_list(raw);
+        if values.len() >= 4 {
+            return Some([values[0], values[1], values[2], values[3]]);
+        }
+    }
+    if args.len() < 4 {
+        return None;
+    }
+    let mut values = [0.0f32; 4];
+    for (idx, arg) in args.iter().take(4).enumerate() {
+        values[idx] = parse_script_number(arg)?;
+    }
+    Some(values)
+}
+
+#[inline(always)]
+fn parse_script_vertalign(raw: &str) -> Option<f32> {
+    let value = raw.trim().trim_matches('"').trim_matches('\'');
     if let Ok(v) = value.parse::<f32>() {
         return Some(v);
     }
@@ -2687,99 +2672,229 @@ fn itg_parse_vertalign_token(token: &str) -> Option<f32> {
     }
 }
 
-fn itg_parse_actor_mod_token(cmd: &str, args: &[&str]) -> Option<ItgActorMod> {
-    let first = args.first().and_then(|v| {
-        v.trim()
-            .trim_matches('"')
-            .trim_matches('\'')
-            .parse::<f32>()
-            .ok()
-    });
-    let bool_first = args.first().map(|v| {
-        let t = v.trim().trim_matches('"').trim_matches('\'');
-        t.eq_ignore_ascii_case("true") || t == "1"
-    });
+#[inline(always)]
+fn parse_script_tween(cmd: &str, args: &[String]) -> Option<(ScriptTween, f32)> {
+    let tween = match cmd {
+        "linear" => ScriptTween::Linear,
+        "accelerate" => ScriptTween::Accelerate,
+        "decelerate" => ScriptTween::Decelerate,
+        _ => return None,
+    };
+    args.first()
+        .and_then(|arg| parse_script_number(arg))
+        .map(|duration| (tween, duration))
+}
+
+#[inline(always)]
+fn parse_script_sleep(cmd: &str, args: &[String]) -> Option<f32> {
+    if cmd != "sleep" {
+        return None;
+    }
+    args.first().and_then(|arg| parse_script_number(arg))
+}
+
+#[inline(always)]
+fn parse_script_control(cmd: &str) -> Option<ScriptControl> {
+    match cmd {
+        "stoptweening" => Some(ScriptControl::StopTweening),
+        "finishtweening" => Some(ScriptControl::FinishTweening),
+        "playcommand" => Some(ScriptControl::PlayCommand),
+        "animate" => Some(ScriptControl::Animate),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn parse_script_actor_mod(cmd: &str, args: &[String]) -> Option<ScriptActorMod> {
+    let first = args.first().and_then(|v| parse_script_number(v));
+    let bool_first = args.first().map(|v| parse_script_bool(v));
 
     match cmd {
-        "x" => first.map(ItgActorMod::X),
-        "y" => first.map(ItgActorMod::Y),
-        "z" => first.map(ItgActorMod::Z),
-        "addx" => first.map(ItgActorMod::AddX),
-        "addy" => first.map(ItgActorMod::AddY),
-        "addz" => first.map(ItgActorMod::AddZ),
-        "rotationx" => first.map(ItgActorMod::RotationX),
-        "rotationy" => first.map(ItgActorMod::RotationY),
-        "rotationz" => first.map(ItgActorMod::RotationZ),
-        "addrotationx" => first.map(ItgActorMod::AddRotationX),
-        "addrotationy" => first.map(ItgActorMod::AddRotationY),
-        "addrotationz" => first.map(ItgActorMod::AddRotationZ),
-        "zoom" => first.map(ItgActorMod::Zoom),
-        "zoomx" => first.map(ItgActorMod::ZoomX),
-        "zoomy" => first.map(ItgActorMod::ZoomY),
-        "zoomz" => first.map(ItgActorMod::ZoomZ),
-        "diffuse" => {
-            if args.len() >= 4 {
-                let parsed = args
-                    .iter()
-                    .take(4)
-                    .map(|v| {
-                        v.trim()
-                            .trim_matches('"')
-                            .trim_matches('\'')
-                            .parse::<f32>()
-                            .ok()
-                    })
-                    .collect::<Option<Vec<f32>>>();
-                if let Some(vals) = parsed {
-                    return Some(ItgActorMod::Diffuse([vals[0], vals[1], vals[2], vals[3]]));
-                }
-            }
-            args.first()
-                .and_then(|v| itg_parse_color(v))
-                .map(ItgActorMod::Diffuse)
-        }
-        "diffusealpha" => first.map(ItgActorMod::DiffuseAlpha),
-        "glow" => {
-            if args.len() >= 4 {
-                let parsed = args
-                    .iter()
-                    .take(4)
-                    .map(|v| {
-                        v.trim()
-                            .trim_matches('"')
-                            .trim_matches('\'')
-                            .parse::<f32>()
-                            .ok()
-                    })
-                    .collect::<Option<Vec<f32>>>();
-                if let Some(vals) = parsed {
-                    return Some(ItgActorMod::Glow([vals[0], vals[1], vals[2], vals[3]]));
-                }
-            }
-            args.first()
-                .and_then(|v| itg_parse_color(v))
-                .map(ItgActorMod::Glow)
-        }
+        "x" => first.map(ScriptActorMod::X),
+        "y" => first.map(ScriptActorMod::Y),
+        "z" => first.map(ScriptActorMod::Z),
+        "addx" => first.map(ScriptActorMod::AddX),
+        "addy" => first.map(ScriptActorMod::AddY),
+        "addz" => first.map(ScriptActorMod::AddZ),
+        "rotationx" => first.map(ScriptActorMod::RotationX),
+        "rotationy" => first.map(ScriptActorMod::RotationY),
+        "rotationz" => first.map(ScriptActorMod::RotationZ),
+        "addrotationx" => first.map(ScriptActorMod::AddRotationX),
+        "addrotationy" => first.map(ScriptActorMod::AddRotationY),
+        "addrotationz" => first.map(ScriptActorMod::AddRotationZ),
+        "zoom" => first.map(ScriptActorMod::Zoom),
+        "zoomx" => first.map(ScriptActorMod::ZoomX),
+        "zoomy" => first.map(ScriptActorMod::ZoomY),
+        "zoomz" => first.map(ScriptActorMod::ZoomZ),
+        "diffuse" => parse_script_color_args(args).map(ScriptActorMod::Diffuse),
+        "diffusealpha" => first.map(ScriptActorMod::DiffuseAlpha),
+        "glow" => parse_script_color_args(args).map(ScriptActorMod::Glow),
         "vertalign" | "valign" => args
             .first()
-            .and_then(|v| itg_parse_vertalign_token(v))
-            .map(ItgActorMod::VertAlign),
+            .and_then(|v| parse_script_vertalign(v))
+            .map(ScriptActorMod::VertAlign),
         "blend" => {
             if args
                 .iter()
                 .any(|a| a.to_ascii_lowercase().contains("blendmode_add"))
             {
-                Some(ItgActorMod::BlendAdd(true))
+                Some(ScriptActorMod::BlendAdd(true))
             } else if !args.is_empty() {
-                Some(ItgActorMod::BlendAdd(false))
+                Some(ScriptActorMod::BlendAdd(false))
             } else {
                 None
             }
         }
-        "visible" => bool_first.map(ItgActorMod::Visible),
+        "visible" => bool_first.map(ScriptActorMod::Visible),
         _ => None,
     }
 }
+
+#[inline(always)]
+fn parse_script_effect_clock(raw: &str) -> Option<ui_anim::EffectClock> {
+    let lower = raw
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_ascii_lowercase();
+    if lower.contains("beat") {
+        Some(ui_anim::EffectClock::Beat)
+    } else if lower.contains("time") || lower.contains("music") || lower.contains("seconds") {
+        Some(ui_anim::EffectClock::Time)
+    } else {
+        None
+    }
+}
+
+#[inline(always)]
+fn parse_script_effect_mod(cmd: &str, args: &[String]) -> Option<ScriptEffectMod> {
+    match cmd {
+        "diffuseramp" => Some(ScriptEffectMod::DiffuseRamp),
+        "glowshift" => Some(ScriptEffectMod::GlowShift),
+        "pulse" => Some(ScriptEffectMod::Pulse),
+        "spin" => Some(ScriptEffectMod::Spin),
+        "effectcolor1" => parse_script_color_args(args).map(ScriptEffectMod::EffectColor1),
+        "effectcolor2" => parse_script_color_args(args).map(ScriptEffectMod::EffectColor2),
+        "effectperiod" => args
+            .first()
+            .and_then(|v| parse_script_number(v))
+            .map(ScriptEffectMod::EffectPeriod),
+        "effectoffset" => args
+            .first()
+            .and_then(|v| parse_script_number(v))
+            .map(ScriptEffectMod::EffectOffset),
+        "effecttiming" => {
+            if args.len() < 4 {
+                return None;
+            }
+            let mut values = [0.0f32; 4];
+            for (idx, arg) in args.iter().take(4).enumerate() {
+                values[idx] = parse_script_number(arg)?;
+            }
+            Some(ScriptEffectMod::EffectTiming(values))
+        }
+        "effectmagnitude" => {
+            if args.len() < 3 {
+                return None;
+            }
+            let mut values = [0.0f32; 3];
+            for (idx, arg) in args.iter().take(3).enumerate() {
+                values[idx] = parse_script_number(arg)?;
+            }
+            Some(ScriptEffectMod::EffectMagnitude(values))
+        }
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn parse_script_effectclock_from_commands(script: &str) -> Option<bool> {
+    let mut out = None;
+    for raw in script.split(';') {
+        let token = raw.trim();
+        if token.is_empty() {
+            continue;
+        }
+        let Some((cmd, args)) = split_script_token(token) else {
+            continue;
+        };
+        if cmd != "effectclock" {
+            continue;
+        }
+        let clock = args.first().map(String::as_str).unwrap_or("time");
+        if let Some(parsed) = parse_script_effect_clock(clock) {
+            out = Some(matches!(parsed, ui_anim::EffectClock::Beat));
+        }
+    }
+    out
+}
+
+fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
+    let mut out = ItgCommandEffect::default();
+    let mut pending_duration = 0.0f32;
+    let mut pending_tween = TweenType::Linear;
+    for raw in script.split(';') {
+        let token = raw.trim();
+        if token.is_empty() {
+            continue;
+        }
+        let Some((cmd, args)) = split_script_token(token) else {
+            continue;
+        };
+        if let Some((tween, duration)) = parse_script_tween(cmd.as_str(), &args) {
+            pending_duration = duration.max(0.0);
+            pending_tween = tween_type_from_script_tween(tween);
+            continue;
+        }
+        if let Some(duration) = parse_script_sleep(cmd.as_str(), &args) {
+            pending_duration = duration.max(0.0);
+            pending_tween = TweenType::Linear;
+            continue;
+        }
+        if let Some(mod_cmd) = parse_script_actor_mod(cmd.as_str(), &args) {
+            match mod_cmd {
+                ScriptActorMod::DiffuseAlpha(alpha) => {
+                    if pending_duration > f32::EPSILON {
+                        out.target_alpha = Some(alpha);
+                        out.duration = pending_duration;
+                        out.tween = pending_tween;
+                        pending_duration = 0.0;
+                    } else {
+                        out.start_alpha = Some(alpha);
+                        out.target_alpha = Some(alpha);
+                    }
+                }
+                ScriptActorMod::Zoom(zoom) => {
+                    if pending_duration > f32::EPSILON {
+                        out.target_zoom = Some(zoom);
+                        out.duration = pending_duration;
+                        out.tween = pending_tween;
+                        pending_duration = 0.0;
+                    } else {
+                        out.start_zoom = Some(zoom);
+                        out.target_zoom = Some(zoom);
+                    }
+                }
+                ScriptActorMod::BlendAdd(v) => {
+                    out.blend_add = Some(v);
+                }
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
+#[inline(always)]
+fn tween_type_from_script_tween(tween: ScriptTween) -> TweenType {
+    match tween {
+        ScriptTween::Linear => TweenType::Linear,
+        ScriptTween::Accelerate => TweenType::Accelerate,
+        ScriptTween::Decelerate => TweenType::Decelerate,
+    }
+}
+
+type ItgActorMod = ScriptActorMod;
 
 fn itg_apply_actor_mods(state: &mut ModelDrawState, mods: &[ItgActorMod]) {
     for m in mods {
@@ -2859,269 +2974,109 @@ fn itg_model_draw_program(
             if token.is_empty() {
                 continue;
             }
-            let Some((cmd, args)) = itg_split_command_token(token) else {
+            let Some((cmd, args)) = split_script_token(token) else {
                 continue;
             };
-
-            match cmd.as_str() {
-                "linear" | "accelerate" | "decelerate" => {
-                    flush_group(
-                        &mut state,
-                        &mut timeline,
-                        &mut cursor_time,
-                        &mut pending_tween,
-                        &mut grouped_mods,
-                    );
-                    let duration = args
-                        .first()
-                        .and_then(|v| {
-                            v.trim()
-                                .trim_matches('"')
-                                .trim_matches('\'')
-                                .parse::<f32>()
-                                .ok()
-                        })
-                        .unwrap_or(0.0)
-                        .max(0.0);
-                    let tween = match cmd.as_str() {
-                        "accelerate" => TweenType::Accelerate,
-                        "decelerate" => TweenType::Decelerate,
-                        _ => TweenType::Linear,
-                    };
-                    pending_tween = Some((duration, tween));
-                }
-                "sleep" => {
-                    flush_group(
-                        &mut state,
-                        &mut timeline,
-                        &mut cursor_time,
-                        &mut pending_tween,
-                        &mut grouped_mods,
-                    );
-                    let duration = args
-                        .first()
-                        .and_then(|v| {
-                            v.trim()
-                                .trim_matches('"')
-                                .trim_matches('\'')
-                                .parse::<f32>()
-                                .ok()
-                        })
-                        .unwrap_or(0.0)
-                        .max(0.0);
-                    cursor_time += duration;
-                }
-                "effectclock" => {
-                    flush_group(
-                        &mut state,
-                        &mut timeline,
-                        &mut cursor_time,
-                        &mut pending_tween,
-                        &mut grouped_mods,
-                    );
-                    let raw_clock = args
-                        .first()
-                        .map(|v| {
-                            v.trim()
-                                .trim_matches('"')
-                                .trim_matches('\'')
-                                .to_ascii_lowercase()
-                        })
-                        .unwrap_or_else(|| "time".to_string());
-                    effect.clock = if raw_clock.contains("beat") {
-                        ModelEffectClock::Beat
-                    } else if raw_clock.contains("time")
-                        || raw_clock.contains("music")
-                        || raw_clock.contains("seconds")
-                    {
-                        ModelEffectClock::Time
-                    } else {
-                        warn!("unsupported effectclock '{raw_clock}' in model DSL path");
-                        ModelEffectClock::Time
-                    };
-                }
-                "diffuseramp" => {
-                    flush_group(
-                        &mut state,
-                        &mut timeline,
-                        &mut cursor_time,
-                        &mut pending_tween,
-                        &mut grouped_mods,
-                    );
-                    effect.mode = ModelEffectMode::DiffuseRamp;
-                }
-                "glowshift" => {
-                    flush_group(
-                        &mut state,
-                        &mut timeline,
-                        &mut cursor_time,
-                        &mut pending_tween,
-                        &mut grouped_mods,
-                    );
-                    effect.mode = ModelEffectMode::GlowShift;
-                }
-                "pulse" => {
-                    flush_group(
-                        &mut state,
-                        &mut timeline,
-                        &mut cursor_time,
-                        &mut pending_tween,
-                        &mut grouped_mods,
-                    );
-                    effect.mode = ModelEffectMode::Pulse;
-                }
-                "spin" => {
-                    flush_group(
-                        &mut state,
-                        &mut timeline,
-                        &mut cursor_time,
-                        &mut pending_tween,
-                        &mut grouped_mods,
-                    );
-                    effect.mode = ModelEffectMode::Spin;
-                    effect.magnitude = [0.0, 0.0, 180.0];
-                }
-                "effectcolor1" | "effectcolor2" => {
-                    flush_group(
-                        &mut state,
-                        &mut timeline,
-                        &mut cursor_time,
-                        &mut pending_tween,
-                        &mut grouped_mods,
-                    );
-                    let parsed = if args.len() >= 4 {
-                        let vals = args
-                            .iter()
-                            .take(4)
-                            .filter_map(|v| {
-                                v.trim()
-                                    .trim_matches('"')
-                                    .trim_matches('\'')
-                                    .parse::<f32>()
-                                    .ok()
-                            })
-                            .collect::<Vec<_>>();
-                        if vals.len() == 4 {
-                            Some([vals[0], vals[1], vals[2], vals[3]])
-                        } else {
-                            None
-                        }
-                    } else {
-                        args.first().and_then(|v| itg_parse_color(v))
-                    };
-                    if let Some(c) = parsed {
-                        if cmd == "effectcolor1" {
-                            effect.color1 = c;
-                        } else {
-                            effect.color2 = c;
-                        }
+            if let Some((tween, duration)) = parse_script_tween(cmd.as_str(), &args) {
+                flush_group(
+                    &mut state,
+                    &mut timeline,
+                    &mut cursor_time,
+                    &mut pending_tween,
+                    &mut grouped_mods,
+                );
+                pending_tween = Some((duration.max(0.0), tween_type_from_script_tween(tween)));
+                continue;
+            }
+            if let Some(duration) = parse_script_sleep(cmd.as_str(), &args) {
+                flush_group(
+                    &mut state,
+                    &mut timeline,
+                    &mut cursor_time,
+                    &mut pending_tween,
+                    &mut grouped_mods,
+                );
+                cursor_time += duration.max(0.0);
+                continue;
+            }
+            if cmd == "effectclock" {
+                flush_group(
+                    &mut state,
+                    &mut timeline,
+                    &mut cursor_time,
+                    &mut pending_tween,
+                    &mut grouped_mods,
+                );
+                let raw_clock = args.first().map(String::as_str).unwrap_or("time");
+                effect.clock = if let Some(clock) = parse_script_effect_clock(raw_clock) {
+                    match clock {
+                        ui_anim::EffectClock::Beat => ModelEffectClock::Beat,
+                        ui_anim::EffectClock::Time => ModelEffectClock::Time,
                     }
-                }
-                "effectperiod" => {
-                    flush_group(
-                        &mut state,
-                        &mut timeline,
-                        &mut cursor_time,
-                        &mut pending_tween,
-                        &mut grouped_mods,
-                    );
-                    if let Some(v) = args.first().and_then(|v| {
-                        v.trim()
-                            .trim_matches('"')
-                            .trim_matches('\'')
-                            .parse::<f32>()
-                            .ok()
-                    }) {
+                } else {
+                    warn!("unsupported effectclock '{raw_clock}' in model DSL path");
+                    ModelEffectClock::Time
+                };
+                continue;
+            }
+            if let Some(effect_mod) = parse_script_effect_mod(cmd.as_str(), &args) {
+                flush_group(
+                    &mut state,
+                    &mut timeline,
+                    &mut cursor_time,
+                    &mut pending_tween,
+                    &mut grouped_mods,
+                );
+                match effect_mod {
+                    ScriptEffectMod::DiffuseRamp => {
+                        effect.mode = ModelEffectMode::DiffuseRamp;
+                    }
+                    ScriptEffectMod::GlowShift => {
+                        effect.mode = ModelEffectMode::GlowShift;
+                    }
+                    ScriptEffectMod::Pulse => {
+                        effect.mode = ModelEffectMode::Pulse;
+                    }
+                    ScriptEffectMod::Spin => {
+                        effect.mode = ModelEffectMode::Spin;
+                        effect.magnitude = [0.0, 0.0, 180.0];
+                    }
+                    ScriptEffectMod::EffectColor1(c) => {
+                        effect.color1 = c;
+                    }
+                    ScriptEffectMod::EffectColor2(c) => {
+                        effect.color2 = c;
+                    }
+                    ScriptEffectMod::EffectPeriod(v) => {
                         effect.period = v.max(1e-6);
                     }
-                }
-                "effectoffset" => {
-                    flush_group(
-                        &mut state,
-                        &mut timeline,
-                        &mut cursor_time,
-                        &mut pending_tween,
-                        &mut grouped_mods,
-                    );
-                    if let Some(v) = args.first().and_then(|v| {
-                        v.trim()
-                            .trim_matches('"')
-                            .trim_matches('\'')
-                            .parse::<f32>()
-                            .ok()
-                    }) {
+                    ScriptEffectMod::EffectOffset(v) => {
                         effect.offset = v;
                     }
-                }
-                "effecttiming" => {
-                    flush_group(
-                        &mut state,
-                        &mut timeline,
-                        &mut cursor_time,
-                        &mut pending_tween,
-                        &mut grouped_mods,
-                    );
-                    let vals = args
-                        .iter()
-                        .take(4)
-                        .filter_map(|v| {
-                            v.trim()
-                                .trim_matches('"')
-                                .trim_matches('\'')
-                                .parse::<f32>()
-                                .ok()
-                        })
-                        .collect::<Vec<_>>();
-                    if vals.len() == 4 {
-                        effect.timing = [
-                            vals[0].max(0.0),
-                            vals[1].max(0.0),
-                            vals[2].max(0.0),
-                            vals[3].max(0.0),
-                        ];
+                    ScriptEffectMod::EffectTiming(v) => {
+                        effect.timing =
+                            [v[0].max(0.0), v[1].max(0.0), v[2].max(0.0), v[3].max(0.0)];
+                    }
+                    ScriptEffectMod::EffectMagnitude(v) => {
+                        effect.magnitude = v;
                     }
                 }
-                "effectmagnitude" => {
-                    flush_group(
-                        &mut state,
-                        &mut timeline,
-                        &mut cursor_time,
-                        &mut pending_tween,
-                        &mut grouped_mods,
-                    );
-                    let vals = args
-                        .iter()
-                        .take(3)
-                        .filter_map(|v| {
-                            v.trim()
-                                .trim_matches('"')
-                                .trim_matches('\'')
-                                .parse::<f32>()
-                                .ok()
-                        })
-                        .collect::<Vec<_>>();
-                    if vals.len() == 3 {
-                        effect.magnitude = [vals[0], vals[1], vals[2]];
-                    }
-                }
-                // known ITG actor commands that don't map to model draw state here
-                "stoptweening" | "finishtweening" | "playcommand" | "animate" => {
-                    flush_group(
-                        &mut state,
-                        &mut timeline,
-                        &mut cursor_time,
-                        &mut pending_tween,
-                        &mut grouped_mods,
-                    );
-                }
-                _ => {
-                    let arg_refs = args.iter().map(String::as_str).collect::<Vec<_>>();
-                    if let Some(mod_cmd) = itg_parse_actor_mod_token(cmd.as_str(), &arg_refs) {
-                        grouped_mods.push(mod_cmd);
-                    } else {
-                        warn!("unsupported noteskin actor command in model DSL path: '{cmd}'");
-                    }
-                }
+                continue;
+            }
+            if parse_script_control(cmd.as_str()).is_some() {
+                flush_group(
+                    &mut state,
+                    &mut timeline,
+                    &mut cursor_time,
+                    &mut pending_tween,
+                    &mut grouped_mods,
+                );
+                continue;
+            }
+            if let Some(mod_cmd) = parse_script_actor_mod(cmd.as_str(), &args) {
+                grouped_mods.push(mod_cmd);
+            } else {
+                warn!("unsupported noteskin actor command in model DSL path: '{cmd}'");
             }
         }
     }
@@ -3147,34 +3102,6 @@ fn itg_model_draw_program(
     state.glow[3] = state.glow[3].clamp(0.0, 1.0);
 
     (state, Arc::from(timeline), effect)
-}
-
-fn itg_parse_f32_list(raw: &str) -> Vec<f32> {
-    raw.split(',')
-        .filter_map(|part| {
-            part.trim()
-                .trim_matches('"')
-                .trim_matches('\'')
-                .parse::<f32>()
-                .ok()
-        })
-        .collect()
-}
-
-fn itg_parse_color(raw: &str) -> Option<[f32; 4]> {
-    let trimmed = raw.trim();
-    let lower = trimmed.to_ascii_lowercase();
-    let value = if lower.starts_with("color(") && trimmed.ends_with(')') {
-        let inner = &trimmed[6..trimmed.len().saturating_sub(1)];
-        inner.trim().trim_matches('"').trim_matches('\'')
-    } else {
-        trimmed.trim_matches('"').trim_matches('\'')
-    };
-    let values = itg_parse_f32_list(value);
-    if values.len() < 4 {
-        return None;
-    }
-    Some([values[0], values[1], values[2], values[3]])
 }
 
 fn itg_find_texture_with_prefix(
@@ -5244,35 +5171,7 @@ fn itg_sprite_animation_is_beat_based(
 }
 
 fn itg_parse_effectclock_from_commands(script: &str) -> Option<bool> {
-    let mut out = None;
-    for raw in script.split(';') {
-        let token = raw.trim();
-        if token.is_empty() {
-            continue;
-        }
-        let Some((cmd, args)) = itg_split_command_token(token) else {
-            continue;
-        };
-        if cmd != "effectclock" {
-            continue;
-        }
-        let clock = args
-            .first()
-            .map(|value| {
-                value
-                    .trim()
-                    .trim_matches('"')
-                    .trim_matches('\'')
-                    .to_ascii_lowercase()
-            })
-            .unwrap_or_else(|| "time".to_string());
-        if clock.contains("beat") {
-            out = Some(true);
-        } else if clock.contains("time") || clock.contains("music") || clock.contains("seconds") {
-            out = Some(false);
-        }
-    }
-    out
+    parse_script_effectclock_from_commands(script)
 }
 
 fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<SpriteSlot> {
@@ -5495,103 +5394,71 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
             continue;
         }
 
-        let Some((command, args)) = itg_split_command_token(token) else {
+        let Some((command, args)) = split_script_token(token) else {
             continue;
         };
 
-        match command.as_str() {
-            "linear" | "accelerate" | "decelerate" => {
-                finish_pending(&mut pending, &mut animation, &mut current_state);
-                if let Some(arg) = args.first() {
-                    if let Some(duration) = itg_parse_numeric_token(arg) {
-                        pending = Some(PendingSegment {
-                            tween: match command.as_str() {
-                                "accelerate" => TweenType::Accelerate,
-                                "decelerate" => TweenType::Decelerate,
-                                _ => TweenType::Linear,
-                            },
-                            duration: duration.max(0.0),
-                            start: current_state,
-                            target_zoom: None,
-                            target_color: None,
-                            target_visible: None,
-                        });
+        if let Some((tween, duration)) = parse_script_tween(command.as_str(), &args) {
+            finish_pending(&mut pending, &mut animation, &mut current_state);
+            pending = Some(PendingSegment {
+                tween: tween_type_from_script_tween(tween),
+                duration: duration.max(0.0),
+                start: current_state,
+                target_zoom: None,
+                target_color: None,
+                target_visible: None,
+            });
+            if !initial_locked {
+                animation.initial = current_state;
+                initial_locked = true;
+            }
+            continue;
+        }
+        if let Some(duration) = parse_script_sleep(command.as_str(), &args) {
+            finish_pending(&mut pending, &mut animation, &mut current_state);
+            pending = Some(PendingSegment {
+                tween: TweenType::Linear,
+                duration: duration.max(0.0),
+                start: current_state,
+                target_zoom: None,
+                target_color: None,
+                target_visible: None,
+            });
+            if !initial_locked {
+                animation.initial = current_state;
+                initial_locked = true;
+            }
+            continue;
+        }
+        if parse_script_control(command.as_str()).is_some() || command == "blend" {
+            finish_pending(&mut pending, &mut animation, &mut current_state);
+            continue;
+        }
+        if let Some(mod_cmd) = parse_script_actor_mod(command.as_str(), &args) {
+            match mod_cmd {
+                ScriptActorMod::DiffuseAlpha(value) => {
+                    if let Some(segment) = pending.as_mut() {
+                        let mut target_color = segment.target_color.unwrap_or(segment.start.color);
+                        target_color[3] = value;
+                        segment.target_color = Some(target_color);
+                    } else {
+                        current_state.color[3] = value;
                         if !initial_locked {
                             animation.initial = current_state;
-                            initial_locked = true;
                         }
-                    } else {
-                        warn!("Failed to parse duration '{arg}' for explosion command '{command}'");
                     }
-                } else {
-                    warn!("Explosion command '{command}' missing duration argument");
                 }
-            }
-            "sleep" => {
-                finish_pending(&mut pending, &mut animation, &mut current_state);
-                if let Some(arg) = args.first() {
-                    if let Some(duration) = itg_parse_numeric_token(arg) {
-                        pending = Some(PendingSegment {
-                            tween: TweenType::Linear,
-                            duration: duration.max(0.0),
-                            start: current_state,
-                            target_zoom: None,
-                            target_color: None,
-                            target_visible: None,
-                        });
+                ScriptActorMod::Zoom(value) => {
+                    if let Some(segment) = pending.as_mut() {
+                        segment.target_zoom = Some(value);
+                    } else {
+                        current_state.zoom = value;
                         if !initial_locked {
                             animation.initial = current_state;
-                            initial_locked = true;
                         }
-                    } else {
-                        warn!("Failed to parse duration '{arg}' for explosion command '{command}'");
-                    }
-                } else {
-                    warn!("Explosion command '{command}' missing duration argument");
-                }
-            }
-            "stoptweening" | "finishtweening" | "playcommand" | "animate" | "blend" => {
-                finish_pending(&mut pending, &mut animation, &mut current_state);
-            }
-            "diffusealpha" => {
-                if let Some(arg) = args.first() {
-                    if let Some(value) = itg_parse_numeric_token(arg) {
-                        if let Some(segment) = pending.as_mut() {
-                            let mut target_color =
-                                segment.target_color.unwrap_or(segment.start.color);
-                            target_color[3] = value;
-                            segment.target_color = Some(target_color);
-                        } else {
-                            current_state.color[3] = value;
-                            if !initial_locked {
-                                animation.initial = current_state;
-                            }
-                        }
-                    } else {
-                        warn!("Failed to parse diffusealpha value '{arg}' in explosion commands");
                     }
                 }
-            }
-            "zoom" => {
-                if let Some(arg) = args.first() {
-                    if let Some(value) = itg_parse_numeric_token(arg) {
-                        if let Some(segment) = pending.as_mut() {
-                            segment.target_zoom = Some(value);
-                        } else {
-                            current_state.zoom = value;
-                            if !initial_locked {
-                                animation.initial = current_state;
-                            }
-                        }
-                    } else {
-                        warn!("Failed to parse zoom value '{arg}' in explosion commands");
-                    }
-                }
-            }
-            "visible" => {
-                if let Some(arg) = args.first() {
-                    let t = arg.trim().trim_matches('"').trim_matches('\'');
-                    let value = t.eq_ignore_ascii_case("true") || t == "1";
+                ScriptActorMod::Visible(value) => {
                     if let Some(segment) = pending.as_mut() {
                         segment.target_visible = Some(value);
                     } else {
@@ -5601,9 +5468,7 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                         }
                     }
                 }
-            }
-            "diffuse" => {
-                if let Some(parsed) = parse_color4(&args) {
+                ScriptActorMod::Diffuse(parsed) => {
                     if let Some(segment) = pending.as_mut() {
                         segment.target_color = Some(parsed);
                     } else {
@@ -5612,50 +5477,57 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                             animation.initial = current_state;
                         }
                     }
-                } else if args.len() >= 3 {
-                    let mut parsed = [0.0f32; 4];
-                    let mut ok = true;
-                    for i in 0..3 {
-                        if let Some(v) = itg_parse_numeric_token(&args[i]) {
-                            parsed[i] = v
-                        } else {
-                            warn!(
-                                "Failed to parse diffuse component '{}' in explosion commands",
-                                args[i]
-                            );
-                            ok = false;
-                            break;
-                        }
-                    }
-                    if ok {
-                        parsed[3] = if args.len() >= 4 {
-                            itg_parse_numeric_token(&args[3]).unwrap_or(current_state.color[3])
-                        } else {
-                            current_state.color[3]
-                        };
+                }
+                ScriptActorMod::BlendAdd(_) => {
+                    finish_pending(&mut pending, &mut animation, &mut current_state);
+                }
+                _ => {}
+            }
+            continue;
+        }
+        if command == "diffuse" && args.len() >= 3 {
+            let mut parsed = [0.0f32; 4];
+            let mut ok = true;
+            for i in 0..3 {
+                if let Some(v) = parse_script_number(&args[i]) {
+                    parsed[i] = v;
+                } else {
+                    warn!(
+                        "Failed to parse diffuse component '{}' in explosion commands",
+                        args[i]
+                    );
+                    ok = false;
+                    break;
+                }
+            }
+            if ok {
+                parsed[3] = if args.len() >= 4 {
+                    parse_script_number(&args[3]).unwrap_or(current_state.color[3])
+                } else {
+                    current_state.color[3]
+                };
 
-                        if let Some(segment) = pending.as_mut() {
-                            segment.target_color = Some(parsed);
-                        } else {
-                            current_state.color = parsed;
-                            if !initial_locked {
-                                animation.initial = current_state;
-                            }
-                        }
+                if let Some(segment) = pending.as_mut() {
+                    segment.target_color = Some(parsed);
+                } else {
+                    current_state.color = parsed;
+                    if !initial_locked {
+                        animation.initial = current_state;
                     }
                 }
             }
-            "glowshift" => {
-                animation.glow.get_or_insert(GlowEffect {
-                    period: 0.0,
-                    color1: [1.0, 1.0, 1.0, 0.0],
-                    color2: [1.0, 1.0, 1.0, 0.0],
-                });
-            }
-            "effectperiod" => {
-                if let Some(arg) = args.first()
-                    && let Some(period) = itg_parse_numeric_token(arg)
-                {
+            continue;
+        }
+        if let Some(effect_mod) = parse_script_effect_mod(command.as_str(), &args) {
+            match effect_mod {
+                ScriptEffectMod::GlowShift => {
+                    animation.glow.get_or_insert(GlowEffect {
+                        period: 0.0,
+                        color1: [1.0, 1.0, 1.0, 0.0],
+                        color2: [1.0, 1.0, 1.0, 0.0],
+                    });
+                }
+                ScriptEffectMod::EffectPeriod(period) => {
                     if let Some(glow) = animation.glow.as_mut() {
                         glow.period = period.max(0.0);
                     } else {
@@ -5666,9 +5538,7 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                         });
                     }
                 }
-            }
-            "effectcolor1" => {
-                if let Some(color) = parse_color4(&args) {
+                ScriptEffectMod::EffectColor1(color) => {
                     if let Some(glow) = animation.glow.as_mut() {
                         glow.color1 = color;
                     } else {
@@ -5679,9 +5549,7 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                         });
                     }
                 }
-            }
-            "effectcolor2" => {
-                if let Some(color) = parse_color4(&args) {
+                ScriptEffectMod::EffectColor2(color) => {
                     if let Some(glow) = animation.glow.as_mut() {
                         glow.color2 = color;
                     } else {
@@ -5692,12 +5560,12 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                         });
                     }
                 }
+                _ => {}
             }
-            other => {
-                if !other.is_empty() {
-                    warn!("Unhandled explosion command '{other}'.");
-                }
-            }
+            continue;
+        }
+        if !command.is_empty() {
+            warn!("Unhandled explosion command '{command}'.");
         }
     }
 
@@ -5724,53 +5592,6 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
     }
 
     animation
-}
-
-fn itg_split_command_token(token: &str) -> Option<(String, Vec<String>)> {
-    let parts = itg_split_call_args(token);
-    if parts.is_empty() {
-        return None;
-    }
-    let command = parts[0].trim().to_ascii_lowercase();
-    if command.is_empty() {
-        return None;
-    }
-    let args = parts
-        .iter()
-        .skip(1)
-        .map(|part| part.trim().to_string())
-        .collect::<Vec<_>>();
-    Some((command, args))
-}
-
-fn itg_parse_numeric_token(raw: &str) -> Option<f32> {
-    raw.trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .parse::<f32>()
-        .ok()
-}
-
-fn parse_color4<T: AsRef<str>>(args: &[T]) -> Option<[f32; 4]> {
-    if args.len() == 1 {
-        let raw = args[0].as_ref().trim();
-        if let Some(color) = itg_parse_color(raw) {
-            return Some(color);
-        }
-        let values = itg_parse_f32_list(raw);
-        if values.len() >= 4 {
-            return Some([values[0], values[1], values[2], values[3]]);
-        }
-    }
-
-    if args.len() < 4 {
-        return None;
-    }
-    let mut values = [0.0; 4];
-    for (i, arg) in args.iter().enumerate().take(4) {
-        values[i] = arg.as_ref().trim().parse().ok()?;
-    }
-    Some(values)
 }
 
 fn texture_dimensions(key: &str) -> Option<(u32, u32)> {

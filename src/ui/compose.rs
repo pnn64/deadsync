@@ -3,7 +3,7 @@ use crate::core::gfx as renderer;
 use crate::core::gfx::{BlendMode, RenderList, RenderObject};
 use crate::core::space::Metrics;
 use crate::ui::actors::{self, Actor, SizeSpec};
-use crate::ui::font;
+use crate::ui::{anim, font};
 use cgmath::{Matrix4, Rad, Vector2, Vector3};
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
@@ -118,6 +118,83 @@ struct SmRect {
 }
 
 #[inline(always)]
+fn lerp_f32(a: f32, b: f32, t: f32) -> f32 {
+    (b - a).mul_add(t, a)
+}
+
+#[inline(always)]
+fn apply_effect_to_sprite(
+    effect: anim::EffectState,
+    elapsed: f32,
+    tint: &mut [f32; 4],
+    scale: &mut [f32; 2],
+    rot_deg: &mut [f32; 3],
+) {
+    let beat = elapsed;
+    if matches!(effect.mode, anim::EffectMode::Spin) {
+        let units = anim::effect_clock_units(effect, elapsed, beat) - effect.offset;
+        rot_deg[0] = (rot_deg[0] + effect.magnitude[0] * units).rem_euclid(360.0);
+        rot_deg[1] = (rot_deg[1] + effect.magnitude[1] * units).rem_euclid(360.0);
+        rot_deg[2] = (rot_deg[2] + effect.magnitude[2] * units).rem_euclid(360.0);
+    }
+
+    if let Some(mix) = anim::effect_mix(effect, elapsed, beat) {
+        match effect.mode {
+            anim::EffectMode::DiffuseRamp => {
+                for (i, out) in tint.iter_mut().enumerate() {
+                    let c = lerp_f32(effect.color1[i], effect.color2[i], mix).clamp(0.0, 1.0);
+                    *out *= c;
+                }
+            }
+            anim::EffectMode::Pulse => {
+                scale[0] *= lerp_f32(1.0, effect.magnitude[0], mix).max(0.0);
+                scale[1] *= lerp_f32(1.0, effect.magnitude[1], mix).max(0.0);
+            }
+            anim::EffectMode::GlowShift | anim::EffectMode::Spin | anim::EffectMode::None => {}
+        }
+    }
+
+    tint[0] = tint[0].clamp(0.0, 1.0);
+    tint[1] = tint[1].clamp(0.0, 1.0);
+    tint[2] = tint[2].clamp(0.0, 1.0);
+    tint[3] = tint[3].clamp(0.0, 1.0);
+    scale[0] = scale[0].max(0.0);
+    scale[1] = scale[1].max(0.0);
+}
+
+#[inline(always)]
+fn apply_effect_to_text(
+    effect: anim::EffectState,
+    elapsed: f32,
+    color: &mut [f32; 4],
+    scale: &mut [f32; 2],
+) {
+    let beat = elapsed;
+    if let Some(mix) = anim::effect_mix(effect, elapsed, beat) {
+        match effect.mode {
+            anim::EffectMode::DiffuseRamp => {
+                for (i, out) in color.iter_mut().enumerate() {
+                    let c = lerp_f32(effect.color1[i], effect.color2[i], mix).clamp(0.0, 1.0);
+                    *out *= c;
+                }
+            }
+            anim::EffectMode::Pulse => {
+                scale[0] *= lerp_f32(1.0, effect.magnitude[0], mix).max(0.0);
+                scale[1] *= lerp_f32(1.0, effect.magnitude[1], mix).max(0.0);
+            }
+            anim::EffectMode::GlowShift | anim::EffectMode::Spin | anim::EffectMode::None => {}
+        }
+    }
+
+    color[0] = color[0].clamp(0.0, 1.0);
+    color[1] = color[1].clamp(0.0, 1.0);
+    color[2] = color[2].clamp(0.0, 1.0);
+    color[3] = color[3].clamp(0.0, 1.0);
+    scale[0] = scale[0].max(0.0);
+    scale[1] = scale[1].max(0.0);
+}
+
+#[inline(always)]
 fn build_actor_recursive<'a>(
     actor: &'a actors::Actor,
     parent: SmRect,
@@ -161,6 +238,7 @@ fn build_actor_recursive<'a>(
             animate,
             state_delay,
             scale,
+            effect,
         } => {
             if !*visible {
                 return;
@@ -199,6 +277,17 @@ fn build_actor_recursive<'a>(
                 }
             }
 
+            let mut effect_tint = *tint;
+            let mut effect_scale = *scale;
+            let mut effect_rot = [*rot_x_deg, *rot_y_deg, *rot_z_deg];
+            apply_effect_to_sprite(
+                *effect,
+                total_elapsed,
+                &mut effect_tint,
+                &mut effect_scale,
+                &mut effect_rot,
+            );
+
             let resolved_size = resolve_sprite_size_like_sm(
                 *size,
                 is_solid,
@@ -206,7 +295,7 @@ fn build_actor_recursive<'a>(
                 *uv_rect,
                 chosen_cell,
                 chosen_grid,
-                *scale,
+                effect_scale,
             );
 
             let rect = place_rect(parent, *align, *offset, resolved_size);
@@ -219,7 +308,7 @@ fn build_actor_recursive<'a>(
                 m,
                 is_solid,
                 texture_name,
-                *tint,
+                effect_tint,
                 *uv_rect,
                 chosen_cell,
                 chosen_grid,
@@ -234,9 +323,9 @@ fn build_actor_recursive<'a>(
                 *fadetop,
                 *fadebottom,
                 *blend,
-                *rot_x_deg,
-                *rot_y_deg,
-                *rot_z_deg,
+                effect_rot[0],
+                effect_rot[1],
+                effect_rot[2],
                 *texcoordvelocity,
                 total_elapsed,
             );
@@ -478,14 +567,18 @@ fn build_actor_recursive<'a>(
             clip,
             blend,
             glow: _,
+            effect,
         } => {
             if let Some(fm) = fonts.get(font) {
+                let mut effect_color = *color;
+                let mut effect_scale = *scale;
+                apply_effect_to_text(*effect, total_elapsed, &mut effect_color, &mut effect_scale);
                 let mut objects = layout_text(
                     fm,
                     fonts,
                     content.as_str(),
                     0.0, // _px_size unused
-                    *scale,
+                    effect_scale,
                     *fit_width,
                     *fit_height,
                     *max_width,
@@ -511,7 +604,7 @@ fn build_actor_recursive<'a>(
                 }
                 let layer = base_z.saturating_add(*z);
                 let mut stroke_rgba = stroke_color.unwrap_or(fm.default_stroke_color);
-                stroke_rgba[3] *= color[3];
+                stroke_rgba[3] *= effect_color[3];
                 if stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty() {
                     let mut stroke_objects = Vec::with_capacity(objects.len());
                     for obj in &objects {
@@ -556,7 +649,7 @@ fn build_actor_recursive<'a>(
                     obj.blend = *blend;
                     obj.camera = camera;
                     if let renderer::ObjectType::Sprite { tint, .. } = &mut obj.object_type {
-                        *tint = *color;
+                        *tint = effect_color;
                     }
                 }
                 out.extend(objects);

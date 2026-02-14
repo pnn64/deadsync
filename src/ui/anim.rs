@@ -210,6 +210,94 @@ pub fn smooth(dur: f32) -> SegmentBuilder {
     SegmentBuilder::new(Ease::Smooth, dur)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EffectClock {
+    Time,
+    Beat,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EffectMode {
+    None,
+    DiffuseRamp,
+    GlowShift,
+    Pulse,
+    Spin,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct EffectState {
+    pub clock: EffectClock,
+    pub mode: EffectMode,
+    pub color1: [f32; 4],
+    pub color2: [f32; 4],
+    pub period: f32,
+    pub offset: f32,
+    pub timing: [f32; 4], // ramp_up, hold_high, ramp_down, hold_low
+    pub magnitude: [f32; 3],
+}
+
+impl Default for EffectState {
+    fn default() -> Self {
+        Self {
+            clock: EffectClock::Time,
+            mode: EffectMode::None,
+            color1: [1.0, 1.0, 1.0, 1.0],
+            color2: [1.0, 1.0, 1.0, 1.0],
+            period: 1.0,
+            offset: 0.0,
+            timing: [0.5, 0.0, 0.5, 0.0],
+            magnitude: [1.0, 1.0, 1.0],
+        }
+    }
+}
+
+#[inline(always)]
+pub fn effect_clock_units(effect: EffectState, time: f32, beat: f32) -> f32 {
+    match effect.clock {
+        EffectClock::Time => time,
+        EffectClock::Beat => beat,
+    }
+}
+
+#[inline(always)]
+pub fn effect_mix(effect: EffectState, time: f32, beat: f32) -> Option<f32> {
+    if !matches!(
+        effect.mode,
+        EffectMode::DiffuseRamp | EffectMode::GlowShift | EffectMode::Pulse
+    ) {
+        return None;
+    }
+    let period = effect.period.max(1e-6);
+    let phase_input = effect_clock_units(effect, time, beat);
+    let phase = (phase_input + effect.offset).rem_euclid(period) / period;
+    let t = effect.timing;
+    let total = (t[0] + t[1] + t[2] + t[3]).max(1e-6);
+    let mut x = phase * total;
+    let mix = if x < t[0] && t[0] > f32::EPSILON {
+        x / t[0]
+    } else {
+        x -= t[0];
+        if x < t[1] {
+            1.0
+        } else {
+            x -= t[1];
+            if x < t[2] && t[2] > f32::EPSILON {
+                1.0 - (x / t[2])
+            } else {
+                0.0
+            }
+        }
+    }
+    .clamp(0.0, 1.0);
+    Some(mix)
+}
+
+#[inline(always)]
+pub fn glowshift_mix(through: f32) -> f32 {
+    (((through + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5).clamp(0.0, 1.0)
+}
+
 #[derive(Clone, Debug)]
 pub struct TweenState {
     pub x: f32,

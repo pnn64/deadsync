@@ -1,4 +1,5 @@
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
+use crate::ui::anim;
 use cgmath::Matrix4;
 use std::sync::Arc;
 
@@ -67,6 +68,7 @@ pub enum Actor {
         animate: bool,
         state_delay: f32,
         scale: [f32; 2],
+        effect: anim::EffectState,
     },
 
     /// Text actor (BitmapText-like)
@@ -91,6 +93,7 @@ pub enum Actor {
         /// Clip rect in parent TL space: [x, y, w, h].
         clip: Option<[f32; 4]>,
         blend: BlendMode,
+        effect: anim::EffectState,
     },
 
     /// Mesh actor (ActorMultiVertex-like)
