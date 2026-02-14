@@ -537,18 +537,6 @@ impl AssetManager {
                 "_fallback/banner12.png".to_string(),
             ),
             (
-                "noteskins/bar/tex notes.png".to_string(),
-                "noteskins/bar/tex notes.png".to_string(),
-            ),
-            (
-                "noteskins/bar/tex receptors.png".to_string(),
-                "noteskins/bar/tex receptors.png".to_string(),
-            ),
-            (
-                "noteskins/bar/tex glow.png".to_string(),
-                "noteskins/bar/tex glow.png".to_string(),
-            ),
-            (
                 "judgements/Love 2x7 (doubleres).png".to_string(),
                 "judgements/Love 2x7 (doubleres).png".to_string(),
             ),
