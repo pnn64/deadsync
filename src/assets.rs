@@ -473,10 +473,6 @@ impl AssetManager {
                 "combo_1000milestone_swoosh.png".to_string(),
             ),
             (
-                "hit_mine_explosion.png".to_string(),
-                "hit_mine_explosion.png".to_string(),
-            ),
-            (
                 "titlemenu_flycenter.png".to_string(),
                 "titlemenu_flycenter.png".to_string(),
             ),

@@ -1,11 +1,10 @@
 use crate::act;
-use crate::assets;
 use crate::core::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
 use crate::core::space::*;
 use crate::game::gameplay::active_hold_is_engaged;
 use crate::game::gameplay::{
     COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind,
-    HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, MINE_EXPLOSION_DURATION, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
 };
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, TimingWindow};
@@ -29,7 +28,6 @@ use std::sync::{
 
 // Gameplay Layout & Feel
 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0; // Match Simply Love's on-screen arrow height
-const TARGET_EXPLOSION_PIXEL_SIZE: f32 = 125.0; // Simply Love tap explosions top out around 125px tall
 const HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER: f32 = -90.0; // Mirrors Simply Love metrics for hold judgments
 const HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR: f32 =
     HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER - RECEPTOR_Y_OFFSET_FROM_CENTER;
@@ -1473,17 +1471,6 @@ pub fn build(
             }
         }
 
-        let mine_explosion_size = {
-            let base = assets::texture_dims("hit_mine_explosion.png")
-                .map(|meta| [meta.w.max(1) as f32, meta.h.max(1) as f32])
-                .unwrap_or([TARGET_EXPLOSION_PIXEL_SIZE, TARGET_EXPLOSION_PIXEL_SIZE]);
-            if base[1] <= 0.0 {
-                base
-            } else {
-                let scale = TARGET_EXPLOSION_PIXEL_SIZE / base[1];
-                [base[0] * scale, TARGET_EXPLOSION_PIXEL_SIZE]
-            }
-        };
         // Receptors + glow
         for i in 0..num_cols {
             let col = col_start + i;
@@ -1898,33 +1885,49 @@ pub fn build(
         // Mine explosions
         for i in 0..num_cols {
             let col = col_start + i;
-            if let Some(active) = state.mine_explosions[col].as_ref() {
-                let duration = MINE_EXPLOSION_DURATION.max(f32::EPSILON);
-                let progress = (active.elapsed / duration).clamp(0.0, 1.0);
-                let alpha = if progress < 0.5 {
-                    1.0
-                } else {
-                    1.0 - ((progress - 0.5) / 0.5)
-                }
-                .clamp(0.0, 1.0);
-                if alpha <= f32::EPSILON {
-                    continue;
-                }
-                let rotation_progress = 180.0 * progress;
-                let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
-                let receptor_y_lane = column_receptor_ys[i];
-                let base_rotation = ns
-                    .receptor_off
-                    .get(i)
-                    .map(|slot| slot.def.rotation_deg as f32)
-                    .unwrap_or(0.0);
-                let final_rotation = base_rotation + rotation_progress;
-                actors.push(act!(sprite("hit_mine_explosion.png"):
+            let Some(active) = state.mine_explosions[col].as_ref() else {
+                continue;
+            };
+            let Some(explosion) = ns.mine_hit_explosion.as_ref() else {
+                continue;
+            };
+            let slot = &explosion.slot;
+            let visual = explosion.animation.state_at(active.elapsed);
+            if !visual.visible {
+                continue;
+            }
+            let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
+            let receptor_y_lane = column_receptor_ys[i];
+            let frame = slot.frame_index(active.elapsed, current_beat);
+            let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
+            let size = scale_explosion(logical_slot_size(slot));
+            actors.push(act!(sprite(slot.texture_key().to_string()):
+                align(0.5, 0.5):
+                xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                setsize(size[0], size[1]):
+                zoom(visual.zoom):
+                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                rotationz(-visual.rotation_z):
+                diffuse(
+                    visual.diffuse[0],
+                    visual.diffuse[1],
+                    visual.diffuse[2],
+                    visual.diffuse[3]
+                ):
+                blend(add):
+                z(Z_MINE_EXPLOSION)
+            ));
+            let glow = visual.glow;
+            let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
+            if glow_strength > f32::EPSILON {
+                actors.push(act!(sprite(slot.texture_key().to_string()):
                     align(0.5, 0.5):
                     xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                    zoomto(mine_explosion_size[0], mine_explosion_size[1]):
-                    rotationz(-final_rotation):
-                    diffuse(1.0, 1.0, 1.0, alpha):
+                    setsize(size[0], size[1]):
+                    zoom(visual.zoom):
+                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                    rotationz(-visual.rotation_z):
+                    diffuse(glow[0], glow[1], glow[2], glow[3]):
                     blend(add):
                     z(Z_MINE_EXPLOSION)
                 ));

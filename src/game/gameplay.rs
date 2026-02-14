@@ -4737,10 +4737,19 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
             }
         }
     }
-    for explosion in &mut state.mine_explosions {
+    for (col, explosion) in state.mine_explosions.iter_mut().enumerate() {
         if let Some(active) = explosion {
             active.elapsed += delta_time;
-            if active.elapsed >= MINE_EXPLOSION_DURATION {
+            let player = if num_players <= 1 || cols_per_player == 0 {
+                0
+            } else {
+                (col / cols_per_player).min(num_players.saturating_sub(1))
+            };
+            let lifetime = state.noteskin[player]
+                .as_ref()
+                .and_then(|ns| ns.mine_hit_explosion.as_ref())
+                .map_or(MINE_EXPLOSION_DURATION, |explosion| explosion.animation.duration());
+            if lifetime <= 0.0 || active.elapsed >= lifetime {
                 *explosion = None;
             }
         }

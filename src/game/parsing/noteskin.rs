@@ -580,6 +580,7 @@ impl TweenType {
 pub struct ExplosionState {
     pub zoom: f32,
     pub color: [f32; 4],
+    pub rotation_z: f32,
     pub visible: bool,
 }
 
@@ -588,6 +589,7 @@ impl Default for ExplosionState {
         Self {
             zoom: 1.0,
             color: [1.0, 1.0, 1.0, 1.0],
+            rotation_z: 0.0,
             visible: true,
         }
     }
@@ -600,6 +602,7 @@ pub struct ExplosionSegment {
     pub start: ExplosionState,
     pub end_zoom: Option<f32>,
     pub end_color: Option<[f32; 4]>,
+    pub end_rotation_z: Option<f32>,
     pub end_visible: Option<bool>,
 }
 
@@ -640,6 +643,7 @@ pub struct ExplosionVisualState {
     pub zoom: f32,
     pub diffuse: [f32; 4],
     pub glow: [f32; 4],
+    pub rotation_z: f32,
     pub visible: bool,
 }
 
@@ -656,6 +660,7 @@ impl Default for ExplosionAnimation {
             initial: ExplosionState {
                 zoom: 1.0,
                 color: [1.0, 1.0, 1.0, 1.0],
+                rotation_z: 0.0,
                 visible: true,
             },
             segments: vec![ExplosionSegment {
@@ -664,10 +669,12 @@ impl Default for ExplosionAnimation {
                 start: ExplosionState {
                     zoom: 1.0,
                     color: [1.0, 1.0, 1.0, 1.0],
+                    rotation_z: 0.0,
                     visible: true,
                 },
                 end_zoom: Some(1.0),
                 end_color: Some([1.0, 1.0, 1.0, 0.0]),
+                end_rotation_z: None,
                 end_visible: None,
             }],
             glow: None,
@@ -697,6 +704,9 @@ impl ExplosionAnimation {
                 if let Some(color) = segment.end_color {
                     current.color = color;
                 }
+                if let Some(rotation_z) = segment.end_rotation_z {
+                    current.rotation_z = rotation_z;
+                }
                 if let Some(visible) = segment.end_visible {
                     current.visible = visible;
                 }
@@ -709,6 +719,9 @@ impl ExplosionAnimation {
                 }
                 if let Some(color) = segment.end_color {
                     current.color = color;
+                }
+                if let Some(rotation_z) = segment.end_rotation_z {
+                    current.rotation_z = rotation_z;
                 }
                 if let Some(visible) = segment.end_visible {
                     current.visible = visible;
@@ -734,6 +747,11 @@ impl ExplosionAnimation {
                 }
                 color = interpolated;
             }
+            let mut rotation_z = current.rotation_z;
+            if let Some(target_rotation_z) = segment.end_rotation_z {
+                rotation_z = (target_rotation_z - segment.start.rotation_z)
+                    .mul_add(eased, segment.start.rotation_z);
+            }
 
             let diffuse = color;
             let glow = self
@@ -745,6 +763,7 @@ impl ExplosionAnimation {
                 zoom,
                 diffuse,
                 glow,
+                rotation_z,
                 visible,
             };
         }
@@ -758,6 +777,7 @@ impl ExplosionAnimation {
             zoom: current.zoom,
             diffuse,
             glow,
+            rotation_z: current.rotation_z,
             visible: current.visible,
         }
     }
@@ -992,6 +1012,7 @@ pub struct Noteskin {
     pub mine_frames: Vec<Option<SpriteSlot>>,
     pub column_xs: Vec<i32>,
     pub tap_explosions: HashMap<String, TapExplosion>,
+    pub mine_hit_explosion: Option<TapExplosion>,
     pub receptor_glow_behavior: ReceptorGlowBehavior,
     pub receptor_pulse: ReceptorPulse,
     pub hold_let_go_gray_percent: f32,
@@ -2017,6 +2038,55 @@ fn load_itg_sprite_noteskin(
             data.resolve_path("Down", "Tap Explosion Bright")
                 .and_then(|p| itg_slot_from_path(&p))
         });
+    let mine_source = explosion_sprites
+        .iter()
+        .find(|sprite| sprite.commands.contains_key("hitminecommand"))
+        .or_else(|| {
+            explosion_sprites
+                .iter()
+                .find(|sprite| sprite.element.to_ascii_lowercase().contains("hitmine explosion"))
+        });
+    let mine_slot = mine_source
+        .map(|sprite| sprite.slot.clone())
+        .or_else(|| {
+            data.resolve_path("Down", "HitMine Explosion")
+                .and_then(|p| itg_slot_from_path(&p))
+        })
+        .or_else(|| {
+            data.resolve_path("Down", "HitMine Explosion")
+                .and_then(|p| itg_slot_from_actor_path_first_sprite(data, &p))
+        });
+    let mine_command = mine_source
+        .and_then(|sprite| sprite.commands.get("hitminecommand"))
+        .cloned()
+        .or_else(|| {
+            data.metrics
+                .get("GhostArrowBright", "HitMineCommand")
+                .map(str::to_string)
+        });
+    let mine_command_with_init = mine_command
+        .as_deref()
+        .map(str::trim)
+        .filter(|cmd| !cmd.is_empty())
+        .map(|cmd| {
+            let mut sequence = Vec::with_capacity(2);
+            if let Some(init) = mine_source
+                .and_then(|sprite| sprite.commands.get("initcommand"))
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+            {
+                sequence.push(init.to_string());
+            }
+            sequence.push(cmd.to_string());
+            sequence.join(";")
+        });
+    let mine_hit_explosion = mine_slot.map(|slot| TapExplosion {
+        slot,
+        animation: mine_command_with_init
+            .as_deref()
+            .map(parse_explosion_animation)
+            .unwrap_or_default(),
+    });
 
     let mut tap_explosions = HashMap::new();
     if let Some(slot) = explosion_slot {
@@ -2201,6 +2271,7 @@ fn load_itg_sprite_noteskin(
         mine_frames,
         column_xs,
         tap_explosions,
+        mine_hit_explosion,
         receptor_glow_behavior,
         receptor_pulse,
         hold_let_go_gray_percent,
@@ -5393,6 +5464,7 @@ struct PendingSegment {
     start: ExplosionState,
     target_zoom: Option<f32>,
     target_color: Option<[f32; 4]>,
+    target_rotation_z: Option<f32>,
     target_visible: Option<bool>,
 }
 
@@ -5418,6 +5490,9 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
             if let Some(color) = segment.target_color {
                 end_state.color = color;
             }
+            if let Some(rotation_z) = segment.target_rotation_z {
+                end_state.rotation_z = rotation_z;
+            }
             if let Some(visible) = segment.target_visible {
                 end_state.visible = visible;
             }
@@ -5428,6 +5503,7 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                 start: segment.start,
                 end_zoom: segment.target_zoom,
                 end_color: segment.target_color,
+                end_rotation_z: segment.target_rotation_z,
                 end_visible: segment.target_visible,
             });
 
@@ -5453,6 +5529,7 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                 start: current_state,
                 target_zoom: None,
                 target_color: None,
+                target_rotation_z: None,
                 target_visible: None,
             });
             if !initial_locked {
@@ -5469,6 +5546,7 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                 start: current_state,
                 target_zoom: None,
                 target_color: None,
+                target_rotation_z: None,
                 target_visible: None,
             });
             if !initial_locked {
@@ -5500,6 +5578,16 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                         segment.target_zoom = Some(value);
                     } else {
                         current_state.zoom = value;
+                        if !initial_locked {
+                            animation.initial = current_state;
+                        }
+                    }
+                }
+                ScriptActorMod::RotationZ(value) => {
+                    if let Some(segment) = pending.as_mut() {
+                        segment.target_rotation_z = Some(value);
+                    } else {
+                        current_state.rotation_z = value;
                         if !initial_locked {
                             animation.initial = current_state;
                         }
@@ -5634,6 +5722,7 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                 animation.initial.color[2],
                 0.0,
             ]),
+            end_rotation_z: Some(animation.initial.rotation_z),
             end_visible: None,
         });
     }
@@ -6180,6 +6269,30 @@ mod tests {
                 "default roll visuals should not resolve explosion for col {col}"
             );
         }
+    }
+
+    #[test]
+    fn default_mine_hit_explosion_comes_from_noteskin_actor_and_commands() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        let mine = ns
+            .mine_hit_explosion
+            .as_ref()
+            .expect("default should resolve HitMine Explosion actor");
+        let key = mine.slot.texture_key().to_ascii_lowercase();
+        assert!(
+            key.contains("noteskins/common/common/fallback hitmine explosion"),
+            "default mine hit explosion should resolve to common fallback actor texture, got '{key}'"
+        );
+        assert!(
+            (mine.animation.duration() - 0.6).abs() <= 1e-6,
+            "default mine hit explosion should follow HitMineCommand duration (0.6s), got {}",
+            mine.animation.duration()
+        );
     }
 
     #[test]
