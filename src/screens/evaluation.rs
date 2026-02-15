@@ -3052,7 +3052,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                         for &(t, life) in &si.life_history {
                             let x = ((t - first) / (dur + padding)).clamp(0.0, 1.0) * graph_width;
-                            let y = (1.0 - life).clamp(0.0, 1.0) * graph_height;
+                            // Simply Love nudges GraphDisplay's white life line down by 1px
+                            // (`self:GetChild("Line"):addy(1)`), so keep a matching inset.
+                            let y = ((1.0 - life).clamp(0.0, 1.0) * graph_height + 1.0)
+                                .clamp(1.0, (graph_height - 1.0).max(1.0));
 
                             if (x - last_x).abs() < 0.5 && (y - last_y).abs() < 0.5 {
                                 continue;
@@ -3090,6 +3093,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                             last_x = x;
                             last_y = y;
+                        }
+
+                        // Life history only stores change points; once life stops changing
+                        // (e.g. capped at full), continue the final segment to graph end.
+                        let end_x = ((last - first) / (dur + padding)).clamp(0.0, 1.0) * graph_width;
+                        if last_x > -900.0 {
+                            let w = (end_x - last_x).max(0.0);
+                            if w > 0.5 {
+                                life_children.push(act!(quad:
+                                    align(0.0, 0.5): xy(last_x, last_y):
+                                    setsize(w, 2.0):
+                                    diffuse(1.0, 1.0, 1.0, 0.8):
+                                    z(4)
+                                ));
+                            }
                         }
 
                         if let Some(fail_time) = si.fail_time {
