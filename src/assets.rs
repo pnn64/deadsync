@@ -1138,6 +1138,47 @@ impl AssetManager {
         profile::set_avatar_texture_key_for_side(side, None);
     }
 
+    pub(crate) fn ensure_texture_for_key(&mut self, backend: &mut Backend, texture_key: &str) {
+        if texture_key.is_empty() {
+            return;
+        }
+        let key = canonical_texture_key(texture_key);
+        if key.starts_with("__") || self.textures.contains_key(&key) {
+            return;
+        }
+
+        let mut path = Path::new("assets").join(&key);
+        if !path.is_file() {
+            path = Path::new("assets/graphics").join(&key);
+        }
+        if !path.is_file() {
+            warn!("Failed to resolve texture key '{key}' for preload.");
+            return;
+        }
+
+        let hints = parse_texture_hints(&key);
+        match open_image_fallback(&path) {
+            Ok(img) => {
+                let mut rgba = img.to_rgba8();
+                if !hints.is_default() {
+                    apply_texture_hints(&mut rgba, &hints);
+                }
+                match backend.create_texture(&rgba, hints.sampler_desc()) {
+                    Ok(texture) => {
+                        self.textures.insert(key.clone(), texture);
+                        register_texture_dims(&key, rgba.width(), rgba.height());
+                    }
+                    Err(e) => {
+                        warn!("Failed to create GPU texture for key '{key}': {e}");
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Failed to open texture for key '{key}': {e}");
+            }
+        }
+    }
+
     pub(crate) fn ensure_texture_from_path(&mut self, backend: &mut Backend, path: &Path) {
         let key = path.to_string_lossy().into_owned();
         if self.textures.contains_key(&key) {

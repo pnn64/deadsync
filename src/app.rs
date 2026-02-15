@@ -24,6 +24,7 @@ use winit::{
 
 use log::{error, info, warn};
 use std::cmp;
+use std::collections::HashSet;
 use std::{error::Error, path::PathBuf, sync::Arc, time::Instant};
 
 use crate::ui::actors::Actor;
@@ -337,6 +338,23 @@ const fn side_ix(side: profile::PlayerSide) -> usize {
         profile::PlayerSide::P1 => 0,
         profile::PlayerSide::P2 => 1,
     }
+}
+
+fn prewarm_gameplay_assets(
+    assets: &mut AssetManager,
+    backend: &mut renderer::Backend,
+    state: &gameplay::State,
+) {
+    let mut seen = HashSet::<String>::with_capacity(256);
+    for noteskin in state.noteskin.iter().flatten() {
+        noteskin.for_each_texture_key(|key| {
+            if seen.insert(key.to_owned()) {
+                assets.ensure_texture_for_key(backend, key);
+            }
+        });
+    }
+    crate::core::audio::preload_sfx("assets/sounds/boom.ogg");
+    crate::core::audio::preload_sfx("assets/sounds/assist_tick.ogg");
 }
 
 fn total_gameplay_elapsed(stages: &[stage_stats::StageSummary]) -> f32 {
@@ -2679,10 +2697,11 @@ impl App {
                     replay_status_text,
                 );
 
-                if let (Some(backend), Some(path)) =
-                    (self.backend.as_mut(), gs.song.banner_path.as_ref())
-                {
-                    self.asset_manager.ensure_texture_from_path(backend, path);
+                if let Some(backend) = self.backend.as_mut() {
+                    prewarm_gameplay_assets(&mut self.asset_manager, backend, &gs);
+                    if let Some(path) = gs.song.banner_path.as_ref() {
+                        self.asset_manager.ensure_texture_from_path(backend, path);
+                    }
                 }
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
                 commands.push(Command::SetDynamicBackground(

@@ -16,13 +16,9 @@ use crate::game::{gameplay::PlayerRuntime, gameplay::State, profile, scroll::Scr
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use cgmath::{Deg, Matrix4, Point3, Vector3};
-use log::info;
 use rssp::streams::StreamSegment;
 use std::array::from_fn;
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, AtomicUsize, Ordering},
-};
+use std::sync::Arc;
 
 // --- CONSTANTS ---
 
@@ -87,12 +83,6 @@ const Z_COLUMN_CUE: i32 = 90;
 const MINE_CORE_SIZE_RATIO: f32 = 0.45;
 const MINE_FILL_LAYERS: usize = 32;
 const Z_MEASURE_LINES: i32 = 80;
-static DDRVIVID_HOLD_GHOST_DRAW_LOGGED: AtomicBool = AtomicBool::new(false);
-static DDRVIVID_HOLD_GHOST_MISSING_LOGGED: AtomicBool = AtomicBool::new(false);
-static CEL_ROLL_GHOST_DRAW_LOGGED: AtomicBool = AtomicBool::new(false);
-static CEL_ROLL_GHOST_MISSING_LOGGED: AtomicBool = AtomicBool::new(false);
-static DEFAULT_TAP_GLOW_DRAW_LOG_COUNT: AtomicUsize = AtomicUsize::new(0);
-static DEFAULT_HOLD_GLOW_DRAW_LOG_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Clone, Copy, Debug)]
 pub enum FieldPlacement {
@@ -1080,8 +1070,6 @@ pub fn build(
     if player_idx >= state.num_players {
         return (Vec::new(), screen_center_x());
     }
-    let is_ddr_vivid_skin = profile.noteskin.as_str() == "ddr-vivid";
-    let is_cel_skin = profile.noteskin.as_str() == "cel";
     // Use the cached field_zoom from gameplay state so visual layout and
     // scroll math share the exact same scaling as gameplay.
     let field_zoom = state.field_zoom[player_idx];
@@ -1530,69 +1518,19 @@ pub fn build(
             let active_hold = state.active_holds[col]
                 .as_ref()
                 .filter(|active| active_hold_is_engaged(active));
-            let (hold_slot, hold_slot_source, is_roll_hold) = if let Some(active) = active_hold {
+            let hold_slot = if let Some(active) = active_hold {
                 let note_type = &state.notes[active.note_index].note_type;
                 let visuals = ns.hold_visuals_for_col(i, matches!(note_type, NoteType::Roll));
                 if let Some(slot) = visuals.explosion.as_ref() {
-                    (
-                        Some(slot),
-                        "note-type explosion",
-                        matches!(note_type, NoteType::Roll),
-                    )
+                    Some(slot)
                 } else if let Some(slot) = ns.hold.explosion.as_ref() {
-                    (
-                        Some(slot),
-                        "hold fallback explosion",
-                        matches!(note_type, NoteType::Roll),
-                    )
+                    Some(slot)
                 } else {
-                    (None, "<none>", matches!(note_type, NoteType::Roll))
+                    None
                 }
             } else {
-                (None, "<inactive>", false)
+                None
             };
-            if hold_slot.is_none()
-                && active_hold.is_some()
-                && is_ddr_vivid_skin
-                && !DDRVIVID_HOLD_GHOST_MISSING_LOGGED.swap(true, Ordering::Relaxed)
-            {
-                info!(
-                    "ddr-vivid hold ghost missing slot: col={}, ns.hold.explosion={}, ns.roll.explosion={}",
-                    col,
-                    ns.hold
-                        .explosion
-                        .as_ref()
-                        .map(|slot| slot.texture_key())
-                        .unwrap_or("<none>"),
-                    ns.roll
-                        .explosion
-                        .as_ref()
-                        .map(|slot| slot.texture_key())
-                        .unwrap_or("<none>"),
-                );
-            }
-            if hold_slot.is_none()
-                && active_hold.is_some()
-                && is_cel_skin
-                && is_roll_hold
-                && !CEL_ROLL_GHOST_MISSING_LOGGED.swap(true, Ordering::Relaxed)
-            {
-                info!(
-                    "cel roll ghost missing slot: col={}, source={}, ns.hold.explosion={}, ns.roll.explosion={}",
-                    col,
-                    hold_slot_source,
-                    ns.hold
-                        .explosion
-                        .as_ref()
-                        .map(|slot| slot.texture_key())
-                        .unwrap_or("<none>"),
-                    ns.roll
-                        .explosion
-                        .as_ref()
-                        .map(|slot| slot.texture_key())
-                        .unwrap_or("<none>"),
-                );
-            }
             if let Some(hold_slot) = hold_slot {
                 let draw = hold_slot.model_draw_at(state.total_elapsed_in_screen, current_beat);
                 let hold_frame = hold_slot.frame_index(state.total_elapsed_in_screen, current_beat);
@@ -1616,80 +1554,11 @@ pub fn build(
                 let color = draw.tint;
                 let glow =
                     hold_slot.model_glow_at(state.total_elapsed_in_screen, current_beat, color[3]);
-                if profile.noteskin.as_str().eq_ignore_ascii_case("default") {
-                    let sample = DEFAULT_HOLD_GLOW_DRAW_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
-                    if sample < 24 {
-                        info!(
-                            "default hold glow draw sample#{} col={} roll={} source={} tex={} frame={} uv={:?} logical_size={:?} draw_zoom={:?} hold_size={:?} base_rot={} receptor_rot={} draw_rot_z={} final_rot={} tint={:?} glow={:?}",
-                            sample + 1,
-                            col,
-                            is_roll_hold,
-                            hold_slot_source,
-                            hold_slot.texture_key(),
-                            hold_frame,
-                            hold_uv,
-                            hold_slot.logical_size(),
-                            draw.zoom,
-                            hold_size,
-                            hold_slot.def.rotation_deg,
-                            receptor_rotation,
-                            draw.rot[2],
-                            final_rotation,
-                            color,
-                            glow
-                        );
-                    }
-                }
                 let blend = if draw.blend_add {
                     BlendMode::Add
                 } else {
                     BlendMode::Alpha
                 };
-                if is_ddr_vivid_skin
-                    && !DDRVIVID_HOLD_GHOST_DRAW_LOGGED.swap(true, Ordering::Relaxed)
-                {
-                    info!(
-                        "ddr-vivid hold ghost draw sample: tex='{}' model={} frame={} uv={:?} size={:?} tint={:?} visible={} blend_add={} z={}",
-                        hold_slot.texture_key(),
-                        hold_slot.model.is_some(),
-                        hold_frame,
-                        hold_uv,
-                        hold_size,
-                        color,
-                        draw.visible,
-                        draw.blend_add,
-                        Z_HOLD_EXPLOSION,
-                    );
-                }
-                if is_cel_skin
-                    && is_roll_hold
-                    && !CEL_ROLL_GHOST_DRAW_LOGGED.swap(true, Ordering::Relaxed)
-                {
-                    info!(
-                        "cel roll ghost draw sample: col={} source={} tex='{}' model={} frame={} uv={:?} size={:?} tint={:?} visible={} blend_add={} z={} ns_hold_tex={} ns_roll_tex={}",
-                        col,
-                        hold_slot_source,
-                        hold_slot.texture_key(),
-                        hold_slot.model.is_some(),
-                        hold_frame,
-                        hold_uv,
-                        hold_size,
-                        color,
-                        draw.visible,
-                        draw.blend_add,
-                        Z_HOLD_EXPLOSION,
-                        ns.hold
-                            .explosion
-                            .as_ref()
-                            .map(|slot| slot.texture_key())
-                            .unwrap_or("<none>"),
-                        ns.roll
-                            .explosion
-                            .as_ref()
-                            .map(|slot| slot.texture_key())
-                            .unwrap_or("<none>"),
-                    );
-                }
                 if let Some(model_actor) = noteskin_model_actor(
                     hold_slot,
                     center,
@@ -1835,31 +1704,6 @@ pub fn build(
                         .get(i)
                         .map(|slot| slot.def.rotation_deg)
                         .unwrap_or(0);
-                    if profile.noteskin.as_str().eq_ignore_ascii_case("default") {
-                        let tex_lower = slot.texture_key().to_ascii_lowercase();
-                        if tex_lower.contains("_glow") {
-                            let sample =
-                                DEFAULT_TAP_GLOW_DRAW_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
-                            if sample < 32 {
-                                info!(
-                                    "default tap glow draw sample#{} col={} window={} tex={} frame={} uv={:?} logical_size={:?} draw_size={:?} visual_zoom={:.3} visual_diffuse={:?} visual_glow={:?} receptor_rot={} blend_add={}",
-                                    sample + 1,
-                                    col,
-                                    active.window,
-                                    slot.texture_key(),
-                                    frame,
-                                    uv,
-                                    slot.logical_size(),
-                                    size,
-                                    visual.zoom,
-                                    visual.diffuse,
-                                    visual.glow,
-                                    rotation_deg,
-                                    false
-                                );
-                            }
-                        }
-                    }
                     actors.push(act!(sprite(slot.texture_key().to_string()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset, receptor_y_lane):

@@ -1059,6 +1059,67 @@ pub struct Noteskin {
 
 impl Noteskin {
     #[inline(always)]
+    pub fn for_each_texture_key(&self, mut visit: impl FnMut(&str)) {
+        for slot in &self.notes {
+            visit(slot.texture_key());
+        }
+        for layer in &self.note_layers {
+            for slot in layer.iter() {
+                visit(slot.texture_key());
+            }
+        }
+        for slot in &self.receptor_off {
+            visit(slot.texture_key());
+        }
+        for slot in &self.receptor_glow {
+            if let Some(slot) = slot.as_ref() {
+                visit(slot.texture_key());
+            }
+        }
+        for slot in &self.mines {
+            if let Some(slot) = slot.as_ref() {
+                visit(slot.texture_key());
+            }
+        }
+        for slot in &self.mine_frames {
+            if let Some(slot) = slot.as_ref() {
+                visit(slot.texture_key());
+            }
+        }
+        for explosion in self.tap_explosions.values() {
+            visit(explosion.slot.texture_key());
+        }
+        if let Some(explosion) = self.mine_hit_explosion.as_ref() {
+            visit(explosion.slot.texture_key());
+        }
+        let mut visit_hold = |h: &HoldVisuals| {
+            for slot in [
+                h.head_inactive.as_ref(),
+                h.head_active.as_ref(),
+                h.body_inactive.as_ref(),
+                h.body_active.as_ref(),
+                h.bottomcap_inactive.as_ref(),
+                h.bottomcap_active.as_ref(),
+            ] {
+                if let Some(slot) = slot {
+                    visit(slot.texture_key());
+                }
+            }
+            if let Some(slot) = h.explosion.as_ref() {
+                visit(slot.texture_key());
+            }
+        };
+        visit_hold(&self.hold);
+        visit_hold(&self.roll);
+        for col in &self.hold_columns {
+            visit_hold(col);
+        }
+        for col in &self.roll_columns {
+            visit_hold(col);
+        }
+    }
+
+    #[inline(always)]
     pub fn part_uv_phase(
         &self,
         part: NoteAnimPart,

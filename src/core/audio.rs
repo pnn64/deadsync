@@ -223,6 +223,23 @@ pub fn play_sfx(path: &str) {
         .send(AudioCommand::PlaySfx(sound_data));
 }
 
+/// Preloads a sound effect into cache without playing it.
+pub fn preload_sfx(path: &str) {
+    let mut cache = ENGINE.sfx_cache.lock().unwrap();
+    if cache.contains_key(path) {
+        return;
+    }
+    match load_and_resample_sfx(path) {
+        Ok(data) => {
+            cache.insert(path.to_string(), data);
+            info!("Cached SFX: {path}");
+        }
+        Err(e) => {
+            warn!("Failed to preload SFX '{path}': {e}");
+        }
+    }
+}
+
 /// Plays a music track from a file path.
 pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
     let rate = if rate.is_finite() && rate > 0.0 {

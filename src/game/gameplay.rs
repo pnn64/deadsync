@@ -24,10 +24,7 @@ use rssp::streams::StreamSegment;
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
 use std::path::PathBuf;
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
-};
+use std::sync::Arc;
 use std::time::Instant;
 use twox_hash::XxHash64;
 use winit::event::KeyEvent;
@@ -47,7 +44,6 @@ const MIN_SECONDS_TO_STEP: f32 = 6.0;
 const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
 const M_MOD_HIGH_CAP: f32 = 600.0;
 const COLUMN_CUE_MIN_SECONDS: f32 = 1.5;
-static DEFAULT_TAP_EXPLOSION_DEBUG_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 // Timing windows now sourced from game::timing
 
@@ -2945,29 +2941,6 @@ fn trigger_tap_explosion(state: &mut State, column: usize, grade: JudgeGrade) {
             elapsed: 0.0,
             start_beat: state.current_beat,
         });
-        if state.player_profiles[player]
-            .noteskin
-            .as_str()
-            .eq_ignore_ascii_case("default")
-        {
-            let sample = DEFAULT_TAP_EXPLOSION_DEBUG_COUNT.fetch_add(1, Ordering::Relaxed);
-            if sample < 32 {
-                let tex = state.noteskin[player]
-                    .as_ref()
-                    .and_then(|ns| ns.tap_explosions.get(window_key))
-                    .map(|explosion| explosion.slot.texture_key())
-                    .unwrap_or("<missing>");
-                info!(
-                    "default tap explosion spawn sample#{} col={} grade={:?} window={} tex={} beat={:.4}",
-                    sample + 1,
-                    column,
-                    grade,
-                    window_key,
-                    tex,
-                    state.current_beat
-                );
-            }
-        }
     }
 }
 
