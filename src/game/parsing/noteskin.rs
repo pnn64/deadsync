@@ -6044,6 +6044,37 @@ mod tests {
     }
 
     #[test]
+    fn default_receptor_overlay_keeps_source_size_ratio() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+
+        let receptor = ns
+            .receptor_off
+            .first()
+            .expect("dance/default should resolve receptor sprite");
+        let overlay = ns
+            .receptor_glow
+            .first()
+            .and_then(|slot| slot.as_ref())
+            .expect("dance/default should resolve receptor overlay sprite");
+
+        assert_eq!(
+            receptor.logical_size(),
+            [64.0, 64.0],
+            "default receptor should use logical source-frame size"
+        );
+        assert_eq!(
+            overlay.logical_size(),
+            [74.0, 74.0],
+            "default overlay should preserve larger source-frame size than receptor"
+        );
+    }
+
+    #[test]
     fn default_and_cel_parse_notedisplay_flags() {
         let style = Style {
             num_cols: 4,

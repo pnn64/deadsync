@@ -1501,7 +1501,10 @@ pub fn build(
                     receptor_slot.frame_index(state.total_elapsed_in_screen, current_beat);
                 let receptor_uv =
                     receptor_slot.uv_for_frame_at(receptor_frame, state.total_elapsed_in_screen);
-                let receptor_size = scale_sprite(receptor_slot.size());
+                // ITG Sprite::SetTexture uses source-frame dimensions for draw size,
+                // so receptor and overlay keep their authored ratio (e.g. 64 vs 74 in
+                // dance/default) instead of being normalized to arrow height.
+                let receptor_size = scale_explosion(logical_slot_size(receptor_slot));
                 let receptor_color = ns.receptor_pulse.color_for_beat(current_beat);
                 actors.push(act!(sprite(receptor_slot.texture_key().to_string()):
                     align(0.5, 0.5):
@@ -1772,7 +1775,7 @@ pub fn build(
                         glow_slot.frame_index(state.total_elapsed_in_screen, current_beat);
                     let glow_uv =
                         glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen);
-                    let glow_size = scale_sprite(glow_slot.size());
+                    let glow_size = scale_explosion(logical_slot_size(glow_slot));
                     let behavior = ns.receptor_glow_behavior;
                     if alpha > f32::EPSILON {
                         let width = glow_size[0] * zoom;
