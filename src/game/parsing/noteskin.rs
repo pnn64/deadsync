@@ -2,14 +2,11 @@ use super::noteskin_itg;
 use crate::assets;
 use crate::ui::anim as ui_anim;
 use image::image_dimensions;
-use log::{info, warn};
+use log::warn;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{
-    Arc, Mutex, OnceLock,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::{Arc, Mutex, OnceLock};
 
 pub const NUM_QUANTIZATIONS: usize = 9;
 const MINE_GRADIENT_SAMPLES: usize = 64;
@@ -1457,9 +1454,16 @@ struct ItgSkinCacheKey {
     skin: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct ItgDataCacheKey {
+    root: String,
+    game: String,
+    skin: String,
+}
+
 static ITG_SKIN_CACHE: OnceLock<Mutex<HashMap<ItgSkinCacheKey, Arc<Noteskin>>>> = OnceLock::new();
-static CEL_ROLL_RESOLVE_LOGGED: AtomicBool = AtomicBool::new(false);
-static DEFAULT_EXPLOSION_DEBUG_LOGGED: AtomicBool = AtomicBool::new(false);
+static ITG_DATA_CACHE: OnceLock<Mutex<HashMap<ItgDataCacheKey, Arc<noteskin_itg::NoteskinData>>>> =
+    OnceLock::new();
 
 #[inline(always)]
 fn itg_skin_cache_key(style: &Style, skin: &str) -> ItgSkinCacheKey {
@@ -1474,6 +1478,44 @@ fn itg_skin_cache_key(style: &Style, skin: &str) -> ItgSkinCacheKey {
         num_players: style.num_players,
         skin: normalized.to_ascii_lowercase(),
     }
+}
+
+#[inline(always)]
+fn itg_data_cache_key(root: &Path, game: &str, skin: &str) -> ItgDataCacheKey {
+    let trimmed = skin.trim();
+    let normalized_skin = if trimmed.is_empty() {
+        "default"
+    } else {
+        trimmed
+    };
+    ItgDataCacheKey {
+        root: root.to_string_lossy().to_ascii_lowercase(),
+        game: game.trim().to_ascii_lowercase(),
+        skin: normalized_skin.to_ascii_lowercase(),
+    }
+}
+
+fn load_itg_data_cached(
+    root: &Path,
+    game: &str,
+    skin: &str,
+) -> Result<Arc<noteskin_itg::NoteskinData>, String> {
+    let key = itg_data_cache_key(root, game, skin);
+    let cache = ITG_DATA_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(cached) = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get(&key)
+        .cloned()
+    {
+        return Ok(cached);
+    }
+    let loaded = Arc::new(noteskin_itg::load_noteskin_data(root, game, skin)?);
+    let mut guard = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let entry = guard.entry(key).or_insert_with(|| loaded.clone());
+    Ok(entry.clone())
 }
 
 pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, String> {
@@ -1600,7 +1642,7 @@ pub fn load_itg_skin(style: &Style, skin: &str) -> Result<Noteskin, String> {
 }
 
 pub fn load_itg(root: &Path, game: &str, skin: &str, style: &Style) -> Result<Noteskin, String> {
-    let data = noteskin_itg::load_noteskin_data(root, game, skin)?;
+    let data = load_itg_data_cached(root, game, skin)?;
     load_itg_sprite_noteskin(&data, style)
 }
 
@@ -1813,38 +1855,6 @@ fn load_itg_sprite_noteskin(
         hold_columns.push(hold_visual);
         roll_columns.push(roll_visual);
     }
-    if data.name.starts_with("ddr-") {
-        info!(
-            "ddr noteskin '{}': behavior remap_head_to_tap={} remap_tap_fake_to_tap={} keep_hold_non_head_button={}",
-            data.name,
-            behavior.remap_head_to_tap,
-            behavior.remap_tap_fake_to_tap,
-            behavior.keep_hold_non_head_button
-        );
-        for col in 0..style.num_cols {
-            let hold = hold_columns.get(col);
-            let roll = roll_columns.get(col);
-            info!(
-                "ddr noteskin '{}': col={} button={} hold_head_inactive={} hold_head_active={} roll_head_inactive={} roll_head_active={}",
-                data.name,
-                col,
-                itg_button_for_col(col),
-                hold.and_then(|v| v.head_inactive.as_ref())
-                    .map(|slot| slot.texture_key())
-                    .unwrap_or("<none>"),
-                hold.and_then(|v| v.head_active.as_ref())
-                    .map(|slot| slot.texture_key())
-                    .unwrap_or("<none>"),
-                roll.and_then(|v| v.head_inactive.as_ref())
-                    .map(|slot| slot.texture_key())
-                    .unwrap_or("<none>"),
-                roll.and_then(|v| v.head_active.as_ref())
-                    .map(|slot| slot.texture_key())
-                    .unwrap_or("<none>"),
-            );
-        }
-    }
-
     let down_col = (0..style.num_cols)
         .find(|&col| itg_button_for_col(col).eq_ignore_ascii_case("Down"))
         .unwrap_or(0);
@@ -2062,64 +2072,6 @@ fn load_itg_sprite_noteskin(
     for visuals in &mut roll_columns {
         visuals.explosion = roll.explosion.clone();
     }
-    if data.name.eq_ignore_ascii_case("cel")
-        && !CEL_ROLL_RESOLVE_LOGGED.swap(true, Ordering::Relaxed)
-    {
-        let hold_direct = data
-            .resolve_path("Down", "Hold Explosion")
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "<none>".to_string());
-        let roll_direct = data
-            .resolve_path("Down", "Roll Explosion")
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "<none>".to_string());
-        let search_dirs = data
-            .search_dirs
-            .iter()
-            .map(|p| p.display().to_string())
-            .collect::<Vec<_>>();
-        let wrappers = explosion_sprites
-            .iter()
-            .filter(|sprite| {
-                sprite.commands.contains_key("holdingoncommand")
-                    || sprite.commands.contains_key("rolloncommand")
-            })
-            .map(|sprite| {
-                format!(
-                    "{}=>{} keys={}",
-                    sprite.element,
-                    sprite.slot.texture_key(),
-                    sprite
-                        .commands
-                        .keys()
-                        .cloned()
-                        .collect::<Vec<_>>()
-                        .join(",")
-                )
-            })
-            .collect::<Vec<_>>();
-        info!(
-            "cel roll resolve debug: search_dirs={:?} down_hold_path={} down_roll_path={} hold_wrapper_tex={} roll_wrapper_tex={} hold_final_tex={} roll_final_tex={} wrappers={:?}",
-            search_dirs,
-            hold_direct,
-            roll_direct,
-            hold_wrapper
-                .map(|s| s.slot.texture_key())
-                .unwrap_or("<none>"),
-            roll_wrapper
-                .map(|s| s.slot.texture_key())
-                .unwrap_or("<none>"),
-            hold.explosion
-                .as_ref()
-                .map(|s| s.texture_key())
-                .unwrap_or("<none>"),
-            roll.explosion
-                .as_ref()
-                .map(|s| s.texture_key())
-                .unwrap_or("<none>"),
-            wrappers,
-        );
-    }
     let explosion_slot = dim_sprites
         .first()
         .map(|s| s.slot.clone())
@@ -2284,80 +2236,6 @@ fn load_itg_sprite_noteskin(
             .map(|i| (i as i32 * 68) - ((style.num_cols - 1) as i32 * 34))
             .collect()
     };
-    if data.name.eq_ignore_ascii_case("default")
-        && !DEFAULT_EXPLOSION_DEBUG_LOGGED.swap(true, Ordering::Relaxed)
-    {
-        let bright_path = data
-            .resolve_path("Down", "Tap Explosion Bright")
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "<none>".to_string());
-        let dim_path = data
-            .resolve_path("Down", "Tap Explosion Dim")
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "<none>".to_string());
-        let hold_path = data
-            .resolve_path("Down", "Hold Explosion")
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "<none>".to_string());
-        let roll_path = data
-            .resolve_path("Down", "Roll Explosion")
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "<none>".to_string());
-        let hold_tex = hold
-            .explosion
-            .as_ref()
-            .map(|slot| {
-                format!(
-                    "{} frames={} size={:?} rot={} effect={:?}",
-                    slot.texture_key(),
-                    slot.source.frame_count(),
-                    slot.logical_size(),
-                    slot.def.rotation_deg,
-                    slot.model_effect.mode
-                )
-            })
-            .unwrap_or_else(|| "<none>".to_string());
-        let roll_tex = roll
-            .explosion
-            .as_ref()
-            .map(|slot| {
-                format!(
-                    "{} frames={} size={:?} rot={} effect={:?}",
-                    slot.texture_key(),
-                    slot.source.frame_count(),
-                    slot.logical_size(),
-                    slot.def.rotation_deg,
-                    slot.model_effect.mode
-                )
-            })
-            .unwrap_or_else(|| "<none>".to_string());
-        let windows = ["W1", "W2", "W3", "W4", "W5"];
-        let tap_windows = windows
-            .iter()
-            .map(|window| {
-                tap_explosions.get(*window).map_or_else(
-                    || format!("{window}:<none>"),
-                    |explosion| {
-                        format!(
-                            "{window}: tex={} frames={} size={:?} init_visible={} init_alpha={:.3} has_glow={}",
-                            explosion.slot.texture_key(),
-                            explosion.slot.source.frame_count(),
-                            explosion.slot.logical_size(),
-                            explosion.animation.initial.visible,
-                            explosion.animation.initial.color[3],
-                            explosion.animation.glow.is_some()
-                        )
-                    },
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(" | ");
-        info!(
-            "default explosion parse debug: down_bright_path={} down_dim_path={} down_hold_path={} down_roll_path={} hold_explosion={} roll_explosion={} tap_windows={}",
-            bright_path, dim_path, hold_path, roll_path, hold_tex, roll_tex, tap_windows
-        );
-    }
-
     Ok(Noteskin {
         notes,
         note_layers,

@@ -3456,12 +3456,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let color_index = config.simply_love_color;
     let profile_data = profile::get();
 
-    let noteskin_prewarm = std::thread::spawn(noteskin::prewarm_itg_preview_cache);
     song_loading::scan_and_load_songs("songs");
     song_loading::scan_and_load_courses("courses", "songs");
-    if noteskin_prewarm.join().is_err() {
-        warn!("noteskin prewarm thread panicked; first-use preview hitches may occur");
-    }
+    std::thread::spawn(|| {
+        if std::panic::catch_unwind(noteskin::prewarm_itg_preview_cache).is_err() {
+            warn!("noteskin prewarm thread panicked; first-use preview hitches may occur");
+        }
+    });
     let event_loop: EventLoop<UserEvent> = EventLoop::<UserEvent>::with_user_event().build()?;
 
     // Spawn background thread to pump pad input and emit user events; decoupled from frame rate.

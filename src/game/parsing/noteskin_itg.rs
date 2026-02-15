@@ -4,9 +4,15 @@ use log::warn;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 const MAX_FALLBACK_DEPTH: usize = 20;
 const MAX_REDIR_DEPTH: usize = 100;
+
+static CHILD_DIR_CACHE: OnceLock<Mutex<HashMap<(String, String), Option<PathBuf>>>> =
+    OnceLock::new();
+static FILE_PREFIX_CACHE: OnceLock<Mutex<HashMap<(String, String), Option<PathBuf>>>> =
+    OnceLock::new();
 
 #[derive(Debug, Clone, Default)]
 pub struct IniData {
@@ -208,10 +214,6 @@ pub fn load_noteskin_data(root: &Path, game: &str, skin: &str) -> Result<Noteski
             });
         }
         if seen.contains(&next_skin) {
-            warn!(
-                "noteskin '{}' fallback revisited '{}'; stopping fallback chain",
-                skin, next_skin
-            );
             return Ok(NoteskinData {
                 name: skin.to_ascii_lowercase(),
                 metrics,
@@ -233,8 +235,18 @@ fn resolve_skin_dir(root: &Path, game: &str, skin: &str) -> Option<PathBuf> {
 
 fn find_child_dir_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf> {
     let want = name.to_ascii_lowercase();
+    let key = (parent.to_string_lossy().to_ascii_lowercase(), want.clone());
+    let cache = CHILD_DIR_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(cached) = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get(&key)
+        .cloned()
+    {
+        return cached;
+    }
     let entries = fs::read_dir(parent).ok()?;
-
+    let mut found = None;
     for entry in entries.flatten() {
         let path = entry.path();
         if !path.is_dir() {
@@ -245,14 +257,29 @@ fn find_child_dir_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf>
             .to_str()
             .is_some_and(|n| n.eq_ignore_ascii_case(&want));
         if matches {
-            return Some(path);
+            found = Some(path);
+            break;
         }
     }
-    None
+    cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(key, found.clone());
+    found
 }
 
 fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
     let want = prefix.to_ascii_lowercase();
+    let key = (dir.to_string_lossy().to_ascii_lowercase(), want.clone());
+    let cache = FILE_PREFIX_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(cached) = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get(&key)
+        .cloned()
+    {
+        return cached;
+    }
     let entries = fs::read_dir(dir).ok()?;
     let mut matches: Vec<PathBuf> = entries
         .flatten()
@@ -266,6 +293,10 @@ fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
         .collect();
 
     if matches.is_empty() {
+        cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(key, None);
         return None;
     }
 
@@ -292,8 +323,12 @@ fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
             matches.len() - 1
         );
     }
-
-    matches.into_iter().next()
+    let chosen = matches.into_iter().next();
+    cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(key, chosen.clone());
+    chosen
 }
 
 fn is_redir(path: &Path) -> bool {
