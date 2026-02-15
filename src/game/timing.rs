@@ -18,6 +18,7 @@ pub const BASE_W2_S: f32 = 0.0430;
 pub const BASE_W3_S: f32 = 0.1020;
 pub const BASE_W4_S: f32 = 0.1350;
 pub const BASE_W5_S: f32 = 0.1800;
+// Simply Love sets TimingWindowSecondsMine=0.070 across Casual/ITG/FA+.
 pub const BASE_MINE_S: f32 = 0.0700;
 
 // FA+ inner Fantastic window (W0) is defined using Simply Love's FA+ W1 timing.

@@ -3089,6 +3089,62 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time: f32) 
 }
 
 #[inline(always)]
+fn try_hit_crossed_mines_while_held(
+    state: &mut State,
+    column: usize,
+    prev_time: f32,
+    current_time: f32,
+) -> bool {
+    if !prev_time.is_finite() || !current_time.is_finite() || current_time <= prev_time {
+        return false;
+    }
+    let mine_window = state.timing_profile.mine_window_s;
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    let player = player_for_col(state, column);
+    let (note_start, note_end) = player_note_range(state, player);
+    // ITG checks held mines as rows are crossed. Match that by only considering
+    // mines whose note time crossed between previous and current music time.
+    let (start_idx, end_idx) = {
+        let times = &state.note_time_cache[note_start..note_end];
+        (
+            times.partition_point(|&t| t <= prev_time),
+            times.partition_point(|&t| t <= current_time),
+        )
+    };
+    let mut hit_any = false;
+    for i in start_idx..end_idx {
+        let note_index = note_start + i;
+        let (is_mine, can_be_judged, already_scored, is_fake, note_column) = {
+            let note = &state.notes[note_index];
+            (
+                matches!(note.note_type, NoteType::Mine),
+                note.can_be_judged,
+                note.mine_result.is_some(),
+                note.is_fake,
+                note.column,
+            )
+        };
+        if !is_mine || !can_be_judged || already_scored || is_fake || note_column != column {
+            continue;
+        }
+        let note_time = state.note_time_cache[note_index];
+        let time_error = current_time - note_time;
+        let abs_err = (time_error / rate).abs();
+        if abs_err > mine_window {
+            continue;
+        }
+        if hit_mine_timebased(state, column, note_index, time_error) {
+            hit_any = true;
+        }
+    }
+    hit_any
+}
+
+#[inline(always)]
 fn hit_mine_timebased(
     state: &mut State,
     column: usize,
@@ -5331,6 +5387,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     // between callbacks for smooth, continuous motion.
     let stream_pos = crate::core::audio::get_music_stream_position_seconds();
     let lead_in = state.audio_lead_in_seconds.max(0.0);
+    let previous_music_time = state.current_music_time;
     let music_time_sec = (stream_pos - lead_in).mul_add(rate, anchor * (1.0 - rate));
     state.current_music_time = music_time_sec;
 
@@ -5452,7 +5509,8 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     let prev_inputs = state.prev_inputs;
     for (col, (now_down, was_down)) in current_inputs.iter().copied().zip(prev_inputs).enumerate() {
         if now_down && was_down {
-            let _ = try_hit_mine_while_held(state, col, music_time_sec);
+            let _ =
+                try_hit_crossed_mines_while_held(state, col, previous_music_time, music_time_sec);
         }
     }
     state.prev_inputs = current_inputs;
