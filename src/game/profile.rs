@@ -1152,6 +1152,7 @@ struct SessionState {
     play_style: PlayStyle,
     play_mode: PlayMode,
     player_side: PlayerSide,
+    fast_profile_switch_from_select_music: bool,
 }
 
 static SESSION: std::sync::LazyLock<Mutex<SessionState>> = std::sync::LazyLock::new(|| {
@@ -1167,6 +1168,7 @@ static SESSION: std::sync::LazyLock<Mutex<SessionState>> = std::sync::LazyLock::
         play_style: PlayStyle::Single,
         play_mode: PlayMode::Regular,
         player_side: PlayerSide::P1,
+        fast_profile_switch_from_select_music: false,
     })
 });
 
@@ -2171,10 +2173,6 @@ pub fn set_avatar_texture_key_for_side(side: PlayerSide, key: Option<String>) {
 }
 
 // --- Session helpers ---
-pub fn get_active_profile() -> ActiveProfile {
-    get_active_profile_for_side(get_session_player_side())
-}
-
 pub fn get_active_profile_for_side(side: PlayerSide) -> ActiveProfile {
     SESSION.lock().unwrap().active_profiles[side_ix(side)].clone()
 }
@@ -2447,6 +2445,21 @@ pub fn is_session_side_guest(side: PlayerSide) -> bool {
 pub fn set_session_joined(p1: bool, p2: bool) {
     let mask = (u8::from(p1) * SESSION_JOINED_MASK_P1) | (u8::from(p2) * SESSION_JOINED_MASK_P2);
     SESSION.lock().unwrap().joined_mask = mask;
+}
+
+pub fn set_fast_profile_switch_from_select_music(enabled: bool) {
+    SESSION.lock().unwrap().fast_profile_switch_from_select_music = enabled;
+}
+
+pub fn fast_profile_switch_from_select_music() -> bool {
+    SESSION.lock().unwrap().fast_profile_switch_from_select_music
+}
+
+pub fn take_fast_profile_switch_from_select_music() -> bool {
+    let mut session = SESSION.lock().unwrap();
+    let was_set = session.fast_profile_switch_from_select_music;
+    session.fast_profile_switch_from_select_music = false;
+    was_set
 }
 
 pub fn update_last_played_for_side(

@@ -11,6 +11,7 @@ pub mod menu_splash;
 pub mod music_wheel;
 pub mod notefield;
 pub mod pad_display;
+pub mod profile_boxes;
 pub mod qr_code;
 pub mod screen_bar;
 pub mod select_pane;

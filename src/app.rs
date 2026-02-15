@@ -752,6 +752,7 @@ impl App {
             }
             ScreenAction::Exit => self.handle_exit_action(),
             ScreenAction::SelectProfiles { p1, p2 } => {
+                let fast_profile_switch = profile::take_fast_profile_switch_from_select_music();
                 let profile_data = profile::set_active_profiles(p1, p2);
                 if let Some(backend) = self.backend.as_mut() {
                     self.asset_manager.set_profile_avatar_for_side(
@@ -788,26 +789,47 @@ impl App {
 
                 let current_color_index =
                     self.state.screens.select_profile_state.active_color_index;
-                self.state.screens.select_music_state = select_music::init();
-                self.state.screens.select_music_state.active_color_index = current_color_index;
-                self.state
-                    .screens
-                    .select_music_state
-                    .preferred_difficulty_index = preferred_active;
-                self.state.screens.select_music_state.selected_steps_index = preferred_active;
-                self.state
-                    .screens
-                    .select_music_state
-                    .p2_preferred_difficulty_index = preferred_p2;
-                self.state
-                    .screens
-                    .select_music_state
-                    .p2_selected_steps_index = preferred_p2;
+                if fast_profile_switch {
+                    self.state.screens.select_music_state.active_color_index = current_color_index;
+                    self.state
+                        .screens
+                        .select_music_state
+                        .preferred_difficulty_index = preferred_active;
+                    self.state.screens.select_music_state.selected_steps_index = preferred_active;
+                    self.state
+                        .screens
+                        .select_music_state
+                        .p2_preferred_difficulty_index = preferred_p2;
+                    self.state
+                        .screens
+                        .select_music_state
+                        .p2_selected_steps_index = preferred_p2;
+                    select_music::trigger_immediate_refresh(&mut self.state.screens.select_music_state);
+                    if self.state.screens.current_screen != CurrentScreen::SelectMusic {
+                        self.handle_navigation_action(CurrentScreen::SelectMusic);
+                    }
+                } else {
+                    self.state.screens.select_music_state = select_music::init();
+                    self.state.screens.select_music_state.active_color_index = current_color_index;
+                    self.state
+                        .screens
+                        .select_music_state
+                        .preferred_difficulty_index = preferred_active;
+                    self.state.screens.select_music_state.selected_steps_index = preferred_active;
+                    self.state
+                        .screens
+                        .select_music_state
+                        .p2_preferred_difficulty_index = preferred_p2;
+                    self.state
+                        .screens
+                        .select_music_state
+                        .p2_selected_steps_index = preferred_p2;
 
-                self.state.screens.select_course_state = select_course::init();
-                self.state.screens.select_course_state.active_color_index = current_color_index;
+                    self.state.screens.select_course_state = select_course::init();
+                    self.state.screens.select_course_state.active_color_index = current_color_index;
 
-                self.handle_navigation_action(CurrentScreen::SelectColor);
+                    self.handle_navigation_action(CurrentScreen::SelectColor);
+                }
                 Vec::new()
             }
             ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
@@ -2444,6 +2466,17 @@ impl App {
             if prev == CurrentScreen::Menu {
                 let p2 = self.state.screens.menu_state.started_by_p2;
                 select_profile::set_joined(&mut self.state.screens.select_profile_state, !p2, p2);
+                profile::set_fast_profile_switch_from_select_music(false);
+            } else if prev == CurrentScreen::SelectMusic {
+                let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+                let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+                select_profile::set_joined(
+                    &mut self.state.screens.select_profile_state,
+                    p1_joined,
+                    p2_joined,
+                );
+            } else {
+                profile::set_fast_profile_switch_from_select_music(false);
             }
         } else if target == CurrentScreen::SelectStyle {
             let current_color_index = self.state.screens.select_style_state.active_color_index;

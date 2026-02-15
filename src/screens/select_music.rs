@@ -13,8 +13,8 @@ use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
-    gs_scorebox, heart_bg, music_wheel, pad_display, select_pane, select_shared, sort_menu,
-    step_artist_bar, test_input,
+    gs_scorebox, heart_bg, music_wheel, pad_display, profile_boxes, select_pane, select_shared,
+    sort_menu, step_artist_bar, test_input,
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
@@ -471,6 +471,7 @@ pub struct State {
     replay_overlay: sort_menu::ReplayOverlayState,
     test_input_overlay_visible: bool,
     test_input_overlay: test_input::State,
+    profile_switch_overlay: Option<profile_boxes::State>,
     pending_replay: Option<sort_menu::ReplayStartPayload>,
     sort_menu: sort_menu::State,
     leaderboard: sort_menu::LeaderboardOverlayState,
@@ -1488,6 +1489,7 @@ pub fn init() -> State {
         replay_overlay: sort_menu::ReplayOverlayState::Hidden,
         test_input_overlay_visible: false,
         test_input_overlay: test_input::State::default(),
+        profile_switch_overlay: None,
         pending_replay: None,
         sort_menu: sort_menu::State::Hidden,
         leaderboard: sort_menu::LeaderboardOverlayState::Hidden,
@@ -1793,14 +1795,14 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> &[sort_menu::Item] {
     ) {
         (profile::PlayStyle::Single, true, true) => &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE,
         (profile::PlayStyle::Single, true, false) => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE[..5]
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE[..6]
         }
         (profile::PlayStyle::Double, true, true) => &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE,
         (profile::PlayStyle::Double, true, false) => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE[..5]
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE[..6]
         }
         (_, _, true) => &sort_menu::ITEMS_MAIN,
-        (_, _, false) => &sort_menu::ITEMS_MAIN[..4],
+        (_, _, false) => &sort_menu::ITEMS_MAIN[..5],
     }
 }
 
@@ -1810,6 +1812,7 @@ fn show_test_input_overlay(state: &mut State) {
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.profile_switch_overlay = None;
     clear_menu_chord(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
@@ -1827,11 +1830,54 @@ fn start_song_search_prompt(state: &mut State) {
     state.sort_menu = sort_menu::State::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     clear_menu_chord(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.song_search = sort_menu::begin_song_search_prompt();
+}
+
+fn show_profile_switch_overlay(state: &mut State) {
+    profile::set_fast_profile_switch_from_select_music(false);
+    clear_preview(state);
+    state.sort_menu = sort_menu::State::Hidden;
+    state.song_search = sort_menu::SongSearchState::Hidden;
+    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    hide_test_input_overlay(state);
+    clear_menu_chord(state);
+    clear_p1_ud_chord(state);
+    clear_p2_ud_chord(state);
+    state.nav_key_held_direction = None;
+    state.nav_key_held_since = None;
+    state.last_steps_nav_dir_p1 = None;
+    state.last_steps_nav_time_p1 = None;
+    state.last_steps_nav_dir_p2 = None;
+    state.last_steps_nav_time_p2 = None;
+
+    let mut overlay = profile_boxes::init();
+    overlay.active_color_index = state.active_color_index;
+    profile_boxes::set_joined(
+        &mut overlay,
+        profile::is_session_side_joined(profile::PlayerSide::P1),
+        profile::is_session_side_joined(profile::PlayerSide::P2),
+    );
+    state.profile_switch_overlay = Some(overlay);
+}
+
+#[inline(always)]
+fn restore_sort_menu_after_profile_overlay(state: &mut State) {
+    let selected_index = sort_menu_items(state, sort_menu::Page::Main)
+        .iter()
+        .position(|item| matches!(item.action, sort_menu::Action::SwitchProfile))
+        .unwrap_or(0);
+    state.sort_menu = sort_menu::State::Visible {
+        page: sort_menu::Page::Main,
+        selected_index,
+    };
+    state.sort_menu_prev_selected_index = selected_index;
+    state.sort_menu_focus_anim_elapsed = sort_menu::FOCUS_TWEEN_SECONDS;
 }
 
 #[inline(always)]
@@ -1904,6 +1950,7 @@ fn start_reload_songs_and_courses(state: &mut State) {
     state.sort_menu = sort_menu::State::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     clear_menu_chord(state);
     clear_p1_ud_chord(state);
@@ -2157,6 +2204,7 @@ fn show_leaderboard_overlay(state: &mut State) {
     let chart_hash_p2 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P2);
     if let Some(overlay) = sort_menu::show_leaderboard_overlay(chart_hash_p1, chart_hash_p2) {
         state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+        state.profile_switch_overlay = None;
         hide_test_input_overlay(state);
         state.leaderboard = overlay;
         clear_preview(state);
@@ -2176,6 +2224,7 @@ fn show_replay_overlay(state: &mut State) {
         return;
     }
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     state.replay_overlay = overlay;
     clear_preview(state);
@@ -2236,6 +2285,25 @@ fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenActi
     }
 }
 
+fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    let Some(overlay) = &mut state.profile_switch_overlay else {
+        return ScreenAction::None;
+    };
+    match profile_boxes::handle_input(overlay, ev) {
+        ScreenAction::SelectProfiles { p1, p2 } => {
+            state.profile_switch_overlay = None;
+            profile::set_fast_profile_switch_from_select_music(true);
+            ScreenAction::SelectProfiles { p1, p2 }
+        }
+        ScreenAction::Navigate(_) => {
+            state.profile_switch_overlay = None;
+            restore_sort_menu_after_profile_overlay(state);
+            ScreenAction::None
+        }
+        _ => ScreenAction::None,
+    }
+}
+
 fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     test_input::apply_virtual_input(&mut state.test_input_overlay, ev);
     let close_side = match ev.action {
@@ -2250,24 +2318,25 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
     ScreenAction::None
 }
 
-fn sort_menu_activate(state: &mut State) {
+fn sort_menu_activate(state: &mut State) -> ScreenAction {
     let (page, selected_index) = match state.sort_menu {
         sort_menu::State::Visible {
             page,
             selected_index,
         } => (page, selected_index),
-        sort_menu::State::Hidden => return,
+        sort_menu::State::Hidden => return ScreenAction::None,
     };
     let items = sort_menu_items(state, page);
     if items.is_empty() {
         hide_sort_menu(state);
-        return;
+        return ScreenAction::None;
     }
     let selected_index = selected_index.min(items.len() - 1);
     audio::play_sfx("assets/sounds/start.ogg");
     match items[selected_index].action {
         sort_menu::Action::OpenSorts => {
             show_sorts_submenu(state);
+            ScreenAction::None
         }
         sort_menu::Action::BackToMain => {
             state.sort_menu = sort_menu::State::Visible {
@@ -2276,64 +2345,84 @@ fn sort_menu_activate(state: &mut State) {
             };
             state.sort_menu_prev_selected_index = 0;
             state.sort_menu_focus_anim_elapsed = 0.0;
+            ScreenAction::None
         }
         sort_menu::Action::SortByGroup => {
             apply_wheel_sort(state, WheelSortMode::Group);
             hide_sort_menu(state);
+            ScreenAction::None
         }
         sort_menu::Action::SortByTitle => {
             apply_wheel_sort(state, WheelSortMode::Title);
             hide_sort_menu(state);
+            ScreenAction::None
         }
         sort_menu::Action::SortByArtist => {
             apply_wheel_sort(state, WheelSortMode::Artist);
             hide_sort_menu(state);
+            ScreenAction::None
         }
         sort_menu::Action::SortByBpm => {
             apply_wheel_sort(state, WheelSortMode::Bpm);
             hide_sort_menu(state);
+            ScreenAction::None
         }
         sort_menu::Action::SortByLength => {
             apply_wheel_sort(state, WheelSortMode::Length);
             hide_sort_menu(state);
+            ScreenAction::None
         }
         sort_menu::Action::SortByMeter => {
             apply_wheel_sort(state, WheelSortMode::Meter);
             hide_sort_menu(state);
+            ScreenAction::None
         }
         sort_menu::Action::SortByPopularity => {
             apply_wheel_sort(state, WheelSortMode::Popularity);
             hide_sort_menu(state);
+            ScreenAction::None
         }
         sort_menu::Action::SortByRecent => {
             apply_wheel_sort(state, WheelSortMode::Recent);
             hide_sort_menu(state);
+            ScreenAction::None
         }
         sort_menu::Action::SwitchToSingle => {
             switch_single_player_style(state, profile::PlayStyle::Single);
+            ScreenAction::None
         }
         sort_menu::Action::SwitchToDouble => {
             switch_single_player_style(state, profile::PlayStyle::Double);
+            ScreenAction::None
         }
         sort_menu::Action::TestInput => {
             hide_sort_menu(state);
             show_test_input_overlay(state);
+            ScreenAction::None
         }
         sort_menu::Action::SongSearch => {
             hide_sort_menu(state);
             start_song_search_prompt(state);
+            ScreenAction::None
+        }
+        sort_menu::Action::SwitchProfile => {
+            show_profile_switch_overlay(state);
+            ScreenAction::None
         }
         sort_menu::Action::ReloadSongsCourses => {
             hide_sort_menu(state);
             start_reload_songs_and_courses(state);
+            ScreenAction::None
         }
         sort_menu::Action::PlayReplay => {
             hide_sort_menu(state);
             show_replay_overlay(state);
+            ScreenAction::None
         }
         sort_menu::Action::ShowLeaderboard => {
             hide_sort_menu(state);
             show_leaderboard_overlay(state);
+            ScreenAction::None
         }
     }
 }
@@ -2359,7 +2448,7 @@ fn handle_sort_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p2_menu_down
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => sort_menu_move(state, 1),
-        VirtualAction::p1_start | VirtualAction::p2_start => sort_menu_activate(state),
+        VirtualAction::p1_start | VirtualAction::p2_start => return sort_menu_activate(state),
         VirtualAction::p1_back
         | VirtualAction::p2_back
         | VirtualAction::p1_select
@@ -2821,6 +2910,9 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
     if state.test_input_overlay_visible {
         return ScreenAction::None;
     }
+    if state.profile_switch_overlay.is_some() {
+        return ScreenAction::None;
+    }
 
     if key.state == ElementState::Pressed {
         if matches!(state.song_search, sort_menu::SongSearchState::Results(_))
@@ -2930,6 +3022,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
     if state.test_input_overlay_visible {
         return handle_test_input_overlay_input(state, ev);
+    }
+    if state.profile_switch_overlay.is_some() {
+        return handle_profile_switch_overlay_input(state, ev);
     }
 
     if state.exit_prompt != ExitPromptState::None {
@@ -3053,6 +3148,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     if sort_menu::update_replay_overlay(&mut state.replay_overlay, dt) {
         return ScreenAction::None;
     }
+    if let Some(overlay) = state.profile_switch_overlay.as_mut() {
+        profile_boxes::update(overlay, dt);
+        return ScreenAction::None;
+    }
 
     match state.out_prompt {
         OutPromptState::PressStartForOptions { elapsed } => {
@@ -3174,6 +3273,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             sort_menu::LeaderboardOverlayState::Hidden
         )
         || !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden)
+        || state.profile_switch_overlay.is_some()
         || state.test_input_overlay_visible
     {
         if state.currently_playing_preview_path.is_some() {
@@ -3410,6 +3510,7 @@ pub fn allows_late_join(state: &State) -> bool {
             state.leaderboard,
             sort_menu::LeaderboardOverlayState::Hidden
         )
+        && state.profile_switch_overlay.is_none()
         && !state.test_input_overlay_visible
 }
 
@@ -4365,6 +4466,22 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         sort_menu::build_song_search_overlay(&state.song_search, state.active_color_index)
     {
         actors.extend(song_search_overlay);
+        return actors;
+    }
+    if let Some(overlay) = state.profile_switch_overlay.as_ref() {
+        actors.push(act!(quad:
+            align(0.0, 0.0):
+            xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 0.8):
+            z(1450)
+        ));
+        actors.extend(profile_boxes::get_box_actors_with_z(
+            overlay,
+            asset_manager,
+            1.0,
+            1451,
+        ));
         return actors;
     }
     if let Some(replay_overlay) =
