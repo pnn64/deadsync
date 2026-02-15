@@ -5,6 +5,7 @@ use crate::game::gameplay::{
     COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind,
     HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
+    TRANSITION_IN_DURATION,
 };
 use crate::game::gameplay::{active_hold_is_engaged, receptor_glow_visual_for_col};
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, TimingWindow};
@@ -280,6 +281,71 @@ fn sm_scale(v: f32, in0: f32, in1: f32, out0: f32, out1: f32) -> f32 {
 fn smoothstep01(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
+}
+
+#[inline(always)]
+fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
+    let fmt_float = |v: f32| -> String {
+        let s = format!("{v:.2}");
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
+    };
+
+    match speed {
+        ScrollSpeedSetting::XMod(mult) => {
+            if (mult - 1.0).abs() <= 0.000_1 {
+                "1x".to_string()
+            } else {
+                format!("{}x", fmt_float(mult))
+            }
+        }
+        ScrollSpeedSetting::CMod(bpm) => {
+            if (bpm - bpm.round()).abs() <= 0.000_1 {
+                format!("C{}", bpm.round() as i32)
+            } else {
+                format!("C{}", fmt_float(bpm))
+            }
+        }
+        ScrollSpeedSetting::MMod(bpm) => {
+            if (bpm - bpm.round()).abs() <= 0.000_1 {
+                format!("M{}", bpm.round() as i32)
+            } else {
+                format!("M{}", fmt_float(bpm))
+            }
+        }
+    }
+}
+
+#[inline(always)]
+fn gameplay_mods_text(scroll_speed: ScrollSpeedSetting, profile: &profile::Profile) -> String {
+    let mut parts = Vec::with_capacity(10);
+    parts.push(format_speed_mod_for_display(scroll_speed));
+    let scroll = profile.scroll_option;
+    if scroll.contains(profile::ScrollOption::Reverse) {
+        parts.push("Reverse".to_string());
+    }
+    if scroll.contains(profile::ScrollOption::Split) {
+        parts.push("Split".to_string());
+    }
+    if scroll.contains(profile::ScrollOption::Alternate) {
+        parts.push("Alternate".to_string());
+    }
+    if scroll.contains(profile::ScrollOption::Cross) {
+        parts.push("Cross".to_string());
+    }
+    if scroll.contains(profile::ScrollOption::Centered) {
+        parts.push("Centered".to_string());
+    }
+    if !matches!(profile.turn_option, profile::TurnOption::None) {
+        parts.push(profile.turn_option.to_string());
+    }
+    if profile.mini_percent != 0 {
+        parts.push(format!("{}% Mini", profile.mini_percent));
+    }
+    parts.push(profile.perspective.to_string());
+    if profile.visual_delay_ms != 0 {
+        parts.push(format!("{}ms VisualDelay", profile.visual_delay_ms));
+    }
+    parts.join(", ")
 }
 
 #[inline(always)]
@@ -3020,6 +3086,46 @@ pub fn build(
             }
         }
     }
+    // Simply Love: ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua
+    // shows the current mod string for 5s, then decelerates out over 0.5s.
+    {
+        // Simply Love DisplayMods.lua uses sleep(5), but ScreenGameplay in/default.lua
+        // keeps a full-screen intro cover up for 2.0s. Since deadsync's gameplay
+        // in-transition cover is shorter, subtract the exact missing cover time so
+        // the *visible* mods duration matches ITG/SL.
+        const SL_DISPLAY_MODS_HOLD_S: f32 = 5.0;
+        const SL_GAMEPLAY_IN_COVER_S: f32 = 2.0;
+        const MODS_FADE_S: f32 = 0.5;
+        let hold_adjust = (SL_GAMEPLAY_IN_COVER_S - TRANSITION_IN_DURATION).max(0.0);
+        let mods_hold_s = (SL_DISPLAY_MODS_HOLD_S - hold_adjust).max(0.0);
+
+        let alpha = if elapsed_screen <= mods_hold_s {
+            1.0
+        } else if elapsed_screen < mods_hold_s + MODS_FADE_S {
+            let t = ((elapsed_screen - mods_hold_s) / MODS_FADE_S).clamp(0.0, 1.0);
+            let decelerate = 1.0 - (1.0 - t) * (1.0 - t);
+            1.0 - decelerate
+        } else {
+            0.0
+        };
+
+        if alpha > 0.0 {
+            let mods_text = gameplay_mods_text(state.scroll_speed[player_idx], profile);
+            if !mods_text.is_empty() {
+                let y = screen_height() * 0.25 * 1.3 + 15.0 + notefield_offset_y;
+                hud_actors.push(act!(text:
+                    font("miso"): settext(mods_text):
+                    align(0.5, 0.5): xy(playfield_center_x, y):
+                    zoom(0.8): maxwidth(125.0):
+                    shadowcolor(0.0, 0.0, 0.0, 1.0):
+                    shadowlength(1.0):
+                    diffuse(1.0, 1.0, 1.0, alpha):
+                    z(84)
+                ));
+            }
+        }
+    }
+
     // Combo Milestone Explosions (100 / 1000 combo)
     if !profile.hide_combo && !profile.hide_combo_explosions && !p.combo_milestones.is_empty() {
         let combo_center_x = playfield_center_x;
