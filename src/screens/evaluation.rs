@@ -1611,26 +1611,18 @@ fn format_gs_error_text(error: &str) -> String {
     }
 }
 
-fn gs_machine_tag(entry: &scores::LeaderboardEntry) -> String {
+fn gs_player_name(entry: &scores::LeaderboardEntry) -> String {
+    let trimmed_name = entry.name.trim();
+    if !trimmed_name.is_empty() {
+        return trimmed_name.to_string();
+    }
     if let Some(tag) = entry.machine_tag.as_deref() {
-        let trimmed = tag.trim();
-        if !trimmed.is_empty() {
-            return trimmed
-                .chars()
-                .take(4)
-                .collect::<String>()
-                .to_ascii_uppercase();
+        let trimmed_tag = tag.trim();
+        if !trimmed_tag.is_empty() {
+            return trimmed_tag.to_string();
         }
     }
-    let trimmed_name = entry.name.trim();
-    if trimmed_name.is_empty() {
-        return GS_ROW_PLACEHOLDER_NAME.to_string();
-    }
-    trimmed_name
-        .chars()
-        .take(4)
-        .collect::<String>()
-        .to_ascii_uppercase()
+    GS_ROW_PLACEHOLDER_NAME.to_string()
 }
 
 fn build_gs_records_pane(
@@ -1650,6 +1642,7 @@ fn build_gs_records_pane(
     let score_x = -24.0 * pane_zoom;
     let date_x = 50.0 * pane_zoom;
     let text_zoom = pane_zoom;
+    let name_max_width = 80.0;
 
     let mut rows: Vec<(String, String, String, String, [f32; 4], [f32; 4])> =
         Vec::with_capacity(GS_RECORD_ROWS);
@@ -1720,7 +1713,7 @@ fn build_gs_records_pane(
                         }
                         rows.push((
                             format!("{}.", entry.rank),
-                            gs_machine_tag(entry),
+                            gs_player_name(entry),
                             format!("{:.2}%", entry.score / 100.0),
                             format_machine_record_date(&entry.date),
                             base_col,
@@ -1771,6 +1764,7 @@ fn build_gs_records_pane(
             align(0.0, 0.5):
             xy(name_x, y):
             zoom(text_zoom):
+            maxwidth(name_max_width):
             z(101):
             diffuse(row_col[0], row_col[1], row_col[2], row_col[3]):
             horizalign(left)
