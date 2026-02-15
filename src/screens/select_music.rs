@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
+use crate::config::{self, BreakdownStyle};
 use crate::core::audio;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
@@ -3925,6 +3926,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Density Graph
     let panel_w = if is_wide() { 286.0 } else { 276.0 };
     let chart_info_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
+    let breakdown_style = config::get().select_music_breakdown_style;
     let build_breakdown_panel = |graph_cy: f32,
                                  is_p2_layout: bool,
                                  graph_key: &String,
@@ -3949,24 +3951,38 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     asset_manager.with_font("miso", |miso_font| -> Option<String> {
                         let text_zoom = 0.8;
                         let max_allowed_logical_width = panel_w / text_zoom;
+                        let (detailed_breakdown, partial_breakdown, simple_breakdown) =
+                            match breakdown_style {
+                                BreakdownStyle::Sl => {
+                                    (&c.detailed_breakdown, &c.partial_breakdown, &c.simple_breakdown)
+                                }
+                                BreakdownStyle::Sn => (
+                                    &c.sn_detailed_breakdown,
+                                    &c.sn_partial_breakdown,
+                                    &c.sn_simple_breakdown,
+                                ),
+                            };
                         let fits = |text: &str| {
                             (font::measure_line_width_logical(miso_font, text, all_fonts) as f32)
                                 <= max_allowed_logical_width
                         };
 
-                        if fits(&c.detailed_breakdown) {
-                            Some(c.detailed_breakdown.clone())
-                        } else if fits(&c.partial_breakdown) {
-                            Some(c.partial_breakdown.clone())
-                        } else if fits(&c.simple_breakdown) {
-                            Some(c.simple_breakdown.clone())
+                        if fits(detailed_breakdown) {
+                            Some(detailed_breakdown.clone())
+                        } else if fits(partial_breakdown) {
+                            Some(partial_breakdown.clone())
+                        } else if fits(simple_breakdown) {
+                            Some(simple_breakdown.clone())
                         } else {
                             Some(format!("{} Total", c.total_streams))
                         }
                     })
                 })
                 .flatten()
-                .unwrap_or_else(|| c.simple_breakdown.clone());
+                .unwrap_or_else(|| match breakdown_style {
+                    BreakdownStyle::Sl => c.simple_breakdown.clone(),
+                    BreakdownStyle::Sn => c.sn_simple_breakdown.clone(),
+                });
 
             let peak_x = panel_w * 0.5 + if is_p2_layout { -136.0 } else { 60.0 };
             if let Some(mesh) = graph_mesh

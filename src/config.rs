@@ -100,6 +100,33 @@ impl FromStr for FullscreenType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BreakdownStyle {
+    Sl,
+    Sn,
+}
+
+impl BreakdownStyle {
+    const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Sl => "SL",
+            Self::Sn => "SN",
+        }
+    }
+}
+
+impl FromStr for BreakdownStyle {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "sl" => Ok(Self::Sl),
+            "sn" => Ok(Self::Sn),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisplayMode {
     Windowed,
     Fullscreen(FullscreenType),
@@ -136,6 +163,7 @@ pub struct Config {
     pub song_parsing_threads: u8,
     pub simply_love_color: i32,
     pub show_select_music_gameplay_timer: bool,
+    pub select_music_breakdown_style: BreakdownStyle,
     pub global_offset_seconds: f32,
     pub visual_delay_seconds: f32,
     pub master_volume: u8,
@@ -173,6 +201,7 @@ impl Default for Config {
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             show_select_music_gameplay_timer: true,
+            select_music_breakdown_style: BreakdownStyle::Sl,
             global_offset_seconds: -0.008,
             visual_delay_seconds: 0.0,
             master_volume: 90,
@@ -276,6 +305,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "SelectMusicBreakdown={}\n",
+        default.select_music_breakdown_style.as_str()
     ));
     content.push_str(&format!(
         "ShowStats={}\n",
@@ -504,6 +537,10 @@ pub fn load() {
                     .get("Options", "RateModPreservesPitch")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.rate_mod_preserves_pitch, |v| v != 0);
+                cfg.select_music_breakdown_style = conf
+                    .get("Options", "SelectMusicBreakdown")
+                    .and_then(|v| BreakdownStyle::from_str(&v).ok())
+                    .unwrap_or(default.select_music_breakdown_style);
                 cfg.fastload = conf
                     .get("Options", "FastLoad")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -594,6 +631,7 @@ pub fn load() {
                     "MusicVolume",
                     "SongParsingThreads",
                     "RateModPreservesPitch",
+                    "SelectMusicBreakdown",
                     "ShowStats",
                     "ShowStatsMode",
                     "SmoothHistogram",
@@ -1285,6 +1323,10 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicBreakdown={}\n",
+        cfg.select_music_breakdown_style.as_str()
+    ));
+    content.push_str(&format!(
         "ShowStats={}\n",
         if cfg.show_stats_mode != 0 { "1" } else { "0" }
     ));
@@ -1536,6 +1578,17 @@ pub fn update_rate_mod_preserves_pitch(enabled: bool) {
             return;
         }
         cfg.rate_mod_preserves_pitch = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_breakdown_style(style: BreakdownStyle) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.select_music_breakdown_style == style {
+            return;
+        }
+        cfg.select_music_breakdown_style = style;
     }
     save_without_keymaps();
 }

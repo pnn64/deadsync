@@ -4,7 +4,7 @@ use crate::core::display::{self, MonitorSpec};
 use crate::core::gfx::BackendType;
 use crate::core::space::{screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
-use crate::config::{self, DisplayMode, FullscreenType};
+use crate::config::{self, BreakdownStyle, DisplayMode, FullscreenType};
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::game::parsing::simfile as song_loading;
@@ -276,13 +276,8 @@ pub const ITEMS: &[Item] = &[
         name: "Simply Love Options",
         help: &[
             "Adjust settings that only apply to this Simply Love theme.",
-            "Visual Style",
-            "Rainbow Mode",
-            "MusicWheel Scroll Speed",
-            "MusicWheel Style",
-            "Preferred Style",
-            "Default Game Mode",
-            "...",
+            "Select Music Options",
+            "Breakdown Style",
         ],
     },
     Item {
@@ -335,6 +330,7 @@ pub enum SubmenuKind {
     System,
     Graphics,
     Sound,
+    SelectMusic,
     GrooveStats,
 }
 
@@ -675,6 +671,27 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
+pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[SubRow {
+    label: "Breakdown Style",
+    choices: &["SL", "SN"],
+    inline: true,
+}];
+
+pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: "Breakdown Style",
+        help: &[
+            "Choose which breakdown format to show in Select Music.",
+            "SL uses Simply Love stream breakdown formatting.",
+            "SN uses Stamina Nation stream breakdown formatting.",
+        ],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
+
 pub const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: "Enable GrooveStats",
@@ -708,6 +725,7 @@ const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
         SubmenuKind::System => SYSTEM_OPTIONS_ROWS,
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ROWS,
         SubmenuKind::Sound => SOUND_OPTIONS_ROWS,
+        SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ROWS,
         SubmenuKind::GrooveStats => GROOVESTATS_OPTIONS_ROWS,
     }
 }
@@ -717,6 +735,7 @@ const fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
         SubmenuKind::System => SYSTEM_OPTIONS_ITEMS,
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ITEMS,
         SubmenuKind::Sound => SOUND_OPTIONS_ITEMS,
+        SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ITEMS,
         SubmenuKind::GrooveStats => GROOVESTATS_OPTIONS_ITEMS,
     }
 }
@@ -726,6 +745,7 @@ const fn submenu_title(kind: SubmenuKind) -> &'static str {
         SubmenuKind::System => "SYSTEM OPTIONS",
         SubmenuKind::Graphics => "GRAPHICS OPTIONS",
         SubmenuKind::Sound => "SOUND OPTIONS",
+        SubmenuKind::SelectMusic => "SELECT MUSIC OPTIONS",
         SubmenuKind::GrooveStats => "GROOVESTATS OPTIONS",
     }
 }
@@ -1111,6 +1131,20 @@ fn bg_brightness_from_choice(idx: usize) -> f32 {
     idx.min(10) as f32 / 10.0
 }
 
+const fn breakdown_style_choice_index(style: BreakdownStyle) -> usize {
+    match style {
+        BreakdownStyle::Sl => 0,
+        BreakdownStyle::Sn => 1,
+    }
+}
+
+const fn breakdown_style_from_choice(idx: usize) -> BreakdownStyle {
+    match idx {
+        1 => BreakdownStyle::Sn,
+        _ => BreakdownStyle::Sl,
+    }
+}
+
 pub struct State {
     pub selected: usize,
     prev_selected: usize,
@@ -1134,6 +1168,7 @@ pub struct State {
     sub_choice_indices_system: Vec<usize>,
     sub_choice_indices_graphics: Vec<usize>,
     sub_choice_indices_sound: Vec<usize>,
+    sub_choice_indices_select_music: Vec<usize>,
     sub_choice_indices_groovestats: Vec<usize>,
     global_offset_ms: i32,
     visual_delay_ms: i32,
@@ -1187,6 +1222,7 @@ pub fn init() -> State {
         sub_choice_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_choice_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         sub_choice_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
+        sub_choice_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
         sub_choice_indices_groovestats: vec![0; GROOVESTATS_OPTIONS_ROWS.len()],
         global_offset_ms: {
             let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
@@ -1272,6 +1308,12 @@ pub fn init() -> State {
         usize::from(cfg.rate_mod_preserves_pitch),
     );
     set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        "Breakdown Style",
+        breakdown_style_choice_index(cfg.select_music_breakdown_style),
+    );
+    set_choice_by_label(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
         "Enable GrooveStats",
@@ -1291,6 +1333,7 @@ fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::System => &state.sub_choice_indices_system,
         SubmenuKind::Graphics => &state.sub_choice_indices_graphics,
         SubmenuKind::Sound => &state.sub_choice_indices_sound,
+        SubmenuKind::SelectMusic => &state.sub_choice_indices_select_music,
         SubmenuKind::GrooveStats => &state.sub_choice_indices_groovestats,
     }
 }
@@ -1300,6 +1343,7 @@ const fn submenu_choice_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::System => &mut state.sub_choice_indices_system,
         SubmenuKind::Graphics => &mut state.sub_choice_indices_graphics,
         SubmenuKind::Sound => &mut state.sub_choice_indices_sound,
+        SubmenuKind::SelectMusic => &mut state.sub_choice_indices_select_music,
         SubmenuKind::GrooveStats => &mut state.sub_choice_indices_groovestats,
     }
 }
@@ -1930,6 +1974,11 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
             }
             _ => {}
         }
+    } else if matches!(kind, SubmenuKind::SelectMusic) {
+        let row = &rows[row_index];
+        if row.label == "Breakdown Style" {
+            config::update_select_music_breakdown_style(breakdown_style_from_choice(new_index));
+        }
     } else if matches!(kind, SubmenuKind::GrooveStats) {
         let row = &rows[row_index];
         if row.label == "Enable GrooveStats" {
@@ -2066,6 +2115,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         "Sound Options" => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::Sound);
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                            state.submenu_fade_t = 0.0;
+                        }
+                        "Simply Love Options" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            state.pending_submenu_kind = Some(SubmenuKind::SelectMusic);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }
