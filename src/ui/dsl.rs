@@ -3,6 +3,9 @@ use crate::core::gfx::BlendMode;
 use crate::ui::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
 use crate::ui::{anim, font, runtime};
 
+// PARITY COMMENT STANDARD:
+// PARITY[<Source>]: <mirrored behavior>. Ref: <file/symbol> when known.
+
 #[allow(dead_code)]
 #[derive(Clone)]
 pub enum Mod<'a> {
@@ -29,7 +32,7 @@ pub enum Mod<'a> {
     // absolute size (pre-zoom) in SM TL space
     SizePx(f32, f32),
 
-    // StepMania zoom semantics (scale factors)
+    // PARITY[StepMania Actor]: zoom/zoomx/zoomy mutate scale factors.
     Zoom(f32),
     ZoomX(f32),
     ZoomY(f32),
@@ -75,7 +78,7 @@ pub enum Mod<'a> {
     AddRotY(f32),
     AddRotZ(f32),
 
-    // ---- NEW: SM/ITG-compatible sprite controls ----
+    // PARITY[StepMania/ITGmania Sprite]: state/frame and UV controls.
     /// `setstate(i)` — linear state index (row-major); grid inferred from filename `_CxR`.
     State(u32),
     /// `SetAllStateDelays(seconds)` — uniform delay for each state while animating.
@@ -98,14 +101,14 @@ pub enum Mod<'a> {
     /// `shadowcolor(r,g,b,a)` — sets shadow tint; default is (0,0,0,0.5).
     ShadowColor([f32; 4]),
 
-    // --- Effect family (SM/ITG) ---
+    // PARITY[StepMania/ITGmania Actor]: effect command family.
     EffectClock(anim::EffectClock),
     EffectMode(anim::EffectMode),
     EffectColor1([f32; 4]),
     EffectColor2([f32; 4]),
     EffectPeriod(f32),
     EffectOffset(f32),
-    EffectTiming([f32; 4]),
+    EffectTiming([f32; 5]),
     EffectMagnitude([f32; 3]),
 }
 
@@ -117,10 +120,14 @@ pub fn __dsl_parse_effect_clock(raw: &str) -> anim::EffectClock {
         .trim_matches('"')
         .trim_matches('\'')
         .to_ascii_lowercase();
-    if lower.contains("beat") {
-        anim::EffectClock::Beat
-    } else {
-        anim::EffectClock::Time
+    match lower.as_str() {
+        // ITGmania Actor::SetEffectClockString()
+        "beat" | "beatnooffset" | "bgm" => anim::EffectClock::Beat,
+        "timer" | "timerglobal" | "music" | "musicnooffset" | "time" | "seconds" => {
+            anim::EffectClock::Time
+        }
+        _ if lower.contains("beat") => anim::EffectClock::Beat,
+        _ => anim::EffectClock::Time,
     }
 }
 
@@ -228,10 +235,10 @@ fn build_sprite_like<'a>(
     let (mut tw, _site_ignored): (Option<&[anim::Step]>, u64) = (None, 0);
     let mut effect = anim::EffectState::default();
 
-    // StepMania zoom (scale factors). Keep signs until we fold to flips.
+    // PARITY[StepMania Actor]: keep zoom signs until final flip folding.
     let (mut sx, mut sy) = (1.0_f32, 1.0_f32);
 
-    // shadow defaults (StepMania): length 0 (disabled), color semi-black 0.5 alpha
+    // PARITY[StepMania Actor]: shadow defaults are length=0, color=(0,0,0,0.5).
     let (mut shx, mut shy) = (0.0_f32, 0.0_f32);
     let mut shc = [0.0_f32, 0.0_f32, 0.0_f32, 0.5_f32];
 
@@ -288,7 +295,7 @@ fn build_sprite_like<'a>(
                 h = *b;
             }
 
-            // StepMania zoom semantics (scale factors)
+            // PARITY[StepMania Actor]: zoom commands mutate scale factors.
             Mod::Zoom(f) => {
                 sx = *f;
                 sy = *f;
@@ -411,9 +418,7 @@ fn build_sprite_like<'a>(
                 state_delay = (*s).max(0.0);
             }
 
-            // shadow
-            // StepMania coordinates have +Y downward. Our world has +Y upward.
-            // Flip Y to keep the shadow visually down-right for positive inputs.
+            // PARITY[StepMania Actor]: +Y is down; flip Y in our +Y-up space for matching shadows.
             Mod::ShadowLenBoth(v) => {
                 shx = *v;
                 shy = -*v;
@@ -441,13 +446,27 @@ fn build_sprite_like<'a>(
                 effect.color2 = *color;
             }
             Mod::EffectPeriod(v) => {
-                effect.period = (*v).max(f32::EPSILON);
+                if *v > 0.0 {
+                    effect.period = *v;
+                    effect.timing = [*v * 0.5, 0.0, *v * 0.5, 0.0, 0.0];
+                }
             }
             Mod::EffectOffset(v) => {
                 effect.offset = *v;
             }
             Mod::EffectTiming(v) => {
-                effect.timing = [v[0].max(0.0), v[1].max(0.0), v[2].max(0.0), v[3].max(0.0)];
+                let timing = [
+                    v[0].max(0.0),
+                    v[1].max(0.0),
+                    v[2].max(0.0),
+                    v[3].max(0.0),
+                    v[4].max(0.0),
+                ];
+                let total = timing[0] + timing[1] + timing[2] + timing[3] + timing[4];
+                if total > 0.0 {
+                    effect.timing = timing;
+                    effect.period = total;
+                }
             }
             Mod::EffectMagnitude(v) => {
                 effect.magnitude = *v;
@@ -455,7 +474,7 @@ fn build_sprite_like<'a>(
         }
     }
 
-    // For tweening, StepMania's `zoomto()` relies on the actor's unzoomed size.
+    // PARITY[StepMania Actor]: `zoomto()` is computed from unzoomed actor size.
     // If size isn't explicitly set, use native texture size (or 1x1 for quads).
     if tw.is_some() && w == 0.0 && h == 0.0 {
         let (nw, nh) = sprite_native_dims(&source, uv, cell, grid);
@@ -567,7 +586,7 @@ fn build_sprite_like<'a>(
         sy = s.scale[1];
     }
 
-    // SM semantics: negative zoom => flips, keep positive magnitudes
+    // PARITY[StepMania Actor]: negative zoom flips; magnitudes stay positive.
     if sx < 0.0 {
         fx = !fx;
         sx = -sx;
@@ -668,7 +687,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
     let (mut fit_w, mut fit_h): (Option<f32>, Option<f32>) = (None, None);
     let (mut max_w, mut max_h): (Option<f32>, Option<f32>) = (None, None);
 
-    // NEW: track StepMania order semantics for max vs zoom (per axis)
+    // PARITY[StepMania Actor]: track command order for maxwidth/maxheight vs zoom.
     let (mut saw_max_w, mut saw_max_h) = (false, false);
     let (mut max_w_pre_zoom, mut max_h_pre_zoom) = (false, false);
 
@@ -677,7 +696,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
     let mut tw: Option<&[anim::Step]> = None;
     let mut effect = anim::EffectState::default();
 
-    // shadow defaults (StepMania)
+    // PARITY[StepMania Actor]: shadow defaults are length=0, color=(0,0,0,0.5).
     let (mut shx, mut shy) = (0.0_f32, 0.0_f32);
     let mut shc = [0.0_f32, 0.0_f32, 0.0_f32, 0.5_f32];
 
@@ -802,8 +821,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
                 tw = Some(steps);
             }
 
-            // shadow
-            // Match StepMania (+Y down) by flipping sign on Y in our (+Y up) world.
+            // PARITY[StepMania Actor]: +Y is down; flip Y in our +Y-up space for matching shadows.
             Mod::ShadowLenBoth(v) => {
                 shx = *v;
                 shy = -*v;
@@ -831,13 +849,27 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
                 effect.color2 = *color2;
             }
             Mod::EffectPeriod(v) => {
-                effect.period = (*v).max(f32::EPSILON);
+                if *v > 0.0 {
+                    effect.period = *v;
+                    effect.timing = [*v * 0.5, 0.0, *v * 0.5, 0.0, 0.0];
+                }
             }
             Mod::EffectOffset(v) => {
                 effect.offset = *v;
             }
             Mod::EffectTiming(v) => {
-                effect.timing = [v[0].max(0.0), v[1].max(0.0), v[2].max(0.0), v[3].max(0.0)];
+                let timing = [
+                    v[0].max(0.0),
+                    v[1].max(0.0),
+                    v[2].max(0.0),
+                    v[3].max(0.0),
+                    v[4].max(0.0),
+                ];
+                let total = timing[0] + timing[1] + timing[2] + timing[3] + timing[4];
+                if total > 0.0 {
+                    effect.timing = timing;
+                    effect.period = total;
+                }
             }
             Mod::EffectMagnitude(v) => {
                 effect.magnitude = *v;
@@ -1073,8 +1105,7 @@ macro_rules! __dsl_apply_one {
         else { $mods.push($crate::ui::dsl::Mod::AddY(($dy) as f32)); }
     }};
 
-    // --- screen-centering helpers (SM parity) ----------------------------
-    // Center()  → set x,y to SCREEN_CENTER_X/Y
+    // PARITY[StepMania Actor]: Center/CenterX/CenterY map to screen center globals.
     (Center () $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let cx = $crate::core::space::globals::screen_center_x();
         let cy = $crate::core::space::globals::screen_center_y();
@@ -1085,7 +1116,6 @@ macro_rules! __dsl_apply_one {
             $mods.push($crate::ui::dsl::Mod::Xy(cx, cy));
         }
     }};
-    // CenterX() → set x to SCREEN_CENTER_X
     (CenterX () $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let cx = $crate::core::space::globals::screen_center_x();
         if let ::core::option::Option::Some(mut seg) = $cur.take() {
@@ -1095,7 +1125,6 @@ macro_rules! __dsl_apply_one {
             $mods.push($crate::ui::dsl::Mod::SetX(cx));
         }
     }};
-    // CenterY() → set y to SCREEN_CENTER_Y
     (CenterY () $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let cy = $crate::core::space::globals::screen_center_y();
         if let ::core::option::Option::Some(mut seg) = $cur.take() {
@@ -1143,7 +1172,7 @@ macro_rules! __dsl_apply_one {
         }
     }};
 
-    // --- Glow (SM/ITG parity) ---------------------------------------
+    // PARITY[StepMania/ITGmania Actor]: glow and stroke color commands.
     (glow ($r:expr,$g:expr,$b:expr,$a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg) = $cur.take() {
             seg = seg.glow(($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32);
@@ -1156,7 +1185,7 @@ macro_rules! __dsl_apply_one {
         $mods.push($crate::ui::dsl::Mod::StrokeColor([($r) as f32,($g) as f32,($b) as f32,($a) as f32]));
     }};
 
-    // --- Shadows (SM parity) ---------------------------------------
+    // PARITY[StepMania Actor]: shadowlength/shadowcolor command behavior.
     (shadowlength ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::ShadowLenBoth(($v) as f32));
     }};
@@ -1170,7 +1199,7 @@ macro_rules! __dsl_apply_one {
         $mods.push($crate::ui::dsl::Mod::ShadowColor([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
     }};
 
-    // --- Effect family (SM/ITG parity) -----------------------------
+    // PARITY[StepMania/ITGmania Actor]: effect command behavior.
     (effectclock (beat) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::EffectClock($crate::ui::anim::EffectClock::Beat));
     }};
@@ -1191,16 +1220,33 @@ macro_rules! __dsl_apply_one {
 
     (diffuseramp () $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::DiffuseRamp));
+        $mods.push($crate::ui::dsl::Mod::EffectPeriod(1.0));
+        $mods.push($crate::ui::dsl::Mod::EffectColor1([0.0, 0.0, 0.0, 1.0]));
+        $mods.push($crate::ui::dsl::Mod::EffectColor2([1.0, 1.0, 1.0, 1.0]));
+    }};
+    (diffuseshift () $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::DiffuseShift));
+        $mods.push($crate::ui::dsl::Mod::EffectPeriod(1.0));
+        $mods.push($crate::ui::dsl::Mod::EffectColor1([0.0, 0.0, 0.0, 1.0]));
+        $mods.push($crate::ui::dsl::Mod::EffectColor2([1.0, 1.0, 1.0, 1.0]));
     }};
     (glowshift () $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::GlowShift));
+        $mods.push($crate::ui::dsl::Mod::EffectPeriod(1.0));
+        $mods.push($crate::ui::dsl::Mod::EffectColor1([1.0, 1.0, 1.0, 0.2]));
+        $mods.push($crate::ui::dsl::Mod::EffectColor2([1.0, 1.0, 1.0, 0.8]));
     }};
     (pulse () $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::Pulse));
+        $mods.push($crate::ui::dsl::Mod::EffectPeriod(2.0));
+        $mods.push($crate::ui::dsl::Mod::EffectMagnitude([0.5, 1.0, 0.0]));
     }};
     (spin () $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::Spin));
         $mods.push($crate::ui::dsl::Mod::EffectMagnitude([0.0, 0.0, 180.0]));
+    }};
+    (stopeffect () $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::None));
     }};
 
     (effectcolor1 ($r:expr,$g:expr,$b:expr,$a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
@@ -1216,13 +1262,18 @@ macro_rules! __dsl_apply_one {
         $mods.push($crate::ui::dsl::Mod::EffectOffset(($v) as f32));
     }};
     (effecttiming ($a:expr,$b:expr,$c:expr,$d:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectTiming([($a) as f32, ($b) as f32, ($c) as f32, ($d) as f32]));
+        // ITGmania compatibility: 4-arg call is (ramp_to_half, hold_at_half, ramp_to_full, hold_at_zero).
+        $mods.push($crate::ui::dsl::Mod::EffectTiming([($a) as f32, ($b) as f32, ($c) as f32, 0.0, ($d) as f32]));
+    }};
+    (effecttiming ($a:expr,$b:expr,$c:expr,$d:expr,$e:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        // ITGmania compatibility: 5-arg call is (ramp_to_half, hold_at_half, ramp_to_full, hold_at_zero, hold_at_full).
+        $mods.push($crate::ui::dsl::Mod::EffectTiming([($a) as f32, ($b) as f32, ($c) as f32, ($e) as f32, ($d) as f32]));
     }};
     (effectmagnitude ($x:expr,$y:expr,$z:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::EffectMagnitude([($x) as f32, ($y) as f32, ($z) as f32]));
     }};
 
-    // --- StepMania zoom semantics (scale) ---
+    // PARITY[StepMania Actor]: zoom* commands mutate scale factors.
     (zoom ($f:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let f=($f) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.zoom(f,f); $cur=::core::option::Option::Some(seg); }
@@ -1249,9 +1300,7 @@ macro_rules! __dsl_apply_one {
         else { $mods.push($crate::ui::dsl::Mod::AddZoomY(df)); }
     }};
 
-    // StepMania:
-    // - `zoomto(w,h)` sets zoom based on unzoomed size (i.e. affects scale).
-    // - `setsize(w,h)` sets the unzoomed size (width/height).
+    // PARITY[StepMania Actor]: `zoomto` works from unzoomed size; `setsize` sets unzoomed size.
     (zoomto ($w:expr, $h:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let ww = ($w) as f32;
         let hh = ($h) as f32;
@@ -1338,7 +1387,7 @@ macro_rules! __dsl_apply_one {
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.fadebottom(vv); $cur=::core::option::Option::Some(seg); }
         else { $mods.push($crate::ui::dsl::Mod::FadeBottom(vv)); }
     }};
-    // --- SM/ITG Sprite: choose frame ---
+    // PARITY[StepMania/ITGmania Sprite]: `setstate(i)` chooses row-major frame index.
     (setstate ($i:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::State(($i) as u32));
     }};
@@ -1349,7 +1398,7 @@ macro_rules! __dsl_apply_one {
     (setallstatedelays ($s:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::StateDelay(($s) as f32));
     }};
-    // --- SM/ITG Sprite: explicit UVs (normalized, top-left origin) ---
+    // PARITY[StepMania/ITGmania Sprite]: `customtexturerect` uses normalized top-left UVs.
     (customtexturerect ($u0:expr, $v0:expr, $u1:expr, $v1:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::UvRect([($u0) as f32, ($v0) as f32, ($u1) as f32, ($v1) as f32]));
     }};

@@ -390,17 +390,27 @@ impl SpriteSlot {
         let effect = self.model_effect;
         if matches!(effect.mode, ModelEffectMode::Spin) {
             let clock = ui_anim::effect_clock_units(effect, time, beat);
-            let spin_units = clock - effect.offset;
-            out.rot[0] = (out.rot[0] + effect.magnitude[0] * spin_units).rem_euclid(360.0);
-            out.rot[1] = (out.rot[1] + effect.magnitude[1] * spin_units).rem_euclid(360.0);
-            out.rot[2] = (out.rot[2] + effect.magnitude[2] * spin_units).rem_euclid(360.0);
+            out.rot[0] = (out.rot[0] + effect.magnitude[0] * clock).rem_euclid(360.0);
+            out.rot[1] = (out.rot[1] + effect.magnitude[1] * clock).rem_euclid(360.0);
+            out.rot[2] = (out.rot[2] + effect.magnitude[2] * clock).rem_euclid(360.0);
         }
-        if let Some(mix) = Self::model_effect_mix(effect, time, beat) {
+        if let Some(percent) = Self::model_effect_mix(effect, time, beat) {
             match effect.mode {
                 ModelEffectMode::DiffuseRamp => {
                     let mut c = [0.0; 4];
                     for (i, out) in c.iter_mut().enumerate() {
-                        *out = lerp(effect.color1[i], effect.color2[i], mix).clamp(0.0, 1.0);
+                        *out = lerp(effect.color2[i], effect.color1[i], percent).clamp(0.0, 1.0);
+                    }
+                    out.tint[0] *= c[0];
+                    out.tint[1] *= c[1];
+                    out.tint[2] *= c[2];
+                    out.tint[3] *= c[3];
+                }
+                ModelEffectMode::DiffuseShift => {
+                    let between = ui_anim::glowshift_mix(percent);
+                    let mut c = [0.0; 4];
+                    for (i, out) in c.iter_mut().enumerate() {
+                        *out = lerp(effect.color2[i], effect.color1[i], between).clamp(0.0, 1.0);
                     }
                     out.tint[0] *= c[0];
                     out.tint[1] *= c[1];
@@ -408,9 +418,14 @@ impl SpriteSlot {
                     out.tint[3] *= c[3];
                 }
                 ModelEffectMode::Pulse => {
-                    out.zoom[0] *= lerp(1.0, effect.magnitude[0], mix).max(0.0);
-                    out.zoom[1] *= lerp(1.0, effect.magnitude[1], mix).max(0.0);
-                    out.zoom[2] *= lerp(1.0, effect.magnitude[2], mix).max(0.0);
+                    let offset = (percent * std::f32::consts::PI).sin().clamp(0.0, 1.0);
+                    let zoom = lerp(effect.magnitude[0], effect.magnitude[1], offset).max(0.0);
+                    let sx = lerp(effect.color2[0], effect.color1[0], offset).max(0.0);
+                    let sy = lerp(effect.color2[1], effect.color1[1], offset).max(0.0);
+                    let sz = lerp(effect.color2[2], effect.color1[2], offset).max(0.0);
+                    out.zoom[0] *= zoom * sx;
+                    out.zoom[1] *= zoom * sy;
+                    out.zoom[2] *= zoom * sz;
                 }
                 // ITG applies glowshift to the separate glow channel, not diffuse.
                 // The renderer samples this via `model_glow_at()`.
@@ -2376,11 +2391,14 @@ fn itg_receptor_pulse(metrics: &noteskin_itg::IniData) -> ReceptorPulse {
                 .filter_map(|arg| parse_script_number(arg))
                 .collect::<Vec<_>>();
             if values.len() >= 4 {
+                // ITGmania compatibility:
+                // 4 args => (ramp_to_half, hold_at_half, ramp_to_full, hold_at_zero)
+                // 5 args => (..., hold_at_zero, hold_at_full)
                 pulse.ramp_to_half = values[0].max(0.0);
                 pulse.hold_at_half = values[1].max(0.0);
                 pulse.ramp_to_full = values[2].max(0.0);
-                pulse.hold_at_full = values[3].max(0.0);
-                pulse.hold_at_zero = values.get(4).copied().unwrap_or(0.0).max(0.0);
+                pulse.hold_at_zero = values[3].max(0.0);
+                pulse.hold_at_full = values.get(4).copied().unwrap_or(0.0).max(0.0);
             }
             continue;
         }
@@ -2595,14 +2613,16 @@ enum ScriptActorMod {
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ScriptEffectMod {
     DiffuseRamp,
+    DiffuseShift,
     GlowShift,
     Pulse,
     Spin,
+    StopEffect,
     EffectColor1([f32; 4]),
     EffectColor2([f32; 4]),
     EffectPeriod(f32),
     EffectOffset(f32),
-    EffectTiming([f32; 4]),
+    EffectTiming([f32; 5]),
     EffectMagnitude([f32; 3]),
 }
 
@@ -2874,12 +2894,13 @@ fn parse_script_effect_clock(raw: &str) -> Option<ui_anim::EffectClock> {
         .trim_matches('"')
         .trim_matches('\'')
         .to_ascii_lowercase();
-    if lower.contains("beat") {
-        Some(ui_anim::EffectClock::Beat)
-    } else if lower.contains("time") || lower.contains("music") || lower.contains("seconds") {
-        Some(ui_anim::EffectClock::Time)
-    } else {
-        None
+    match lower.as_str() {
+        "beat" | "beatnooffset" | "bgm" => Some(ui_anim::EffectClock::Beat),
+        "timer" | "timerglobal" | "music" | "musicnooffset" | "time" | "seconds" => {
+            Some(ui_anim::EffectClock::Time)
+        }
+        _ if lower.contains("beat") => Some(ui_anim::EffectClock::Beat),
+        _ => None,
     }
 }
 
@@ -2887,9 +2908,11 @@ fn parse_script_effect_clock(raw: &str) -> Option<ui_anim::EffectClock> {
 fn parse_script_effect_mod(cmd: &str, args: &[String]) -> Option<ScriptEffectMod> {
     match cmd {
         "diffuseramp" => Some(ScriptEffectMod::DiffuseRamp),
+        "diffuseshift" => Some(ScriptEffectMod::DiffuseShift),
         "glowshift" => Some(ScriptEffectMod::GlowShift),
         "pulse" => Some(ScriptEffectMod::Pulse),
         "spin" => Some(ScriptEffectMod::Spin),
+        "stopeffect" => Some(ScriptEffectMod::StopEffect),
         "effectcolor1" => parse_script_color_args(args).map(ScriptEffectMod::EffectColor1),
         "effectcolor2" => parse_script_color_args(args).map(ScriptEffectMod::EffectColor2),
         "effectperiod" => args
@@ -2904,9 +2927,17 @@ fn parse_script_effect_mod(cmd: &str, args: &[String]) -> Option<ScriptEffectMod
             if args.len() < 4 {
                 return None;
             }
-            let mut values = [0.0f32; 4];
-            for (idx, arg) in args.iter().take(4).enumerate() {
-                values[idx] = parse_script_number(arg)?;
+            let mut values = [0.0f32; 5];
+            values[0] = parse_script_number(&args[0])?;
+            values[1] = parse_script_number(&args[1])?;
+            values[2] = parse_script_number(&args[2])?;
+            let hold_at_zero = parse_script_number(&args[3])?;
+            if args.len() >= 5 {
+                values[3] = parse_script_number(&args[4])?;
+                values[4] = hold_at_zero;
+            } else {
+                values[3] = 0.0;
+                values[4] = hold_at_zero;
             }
             Some(ScriptEffectMod::EffectTiming(values))
         }
@@ -3147,16 +3178,37 @@ fn itg_model_draw_program(
                 match effect_mod {
                     ScriptEffectMod::DiffuseRamp => {
                         effect.mode = ModelEffectMode::DiffuseRamp;
+                        effect.period = 1.0;
+                        effect.timing = [0.5, 0.0, 0.5, 0.0, 0.0];
+                        effect.color1 = [0.0, 0.0, 0.0, 1.0];
+                        effect.color2 = [1.0, 1.0, 1.0, 1.0];
+                    }
+                    ScriptEffectMod::DiffuseShift => {
+                        effect.mode = ModelEffectMode::DiffuseShift;
+                        effect.period = 1.0;
+                        effect.timing = [0.5, 0.0, 0.5, 0.0, 0.0];
+                        effect.color1 = [0.0, 0.0, 0.0, 1.0];
+                        effect.color2 = [1.0, 1.0, 1.0, 1.0];
                     }
                     ScriptEffectMod::GlowShift => {
                         effect.mode = ModelEffectMode::GlowShift;
+                        effect.period = 1.0;
+                        effect.timing = [0.5, 0.0, 0.5, 0.0, 0.0];
+                        effect.color1 = [1.0, 1.0, 1.0, 0.2];
+                        effect.color2 = [1.0, 1.0, 1.0, 0.8];
                     }
                     ScriptEffectMod::Pulse => {
                         effect.mode = ModelEffectMode::Pulse;
+                        effect.period = 2.0;
+                        effect.timing = [1.0, 0.0, 1.0, 0.0, 0.0];
+                        effect.magnitude = [0.5, 1.0, 0.0];
                     }
                     ScriptEffectMod::Spin => {
                         effect.mode = ModelEffectMode::Spin;
                         effect.magnitude = [0.0, 0.0, 180.0];
+                    }
+                    ScriptEffectMod::StopEffect => {
+                        effect.mode = ModelEffectMode::None;
                     }
                     ScriptEffectMod::EffectColor1(c) => {
                         effect.color1 = c;
@@ -3165,14 +3217,27 @@ fn itg_model_draw_program(
                         effect.color2 = c;
                     }
                     ScriptEffectMod::EffectPeriod(v) => {
-                        effect.period = v.max(1e-6);
+                        if v > 0.0 {
+                            effect.period = v;
+                            effect.timing = [v * 0.5, 0.0, v * 0.5, 0.0, 0.0];
+                        }
                     }
                     ScriptEffectMod::EffectOffset(v) => {
                         effect.offset = v;
                     }
                     ScriptEffectMod::EffectTiming(v) => {
-                        effect.timing =
-                            [v[0].max(0.0), v[1].max(0.0), v[2].max(0.0), v[3].max(0.0)];
+                        let timing = [
+                            v[0].max(0.0),
+                            v[1].max(0.0),
+                            v[2].max(0.0),
+                            v[3].max(0.0),
+                            v[4].max(0.0),
+                        ];
+                        let total = timing[0] + timing[1] + timing[2] + timing[3] + timing[4];
+                        if total > 0.0 {
+                            effect.timing = timing;
+                            effect.period = total;
+                        }
                     }
                     ScriptEffectMod::EffectMagnitude(v) => {
                         effect.magnitude = v;

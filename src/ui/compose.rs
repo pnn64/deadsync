@@ -130,27 +130,43 @@ fn apply_effect_to_sprite(
     scale: &mut [f32; 2],
     rot_deg: &mut [f32; 3],
 ) {
+    // We currently don't have song beat/time split plumbed here, so use elapsed for both.
     let beat = elapsed;
     if matches!(effect.mode, anim::EffectMode::Spin) {
-        let units = anim::effect_clock_units(effect, elapsed, beat) - effect.offset;
+        // ITGmania spin uses effect delta from clock and does not use effectoffset.
+        let units = anim::effect_clock_units(effect, elapsed, beat);
         rot_deg[0] = (rot_deg[0] + effect.magnitude[0] * units).rem_euclid(360.0);
         rot_deg[1] = (rot_deg[1] + effect.magnitude[1] * units).rem_euclid(360.0);
         rot_deg[2] = (rot_deg[2] + effect.magnitude[2] * units).rem_euclid(360.0);
     }
 
-    if let Some(mix) = anim::effect_mix(effect, elapsed, beat) {
+    if let Some(percent) = anim::effect_mix(effect, elapsed, beat) {
         match effect.mode {
             anim::EffectMode::DiffuseRamp => {
                 for (i, out) in tint.iter_mut().enumerate() {
-                    let c = lerp_f32(effect.color1[i], effect.color2[i], mix).clamp(0.0, 1.0);
+                    let c = lerp_f32(effect.color2[i], effect.color1[i], percent).clamp(0.0, 1.0);
+                    *out *= c;
+                }
+            }
+            anim::EffectMode::DiffuseShift => {
+                let between = (((percent + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5)
+                    .clamp(0.0, 1.0);
+                for (i, out) in tint.iter_mut().enumerate() {
+                    let c = lerp_f32(effect.color2[i], effect.color1[i], between).clamp(0.0, 1.0);
                     *out *= c;
                 }
             }
             anim::EffectMode::Pulse => {
-                scale[0] *= lerp_f32(1.0, effect.magnitude[0], mix).max(0.0);
-                scale[1] *= lerp_f32(1.0, effect.magnitude[1], mix).max(0.0);
+                let offset = (percent * std::f32::consts::PI).sin().clamp(0.0, 1.0);
+                let zoom = lerp_f32(effect.magnitude[0], effect.magnitude[1], offset).max(0.0);
+                let sx = lerp_f32(effect.color2[0], effect.color1[0], offset).max(0.0);
+                let sy = lerp_f32(effect.color2[1], effect.color1[1], offset).max(0.0);
+                scale[0] *= zoom * sx;
+                scale[1] *= zoom * sy;
             }
-            anim::EffectMode::GlowShift | anim::EffectMode::Spin | anim::EffectMode::None => {}
+            anim::EffectMode::GlowShift
+            | anim::EffectMode::Spin
+            | anim::EffectMode::None => {}
         }
     }
 
@@ -169,20 +185,35 @@ fn apply_effect_to_text(
     color: &mut [f32; 4],
     scale: &mut [f32; 2],
 ) {
+    // We currently don't have song beat/time split plumbed here, so use elapsed for both.
     let beat = elapsed;
-    if let Some(mix) = anim::effect_mix(effect, elapsed, beat) {
+    if let Some(percent) = anim::effect_mix(effect, elapsed, beat) {
         match effect.mode {
             anim::EffectMode::DiffuseRamp => {
                 for (i, out) in color.iter_mut().enumerate() {
-                    let c = lerp_f32(effect.color1[i], effect.color2[i], mix).clamp(0.0, 1.0);
+                    let c = lerp_f32(effect.color2[i], effect.color1[i], percent).clamp(0.0, 1.0);
+                    *out *= c;
+                }
+            }
+            anim::EffectMode::DiffuseShift => {
+                let between = (((percent + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5)
+                    .clamp(0.0, 1.0);
+                for (i, out) in color.iter_mut().enumerate() {
+                    let c = lerp_f32(effect.color2[i], effect.color1[i], between).clamp(0.0, 1.0);
                     *out *= c;
                 }
             }
             anim::EffectMode::Pulse => {
-                scale[0] *= lerp_f32(1.0, effect.magnitude[0], mix).max(0.0);
-                scale[1] *= lerp_f32(1.0, effect.magnitude[1], mix).max(0.0);
+                let offset = (percent * std::f32::consts::PI).sin().clamp(0.0, 1.0);
+                let zoom = lerp_f32(effect.magnitude[0], effect.magnitude[1], offset).max(0.0);
+                let sx = lerp_f32(effect.color2[0], effect.color1[0], offset).max(0.0);
+                let sy = lerp_f32(effect.color2[1], effect.color1[1], offset).max(0.0);
+                scale[0] *= zoom * sx;
+                scale[1] *= zoom * sy;
             }
-            anim::EffectMode::GlowShift | anim::EffectMode::Spin | anim::EffectMode::None => {}
+            anim::EffectMode::GlowShift
+            | anim::EffectMode::Spin
+            | anim::EffectMode::None => {}
         }
     }
 

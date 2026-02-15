@@ -220,6 +220,7 @@ pub enum EffectClock {
 pub enum EffectMode {
     None,
     DiffuseRamp,
+    DiffuseShift,
     GlowShift,
     Pulse,
     Spin,
@@ -233,7 +234,9 @@ pub struct EffectState {
     pub color2: [f32; 4],
     pub period: f32,
     pub offset: f32,
-    pub timing: [f32; 4], // ramp_up, hold_high, ramp_down, hold_low
+    // ITGmania Actor::SetEffectTiming():
+    // ramp_to_half, hold_at_half, ramp_to_full, hold_at_full, hold_at_zero.
+    pub timing: [f32; 5],
     pub magnitude: [f32; 3],
 }
 
@@ -246,7 +249,7 @@ impl Default for EffectState {
             color2: [1.0, 1.0, 1.0, 1.0],
             period: 1.0,
             offset: 0.0,
-            timing: [0.5, 0.0, 0.5, 0.0],
+            timing: [0.5, 0.0, 0.5, 0.0, 0.0],
             magnitude: [1.0, 1.0, 1.0],
         }
     }
@@ -264,33 +267,42 @@ pub fn effect_clock_units(effect: EffectState, time: f32, beat: f32) -> f32 {
 pub fn effect_mix(effect: EffectState, time: f32, beat: f32) -> Option<f32> {
     if !matches!(
         effect.mode,
-        EffectMode::DiffuseRamp | EffectMode::GlowShift | EffectMode::Pulse
+        EffectMode::DiffuseRamp
+            | EffectMode::DiffuseShift
+            | EffectMode::GlowShift
+            | EffectMode::Pulse
     ) {
         return None;
     }
-    let period = effect.period.max(1e-6);
-    let phase_input = effect_clock_units(effect, time, beat);
-    let phase = (phase_input + effect.offset).rem_euclid(period) / period;
     let t = effect.timing;
-    let total = (t[0] + t[1] + t[2] + t[3]).max(1e-6);
-    let mut x = phase * total;
-    let mix = if x < t[0] && t[0] > f32::EPSILON {
-        x / t[0]
-    } else {
-        x -= t[0];
-        if x < t[1] {
-            1.0
+    let total = (t[0] + t[1] + t[2] + t[3] + t[4]).max(1e-6);
+    let units = effect_clock_units(effect, time, beat) + effect.offset;
+    let x = units.rem_euclid(total);
+
+    // ITGmania Actor::PreDraw() fPercentThroughEffect semantics.
+    let rup_plus_ath = t[0] + t[1];
+    let rupath_plus_rdown = rup_plus_ath + t[2];
+    let rupathrdown_plus_atf = rupath_plus_rdown + t[3];
+    let p = if x < t[0] {
+        if t[0] > f32::EPSILON {
+            x / t[0] * 0.5
         } else {
-            x -= t[1];
-            if x < t[2] && t[2] > f32::EPSILON {
-                1.0 - (x / t[2])
-            } else {
-                0.0
-            }
+            0.5
         }
-    }
-    .clamp(0.0, 1.0);
-    Some(mix)
+    } else if x < rup_plus_ath {
+        0.5
+    } else if x < rupath_plus_rdown {
+        if t[2] > f32::EPSILON {
+            0.5 + ((x - rup_plus_ath) / t[2]) * 0.5
+        } else {
+            1.0
+        }
+    } else if x < rupathrdown_plus_atf {
+        1.0
+    } else {
+        0.0
+    };
+    Some(p.clamp(0.0, 1.0))
 }
 
 #[inline(always)]
