@@ -124,6 +124,82 @@ fn receptor_glow_duration_for_col(state: &State, col: usize) -> f32 {
 }
 
 #[inline(always)]
+fn receptor_glow_behavior_for_col(state: &State, col: usize) -> noteskin::ReceptorGlowBehavior {
+    let player = if state.num_players <= 1 || state.cols_per_player == 0 {
+        0
+    } else {
+        (col / state.cols_per_player).min(state.num_players.saturating_sub(1))
+    };
+    state.noteskin[player]
+        .as_ref()
+        .map(|ns| ns.receptor_glow_behavior)
+        .unwrap_or_default()
+}
+
+#[inline(always)]
+fn lane_is_pressed(state: &State, col: usize) -> bool {
+    state.keyboard_lane_state[col] || state.gamepad_lane_state[col]
+}
+
+#[inline(always)]
+fn trigger_receptor_glow_pulse(state: &mut State, col: usize) {
+    let behavior = receptor_glow_behavior_for_col(state, col);
+    state.receptor_glow_press_timers[col] = 0.0;
+    state.receptor_glow_lift_start_alpha[col] = behavior.press_alpha_start;
+    state.receptor_glow_lift_start_zoom[col] = behavior.press_zoom_start;
+    state.receptor_glow_timers[col] = receptor_glow_duration_for_col(state, col);
+}
+
+#[inline(always)]
+fn start_receptor_glow_press(state: &mut State, col: usize) {
+    let behavior = receptor_glow_behavior_for_col(state, col);
+    state.receptor_glow_timers[col] = 0.0;
+    state.receptor_glow_press_timers[col] = behavior.press_duration;
+    state.receptor_glow_lift_start_alpha[col] = behavior.press_alpha_end;
+    state.receptor_glow_lift_start_zoom[col] = behavior.press_zoom_end;
+}
+
+#[inline(always)]
+fn release_receptor_glow(state: &mut State, col: usize) {
+    let behavior = receptor_glow_behavior_for_col(state, col);
+    let (alpha, zoom) = if state.receptor_glow_press_timers[col] > f32::EPSILON
+        && behavior.press_duration > f32::EPSILON
+    {
+        behavior.sample_press(state.receptor_glow_press_timers[col])
+    } else {
+        (behavior.press_alpha_end, behavior.press_zoom_end)
+    };
+    state.receptor_glow_press_timers[col] = 0.0;
+    state.receptor_glow_lift_start_alpha[col] = alpha;
+    state.receptor_glow_lift_start_zoom[col] = zoom;
+    state.receptor_glow_timers[col] = receptor_glow_duration_for_col(state, col);
+}
+
+#[inline(always)]
+pub fn receptor_glow_visual_for_col(state: &State, col: usize) -> Option<(f32, f32)> {
+    if col >= state.num_cols {
+        return None;
+    }
+    let behavior = receptor_glow_behavior_for_col(state, col);
+    if lane_is_pressed(state, col) {
+        if state.receptor_glow_press_timers[col] > f32::EPSILON
+            && behavior.press_duration > f32::EPSILON
+        {
+            return Some(behavior.sample_press(state.receptor_glow_press_timers[col]));
+        }
+        return Some((behavior.press_alpha_end, behavior.press_zoom_end));
+    }
+    if state.receptor_glow_timers[col] > f32::EPSILON {
+        return Some(behavior.sample_lift(
+            state.receptor_glow_timers[col],
+            state.receptor_glow_lift_start_alpha[col],
+            state.receptor_glow_lift_start_zoom[col],
+        ));
+    }
+    None
+}
+
+#[inline(always)]
 fn quantization_index_from_beat(beat: f32) -> u8 {
     // Match ITG's BeatToNoteType path: round beat->row at 48 rows/beat,
     // then classify by measure-subdivision divisibility.
@@ -1438,6 +1514,9 @@ pub struct State {
     pub reverse_scroll: [bool; MAX_PLAYERS],
     pub column_scroll_dirs: [f32; MAX_COLS],
     pub receptor_glow_timers: [f32; MAX_COLS],
+    receptor_glow_press_timers: [f32; MAX_COLS],
+    receptor_glow_lift_start_alpha: [f32; MAX_COLS],
+    receptor_glow_lift_start_zoom: [f32; MAX_COLS],
     pub receptor_bop_timers: [f32; MAX_COLS],
     pub tap_explosions: [Option<ActiveTapExplosion>; MAX_COLS],
     pub mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
@@ -2773,6 +2852,9 @@ pub fn init(
         reverse_scroll,
         column_scroll_dirs,
         receptor_glow_timers: [0.0; MAX_COLS],
+        receptor_glow_press_timers: [0.0; MAX_COLS],
+        receptor_glow_lift_start_alpha: [0.0; MAX_COLS],
+        receptor_glow_lift_start_zoom: [1.0; MAX_COLS],
         receptor_bop_timers: [0.0; MAX_COLS],
         tap_explosions: Default::default(),
         mine_explosions: Default::default(),
@@ -3799,8 +3881,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                         );
 
                         if !hide_early_dw_flash {
-                            state.receptor_glow_timers[note_col] =
-                                receptor_glow_duration_for_col(state, note_col);
+                            trigger_receptor_glow_pulse(state, note_col);
                             trigger_tap_explosion(state, note_col, grade);
                         }
 
@@ -3881,8 +3962,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                         break;
                     }
                 }
-                state.receptor_glow_timers[note_col] =
-                    receptor_glow_duration_for_col(state, note_col);
+                trigger_receptor_glow_pulse(state, note_col);
                 trigger_tap_explosion(state, note_col, grade);
                 if let Some(end_time) = state.hold_end_time_cache[idx]
                     && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
@@ -3967,8 +4047,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                         break;
                     }
                 }
-                state.receptor_glow_timers[note_col] =
-                    receptor_glow_duration_for_col(state, note_col);
+                trigger_receptor_glow_pulse(state, note_col);
                 trigger_tap_explosion(state, note_col, grade);
                 if let Some(end_time) = state.hold_end_time_cache[idx]
                     && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
@@ -4094,6 +4173,10 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
         state.keyboard_lane_state = [false; MAX_COLS];
         state.gamepad_lane_state = [false; MAX_COLS];
         state.prev_inputs = [false; MAX_COLS];
+        state.receptor_glow_timers = [0.0; MAX_COLS];
+        state.receptor_glow_press_timers = [0.0; MAX_COLS];
+        state.receptor_glow_lift_start_alpha = [0.0; MAX_COLS];
+        state.receptor_glow_lift_start_zoom = [1.0; MAX_COLS];
         state.pending_edges.clear();
         state.autoplay_lane_state = [false; MAX_COLS];
         state.autoplay_hold_release_time = [None; MAX_COLS];
@@ -4632,21 +4715,22 @@ fn process_input_edges(state: &mut State) {
         if lane_idx >= state.num_cols {
             continue;
         }
-        let was_down = state.keyboard_lane_state[lane_idx] || state.gamepad_lane_state[lane_idx];
+        let was_down = lane_is_pressed(state, lane_idx);
         match edge.source {
             InputSource::Keyboard => state.keyboard_lane_state[lane_idx] = edge.pressed,
             InputSource::Gamepad => state.gamepad_lane_state[lane_idx] = edge.pressed,
         }
-        let is_down = state.keyboard_lane_state[lane_idx] || state.gamepad_lane_state[lane_idx];
+        let is_down = lane_is_pressed(state, lane_idx);
         if edge.pressed && is_down && !was_down {
+            start_receptor_glow_press(state, lane_idx);
             let event_music_time = edge.event_music_time;
             let hit_note = judge_a_tap(state, lane_idx, event_music_time);
             refresh_roll_life_on_step(state, lane_idx);
             if !hit_note {
-                state.receptor_glow_timers[lane_idx] =
-                    receptor_glow_duration_for_col(state, lane_idx);
                 state.receptor_bop_timers[lane_idx] = 0.11;
             }
+        } else if !edge.pressed && was_down && !is_down {
+            release_receptor_glow(state, lane_idx);
         }
     }
 }
@@ -4700,8 +4784,16 @@ fn decay_let_go_hold_life(state: &mut State) {
 
 #[inline(always)]
 fn tick_visual_effects(state: &mut State, delta_time: f32) {
-    for timer in &mut state.receptor_glow_timers {
-        *timer = (*timer - delta_time).max(0.0);
+    for col in 0..state.num_cols {
+        if lane_is_pressed(state, col) {
+            state.receptor_glow_timers[col] = 0.0;
+            state.receptor_glow_press_timers[col] =
+                (state.receptor_glow_press_timers[col] - delta_time).max(0.0);
+        } else {
+            state.receptor_glow_press_timers[col] = 0.0;
+            state.receptor_glow_timers[col] =
+                (state.receptor_glow_timers[col] - delta_time).max(0.0);
+        }
     }
     for timer in &mut state.receptor_bop_timers {
         *timer = (*timer - delta_time).max(0.0);

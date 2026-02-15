@@ -1,12 +1,12 @@
 use crate::act;
 use crate::core::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
 use crate::core::space::*;
-use crate::game::gameplay::active_hold_is_engaged;
 use crate::game::gameplay::{
     COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind,
     HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
 };
+use crate::game::gameplay::{active_hold_is_engaged, receptor_glow_visual_for_col};
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, TimingWindow};
 use crate::game::note::{HoldResult, NoteType};
 use crate::game::parsing::noteskin::{
@@ -1765,8 +1765,7 @@ pub fn build(
                 }
             }
             if !profile.hide_targets {
-                let glow_timer = state.receptor_glow_timers[col];
-                if glow_timer > 0.0
+                if let Some((alpha, zoom)) = receptor_glow_visual_for_col(state, col)
                     && let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref())
                 {
                     let glow_frame =
@@ -1775,7 +1774,6 @@ pub fn build(
                         glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen);
                     let glow_size = scale_sprite(glow_slot.size());
                     let behavior = ns.receptor_glow_behavior;
-                    let (alpha, zoom) = behavior.sample(glow_timer);
                     if alpha > f32::EPSILON {
                         let width = glow_size[0] * zoom;
                         let height = glow_size[1] * zoom;

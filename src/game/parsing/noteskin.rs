@@ -789,6 +789,12 @@ pub struct TapExplosion {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ReceptorGlowBehavior {
+    pub press_duration: f32,
+    pub press_alpha_start: f32,
+    pub press_alpha_end: f32,
+    pub press_zoom_start: f32,
+    pub press_zoom_end: f32,
+    pub press_tween: TweenType,
     pub duration: f32,
     pub alpha_start: f32,
     pub alpha_end: f32,
@@ -799,7 +805,30 @@ pub struct ReceptorGlowBehavior {
 }
 
 impl ReceptorGlowBehavior {
-    pub fn sample(self, timer_remaining: f32) -> (f32, f32) {
+    pub fn sample_press(self, timer_remaining: f32) -> (f32, f32) {
+        let duration = self.press_duration.max(0.0);
+        if duration <= f32::EPSILON {
+            return (
+                self.press_alpha_end.clamp(0.0, 1.0),
+                self.press_zoom_end.max(0.0),
+            );
+        }
+        let elapsed = (duration - timer_remaining.clamp(0.0, duration)).clamp(0.0, duration);
+        let progress = elapsed / duration;
+        let eased = self.press_tween.ease(progress);
+        let alpha =
+            (self.press_alpha_end - self.press_alpha_start).mul_add(eased, self.press_alpha_start);
+        let zoom =
+            (self.press_zoom_end - self.press_zoom_start).mul_add(eased, self.press_zoom_start);
+        (alpha.clamp(0.0, 1.0), zoom.max(0.0))
+    }
+
+    pub fn sample_lift(
+        self,
+        timer_remaining: f32,
+        start_alpha: f32,
+        start_zoom: f32,
+    ) -> (f32, f32) {
         let duration = self.duration.max(0.0);
         if duration <= f32::EPSILON {
             return (self.alpha_end.clamp(0.0, 1.0), self.zoom_end.max(0.0));
@@ -807,8 +836,8 @@ impl ReceptorGlowBehavior {
         let elapsed = (duration - timer_remaining.clamp(0.0, duration)).clamp(0.0, duration);
         let progress = elapsed / duration;
         let eased = self.tween.ease(progress);
-        let alpha = (self.alpha_end - self.alpha_start).mul_add(eased, self.alpha_start);
-        let zoom = (self.zoom_end - self.zoom_start).mul_add(eased, self.zoom_start);
+        let alpha = (self.alpha_end - start_alpha).mul_add(eased, start_alpha);
+        let zoom = (self.zoom_end - start_zoom).mul_add(eased, start_zoom);
         (alpha.clamp(0.0, 1.0), zoom.max(0.0))
     }
 }
@@ -816,6 +845,12 @@ impl ReceptorGlowBehavior {
 impl Default for ReceptorGlowBehavior {
     fn default() -> Self {
         Self {
+            press_duration: 0.0,
+            press_alpha_start: 1.0,
+            press_alpha_end: 1.0,
+            press_zoom_start: 1.0,
+            press_zoom_end: 1.0,
+            press_tween: TweenType::Linear,
             duration: 0.2,
             alpha_start: 1.0,
             alpha_end: 0.0,
@@ -2502,6 +2537,33 @@ fn itg_receptor_glow_behavior(
     let lift = itg_parse_command_effect(&lift_cmd);
     let none = itg_parse_command_effect(&none_cmd);
 
+    out.press_duration = press.duration.max(0.0);
+    out.press_alpha_start = press
+        .start_alpha
+        .or(press.target_alpha)
+        .or(init.target_alpha)
+        .unwrap_or(out.press_alpha_start);
+    out.press_alpha_end = press
+        .target_alpha
+        .or(press.start_alpha)
+        .or(init.target_alpha)
+        .unwrap_or(out.press_alpha_end);
+    out.press_zoom_start = press
+        .start_zoom
+        .or(press.target_zoom)
+        .or(init.target_zoom)
+        .unwrap_or(out.press_zoom_start);
+    out.press_zoom_end = press
+        .target_zoom
+        .or(press.start_zoom)
+        .or(init.target_zoom)
+        .unwrap_or(out.press_zoom_end);
+    out.press_tween = if press.duration > f32::EPSILON {
+        press.tween
+    } else {
+        out.press_tween
+    };
+
     out.duration = if lift.duration > f32::EPSILON {
         lift.duration
     } else if none.duration > f32::EPSILON {
@@ -2511,21 +2573,13 @@ fn itg_receptor_glow_behavior(
     } else {
         out.duration
     };
-    out.alpha_start = press
-        .start_alpha
-        .or(press.target_alpha)
-        .or(init.target_alpha)
-        .unwrap_or(out.alpha_start);
+    out.alpha_start = out.press_alpha_end;
     out.alpha_end = lift
         .target_alpha
         .or(none.target_alpha)
         .or(init.target_alpha)
         .unwrap_or(0.0);
-    out.zoom_start = press
-        .start_zoom
-        .or(press.target_zoom)
-        .or(init.target_zoom)
-        .unwrap_or(out.zoom_start);
+    out.zoom_start = out.press_zoom_end;
     out.zoom_end = lift
         .target_zoom
         .or(none.target_zoom)
@@ -2545,6 +2599,11 @@ fn itg_receptor_glow_behavior(
         .or(lift.blend_add)
         .or(init.blend_add)
         .unwrap_or(out.blend_add);
+    out.press_alpha_start = out.press_alpha_start.clamp(0.0, 1.0);
+    out.press_alpha_end = out.press_alpha_end.clamp(0.0, 1.0);
+    out.press_zoom_start = out.press_zoom_start.max(0.0);
+    out.press_zoom_end = out.press_zoom_end.max(0.0);
+    out.press_duration = out.press_duration.max(0.0);
     out.alpha_start = out.alpha_start.clamp(0.0, 1.0);
     out.alpha_end = out.alpha_end.clamp(0.0, 1.0);
     out.zoom_start = out.zoom_start.max(0.0);
@@ -5931,6 +5990,57 @@ mod tests {
             [16.0, 16.0],
             "lambda circle logical size should honor '(doubleres)' source dimensions"
         );
+    }
+
+    #[test]
+    fn default_receptor_overlay_press_and_lift_behavior_is_parsed() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        let behavior = ns.receptor_glow_behavior;
+
+        assert!(
+            (behavior.press_duration - 0.2).abs() <= 1e-6,
+            "default press command duration should be 0.2s"
+        );
+        assert!(
+            (behavior.press_alpha_start - 0.8).abs() <= 1e-6,
+            "default press command should start overlay alpha at 0.8"
+        );
+        assert!(
+            (behavior.press_alpha_end - 0.4).abs() <= 1e-6,
+            "default press command should settle overlay alpha at 0.4 while held"
+        );
+        assert!(
+            (behavior.duration - 0.2).abs() <= 1e-6,
+            "default lift command duration should be 0.2s"
+        );
+        assert!(
+            behavior.alpha_end.abs() <= 1e-6,
+            "default lift command should fade overlay alpha to 0"
+        );
+
+        let (press_start_alpha, press_start_zoom) = behavior.sample_press(behavior.press_duration);
+        let (press_end_alpha, press_end_zoom) = behavior.sample_press(0.0);
+        assert!((press_start_alpha - behavior.press_alpha_start).abs() <= 1e-6);
+        assert!((press_end_alpha - behavior.press_alpha_end).abs() <= 1e-6);
+        assert!((press_start_zoom - behavior.press_zoom_start).abs() <= 1e-6);
+        assert!((press_end_zoom - behavior.press_zoom_end).abs() <= 1e-6);
+
+        let (lift_start_alpha, lift_start_zoom) = behavior.sample_lift(
+            behavior.duration,
+            behavior.press_alpha_end,
+            behavior.press_zoom_end,
+        );
+        let (lift_end_alpha, lift_end_zoom) =
+            behavior.sample_lift(0.0, behavior.press_alpha_end, behavior.press_zoom_end);
+        assert!((lift_start_alpha - behavior.press_alpha_end).abs() <= 1e-6);
+        assert!((lift_start_zoom - behavior.press_zoom_end).abs() <= 1e-6);
+        assert!((lift_end_alpha - behavior.alpha_end).abs() <= 1e-6);
+        assert!((lift_end_zoom - behavior.zoom_end).abs() <= 1e-6);
     }
 
     #[test]
