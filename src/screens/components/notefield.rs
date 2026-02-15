@@ -2419,38 +2419,39 @@ pub fn build(
                     let u1 = cap_uv[2];
                     let mut v0 = cap_uv[1];
                     let mut v1 = cap_uv[3];
-                    // Only draw the tail cap if the rendered body actually reaches
-                    // the cap side. This prevents floating caps when no body segments
-                    // were drawn near the tail due to scroll gimmicks.
-                    let (rt, rb) = match (rendered_body_top, rendered_body_bottom) {
-                        (Some(t), Some(b)) if b > t + 0.5 => (t, b),
-                        _ => {
+                    let body_anchor = match (rendered_body_top, rendered_body_bottom) {
+                        (Some(t), Some(b)) if b > t + 0.5 => Some((t, b)),
+                        _ => None,
+                    };
+                    // ITG always draws the tail cap path (DrawHoldBodyInternal -> hpt_bottom),
+                    // even when no body strip vertices are emitted. Keep body-edge anchoring
+                    // when available, but fall back to tail-based placement otherwise so
+                    // very short holds remain visible.
+                    let (mut cap_top, mut cap_bottom) = if let Some((rt, rb)) = body_anchor {
+                        let cap_adjacent_ok = if head_is_top {
+                            // Tail visually below; ensure the drawn body bottom is near the tail.
+                            let dist = body_tail_y - rb;
+                            dist >= -2.0 && dist <= cap_height + 2.0
+                        } else {
+                            // Tail visually above; ensure the drawn body top is near the tail.
+                            let dist = rt - body_tail_y;
+                            dist >= -2.0 && dist <= cap_height + 2.0
+                        };
+                        if !cap_adjacent_ok {
                             continue;
                         }
-                    };
-                    let cap_adjacent_ok = if head_is_top {
-                        // Tail visually below; ensure the drawn body bottom is near the tail.
-                        let dist = body_tail_y - rb;
-                        dist >= -2.0 && dist <= cap_height + 2.0
+                        // Anchor cap join to the actual rendered body edge. This avoids
+                        // sub-pixel drift leaving a 1px seam at the body/cap boundary.
+                        if head_is_top {
+                            (rb, rb + cap_height)
+                        } else {
+                            (rt - cap_height, rt)
+                        }
+                    } else if head_is_top {
+                        (body_tail_y, body_tail_y + cap_height)
                     } else {
-                        // Tail visually above; ensure the drawn body top is near the tail.
-                        let dist = rt - body_tail_y;
-                        dist >= -2.0 && dist <= cap_height + 2.0
+                        (body_tail_y - cap_height, body_tail_y)
                     };
-                    if !cap_adjacent_ok {
-                        continue;
-                    }
-                    // Anchor cap join to the actual rendered body edge. This avoids
-                    // sub-pixel drift leaving a 1px seam at the body/cap boundary.
-                    let mut cap_top;
-                    let mut cap_bottom;
-                    if head_is_top {
-                        cap_top = rb;
-                        cap_bottom = cap_top + cap_height;
-                    } else {
-                        cap_bottom = rt;
-                        cap_top = cap_bottom - cap_height;
-                    }
                     let mut cap_center = (cap_top + cap_bottom) * 0.5;
                     if cap_height > f32::EPSILON {
                         let v_span = v1 - v0;
