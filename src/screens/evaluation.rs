@@ -1637,12 +1637,13 @@ fn build_gs_records_pane(
     let pane_zoom = 0.8_f32;
     let row_height = 22.0 * pane_zoom;
     let first_row_y = row_height;
-    let rank_x = -120.0 * pane_zoom;
-    let name_x = -110.0 * pane_zoom;
-    let score_x = -24.0 * pane_zoom;
-    let date_x = 50.0 * pane_zoom;
+    let rank_x = -130.0 * pane_zoom;
+    let name_x = -120.0 * pane_zoom;
+    let score_x = 16.0 * pane_zoom;
+    let date_x = 72.0 * pane_zoom;
     let text_zoom = pane_zoom;
-    let name_max_width = 80.0;
+    let rank_max_width = 55.0;
+    let name_max_width = 130.0;
 
     let mut rows: Vec<(String, String, String, String, [f32; 4], [f32; 4])> =
         Vec::with_capacity(GS_RECORD_ROWS);
@@ -1746,6 +1747,13 @@ fn build_gs_records_pane(
     }
 
     let mut children = Vec::with_capacity(GS_RECORD_ROWS * 4 + 1);
+    children.push(act!(sprite("GrooveStats.png"):
+        align(0.5, 0.5):
+        xy(0.0, 100.0 * pane_zoom):
+        zoom(1.5 * pane_zoom):
+        diffuse(1.0, 1.0, 1.0, 0.5):
+        z(100)
+    ));
     for (i, (rank, name, score, date, row_col, score_col)) in rows.into_iter().enumerate() {
         let y = first_row_y + i as f32 * row_height;
         children.push(act!(text:
@@ -1754,6 +1762,7 @@ fn build_gs_records_pane(
             align(1.0, 0.5):
             xy(rank_x, y):
             zoom(text_zoom):
+            maxwidth(rank_max_width):
             z(101):
             diffuse(row_col[0], row_col[1], row_col[2], row_col[3]):
             horizalign(right)
@@ -1790,13 +1799,6 @@ fn build_gs_records_pane(
             horizalign(left)
         ));
     }
-
-    children.push(act!(sprite("GrooveStats.png"):
-        align(0.5, 0.5):
-        xy(165.0 * pane_zoom, 25.0 * pane_zoom):
-        zoom(0.3 * pane_zoom):
-        z(102)
-    ));
 
     vec![Actor::Frame {
         align: [0.5, 0.5],
