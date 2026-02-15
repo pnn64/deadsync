@@ -166,6 +166,7 @@ pub struct ModelAutoRotKey {
 #[derive(Debug, Clone)]
 pub struct SpriteSlot {
     pub def: SpriteDefinition,
+    pub source_size: [i32; 2],
     pub source: Arc<SpriteSource>,
     pub uv_velocity: [f32; 2],
     pub uv_offset: [f32; 2],
@@ -223,13 +224,10 @@ impl SpriteSlot {
 
     #[inline(always)]
     pub fn logical_size(&self) -> [f32; 2] {
-        let mut width = self.def.size[0].max(0) as f32;
-        let mut height = self.def.size[1].max(0) as f32;
-        if crate::assets::parse_texture_hints(self.texture_key()).doubleres {
-            width *= 0.5;
-            height *= 0.5;
-        }
-        [width, height]
+        [
+            self.source_size[0].max(0) as f32,
+            self.source_size[1].max(0) as f32,
+        ]
     }
 
     pub fn frame_index(&self, time: f32, beat: f32) -> usize {
@@ -2042,9 +2040,12 @@ fn load_itg_sprite_noteskin(
         .iter()
         .find(|sprite| sprite.commands.contains_key("hitminecommand"))
         .or_else(|| {
-            explosion_sprites
-                .iter()
-                .find(|sprite| sprite.element.to_ascii_lowercase().contains("hitmine explosion"))
+            explosion_sprites.iter().find(|sprite| {
+                sprite
+                    .element
+                    .to_ascii_lowercase()
+                    .contains("hitmine explosion")
+            })
         });
     let mine_slot = mine_source
         .map(|sprite| sprite.slot.clone())
@@ -3277,6 +3278,7 @@ fn itg_texture_key(path: &Path) -> Option<String> {
 fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
     let key = itg_texture_key(path)?;
     let dims = texture_dimensions(&key)?;
+    let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
     let source = Arc::new(SpriteSource::Atlas {
         texture_key: key,
         tex_dims: dims,
@@ -3289,6 +3291,7 @@ fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
             mirror_h: false,
             mirror_v: false,
         },
+        source_size: [source_frame.0 as i32, source_frame.1 as i32],
         source,
         uv_velocity: [0.0, 0.0],
         uv_offset: [0.0, 0.0],
@@ -5304,6 +5307,7 @@ fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<SpriteSlot
     let row = idx / cols;
     let frame_w = (dims.0 / cols as u32).max(1);
     let frame_h = (dims.1 / rows as u32).max(1);
+    let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
     let source = Arc::new(SpriteSource::Atlas {
         texture_key: key,
         tex_dims: dims,
@@ -5316,6 +5320,7 @@ fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<SpriteSlot
             mirror_h: false,
             mirror_v: false,
         },
+        source_size: [source_frame.0 as i32, source_frame.1 as i32],
         source,
         uv_velocity: [0.0, 0.0],
         uv_offset: [0.0, 0.0],
@@ -5351,6 +5356,7 @@ fn itg_slot_from_path_animated(
     let row = start / cols;
     let frame_w = (dims.0 / cols as u32).max(1);
     let frame_h = (dims.1 / rows as u32).max(1);
+    let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
     let default_delay = frame_delays
         .and_then(|delays| delays.first().copied())
         .unwrap_or(1.0)
@@ -5387,6 +5393,7 @@ fn itg_slot_from_path_animated(
             mirror_h: false,
             mirror_v: false,
         },
+        source_size: [source_frame.0 as i32, source_frame.1 as i32],
         source,
         uv_velocity: [0.0, 0.0],
         uv_offset: [0.0, 0.0],
@@ -5887,6 +5894,42 @@ mod tests {
         assert_eq!(
             circle_layers, 4,
             "default tap note should keep four circle layers"
+        );
+    }
+
+    #[test]
+    fn lambda_tap_note_uses_source_size_hints() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "lambda")
+            .expect("dance/lambda should load from assets/noteskins");
+        let q4_layers = ns
+            .note_layers
+            .first()
+            .expect("lambda should expose 4th-note tap layers");
+        assert_eq!(
+            q4_layers.len(),
+            5,
+            "lambda tap note should have arrow + four circles"
+        );
+        let arrow = q4_layers
+            .first()
+            .expect("lambda should expose primary arrow layer");
+        assert_eq!(
+            arrow.logical_size(),
+            [64.0, 64.0],
+            "lambda arrow logical size should use '(res 64x512)' source frame dimensions"
+        );
+        let circle = q4_layers
+            .iter()
+            .find(|slot| slot.texture_key().to_ascii_lowercase().contains("_circle"))
+            .expect("lambda should expose circle layers");
+        assert_eq!(
+            circle.logical_size(),
+            [16.0, 16.0],
+            "lambda circle logical size should honor '(doubleres)' source dimensions"
         );
     }
 

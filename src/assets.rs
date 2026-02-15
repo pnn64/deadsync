@@ -40,6 +40,128 @@ impl TextureHints {
     }
 }
 
+#[inline(always)]
+fn has_ascii_case_insensitive_substr(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack
+        .windows(needle.len())
+        .any(|window| window.eq_ignore_ascii_case(needle))
+}
+
+#[inline(always)]
+fn parse_ascii_digits(bytes: &[u8]) -> Option<u32> {
+    if bytes.is_empty() {
+        return None;
+    }
+    let mut value = 0u32;
+    for &b in bytes {
+        if !b.is_ascii_digit() {
+            return None;
+        }
+        value = value.checked_mul(10)?.checked_add(u32::from(b - b'0'))?;
+    }
+    Some(value)
+}
+
+#[inline(always)]
+fn is_res_tag(bytes: &[u8], idx: usize) -> bool {
+    idx + 4 <= bytes.len()
+        && bytes[idx] == b'('
+        && bytes[idx + 1].eq_ignore_ascii_case(&b'r')
+        && bytes[idx + 2].eq_ignore_ascii_case(&b'e')
+        && bytes[idx + 3].eq_ignore_ascii_case(&b's')
+}
+
+#[inline(always)]
+fn skip_parenthetical(bytes: &[u8], start: usize) -> usize {
+    let mut depth = 0usize;
+    let mut idx = start;
+    while idx < bytes.len() {
+        match bytes[idx] {
+            b'(' => depth += 1,
+            b')' => {
+                if depth == 0 {
+                    return idx + 1;
+                }
+                depth -= 1;
+                if depth == 0 {
+                    return idx + 1;
+                }
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    bytes.len()
+}
+
+fn parse_texture_resolution_hint(raw: &str) -> Option<(u32, u32)> {
+    let bytes = raw.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] != b'(' {
+            i += 1;
+            continue;
+        }
+        let end = skip_parenthetical(bytes, i);
+        if end <= i + 2 {
+            i = end.max(i + 1);
+            continue;
+        }
+        let section = raw.get(i + 1..end - 1)?.to_ascii_lowercase();
+        let mut scan = 0usize;
+        while let Some(rel) = section[scan..].find("res ") {
+            let start = scan + rel + 4;
+            let tail = section[start..].trim_start();
+            let Some(x_pos) = tail.find('x') else {
+                break;
+            };
+            let width_txt = tail[..x_pos].trim();
+            if width_txt.is_empty() || !width_txt.bytes().all(|b| b.is_ascii_digit()) {
+                scan = start + 1;
+                continue;
+            }
+            let after_x = &tail[x_pos + 1..];
+            let height_len = after_x.bytes().take_while(|b| b.is_ascii_digit()).count();
+            if height_len == 0 {
+                scan = start + x_pos + 1;
+                continue;
+            }
+            let height_txt = &after_x[..height_len];
+            let (Ok(width), Ok(height)) = (width_txt.parse::<u32>(), height_txt.parse::<u32>())
+            else {
+                scan = start + x_pos + 1 + height_len;
+                continue;
+            };
+            if width > 0 && height > 0 {
+                return Some((width, height));
+            }
+            scan = start + x_pos + 1 + height_len;
+        }
+        i = end.max(i + 1);
+    }
+    None
+}
+
+pub fn texture_source_dims_from_real(texture_key: &str, real_w: u32, real_h: u32) -> (u32, u32) {
+    let (mut source_w, mut source_h) =
+        parse_texture_resolution_hint(texture_key).unwrap_or((real_w, real_h));
+    if parse_texture_hints(texture_key).doubleres {
+        source_w /= 2;
+        source_h /= 2;
+    }
+    (source_w, source_h)
+}
+
+pub fn texture_source_frame_dims_from_real(
+    texture_key: &str,
+    real_w: u32,
+    real_h: u32,
+) -> (u32, u32) {
+    let (source_w, source_h) = texture_source_dims_from_real(texture_key, real_w, real_h);
+    let (frames_wide, frames_high) = parse_sprite_sheet_dims(texture_key);
+    (source_w / frames_wide.max(1), source_h / frames_high.max(1))
+}
+
 pub fn parse_texture_hints(raw: &str) -> TextureHints {
     let mut hints = TextureHints::default();
     let trimmed = raw.trim();
@@ -52,12 +174,7 @@ pub fn parse_texture_hints(raw: &str) -> TextureHints {
     }
 
     // Zero-allocation case-insensitive substring check
-    let has = |sub: &[u8]| {
-        trimmed
-            .as_bytes()
-            .windows(sub.len())
-            .any(|w| w.eq_ignore_ascii_case(sub))
-    };
+    let has = |sub: &[u8]| has_ascii_case_insensitive_substr(trimmed.as_bytes(), sub);
 
     if has(b"32bpp") {
         hints.color_depth = Some(32);
@@ -203,54 +320,6 @@ fn append_noteskins_pngs_recursive(list: &mut Vec<(String, String)>, folder: &st
 }
 
 pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
-    #[inline(always)]
-    fn parse_ascii_digits(bytes: &[u8]) -> Option<u32> {
-        if bytes.is_empty() {
-            return None;
-        }
-        let mut value: u32 = 0;
-        for &b in bytes {
-            if !b.is_ascii_digit() {
-                return None;
-            }
-            let digit = u32::from(b - b'0');
-            value = value.checked_mul(10)?.checked_add(digit)?;
-        }
-        Some(value)
-    }
-
-    #[inline(always)]
-    fn is_res_tag(bytes: &[u8], idx: usize) -> bool {
-        idx + 4 <= bytes.len()
-            && bytes[idx] == b'('
-            && bytes[idx + 1].eq_ignore_ascii_case(&b'r')
-            && bytes[idx + 2].eq_ignore_ascii_case(&b'e')
-            && bytes[idx + 3].eq_ignore_ascii_case(&b's')
-    }
-
-    #[inline(always)]
-    fn skip_parenthetical(bytes: &[u8], start: usize) -> usize {
-        let mut depth = 0usize;
-        let mut idx = start;
-        while idx < bytes.len() {
-            match bytes[idx] {
-                b'(' => depth += 1,
-                b')' => {
-                    if depth == 0 {
-                        return idx + 1;
-                    }
-                    depth -= 1;
-                    if depth == 0 {
-                        return idx + 1;
-                    }
-                }
-                _ => {}
-            }
-            idx += 1;
-        }
-        bytes.len()
-    }
-
     let bytes = filename.as_bytes();
     let mut dims: Option<(u32, u32)> = None;
     let mut i = 0usize;

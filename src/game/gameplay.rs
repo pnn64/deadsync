@@ -4748,7 +4748,9 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
             let lifetime = state.noteskin[player]
                 .as_ref()
                 .and_then(|ns| ns.mine_hit_explosion.as_ref())
-                .map_or(MINE_EXPLOSION_DURATION, |explosion| explosion.animation.duration());
+                .map_or(MINE_EXPLOSION_DURATION, |explosion| {
+                    explosion.animation.duration()
+                });
             if lifetime <= 0.0 || active.elapsed >= lifetime {
                 *explosion = None;
             }

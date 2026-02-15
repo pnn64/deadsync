@@ -6,7 +6,9 @@ use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
-use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization};
+use crate::game::parsing::noteskin::{
+    self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization,
+};
 use crate::game::song::SongData;
 use crate::screens::components::heart_bg;
 use crate::screens::components::notefield::noteskin_model_actor;
