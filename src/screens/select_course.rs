@@ -40,10 +40,8 @@ const COURSE_TRACKLIST_TARGET_VISIBLE_ROWS: usize = 6;
 const COURSE_TRACKLIST_SCROLL_MIN_ENTRIES: usize = 6;
 // Manual tune knob for the whole course tracklist text block.
 // Negative moves up, positive moves down.
-const COURSE_TRACKLIST_TEXT_Y_OFFSET: f32 = -8.0;
-const COURSE_TRACKLIST_ROW_SPACING_MIN: f32 = 12.0;
-const COURSE_TRACKLIST_TEXT_ZOOM_MIN: f32 = 0.8;
-const COURSE_TRACKLIST_TEXT_ZOOM_MAX: f32 = 0.92;
+const COURSE_TRACKLIST_TEXT_Y_OFFSET: f32 = 0.0;
+const COURSE_TRACKLIST_TEXT_HEIGHT: f32 = 15.0;
 
 rgba_const!(UI_BOX_BG_COLOR, "#1E282F");
 rgba_const!(COURSE_WHEEL_SONG_TEXT_COLOR, "#D77272");
@@ -1031,6 +1029,74 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             [0.5, 0.5, 0.5, 1.0],
         ),
     };
+    let has_desc = !desc_text.trim().is_empty();
+    let desc_h = if has_desc { 16.0 } else { 0.0 };
+    let list_left_x = panel_cx - panel_w * 0.5 + 10.0;
+    let list_title_x = list_left_x + 38.0;
+    let list_start_y = panel_top + 8.0 + COURSE_TRACKLIST_TEXT_Y_OFFSET;
+    let list_bottom_y = panel_cy + panel_h * 0.5 - 8.0 - desc_h + COURSE_TRACKLIST_TEXT_Y_OFFSET;
+    if let Some(meta) = selected_meta.as_ref()
+        && !meta.entries.is_empty()
+    {
+        let visible_rows = meta
+            .entries
+            .len()
+            .min(COURSE_TRACKLIST_TARGET_VISIBLE_ROWS)
+            .max(1);
+        let row_spacing = COURSE_TRACKLIST_ROW_SPACING;
+        let (start_idx, frac, _) =
+            course_tracklist_scroll(meta.entries.len(), visible_rows, state.session_elapsed);
+        let rows_to_draw = visible_rows + 2;
+        let title_maxwidth = (panel_w - (list_title_x - list_left_x) - 14.0).max(40.0);
+        for row in 0..rows_to_draw {
+            let idx = start_idx + row;
+            if idx >= meta.entries.len() {
+                break;
+            }
+            let entry = &meta.entries[idx];
+            let y = list_start_y + row as f32 * row_spacing - frac * row_spacing;
+            if y > list_bottom_y + 0.5 {
+                break;
+            }
+            let diff_text = entry
+                .meter
+                .map(|meter| meter.to_string())
+                .unwrap_or_else(|| "?".to_string());
+            let diff_color = color::difficulty_rgba(&entry.difficulty, state.active_color_index);
+            actors.push(act!(text:
+                font("miso"):
+                settext(diff_text):
+                align(0.0, 0.0):
+                xy(list_left_x, y):
+                zoomtoheight(COURSE_TRACKLIST_TEXT_HEIGHT):
+                maxwidth(34.0):
+                z(121):
+                diffuse(diff_color[0], diff_color[1], diff_color[2], 1.0)
+            ));
+            actors.push(act!(text:
+                font("miso"):
+                settext(entry.title.clone()):
+                align(0.0, 0.0):
+                xy(list_title_x, y):
+                zoomtoheight(COURSE_TRACKLIST_TEXT_HEIGHT):
+                maxwidth(title_maxwidth):
+                z(121):
+                diffuse(1.0, 1.0, 1.0, 1.0)
+            ));
+        }
+    } else {
+        actors.push(act!(text:
+            font("miso"):
+            settext("Select a course to view songs."):
+            align(0.0, 0.0):
+            xy(list_left_x, list_start_y):
+            zoom(0.72):
+            maxwidth(panel_w - 16.0):
+            z(121):
+            diffuse(1.0, 1.0, 1.0, 1.0)
+        ));
+    }
+
     let step_artist_x0 = if is_wide() {
         screen_center_x() - 355.5
     } else {
@@ -1055,79 +1121,6 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             ],
         },
     ));
-
-    let has_desc = !desc_text.trim().is_empty();
-    let desc_h = if has_desc { 16.0 } else { 0.0 };
-    let list_left_x = panel_cx - panel_w * 0.5 + 10.0;
-    let list_title_x = list_left_x + 38.0;
-    let list_start_y = panel_top + 8.0 + COURSE_TRACKLIST_ROW_SPACING + COURSE_TRACKLIST_TEXT_Y_OFFSET;
-    let list_bottom_y = panel_cy + panel_h * 0.5 - 8.0 - desc_h + COURSE_TRACKLIST_TEXT_Y_OFFSET;
-    let avail_h = (list_bottom_y - list_start_y).max(COURSE_TRACKLIST_ROW_SPACING);
-    if let Some(meta) = selected_meta.as_ref()
-        && !meta.entries.is_empty()
-    {
-        let visible_rows = meta
-            .entries
-            .len()
-            .min(COURSE_TRACKLIST_TARGET_VISIBLE_ROWS)
-            .max(1);
-        let row_spacing = (avail_h / visible_rows as f32)
-            .max(COURSE_TRACKLIST_ROW_SPACING_MIN)
-            .max(1.0);
-        let text_zoom = (0.72 + row_spacing * 0.01)
-            .clamp(COURSE_TRACKLIST_TEXT_ZOOM_MIN, COURSE_TRACKLIST_TEXT_ZOOM_MAX);
-        let (start_idx, frac, _) =
-            course_tracklist_scroll(meta.entries.len(), visible_rows, state.session_elapsed);
-        let rows_to_draw = visible_rows + usize::from(frac > 1e-3);
-        let title_maxwidth = (panel_w - (list_title_x - list_left_x) - 14.0).max(40.0);
-        for row in 0..rows_to_draw {
-            let idx = start_idx + row;
-            if idx >= meta.entries.len() {
-                break;
-            }
-            let entry = &meta.entries[idx];
-            let y = list_start_y + row as f32 * row_spacing - frac * row_spacing;
-            if y > list_bottom_y + 0.5 {
-                break;
-            }
-            let diff_text = entry
-                .meter
-                .map(|meter| meter.to_string())
-                .unwrap_or_else(|| "?".to_string());
-            let diff_color = color::difficulty_rgba(&entry.difficulty, state.active_color_index);
-            actors.push(act!(text:
-                font("miso"):
-                settext(diff_text):
-                align(0.0, 0.0):
-                xy(list_left_x, y):
-                zoom(text_zoom):
-                maxwidth(34.0):
-                z(121):
-                diffuse(diff_color[0], diff_color[1], diff_color[2], 1.0)
-            ));
-            actors.push(act!(text:
-                font("miso"):
-                settext(entry.title.clone()):
-                align(0.0, 0.0):
-                xy(list_title_x, y):
-                zoom(text_zoom):
-                maxwidth(title_maxwidth):
-                z(121):
-                diffuse(1.0, 1.0, 1.0, 1.0)
-            ));
-        }
-    } else {
-        actors.push(act!(text:
-            font("miso"):
-            settext("Select a course to view songs."):
-            align(0.0, 0.0):
-            xy(list_left_x, list_start_y):
-            zoom(0.72):
-            maxwidth(panel_w - 16.0):
-            z(121):
-            diffuse(1.0, 1.0, 1.0, 1.0)
-        ));
-    }
 
     if has_desc {
         actors.push(act!(quad:
