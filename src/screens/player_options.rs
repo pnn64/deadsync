@@ -6,7 +6,7 @@ use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
-use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
+use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization};
 use crate::game::song::SongData;
 use crate::screens::components::heart_bg;
 use crate::screens::components::notefield::noteskin_model_actor;
@@ -4785,17 +4785,32 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             draw_hold_preview(texture, preview_x_for(P2), &mut actors);
                         }
                     }
-                    // Add noteskin preview for "NoteSkin" row showing animated 4th note
+                    // Match ITGmania themes that show four directional noteskin preview arrows
+                    // with explicit quant offsets: Left/Down/Up/Right and 0/1/3/2 quant indices.
                     if row.name == "NoteSkin" {
-                        let draw_noteskin_preview =
-                            |ns: &Noteskin, center_x: f32, actors: &mut Vec<Actor>| {
-                                let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
-                                const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
-                                const PREVIEW_SCALE: f32 = 0.45;
+                        const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
+                        const PREVIEW_SCALE: f32 = 0.45;
+                        const PREVIEW_ARROWS: [(usize, f32, f32); 4] = [
+                            (0, 0.0, -1.5),
+                            (1, 1.0, -0.5),
+                            (2, 3.0, 0.5),
+                            (3, 2.0, 1.5),
+                        ];
+                        let draw_noteskin_note =
+                            |ns: &Noteskin,
+                             note_idx: usize,
+                             quant_idx: f32,
+                             center_x: f32,
+                             actors: &mut Vec<Actor>| {
                                 let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
                                 let elapsed = state.preview_time;
                                 let beat = state.preview_beat;
                                 let note_uv_phase = ns.tap_note_uv_phase(elapsed, beat, 0.0);
+                                let tap_spacing = ns.note_display_metrics.part_texture_translate
+                                    [NoteAnimPart::Tap as usize]
+                                    .note_color_spacing;
+                                let uv_translate =
+                                    [tap_spacing[0] * quant_idx, tap_spacing[1] * quant_idx];
                                 if let Some(note_slots) = ns.note_layers.get(note_idx) {
                                     let primary_h = note_slots
                                         .first()
@@ -4818,6 +4833,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                             elapsed
                                         };
                                         let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
+                                        let uv = [
+                                            uv[0] + uv_translate[0],
+                                            uv[1] + uv_translate[1],
+                                            uv[2] + uv_translate[0],
+                                            uv[3] + uv_translate[1],
+                                        ];
                                         let slot_size = note_slot.logical_size();
                                         let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
                                         let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
@@ -4891,6 +4912,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     elapsed
                                 };
                                 let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
+                                let uv = [
+                                    uv[0] + uv_translate[0],
+                                    uv[1] + uv_translate[1],
+                                    uv[2] + uv_translate[0],
+                                    uv[3] + uv_translate[1],
+                                ];
                                 let size_raw = note_slot.logical_size();
                                 let width = size_raw[0].max(1.0);
                                 let height = size_raw[1].max(1.0);
@@ -4924,6 +4951,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                         diffuse(1.0, 1.0, 1.0, a):
                                         z(102)
                                     ));
+                                }
+                            };
+                        let draw_noteskin_preview =
+                            |ns: &Noteskin, center_x: f32, actors: &mut Vec<Actor>| {
+                                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                                for (col, quant_idx, x_mult) in PREVIEW_ARROWS {
+                                    let x = center_x + x_mult * target_height;
+                                    let note_idx = col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+                                    draw_noteskin_note(ns, note_idx, quant_idx, x, actors);
                                 }
                             };
                         if let Some(ns) = state.noteskin[primary_player_idx].as_ref() {
