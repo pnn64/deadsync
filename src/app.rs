@@ -3043,6 +3043,10 @@ impl App {
                     chart_opt: chart_to_graph_p2,
                 });
             }
+
+            // PlayerOptions state is tied to a specific song selection; once we're back on
+            // SelectMusic, drop it so direct Gameplay starts cannot reuse stale song data.
+            self.state.screens.player_options_state = None;
         }
 
         if target == CurrentScreen::SelectCourse {
