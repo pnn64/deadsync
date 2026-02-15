@@ -3888,6 +3888,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 x0,
                 center_y: y_cen,
                 accent_color: sel_col,
+                z_base: 120,
                 label_text: "STEPS",
                 label_max_width: 40.0,
                 artist_text: step_artist,

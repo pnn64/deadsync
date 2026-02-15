@@ -1005,6 +1005,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     let panel_cx = banner_cx;
     let panel_cy = screen_center_y() + 67.0;
     let panel_top = panel_cy - panel_h * 0.5;
+    let panel_bottom = panel_cy + panel_h * 0.5;
     actors.push(act!(quad:
         align(0.5, 0.5):
         xy(panel_cx, panel_cy):
@@ -1030,11 +1031,10 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         ),
     };
     let has_desc = !desc_text.trim().is_empty();
-    let desc_h = if has_desc { 16.0 } else { 0.0 };
     let list_left_x = panel_cx - panel_w * 0.5 + 10.0;
     let list_title_x = list_left_x + 38.0;
     let list_start_y = panel_top + 8.0 + COURSE_TRACKLIST_TEXT_Y_OFFSET;
-    let list_bottom_y = panel_cy + panel_h * 0.5 - 8.0 - desc_h + COURSE_TRACKLIST_TEXT_Y_OFFSET;
+    let list_clip = Some([panel_cx - panel_w * 0.5, panel_top, panel_w, panel_h]);
     if let Some(meta) = selected_meta.as_ref()
         && !meta.entries.is_empty()
     {
@@ -1055,7 +1055,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             }
             let entry = &meta.entries[idx];
             let y = list_start_y + row as f32 * row_spacing - frac * row_spacing;
-            if y > list_bottom_y + 0.5 {
+            if y > panel_bottom + row_spacing {
                 break;
             }
             let diff_text = entry
@@ -1063,7 +1063,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
                 .map(|meter| meter.to_string())
                 .unwrap_or_else(|| "?".to_string());
             let diff_color = color::difficulty_rgba(&entry.difficulty, state.active_color_index);
-            actors.push(act!(text:
+            let mut meter_actor = act!(text:
                 font("miso"):
                 settext(diff_text):
                 align(0.0, 0.0):
@@ -1072,8 +1072,13 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
                 maxwidth(34.0):
                 z(121):
                 diffuse(diff_color[0], diff_color[1], diff_color[2], 1.0)
-            ));
-            actors.push(act!(text:
+            );
+            if let Actor::Text { clip, .. } = &mut meter_actor {
+                *clip = list_clip;
+            }
+            actors.push(meter_actor);
+
+            let mut title_actor = act!(text:
                 font("miso"):
                 settext(entry.title.clone()):
                 align(0.0, 0.0):
@@ -1082,10 +1087,14 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
                 maxwidth(title_maxwidth):
                 z(121):
                 diffuse(1.0, 1.0, 1.0, 1.0)
-            ));
+            );
+            if let Actor::Text { clip, .. } = &mut title_actor {
+                *clip = list_clip;
+            }
+            actors.push(title_actor);
         }
     } else {
-        actors.push(act!(text:
+        let mut no_course_actor = act!(text:
             font("miso"):
             settext("Select a course to view songs."):
             align(0.0, 0.0):
@@ -1094,7 +1103,11 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             maxwidth(panel_w - 16.0):
             z(121):
             diffuse(1.0, 1.0, 1.0, 1.0)
-        ));
+        );
+        if let Actor::Text { clip, .. } = &mut no_course_actor {
+            *clip = list_clip;
+        }
+        actors.push(no_course_actor);
     }
 
     let step_artist_x0 = if is_wide() {
@@ -1108,6 +1121,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             x0: step_artist_x0,
             center_y: step_artist_y,
             accent_color: step_artist_col,
+            z_base: 122,
             label_text: step_idx_text.as_str(),
             label_max_width: 22.0,
             artist_text: step_artist_text.as_str(),
@@ -1127,7 +1141,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             align(0.5, 0.5):
             xy(panel_cx, panel_cy + panel_h * 0.5 - 9.0):
             setsize(panel_w, 16.0):
-            z(121):
+            z(122):
             diffuse(0.0, 0.0, 0.0, 0.5)
         ));
         actors.push(act!(text:
@@ -1137,7 +1151,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             xy(panel_cx, panel_cy + panel_h * 0.5 - 9.0):
             zoom(0.72):
             maxwidth(panel_w - 8.0):
-            z(122):
+            z(123):
             diffuse(1.0, 1.0, 1.0, 1.0)
         ));
     }
