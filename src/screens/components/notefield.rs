@@ -1179,6 +1179,18 @@ pub fn build(
                 [width * scale, target_arrow_px]
             }
         };
+        let scale_mine_slot = |slot: &SpriteSlot| -> [f32; 2] {
+            // ITG NoteDisplay::DrawTap uses SetPRZForActor zoom for TapMine and does not
+            // normalize Def.Model mine meshes to an arrow texture target size. Preserve
+            // native model geometry scale here; keep sprite mines on texture-size scaling.
+            if let Some(model) = slot.model.as_ref() {
+                let model_size = model.size();
+                if model_size[0] > f32::EPSILON && model_size[1] > f32::EPSILON {
+                    return [model_size[0] * field_zoom, model_size[1] * field_zoom];
+                }
+            }
+            scale_sprite(slot.size())
+        };
         let scale_cap = |size: [i32; 2]| -> [f32; 2] {
             let width = size[0].max(0) as f32;
             let height = size[1].max(0) as f32;
@@ -2786,8 +2798,8 @@ pub fn build(
                     let mine_note_beat = state.notes[arrow.note_index].beat;
                     let mine_uv_phase = ns.tap_mine_uv_phase(phase_time, beat, mine_note_beat);
                     let circle_reference = frame_slot
-                        .map(|slot| scale_sprite(slot.size()))
-                        .or_else(|| fill_slot.map(|slot| scale_sprite(slot.size())))
+                        .map(scale_mine_slot)
+                        .or_else(|| fill_slot.map(scale_mine_slot))
                         .unwrap_or([
                             TARGET_ARROW_PIXEL_SIZE * field_zoom,
                             TARGET_ARROW_PIXEL_SIZE * field_zoom,
@@ -2838,7 +2850,7 @@ pub fn build(
                                         false,
                                     ),
                                 );
-                                let size = scale_sprite(slot.size());
+                                let size = scale_mine_slot(slot);
                                 let width = size[0];
                                 let height = size[1];
                                 let base_rotation = -slot.def.rotation_deg as f32;
@@ -2895,7 +2907,7 @@ pub fn build(
                             slot.uv_for_frame_at(frame, uv_elapsed),
                             ns.part_uv_translation(NoteAnimPart::Mine, mine_note_beat, false),
                         );
-                        let size = scale_sprite(slot.size());
+                        let size = scale_mine_slot(slot);
                         let base_rotation = -slot.def.rotation_deg as f32;
                         let has_scripted_rot =
                             matches!(slot.model_effect.mode, ModelEffectMode::Spin)
