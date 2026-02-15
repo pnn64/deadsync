@@ -33,6 +33,17 @@ const MUSIC_WHEEL_STOP_SPINDOWN_THRESHOLD: f32 = 0.25;
 const BANNER_NATIVE_WIDTH: f32 = 418.0;
 const BANNER_NATIVE_HEIGHT: f32 = 164.0;
 const BANNER_UPDATE_DELAY_SECONDS: f32 = 0.01;
+const COURSE_TRACKLIST_ROW_SPACING: f32 = 23.0;
+const COURSE_TRACKLIST_SCROLL_STEP_SECONDS: f32 = 0.5;
+const COURSE_TRACKLIST_SCROLL_END_PAUSE_SECONDS: f32 = 0.5;
+const COURSE_TRACKLIST_TARGET_VISIBLE_ROWS: usize = 6;
+const COURSE_TRACKLIST_SCROLL_MIN_ENTRIES: usize = 6;
+// Manual tune knob for the whole course tracklist text block.
+// Negative moves up, positive moves down.
+const COURSE_TRACKLIST_TEXT_Y_OFFSET: f32 = -8.0;
+const COURSE_TRACKLIST_ROW_SPACING_MIN: f32 = 12.0;
+const COURSE_TRACKLIST_TEXT_ZOOM_MIN: f32 = 0.8;
+const COURSE_TRACKLIST_TEXT_ZOOM_MAX: f32 = 0.92;
 
 rgba_const!(UI_BOX_BG_COLOR, "#1E282F");
 rgba_const!(COURSE_WHEEL_SONG_TEXT_COLOR, "#D77272");
@@ -758,6 +769,53 @@ fn format_bpm_range(min_bpm: Option<f64>, max_bpm: Option<f64>) -> String {
     }
 }
 
+#[inline(always)]
+fn course_tracklist_scroll(
+    entry_count: usize,
+    visible_rows: usize,
+    elapsed: f32,
+) -> (usize, f32, usize) {
+    if entry_count == 0
+        || visible_rows == 0
+        || entry_count <= COURSE_TRACKLIST_SCROLL_MIN_ENTRIES
+        || entry_count <= visible_rows
+    {
+        return (0, 0.0, 0);
+    }
+    let max_start = entry_count - visible_rows;
+    let step = COURSE_TRACKLIST_SCROLL_STEP_SECONDS.max(1e-3);
+    let pause = COURSE_TRACKLIST_SCROLL_END_PAUSE_SECONDS.max(0.0);
+    let sweep = max_start as f32 * step;
+    let cycle = pause + sweep + pause + sweep;
+    if cycle <= f32::EPSILON {
+        return (0, 0.0, 0);
+    }
+
+    let mut t = elapsed.max(0.0).rem_euclid(cycle);
+    let pos = if t < pause {
+        0.0
+    } else {
+        t -= pause;
+        if t < sweep {
+            t / step
+        } else {
+            t -= sweep;
+            if t < pause {
+                max_start as f32
+            } else {
+                t -= pause;
+                (max_start as f32 - t / step).max(0.0)
+            }
+        }
+    }
+    .clamp(0.0, max_start as f32);
+
+    let start = pos.floor() as usize;
+    let frac = pos - start as f32;
+    let focus = pos.round().clamp(0.0, max_start as f32) as usize;
+    (start, frac, focus)
+}
+
 fn sl_select_music_bg_flash() -> Actor {
     act!(quad:
         align(0.0, 0.0):
@@ -944,9 +1002,9 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         ],
     });
 
-    let panel_w = if is_wide() { 286.0 } else { 276.0 };
+    let panel_w = (BANNER_NATIVE_WIDTH * banner_zoom).round();
     let panel_h = 152.0;
-    let panel_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
+    let panel_cx = banner_cx;
     let panel_cy = screen_center_y() + 67.0;
     let panel_top = panel_cy - panel_h * 0.5;
     actors.push(act!(quad:
@@ -998,17 +1056,40 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         },
     ));
 
-    let list_left_x = panel_cx - panel_w * 0.5 + 8.0;
-    let list_start_y = panel_top + 8.0;
-    let list_bottom_y = panel_cy + panel_h * 0.5 - 18.0;
-    let avail_h = (list_bottom_y - list_start_y).max(12.0);
+    let has_desc = !desc_text.trim().is_empty();
+    let desc_h = if has_desc { 16.0 } else { 0.0 };
+    let list_left_x = panel_cx - panel_w * 0.5 + 10.0;
+    let list_title_x = list_left_x + 38.0;
+    let list_start_y = panel_top + 8.0 + COURSE_TRACKLIST_ROW_SPACING + COURSE_TRACKLIST_TEXT_Y_OFFSET;
+    let list_bottom_y = panel_cy + panel_h * 0.5 - 8.0 - desc_h + COURSE_TRACKLIST_TEXT_Y_OFFSET;
+    let avail_h = (list_bottom_y - list_start_y).max(COURSE_TRACKLIST_ROW_SPACING);
     if let Some(meta) = selected_meta.as_ref()
         && !meta.entries.is_empty()
     {
-        let line_h = (avail_h / (meta.entries.len() as f32)).min(14.0);
-        let text_zoom = (line_h / 16.0).clamp(0.28, 0.8);
-        for (i, entry) in meta.entries.iter().enumerate() {
-            let y = list_start_y + i as f32 * line_h;
+        let visible_rows = meta
+            .entries
+            .len()
+            .min(COURSE_TRACKLIST_TARGET_VISIBLE_ROWS)
+            .max(1);
+        let row_spacing = (avail_h / visible_rows as f32)
+            .max(COURSE_TRACKLIST_ROW_SPACING_MIN)
+            .max(1.0);
+        let text_zoom = (0.72 + row_spacing * 0.01)
+            .clamp(COURSE_TRACKLIST_TEXT_ZOOM_MIN, COURSE_TRACKLIST_TEXT_ZOOM_MAX);
+        let (start_idx, frac, _) =
+            course_tracklist_scroll(meta.entries.len(), visible_rows, state.session_elapsed);
+        let rows_to_draw = visible_rows + usize::from(frac > 1e-3);
+        let title_maxwidth = (panel_w - (list_title_x - list_left_x) - 14.0).max(40.0);
+        for row in 0..rows_to_draw {
+            let idx = start_idx + row;
+            if idx >= meta.entries.len() {
+                break;
+            }
+            let entry = &meta.entries[idx];
+            let y = list_start_y + row as f32 * row_spacing - frac * row_spacing;
+            if y > list_bottom_y + 0.5 {
+                break;
+            }
             let diff_text = entry
                 .meter
                 .map(|meter| meter.to_string())
@@ -1020,17 +1101,17 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
                 align(0.0, 0.0):
                 xy(list_left_x, y):
                 zoom(text_zoom):
-                maxwidth(74.0):
+                maxwidth(34.0):
                 z(121):
                 diffuse(diff_color[0], diff_color[1], diff_color[2], 1.0)
             ));
             actors.push(act!(text:
                 font("miso"):
-                settext(format!("{}. {}", i + 1, entry.title)):
+                settext(entry.title.clone()):
                 align(0.0, 0.0):
-                xy(list_left_x + 78.0, y):
+                xy(list_title_x, y):
                 zoom(text_zoom):
-                maxwidth(panel_w - 92.0):
+                maxwidth(title_maxwidth):
                 z(121):
                 diffuse(1.0, 1.0, 1.0, 1.0)
             ));
@@ -1048,7 +1129,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
 
-    if !desc_text.trim().is_empty() {
+    if has_desc {
         actors.push(act!(quad:
             align(0.5, 0.5):
             xy(panel_cx, panel_cy + panel_h * 0.5 - 9.0):
