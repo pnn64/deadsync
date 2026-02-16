@@ -2,7 +2,6 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::game::judgment;
 use crate::game::profile;
 use crate::screens::components::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::components::{gameplay_stats, notefield};
@@ -384,31 +383,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let show_hard_ex_score =
                 show_ex_score && state.player_profiles[player_idx].show_hard_ex_score;
             let (score_text, score_color) = if show_ex_score {
-                let mines_disabled = false;
-                let (start, end) = state.note_ranges[player_idx];
-                let ex_percent = judgment::calculate_ex_score_from_notes(
-                    &state.notes[start..end],
-                    &state.note_time_cache[start..end],
-                    &state.hold_end_time_cache[start..end],
-                    chart.stats.total_steps,
-                    state.holds_total[player_idx],
-                    state.rolls_total[player_idx],
-                    state.mines_total[player_idx],
-                    state.players[player_idx].fail_time,
-                    mines_disabled,
-                );
+                let ex_percent = crate::game::gameplay::display_ex_score_percent(state, player_idx);
                 (
                     format!("{:.2}", ex_percent.max(0.0)),
                     color::JUDGMENT_RGBA[0],
                 )
             } else {
-                let score_percent = (judgment::calculate_itg_score_percent(
-                    &state.players[player_idx].scoring_counts,
-                    state.players[player_idx].holds_held_for_score,
-                    state.players[player_idx].rolls_held_for_score,
-                    state.players[player_idx].mines_hit_for_score,
-                    state.possible_grade_points[player_idx],
-                ) * 100.0) as f32;
+                let score_percent =
+                    (crate::game::gameplay::display_itg_score_percent(state, player_idx) * 100.0)
+                        as f32;
                 (format!("{score_percent:.2}"), [1.0, 1.0, 1.0, 1.0])
             };
 
@@ -424,19 +407,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
 
             if show_hard_ex_score {
-                let mines_disabled = false;
-                let (start, end) = state.note_ranges[player_idx];
-                let hard_ex_percent = judgment::calculate_hard_ex_score_from_notes(
-                    &state.notes[start..end],
-                    &state.note_time_cache[start..end],
-                    &state.hold_end_time_cache[start..end],
-                    chart.stats.total_steps,
-                    state.holds_total[player_idx],
-                    state.rolls_total[player_idx],
-                    state.mines_total[player_idx],
-                    state.players[player_idx].fail_time,
-                    mines_disabled,
-                );
+                let hard_ex_percent =
+                    crate::game::gameplay::display_hard_ex_score_percent(state, player_idx);
                 let hex = color::HARD_EX_SCORE_RGBA;
                 let hard_ex_x = if is_p2_side {
                     // Arrow Cloud: HardEX uses /4.3 on P2 (while EX uses /2.75).

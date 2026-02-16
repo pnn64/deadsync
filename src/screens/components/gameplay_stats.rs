@@ -2,9 +2,9 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::core::gfx::{BlendMode, MeshMode};
 use crate::core::space::*;
-use crate::game::gameplay::State;
+use crate::game::gameplay::{self, State};
 use crate::game::judgment::JudgeGrade;
-use crate::game::{profile, timing as timing_stats};
+use crate::game::profile;
 use crate::screens::components::gs_scorebox;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -166,11 +166,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                 let (start, end) = state.note_ranges[player_idx];
                 if show_fa_plus_window && end > start {
                     let use_10ms_blue = state.player_profiles[player_idx].fa_plus_10ms_blue_window;
-                    let wc = if use_10ms_blue {
-                        timing_stats::compute_window_counts_10ms_blue(&state.notes[start..end])
-                    } else {
-                        timing_stats::compute_window_counts(&state.notes[start..end])
-                    };
+                    let wc = gameplay::display_window_counts(state, player_idx, use_10ms_blue);
                     let rows: [([f32; 4], [f32; 4], u32); 7] = [
                         (fantastic_color, dim_fantastic, wc.w0),
                         (white_fa_color, dim_white_fa, wc.w1),
@@ -229,10 +225,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                     }
                 } else {
                     for (row_i, grade) in JUDGMENT_ORDER.iter().enumerate() {
-                        let count = *state.players[player_idx]
-                            .judgment_counts
-                            .get(grade)
-                            .unwrap_or(&0);
+                        let count = gameplay::display_judgment_count(state, player_idx, *grade);
                         let bright = match grade {
                             JudgeGrade::Fantastic => fantastic_color,
                             JudgeGrade::Excellent => excellent_color,
@@ -440,18 +433,14 @@ pub fn build_double_step_stats(
                         .enumerate()
                         .map(|(i, grade)| {
                             let info = JUDGMENT_INFO.get(grade).unwrap();
-                            let count = *state.players[0].judgment_counts.get(grade).unwrap_or(&0);
+                            let count = gameplay::display_judgment_count(state, 0, *grade);
                             let bright = info.color;
                             let dim = color::JUDGMENT_DIM_RGBA[i];
                             (info.label, bright, dim, count)
                         })
                         .collect()
                 } else {
-                    let wc = if use_10ms_blue {
-                        timing_stats::compute_window_counts_10ms_blue(&state.notes)
-                    } else {
-                        timing_stats::compute_window_counts(&state.notes)
-                    };
+                    let wc = gameplay::display_window_counts(state, 0, use_10ms_blue);
                     let fantastic_color = JUDGMENT_INFO
                         .get(&JudgeGrade::Fantastic)
                         .map(|info| info.color)
@@ -1454,7 +1443,7 @@ fn build_side_pane(
             // Standard ITG-style rows: Fantastic..Miss using aggregate grade counts.
             for (index, grade) in JUDGMENT_ORDER.iter().enumerate() {
                 let info = JUDGMENT_INFO.get(grade).unwrap();
-                let count = *state.players[0].judgment_counts.get(grade).unwrap_or(&0);
+                let count = gameplay::display_judgment_count(state, 0, *grade);
 
                 let local_y = y_base + (index as f32 * row_height);
                 let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
@@ -1513,11 +1502,7 @@ fn build_side_pane(
             // FA+ mode: split Fantastic into W0 (blue) and W1 (white) using per-note windows,
             // matching Simply Love's FA+ Step Statistics semantics.
             let use_10ms_blue = state.player_profiles[player_idx].fa_plus_10ms_blue_window;
-            let wc = if use_10ms_blue {
-                timing_stats::compute_window_counts_10ms_blue(&state.notes)
-            } else {
-                timing_stats::compute_window_counts(&state.notes)
-            };
+            let wc = gameplay::display_window_counts(state, player_idx, use_10ms_blue);
 	            let fantastic_color = JUDGMENT_INFO
 	                .get(&JudgeGrade::Fantastic)
 	                .map(|info| info.color)

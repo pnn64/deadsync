@@ -94,6 +94,7 @@ struct CourseRunState {
     course_stepchart_label: String,
     song_stub: Arc<crate::game::song::SongData>,
     stages: Vec<CourseStageRuntime>,
+    course_display_totals: [crate::game::gameplay::CourseDisplayTotals; crate::game::gameplay::MAX_PLAYERS],
     next_stage_index: usize,
     stage_summaries: Vec<stage_stats::StageSummary>,
     stage_eval_pages: Vec<evaluation::State>,
@@ -398,6 +399,30 @@ fn build_course_run_from_selection(selection: select_course::SelectedCoursePlan)
     if stages.is_empty() {
         return None;
     }
+    let global_offset_seconds = crate::config::get().global_offset_seconds;
+    let mut course_display_totals = [crate::game::gameplay::CourseDisplayTotals::default();
+        crate::game::gameplay::MAX_PLAYERS];
+    for stage in &stages {
+        for player_idx in 0..crate::game::gameplay::MAX_PLAYERS {
+            let Some(chart) = select_music::chart_for_steps_index(
+                stage.song.as_ref(),
+                chart_type,
+                stage.steps_index[player_idx],
+            ) else {
+                continue;
+            };
+            let add =
+                crate::game::gameplay::course_display_totals_for_chart(chart, global_offset_seconds);
+            let total = &mut course_display_totals[player_idx];
+            total.possible_grade_points = total
+                .possible_grade_points
+                .saturating_add(add.possible_grade_points);
+            total.total_steps = total.total_steps.saturating_add(add.total_steps);
+            total.holds_total = total.holds_total.saturating_add(add.holds_total);
+            total.rolls_total = total.rolls_total.saturating_add(add.rolls_total);
+            total.mines_total = total.mines_total.saturating_add(add.mines_total);
+        }
+    }
     Some(CourseRunState {
         path: selection.path.clone(),
         name: selection.name,
@@ -408,6 +433,7 @@ fn build_course_run_from_selection(selection: select_course::SelectedCoursePlan)
         course_stepchart_label: selection.course_stepchart_label,
         song_stub: selection.song_stub,
         stages,
+        course_display_totals,
         next_stage_index: 0,
         stage_summaries: Vec::new(),
         stage_eval_pages: Vec::new(),
@@ -1372,12 +1398,23 @@ impl App {
 
     fn should_chain_course_to_next_stage(&self) -> bool {
         self.state.screens.current_screen == CurrentScreen::Gameplay
+            && !self.current_gameplay_stage_failed()
             && self
                 .state
                 .session
                 .course_run
                 .as_ref()
                 .is_some_and(|course| course.next_stage_index < course.stages.len())
+    }
+
+    fn current_gameplay_stage_failed(&self) -> bool {
+        let Some(gs) = self.state.screens.gameplay_state.as_ref() else {
+            return false;
+        };
+        (0..gs.num_players.min(crate::game::gameplay::MAX_PLAYERS)).any(|player_idx| {
+            let p = &gs.players[player_idx];
+            p.is_failing || p.life <= 0.0 || p.fail_time.is_some()
+        })
     }
 
     fn append_stage_results_from_eval(
@@ -3092,8 +3129,17 @@ impl App {
     ) -> Vec<Command> {
         let mut commands = Vec::new();
         if target == CurrentScreen::Gameplay {
+            let mut course_display_carry = None;
+            let course_display_totals = self
+                .state
+                .session
+                .course_run
+                .as_ref()
+                .map(|course| course.course_display_totals);
             if prev == CurrentScreen::Gameplay && self.state.session.course_run.is_some() {
                 if let Some(gameplay_results) = self.state.screens.gameplay_state.take() {
+                    course_display_carry =
+                        Some(crate::game::gameplay::course_display_carry_from_state(&gameplay_results));
                     let color_idx = gameplay_results.active_color_index;
                     let mut eval_state = evaluation::init(Some(gameplay_results));
                     eval_state.active_color_index = color_idx;
@@ -3249,6 +3295,8 @@ impl App {
                     replay_offsets,
                     replay_status_text,
                     lead_in_timing,
+                    course_display_carry,
+                    course_display_totals,
                 );
 
                 if let Some(backend) = self.backend.as_mut() {

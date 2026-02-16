@@ -746,6 +746,72 @@ fn compute_possible_grade_points(
     pts as i32
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CourseDisplayTotals {
+    pub possible_grade_points: i32,
+    pub total_steps: u32,
+    pub holds_total: u32,
+    pub rolls_total: u32,
+    pub mines_total: u32,
+}
+
+pub fn course_display_totals_for_chart(
+    chart: &ChartData,
+    global_offset_seconds: f32,
+) -> CourseDisplayTotals {
+    let mut timing = chart.timing.clone();
+    timing.set_global_offset_seconds(global_offset_seconds);
+    let mut holds_total = 0u32;
+    let mut rolls_total = 0u32;
+    let mut mines_total = 0u32;
+    let mut rows: Vec<usize> = Vec::with_capacity(chart.parsed_notes.len());
+    for parsed in &chart.parsed_notes {
+        let Some(beat) = timing.get_beat_for_row(parsed.row_index) else {
+            continue;
+        };
+        let explicit_fake_tap = matches!(parsed.note_type, NoteType::Fake);
+        let fake_by_segment = timing.is_fake_at_beat(beat);
+        let is_fake = explicit_fake_tap || fake_by_segment;
+        let note_type = if explicit_fake_tap {
+            NoteType::Tap
+        } else {
+            parsed.note_type
+        };
+        let can_be_judged = !is_fake && timing.is_judgable_at_beat(beat);
+        if !can_be_judged {
+            continue;
+        }
+        match note_type {
+            NoteType::Hold => {
+                holds_total = holds_total.saturating_add(1);
+                rows.push(parsed.row_index);
+            }
+            NoteType::Roll => {
+                rolls_total = rolls_total.saturating_add(1);
+                rows.push(parsed.row_index);
+            }
+            NoteType::Mine => {
+                mines_total = mines_total.saturating_add(1);
+            }
+            NoteType::Tap | NoteType::Fake => {
+                rows.push(parsed.row_index);
+            }
+        }
+    }
+    rows.sort_unstable();
+    rows.dedup();
+    let possible_i64 = i64::try_from(rows.len()).unwrap_or(i64::MAX) * 5
+        + i64::from(holds_total) * i64::from(judgment::HOLD_SCORE_HELD)
+        + i64::from(rolls_total) * i64::from(judgment::HOLD_SCORE_HELD);
+    CourseDisplayTotals {
+        possible_grade_points: possible_i64.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+        total_steps: chart.stats.total_steps,
+        holds_total,
+        rolls_total,
+        mines_total,
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct RowEntry {
     row_index: usize,
@@ -1367,6 +1433,38 @@ pub struct PlayerRuntime {
     pub error_bar_avg_samples: VecDeque<(f32, f32)>,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CourseDisplayCarry {
+    pub judgment_counts: [u32; 6],
+    pub scoring_counts: [u32; 6],
+    pub window_counts: crate::game::timing::WindowCounts,
+    pub window_counts_10ms_blue: crate::game::timing::WindowCounts,
+    pub holds_held_for_score: u32,
+    pub rolls_held_for_score: u32,
+    pub mines_hit_for_score: u32,
+}
+
+const DISPLAY_JUDGE_ORDER: [JudgeGrade; 6] = [
+    JudgeGrade::Fantastic,
+    JudgeGrade::Excellent,
+    JudgeGrade::Great,
+    JudgeGrade::Decent,
+    JudgeGrade::WayOff,
+    JudgeGrade::Miss,
+];
+
+#[inline(always)]
+const fn display_judge_ix(grade: JudgeGrade) -> usize {
+    match grade {
+        JudgeGrade::Fantastic => 0,
+        JudgeGrade::Excellent => 1,
+        JudgeGrade::Great => 2,
+        JudgeGrade::Decent => 3,
+        JudgeGrade::WayOff => 4,
+        JudgeGrade::Miss => 5,
+    }
+}
+
 fn init_player_runtime() -> PlayerRuntime {
     PlayerRuntime {
         combo: 0,
@@ -1510,6 +1608,8 @@ pub struct State {
     pub autoplay_enabled: bool,
     pub autoplay_used: bool,
     replay_mode: bool,
+    pub course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
+    pub course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
 
     pub player_profiles: [profile::Profile; MAX_PLAYERS],
     pub noteskin: [Option<Noteskin>; MAX_PLAYERS],
@@ -2169,6 +2269,8 @@ pub fn init(
     replay_offsets: Option<ReplayOffsetSnapshot>,
     replay_status_text: Option<String>,
     lead_in_timing: Option<LeadInTiming>,
+    course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
+    course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
 ) -> State {
     info!("Initializing Gameplay Screen...");
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
@@ -2851,6 +2953,8 @@ pub fn init(
         autoplay_enabled: replay_mode,
         autoplay_used: replay_mode,
         replay_mode,
+        course_display_carry,
+        course_display_totals,
         player_profiles,
         noteskin,
         active_color_index,
@@ -2918,6 +3022,307 @@ pub fn init(
         replay_edges: Vec::with_capacity(4096),
         log_timer: 0.0,
     }
+}
+
+pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MAX_PLAYERS] {
+    let mut carry = [CourseDisplayCarry::default(); MAX_PLAYERS];
+    for player in 0..state.num_players.min(MAX_PLAYERS) {
+        let p = &state.players[player];
+        let previous = state
+            .course_display_carry
+            .as_ref()
+            .map_or(CourseDisplayCarry::default(), |old| old[player]);
+        let (start, end) = state.note_ranges[player];
+        let mut judgment_counts = [0u32; 6];
+        let mut scoring_counts = [0u32; 6];
+        for grade in DISPLAY_JUDGE_ORDER {
+            let ix = display_judge_ix(grade);
+            let stage_judgment = p.judgment_counts.get(&grade).copied().unwrap_or(0);
+            let stage_scoring = p.scoring_counts.get(&grade).copied().unwrap_or(0);
+            judgment_counts[ix] = previous.judgment_counts[ix].saturating_add(stage_judgment);
+            scoring_counts[ix] = previous.scoring_counts[ix].saturating_add(stage_scoring);
+        }
+        let stage_window_counts = crate::game::timing::compute_window_counts(&state.notes[start..end]);
+        let stage_window_counts_10ms_blue =
+            crate::game::timing::compute_window_counts_10ms_blue(&state.notes[start..end]);
+        let window_counts = crate::game::timing::WindowCounts {
+            w0: previous.window_counts.w0.saturating_add(stage_window_counts.w0),
+            w1: previous.window_counts.w1.saturating_add(stage_window_counts.w1),
+            w2: previous.window_counts.w2.saturating_add(stage_window_counts.w2),
+            w3: previous.window_counts.w3.saturating_add(stage_window_counts.w3),
+            w4: previous.window_counts.w4.saturating_add(stage_window_counts.w4),
+            w5: previous.window_counts.w5.saturating_add(stage_window_counts.w5),
+            miss: previous
+                .window_counts
+                .miss
+                .saturating_add(stage_window_counts.miss),
+        };
+        let window_counts_10ms_blue = crate::game::timing::WindowCounts {
+            w0: previous
+                .window_counts_10ms_blue
+                .w0
+                .saturating_add(stage_window_counts_10ms_blue.w0),
+            w1: previous
+                .window_counts_10ms_blue
+                .w1
+                .saturating_add(stage_window_counts_10ms_blue.w1),
+            w2: previous
+                .window_counts_10ms_blue
+                .w2
+                .saturating_add(stage_window_counts_10ms_blue.w2),
+            w3: previous
+                .window_counts_10ms_blue
+                .w3
+                .saturating_add(stage_window_counts_10ms_blue.w3),
+            w4: previous
+                .window_counts_10ms_blue
+                .w4
+                .saturating_add(stage_window_counts_10ms_blue.w4),
+            w5: previous
+                .window_counts_10ms_blue
+                .w5
+                .saturating_add(stage_window_counts_10ms_blue.w5),
+            miss: previous
+                .window_counts_10ms_blue
+                .miss
+                .saturating_add(stage_window_counts_10ms_blue.miss),
+        };
+        carry[player] = CourseDisplayCarry {
+            judgment_counts,
+            scoring_counts,
+            window_counts,
+            window_counts_10ms_blue,
+            holds_held_for_score: previous
+                .holds_held_for_score
+                .saturating_add(p.holds_held_for_score),
+            rolls_held_for_score: previous
+                .rolls_held_for_score
+                .saturating_add(p.rolls_held_for_score),
+            mines_hit_for_score: previous
+                .mines_hit_for_score
+                .saturating_add(p.mines_hit_for_score),
+        };
+    }
+    if state.num_players == 1 {
+        carry[1] = carry[0];
+    }
+    carry
+}
+
+#[inline(always)]
+fn display_carry_for_player(state: &State, player_idx: usize) -> CourseDisplayCarry {
+    if player_idx >= MAX_PLAYERS {
+        return CourseDisplayCarry::default();
+    }
+    state
+        .course_display_carry
+        .as_ref()
+        .map_or(CourseDisplayCarry::default(), |carry| carry[player_idx])
+}
+
+#[inline(always)]
+fn add_window_counts(
+    lhs: crate::game::timing::WindowCounts,
+    rhs: crate::game::timing::WindowCounts,
+) -> crate::game::timing::WindowCounts {
+    crate::game::timing::WindowCounts {
+        w0: lhs.w0.saturating_add(rhs.w0),
+        w1: lhs.w1.saturating_add(rhs.w1),
+        w2: lhs.w2.saturating_add(rhs.w2),
+        w3: lhs.w3.saturating_add(rhs.w3),
+        w4: lhs.w4.saturating_add(rhs.w4),
+        w5: lhs.w5.saturating_add(rhs.w5),
+        miss: lhs.miss.saturating_add(rhs.miss),
+    }
+}
+
+#[inline(always)]
+fn display_totals_for_player(state: &State, player_idx: usize) -> CourseDisplayTotals {
+    if player_idx >= MAX_PLAYERS {
+        return CourseDisplayTotals::default();
+    }
+    if let Some(totals) = state.course_display_totals.as_ref() {
+        return totals[player_idx];
+    }
+    CourseDisplayTotals {
+        possible_grade_points: state.possible_grade_points[player_idx],
+        total_steps: state.charts[player_idx].stats.total_steps,
+        holds_total: state.holds_total[player_idx],
+        rolls_total: state.rolls_total[player_idx],
+        mines_total: state.mines_total[player_idx],
+    }
+}
+
+pub fn display_judgment_count(state: &State, player_idx: usize, grade: JudgeGrade) -> u32 {
+    if player_idx >= state.num_players {
+        return 0;
+    }
+    let base = state.players[player_idx]
+        .judgment_counts
+        .get(&grade)
+        .copied()
+        .unwrap_or(0);
+    let carry = display_carry_for_player(state, player_idx);
+    base.saturating_add(carry.judgment_counts[display_judge_ix(grade)])
+}
+
+pub fn display_window_counts(
+    state: &State,
+    player_idx: usize,
+    use_10ms_blue: bool,
+) -> crate::game::timing::WindowCounts {
+    if player_idx >= state.num_players {
+        return crate::game::timing::WindowCounts::default();
+    }
+    let (start, end) = state.note_ranges[player_idx];
+    let current = if use_10ms_blue {
+        crate::game::timing::compute_window_counts_10ms_blue(&state.notes[start..end])
+    } else {
+        crate::game::timing::compute_window_counts(&state.notes[start..end])
+    };
+    let carry = display_carry_for_player(state, player_idx);
+    let carry_counts = if use_10ms_blue {
+        carry.window_counts_10ms_blue
+    } else {
+        carry.window_counts
+    };
+    add_window_counts(current, carry_counts)
+}
+
+pub fn display_itg_score_percent(state: &State, player_idx: usize) -> f64 {
+    if player_idx >= state.num_players {
+        return 0.0;
+    }
+    let carry = display_carry_for_player(state, player_idx);
+    let mut scoring_counts: HashMap<JudgeGrade, u32> =
+        HashMap::with_capacity(DISPLAY_JUDGE_ORDER.len());
+    for grade in DISPLAY_JUDGE_ORDER {
+        let base = state.players[player_idx]
+            .scoring_counts
+            .get(&grade)
+            .copied()
+            .unwrap_or(0);
+        let total = base.saturating_add(carry.scoring_counts[display_judge_ix(grade)]);
+        scoring_counts.insert(grade, total);
+    }
+    let holds = state.players[player_idx]
+        .holds_held_for_score
+        .saturating_add(carry.holds_held_for_score);
+    let rolls = state.players[player_idx]
+        .rolls_held_for_score
+        .saturating_add(carry.rolls_held_for_score);
+    let mines = state.players[player_idx]
+        .mines_hit_for_score
+        .saturating_add(carry.mines_hit_for_score);
+    let possible = display_totals_for_player(state, player_idx).possible_grade_points;
+    judgment::calculate_itg_score_percent(&scoring_counts, holds, rolls, mines, possible)
+}
+
+#[inline(always)]
+fn ex_score_from_components(
+    counts: crate::game::timing::WindowCounts,
+    holds_held: u32,
+    mines_hit: u32,
+    total_steps: u32,
+    holds_total: u32,
+    rolls_total: u32,
+    mines_total: u32,
+) -> f64 {
+    if total_steps == 0 {
+        return 0.0;
+    }
+    let total_possible = f64::from(total_steps).mul_add(3.5, f64::from(holds_total + rolls_total));
+    if total_possible <= 0.0 {
+        return 0.0;
+    }
+    let mines_effective = mines_hit.min(mines_total);
+    let total_points = f64::from(counts.w0) * 3.5
+        + f64::from(counts.w1) * 3.0
+        + f64::from(counts.w2) * 2.0
+        + f64::from(counts.w3)
+        + f64::from(holds_held)
+        - f64::from(mines_effective);
+    ((total_points / total_possible).max(0.0) * 10000.0).floor() / 100.0
+}
+
+#[inline(always)]
+fn hard_ex_score_from_components(
+    counts: crate::game::timing::WindowCounts,
+    counts_10ms: crate::game::timing::WindowCounts,
+    holds_held: u32,
+    mines_hit: u32,
+    total_steps: u32,
+    holds_total: u32,
+    rolls_total: u32,
+    mines_total: u32,
+) -> f64 {
+    if total_steps == 0 {
+        return 0.0;
+    }
+    let total_possible = f64::from(total_steps).mul_add(3.5, f64::from(holds_total + rolls_total));
+    if total_possible <= 0.0 {
+        return 0.0;
+    }
+    let w010 = counts_10ms.w0;
+    let fantastic_total = counts.w0.saturating_add(counts.w1);
+    let w110 = fantastic_total.saturating_sub(w010);
+    let mines_effective = mines_hit.min(mines_total);
+    let total_points = f64::from(w010) * 3.5
+        + f64::from(w110) * 3.0
+        + f64::from(counts.w2)
+        + f64::from(holds_held)
+        - f64::from(mines_effective);
+    ((total_points / total_possible).max(0.0) * 10000.0).floor() / 100.0
+}
+
+pub fn display_ex_score_percent(state: &State, player_idx: usize) -> f64 {
+    if player_idx >= state.num_players {
+        return 0.0;
+    }
+    let carry = display_carry_for_player(state, player_idx);
+    let counts = display_window_counts(state, player_idx, false);
+    let holds_held = state.players[player_idx]
+        .holds_held_for_score
+        .saturating_add(carry.holds_held_for_score);
+    let mines_hit = state.players[player_idx]
+        .mines_hit_for_score
+        .saturating_add(carry.mines_hit_for_score);
+    let totals = display_totals_for_player(state, player_idx);
+    ex_score_from_components(
+        counts,
+        holds_held,
+        mines_hit,
+        totals.total_steps,
+        totals.holds_total,
+        totals.rolls_total,
+        totals.mines_total,
+    )
+}
+
+pub fn display_hard_ex_score_percent(state: &State, player_idx: usize) -> f64 {
+    if player_idx >= state.num_players {
+        return 0.0;
+    }
+    let carry = display_carry_for_player(state, player_idx);
+    let counts = display_window_counts(state, player_idx, false);
+    let counts_10ms = display_window_counts(state, player_idx, true);
+    let holds_held = state.players[player_idx]
+        .holds_held_for_score
+        .saturating_add(carry.holds_held_for_score);
+    let mines_hit = state.players[player_idx]
+        .mines_hit_for_score
+        .saturating_add(carry.mines_hit_for_score);
+    let totals = display_totals_for_player(state, player_idx);
+    hard_ex_score_from_components(
+        counts,
+        counts_10ms,
+        holds_held,
+        mines_hit,
+        totals.total_steps,
+        totals.holds_total,
+        totals.rolls_total,
+        totals.mines_total,
+    )
 }
 
 fn update_itg_grade_totals(p: &mut PlayerRuntime) {
