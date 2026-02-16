@@ -93,6 +93,21 @@ const AUTOPLAY_HOLD_RELEASE_SECONDS: f32 = 0.001;
 const AUTOPLAY_OFFSET_EPSILON_SECONDS: f32 = 0.000_001;
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 
+#[derive(Clone, Copy, Debug)]
+pub struct LeadInTiming {
+    pub min_seconds_to_step: f32,
+    pub min_seconds_to_music: f32,
+}
+
+impl Default for LeadInTiming {
+    fn default() -> Self {
+        Self {
+            min_seconds_to_step: MIN_SECONDS_TO_STEP,
+            min_seconds_to_music: MIN_SECONDS_TO_MUSIC,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HoldToExitKey {
     Start,
@@ -2153,6 +2168,7 @@ pub fn init(
     replay_edges: Option<Vec<ReplayInputEdge>>,
     replay_offsets: Option<ReplayOffsetSnapshot>,
     replay_status_text: Option<String>,
+    lead_in_timing: Option<LeadInTiming>,
 ) -> State {
     info!("Initializing Gameplay Screen...");
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
@@ -2492,8 +2508,9 @@ pub fn init(
     // MinSecondsToStep / MinSecondsToMusic. Simply Love scales both by
     // MusicRate, so we apply the same here to keep real-world lead-in time
     // consistent across rates.
-    let min_time_to_notes = MIN_SECONDS_TO_STEP * rate;
-    let min_time_to_music = MIN_SECONDS_TO_MUSIC * rate;
+    let lead_in_timing = lead_in_timing.unwrap_or_default();
+    let min_time_to_notes = lead_in_timing.min_seconds_to_step.max(0.0) * rate;
+    let min_time_to_music = lead_in_timing.min_seconds_to_music.max(0.0) * rate;
     let mut start_delay = min_time_to_notes - first_second;
     if start_delay < min_time_to_music {
         start_delay = min_time_to_music;

@@ -53,12 +53,24 @@ struct SessionStats {
     duration_seconds: f32,
 }
 
+#[inline(always)]
+fn is_course_summary_stage(stage: &stage_stats::StageSummary) -> bool {
+    stage
+        .players
+        .iter()
+        .flatten()
+        .any(|player| player.chart.short_hash.starts_with("course-"))
+}
+
 fn session_stats_for_side(
     side: profile::PlayerSide,
     stages: &[stage_stats::StageSummary],
 ) -> SessionStats {
     let mut out = SessionStats::default();
     for s in stages {
+        if is_course_summary_stage(s) {
+            continue;
+        }
         let Some(p) = s.players.get(side_ix(side)).and_then(|p| p.as_ref()) else {
             continue;
         };

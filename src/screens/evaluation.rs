@@ -226,42 +226,47 @@ impl EvalPane {
     }
 
     #[inline(always)]
-    fn next(self, has_hard_ex: bool, has_gs: bool) -> Self {
+    fn next(self, has_hard_ex: bool, has_online_panes: bool, has_gs: bool) -> Self {
         // Order (per user parity request):
         // ITG -> EX -> H.EX -> Arrow breakdown -> Machine -> QR -> GS -> Timing -> ITG
-        match (self, has_hard_ex, has_gs) {
-            (Self::Standard, _, _) => Self::FaPlus,
-            (Self::FaPlus, true, _) => Self::HardEx,
-            (Self::FaPlus, false, _) => Self::Column,
-            (Self::HardEx, true, _) => Self::Column,
-            (Self::HardEx, false, _) => Self::Standard,
-            (Self::Column, _, _) => Self::MachineRecords,
-            (Self::MachineRecords, _, _) => Self::QrCode,
-            (Self::QrCode, _, true) => Self::GrooveStats,
-            (Self::QrCode, _, false) => Self::Timing,
-            (Self::GrooveStats, _, _) => Self::Timing,
-            (Self::Timing, _, _) => Self::Standard,
+        match (self, has_hard_ex, has_online_panes, has_gs) {
+            (Self::Standard, _, _, _) => Self::FaPlus,
+            (Self::FaPlus, true, _, _) => Self::HardEx,
+            (Self::FaPlus, false, _, _) => Self::Column,
+            (Self::HardEx, true, _, _) => Self::Column,
+            (Self::HardEx, false, _, _) => Self::Standard,
+            (Self::Column, _, _, _) => Self::MachineRecords,
+            (Self::MachineRecords, _, true, _) => Self::QrCode,
+            (Self::MachineRecords, _, false, _) => Self::Timing,
+            (Self::QrCode, _, true, true) => Self::GrooveStats,
+            (Self::QrCode, _, true, false) => Self::Timing,
+            (Self::QrCode, _, false, _) => Self::Timing,
+            (Self::GrooveStats, _, _, _) => Self::Timing,
+            (Self::Timing, _, _, _) => Self::Standard,
         }
     }
 
     #[inline(always)]
-    fn prev(self, has_hard_ex: bool, has_gs: bool) -> Self {
-        match (self, has_hard_ex, has_gs) {
-            (Self::Standard, _, _) => Self::Timing,
-            (Self::Timing, _, true) => Self::GrooveStats,
-            (Self::Timing, _, false) => Self::QrCode,
-            (Self::GrooveStats, _, _) => Self::QrCode,
-            (Self::QrCode, _, _) => Self::MachineRecords,
-            (Self::MachineRecords, _, _) => Self::Column,
-            (Self::Column, true, _) => Self::HardEx,
-            (Self::Column, false, _) => Self::FaPlus,
-            (Self::HardEx, true, _) => Self::FaPlus,
-            (Self::HardEx, false, _) => Self::Standard,
-            (Self::FaPlus, _, _) => Self::Standard,
+    fn prev(self, has_hard_ex: bool, has_online_panes: bool, has_gs: bool) -> Self {
+        match (self, has_hard_ex, has_online_panes, has_gs) {
+            (Self::Standard, _, _, _) => Self::Timing,
+            (Self::Timing, _, true, true) => Self::GrooveStats,
+            (Self::Timing, _, true, false) => Self::QrCode,
+            (Self::Timing, _, false, _) => Self::MachineRecords,
+            (Self::GrooveStats, _, true, _) => Self::QrCode,
+            (Self::GrooveStats, _, false, _) => Self::MachineRecords,
+            (Self::QrCode, _, _, _) => Self::MachineRecords,
+            (Self::MachineRecords, _, _, _) => Self::Column,
+            (Self::Column, true, _, _) => Self::HardEx,
+            (Self::Column, false, _, _) => Self::FaPlus,
+            (Self::HardEx, true, _, _) => Self::FaPlus,
+            (Self::HardEx, false, _, _) => Self::Standard,
+            (Self::FaPlus, _, _, _) => Self::Standard,
         }
     }
 }
 
+#[derive(Clone)]
 pub struct State {
     pub active_color_index: i32,
     bg: heart_bg::State,
@@ -274,6 +279,9 @@ pub struct State {
     pub timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub scatter_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub density_graph_texture_key: String,
+    pub return_to_course: bool,
+    pub auto_advance_seconds: Option<f32>,
+    pub allow_online_panes: bool,
     active_pane: [EvalPane; MAX_PLAYERS],
 }
 
@@ -573,6 +581,56 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         timing_hist_mesh,
         scatter_mesh,
         density_graph_texture_key: "__white".to_string(),
+        return_to_course: false,
+        auto_advance_seconds: None,
+        allow_online_panes: true,
+        active_pane,
+    }
+}
+
+pub fn init_from_score_info(
+    score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    stage_duration_seconds: f32,
+) -> State {
+    let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
+    let play_style = profile::get_session_play_style();
+    match play_style {
+        profile::PlayStyle::Versus => {
+            active_pane[0] = score_info[0]
+                .as_ref()
+                .map_or(EvalPane::Standard, |si| EvalPane::default_for(si.show_fa_plus_pane));
+            active_pane[1] = score_info[1]
+                .as_ref()
+                .map_or(EvalPane::Standard, |si| EvalPane::default_for(si.show_fa_plus_pane));
+        }
+        profile::PlayStyle::Single | profile::PlayStyle::Double => {
+            let joined = profile::get_session_player_side();
+            let primary = score_info[0]
+                .as_ref()
+                .map_or(EvalPane::Standard, |si| EvalPane::default_for(si.show_fa_plus_pane));
+            let secondary = EvalPane::Timing;
+            active_pane = match joined {
+                profile::PlayerSide::P1 => [primary, secondary],
+                profile::PlayerSide::P2 => [secondary, primary],
+            };
+        }
+    }
+
+    State {
+        active_color_index: color::DEFAULT_COLOR_INDEX,
+        bg: heart_bg::State::new(),
+        screen_elapsed: 0.0,
+        session_elapsed: 0.0,
+        gameplay_elapsed: 0.0,
+        stage_duration_seconds,
+        score_info,
+        density_graph_mesh: std::array::from_fn(|_| None),
+        timing_hist_mesh: std::array::from_fn(|_| None),
+        scatter_mesh: std::array::from_fn(|_| None),
+        density_graph_texture_key: "__white".to_string(),
+        return_to_course: false,
+        auto_advance_seconds: None,
+        allow_online_panes: true,
         active_pane,
     }
 }
@@ -817,6 +875,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if !ev.pressed {
         return ScreenAction::None;
     }
+    if state.auto_advance_seconds.is_some() {
+        return ScreenAction::None;
+    }
+    let return_target = if state.return_to_course {
+        Screen::SelectCourse
+    } else {
+        Screen::SelectMusic
+    };
 
     let play_style = profile::get_session_play_style();
     let side_idx = |side: profile::PlayerSide| match side {
@@ -837,22 +903,24 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             return;
         };
         let has_hard_ex = si.show_hard_ex_score;
+        let has_online_panes = state.allow_online_panes;
         let gs_side = if play_style == profile::PlayStyle::Versus {
             controller
         } else {
             profile::get_session_player_side()
         };
-        let has_gs = scores::get_or_fetch_player_leaderboards_for_side(
-            &si.chart.short_hash,
-            gs_side,
-            GS_RECORD_ROWS,
-        )
-        .is_some();
+        let has_gs = has_online_panes
+            && scores::get_or_fetch_player_leaderboards_for_side(
+                &si.chart.short_hash,
+                gs_side,
+                GS_RECORD_ROWS,
+            )
+            .is_some();
 
         state.active_pane[controller_idx] = if dir >= 0 {
-            state.active_pane[controller_idx].next(has_hard_ex, has_gs)
+            state.active_pane[controller_idx].next(has_hard_ex, has_online_panes, has_gs)
         } else {
-            state.active_pane[controller_idx].prev(has_hard_ex, has_gs)
+            state.active_pane[controller_idx].prev(has_hard_ex, has_online_panes, has_gs)
         };
 
         // Don't allow duplicate panes in single/double.
@@ -860,9 +928,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             let other_idx = 1 - controller_idx;
             if state.active_pane[controller_idx] == state.active_pane[other_idx] {
                 state.active_pane[controller_idx] = if dir >= 0 {
-                    state.active_pane[controller_idx].next(has_hard_ex, has_gs)
+                    state.active_pane[controller_idx].next(has_hard_ex, has_online_panes, has_gs)
                 } else {
-                    state.active_pane[controller_idx].prev(has_hard_ex, has_gs)
+                    state.active_pane[controller_idx].prev(has_hard_ex, has_online_panes, has_gs)
                 };
             }
         }
@@ -872,7 +940,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_back
         | VirtualAction::p1_start
         | VirtualAction::p2_back
-        | VirtualAction::p2_start => ScreenAction::Navigate(Screen::SelectMusic),
+        | VirtualAction::p2_start => ScreenAction::Navigate(return_target),
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             shift_pane_for(profile::PlayerSide::P1, 1);
             ScreenAction::None

@@ -260,6 +260,11 @@ pub struct Row {
 }
 
 #[derive(Clone, Debug)]
+pub struct FixedStepchart {
+    pub label: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct SpeedMod {
     pub mod_type: String, // "X", "C", "M"
     pub value: f32,
@@ -288,6 +293,8 @@ impl RowTween {
 
 pub struct State {
     pub song: Arc<SongData>,
+    pub return_screen: Screen,
+    pub fixed_stepchart: Option<FixedStepchart>,
     pub chart_steps_index: [usize; PLAYER_SLOTS],
     pub chart_difficulty_index: [usize; PLAYER_SLOTS],
     pub rows: Vec<Row>,
@@ -498,23 +505,32 @@ fn cached_or_load_noteskin(
     fallback_noteskin(cache)
 }
 
-fn what_comes_next_choices(pane: OptionsPane) -> Vec<String> {
+#[inline(always)]
+fn choose_different_screen_label(return_screen: Screen) -> &'static str {
+    match return_screen {
+        Screen::SelectCourse => "Choose a Different Course",
+        _ => "Choose a Different Song",
+    }
+}
+
+fn what_comes_next_choices(pane: OptionsPane, return_screen: Screen) -> Vec<String> {
+    let choose_different = choose_different_screen_label(return_screen).to_string();
     match pane {
         OptionsPane::Main => vec![
             "Gameplay".to_string(),
-            "Choose a Different Song".to_string(),
+            choose_different,
             "Advanced Modifiers".to_string(),
             "Uncommon Modifiers".to_string(),
         ],
         OptionsPane::Advanced => vec![
             "Gameplay".to_string(),
-            "Choose a Different Song".to_string(),
+            choose_different,
             "Main Modifiers".to_string(),
             "Uncommon Modifiers".to_string(),
         ],
         OptionsPane::Uncommon => vec![
             "Gameplay".to_string(),
-            "Choose a Different Song".to_string(),
+            choose_different,
             "Main Modifiers".to_string(),
             "Advanced Modifiers".to_string(),
         ],
@@ -528,6 +544,8 @@ fn build_main_rows(
     preferred_difficulty_index: [usize; PLAYER_SLOTS],
     session_music_rate: f32,
     noteskin_names: &[String],
+    return_screen: Screen,
+    fixed_stepchart: Option<&FixedStepchart>,
 ) -> Vec<Row> {
     let speed_mod_value_str = match speed_mod.mod_type.as_str() {
         "X" => format!("{:.2}x", speed_mod.value),
@@ -535,61 +553,77 @@ fn build_main_rows(
         "M" => format!("M{}", speed_mod.value as i32),
         _ => String::new(),
     };
-    // Build Stepchart choices from the song's charts for the current play style, ordered
-    // Beginner..Challenge, then Edit charts.
-    let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
-    let mut stepchart_choices: Vec<String> = Vec::with_capacity(5);
-    let mut stepchart_choice_indices: Vec<usize> = Vec::with_capacity(5);
-    for (i, file_name) in crate::ui::color::FILE_DIFFICULTY_NAMES.iter().enumerate() {
-        if let Some(chart) = song.charts.iter().find(|c| {
-            c.chart_type.eq_ignore_ascii_case(target_chart_type)
-                && c.difficulty.eq_ignore_ascii_case(file_name)
-                && !c.notes.is_empty()
-        }) {
-            let display_name = crate::ui::color::DISPLAY_DIFFICULTY_NAMES[i];
-            stepchart_choices.push(format!("{} {}", display_name, chart.meter));
-            stepchart_choice_indices.push(i);
-        }
-    }
-    for (i, chart) in crate::screens::select_music::edit_charts_sorted(song, target_chart_type)
-        .into_iter()
-        .enumerate()
-    {
-        let desc = chart.description.trim();
-        if desc.is_empty() {
-            stepchart_choices.push(format!("Edit {}", chart.meter));
+    let (stepchart_choices, stepchart_choice_indices, initial_stepchart_choice_index) =
+        if let Some(fixed) = fixed_stepchart {
+            let fixed_steps_idx = chart_steps_index[session_persisted_player_idx()];
+            (
+                vec![fixed.label.clone()],
+                vec![fixed_steps_idx],
+                [0; PLAYER_SLOTS],
+            )
         } else {
-            stepchart_choices.push(format!("Edit {} {}", desc, chart.meter));
-        }
-        stepchart_choice_indices.push(crate::ui::color::FILE_DIFFICULTY_NAMES.len() + i);
-    }
-    // Fallback if none found (defensive; SelectMusic filters songs by play style).
-    if stepchart_choices.is_empty() {
-        stepchart_choices.push("(Current)".to_string());
-        let base_pref = preferred_difficulty_index[session_persisted_player_idx()].min(
-            crate::ui::color::FILE_DIFFICULTY_NAMES
-                .len()
-                .saturating_sub(1),
-        );
-        stepchart_choice_indices.push(base_pref);
-    }
-    let initial_stepchart_choice_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
-        let steps_idx = chart_steps_index[player_idx];
-        let pref_idx = preferred_difficulty_index[player_idx].min(
-            crate::ui::color::FILE_DIFFICULTY_NAMES
-                .len()
-                .saturating_sub(1),
-        );
-        stepchart_choice_indices
-            .iter()
-            .position(|&idx| idx == steps_idx)
-            .or_else(|| {
-                stepchart_choice_indices
-                    .iter()
-                    .position(|&idx| idx == pref_idx)
-            })
-            .unwrap_or(0)
-    });
+            // Build Stepchart choices from the song's charts for the current play style, ordered
+            // Beginner..Challenge, then Edit charts.
+            let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
+            let mut stepchart_choices: Vec<String> = Vec::with_capacity(5);
+            let mut stepchart_choice_indices: Vec<usize> = Vec::with_capacity(5);
+            for (i, file_name) in crate::ui::color::FILE_DIFFICULTY_NAMES.iter().enumerate() {
+                if let Some(chart) = song.charts.iter().find(|c| {
+                    c.chart_type.eq_ignore_ascii_case(target_chart_type)
+                        && c.difficulty.eq_ignore_ascii_case(file_name)
+                        && !c.notes.is_empty()
+                }) {
+                    let display_name = crate::ui::color::DISPLAY_DIFFICULTY_NAMES[i];
+                    stepchart_choices.push(format!("{} {}", display_name, chart.meter));
+                    stepchart_choice_indices.push(i);
+                }
+            }
+            for (i, chart) in crate::screens::select_music::edit_charts_sorted(song, target_chart_type)
+                .into_iter()
+                .enumerate()
+            {
+                let desc = chart.description.trim();
+                if desc.is_empty() {
+                    stepchart_choices.push(format!("Edit {}", chart.meter));
+                } else {
+                    stepchart_choices.push(format!("Edit {} {}", desc, chart.meter));
+                }
+                stepchart_choice_indices.push(crate::ui::color::FILE_DIFFICULTY_NAMES.len() + i);
+            }
+            // Fallback if none found (defensive; SelectMusic filters songs by play style).
+            if stepchart_choices.is_empty() {
+                stepchart_choices.push("(Current)".to_string());
+                let base_pref = preferred_difficulty_index[session_persisted_player_idx()].min(
+                    crate::ui::color::FILE_DIFFICULTY_NAMES
+                        .len()
+                        .saturating_sub(1),
+                );
+                stepchart_choice_indices.push(base_pref);
+            }
+            let initial_stepchart_choice_index: [usize; PLAYER_SLOTS] =
+                std::array::from_fn(|player_idx| {
+                    let steps_idx = chart_steps_index[player_idx];
+                    let pref_idx = preferred_difficulty_index[player_idx].min(
+                        crate::ui::color::FILE_DIFFICULTY_NAMES
+                            .len()
+                            .saturating_sub(1),
+                    );
+                    stepchart_choice_indices
+                        .iter()
+                        .position(|&idx| idx == steps_idx)
+                        .or_else(|| {
+                            stepchart_choice_indices
+                                .iter()
+                                .position(|&idx| idx == pref_idx)
+                        })
+                        .unwrap_or(0)
+                });
+            (
+                stepchart_choices,
+                stepchart_choice_indices,
+                initial_stepchart_choice_index,
+            )
+        };
     vec![
         Row {
             name: "Type of Speed Mod".to_string(),
@@ -772,10 +806,10 @@ fn build_main_rows(
         },
         Row {
             name: "What comes next?".to_string(),
-            choices: what_comes_next_choices(OptionsPane::Main),
+            choices: what_comes_next_choices(OptionsPane::Main, return_screen),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![
-                "Go back and choose a different song or change additional".to_string(),
+                "Go back and choose a different chart or change additional".to_string(),
                 "modifiers.".to_string(),
             ],
             choice_difficulty_indices: None,
@@ -790,7 +824,7 @@ fn build_main_rows(
     ]
 }
 
-fn build_advanced_rows() -> Vec<Row> {
+fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
     let mut gameplay_extras_more_choices =
         vec!["Judgment Tilt".to_string(), "Column Cues".to_string()];
     if crate::game::scores::is_gs_get_scores_service_allowed() {
@@ -1100,11 +1134,11 @@ fn build_advanced_rows() -> Vec<Row> {
         },
         Row {
             name: "What comes next?".to_string(),
-            choices: what_comes_next_choices(OptionsPane::Advanced),
+            choices: what_comes_next_choices(OptionsPane::Advanced, return_screen),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![
                 "Jump to gameplay, another modifier pane,".to_string(),
-                "or back to song select.".to_string(),
+                "or back to the select screen.".to_string(),
             ],
             choice_difficulty_indices: None,
         },
@@ -1118,7 +1152,7 @@ fn build_advanced_rows() -> Vec<Row> {
     ]
 }
 
-fn build_uncommon_rows() -> Vec<Row> {
+fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
     vec![
         Row {
             name: "Insert".to_string(),
@@ -1235,11 +1269,11 @@ fn build_uncommon_rows() -> Vec<Row> {
         },
         Row {
             name: "What comes next?".to_string(),
-            choices: what_comes_next_choices(OptionsPane::Uncommon),
+            choices: what_comes_next_choices(OptionsPane::Uncommon, return_screen),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![
                 "Jump to gameplay, another modifier pane,".to_string(),
-                "or back to song select.".to_string(),
+                "or back to the select screen.".to_string(),
             ],
             choice_difficulty_indices: None,
         },
@@ -1261,6 +1295,8 @@ fn build_rows(
     session_music_rate: f32,
     pane: OptionsPane,
     noteskin_names: &[String],
+    return_screen: Screen,
+    fixed_stepchart: Option<&FixedStepchart>,
 ) -> Vec<Row> {
     match pane {
         OptionsPane::Main => build_main_rows(
@@ -1270,9 +1306,11 @@ fn build_rows(
             preferred_difficulty_index,
             session_music_rate,
             noteskin_names,
+            return_screen,
+            fixed_stepchart,
         ),
-        OptionsPane::Advanced => build_advanced_rows(),
-        OptionsPane::Uncommon => build_uncommon_rows(),
+        OptionsPane::Advanced => build_advanced_rows(return_screen),
+        OptionsPane::Uncommon => build_uncommon_rows(return_screen),
     }
 }
 
@@ -1784,6 +1822,8 @@ pub fn init(
     chart_steps_index: [usize; PLAYER_SLOTS],
     preferred_difficulty_index: [usize; PLAYER_SLOTS],
     active_color_index: i32,
+    return_screen: Screen,
+    fixed_stepchart: Option<FixedStepchart>,
 ) -> State {
     let session_music_rate = crate::game::profile::get_session_music_rate();
     let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
@@ -1839,6 +1879,8 @@ pub fn init(
         session_music_rate,
         OptionsPane::Main,
         &noteskin_names,
+        return_screen,
+        fixed_stepchart.as_ref(),
     );
     let player_profiles = [p1_profile.clone(), p2_profile.clone()];
     let (
@@ -1884,6 +1926,8 @@ pub fn init(
     let row_tweens = init_row_tweens(rows.len(), [0; PLAYER_SLOTS], active);
     State {
         song,
+        return_screen,
+        fixed_stepchart,
         chart_steps_index,
         chart_difficulty_index,
         rows,
@@ -3425,6 +3469,8 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         state.music_rate,
         pane,
         &state.noteskin_names,
+        state.return_screen,
+        state.fixed_stepchart.as_ref(),
     );
     let (
         scroll_active_mask_p1,
@@ -3596,8 +3642,8 @@ fn handle_start_event(
         if let Some(choice) = what_comes_next_row.choices.get(choice_idx) {
             match choice.as_str() {
                 "Gameplay" => return Some(ScreenAction::Navigate(Screen::Gameplay)),
-                "Choose a Different Song" => {
-                    return Some(ScreenAction::Navigate(Screen::SelectMusic));
+                c if c == choose_different_screen_label(state.return_screen) => {
+                    return Some(ScreenAction::Navigate(state.return_screen));
                 }
                 "Advanced Modifiers" => switch_to_pane(state, OptionsPane::Advanced),
                 "Uncommon Modifiers" => switch_to_pane(state, OptionsPane::Uncommon),
@@ -3614,20 +3660,20 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if state.pane_transition.is_active() {
         return match ev.action {
             VirtualAction::p1_back if ev.pressed && active[P1] => {
-                ScreenAction::Navigate(Screen::SelectMusic)
+                ScreenAction::Navigate(state.return_screen)
             }
             VirtualAction::p2_back if ev.pressed && active[P2] => {
-                ScreenAction::Navigate(Screen::SelectMusic)
+                ScreenAction::Navigate(state.return_screen)
             }
             _ => ScreenAction::None,
         };
     }
     match ev.action {
         VirtualAction::p1_back if ev.pressed && active[P1] => {
-            return ScreenAction::Navigate(Screen::SelectMusic);
+            return ScreenAction::Navigate(state.return_screen);
         }
         VirtualAction::p2_back if ev.pressed && active[P2] => {
-            return ScreenAction::Navigate(Screen::SelectMusic);
+            return ScreenAction::Navigate(state.return_screen);
         }
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
             handle_nav_event(state, active, P1, NavDirection::Up, ev.pressed);

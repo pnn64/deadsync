@@ -8,6 +8,7 @@ use crate::core::space::{
 use crate::game::chart::ChartData;
 use crate::game::course::get_course_cache;
 use crate::game::profile;
+use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
@@ -17,14 +18,25 @@ use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use std::collections::HashMap;
+use std::hash::Hasher;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use twox_hash::XxHash64;
 
 use super::select_music::MusicWheelEntry;
 
 const TRANSITION_IN_DURATION: f32 = 0.5;
 const TRANSITION_OUT_DURATION: f32 = 0.3;
+const SHOW_OPTIONS_MESSAGE_SECONDS: f32 = 1.5;
+const ENTERING_OPTIONS_FADE_OUT_SECONDS: f32 = 0.125;
+const ENTERING_OPTIONS_HIBERNATE_SECONDS: f32 = 0.1;
+const ENTERING_OPTIONS_FADE_IN_SECONDS: f32 = 0.125;
+const ENTERING_OPTIONS_HOLD_SECONDS: f32 = 1.0;
+const ENTERING_OPTIONS_TOTAL_SECONDS: f32 = ENTERING_OPTIONS_FADE_OUT_SECONDS
+    + ENTERING_OPTIONS_HIBERNATE_SECONDS
+    + ENTERING_OPTIONS_FADE_IN_SECONDS
+    + ENTERING_OPTIONS_HOLD_SECONDS;
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
 const MUSIC_WHEEL_SWITCH_SECONDS: f32 = 0.10;
 const MUSIC_WHEEL_SETTLE_MIN_SPEED: f32 = 0.2;
@@ -42,9 +54,47 @@ const COURSE_TRACKLIST_SCROLL_MIN_ENTRIES: usize = 6;
 // Negative moves up, positive moves down.
 const COURSE_TRACKLIST_TEXT_Y_OFFSET: f32 = 0.0;
 const COURSE_TRACKLIST_TEXT_HEIGHT: f32 = 15.0;
+const PRESS_START_FOR_OPTIONS_TEXT: &str = "Press &START; for options";
+const ENTERING_OPTIONS_TEXT: &str = "Entering Options...";
+const SL_EXIT_PROMPT_BG_ALPHA: f32 = 0.925;
+const SL_EXIT_PROMPT_TEXT: &str = "Do you want to exit this game?";
+const SL_EXIT_PROMPT_NO_LABEL: &str = "No";
+const SL_EXIT_PROMPT_YES_LABEL: &str = "Yes";
+const SL_EXIT_PROMPT_NO_INFO: &str = "Keep playing.";
+const SL_EXIT_PROMPT_YES_INFO: &str = "I'm finished.";
+const SL_EXIT_PROMPT_CHOICE_Y: f32 = 250.0;
+const SL_EXIT_PROMPT_CHOICE_X_OFFSET: f32 = 100.0;
+const SL_EXIT_PROMPT_PROMPT_Y_OFFSET: f32 = -70.0;
+const SL_EXIT_PROMPT_PROMPT_ZOOM: f32 = 1.3;
+const SL_EXIT_PROMPT_LABEL_ZOOM: f32 = 1.1;
+const SL_EXIT_PROMPT_INFO_ZOOM: f32 = 0.825;
+const SL_EXIT_PROMPT_INFO_Y_OFFSET: f32 = 30.0;
+const SL_EXIT_PROMPT_ACTIVE_ZOOM: f32 = 1.1;
+const SL_EXIT_PROMPT_INACTIVE_ZOOM: f32 = 0.5;
+const SL_EXIT_PROMPT_CHOICE_TWEEN_SECONDS: f32 = 0.1;
+const SL_EXIT_PROMPT_CHOICES_DELAY_SECONDS: f32 = 0.0;
+const SL_EXIT_PROMPT_CHOICES_FADE_SECONDS: f32 = 0.15;
 
 rgba_const!(UI_BOX_BG_COLOR, "#1E282F");
 rgba_const!(COURSE_WHEEL_SONG_TEXT_COLOR, "#D77272");
+
+#[derive(Clone, Debug)]
+pub struct CourseStagePlan {
+    pub song: Arc<SongData>,
+    pub chart_hash: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct SelectedCoursePlan {
+    pub path: PathBuf,
+    pub name: String,
+    pub banner_path: Option<PathBuf>,
+    pub song_stub: Arc<SongData>,
+    pub course_difficulty_name: String,
+    pub course_meter: Option<u32>,
+    pub course_stepchart_label: String,
+    pub stages: Vec<CourseStagePlan>,
+}
 
 #[derive(Clone, Debug)]
 struct CourseSongEntry {
@@ -74,12 +124,15 @@ struct CourseMeta {
     entries: Vec<CourseSongEntry>,
     totals: CourseTotals,
     rated_entry_count: usize,
+    course_difficulty_name: String,
+    course_stepchart_label: String,
     course_meter: Option<u32>,
     meter_sum: u32,
     meter_count: usize,
     min_bpm: Option<f64>,
     max_bpm: Option<f64>,
     total_length_seconds: i32,
+    runtime_stages: Vec<CourseStagePlan>,
 }
 
 struct InitData {
@@ -92,6 +145,24 @@ struct InitData {
 enum NavDirection {
     Left,
     Right,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum OutPromptState {
+    None,
+    PressStartForOptions { elapsed: f32 },
+    EnteringOptions { elapsed: f32 },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ExitPromptState {
+    None,
+    Active {
+        elapsed: f32,
+        active_choice: u8,
+        switch_from: Option<u8>,
+        switch_elapsed: f32,
+    },
 }
 
 pub struct State {
@@ -113,6 +184,8 @@ pub struct State {
     banner_high_quality_requested: bool,
     prev_selected_index: usize,
     time_since_selection_change: f32,
+    out_prompt: OutPromptState,
+    exit_prompt: ExitPromptState,
 }
 
 #[inline(always)]
@@ -170,6 +243,13 @@ fn course_name(path: &Path, course: &rssp::course::CourseFile) -> String {
 }
 
 #[inline(always)]
+pub fn course_score_hash(course_path: &Path) -> String {
+    let mut hasher = XxHash64::with_seed(0xC0_01_53_42_0A);
+    hasher.write(course_path.to_string_lossy().as_bytes());
+    format!("course-{:016x}", hasher.finish())
+}
+
+#[inline(always)]
 fn course_steps_label(steps: &rssp::course::StepsSpec) -> String {
     match steps {
         rssp::course::StepsSpec::Difficulty(diff) => rssp::course::difficulty_label(*diff)
@@ -194,6 +274,52 @@ fn course_entry_song_label(entry: &rssp::course::CourseEntry) -> String {
         rssp::course::CourseSong::RandomWithinGroup { group } => format!("{group}/*"),
         rssp::course::CourseSong::SortPick { .. } => "SORT PICK".to_string(),
         rssp::course::CourseSong::Unknown { raw } => raw.clone(),
+    }
+}
+
+#[inline(always)]
+fn course_difficulty_from_meters(course: &rssp::course::CourseFile) -> Option<(&'static str, u32)> {
+    use rssp::course::Difficulty;
+    const ORDER: [(Difficulty, &str); 6] = [
+        (Difficulty::Challenge, "Challenge"),
+        (Difficulty::Hard, "Hard"),
+        (Difficulty::Medium, "Medium"),
+        (Difficulty::Easy, "Easy"),
+        (Difficulty::Beginner, "Beginner"),
+        (Difficulty::Edit, "Edit"),
+    ];
+    for (diff, name) in ORDER {
+        if let Some(meter) = course.meter_for(diff).filter(|v| *v >= 0) {
+            return Some((name, meter as u32));
+        }
+    }
+    None
+}
+
+#[inline(always)]
+fn normalize_difficulty_file_name(raw: &str) -> Option<&'static str> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "beginner" => Some("Beginner"),
+        "easy" | "basic" | "light" => Some("Easy"),
+        "regular" | "medium" | "another" | "trick" | "standard" => Some("Medium"),
+        "difficult" | "hard" | "ssr" | "maniac" | "heavy" => Some("Hard"),
+        "challenge" | "expert" | "oni" | "smaniac" => Some("Challenge"),
+        "edit" => Some("Edit"),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn course_stepchart_label(difficulty_name: &str, meter: Option<u32>) -> String {
+    let idx = color::FILE_DIFFICULTY_NAMES
+        .iter()
+        .position(|name| name.eq_ignore_ascii_case(difficulty_name))
+        .unwrap_or(2);
+    let display = color::DISPLAY_DIFFICULTY_NAMES[idx];
+    if let Some(meter) = meter {
+        format!("{display} {meter}")
+    } else {
+        display.to_string()
     }
 }
 
@@ -322,15 +448,12 @@ fn build_init_data() -> InitData {
 
     for (path, course) in course_cache.iter() {
         let mut entries = Vec::with_capacity(course.entries.len());
+        let mut runtime_stages = Vec::with_capacity(course.entries.len());
         let mut total_seconds = 0i32;
         let mut totals = CourseTotals::default();
         let mut rated_entry_count = 0usize;
         let mut meter_sum = 0u32;
         let mut meter_count = 0usize;
-        let mut course_meter = course
-            .meter_for(rssp::course::Difficulty::Medium)
-            .filter(|v| *v >= 0)
-            .map(|v| v as u32);
         let mut min_bpm = None;
         let mut max_bpm = None;
 
@@ -371,6 +494,10 @@ fn build_init_data() -> InitData {
                     difficulty = chart.difficulty.to_ascii_lowercase();
                     meter = Some(chart.meter);
                     step_artist = chart_step_artist(chart);
+                    runtime_stages.push(CourseStagePlan {
+                        song: song_data.clone(),
+                        chart_hash: chart.short_hash.clone(),
+                    });
                     add_chart_totals(&mut totals, chart);
                     rated_entry_count = rated_entry_count.saturating_add(1);
                     meter_sum = meter_sum.saturating_add(chart.meter);
@@ -385,6 +512,22 @@ fn build_init_data() -> InitData {
             });
         }
 
+        let (course_difficulty_name, course_meter) =
+            if let Some((difficulty_name, meter)) = course_difficulty_from_meters(course) {
+                (difficulty_name.to_string(), Some(meter))
+            } else if let Some(first_entry) = entries.first() {
+                if let Some(normalized) = normalize_difficulty_file_name(first_entry.difficulty.as_str())
+                {
+                    (normalized.to_string(), first_entry.meter)
+                } else {
+                    ("Medium".to_string(), first_entry.meter)
+                }
+            } else {
+                ("Medium".to_string(), None)
+            };
+        let course_stepchart_label =
+            course_stepchart_label(course_difficulty_name.as_str(), course_meter);
+
         let group_name = course_group_name(path);
         let meta = Arc::new(CourseMeta {
             path: path.clone(),
@@ -395,12 +538,15 @@ fn build_init_data() -> InitData {
             entries,
             totals,
             rated_entry_count,
-            course_meter: course_meter.take(),
+            course_difficulty_name,
+            course_stepchart_label,
+            course_meter,
             meter_sum,
             meter_count,
             min_bpm,
             max_bpm,
             total_length_seconds: total_seconds.max(0),
+            runtime_stages,
         });
 
         grouped.entry(group_name).or_default().push(meta.clone());
@@ -437,6 +583,23 @@ fn selected_course_meta(state: &State) -> Option<Arc<CourseMeta>> {
     state.course_meta_by_path.get(&song.simfile_path).cloned()
 }
 
+pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
+    let meta = selected_course_meta(state)?;
+    if meta.runtime_stages.is_empty() {
+        return None;
+    }
+    Some(SelectedCoursePlan {
+        path: meta.path.clone(),
+        name: meta.name.clone(),
+        banner_path: meta.banner_path.clone(),
+        song_stub: Arc::new(make_course_song(&meta)),
+        course_difficulty_name: meta.course_difficulty_name.clone(),
+        course_meter: meta.course_meter,
+        course_stepchart_label: meta.course_stepchart_label.clone(),
+        stages: meta.runtime_stages.clone(),
+    })
+}
+
 #[inline(always)]
 fn selected_banner_path(state: &State) -> Option<PathBuf> {
     match state.entries.get(state.selected_index) {
@@ -466,6 +629,8 @@ pub fn init() -> State {
         banner_high_quality_requested: false,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
+        out_prompt: OutPromptState::None,
+        exit_prompt: ExitPromptState::None,
     };
     rebuild_displayed_entries(&mut state);
     state
@@ -578,8 +743,11 @@ fn handle_wheel_dir(state: &mut State, dir: PadDir, pressed: bool, ts: Instant) 
 }
 
 pub fn handle_confirm(state: &mut State) -> ScreenAction {
+    if state.out_prompt != OutPromptState::None {
+        return ScreenAction::None;
+    }
     if state.entries.is_empty() {
-        audio::play_sfx("assets/sounds/start.ogg");
+        audio::play_sfx("assets/sounds/expand.ogg");
         return ScreenAction::None;
     }
     state.nav_key_held_direction = None;
@@ -587,8 +755,8 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
 
     match state.entries.get(state.selected_index) {
         Some(MusicWheelEntry::Song(_)) => {
-            // Course gameplay handoff is not wired yet; keep the action local for now.
             audio::play_sfx("assets/sounds/start.ogg");
+            state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
             ScreenAction::None
         }
         _ => ScreenAction::None,
@@ -596,6 +764,24 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if state.exit_prompt != ExitPromptState::None {
+        return handle_exit_prompt_input(state, ev);
+    }
+
+    if state.out_prompt != OutPromptState::None {
+        if ev.pressed
+            && matches!(ev.action, VirtualAction::p1_start | VirtualAction::p2_start)
+            && matches!(
+                state.out_prompt,
+                OutPromptState::PressStartForOptions { .. }
+            )
+        {
+            audio::play_sfx("assets/sounds/start.ogg");
+            state.out_prompt = OutPromptState::EnteringOptions { elapsed: 0.0 };
+        }
+        return ScreenAction::None;
+    }
+
     let play_style = profile::get_session_play_style();
     if play_style == profile::PlayStyle::Versus {
         return match ev.action {
@@ -615,8 +801,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 handle_confirm(state)
             }
             VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
-                audio::play_sfx("assets/sounds/start.ogg");
-                ScreenAction::Navigate(Screen::Menu)
+                begin_exit_prompt(state);
+                ScreenAction::None
             }
             _ => ScreenAction::None,
         };
@@ -632,8 +818,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             VirtualAction::p1_start if ev.pressed => handle_confirm(state),
             VirtualAction::p1_back if ev.pressed => {
-                audio::play_sfx("assets/sounds/start.ogg");
-                ScreenAction::Navigate(Screen::Menu)
+                begin_exit_prompt(state);
+                ScreenAction::None
             }
             _ => ScreenAction::None,
         },
@@ -646,8 +832,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             VirtualAction::p2_start if ev.pressed => handle_confirm(state),
             VirtualAction::p2_back if ev.pressed => {
-                audio::play_sfx("assets/sounds/start.ogg");
-                ScreenAction::Navigate(Screen::Menu)
+                begin_exit_prompt(state);
+                ScreenAction::None
             }
             _ => ScreenAction::None,
         },
@@ -656,6 +842,46 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
 pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     let dt = dt.max(0.0);
+
+    match state.out_prompt {
+        OutPromptState::PressStartForOptions { elapsed } => {
+            let elapsed = elapsed + dt;
+            if elapsed >= SHOW_OPTIONS_MESSAGE_SECONDS {
+                state.out_prompt = OutPromptState::None;
+                return ScreenAction::NavigateNoFade(Screen::Gameplay);
+            }
+            state.out_prompt = OutPromptState::PressStartForOptions { elapsed };
+            return ScreenAction::None;
+        }
+        OutPromptState::EnteringOptions { elapsed } => {
+            let elapsed = elapsed + dt;
+            if elapsed >= ENTERING_OPTIONS_TOTAL_SECONDS {
+                state.out_prompt = OutPromptState::None;
+                return ScreenAction::NavigateNoFade(Screen::PlayerOptions);
+            }
+            state.out_prompt = OutPromptState::EnteringOptions { elapsed };
+            return ScreenAction::None;
+        }
+        OutPromptState::None => {}
+    }
+
+    if let ExitPromptState::Active {
+        elapsed,
+        switch_from,
+        switch_elapsed,
+        ..
+    } = &mut state.exit_prompt
+    {
+        *elapsed += dt;
+        if switch_from.is_some() {
+            *switch_elapsed += dt;
+            if *switch_elapsed >= SL_EXIT_PROMPT_CHOICE_TWEEN_SECONDS {
+                *switch_from = None;
+                *switch_elapsed = 0.0;
+            }
+        }
+    }
+
     state.selection_animation_timer += dt;
     state.time_since_selection_change += dt;
 
@@ -721,6 +947,8 @@ pub fn trigger_immediate_refresh(state: &mut State) {
     state.time_since_selection_change = BANNER_UPDATE_DELAY_SECONDS;
     state.last_requested_banner_path = None;
     state.banner_high_quality_requested = false;
+    state.out_prompt = OutPromptState::None;
+    state.exit_prompt = ExitPromptState::None;
 }
 
 #[inline(always)]
@@ -959,10 +1187,49 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         .and_then(|meta| meta.entries.first())
         .map(|entry| color::difficulty_rgba(&entry.difficulty, state.active_color_index))
         .unwrap_or_else(|| color::simply_love_rgba(state.active_color_index));
+    let pane_side = if is_p2_single {
+        profile::PlayerSide::P2
+    } else {
+        profile::PlayerSide::P1
+    };
+    let pane_profile = profile::get_for_side(pane_side);
     let pane_cx = if is_p2_single {
         screen_width() * 0.75 + 5.0
     } else {
         screen_width() * 0.25 - 5.0
+    };
+    let placeholder = ("----".to_string(), "??.??%".to_string());
+    let selected_course_hash = selected_meta
+        .as_ref()
+        .map(|meta| course_score_hash(meta.path.as_path()));
+    let fallback_player = if let Some(hash) = selected_course_hash.as_deref()
+        && let Some(sc) = scores::get_cached_local_score_for_side(hash, pane_side)
+        && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
+    {
+        (
+            pane_profile.player_initials.clone(),
+            format!("{:.2}%", sc.score_percent * 100.0),
+        )
+    } else {
+        placeholder.clone()
+    };
+    let fallback_machine = if let Some(hash) = selected_course_hash.as_deref()
+        && let Some((initials, sc)) = scores::get_machine_record_local(hash)
+        && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
+    {
+        (initials, format!("{:.2}%", sc.score_percent * 100.0))
+    } else {
+        placeholder
+    };
+    let gs_view = gs_scorebox::SelectMusicScoreboxView {
+        mode_text: gs_scorebox::select_music_mode_text(pane_side, None),
+        machine_name: fallback_machine.0,
+        machine_score: fallback_machine.1,
+        player_name: fallback_player.0,
+        player_score: fallback_player.1,
+        rivals: std::array::from_fn(|_| ("----".to_string(), "??.??%".to_string())),
+        show_rivals: false,
+        loading_text: None,
     };
     actors.extend(select_pane::build_base(select_pane::StatsPaneParams {
         pane_cx,
@@ -975,8 +1242,31 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             holds: holds_text.as_str(),
             rolls: rolls_text.as_str(),
         },
-        meter: Some(meter_text.as_str()),
+        meter: (!gs_view.show_rivals).then_some(meter_text.as_str()),
     }));
+    let pane_layout = select_pane::layout();
+    let lines = [
+        (
+            gs_view.machine_name.as_str(),
+            gs_view.machine_score.as_str(),
+        ),
+        (gs_view.player_name.as_str(), gs_view.player_score.as_str()),
+    ];
+    for i in 0..2 {
+        let (name, pct) = lines[i];
+        actors.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + pane_layout.cols[2] - 50.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+        actors.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + pane_layout.cols[2] + 25.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+    }
+    if let Some(status) = gs_view.loading_text {
+        actors.push(act!(text: font("miso"): settext(status): align(0.5, 0.5): xy(pane_cx + pane_layout.cols[2] - 15.0, pane_layout.pane_top + pane_layout.rows[2]): maxwidth(90.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
+    }
+    if gs_view.show_rivals {
+        for i in 0..3 {
+            let (name, pct) = (&gs_view.rivals[i].0, &gs_view.rivals[i].1);
+            actors.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + pane_layout.cols[2] + 50.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+            actors.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + pane_layout.cols[2] + 125.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+        }
+    }
 
     let (box_w, frame_x, frame_y) = if is_wide() {
         (320.0, screen_center_x() - 170.0, screen_center_y() - 55.0)
@@ -1195,5 +1485,254 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
 
+    // Match ScreenSelectMusic out-prompt visual treatment.
+    if state.out_prompt != OutPromptState::None {
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 0.0):
+            cropbottom(1.0):
+            fadebottom(0.5):
+            z(1400):
+            linear(TRANSITION_OUT_DURATION): cropbottom(-0.5): alpha(1.0)
+        ));
+
+        match state.out_prompt {
+            OutPromptState::PressStartForOptions { .. } => {
+                actors.push(act!(text:
+                    font("wendy"):
+                    settext(PRESS_START_FOR_OPTIONS_TEXT):
+                    align(0.5, 0.5):
+                    xy(screen_center_x(), screen_center_y()):
+                    zoom(0.75):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    z(1401)
+                ));
+            }
+            OutPromptState::EnteringOptions { .. } => {
+                actors.push(act!(text:
+                    font("wendy"):
+                    settext(PRESS_START_FOR_OPTIONS_TEXT):
+                    align(0.5, 0.5):
+                    xy(screen_center_x(), screen_center_y()):
+                    zoom(0.75):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    z(1401):
+                    linear(ENTERING_OPTIONS_FADE_OUT_SECONDS): alpha(0.0)
+                ));
+                actors.push(act!(text:
+                    font("wendy"):
+                    settext(ENTERING_OPTIONS_TEXT):
+                    align(0.5, 0.5):
+                    xy(screen_center_x(), screen_center_y()):
+                    zoom(0.75):
+                    diffuse(1.0, 1.0, 1.0, 0.0):
+                    z(1401):
+                    sleep(ENTERING_OPTIONS_FADE_OUT_SECONDS + ENTERING_OPTIONS_HIBERNATE_SECONDS):
+                    linear(ENTERING_OPTIONS_FADE_IN_SECONDS): alpha(1.0):
+                    sleep(ENTERING_OPTIONS_HOLD_SECONDS)
+                ));
+            }
+            OutPromptState::None => {}
+        }
+    }
+
+    if let ExitPromptState::Active {
+        elapsed,
+        active_choice,
+        switch_from,
+        switch_elapsed,
+    } = state.exit_prompt
+    {
+        let choices_alpha = if elapsed <= SL_EXIT_PROMPT_CHOICES_DELAY_SECONDS {
+            0.0
+        } else {
+            ((elapsed - SL_EXIT_PROMPT_CHOICES_DELAY_SECONDS) / SL_EXIT_PROMPT_CHOICES_FADE_SECONDS)
+                .clamp(0.0, 1.0)
+        };
+        let p2_color = color::simply_love_rgba(state.active_color_index - 2);
+
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, SL_EXIT_PROMPT_BG_ALPHA):
+            z(1500)
+        ));
+        actors.push(act!(text:
+            font("miso"):
+            settext(SL_EXIT_PROMPT_TEXT):
+            align(0.5, 0.0):
+            xy(screen_center_x(), screen_center_y() + SL_EXIT_PROMPT_PROMPT_Y_OFFSET):
+            zoom(SL_EXIT_PROMPT_PROMPT_ZOOM):
+            maxwidth(420.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(1501):
+            horizalign(center)
+        ));
+
+        let zoom_no = exit_prompt_choice_zoom(0, active_choice, switch_from, switch_elapsed);
+        let zoom_yes = exit_prompt_choice_zoom(1, active_choice, switch_from, switch_elapsed);
+        let cx = screen_center_x();
+        push_exit_prompt_choice(
+            &mut actors,
+            cx - SL_EXIT_PROMPT_CHOICE_X_OFFSET,
+            SL_EXIT_PROMPT_CHOICE_Y,
+            SL_EXIT_PROMPT_NO_LABEL,
+            SL_EXIT_PROMPT_NO_INFO,
+            active_choice == 0,
+            zoom_no,
+            p2_color,
+            choices_alpha,
+            1502,
+        );
+        push_exit_prompt_choice(
+            &mut actors,
+            cx + SL_EXIT_PROMPT_CHOICE_X_OFFSET,
+            SL_EXIT_PROMPT_CHOICE_Y,
+            SL_EXIT_PROMPT_YES_LABEL,
+            SL_EXIT_PROMPT_YES_INFO,
+            active_choice == 1,
+            zoom_yes,
+            p2_color,
+            choices_alpha,
+            1502,
+        );
+    }
+
     actors
+}
+
+#[inline(always)]
+fn begin_exit_prompt(state: &mut State) {
+    state.exit_prompt = ExitPromptState::Active {
+        elapsed: 0.0,
+        active_choice: 0,
+        switch_from: None,
+        switch_elapsed: 0.0,
+    };
+    state.nav_key_held_direction = None;
+    state.nav_key_held_since = None;
+}
+
+#[inline(always)]
+fn exit_prompt_choice_zoom(
+    choice: u8,
+    active_choice: u8,
+    switch_from: Option<u8>,
+    switch_elapsed: f32,
+) -> f32 {
+    #[inline(always)]
+    fn lerp(a: f32, b: f32, t: f32) -> f32 {
+        (b - a).mul_add(t, a)
+    }
+
+    if let Some(from) = switch_from {
+        let t = (switch_elapsed / SL_EXIT_PROMPT_CHOICE_TWEEN_SECONDS).clamp(0.0, 1.0);
+        if choice == from {
+            return lerp(SL_EXIT_PROMPT_ACTIVE_ZOOM, SL_EXIT_PROMPT_INACTIVE_ZOOM, t);
+        }
+        if choice == active_choice {
+            return lerp(SL_EXIT_PROMPT_INACTIVE_ZOOM, SL_EXIT_PROMPT_ACTIVE_ZOOM, t);
+        }
+    }
+
+    [SL_EXIT_PROMPT_INACTIVE_ZOOM, SL_EXIT_PROMPT_ACTIVE_ZOOM][(choice == active_choice) as usize]
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_exit_prompt_choice(
+    out: &mut Vec<Actor>,
+    cx: f32,
+    cy: f32,
+    label: &str,
+    info: &str,
+    active: bool,
+    choice_zoom: f32,
+    active_rgba: [f32; 4],
+    alpha: f32,
+    z: i16,
+) {
+    let mut rgba = [1.0; 4];
+    if active {
+        rgba = active_rgba;
+    }
+    rgba[3] *= alpha;
+
+    out.push(act!(text:
+        align(0.5, 0.5):
+        xy(cx, cy):
+        font("wendy"):
+        zoom(SL_EXIT_PROMPT_LABEL_ZOOM * choice_zoom):
+        settext(label):
+        diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
+        z(z):
+        horizalign(center)
+    ));
+    out.push(act!(text:
+        align(0.5, 0.5):
+        xy(cx, cy + SL_EXIT_PROMPT_INFO_Y_OFFSET * choice_zoom):
+        font("miso"):
+        zoom(SL_EXIT_PROMPT_INFO_ZOOM * choice_zoom):
+        settext(info):
+        diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
+        z(z):
+        horizalign(center)
+    ));
+}
+
+fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if !ev.pressed {
+        return ScreenAction::None;
+    }
+    let ExitPromptState::Active { active_choice, .. } = state.exit_prompt else {
+        return ScreenAction::None;
+    };
+
+    match ev.action {
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => {
+            let ExitPromptState::Active {
+                active_choice,
+                switch_from,
+                switch_elapsed,
+                ..
+            } = &mut state.exit_prompt
+            else {
+                return ScreenAction::None;
+            };
+            let prev = *active_choice;
+            *active_choice = 1 - prev;
+            *switch_from = Some(prev);
+            *switch_elapsed = 0.0;
+            audio::play_sfx("assets/sounds/change.ogg");
+            ScreenAction::None
+        }
+
+        VirtualAction::p1_back
+        | VirtualAction::p2_back
+        | VirtualAction::p1_select
+        | VirtualAction::p2_select => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            state.exit_prompt = ExitPromptState::None;
+            ScreenAction::None
+        }
+
+        VirtualAction::p1_start | VirtualAction::p2_start => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            state.exit_prompt = ExitPromptState::None;
+            if active_choice == 1 {
+                ScreenAction::Navigate(Screen::Menu)
+            } else {
+                ScreenAction::None
+            }
+        }
+
+        _ => ScreenAction::None,
+    }
 }

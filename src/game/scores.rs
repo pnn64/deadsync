@@ -4,6 +4,7 @@ use crate::core::network;
 use crate::game::gameplay;
 use crate::game::judgment;
 use crate::game::profile::{self, Profile};
+use crate::game::stage_stats;
 use crate::game::song::get_song_cache;
 use chrono::{Local, TimeZone};
 use log::{info, warn};
@@ -1353,6 +1354,62 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             &mut entry,
         );
     }
+}
+
+pub fn save_local_summary_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+    music_rate: f32,
+    summary: &stage_stats::PlayerStageSummary,
+) {
+    if chart_hash.trim().is_empty() {
+        return;
+    }
+    let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+        return;
+    };
+
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    let profile_initials = profile::get_for_side(side).player_initials;
+    let counts = [
+        summary.window_counts.w0.saturating_add(summary.window_counts.w1),
+        summary.window_counts.w2,
+        summary.window_counts.w3,
+        summary.window_counts.w4,
+        summary.window_counts.w5,
+        summary.window_counts.miss,
+    ];
+    let (lamp_index, lamp_judge_count) = compute_local_lamp(counts, summary.grade);
+    let mut entry = LocalScoreEntryV1 {
+        version: LOCAL_SCORE_VERSION_V1,
+        played_at_ms: now_ms,
+        music_rate: if music_rate.is_finite() && music_rate > 0.0 {
+            music_rate
+        } else {
+            1.0
+        },
+        score_percent: summary.score_percent.clamp(0.0, 1.0),
+        grade_code: grade_to_code(summary.grade),
+        lamp_index,
+        lamp_judge_count,
+        ex_score_percent: summary.ex_score_percent.clamp(0.0, 100.0),
+        hard_ex_score_percent: summary.ex_score_percent.clamp(0.0, 100.0),
+        judgment_counts: counts,
+        holds_held: 0,
+        holds_total: 0,
+        rolls_held: 0,
+        rolls_total: 0,
+        mines_avoided: 0,
+        mines_total: 0,
+        hands_achieved: 0,
+        fail_time: (summary.grade == Grade::Failed).then_some(0.0),
+        beat0_time_seconds: 0.0,
+        replay: Vec::new(),
+    };
+    append_local_score_on_disk(&profile_id, profile_initials.as_str(), chart_hash, &mut entry);
 }
 
 // --- API Response Structs ---

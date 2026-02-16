@@ -24,7 +24,7 @@ use winit::{
 
 use log::{error, info, warn};
 use std::cmp;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::{error::Error, path::PathBuf, sync::Arc, time::Instant};
 
 use crate::ui::actors::Actor;
@@ -73,6 +73,31 @@ enum Command {
 const FADE_OUT_DURATION: f32 = 0.4;
 const MENU_TO_SELECT_COLOR_OUT_DURATION: f32 = 1.0;
 const MENU_ACTORS_FADE_DURATION: f32 = 0.65;
+const COURSE_MIN_SECONDS_TO_STEP_NEXT_SONG: f32 = 4.0;
+const COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG: f32 = 0.0;
+
+#[derive(Clone)]
+struct CourseStageRuntime {
+    song: Arc<crate::game::song::SongData>,
+    steps_index: [usize; crate::game::gameplay::MAX_PLAYERS],
+    preferred_difficulty_index: [usize; crate::game::gameplay::MAX_PLAYERS],
+}
+
+#[derive(Clone)]
+struct CourseRunState {
+    path: PathBuf,
+    name: String,
+    banner_path: Option<PathBuf>,
+    score_hash: String,
+    course_difficulty_name: String,
+    course_meter: Option<u32>,
+    course_stepchart_label: String,
+    song_stub: Arc<crate::game::song::SongData>,
+    stages: Vec<CourseStageRuntime>,
+    next_stage_index: usize,
+    stage_summaries: Vec<stage_stats::StageSummary>,
+    stage_eval_pages: Vec<evaluation::State>,
+}
 
 /* -------------------- transition state machine -------------------- */
 #[derive(Debug)]
@@ -230,6 +255,9 @@ pub struct SessionState {
     preferred_difficulty_index: usize,
     session_start_time: Option<Instant>,
     played_stages: Vec<stage_stats::StageSummary>,
+    course_run: Option<CourseRunState>,
+    course_eval_pages: Vec<evaluation::State>,
+    course_eval_page_index: usize,
 }
 
 /// Pure-ish container for the high-level game state.
@@ -328,6 +356,9 @@ impl SessionState {
             preferred_difficulty_index,
             session_start_time: None,
             played_stages: Vec::new(),
+            course_run: None,
+            course_eval_pages: Vec::new(),
+            course_eval_page_index: 0,
         }
     }
 }
@@ -338,6 +369,292 @@ const fn side_ix(side: profile::PlayerSide) -> usize {
         profile::PlayerSide::P1 => 0,
         profile::PlayerSide::P2 => 1,
     }
+}
+
+fn course_stage_runtime_from_plan(
+    plan: &select_course::CourseStagePlan,
+    chart_type: &str,
+) -> Option<CourseStageRuntime> {
+    let steps_idx = select_music::steps_index_for_chart_hash(
+        plan.song.as_ref(),
+        chart_type,
+        plan.chart_hash.as_str(),
+    )?;
+    Some(CourseStageRuntime {
+        song: plan.song.clone(),
+        steps_index: [steps_idx; crate::game::gameplay::MAX_PLAYERS],
+        preferred_difficulty_index: [steps_idx; crate::game::gameplay::MAX_PLAYERS],
+    })
+}
+
+fn build_course_run_from_selection(selection: select_course::SelectedCoursePlan) -> Option<CourseRunState> {
+    let chart_type = profile::get_session_play_style().chart_type();
+    let mut stages = Vec::with_capacity(selection.stages.len());
+    for stage in &selection.stages {
+        if let Some(runtime) = course_stage_runtime_from_plan(stage, chart_type) {
+            stages.push(runtime);
+        }
+    }
+    if stages.is_empty() {
+        return None;
+    }
+    Some(CourseRunState {
+        path: selection.path.clone(),
+        name: selection.name,
+        banner_path: selection.banner_path,
+        score_hash: select_course::course_score_hash(selection.path.as_path()),
+        course_difficulty_name: selection.course_difficulty_name,
+        course_meter: selection.course_meter,
+        course_stepchart_label: selection.course_stepchart_label,
+        song_stub: selection.song_stub,
+        stages,
+        next_stage_index: 0,
+        stage_summaries: Vec::new(),
+        stage_eval_pages: Vec::new(),
+    })
+}
+
+#[inline(always)]
+fn merge_window_counts(
+    mut total: crate::game::timing::WindowCounts,
+    add: crate::game::timing::WindowCounts,
+) -> crate::game::timing::WindowCounts {
+    total.w0 = total.w0.saturating_add(add.w0);
+    total.w1 = total.w1.saturating_add(add.w1);
+    total.w2 = total.w2.saturating_add(add.w2);
+    total.w3 = total.w3.saturating_add(add.w3);
+    total.w4 = total.w4.saturating_add(add.w4);
+    total.w5 = total.w5.saturating_add(add.w5);
+    total.miss = total.miss.saturating_add(add.miss);
+    total
+}
+
+fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::StageSummary> {
+    if course.stage_summaries.is_empty() {
+        return None;
+    }
+    let mut summary_song = (*course.song_stub).clone();
+    summary_song.simfile_path = course.path.clone();
+    summary_song.title = course.name.clone();
+    summary_song.translit_title = course.name.clone();
+    summary_song.banner_path = course.banner_path.clone();
+    let duration_seconds: f32 = course
+        .stage_summaries
+        .iter()
+        .map(|stage| stage.duration_seconds.max(0.0))
+        .sum();
+    summary_song.music_length_seconds = duration_seconds;
+    summary_song.total_length_seconds = duration_seconds.round() as i32;
+    let summary_song = Arc::new(summary_song);
+
+    let mut players: [Option<stage_stats::PlayerStageSummary>; crate::game::gameplay::MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        let idx = side_ix(side);
+        let mut weighted_score = 0.0_f64;
+        let mut weighted_ex = 0.0_f64;
+        let mut weight_sum = 0.0_f64;
+        let mut notes_hit: u32 = 0;
+        let mut meter_sum = 0u32;
+        let mut meter_count = 0u32;
+        let mut any_failed = false;
+        let mut show_w0 = false;
+        let mut show_ex = false;
+        let mut counts = crate::game::timing::WindowCounts::default();
+        let mut first_player: Option<&stage_stats::PlayerStageSummary> = None;
+        for stage in &course.stage_summaries {
+            let Some(player) = stage.players[idx].as_ref() else {
+                continue;
+            };
+            if first_player.is_none() {
+                first_player = Some(player);
+            }
+            let weight = player.notes_hit.max(1) as f64;
+            weighted_score += player.score_percent * weight;
+            weighted_ex += player.ex_score_percent * weight;
+            weight_sum += weight;
+            notes_hit = notes_hit.saturating_add(player.notes_hit);
+            meter_sum = meter_sum.saturating_add(player.chart.meter);
+            meter_count = meter_count.saturating_add(1);
+            any_failed |= player.grade == scores::Grade::Failed;
+            show_w0 |= player.show_w0;
+            show_ex |= player.show_ex_score;
+            counts = merge_window_counts(counts, player.window_counts);
+        }
+        let Some(first_player) = first_player else {
+            continue;
+        };
+        let score_percent = if weight_sum > 0.0 {
+            (weighted_score / weight_sum).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let ex_score_percent = if weight_sum > 0.0 {
+            (weighted_ex / weight_sum).clamp(0.0, 100.0)
+        } else {
+            0.0
+        };
+        let mut grade = if any_failed {
+            scores::Grade::Failed
+        } else {
+            scores::score_to_grade(score_percent * 10000.0)
+        };
+        if grade != scores::Grade::Failed && show_w0 && ex_score_percent >= 100.0 {
+            grade = scores::Grade::Quint;
+        }
+        let mut summary_chart = (*first_player.chart).clone();
+        summary_chart.short_hash = course.score_hash.clone();
+        summary_chart.difficulty = course.course_difficulty_name.clone();
+        summary_chart.description = course.name.clone();
+        summary_chart.meter = course.course_meter.unwrap_or_else(|| {
+            if meter_count > 0 {
+                (meter_sum as f32 / meter_count as f32).round() as u32
+            } else {
+                summary_chart.meter
+            }
+        });
+        players[idx] = Some(stage_stats::PlayerStageSummary {
+            profile_name: first_player.profile_name.clone(),
+            chart: Arc::new(summary_chart),
+            grade,
+            score_percent,
+            ex_score_percent,
+            notes_hit,
+            window_counts: counts,
+            show_w0,
+            show_ex_score: show_ex,
+        });
+    }
+
+    let music_rate = course
+        .stage_summaries
+        .last()
+        .map(|s| s.music_rate)
+        .unwrap_or(1.0);
+    Some(stage_stats::StageSummary {
+        song: summary_song,
+        music_rate,
+        duration_seconds,
+        players,
+    })
+}
+
+#[inline(always)]
+fn highlight_rank_for_initials(
+    entries: &[scores::LeaderboardEntry],
+    initials: &str,
+    score_percent: f64,
+) -> Option<u32> {
+    if initials.trim().is_empty() {
+        return None;
+    }
+    let target = (score_percent * 10000.0).round();
+    entries
+        .iter()
+        .find(|entry| entry.name == initials && (entry.score - target).abs() <= 0.5)
+        .map(|entry| entry.rank.max(1))
+}
+
+fn score_info_from_stage(
+    stage: &stage_stats::StageSummary,
+    side: profile::PlayerSide,
+) -> Option<evaluation::ScoreInfo> {
+    let idx = side_ix(side);
+    let player = stage.players[idx].as_ref()?;
+    let mut judgment_counts = HashMap::new();
+    judgment_counts.insert(
+        crate::game::judgment::JudgeGrade::Fantastic,
+        player
+            .window_counts
+            .w0
+            .saturating_add(player.window_counts.w1),
+    );
+    judgment_counts.insert(crate::game::judgment::JudgeGrade::Excellent, player.window_counts.w2);
+    judgment_counts.insert(crate::game::judgment::JudgeGrade::Great, player.window_counts.w3);
+    judgment_counts.insert(crate::game::judgment::JudgeGrade::Decent, player.window_counts.w4);
+    judgment_counts.insert(crate::game::judgment::JudgeGrade::WayOff, player.window_counts.w5);
+    judgment_counts.insert(crate::game::judgment::JudgeGrade::Miss, player.window_counts.miss);
+
+    let chart_hash = player.chart.short_hash.as_str();
+    let machine_records = scores::get_machine_leaderboard_local(chart_hash, usize::MAX);
+    let personal_records = scores::get_personal_leaderboard_local_for_side(chart_hash, side, usize::MAX);
+    let initials = profile::get_for_side(side).player_initials;
+    let machine_record_highlight_rank =
+        highlight_rank_for_initials(machine_records.as_slice(), initials.as_str(), player.score_percent);
+    let personal_record_highlight_rank = highlight_rank_for_initials(
+        personal_records.as_slice(),
+        initials.as_str(),
+        player.score_percent,
+    );
+    let earned_machine_record = machine_record_highlight_rank
+        .is_some_and(|rank| rank <= 10);
+    let earned_top2_personal = personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+
+    Some(evaluation::ScoreInfo {
+        song: stage.song.clone(),
+        chart: player.chart.clone(),
+        profile_name: player.profile_name.clone(),
+        judgment_counts,
+        score_percent: player.score_percent,
+        grade: player.grade,
+        speed_mod: profile::get_for_side(side).scroll_speed,
+        hands_achieved: 0,
+        holds_held: 0,
+        holds_total: 0,
+        rolls_held: 0,
+        rolls_total: 0,
+        mines_avoided: 0,
+        mines_total: 0,
+        timing: crate::game::timing::TimingStats::default(),
+        scatter: Vec::new(),
+        scatter_worst_window_ms: 45.0,
+        histogram: crate::game::timing::HistogramMs::default(),
+        graph_first_second: 0.0,
+        graph_last_second: stage.song.total_length_seconds.max(0) as f32,
+        music_rate: if stage.music_rate.is_finite() && stage.music_rate > 0.0 {
+            stage.music_rate
+        } else {
+            1.0
+        },
+        scroll_option: profile::get_for_side(side).scroll_option,
+        life_history: Vec::new(),
+        fail_time: (player.grade == scores::Grade::Failed).then_some(stage.duration_seconds),
+        window_counts: player.window_counts,
+        window_counts_10ms: player.window_counts,
+        ex_score_percent: player.ex_score_percent,
+        hard_ex_score_percent: player.ex_score_percent,
+        column_judgments: Vec::new(),
+        noteskin: None,
+        show_fa_plus_window: player.show_w0,
+        show_ex_score: player.show_ex_score,
+        show_hard_ex_score: false,
+        show_fa_plus_pane: player.show_w0,
+        machine_records,
+        machine_record_highlight_rank,
+        personal_records,
+        personal_record_highlight_rank,
+        show_machine_personal_split: !earned_machine_record && earned_top2_personal,
+    })
+}
+
+fn build_course_summary_eval_state(
+    stage: &stage_stats::StageSummary,
+    active_color_index: i32,
+    session_elapsed: f32,
+    gameplay_elapsed: f32,
+) -> evaluation::State {
+    let mut score_info: [Option<evaluation::ScoreInfo>; crate::game::gameplay::MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        score_info[side_ix(side)] = score_info_from_stage(stage, side);
+    }
+    let mut state = evaluation::init_from_score_info(score_info, stage.duration_seconds);
+    state.active_color_index = active_color_index;
+    state.session_elapsed = session_elapsed;
+    state.gameplay_elapsed = gameplay_elapsed;
+    state.return_to_course = true;
+    state.allow_online_panes = false;
+    state
 }
 
 fn prewarm_gameplay_assets(
@@ -619,7 +936,14 @@ impl ScreensState {
                 self.evaluation_state.gameplay_elapsed =
                     total_gameplay_elapsed(&session.played_stages);
                 evaluation::update(&mut self.evaluation_state, delta_time);
-                None
+                if let Some(delay) = self.evaluation_state.auto_advance_seconds
+                    && self.evaluation_state.screen_elapsed >= delay
+                    && self.player_options_state.is_some()
+                {
+                    Some(ScreenAction::Navigate(CurrentScreen::Gameplay))
+                } else {
+                    None
+                }
             }
             CurrentScreen::EvaluationSummary => {
                 evaluation_summary::update(&mut self.evaluation_summary_state, delta_time);
@@ -737,6 +1061,24 @@ impl App {
         action: ScreenAction,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
+        let action = match action {
+            ScreenAction::Navigate(CurrentScreen::Evaluation) if self.should_chain_course_to_next_stage() => {
+                ScreenAction::Navigate(CurrentScreen::Gameplay)
+            }
+            ScreenAction::Navigate(CurrentScreen::SelectMusic)
+                if self.state.screens.current_screen == CurrentScreen::Gameplay
+                    && self.state.session.course_run.is_some() =>
+            {
+                ScreenAction::Navigate(CurrentScreen::SelectCourse)
+            }
+            ScreenAction::NavigateNoFade(CurrentScreen::SelectMusic)
+                if self.state.screens.current_screen == CurrentScreen::Gameplay
+                    && self.state.session.course_run.is_some() =>
+            {
+                ScreenAction::NavigateNoFade(CurrentScreen::SelectCourse)
+            }
+            other => other,
+        };
         let commands = match action {
             ScreenAction::Navigate(screen) => {
                 self.handle_navigation_action(screen);
@@ -984,6 +1326,105 @@ impl App {
         {
             config::update_global_offset(gs.global_offset_seconds);
         }
+    }
+
+    fn clear_course_runtime(&mut self) {
+        self.state.session.course_run = None;
+        self.state.session.course_eval_pages.clear();
+        self.state.session.course_eval_page_index = 0;
+    }
+
+    fn start_course_run_from_selected(&mut self) -> bool {
+        let Some(selection) = select_course::selected_course_plan(&self.state.screens.select_course_state)
+        else {
+            warn!("Unable to start course run: selected course has no playable stages.");
+            return false;
+        };
+        let Some(course_run) = build_course_run_from_selection(selection) else {
+            warn!("Unable to start course run: failed to resolve course stages.");
+            return false;
+        };
+        self.state.session.course_run = Some(course_run);
+        self.state.session.course_eval_pages.clear();
+        self.state.session.course_eval_page_index = 0;
+        true
+    }
+
+    fn prepare_player_options_for_course_stage(&mut self, color_index: i32) -> bool {
+        let Some(course_run) = self.state.session.course_run.as_ref() else {
+            return false;
+        };
+        let Some(stage) = course_run.stages.get(course_run.next_stage_index) else {
+            return false;
+        };
+        self.state.screens.player_options_state = Some(player_options::init(
+            stage.song.clone(),
+            stage.steps_index,
+            stage.preferred_difficulty_index,
+            color_index,
+            CurrentScreen::SelectCourse,
+            Some(player_options::FixedStepchart {
+                label: course_run.course_stepchart_label.clone(),
+            }),
+        ));
+        true
+    }
+
+    fn should_chain_course_to_next_stage(&self) -> bool {
+        self.state.screens.current_screen == CurrentScreen::Gameplay
+            && self
+                .state
+                .session
+                .course_run
+                .as_ref()
+                .is_some_and(|course| course.next_stage_index < course.stages.len())
+    }
+
+    fn append_stage_results_from_eval(
+        &mut self,
+        eval_state: &evaluation::State,
+    ) -> Option<stage_stats::StageSummary> {
+        let stage_summary = stage_summary_from_eval(eval_state);
+        if let Some(stage) = stage_summary.as_ref() {
+            for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+                if let Some(p) = stage.players.get(side_ix(side)).and_then(|p| p.as_ref()) {
+                    profile::add_stage_calories_for_side(side, p.notes_hit);
+                }
+            }
+            self.state.session.played_stages.push(stage.clone());
+        }
+        if let Some(course_run) = self.state.session.course_run.as_mut() {
+            if let Some(stage) = stage_summary.as_ref() {
+                course_run.stage_summaries.push(stage.clone());
+            }
+            let mut stage_page = eval_state.clone();
+            stage_page.return_to_course = true;
+            stage_page.auto_advance_seconds = None;
+            course_run.stage_eval_pages.push(stage_page);
+        }
+        stage_summary
+    }
+
+    fn step_course_eval_page(&mut self, delta: i32) {
+        let len = self.state.session.course_eval_pages.len();
+        if len <= 1 || delta == 0 {
+            return;
+        }
+        let mut idx = self.state.session.course_eval_page_index as i32 + delta;
+        if idx < 0 {
+            idx += len as i32;
+        }
+        let idx = (idx as usize) % len;
+        self.state.session.course_eval_page_index = idx;
+
+        let mut page = self.state.session.course_eval_pages[idx].clone();
+        page.screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
+        page.session_elapsed = self.state.screens.evaluation_state.session_elapsed;
+        page.gameplay_elapsed = self.state.screens.evaluation_state.gameplay_elapsed;
+        page.return_to_course = true;
+        page.auto_advance_seconds = None;
+        self.state.screens.evaluation_state = page;
+        crate::core::audio::play_sfx("assets/sounds/change.ogg");
     }
 
     fn is_actor_only_fade(&self, from: CurrentScreen, to: CurrentScreen) -> bool {
@@ -2164,6 +2605,23 @@ impl App {
                 }
                 return;
             }
+        } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
+            if key_event.state == winit::event::ElementState::Pressed
+                && !self.state.session.course_eval_pages.is_empty()
+                && let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key
+            {
+                match code {
+                    winit::keyboard::KeyCode::KeyN => {
+                        self.step_course_eval_page(1);
+                        return;
+                    }
+                    winit::keyboard::KeyCode::KeyP => {
+                        self.step_course_eval_page(-1);
+                        return;
+                    }
+                    _ => {}
+                }
+            }
         } else if self.state.screens.current_screen == CurrentScreen::Gameplay
             && let Some(gs) = &mut self.state.screens.gameplay_state
         {
@@ -2305,14 +2763,16 @@ impl App {
                     volume: 1.0,
                 });
             }
-        } else if prev_menu_music || prev_course_music {
+        } else if (prev_menu_music || prev_course_music) && target != CurrentScreen::Gameplay {
             commands.push(Command::StopMusic);
         } else if target != CurrentScreen::Gameplay && !keep_preview {
             commands.push(Command::StopMusic);
         }
 
-        if prev == CurrentScreen::Gameplay {
-            commands.push(Command::StopMusic);
+        if prev == CurrentScreen::Gameplay && target != CurrentScreen::Gameplay {
+            if !target_menu_music && !target_course_music {
+                commands.push(Command::StopMusic);
+            }
             if let Some(backend) = self.backend.as_mut() {
                 self.asset_manager.set_dynamic_background(backend, None);
             }
@@ -2443,6 +2903,7 @@ impl App {
         if target == CurrentScreen::Menu {
             self.state.session.session_start_time = None;
             self.state.session.played_stages.clear();
+            self.clear_course_runtime();
             let current_color_index = self.state.screens.menu_state.active_color_index;
             self.state.screens.menu_state = menu::init();
             self.state.screens.menu_state.active_color_index = current_color_index;
@@ -2506,79 +2967,121 @@ impl App {
             self.state.screens.profile_load_state.active_color_index = current_color_index;
             profile_load::on_enter(&mut self.state.screens.profile_load_state);
         } else if target == CurrentScreen::PlayerOptions {
-            let (song_arc, chart_steps_index, preferred_difficulty_index) = {
-                let sm_state = &self.state.screens.select_music_state;
-                let entry = sm_state.entries.get(sm_state.selected_index).unwrap();
-                let song = match entry {
-                    select_music::MusicWheelEntry::Song(s) => s,
-                    _ => panic!("Cannot open player options on a pack header"),
+            if prev == CurrentScreen::SelectCourse {
+                if !self.start_course_run_from_selected() {
+                    self.state.screens.player_options_state = None;
+                    return;
+                }
+                let color_index = self.state.screens.select_course_state.active_color_index;
+                if !self.prepare_player_options_for_course_stage(color_index) {
+                    self.state.screens.player_options_state = None;
+                    warn!("Unable to prepare PlayerOptions for the selected course.");
+                }
+            } else {
+                let (song_arc, chart_steps_index, preferred_difficulty_index) = {
+                    let sm_state = &self.state.screens.select_music_state;
+                    let entry = sm_state.entries.get(sm_state.selected_index).unwrap();
+                    let song = match entry {
+                        select_music::MusicWheelEntry::Song(s) => s,
+                        _ => panic!("Cannot open player options on a pack header"),
+                    };
+                    let play_style = profile::get_session_play_style();
+                    let (steps, pref) = match play_style {
+                        profile::PlayStyle::Versus => (
+                            [
+                                sm_state.selected_steps_index,
+                                sm_state.p2_selected_steps_index,
+                            ],
+                            [
+                                sm_state.preferred_difficulty_index,
+                                sm_state.p2_preferred_difficulty_index,
+                            ],
+                        ),
+                        profile::PlayStyle::Single | profile::PlayStyle::Double => (
+                            [sm_state.selected_steps_index; 2],
+                            [sm_state.preferred_difficulty_index; 2],
+                        ),
+                    };
+                    (song.clone(), steps, pref)
                 };
-                let play_style = profile::get_session_play_style();
-                let (steps, pref) = match play_style {
-                    profile::PlayStyle::Versus => (
-                        [
-                            sm_state.selected_steps_index,
-                            sm_state.p2_selected_steps_index,
-                        ],
-                        [
-                            sm_state.preferred_difficulty_index,
-                            sm_state.p2_preferred_difficulty_index,
-                        ],
-                    ),
-                    profile::PlayStyle::Single | profile::PlayStyle::Double => (
-                        [sm_state.selected_steps_index; 2],
-                        [sm_state.preferred_difficulty_index; 2],
-                    ),
-                };
-                (song.clone(), steps, pref)
-            };
 
-            let color_index = self.state.screens.select_music_state.active_color_index;
-            self.state.screens.player_options_state = Some(player_options::init(
-                song_arc,
-                chart_steps_index,
-                preferred_difficulty_index,
-                color_index,
-            ));
+                let color_index = self.state.screens.select_music_state.active_color_index;
+                self.state.screens.player_options_state = Some(player_options::init(
+                    song_arc,
+                    chart_steps_index,
+                    preferred_difficulty_index,
+                    color_index,
+                    CurrentScreen::SelectMusic,
+                    None,
+                ));
+            }
+        } else if target == CurrentScreen::Gameplay && prev == CurrentScreen::Gameplay {
+            if self.state.session.course_run.is_some() {
+                let color_index = self
+                    .state
+                    .screens
+                    .gameplay_state
+                    .as_ref()
+                    .map_or(self.state.screens.select_course_state.active_color_index, |gs| {
+                        gs.active_color_index
+                    });
+                if !self.prepare_player_options_for_course_stage(color_index) {
+                    self.state.screens.player_options_state = None;
+                    warn!("Unable to prepare gameplay for the next course stage.");
+                }
+            }
         } else if target == CurrentScreen::Gameplay
-            && prev == CurrentScreen::SelectMusic
+            && (prev == CurrentScreen::SelectMusic || prev == CurrentScreen::SelectCourse)
             && self.state.screens.player_options_state.is_none()
         {
             // Allow starting Gameplay directly from SelectMusic (Simply Love behavior) by
             // constructing a PlayerOptions state from persisted profile/session defaults.
-            let (song_arc, chart_steps_index, preferred_difficulty_index) = {
-                let sm_state = &self.state.screens.select_music_state;
-                let entry = sm_state.entries.get(sm_state.selected_index).unwrap();
-                let song = match entry {
-                    select_music::MusicWheelEntry::Song(s) => s,
-                    _ => panic!("Cannot start gameplay on a pack header"),
+            if prev == CurrentScreen::SelectCourse {
+                if !self.start_course_run_from_selected() {
+                    warn!("Unable to start gameplay: selected course has no playable stages.");
+                    return;
+                }
+                let color_index = self.state.screens.select_course_state.active_color_index;
+                if !self.prepare_player_options_for_course_stage(color_index) {
+                    warn!("Unable to prepare gameplay for the selected course stage.");
+                }
+            } else {
+                let (song_arc, chart_steps_index, preferred_difficulty_index) = {
+                    let sm_state = &self.state.screens.select_music_state;
+                    let entry = sm_state.entries.get(sm_state.selected_index).unwrap();
+                    let song = match entry {
+                        select_music::MusicWheelEntry::Song(s) => s,
+                        _ => panic!("Cannot start gameplay on a pack header"),
+                    };
+                    let play_style = profile::get_session_play_style();
+                    let (steps, pref) = match play_style {
+                        profile::PlayStyle::Versus => (
+                            [
+                                sm_state.selected_steps_index,
+                                sm_state.p2_selected_steps_index,
+                            ],
+                            [
+                                sm_state.preferred_difficulty_index,
+                                sm_state.p2_preferred_difficulty_index,
+                            ],
+                        ),
+                        profile::PlayStyle::Single | profile::PlayStyle::Double => (
+                            [sm_state.selected_steps_index; 2],
+                            [sm_state.preferred_difficulty_index; 2],
+                        ),
+                    };
+                    (song.clone(), steps, pref)
                 };
-                let play_style = profile::get_session_play_style();
-                let (steps, pref) = match play_style {
-                    profile::PlayStyle::Versus => (
-                        [
-                            sm_state.selected_steps_index,
-                            sm_state.p2_selected_steps_index,
-                        ],
-                        [
-                            sm_state.preferred_difficulty_index,
-                            sm_state.p2_preferred_difficulty_index,
-                        ],
-                    ),
-                    profile::PlayStyle::Single | profile::PlayStyle::Double => (
-                        [sm_state.selected_steps_index; 2],
-                        [sm_state.preferred_difficulty_index; 2],
-                    ),
-                };
-                (song.clone(), steps, pref)
-            };
-            let color_index = self.state.screens.select_music_state.active_color_index;
-            self.state.screens.player_options_state = Some(player_options::init(
-                song_arc,
-                chart_steps_index,
-                preferred_difficulty_index,
-                color_index,
-            ));
+                let color_index = self.state.screens.select_music_state.active_color_index;
+                self.state.screens.player_options_state = Some(player_options::init(
+                    song_arc,
+                    chart_steps_index,
+                    preferred_difficulty_index,
+                    color_index,
+                    CurrentScreen::SelectMusic,
+                    None,
+                ));
+            }
         }
     }
 
@@ -2589,6 +3092,15 @@ impl App {
     ) -> Vec<Command> {
         let mut commands = Vec::new();
         if target == CurrentScreen::Gameplay {
+            if prev == CurrentScreen::Gameplay && self.state.session.course_run.is_some() {
+                if let Some(gameplay_results) = self.state.screens.gameplay_state.take() {
+                    let color_idx = gameplay_results.active_color_index;
+                    let mut eval_state = evaluation::init(Some(gameplay_results));
+                    eval_state.active_color_index = color_idx;
+                    let _ = self.append_stage_results_from_eval(&eval_state);
+                }
+            }
+
             let replay_pending =
                 select_music::take_pending_replay(&mut self.state.screens.select_music_state);
             let replay_edges = replay_pending.as_ref().map(|payload| {
@@ -2720,6 +3232,12 @@ impl App {
                 ];
 
                 let color_index = po_state.active_color_index;
+                let lead_in_timing = self.state.session.course_run.as_ref().and_then(|course| {
+                    (course.next_stage_index > 0).then_some(crate::game::gameplay::LeadInTiming {
+                        min_seconds_to_step: COURSE_MIN_SECONDS_TO_STEP_NEXT_SONG,
+                        min_seconds_to_music: COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG,
+                    })
+                });
                 let gs = gameplay::init(
                     song_arc,
                     charts,
@@ -2730,6 +3248,7 @@ impl App {
                     replay_edges,
                     replay_offsets,
                     replay_status_text,
+                    lead_in_timing,
                 );
 
                 if let Some(backend) = self.backend.as_mut() {
@@ -2743,6 +3262,9 @@ impl App {
                     gs.song.background_path.clone(),
                 ));
                 self.state.screens.gameplay_state = Some(gs);
+                if let Some(course) = self.state.session.course_run.as_mut() {
+                    course.next_stage_index = course.next_stage_index.saturating_add(1);
+                }
             } else {
                 panic!("Navigating to Gameplay without PlayerOptions state!");
             }
@@ -2761,15 +3283,65 @@ impl App {
             );
             self.state.screens.evaluation_state = evaluation::init(gameplay_results);
             self.state.screens.evaluation_state.active_color_index = color_idx;
+            let eval_snapshot = self.state.screens.evaluation_state.clone();
+            let _ = self.append_stage_results_from_eval(&eval_snapshot);
+            self.state.screens.evaluation_state.return_to_course =
+                self.state.session.course_run.is_some();
+            self.state.screens.evaluation_state.auto_advance_seconds = None;
 
-            if let Some(stage) = stage_summary_from_eval(&self.state.screens.evaluation_state) {
-                for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
-                    if let Some(p) = stage.players.get(side_ix(side)).and_then(|p| p.as_ref()) {
-                        profile::add_stage_calories_for_side(side, p.notes_hit);
+            if let Some(course_run) = self.state.session.course_run.as_mut() {
+                if course_run.next_stage_index >= course_run.stages.len() {
+                    let score_hash = course_run.score_hash.clone();
+                    let per_song_pages = course_run.stage_eval_pages.clone();
+                    let course_summary = build_course_summary_stage(course_run);
+                    self.state.session.course_run = None;
+                    self.state.session.course_eval_pages.clear();
+                    self.state.session.course_eval_page_index = 0;
+
+                    if let Some(course_stage) = course_summary {
+                        for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+                            if let Some(player) = course_stage.players[side_ix(side)].as_ref() {
+                                scores::save_local_summary_score_for_side(
+                                    score_hash.as_str(),
+                                    side,
+                                    course_stage.music_rate,
+                                    player,
+                                );
+                            }
+                        }
+                        self.state.session.played_stages.push(course_stage.clone());
+
+                        let gameplay_elapsed = total_gameplay_elapsed(&self.state.session.played_stages);
+                        let session_elapsed = self.state.screens.evaluation_state.session_elapsed;
+                        let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
+                        let mut course_page = build_course_summary_eval_state(
+                            &course_stage,
+                            color_idx,
+                            session_elapsed,
+                            gameplay_elapsed,
+                        );
+                        course_page.screen_elapsed = screen_elapsed;
+                        self.state.screens.evaluation_state = course_page.clone();
+
+                        let mut pages = Vec::with_capacity(per_song_pages.len().saturating_add(1));
+                        pages.push(course_page);
+                        for mut page in per_song_pages {
+                            page.return_to_course = true;
+                            page.auto_advance_seconds = None;
+                            page.screen_elapsed = screen_elapsed;
+                            page.session_elapsed = session_elapsed;
+                            page.gameplay_elapsed = gameplay_elapsed;
+                            pages.push(page);
+                        }
+                        self.state.session.course_eval_pages = pages;
+                        self.state.session.course_eval_page_index = 0;
                     }
                 }
-                self.state.session.played_stages.push(stage);
+            } else {
+                self.state.session.course_eval_pages.clear();
+                self.state.session.course_eval_page_index = 0;
             }
+
             self.state.screens.evaluation_state.gameplay_elapsed =
                 total_gameplay_elapsed(&self.state.session.played_stages);
         }
@@ -2861,6 +3433,7 @@ impl App {
         }
 
         if target == CurrentScreen::SelectMusic {
+            self.clear_course_runtime();
             if self.state.session.session_start_time.is_none() {
                 self.state.session.session_start_time = Some(Instant::now());
                 self.state.session.played_stages.clear();
@@ -3085,6 +3658,7 @@ impl App {
         }
 
         if target == CurrentScreen::SelectCourse {
+            self.clear_course_runtime();
             if self.state.session.session_start_time.is_none() {
                 self.state.session.session_start_time = Some(Instant::now());
                 self.state.session.played_stages.clear();

@@ -36,6 +36,7 @@ const BW_NORMAL: f32 = 543.0;
 const BW_SMALL: f32 = 400.0;
 const PHI: f32 = 0.618_034;
 
+#[derive(Clone)]
 pub struct State {
     t0: Instant,
     tex_key: &'static str,
