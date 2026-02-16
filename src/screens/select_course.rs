@@ -110,6 +110,7 @@ pub struct State {
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     last_requested_banner_path: Option<PathBuf>,
+    banner_high_quality_requested: bool,
     prev_selected_index: usize,
     time_since_selection_change: f32,
 }
@@ -462,6 +463,7 @@ pub fn init() -> State {
         nav_key_held_direction: None,
         nav_key_held_since: None,
         last_requested_banner_path: None,
+        banner_high_quality_requested: false,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
     };
@@ -680,6 +682,15 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         let banner = selected_banner_path(state);
         if banner != state.last_requested_banner_path {
             state.last_requested_banner_path = banner.clone();
+            state.banner_high_quality_requested = false;
+            return ScreenAction::RequestBanner(banner);
+        }
+        if banner.is_some()
+            && !state.banner_high_quality_requested
+            && state.nav_key_held_direction.is_none()
+            && state.wheel_offset_from_selection.abs() < 0.0001
+        {
+            state.banner_high_quality_requested = true;
             return ScreenAction::RequestBanner(banner);
         }
     }
@@ -709,6 +720,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 pub fn trigger_immediate_refresh(state: &mut State) {
     state.time_since_selection_change = BANNER_UPDATE_DELAY_SECONDS;
     state.last_requested_banner_path = None;
+    state.banner_high_quality_requested = false;
 }
 
 #[inline(always)]

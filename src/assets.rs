@@ -4,12 +4,15 @@ use crate::ui::font::{self, Font, FontLoadData};
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::{info, warn};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     error::Error,
     fs,
+    hash::Hasher,
     path::{Path, PathBuf},
     sync::{Arc, Mutex, RwLock, mpsc},
+    time::Instant,
 };
+use twox_hash::XxHash64;
 
 // --- Texture Metadata ---
 
@@ -267,7 +270,10 @@ pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
     rel.to_string_lossy().replace('\\', "/")
 }
 
-pub(crate) fn open_image_fallback(path: &Path) -> image::ImageResult<image::DynamicImage> {
+fn open_image_fallback_mode(
+    path: &Path,
+    warn_mismatch: bool,
+) -> image::ImageResult<image::DynamicImage> {
     let hint = ImageFormat::from_path(path).ok();
     if let Some(fmt) = hint {
         let mut reader = ImageReader::open(path).map_err(image::ImageError::IoError)?;
@@ -283,6 +289,7 @@ pub(crate) fn open_image_fallback(path: &Path) -> image::ImageResult<image::Dyna
     let guessed_fmt = guessed.format();
     if let (Some(hint_fmt), Some(real_fmt)) = (hint, guessed_fmt)
         && hint_fmt != real_fmt
+        && warn_mismatch
     {
         warn!(
             "Graphic file '{}' is really {:?}",
@@ -291,6 +298,435 @@ pub(crate) fn open_image_fallback(path: &Path) -> image::ImageResult<image::Dyna
         );
     }
     guessed.decode()
+}
+
+pub(crate) fn open_image_fallback(path: &Path) -> image::ImageResult<image::DynamicImage> {
+    open_image_fallback_mode(path, true)
+}
+
+fn open_image_fallback_quiet(path: &Path) -> image::ImageResult<image::DynamicImage> {
+    open_image_fallback_mode(path, false)
+}
+
+const BANNER_CACHE_DIR: &str = "cache/banner";
+
+#[derive(Clone, Copy, Debug)]
+struct BannerCacheOptions {
+    enabled: bool,
+    scale_divisor: u32,
+    min_dimension: u32,
+    round_pow2: bool,
+    color_depth: u8,
+}
+
+impl BannerCacheOptions {
+    #[inline(always)]
+    fn from_config(cfg: &crate::config::Config) -> Self {
+        Self {
+            enabled: cfg.banner_cache,
+            scale_divisor: u32::from(cfg.banner_cache_scale_divisor.max(1)),
+            min_dimension: u32::from(cfg.banner_cache_min_dimension.max(1)),
+            round_pow2: cfg.banner_cache_pow2,
+            color_depth: cfg.banner_cache_color_depth,
+        }
+    }
+}
+
+#[inline(always)]
+fn pow2_or_one(v: u32) -> u32 {
+    if v <= 1 { 1 } else { v.next_power_of_two() }
+}
+
+#[inline(always)]
+fn closest_pow2(value: u32) -> u32 {
+    let hi = pow2_or_one(value);
+    let lo = (hi / 2).max(1);
+    let d_hi = hi.abs_diff(value);
+    let d_lo = lo.abs_diff(value);
+    if d_hi < d_lo { hi } else { lo }
+}
+
+fn compute_cached_banner_dims(src_w: u32, src_h: u32, opts: BannerCacheOptions) -> (u32, u32) {
+    let mut w = (src_w / opts.scale_divisor).max(1);
+    let mut h = (src_h / opts.scale_divisor).max(1);
+
+    if opts.round_pow2 {
+        w = closest_pow2(w);
+        h = closest_pow2(h);
+    }
+
+    let w_floor = opts.min_dimension.min(pow2_or_one(src_w));
+    let h_floor = opts.min_dimension.min(pow2_or_one(src_h));
+    (w.max(w_floor), h.max(h_floor))
+}
+
+fn apply_banner_cache_color_depth(rgba: &mut RgbaImage, color_depth: u8) {
+    if color_depth >= 32 {
+        return;
+    }
+    if color_depth <= 8 {
+        for px in rgba.pixels_mut() {
+            let [r, g, b, a] = px.0;
+            let r3 = ((u16::from(r) * 7 + 127) / 255) as u8;
+            let g3 = ((u16::from(g) * 7 + 127) / 255) as u8;
+            let b2 = ((u16::from(b) * 3 + 127) / 255) as u8;
+            px.0 = [
+                ((u16::from(r3) * 255) / 7) as u8,
+                ((u16::from(g3) * 255) / 7) as u8,
+                ((u16::from(b2) * 255) / 3) as u8,
+                if a < 128 { 0 } else { 255 },
+            ];
+        }
+        return;
+    }
+
+    for px in rgba.pixels_mut() {
+        let [r, g, b, a] = px.0;
+        let r5 = ((u16::from(r) * 31 + 127) / 255) as u8;
+        let g5 = ((u16::from(g) * 31 + 127) / 255) as u8;
+        let b5 = ((u16::from(b) * 31 + 127) / 255) as u8;
+        px.0 = [
+            ((u16::from(r5) * 255) / 31) as u8,
+            ((u16::from(g5) * 255) / 31) as u8,
+            ((u16::from(b5) * 255) / 31) as u8,
+            if a < 128 { 0 } else { 255 },
+        ];
+    }
+}
+
+fn banner_cache_opthash(opts: BannerCacheOptions) -> u64 {
+    let mut hasher = XxHash64::with_seed(0);
+    hasher.write_u8(1); // cache format version
+    hasher.write_u8(opts.color_depth);
+    hasher.write_u8(u8::from(opts.round_pow2));
+    hasher.write_u32(opts.scale_divisor);
+    hasher.write_u32(opts.min_dimension);
+    hasher.finish()
+}
+
+fn banner_cache_path_for(path: &Path, opts: BannerCacheOptions) -> Option<(PathBuf, String)> {
+    let canonical = path.canonicalize().ok()?;
+    let mut hasher = XxHash64::with_seed(0);
+    hasher.write(canonical.to_string_lossy().replace('\\', "/").as_bytes());
+    let path_hash = hasher.finish();
+    let path_hex = format!("{path_hash:016x}");
+    let opt_hash = banner_cache_opthash(opts);
+    let shard2 = &path_hex[..2];
+    Some((
+        Path::new(BANNER_CACHE_DIR)
+            .join(shard2)
+            .join(format!("{path_hex}-{opt_hash:016x}.png")),
+        path_hex,
+    ))
+}
+
+fn source_newer_than_cache(src: &Path, cache: &Path) -> bool {
+    let src_m = fs::metadata(src).ok().and_then(|m| m.modified().ok());
+    let cache_m = fs::metadata(cache).ok().and_then(|m| m.modified().ok());
+    match (src_m, cache_m) {
+        (Some(src_m), Some(cache_m)) => src_m > cache_m,
+        (Some(_), None) => true,
+        _ => false,
+    }
+}
+
+fn ensure_cache_parent(cache_path: &Path) -> bool {
+    if let Some(parent) = cache_path.parent()
+        && let Err(e) = fs::create_dir_all(parent)
+    {
+        warn!(
+            "Failed to create banner cache directory '{}': {e}",
+            parent.display()
+        );
+        return false;
+    }
+    true
+}
+
+fn load_cached_banner_image(cache_path: &Path, source_path: &Path) -> Option<RgbaImage> {
+    if !cache_path.is_file() || source_newer_than_cache(source_path, cache_path) {
+        return None;
+    }
+    open_image_fallback_quiet(cache_path)
+        .ok()
+        .map(|img| img.to_rgba8())
+}
+
+fn prune_stale_banner_cache_variants(cache_path: &Path, path_hex: &str) {
+    let Some(parent) = cache_path.parent() else {
+        return;
+    };
+    let Some(current_name) = cache_path.file_name().and_then(|n| n.to_str()) else {
+        return;
+    };
+
+    let prefix = format!("{path_hex}-");
+    let Ok(entries) = fs::read_dir(parent) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if name == current_name || !name.starts_with(&prefix) || !name.ends_with(".png") {
+            continue;
+        }
+        if let Err(e) = fs::remove_file(&path) {
+            warn!(
+                "Failed to remove stale banner cache variant '{}': {e}",
+                path.display()
+            );
+        }
+    }
+}
+
+fn save_cached_banner_image(cache_path: &Path, path_hex: &str, rgba: &RgbaImage) {
+    if !ensure_cache_parent(cache_path) {
+        return;
+    }
+    if let Err(e) = rgba.save(cache_path) {
+        warn!(
+            "Failed to save cached banner '{}': {e}",
+            cache_path.to_string_lossy()
+        );
+        return;
+    }
+    prune_stale_banner_cache_variants(cache_path, path_hex);
+}
+
+fn load_or_build_cached_banner(
+    path: &Path,
+    opts: BannerCacheOptions,
+) -> image::ImageResult<RgbaImage> {
+    let Some((cache_path, path_hex)) = banner_cache_path_for(path, opts) else {
+        return build_cached_banner_rgba(path, opts);
+    };
+
+    if let Some(rgba) = load_cached_banner_image(&cache_path, path) {
+        prune_stale_banner_cache_variants(&cache_path, &path_hex);
+        return Ok(rgba);
+    }
+
+    let rgba = build_cached_banner_rgba(path, opts)?;
+    save_cached_banner_image(&cache_path, &path_hex, &rgba);
+    Ok(rgba)
+}
+
+#[inline(always)]
+fn is_cacheable_banner_path(path: &Path) -> bool {
+    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+        return false;
+    };
+    matches!(
+        ext.to_ascii_lowercase().as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "tga" | "tif" | "tiff"
+    )
+}
+
+fn ensure_cached_banner_on_disk(path: &Path, opts: BannerCacheOptions) -> image::ImageResult<bool> {
+    let Some((cache_path, path_hex)) = banner_cache_path_for(path, opts) else {
+        return Ok(false);
+    };
+    if cache_path.is_file() && !source_newer_than_cache(path, &cache_path) {
+        prune_stale_banner_cache_variants(&cache_path, &path_hex);
+        return Ok(false);
+    }
+    let rgba = build_cached_banner_rgba(path, opts)?;
+    save_cached_banner_image(&cache_path, &path_hex, &rgba);
+    Ok(true)
+}
+
+enum BannerPrewarmOutcome {
+    Built { millis: f64 },
+    Reused { millis: f64 },
+    SkippedNonFile,
+    SkippedNonImage,
+    Failed { path: PathBuf, msg: String },
+}
+
+#[inline(always)]
+fn prewarm_one_banner(path: PathBuf, opts: BannerCacheOptions) -> BannerPrewarmOutcome {
+    if !path.is_file() {
+        return BannerPrewarmOutcome::SkippedNonFile;
+    }
+    if !is_cacheable_banner_path(&path) {
+        return BannerPrewarmOutcome::SkippedNonImage;
+    }
+
+    let started = Instant::now();
+    match ensure_cached_banner_on_disk(&path, opts) {
+        Ok(true) => BannerPrewarmOutcome::Built {
+            millis: started.elapsed().as_secs_f64() * 1000.0,
+        },
+        Ok(false) => BannerPrewarmOutcome::Reused {
+            millis: started.elapsed().as_secs_f64() * 1000.0,
+        },
+        Err(e) => BannerPrewarmOutcome::Failed {
+            path,
+            msg: e.to_string(),
+        },
+    }
+}
+
+#[inline(always)]
+fn banner_prewarm_workers(job_count: usize) -> usize {
+    if job_count == 0 {
+        return 0;
+    }
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .min(job_count)
+}
+
+pub fn prewarm_banner_cache(paths: &[PathBuf]) {
+    let opts = BannerCacheOptions::from_config(&crate::config::get());
+    if !opts.enabled {
+        return;
+    }
+
+    let started = Instant::now();
+    let mut unique = HashSet::with_capacity(paths.len());
+    let mut deduped = Vec::with_capacity(paths.len());
+    let mut duplicate = 0usize;
+    for path in paths {
+        if unique.insert(path.clone()) {
+            deduped.push(path.clone());
+        } else {
+            duplicate += 1;
+        }
+    }
+
+    let worker_count = banner_prewarm_workers(deduped.len());
+    info!(
+        "Banner cache prewarm start: {} input, {} unique, {} duplicate, {} worker threads.",
+        paths.len(),
+        deduped.len(),
+        duplicate,
+        worker_count
+    );
+
+    let (job_tx, job_rx) = mpsc::channel::<PathBuf>();
+    let job_rx = Arc::new(Mutex::new(job_rx));
+    let (res_tx, res_rx) = mpsc::channel::<BannerPrewarmOutcome>();
+    let mut workers = Vec::with_capacity(worker_count);
+    for _ in 0..worker_count {
+        let job_rx = Arc::clone(&job_rx);
+        let res_tx = res_tx.clone();
+        workers.push(std::thread::spawn(move || {
+            loop {
+                let job = {
+                    let Ok(rx) = job_rx.lock() else { return };
+                    rx.recv()
+                };
+                let Ok(path) = job else {
+                    return;
+                };
+                let _ = res_tx.send(prewarm_one_banner(path, opts));
+            }
+        }));
+    }
+    drop(res_tx);
+    for path in deduped {
+        let _ = job_tx.send(path);
+    }
+    drop(job_tx);
+
+    let mut prepared = 0usize;
+    let mut built = 0usize;
+    let mut reused = 0usize;
+    let mut skipped_non_file = 0usize;
+    let mut skipped_non_image = 0usize;
+    let mut failed = 0usize;
+    let mut built_ms = 0.0f64;
+    let mut reused_ms = 0.0f64;
+    for result in res_rx {
+        match result {
+            BannerPrewarmOutcome::Built { millis } => {
+                prepared += 1;
+                built += 1;
+                built_ms += millis;
+            }
+            BannerPrewarmOutcome::Reused { millis } => {
+                prepared += 1;
+                reused += 1;
+                reused_ms += millis;
+            }
+            BannerPrewarmOutcome::SkippedNonFile => {
+                skipped_non_file += 1;
+            }
+            BannerPrewarmOutcome::SkippedNonImage => {
+                skipped_non_image += 1;
+            }
+            BannerPrewarmOutcome::Failed { path, msg } => {
+                failed += 1;
+                warn!(
+                    "Banner cache prewarm failed for '{}': {}",
+                    path.display(),
+                    msg
+                );
+            }
+        }
+    }
+
+    for worker in workers {
+        let _ = worker.join();
+    }
+
+    let elapsed = started.elapsed().as_secs_f64();
+    let prep_per_sec = if elapsed > 0.0 {
+        prepared as f64 / elapsed
+    } else {
+        0.0
+    };
+    let built_avg_ms = if built > 0 {
+        built_ms / built as f64
+    } else {
+        0.0
+    };
+    let reused_avg_ms = if reused > 0 {
+        reused_ms / reused as f64
+    } else {
+        0.0
+    };
+    info!(
+        "Banner cache prewarm complete in {:.2}s: prepared={} (built={}, reused={}), \
+         skipped={} (non-file={}, non-image={}, duplicate={}), failed={}, workers={}, \
+         throughput={:.1}/s, avg_ms={{built:{:.2}, reused:{:.2}}}.",
+        elapsed,
+        prepared,
+        built,
+        reused,
+        skipped_non_file + skipped_non_image + duplicate,
+        skipped_non_file,
+        skipped_non_image,
+        duplicate,
+        failed,
+        worker_count,
+        prep_per_sec,
+        built_avg_ms,
+        reused_avg_ms
+    );
+}
+
+fn build_cached_banner_rgba(
+    path: &Path,
+    opts: BannerCacheOptions,
+) -> image::ImageResult<RgbaImage> {
+    let src = open_image_fallback_quiet(path)?.to_rgba8();
+    let (dst_w, dst_h) = compute_cached_banner_dims(src.width(), src.height(), opts);
+    let mut out = if src.width() == dst_w && src.height() == dst_h {
+        src
+    } else {
+        image::imageops::resize(&src, dst_w, dst_h, image::imageops::FilterType::Triangle)
+    };
+    apply_banner_cache_color_depth(&mut out, opts.color_depth);
+    Ok(out)
 }
 
 fn append_noteskins_pngs_recursive(list: &mut Vec<(String, String)>, folder: &str) {
@@ -383,10 +819,17 @@ fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
 
 // --- Asset Manager ---
 
+#[derive(Debug, Clone)]
+struct DynamicBannerState {
+    key: String,
+    path: PathBuf,
+    high_res_loaded: bool,
+}
+
 pub struct AssetManager {
     pub textures: HashMap<String, GfxTexture>,
     fonts: HashMap<&'static str, Font>,
-    current_dynamic_banner: Option<(String, PathBuf)>,
+    current_dynamic_banner: Option<DynamicBannerState>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     current_dynamic_background: Option<(String, PathBuf)>,
     current_profile_avatars: [Option<(String, PathBuf)>; 2],
@@ -926,8 +1369,8 @@ impl AssetManager {
             || self.current_dynamic_background.is_some()
         {
             backend.wait_for_idle(); // Wait for GPU to finish using old textures
-            if let Some((key, _)) = self.current_dynamic_banner.take() {
-                self.textures.remove(&key);
+            if let Some(state) = self.current_dynamic_banner.take() {
+                self.textures.remove(&state.key);
             }
             if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
                 self.textures.remove(&key);
@@ -991,44 +1434,100 @@ impl AssetManager {
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
     ) -> String {
+        const FALLBACK_KEY: &str = "banner1.png";
+        let banner_cache_opts = BannerCacheOptions::from_config(&crate::config::get());
+
         if let Some(path) = path_opt {
-            if self
-                .current_dynamic_banner
-                .as_ref()
-                .is_some_and(|(_, p)| p == &path)
+            if let Some(current) = self.current_dynamic_banner.as_ref()
+                && current.path == path
             {
-                return self.current_dynamic_banner.as_ref().unwrap().0.clone();
-            }
-
-            self.destroy_current_dynamic_banner(backend);
-
-            match open_image_fallback(&path) {
-                Ok(img) => {
-                    let rgba = img.to_rgba8();
-                    match backend.create_texture(&rgba, SamplerDesc::default()) {
-                        Ok(texture) => {
-                            let key = path.to_string_lossy().into_owned();
-                            self.textures.insert(key.clone(), texture);
-                            register_texture_dims(&key, rgba.width(), rgba.height());
-                            self.current_dynamic_banner = Some((key.clone(), path));
-                            key
+                let key = current.key.clone();
+                if banner_cache_opts.enabled && !current.high_res_loaded {
+                    match open_image_fallback(&path) {
+                        Ok(img) => {
+                            let rgba = img.to_rgba8();
+                            match backend.create_texture(&rgba, SamplerDesc::default()) {
+                                Ok(texture) => {
+                                    backend.wait_for_idle();
+                                    self.textures.insert(key.clone(), texture);
+                                    register_texture_dims(&key, rgba.width(), rgba.height());
+                                    if let Some(state) = self.current_dynamic_banner.as_mut() {
+                                        state.high_res_loaded = true;
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to upgrade banner '{}' to high-res: {e}",
+                                        path.display()
+                                    );
+                                }
+                            }
                         }
                         Err(e) => {
                             warn!(
-                                "Failed to create GPU texture for {path:?}: {e}. Using fallback."
+                                "Failed to open high-res banner '{}' during upgrade: {e}",
+                                path.display()
                             );
-                            "banner1.png".to_string()
                         }
                     }
                 }
+                return key;
+            }
+
+            self.destroy_current_dynamic_banner(backend);
+            let key = path.to_string_lossy().into_owned();
+
+            let (rgba, high_res_loaded) = if banner_cache_opts.enabled
+                && is_cacheable_banner_path(&path)
+            {
+                match load_or_build_cached_banner(&path, banner_cache_opts) {
+                    Ok(cached) => (cached, false),
+                    Err(e) => {
+                        warn!(
+                            "Failed to use low-res cached banner '{}': {e}; trying high-res.",
+                            path.display()
+                        );
+                        match open_image_fallback(&path) {
+                            Ok(full) => (full.to_rgba8(), true),
+                            Err(e) => {
+                                warn!("Failed to open banner image {path:?}: {e}. Using fallback.");
+                                return FALLBACK_KEY.to_string();
+                            }
+                        }
+                    }
+                }
+            } else {
+                match open_image_fallback(&path) {
+                    Ok(full) => (full.to_rgba8(), true),
+                    Err(e) => {
+                        warn!("Failed to open banner image {path:?}: {e}. Using fallback.");
+                        return FALLBACK_KEY.to_string();
+                    }
+                }
+            };
+
+            match backend.create_texture(&rgba, SamplerDesc::default()) {
+                Ok(texture) => {
+                    self.textures.insert(key.clone(), texture);
+                    register_texture_dims(&key, rgba.width(), rgba.height());
+                    self.current_dynamic_banner = Some(DynamicBannerState {
+                        key: key.clone(),
+                        path,
+                        high_res_loaded,
+                    });
+                    key
+                }
                 Err(e) => {
-                    warn!("Failed to open banner image {path:?}: {e}. Using fallback.");
-                    "banner1.png".to_string()
+                    warn!(
+                        "Failed to create GPU texture for banner '{}': {e}. Using fallback.",
+                        key
+                    );
+                    FALLBACK_KEY.to_string()
                 }
             }
         } else {
             self.destroy_current_dynamic_banner(backend);
-            "banner1.png".to_string()
+            FALLBACK_KEY.to_string()
         }
     }
 
@@ -1111,9 +1610,9 @@ impl AssetManager {
     }
 
     fn destroy_current_dynamic_banner(&mut self, backend: &mut Backend) {
-        if let Some((key, _)) = self.current_dynamic_banner.take() {
+        if let Some(state) = self.current_dynamic_banner.take() {
             backend.wait_for_idle();
-            self.textures.remove(&key);
+            self.textures.remove(&state.key);
         }
     }
 

@@ -3093,7 +3093,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                         // Life history only stores change points; once life stops changing
                         // (e.g. capped at full), continue the final segment to graph end.
-                        let end_x = ((last - first) / (dur + padding)).clamp(0.0, 1.0) * graph_width;
+                        let end_x =
+                            ((last - first) / (dur + padding)).clamp(0.0, 1.0) * graph_width;
                         if last_x > -900.0 {
                             let w = (end_x - last_x).max(0.0);
                             if w > 0.5 {

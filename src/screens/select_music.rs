@@ -489,6 +489,7 @@ pub struct State {
     expanded_pack_name: Option<String>,
     bg: heart_bg::State,
     last_requested_banner_path: Option<PathBuf>,
+    banner_high_quality_requested: bool,
     last_requested_chart_hash: Option<String>,
     last_requested_chart_hash_p2: Option<String>,
     chord_mask_p1: u8,
@@ -1498,6 +1499,7 @@ pub fn init() -> State {
         expanded_pack_name: last_pack_name,
         bg: heart_bg::State::new(),
         last_requested_banner_path: None,
+        banner_high_quality_requested: false,
         current_banner_key: "banner1.png".to_string(),
         last_requested_chart_hash: None,
         current_graph_key: "__white".to_string(),
@@ -3303,6 +3305,15 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
 
     if state.last_requested_banner_path != new_banner {
         state.last_requested_banner_path = new_banner.clone();
+        state.banner_high_quality_requested = false;
+        return ScreenAction::RequestBanner(new_banner);
+    }
+    if new_banner.is_some()
+        && !state.banner_high_quality_requested
+        && state.nav_key_held_direction.is_none()
+        && state.wheel_offset_from_selection.abs() < 0.0001
+    {
+        state.banner_high_quality_requested = true;
         return ScreenAction::RequestBanner(new_banner);
     }
 
@@ -3452,6 +3463,7 @@ pub fn trigger_immediate_refresh(state: &mut State) {
     state.last_requested_chart_hash = None;
     state.last_requested_chart_hash_p2 = None;
     state.last_requested_banner_path = None;
+    state.banner_high_quality_requested = false;
 }
 
 pub fn reset_preview_after_gameplay(state: &mut State) {
@@ -3954,9 +3966,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let max_allowed_logical_width = panel_w / text_zoom;
                         let (detailed_breakdown, partial_breakdown, simple_breakdown) =
                             match breakdown_style {
-                                BreakdownStyle::Sl => {
-                                    (&c.detailed_breakdown, &c.partial_breakdown, &c.simple_breakdown)
-                                }
+                                BreakdownStyle::Sl => (
+                                    &c.detailed_breakdown,
+                                    &c.partial_breakdown,
+                                    &c.simple_breakdown,
+                                ),
                                 BreakdownStyle::Sn => (
                                     &c.sn_detailed_breakdown,
                                     &c.sn_partial_breakdown,

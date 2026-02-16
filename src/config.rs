@@ -145,6 +145,16 @@ pub struct Config {
     // Global background brightness during gameplay (ITGmania: Pref "BGBrightness").
     // 1.0 = full brightness, 0.0 = black.
     pub bg_brightness: f32,
+    /// ITGmania-style wheel banner cache toggle.
+    pub banner_cache: bool,
+    /// Downscale divisor for cached banners (ITG default: 2).
+    pub banner_cache_scale_divisor: u8,
+    /// Minimum cached banner dimension in pixels (ITG default: 32).
+    pub banner_cache_min_dimension: u16,
+    /// Round cached banner dimensions to nearest power-of-two (ITG default: on).
+    pub banner_cache_pow2: bool,
+    /// Cached banner color depth in bits (supported: 8/16/32; deadsync default: 32).
+    pub banner_cache_color_depth: u8,
     pub display_width: u32,
     pub display_height: u32,
     pub video_renderer: BackendType,
@@ -192,6 +202,11 @@ impl Default for Config {
             translated_titles: false,
             mine_hit_sound: true,
             bg_brightness: 0.7,
+            banner_cache: true,
+            banner_cache_scale_divisor: 2,
+            banner_cache_min_dimension: 32,
+            banner_cache_pow2: true,
+            banner_cache_color_depth: 16,
             display_width: 1600,
             display_height: 900,
             video_renderer: BackendType::OpenGL,
@@ -235,6 +250,17 @@ static CONFIG: std::sync::LazyLock<Mutex<Config>> =
 
 // --- File I/O ---
 
+#[inline(always)]
+const fn normalize_banner_cache_color_depth(bits: u8) -> u8 {
+    if bits <= 8 {
+        8
+    } else if bits <= 16 {
+        16
+    } else {
+        32
+    }
+}
+
 fn create_default_config_file() -> Result<(), std::io::Error> {
     info!("'{CONFIG_PATH}' not found, creating with default values.");
     let default = Config::default();
@@ -253,6 +279,26 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!("BGBrightness={}\n", default.bg_brightness));
+    content.push_str(&format!(
+        "BannerCache={}\n",
+        if default.banner_cache { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "BannerCacheColorDepth={}\n",
+        default.banner_cache_color_depth
+    ));
+    content.push_str(&format!(
+        "BannerCacheMinDimension={}\n",
+        default.banner_cache_min_dimension
+    ));
+    content.push_str(&format!(
+        "BannerCachePow2={}\n",
+        if default.banner_cache_pow2 { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "BannerCacheScaleDivisor={}\n",
+        default.banner_cache_scale_divisor
+    ));
     content.push_str(&format!(
         "CacheSongs={}\n",
         if default.cachesongs { "1" } else { "0" }
@@ -478,6 +524,29 @@ pub fn load() {
                     .get("Options", "BGBrightness")
                     .and_then(|v| v.parse::<f32>().ok())
                     .map_or(default.bg_brightness, |v| v.clamp(0.0, 1.0));
+                cfg.banner_cache = conf
+                    .get("Options", "BannerCache")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.banner_cache, |v| v != 0);
+                cfg.banner_cache_color_depth = conf
+                    .get("Options", "BannerCacheColorDepth")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(
+                        default.banner_cache_color_depth,
+                        normalize_banner_cache_color_depth,
+                    );
+                cfg.banner_cache_min_dimension = conf
+                    .get("Options", "BannerCacheMinDimension")
+                    .and_then(|v| v.parse::<u16>().ok())
+                    .map_or(default.banner_cache_min_dimension, |v| v.clamp(1, 2048));
+                cfg.banner_cache_pow2 = conf
+                    .get("Options", "BannerCachePow2")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.banner_cache_pow2, |v| v != 0);
+                cfg.banner_cache_scale_divisor = conf
+                    .get("Options", "BannerCacheScaleDivisor")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.banner_cache_scale_divisor, |v| v.clamp(1, 8));
                 cfg.display_width = conf
                     .get("Options", "DisplayWidth")
                     .and_then(|v| v.parse().ok())
@@ -616,6 +685,11 @@ pub fn load() {
                     "AudioSampleRateHz",
                     "AutoPopulateGrooveStatsScores",
                     "BGBrightness",
+                    "BannerCache",
+                    "BannerCacheColorDepth",
+                    "BannerCacheMinDimension",
+                    "BannerCachePow2",
+                    "BannerCacheScaleDivisor",
                     "CacheSongs",
                     "DisplayHeight",
                     "DisplayWidth",
@@ -1272,6 +1346,26 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "BGBrightness={}\n",
         cfg.bg_brightness.clamp(0.0, 1.0)
+    ));
+    content.push_str(&format!(
+        "BannerCache={}\n",
+        if cfg.banner_cache { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "BannerCacheColorDepth={}\n",
+        cfg.banner_cache_color_depth
+    ));
+    content.push_str(&format!(
+        "BannerCacheMinDimension={}\n",
+        cfg.banner_cache_min_dimension
+    ));
+    content.push_str(&format!(
+        "BannerCachePow2={}\n",
+        if cfg.banner_cache_pow2 { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "BannerCacheScaleDivisor={}\n",
+        cfg.banner_cache_scale_divisor
     ));
     content.push_str(&format!(
         "CacheSongs={}\n",

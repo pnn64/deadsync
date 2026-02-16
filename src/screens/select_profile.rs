@@ -1,7 +1,7 @@
 use crate::assets::AssetManager;
 use crate::core::input::InputEvent;
-use crate::screens::components::profile_boxes;
 use crate::screens::ScreenAction;
+use crate::screens::components::profile_boxes;
 use crate::ui::actors::Actor;
 
 pub type State = profile_boxes::State;
@@ -42,6 +42,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 }
 
 #[inline(always)]
-pub fn get_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier: f32) -> Vec<Actor> {
+pub fn get_actors(
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+) -> Vec<Actor> {
     profile_boxes::get_actors(state, asset_manager, alpha_multiplier)
 }

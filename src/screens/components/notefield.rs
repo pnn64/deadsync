@@ -4,8 +4,7 @@ use crate::core::space::*;
 use crate::game::gameplay::{
     COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind,
     HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, RECEPTOR_Y_OFFSET_FROM_CENTER,
-    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
-    TRANSITION_IN_DURATION,
+    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, TRANSITION_IN_DURATION,
 };
 use crate::game::gameplay::{active_hold_is_engaged, receptor_glow_visual_for_col};
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, TimingWindow};

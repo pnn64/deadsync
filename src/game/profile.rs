@@ -2448,11 +2448,17 @@ pub fn set_session_joined(p1: bool, p2: bool) {
 }
 
 pub fn set_fast_profile_switch_from_select_music(enabled: bool) {
-    SESSION.lock().unwrap().fast_profile_switch_from_select_music = enabled;
+    SESSION
+        .lock()
+        .unwrap()
+        .fast_profile_switch_from_select_music = enabled;
 }
 
 pub fn fast_profile_switch_from_select_music() -> bool {
-    SESSION.lock().unwrap().fast_profile_switch_from_select_music
+    SESSION
+        .lock()
+        .unwrap()
+        .fast_profile_switch_from_select_music
 }
 
 pub fn take_fast_profile_switch_from_select_music() -> bool {

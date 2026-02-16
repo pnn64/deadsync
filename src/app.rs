@@ -804,7 +804,9 @@ impl App {
                         .screens
                         .select_music_state
                         .p2_selected_steps_index = preferred_p2;
-                    select_music::trigger_immediate_refresh(&mut self.state.screens.select_music_state);
+                    select_music::trigger_immediate_refresh(
+                        &mut self.state.screens.select_music_state,
+                    );
                     if self.state.screens.current_screen != CurrentScreen::SelectMusic {
                         self.handle_navigation_action(CurrentScreen::SelectMusic);
                     }
@@ -3495,6 +3497,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     song_loading::scan_and_load_songs("songs");
     song_loading::scan_and_load_courses("courses", "songs");
+    crate::assets::prewarm_banner_cache(&collect_banner_cache_paths());
     std::thread::spawn(|| {
         if std::panic::catch_unwind(noteskin::prewarm_itg_preview_cache).is_err() {
             warn!("noteskin prewarm thread panicked; first-use preview hitches may occur");
@@ -3526,4 +3529,32 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     );
     event_loop.run_app(&mut app)?;
     Ok(())
+}
+
+fn collect_banner_cache_paths() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    {
+        let song_cache = crate::game::song::get_song_cache();
+        for pack in song_cache.iter() {
+            if let Some(path) = pack.banner_path.as_ref() {
+                out.push(path.clone());
+            }
+            for song in &pack.songs {
+                if let Some(path) = song.banner_path.as_ref() {
+                    out.push(path.clone());
+                }
+            }
+        }
+    }
+    {
+        let course_cache = crate::game::course::get_course_cache();
+        for (course_path, course) in course_cache.iter() {
+            if let Some(path) =
+                rssp::course::resolve_course_banner_path(course_path, &course.banner)
+            {
+                out.push(path);
+            }
+        }
+    }
+    out
 }

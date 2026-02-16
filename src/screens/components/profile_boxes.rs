@@ -1590,7 +1590,11 @@ fn push_scroller_frame(
     }
 }
 
-fn build_box_actors(state: &State, asset_manager: &AssetManager, alpha_multiplier: f32) -> Vec<Actor> {
+fn build_box_actors(
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+) -> Vec<Actor> {
     if alpha_multiplier <= 0.0 {
         return Vec::new();
     }
