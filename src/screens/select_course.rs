@@ -1001,11 +1001,12 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     });
 
     let panel_w = (BANNER_NATIVE_WIDTH * banner_zoom).round();
-    let panel_h = 152.0;
+    let panel_h = 145.0;
     let panel_cx = banner_cx;
-    let panel_cy = screen_center_y() + 67.0;
-    let panel_top = panel_cy - panel_h * 0.5;
-    let panel_bottom = panel_cy + panel_h * 0.5;
+    // Keep panel top flush with the Step Artist bar bottom.
+    let panel_top = screen_center_y() - 9.0;
+    let panel_cy = panel_top + panel_h * 0.5;
+    let panel_bottom = panel_top + panel_h;
     actors.push(act!(quad:
         align(0.5, 0.5):
         xy(panel_cx, panel_cy):
