@@ -403,22 +403,16 @@ fn build_actor_recursive<'a>(
             let rect = place_rect(parent, *align, *offset, *size);
             let base_x = m.left + rect.x;
             let base_y = m.top - rect.y;
-
-            let mut world: Vec<renderer::MeshVertex> = Vec::with_capacity(vertices.len());
-            for v in vertices.iter() {
-                world.push(renderer::MeshVertex {
-                    pos: [base_x + v.pos[0], base_y - v.pos[1]],
-                    color: v.color,
-                });
-            }
+            let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, 0.0))
+                * Matrix4::from_nonuniform_scale(1.0, -1.0, 1.0);
 
             let before = out.len();
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::Mesh {
-                    vertices: std::borrow::Cow::Owned(world),
+                    vertices: std::borrow::Cow::Borrowed(vertices.as_ref()),
                     mode: *mode,
                 },
-                transform: Matrix4::from_scale(1.0),
+                transform,
                 blend: *blend,
                 z: 0,
                 order: 0,
@@ -454,24 +448,17 @@ fn build_actor_recursive<'a>(
             let rect = place_rect(parent, *align, *offset, *size);
             let base_x = m.left + rect.x;
             let base_y = m.top - rect.y;
-
-            let mut world: Vec<renderer::TexturedMeshVertex> = Vec::with_capacity(vertices.len());
-            for v in vertices.iter() {
-                world.push(renderer::TexturedMeshVertex {
-                    pos: [base_x + v.pos[0], base_y - v.pos[1]],
-                    uv: v.uv,
-                    color: v.color,
-                });
-            }
+            let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, 0.0))
+                * Matrix4::from_nonuniform_scale(1.0, -1.0, 1.0);
 
             let before = out.len();
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::TexturedMesh {
                     texture_id: std::borrow::Cow::Borrowed(texture.as_str()),
-                    vertices: std::borrow::Cow::Owned(world),
+                    vertices: std::borrow::Cow::Borrowed(vertices.as_ref()),
                     mode: *mode,
                 },
-                transform: Matrix4::from_scale(1.0),
+                transform,
                 blend: *blend,
                 z: 0,
                 order: 0,
