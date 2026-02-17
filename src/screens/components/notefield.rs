@@ -10,7 +10,7 @@ use crate::game::gameplay::{active_hold_is_engaged, receptor_glow_visual_for_col
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, TimingWindow};
 use crate::game::note::{HoldResult, NoteType};
 use crate::game::parsing::noteskin::{
-    ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
+    ModelDrawState, ModelEffectMode, ModelMesh, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
 };
 use crate::game::{gameplay::PlayerRuntime, gameplay::State, profile, scroll::ScrollSpeedSetting};
 use crate::ui::actors::{Actor, SizeSpec};
@@ -95,6 +95,111 @@ struct MineFillState {
     layers: [[f32; 4]; MINE_FILL_LAYERS],
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct ModelMeshCacheKey {
+    slot: *const SpriteSlot,
+    size: [u32; 2],
+    uv_rect: [u32; 4],
+    rotation: u32,
+    pos: [u32; 3],
+    rot: [u32; 3],
+    zoom: [u32; 3],
+    vert_align: u32,
+    tint: [u32; 4],
+}
+
+struct ModelMeshCacheEntry {
+    key: ModelMeshCacheKey,
+    vertices: Arc<[TexturedMeshVertex]>,
+}
+
+#[derive(Default)]
+struct ModelMeshCache {
+    entries: Vec<ModelMeshCacheEntry>,
+}
+
+impl ModelMeshCache {
+    #[inline(always)]
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            entries: Vec::with_capacity(capacity),
+        }
+    }
+
+    #[inline(always)]
+    fn get_or_insert_with<F>(
+        &mut self,
+        key: ModelMeshCacheKey,
+        build: F,
+    ) -> Arc<[TexturedMeshVertex]>
+    where
+        F: FnOnce() -> Arc<[TexturedMeshVertex]>,
+    {
+        if let Some(entry) = self.entries.iter().find(|entry| entry.key == key) {
+            return entry.vertices.clone();
+        }
+        let vertices = build();
+        self.entries.push(ModelMeshCacheEntry {
+            key,
+            vertices: vertices.clone(),
+        });
+        vertices
+    }
+}
+
+#[inline(always)]
+const fn norm_bits(v: f32) -> u32 {
+    if v == 0.0 {
+        0.0f32.to_bits()
+    } else {
+        v.to_bits()
+    }
+}
+
+#[inline(always)]
+fn model_cache_key(
+    slot: &SpriteSlot,
+    size: [f32; 2],
+    uv_rect: [f32; 4],
+    rotation_deg: f32,
+    draw: ModelDrawState,
+    tint: [f32; 4],
+) -> ModelMeshCacheKey {
+    ModelMeshCacheKey {
+        slot: slot as *const SpriteSlot,
+        size: [norm_bits(size[0]), norm_bits(size[1])],
+        uv_rect: [
+            norm_bits(uv_rect[0]),
+            norm_bits(uv_rect[1]),
+            norm_bits(uv_rect[2]),
+            norm_bits(uv_rect[3]),
+        ],
+        rotation: norm_bits(rotation_deg),
+        pos: [
+            norm_bits(draw.pos[0]),
+            norm_bits(draw.pos[1]),
+            norm_bits(draw.pos[2]),
+        ],
+        rot: [
+            norm_bits(draw.rot[0]),
+            norm_bits(draw.rot[1]),
+            norm_bits(draw.rot[2]),
+        ],
+        zoom: [
+            norm_bits(draw.zoom[0]),
+            norm_bits(draw.zoom[1]),
+            norm_bits(draw.zoom[2]),
+        ],
+        vert_align: norm_bits(draw.vert_align),
+        tint: [
+            norm_bits(tint[0]),
+            norm_bits(tint[1]),
+            norm_bits(tint[2]),
+            norm_bits(tint[3]),
+        ],
+    }
+}
+
 fn mine_fill_state(colors: &[[f32; 4]], beat: f32) -> Option<MineFillState> {
     if colors.is_empty() {
         return None;
@@ -135,27 +240,34 @@ const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
 }
 
 #[inline(always)]
-pub(crate) fn noteskin_model_actor(
+fn model_tint(color: [f32; 4], draw: ModelDrawState) -> [f32; 4] {
+    [
+        color[0] * draw.tint[0],
+        color[1] * draw.tint[1],
+        color[2] * draw.tint[2],
+        color[3] * draw.tint[3],
+    ]
+}
+
+#[inline(always)]
+const fn model_blend(draw: ModelDrawState, blend: BlendMode) -> BlendMode {
+    if draw.blend_add {
+        BlendMode::Add
+    } else {
+        blend
+    }
+}
+
+#[inline(always)]
+fn build_model_vertices(
     slot: &SpriteSlot,
-    xy: [f32; 2],
+    model: &ModelMesh,
     size: [f32; 2],
     uv_rect: [f32; 4],
     rotation_deg: f32,
-    elapsed: f32,
-    beat: f32,
-    color: [f32; 4],
-    blend: BlendMode,
-    z: i16,
-) -> Option<Actor> {
-    let model = slot.model.as_ref()?;
-    let draw = slot.model_draw_at(elapsed, beat);
-    if !draw.visible {
-        return None;
-    }
-    if model.vertices.is_empty() {
-        return None;
-    }
-
+    draw: ModelDrawState,
+    tint: [f32; 4],
+) -> Arc<[TexturedMeshVertex]> {
     let model_size = model.size();
     let model_h = model_size[1];
     let scale = if model_h > f32::EPSILON && size[1] > f32::EPSILON {
@@ -193,17 +305,6 @@ pub(crate) fn noteskin_model_actor(
             (uv_rect[0] - base_u0, uv_rect[1] - base_v0)
         }
         crate::game::parsing::noteskin::SpriteSource::Animated { .. } => (0.0, 0.0),
-    };
-    let tint = [
-        color[0] * draw.tint[0],
-        color[1] * draw.tint[1],
-        color[2] * draw.tint[2],
-        color[3] * draw.tint[3],
-    ];
-    let blend = if draw.blend_add {
-        BlendMode::Add
-    } else {
-        blend
     };
     let align_y = (0.5 - draw.vert_align) * size[1];
 
@@ -253,18 +354,102 @@ pub(crate) fn noteskin_model_actor(
             color: tint,
         });
     }
+    Arc::from(vertices)
+}
 
-    Some(Actor::TexturedMesh {
+#[inline(always)]
+fn noteskin_model_actor_from_vertices(
+    slot: &SpriteSlot,
+    xy: [f32; 2],
+    vertices: Arc<[TexturedMeshVertex]>,
+    blend: BlendMode,
+    z: i16,
+) -> Actor {
+    Actor::TexturedMesh {
         align: [0.0, 0.0],
         offset: xy,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         texture: slot.texture_key().to_string(),
-        vertices: Arc::from(vertices),
+        vertices,
         mode: MeshMode::Triangles,
         visible: true,
         blend,
         z,
-    })
+    }
+}
+
+#[inline(always)]
+fn noteskin_model_actor_from_draw(
+    slot: &SpriteSlot,
+    draw: ModelDrawState,
+    xy: [f32; 2],
+    size: [f32; 2],
+    uv_rect: [f32; 4],
+    rotation_deg: f32,
+    color: [f32; 4],
+    blend: BlendMode,
+    z: i16,
+) -> Option<Actor> {
+    let model = slot.model.as_ref()?;
+    if !draw.visible || model.vertices.is_empty() {
+        return None;
+    }
+
+    let tint = model_tint(color, draw);
+    let blend = model_blend(draw, blend);
+    let vertices = build_model_vertices(slot, model, size, uv_rect, rotation_deg, draw, tint);
+    Some(noteskin_model_actor_from_vertices(
+        slot, xy, vertices, blend, z,
+    ))
+}
+
+#[inline(always)]
+fn noteskin_model_actor_from_draw_cached(
+    slot: &SpriteSlot,
+    draw: ModelDrawState,
+    xy: [f32; 2],
+    size: [f32; 2],
+    uv_rect: [f32; 4],
+    rotation_deg: f32,
+    color: [f32; 4],
+    blend: BlendMode,
+    z: i16,
+    cache: &mut ModelMeshCache,
+) -> Option<Actor> {
+    let model = slot.model.as_ref()?;
+    if !draw.visible || model.vertices.is_empty() {
+        return None;
+    }
+
+    let tint = model_tint(color, draw);
+    let key = model_cache_key(slot, size, uv_rect, rotation_deg, draw, tint);
+    let vertices = cache.get_or_insert_with(key, || {
+        build_model_vertices(slot, model, size, uv_rect, rotation_deg, draw, tint)
+    });
+    Some(noteskin_model_actor_from_vertices(
+        slot,
+        xy,
+        vertices,
+        model_blend(draw, blend),
+        z,
+    ))
+}
+
+#[inline(always)]
+pub(crate) fn noteskin_model_actor(
+    slot: &SpriteSlot,
+    xy: [f32; 2],
+    size: [f32; 2],
+    uv_rect: [f32; 4],
+    rotation_deg: f32,
+    elapsed: f32,
+    beat: f32,
+    color: [f32; 4],
+    blend: BlendMode,
+    z: i16,
+) -> Option<Actor> {
+    let draw = slot.model_draw_at(elapsed, beat);
+    noteskin_model_actor_from_draw(slot, draw, xy, size, uv_rect, rotation_deg, color, blend, z)
 }
 
 #[inline(always)]
@@ -1114,6 +1299,7 @@ pub fn build(
 ) -> (Vec<Actor>, f32) {
     let mut actors = Vec::new();
     let mut hud_actors: Vec<Actor> = Vec::new();
+    let mut model_cache = ModelMeshCache::with_capacity(96);
     let hold_judgment_texture: Option<&str> = match profile.hold_judgment_graphic {
         profile::HoldJudgmentGraphic::Love => Some("hold_judgements/Love 1x2 (doubleres).png"),
         profile::HoldJudgmentGraphic::Mute => Some("hold_judgements/mute 1x2 (doubleres).png"),
@@ -1624,31 +1810,31 @@ pub fn build(
                 } else {
                     BlendMode::Alpha
                 };
-                if let Some(model_actor) = noteskin_model_actor(
+                if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                     hold_slot,
+                    draw,
                     center,
                     hold_size,
                     hold_uv,
                     -final_rotation,
-                    state.total_elapsed_in_screen,
-                    current_beat,
                     color,
                     blend,
                     Z_HOLD_EXPLOSION as i16,
+                    &mut model_cache,
                 ) {
                     actors.push(model_actor);
                     if let Some(glow_color) = glow
-                        && let Some(glow_actor) = noteskin_model_actor(
+                        && let Some(glow_actor) = noteskin_model_actor_from_draw_cached(
                             hold_slot,
+                            draw,
                             center,
                             hold_size,
                             hold_uv,
                             -final_rotation,
-                            state.total_elapsed_in_screen,
-                            current_beat,
                             glow_color,
                             BlendMode::Add,
                             Z_HOLD_EXPLOSION as i16,
+                            &mut model_cache,
                         )
                     {
                         actors.push(glow_actor);
@@ -2491,17 +2677,17 @@ pub fn build(
                     } else {
                         BlendMode::Alpha
                     };
-                    if let Some(model_actor) = noteskin_model_actor(
+                    if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                         head_slot,
+                        draw,
                         center,
                         size,
                         uv,
                         -head_slot.def.rotation_deg as f32,
-                        elapsed,
-                        current_beat,
                         color,
                         blend,
                         Z_TAP_NOTE as i16,
+                        &mut model_cache,
                     ) {
                         actors.push(model_actor);
                     } else if draw.blend_add {
@@ -2580,17 +2766,17 @@ pub fn build(
                         } else {
                             BlendMode::Alpha
                         };
-                        if let Some(model_actor) = noteskin_model_actor(
+                        if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                             note_slot,
+                            draw,
                             center,
                             size,
                             uv,
                             -note_slot.def.rotation_deg as f32,
-                            elapsed,
-                            current_beat,
                             color,
                             blend,
                             layer_z as i16,
+                            &mut model_cache,
                         ) {
                             actors.push(model_actor);
                         } else if draw.blend_add {
@@ -2629,17 +2815,18 @@ pub fn build(
                         ns.part_uv_translation(hold_head_part, note.beat, false),
                     );
                     let size = scale_sprite(note_slot.size());
-                    if let Some(model_actor) = noteskin_model_actor(
+                    let draw = note_slot.model_draw_at(elapsed, current_beat);
+                    if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                         note_slot,
+                        draw,
                         head_center,
                         size,
                         uv,
                         -note_slot.def.rotation_deg as f32,
-                        elapsed,
-                        current_beat,
                         hold_diffuse,
                         BlendMode::Alpha,
                         Z_TAP_NOTE as i16,
+                        &mut model_cache,
                     ) {
                         actors.push(model_actor);
                     } else {
@@ -2776,17 +2963,17 @@ pub fn build(
                                 };
                                 let sprite_rotation = base_rotation + legacy_rot + draw.rot[2];
                                 let center = [playfield_center_x + col_x_offset, y_pos];
-                                if let Some(model_actor) = noteskin_model_actor(
+                                if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                                     slot,
+                                    draw,
                                     center,
                                     [width, height],
                                     uv,
                                     base_rotation + legacy_rot,
-                                    note_display_time,
-                                    beat,
                                     [1.0, 1.0, 1.0, 0.9],
                                     BlendMode::Alpha,
                                     (Z_TAP_NOTE - 1) as i16,
+                                    &mut model_cache,
                                 ) {
                                     actors.push(model_actor);
                                 } else {
@@ -2831,17 +3018,17 @@ pub fn build(
                         };
                         let sprite_rotation = base_rotation + legacy_rot + draw.rot[2];
                         let center = [playfield_center_x + col_x_offset, y_pos];
-                        if let Some(model_actor) = noteskin_model_actor(
+                        if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                             slot,
+                            draw,
                             center,
                             size,
                             uv,
                             base_rotation + legacy_rot,
-                            note_display_time,
-                            beat,
                             [1.0, 1.0, 1.0, 1.0],
                             BlendMode::Alpha,
                             Z_TAP_NOTE as i16,
+                            &mut model_cache,
                         ) {
                             actors.push(model_actor);
                         } else {
@@ -2924,17 +3111,18 @@ pub fn build(
                         };
                         let note_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
                         let center = [playfield_center_x + col_x_offset, y_pos];
-                        if let Some(model_actor) = noteskin_model_actor(
+                        let draw = head_slot.model_draw_at(elapsed, current_beat);
+                        if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                             head_slot,
+                            draw,
                             center,
                             note_size,
                             note_uv,
                             -head_slot.def.rotation_deg as f32,
-                            elapsed,
-                            current_beat,
                             [1.0, 1.0, 1.0, 1.0],
                             BlendMode::Alpha,
                             Z_TAP_NOTE as i16,
+                            &mut model_cache,
                         ) {
                             actors.push(model_actor);
                         } else {
@@ -3003,17 +3191,17 @@ pub fn build(
                             BlendMode::Alpha
                         };
                         let color = draw.tint;
-                        if let Some(model_actor) = noteskin_model_actor(
+                        if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                             note_slot,
+                            draw,
                             center,
                             note_size,
                             note_uv,
                             -note_slot.def.rotation_deg as f32,
-                            elapsed,
-                            current_beat,
                             color,
                             blend,
                             layer_z as i16,
+                            &mut model_cache,
                         ) {
                             actors.push(model_actor);
                         } else {
@@ -3058,17 +3246,18 @@ pub fn build(
                     );
                     let note_size = scale_sprite(note_slot.size());
                     let center = [playfield_center_x + col_x_offset, y_pos];
-                    if let Some(model_actor) = noteskin_model_actor(
+                    let draw = note_slot.model_draw_at(elapsed, current_beat);
+                    if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                         note_slot,
+                        draw,
                         center,
                         note_size,
                         note_uv,
                         -note_slot.def.rotation_deg as f32,
-                        elapsed,
-                        current_beat,
                         [1.0, 1.0, 1.0, 1.0],
                         BlendMode::Alpha,
                         Z_TAP_NOTE as i16,
+                        &mut model_cache,
                     ) {
                         actors.push(model_actor);
                     } else {
