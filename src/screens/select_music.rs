@@ -3655,6 +3655,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
     let target_chart_type = play_style.chart_type();
     let selected_entry = state.entries.get(state.selected_index);
+    let selected_song = match selected_entry {
+        Some(MusicWheelEntry::Song(song)) => Some(song.as_ref()),
+        _ => None,
+    };
+    let immediate_chart_p1 = selected_song
+        .and_then(|song| chart_for_steps_index(song, target_chart_type, state.selected_steps_index));
+    let immediate_chart_p2 = if is_versus {
+        selected_song.and_then(|song| {
+            chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index)
+        })
+    } else {
+        None
+    };
     let allow_gs_fetch = allow_gs_fetch_for_selection(state);
 
     actors.extend(state.bg.build(heart_bg::Params {
@@ -3673,19 +3686,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         profile::PlayerSide::P1
     };
-    let mode_steps_index = if mode_side == profile::PlayerSide::P2 && is_versus {
-        state.p2_selected_steps_index
-    } else {
-        state.selected_steps_index
-    };
     let mode_chart_hash = if allow_gs_fetch {
-        match selected_entry {
-            Some(MusicWheelEntry::Song(song)) => {
-                chart_for_steps_index(song, target_chart_type, mode_steps_index)
-                    .map(|c| c.short_hash.as_str())
-            }
-            _ => None,
-        }
+        let mode_chart = if mode_side == profile::PlayerSide::P2 && is_versus {
+            immediate_chart_p2
+        } else {
+            immediate_chart_p1
+        };
+        mode_chart.map(|c| c.short_hash.as_str())
     } else {
         None
     };
@@ -3706,17 +3713,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         color::FILE_DIFFICULTY_NAMES[preferred_idx_p2],
         state.active_color_index,
     );
-    if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-        if let Some(chart) =
-            chart_for_steps_index(song, target_chart_type, state.selected_steps_index)
-        {
-            sel_col_p1 = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
-        }
-        if let Some(chart) =
-            chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index)
-        {
-            sel_col_p2 = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
-        }
+    if let Some(chart) = immediate_chart_p1 {
+        sel_col_p1 = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
+    }
+    if let Some(chart) = immediate_chart_p2 {
+        sel_col_p2 = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
     }
 
     // Timer (zmod parity: optional gameplay timer to the right of session timer).
@@ -3828,19 +3829,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     });
 
     // Chart Stats & Graph
-    let immediate_chart_p1 = match entry_opt {
-        Some(MusicWheelEntry::Song(s)) => {
-            chart_for_steps_index(s, target_chart_type, state.selected_steps_index)
-        }
-        _ => None,
-    };
-
-    let immediate_chart_p2 = match entry_opt {
-        Some(MusicWheelEntry::Song(s)) => {
-            chart_for_steps_index(s, target_chart_type, state.p2_selected_steps_index)
-        }
-        _ => None,
-    };
 
     let disp_chart_p1 = state
         .displayed_chart_p1
