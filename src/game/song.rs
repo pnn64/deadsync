@@ -93,42 +93,58 @@ impl SongData {
         }
     }
 
-    /// Formats the display BPM for the UI, prioritizing #DISPLAYBPM and cleaning up the format
-    /// to match `ITGmania` (e.g., "128" instead of "128.000000"). Falls back to the
-    /// calculated min-max range if #DISPLAYBPM is absent or set to "*".
-    pub fn formatted_display_bpm(&self) -> String {
-        if !self.display_bpm.is_empty() && &self.display_bpm != "*" {
-            let s = &self.display_bpm;
-            // Handle range "min:max" or "min - max"
-            let parts: Vec<&str> = s.split([':', '-']).map(str::trim).collect();
-            if parts.len() == 2 {
-                if let (Some(min), Some(max)) =
-                    (parts[0].parse::<f32>().ok(), parts[1].parse::<f32>().ok())
-                {
-                    let min_i = min.round() as i32;
-                    let max_i = max.round() as i32;
-                    if min_i == max_i {
-                        format!("{min_i}")
-                    } else {
-                        format!("{} - {}", min_i.min(max_i), min_i.max(max_i))
-                    }
-                } else {
-                    s.clone() // Fallback if parsing fails
-                }
-            } else if let Ok(val) = s.parse::<f32>() {
-                // Handle single value "128.000000"
-                format!("{}", val.round() as i32)
-            } else {
-                s.clone() // Fallback for other formats
-            }
+    #[inline(always)]
+    fn parse_display_bpm_tag(s: &str) -> Option<(f64, f64)> {
+        let parse_pair = |a: &str, b: &str| -> Option<(f64, f64)> {
+            let a = a.trim().parse::<f64>().ok()?;
+            let b = b.trim().parse::<f64>().ok()?;
+            Some((a.min(b), a.max(b)))
+        };
+        if let Some((a, b)) = s.split_once(':') {
+            return parse_pair(a, b);
+        }
+        if let Some((a, b)) = s.split_once('-') {
+            return parse_pair(a, b);
+        }
+        let v = s.parse::<f64>().ok()?;
+        Some((v, v))
+    }
+
+    pub fn display_bpm_range(&self) -> Option<(f64, f64)> {
+        let s = self.display_bpm.trim();
+        if !s.is_empty()
+            && s != "*"
+            && let Some((lo, hi)) = Self::parse_display_bpm_tag(s)
+            && lo.is_finite()
+            && hi.is_finite()
+            && lo > 0.0
+            && hi > 0.0
+        {
+            return Some((lo, hi));
+        }
+        let lo = self.min_bpm;
+        let hi = self.max_bpm;
+        if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
+            Some((lo.min(hi), lo.max(hi)))
         } else {
-            let min = self.min_bpm.round() as i32;
-            let max = self.max_bpm.round() as i32;
-            if (self.min_bpm - self.max_bpm).abs() < 1e-6 {
-                format!("{min}")
-            } else {
-                format!("{min} - {max}")
-            }
+            None
+        }
+    }
+
+    /// Formats display BPM for UI text.
+    ///
+    /// Matches Simply Love's semantics by treating non-positive DISPLAYBPM values
+    /// as invalid and falling back to actual BPM range.
+    pub fn formatted_display_bpm(&self) -> String {
+        let Some((lo, hi)) = self.display_bpm_range() else {
+            return String::new();
+        };
+        let lo_i = lo.round() as i32;
+        let hi_i = hi.round() as i32;
+        if lo_i == hi_i {
+            lo_i.to_string()
+        } else {
+            format!("{} - {}", lo_i.min(hi_i), lo_i.max(hi_i))
         }
     }
 }

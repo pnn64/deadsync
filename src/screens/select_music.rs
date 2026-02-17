@@ -1011,31 +1011,7 @@ fn song_bpm_for_sort(song: &SongData) -> i32 {
 }
 
 fn song_display_bpm_range(song: &SongData) -> Option<(f64, f64)> {
-    let s = song.display_bpm.trim();
-    if !s.is_empty() && s != "*" {
-        let parts: Vec<&str> = s.split([':', '-']).map(str::trim).collect();
-        if parts.len() == 2 {
-            if let (Ok(a), Ok(b)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-                let lo = a.min(b);
-                let hi = a.max(b);
-                if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
-                    return Some((lo, hi));
-                }
-            }
-        } else if let Ok(v) = s.parse::<f64>()
-            && v.is_finite()
-            && v > 0.0
-        {
-            return Some((v, v));
-        }
-    }
-    let lo = song.min_bpm;
-    let hi = song.max_bpm;
-    if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
-        Some((lo.min(hi), lo.max(hi)))
-    } else {
-        None
-    }
+    song.display_bpm_range()
 }
 
 #[inline(always)]
@@ -3802,14 +3778,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         Some(MusicWheelEntry::Song(s)) => (
             s.artist.clone(),
             s.formatted_display_bpm(),
-            format_chart_length(
-                ((if s.music_length_seconds > 0.0 {
-                    s.music_length_seconds
-                } else {
-                    s.total_length_seconds.max(0) as f32
-                }) / music_rate)
-                    .round() as i32,
-            ),
+            format_chart_length(((s.total_length_seconds.max(0) as f32) / music_rate) as i32),
         ),
         Some(MusicWheelEntry::PackHeader { original_index, .. }) => {
             let total_sec: f64 = get_song_cache()
@@ -3817,6 +3786,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 .map(|p| {
                     p.songs
                         .iter()
+                        .filter(|song| {
+                            song.charts
+                                .iter()
+                                .any(|c| c.chart_type.eq_ignore_ascii_case(target_chart_type))
+                        })
                         .map(|s| {
                             (if s.music_length_seconds > 0.0 {
                                 s.music_length_seconds

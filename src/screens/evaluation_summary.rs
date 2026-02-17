@@ -104,31 +104,7 @@ fn format_rate_x(rate: f32) -> String {
 }
 
 fn display_bpm_range(song: &SongData) -> Option<(f64, f64)> {
-    let s = song.display_bpm.trim();
-    if !s.is_empty() && s != "*" {
-        let parts: Vec<&str> = s.split([':', '-']).map(str::trim).collect();
-        if parts.len() == 2 {
-            if let (Ok(a), Ok(b)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-                let lo = a.min(b);
-                let hi = a.max(b);
-                if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
-                    return Some((lo, hi));
-                }
-            }
-        } else if let Ok(v) = s.parse::<f64>() {
-            if v.is_finite() && v > 0.0 {
-                return Some((v, v));
-            }
-        }
-    }
-
-    let lo = song.min_bpm;
-    let hi = song.max_bpm;
-    if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
-        Some((lo.min(hi), lo.max(hi)))
-    } else {
-        None
-    }
+    song.display_bpm_range()
 }
 
 fn stringify_display_bpms(song: &SongData, music_rate: f32) -> String {

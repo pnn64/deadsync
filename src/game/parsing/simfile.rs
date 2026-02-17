@@ -1721,20 +1721,81 @@ fn ogg_length_seconds(path: &Path) -> Result<f32, String> {
     // Safe wrapper around the unsafe memmap2 API.
     let mmap = unsafe { Mmap::map(&file) }.map_err(|e| format!("Memory-map failed: {e}"))?;
 
-    // Use lewton to get the sample rate from the header.
-    let sample_rate_hz = {
-        let cursor = Cursor::new(&mmap[..]);
-        let reader = OggStreamReader::new(BufReader::new(cursor))
-            .map_err(|e| format!("lewton header error: {e}"))?;
-        let rate = reader.ident_hdr.audio_sample_rate;
-        if rate == 0 {
-            return Err("Invalid sample rate (0)".into());
-        }
-        f64::from(rate)
-    };
+    let sample_rate_hz = ogg_sample_rate_hz(&mmap)?;
 
     let total_samples = find_last_granule_backwards(&mmap)?;
     Ok((total_samples as f64 / sample_rate_hz) as f32)
+}
+
+fn ogg_sample_rate_hz(data: &[u8]) -> Result<f64, String> {
+    match ogg_sample_rate_hz_lewton(data) {
+        Ok(rate) => Ok(rate),
+        Err(lewton_err) => ogg_sample_rate_hz_ident_packet(data).ok_or_else(|| {
+            format!(
+                "lewton header error: {lewton_err}; fallback OGG ident parse failed"
+            )
+        }),
+    }
+}
+
+fn ogg_sample_rate_hz_lewton(data: &[u8]) -> Result<f64, String> {
+    let cursor = Cursor::new(data);
+    let reader = OggStreamReader::new(BufReader::new(cursor)).map_err(|e| format!("{e}"))?;
+    let rate = reader.ident_hdr.audio_sample_rate;
+    if rate == 0 {
+        return Err("Invalid sample rate (0)".into());
+    }
+    Ok(f64::from(rate))
+}
+
+fn ogg_sample_rate_hz_ident_packet(data: &[u8]) -> Option<f64> {
+    const PAGE_HEADER: usize = 27;
+    const MIN_RATE_HZ: u32 = 8_000;
+    const MAX_RATE_HZ: u32 = 384_000;
+
+    let mut pos = 0usize;
+    let mut packet = Vec::with_capacity(64);
+
+    while pos + PAGE_HEADER <= data.len() {
+        if &data[pos..pos + 4] != b"OggS" {
+            pos += 1;
+            continue;
+        }
+
+        let seg_count = data[pos + 26] as usize;
+        let header_end = pos.checked_add(PAGE_HEADER + seg_count)?;
+        if header_end > data.len() {
+            return None;
+        }
+
+        let seg_table = &data[pos + PAGE_HEADER..header_end];
+        let mut body_pos = header_end;
+
+        for &seg_len_u8 in seg_table {
+            let seg_len = seg_len_u8 as usize;
+            let seg_end = body_pos.checked_add(seg_len)?;
+            if seg_end > data.len() {
+                return None;
+            }
+            packet.extend_from_slice(&data[body_pos..seg_end]);
+            body_pos = seg_end;
+
+            if seg_len < 255 {
+                if packet.len() < 16 || packet[0] != 0x01 || &packet[1..7] != b"vorbis" {
+                    return None;
+                }
+                let rate = u32::from_le_bytes(packet[12..16].try_into().ok()?);
+                if !(MIN_RATE_HZ..=MAX_RATE_HZ).contains(&rate) {
+                    return None;
+                }
+                return Some(f64::from(rate));
+            }
+        }
+
+        pos = body_pos;
+    }
+
+    None
 }
 
 fn find_last_granule_backwards(data: &[u8]) -> Result<u64, String> {

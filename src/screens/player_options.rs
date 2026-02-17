@@ -394,19 +394,10 @@ fn tilt_intensity_choices() -> Vec<String> {
 
 // Prefer #DISPLAYBPM for reference BPM (use max of range or single value); fallback to song.max_bpm, then 120.
 fn reference_bpm_for_song(song: &SongData) -> f32 {
-    let s = song.display_bpm.trim();
-    let from_display = if !s.is_empty() && s != "*" {
-        if let Some((_, max_str)) = s.split_once(':') {
-            max_str.trim().parse::<f32>().ok()
-        } else if let Some((_, max_str)) = s.split_once('-') {
-            max_str.trim().parse::<f32>().ok()
-        } else {
-            s.parse::<f32>().ok()
-        }
-    } else {
-        None
-    };
-    let bpm = from_display.unwrap_or(song.max_bpm as f32);
+    let bpm = song
+        .display_bpm_range()
+        .map(|(_, hi)| hi as f32)
+        .unwrap_or(song.max_bpm as f32);
     if bpm.is_finite() && bpm > 0.0 {
         bpm
     } else {
