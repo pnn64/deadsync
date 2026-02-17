@@ -23,6 +23,7 @@ use crate::ui::color;
 use crate::ui::font;
 use log::info;
 use rssp::bpm::parse_bpm_map;
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -586,12 +587,12 @@ pub(crate) fn edit_charts_sorted<'a>(song: &'a SongData, chart_type: &str) -> Ve
                 && !c.notes.is_empty()
         })
         .collect();
-    edits.sort_by(|a, b| {
-        a.description
-            .to_lowercase()
-            .cmp(&b.description.to_lowercase())
-            .then(a.meter.cmp(&b.meter))
-            .then(a.short_hash.cmp(&b.short_hash))
+    edits.sort_by_cached_key(|c| {
+        (
+            c.description.to_lowercase(),
+            c.meter,
+            c.short_hash.as_str(),
+        )
     });
     edits
 }
@@ -632,14 +633,13 @@ fn edit_chart_indices_sorted(song: &SongData, chart_type: &str) -> Vec<usize> {
             }
         })
         .collect();
-    indices.sort_by(|&ai, &bi| {
-        let a = &song.charts[ai];
-        let b = &song.charts[bi];
-        a.description
-            .to_lowercase()
-            .cmp(&b.description.to_lowercase())
-            .then(a.meter.cmp(&b.meter))
-            .then(a.short_hash.cmp(&b.short_hash))
+    indices.sort_by_cached_key(|&idx| {
+        let c = &song.charts[idx];
+        (
+            c.description.to_lowercase(),
+            c.meter,
+            c.short_hash.as_str(),
+        )
     });
     indices
 }
@@ -845,26 +845,46 @@ fn song_title_sort_key(song: &SongData) -> (String, String, String) {
 }
 
 #[inline(always)]
-fn title_group_meta(song: &SongData) -> (u8, String) {
+fn alpha_group_bucket_from_text(text: &str) -> u8 {
+    let first = text.trim_start().chars().next();
+    match first {
+        Some(ch) if ch.is_ascii_digit() => 1,
+        Some(ch) if ch.is_ascii_alphabetic() => {
+            let c = ch.to_ascii_uppercase();
+            (c as u8).saturating_sub(b'A').saturating_add(2)
+        }
+        _ => 0,
+    }
+}
+
+#[inline(always)]
+fn alpha_group_meta_from_text(text: &str) -> (u8, String) {
+    let bucket = alpha_group_bucket_from_text(text);
+    let label = match bucket {
+        0 => "Other".to_string(),
+        1 => "0-9".to_string(),
+        b => ((b'A' + b.saturating_sub(2)) as char).to_string(),
+    };
+    (bucket, label)
+}
+
+#[inline(always)]
+fn title_group_bucket(song: &SongData) -> u8 {
     let title = if song.translit_title.trim().is_empty() {
         song.title.as_str()
     } else {
         song.translit_title.as_str()
     };
-    alpha_group_meta_from_text(title)
+    alpha_group_bucket_from_text(title)
 }
 
 #[inline(always)]
-fn alpha_group_meta_from_text(text: &str) -> (u8, String) {
-    let first = text.trim_start().chars().next();
-    match first {
-        Some(ch) if ch.is_ascii_digit() => (1, "0-9".to_string()),
-        Some(ch) if ch.is_ascii_alphabetic() => {
-            let c = ch.to_ascii_uppercase();
-            let rank = (c as u8).saturating_sub(b'A').saturating_add(2);
-            (rank, c.to_string())
-        }
-        _ => (0, "Other".to_string()),
+fn title_group_label(song: &SongData) -> String {
+    let bucket = title_group_bucket(song);
+    match bucket {
+        0 => "Other".to_string(),
+        1 => "0-9".to_string(),
+        b => ((b'A' + b.saturating_sub(2)) as char).to_string(),
     }
 }
 
@@ -890,14 +910,13 @@ fn build_title_grouped_entries(
         })
         .collect();
 
-    songs.sort_by(|a, b| {
-        let (a_bucket, _) = title_group_meta(a.as_ref());
-        let (b_bucket, _) = title_group_meta(b.as_ref());
-        a_bucket
-            .cmp(&b_bucket)
-            .then_with(|| song_title_sort_key(a.as_ref()).cmp(&song_title_sort_key(b.as_ref())))
-            .then_with(|| a.title.cmp(&b.title))
-            .then_with(|| a.subtitle.cmp(&b.subtitle))
+    songs.sort_by_cached_key(|song| {
+        (
+            title_group_bucket(song.as_ref()),
+            song_title_sort_key(song.as_ref()),
+            song.title.clone(),
+            song.subtitle.clone(),
+        )
     });
 
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
@@ -906,7 +925,7 @@ fn build_title_grouped_entries(
     let mut header_idx = 0usize;
 
     for song in songs {
-        let (_, group_name) = title_group_meta(song.as_ref());
+        let group_name = title_group_label(song.as_ref());
         if current_group.as_deref() != Some(group_name.as_str()) {
             entries.push(MusicWheelEntry::PackHeader {
                 name: group_name.clone(),
@@ -942,13 +961,12 @@ fn build_artist_grouped_entries(
         })
         .collect();
 
-    songs.sort_by(|a, b| {
-        let (a_bucket, _) = alpha_group_meta_from_text(&a.artist);
-        let (b_bucket, _) = alpha_group_meta_from_text(&b.artist);
-        a_bucket
-            .cmp(&b_bucket)
-            .then_with(|| song_artist_sort_key(a.as_ref()).cmp(&song_artist_sort_key(b.as_ref())))
-            .then_with(|| song_title_sort_key(a.as_ref()).cmp(&song_title_sort_key(b.as_ref())))
+    songs.sort_by_cached_key(|song| {
+        (
+            alpha_group_bucket_from_text(&song.artist),
+            song_artist_sort_key(song.as_ref()),
+            song_title_sort_key(song.as_ref()),
+        )
     });
 
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
@@ -1028,10 +1046,8 @@ fn build_bpm_grouped_entries(
         })
         .collect();
 
-    songs.sort_by(|a, b| {
-        song_bpm_for_sort(a.as_ref())
-            .cmp(&song_bpm_for_sort(b.as_ref()))
-            .then_with(|| song_title_sort_key(a.as_ref()).cmp(&song_title_sort_key(b.as_ref())))
+    songs.sort_by_cached_key(|song| {
+        (song_bpm_for_sort(song.as_ref()), song_title_sort_key(song.as_ref()))
     });
 
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
@@ -1087,10 +1103,11 @@ fn build_length_grouped_entries(
         })
         .collect();
 
-    songs.sort_by(|a, b| {
-        song_length_for_sort(a.as_ref())
-            .cmp(&song_length_for_sort(b.as_ref()))
-            .then_with(|| song_title_sort_key(a.as_ref()).cmp(&song_title_sort_key(b.as_ref())))
+    songs.sort_by_cached_key(|song| {
+        (
+            song_length_for_sort(song.as_ref()),
+            song_title_sort_key(song.as_ref()),
+        )
     });
 
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
@@ -1148,12 +1165,11 @@ fn build_meter_grouped_entries(
         })
         .collect();
 
-    songs.sort_by(|a, b| {
-        let a_meter = song_meter_for_sort(a.as_ref(), chart_type).unwrap_or(u32::MAX);
-        let b_meter = song_meter_for_sort(b.as_ref(), chart_type).unwrap_or(u32::MAX);
-        a_meter
-            .cmp(&b_meter)
-            .then_with(|| song_title_sort_key(a.as_ref()).cmp(&song_title_sort_key(b.as_ref())))
+    songs.sort_by_cached_key(|song| {
+        (
+            song_meter_for_sort(song.as_ref(), chart_type).unwrap_or(u32::MAX),
+            song_title_sort_key(song.as_ref()),
+        )
     });
 
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
@@ -1212,18 +1228,12 @@ fn build_popularity_grouped_entries(
             .or_insert(chart_plays);
     }
 
-    songs.sort_by(|a, b| {
-        let a_count = song_play_counts
-            .get(&(Arc::as_ptr(a) as usize))
+    songs.sort_by_cached_key(|song| {
+        let play_count = song_play_counts
+            .get(&(Arc::as_ptr(song) as usize))
             .copied()
             .unwrap_or(0);
-        let b_count = song_play_counts
-            .get(&(Arc::as_ptr(b) as usize))
-            .copied()
-            .unwrap_or(0);
-        b_count
-            .cmp(&a_count)
-            .then_with(|| song_title_sort_key(a.as_ref()).cmp(&song_title_sort_key(b.as_ref())))
+        (Reverse(play_count), song_title_sort_key(song.as_ref()))
     });
     songs.truncate(POPULAR_SONGS_TO_SHOW.min(songs.len()));
 
