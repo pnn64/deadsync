@@ -463,7 +463,7 @@ pub enum MusicWheelEntry {
 #[derive(Clone, Debug)]
 struct DisplayedChart {
     song: Arc<SongData>,
-    chart_hash: String,
+    chart_ix: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -723,6 +723,19 @@ fn ensure_chart_cache_for_song(
     state.cached_chart_type = chart_type;
     state.cached_steps_index_p1 = state.selected_steps_index;
     state.cached_steps_index_p2 = state.p2_selected_steps_index;
+}
+
+#[inline(always)]
+fn displayed_chart_matches(
+    displayed: Option<&DisplayedChart>,
+    song: &Arc<SongData>,
+    desired_ix: Option<usize>,
+) -> bool {
+    match (displayed, desired_ix) {
+        (Some(d), Some(ix)) => Arc::ptr_eq(&d.song, song) && d.chart_ix == ix,
+        (None, None) => true,
+        _ => false,
+    }
 }
 
 pub(crate) fn steps_index_for_chart_hash(
@@ -3397,21 +3410,16 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
             ensure_chart_cache_for_song(state, song, target_chart_type, is_versus);
 
+            if !displayed_chart_matches(state.displayed_chart_p1.as_ref(), song, state.cached_chart_ix_p1)
+            {
+                state.displayed_chart_p1 = state.cached_chart_ix_p1.map(|chart_ix| DisplayedChart {
+                    song: song.clone(),
+                    chart_ix,
+                });
+            }
             let desired_hash_p1 = state
                 .cached_chart_ix_p1
                 .map(|ix| song.charts[ix].short_hash.as_str());
-
-            if state
-                .displayed_chart_p1
-                .as_ref()
-                .map(|d| d.chart_hash.as_str())
-                != desired_hash_p1
-            {
-                state.displayed_chart_p1 = desired_hash_p1.map(|h| DisplayedChart {
-                    song: song.clone(),
-                    chart_hash: h.to_string(),
-                });
-            }
 
             if state.last_requested_chart_hash.as_deref() != desired_hash_p1 {
                 state.last_requested_chart_hash = desired_hash_p1.map(str::to_string);
@@ -3431,21 +3439,19 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             }
 
             if is_versus {
+                if !displayed_chart_matches(
+                    state.displayed_chart_p2.as_ref(),
+                    song,
+                    state.cached_chart_ix_p2,
+                ) {
+                    state.displayed_chart_p2 = state.cached_chart_ix_p2.map(|chart_ix| DisplayedChart {
+                        song: song.clone(),
+                        chart_ix,
+                    });
+                }
                 let desired_hash_p2 = state
                     .cached_chart_ix_p2
                     .map(|ix| song.charts[ix].short_hash.as_str());
-
-                if state
-                    .displayed_chart_p2
-                    .as_ref()
-                    .map(|d| d.chart_hash.as_str())
-                    != desired_hash_p2
-                {
-                    state.displayed_chart_p2 = desired_hash_p2.map(|h| DisplayedChart {
-                        song: song.clone(),
-                        chart_hash: h.to_string(),
-                    });
-                }
 
                 if state.last_requested_chart_hash_p2.as_deref() != desired_hash_p2 {
                     state.last_requested_chart_hash_p2 = desired_hash_p2.map(str::to_string);
@@ -3524,26 +3530,25 @@ pub fn reset_preview_after_gameplay(state: &mut State) {
 }
 
 pub fn prime_displayed_chart_data(state: &mut State) {
-    if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-        let target_chart_type = profile::get_session_play_style().chart_type();
-        state.displayed_chart_p1 =
-            chart_for_steps_index(song, target_chart_type, state.selected_steps_index).map(|c| {
-                DisplayedChart {
-                    song: song.clone(),
-                    chart_hash: c.short_hash.clone(),
-                }
-            });
-        state.displayed_chart_p2 =
-            chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index).map(
-                |c| DisplayedChart {
-                    song: song.clone(),
-                    chart_hash: c.short_hash.clone(),
-                },
-            );
+    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+        state.displayed_chart_p1 = None;
+        state.displayed_chart_p2 = None;
         return;
-    }
-    state.displayed_chart_p1 = None;
-    state.displayed_chart_p2 = None;
+    };
+    let song = song.clone();
+    let play_style = profile::get_session_play_style();
+    let target_chart_type = play_style.chart_type();
+    let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
+    ensure_chart_cache_for_song(state, &song, target_chart_type, is_versus);
+
+    state.displayed_chart_p1 = state.cached_chart_ix_p1.map(|chart_ix| DisplayedChart {
+        song: song.clone(),
+        chart_ix,
+    });
+    state.displayed_chart_p2 = state.cached_chart_ix_p2.map(|chart_ix| DisplayedChart {
+        song,
+        chart_ix,
+    });
 }
 
 pub fn take_pending_replay(state: &mut State) -> Option<sort_menu::ReplayStartPayload> {
@@ -3843,11 +3848,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let disp_chart_p1 = state
         .displayed_chart_p1
         .as_ref()
-        .and_then(|d| d.song.charts.iter().find(|c| c.short_hash == d.chart_hash));
+        .and_then(|d| d.song.charts.get(d.chart_ix));
     let disp_chart_p2 = state
         .displayed_chart_p2
         .as_ref()
-        .and_then(|d| d.song.charts.iter().find(|c| c.short_hash == d.chart_hash));
+        .and_then(|d| d.song.charts.get(d.chart_ix));
 
     let (step_artist, steps, jumps, holds, mines, hands, rolls, meter) =
         if let Some(c) = immediate_chart_p1 {
