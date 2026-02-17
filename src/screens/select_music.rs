@@ -24,7 +24,7 @@ use crate::ui::font;
 use log::info;
 use rssp::bpm::parse_bpm_map;
 use std::cmp::Reverse;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -1211,53 +1211,55 @@ fn build_meter_grouped_entries(
 fn build_popularity_grouped_entries(
     grouped_entries: &[MusicWheelEntry],
 ) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
-    let mut songs: Vec<Arc<SongData>> = grouped_entries
+    let songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
             MusicWheelEntry::Song(song) => Some(song.clone()),
             MusicWheelEntry::PackHeader { .. } => None,
         })
         .collect();
-    let mut hash_to_song: HashMap<String, Arc<SongData>> = HashMap::new();
-    for song in &songs {
+    let mut hash_to_song_ix: HashMap<&str, usize> =
+        HashMap::with_capacity(songs.len().saturating_mul(8));
+    for (song_ix, song) in songs.iter().enumerate() {
         for chart in &song.charts {
             if chart.notes.is_empty() {
                 continue;
             }
-            hash_to_song
-                .entry(chart.short_hash.clone())
-                .or_insert_with(|| song.clone());
+            hash_to_song_ix
+                .entry(chart.short_hash.as_str())
+                .or_insert(song_ix);
         }
     }
-    let mut song_play_counts: HashMap<usize, u32> = HashMap::with_capacity(songs.len());
+    let mut song_play_counts = vec![0u32; songs.len()];
     for (chart_hash, chart_plays) in scores::played_chart_counts_for_machine() {
-        let Some(song) = hash_to_song.get(chart_hash.as_str()) else {
+        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_str()) else {
             continue;
         };
-        let song_ptr = Arc::as_ptr(song) as usize;
-        song_play_counts
-            .entry(song_ptr)
-            .and_modify(|count| *count = count.saturating_add(chart_plays))
-            .or_insert(chart_plays);
+        song_play_counts[song_ix] = song_play_counts[song_ix].saturating_add(chart_plays);
     }
+    let mut ranked: Vec<(Arc<SongData>, u32)> = songs
+        .into_iter()
+        .enumerate()
+        .map(|(song_ix, song)| (song, song_play_counts[song_ix]))
+        .collect();
 
-    songs.sort_by_cached_key(|song| {
-        let play_count = song_play_counts
-            .get(&(Arc::as_ptr(song) as usize))
-            .copied()
-            .unwrap_or(0);
-        (Reverse(play_count), song_title_sort_key(song.as_ref()))
+    ranked.sort_by_cached_key(|(song, play_count)| {
+        (Reverse(*play_count), song_title_sort_key(song.as_ref()))
     });
-    songs.truncate(POPULAR_SONGS_TO_SHOW.min(songs.len()));
+    ranked.truncate(POPULAR_SONGS_TO_SHOW.min(ranked.len()));
 
-    let count = songs.len();
+    let count = ranked.len();
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
     entries.push(MusicWheelEntry::PackHeader {
         name: POPULAR_SORT_HEADER.to_string(),
         original_index: 0,
         banner_path: None,
     });
-    entries.extend(songs.into_iter().map(MusicWheelEntry::Song));
+    entries.extend(
+        ranked
+            .into_iter()
+            .map(|(song, _)| MusicWheelEntry::Song(song)),
+    );
 
     let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
     counts.insert(POPULAR_SORT_HEADER.to_string(), count);
@@ -1267,47 +1269,56 @@ fn build_popularity_grouped_entries(
 fn build_recent_grouped_entries(
     grouped_entries: &[MusicWheelEntry],
 ) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
-    let mut hash_to_song: HashMap<String, Arc<SongData>> = HashMap::new();
-    for entry in grouped_entries {
-        let MusicWheelEntry::Song(song) = entry else {
-            continue;
-        };
+    let songs: Vec<Arc<SongData>> = grouped_entries
+        .iter()
+        .filter_map(|e| match e {
+            MusicWheelEntry::Song(song) => Some(song.clone()),
+            MusicWheelEntry::PackHeader { .. } => None,
+        })
+        .collect();
+
+    let mut hash_to_song_ix: HashMap<&str, usize> =
+        HashMap::with_capacity(songs.len().saturating_mul(8));
+    for (song_ix, song) in songs.iter().enumerate() {
         for chart in &song.charts {
             if chart.notes.is_empty() {
                 continue;
             }
-            hash_to_song
-                .entry(chart.short_hash.clone())
-                .or_insert_with(|| song.clone());
+            hash_to_song_ix
+                .entry(chart.short_hash.as_str())
+                .or_insert(song_ix);
         }
     }
 
-    let recent_chart_hashes = scores::recent_played_chart_hashes_for_machine();
-    let mut recent_songs: Vec<Arc<SongData>> = Vec::with_capacity(RECENT_SONGS_TO_SHOW);
-    let mut seen_song_ptrs: HashSet<usize> = HashSet::with_capacity(RECENT_SONGS_TO_SHOW);
+    let mut recent_song_ixs: Vec<usize> = Vec::with_capacity(RECENT_SONGS_TO_SHOW);
+    let mut seen_song_ix = vec![false; songs.len()];
 
-    for chart_hash in recent_chart_hashes {
-        let Some(song) = hash_to_song.get(chart_hash.as_str()) else {
+    for chart_hash in scores::recent_played_chart_hashes_for_machine() {
+        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_str()) else {
             continue;
         };
-        let song_ptr = Arc::as_ptr(song) as usize;
-        if !seen_song_ptrs.insert(song_ptr) {
+        if seen_song_ix[song_ix] {
             continue;
         }
-        recent_songs.push(song.clone());
-        if recent_songs.len() >= RECENT_SONGS_TO_SHOW {
+        seen_song_ix[song_ix] = true;
+        recent_song_ixs.push(song_ix);
+        if recent_song_ixs.len() >= RECENT_SONGS_TO_SHOW {
             break;
         }
     }
 
-    let count = recent_songs.len();
+    let count = recent_song_ixs.len();
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
     entries.push(MusicWheelEntry::PackHeader {
         name: RECENT_SORT_HEADER.to_string(),
         original_index: 0,
         banner_path: None,
     });
-    entries.extend(recent_songs.into_iter().map(MusicWheelEntry::Song));
+    entries.extend(
+        recent_song_ixs
+            .into_iter()
+            .map(|song_ix| MusicWheelEntry::Song(songs[song_ix].clone())),
+    );
 
     let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
     counts.insert(RECENT_SORT_HEADER.to_string(), count);
