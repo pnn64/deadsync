@@ -3,6 +3,24 @@ use crate::game::timing::{TimingData, TimingSegments};
 use rssp::TechCounts;
 use rssp::stats::ArrowStats;
 
+#[derive(Clone, Debug, Default)]
+pub struct StaminaCounts {
+    pub anchors: u32,
+    pub triangles: u32,
+    pub boxes: u32,
+    pub towers: u32,
+    pub doritos: u32,
+    pub hip_breakers: u32,
+    pub copters: u32,
+    pub spirals: u32,
+    pub candles: u32,
+    pub candle_percent: f64,
+    pub staircases: u32,
+    pub mono: u32,
+    pub mono_percent: f64,
+    pub sweeps: u32,
+}
+
 #[derive(Clone, Debug)]
 pub struct ChartData {
     pub chart_type: String,
@@ -21,6 +39,7 @@ pub struct ChartData {
     /// Count of mines that are actually judgable in gameplay, excluding
     /// any mines that fall within fake or warp segments.
     pub mines_nonfake: u32,
+    pub stamina_counts: StaminaCounts,
     pub total_streams: u32,
     pub max_nps: f64,
     pub sn_detailed_breakdown: String,

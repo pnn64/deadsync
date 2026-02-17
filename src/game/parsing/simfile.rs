@@ -1,5 +1,5 @@
 use crate::game::{
-    chart::ChartData,
+    chart::{ChartData, StaminaCounts},
     course::set_course_cache,
     note::NoteType,
     parsing::notes::ParsedNote,
@@ -10,6 +10,7 @@ use crate::game::{
     },
 };
 use log::{info, warn};
+use rssp::patterns::{PatternVariant, compute_box_counts, count_pattern};
 use rssp::{AnalysisOptions, analyze};
 use std::collections::HashMap;
 use std::fs;
@@ -25,6 +26,8 @@ use std::io::{BufReader, Cursor, Read, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
+
+const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
 
@@ -132,6 +135,66 @@ impl From<CachedTechCounts> for rssp::TechCounts {
             jacks: counts.jacks,
             brackets: counts.brackets,
             doublesteps: counts.doublesteps,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Encode, Decode)]
+struct CachedStaminaCounts {
+    pub anchors: u32,
+    pub triangles: u32,
+    pub boxes: u32,
+    pub towers: u32,
+    pub doritos: u32,
+    pub hip_breakers: u32,
+    pub copters: u32,
+    pub spirals: u32,
+    pub candles: u32,
+    pub candle_percent: f64,
+    pub staircases: u32,
+    pub mono: u32,
+    pub mono_percent: f64,
+    pub sweeps: u32,
+}
+
+impl From<&StaminaCounts> for CachedStaminaCounts {
+    fn from(counts: &StaminaCounts) -> Self {
+        Self {
+            anchors: counts.anchors,
+            triangles: counts.triangles,
+            boxes: counts.boxes,
+            towers: counts.towers,
+            doritos: counts.doritos,
+            hip_breakers: counts.hip_breakers,
+            copters: counts.copters,
+            spirals: counts.spirals,
+            candles: counts.candles,
+            candle_percent: counts.candle_percent,
+            staircases: counts.staircases,
+            mono: counts.mono,
+            mono_percent: counts.mono_percent,
+            sweeps: counts.sweeps,
+        }
+    }
+}
+
+impl From<CachedStaminaCounts> for StaminaCounts {
+    fn from(counts: CachedStaminaCounts) -> Self {
+        Self {
+            anchors: counts.anchors,
+            triangles: counts.triangles,
+            boxes: counts.boxes,
+            towers: counts.towers,
+            doritos: counts.doritos,
+            hip_breakers: counts.hip_breakers,
+            copters: counts.copters,
+            spirals: counts.spirals,
+            candles: counts.candles,
+            candle_percent: counts.candle_percent,
+            staircases: counts.staircases,
+            mono: counts.mono,
+            mono_percent: counts.mono_percent,
+            sweeps: counts.sweeps,
         }
     }
 }
@@ -358,6 +421,7 @@ struct SerializableChartData {
     stats: CachedArrowStats,
     tech_counts: CachedTechCounts,
     mines_nonfake: u32,
+    stamina_counts: CachedStaminaCounts,
     total_streams: u32,
     max_nps: f64,
     sn_detailed_breakdown: String,
@@ -397,6 +461,7 @@ impl From<&ChartData> for SerializableChartData {
             stats: (&chart.stats).into(),
             tech_counts: (&chart.tech_counts).into(),
             mines_nonfake: chart.mines_nonfake,
+            stamina_counts: (&chart.stamina_counts).into(),
             total_streams: chart.total_streams,
             max_nps: chart.max_nps,
             sn_detailed_breakdown: chart.sn_detailed_breakdown.clone(),
@@ -439,6 +504,7 @@ impl From<SerializableChartData> for ChartData {
             stats: chart.stats.into(),
             tech_counts: chart.tech_counts.into(),
             mines_nonfake: chart.mines_nonfake,
+            stamina_counts: chart.stamina_counts.into(),
             total_streams: chart.total_streams,
             max_nps: chart.max_nps,
             sn_detailed_breakdown: chart.sn_detailed_breakdown,
@@ -569,6 +635,7 @@ impl From<SerializableSongData> for SongData {
 #[derive(Serialize, Deserialize, Encode, Decode)]
 struct CachedSong {
     rssp_version: String,
+    mono_threshold: usize,
     source_hash: u64,
     data: SerializableSongData,
 }
@@ -1334,6 +1401,13 @@ fn load_song_from_cache(
         );
         return None;
     }
+    if cached_song.mono_threshold != SONG_ANALYSIS_MONO_THRESHOLD {
+        info!(
+            "Cache stale (mono threshold mismatch) for: {:?}",
+            path.file_name().unwrap_or_default()
+        );
+        return None;
+    }
 
     let content_hash = match get_content_hash(path) {
         Ok(h) => h,
@@ -1383,6 +1457,7 @@ fn parse_song_and_maybe_write_cache(
         let serializable_data: SerializableSongData = (&song_data).into();
         let cached_song = CachedSong {
             rssp_version: rssp::RSSP_VERSION.to_string(),
+            mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
             source_hash: ch,
             data: serializable_data,
         };
@@ -1412,6 +1487,62 @@ fn parse_song_and_maybe_write_cache(
     Ok(song_data)
 }
 
+#[inline]
+fn build_stamina_counts(chart: &rssp::report::ChartSummary) -> StaminaCounts {
+    let boxes = compute_box_counts(&chart.detected_patterns).total_boxes;
+    let towers = count_pattern(&chart.detected_patterns, PatternVariant::TowerLR)
+        + count_pattern(&chart.detected_patterns, PatternVariant::TowerUD)
+        + count_pattern(&chart.detected_patterns, PatternVariant::TowerCornerLD)
+        + count_pattern(&chart.detected_patterns, PatternVariant::TowerCornerLU)
+        + count_pattern(&chart.detected_patterns, PatternVariant::TowerCornerRD)
+        + count_pattern(&chart.detected_patterns, PatternVariant::TowerCornerRU);
+    let triangles = count_pattern(&chart.detected_patterns, PatternVariant::TriangleLDL)
+        + count_pattern(&chart.detected_patterns, PatternVariant::TriangleLUL)
+        + count_pattern(&chart.detected_patterns, PatternVariant::TriangleRDR)
+        + count_pattern(&chart.detected_patterns, PatternVariant::TriangleRUR);
+    let doritos = count_pattern(&chart.detected_patterns, PatternVariant::DoritoLeft)
+        + count_pattern(&chart.detected_patterns, PatternVariant::DoritoRight)
+        + count_pattern(&chart.detected_patterns, PatternVariant::DoritoInvLeft)
+        + count_pattern(&chart.detected_patterns, PatternVariant::DoritoInvRight);
+    let hip_breakers = count_pattern(&chart.detected_patterns, PatternVariant::HipBreakerLeft)
+        + count_pattern(&chart.detected_patterns, PatternVariant::HipBreakerRight)
+        + count_pattern(&chart.detected_patterns, PatternVariant::HipBreakerInvLeft)
+        + count_pattern(&chart.detected_patterns, PatternVariant::HipBreakerInvRight);
+    let copters = count_pattern(&chart.detected_patterns, PatternVariant::CopterLeft)
+        + count_pattern(&chart.detected_patterns, PatternVariant::CopterRight)
+        + count_pattern(&chart.detected_patterns, PatternVariant::CopterInvLeft)
+        + count_pattern(&chart.detected_patterns, PatternVariant::CopterInvRight);
+    let spirals = count_pattern(&chart.detected_patterns, PatternVariant::SpiralLeft)
+        + count_pattern(&chart.detected_patterns, PatternVariant::SpiralRight)
+        + count_pattern(&chart.detected_patterns, PatternVariant::SpiralInvLeft)
+        + count_pattern(&chart.detected_patterns, PatternVariant::SpiralInvRight);
+    let staircases = count_pattern(&chart.detected_patterns, PatternVariant::StaircaseLeft)
+        + count_pattern(&chart.detected_patterns, PatternVariant::StaircaseRight)
+        + count_pattern(&chart.detected_patterns, PatternVariant::StaircaseInvLeft)
+        + count_pattern(&chart.detected_patterns, PatternVariant::StaircaseInvRight);
+    let sweeps = count_pattern(&chart.detected_patterns, PatternVariant::SweepLeft)
+        + count_pattern(&chart.detected_patterns, PatternVariant::SweepRight)
+        + count_pattern(&chart.detected_patterns, PatternVariant::SweepInvLeft)
+        + count_pattern(&chart.detected_patterns, PatternVariant::SweepInvRight);
+
+    StaminaCounts {
+        anchors: chart.anchor_left + chart.anchor_down + chart.anchor_up + chart.anchor_right,
+        triangles,
+        boxes,
+        towers,
+        doritos,
+        hip_breakers,
+        copters,
+        spirals,
+        candles: chart.candle_total,
+        candle_percent: chart.candle_percent,
+        staircases,
+        mono: chart.mono_total,
+        mono_percent: chart.mono_percent,
+        sweeps,
+    }
+}
+
 /// The original parsing logic, now separated to be called on a cache miss.
 fn parse_and_process_song_file(
     path: &Path,
@@ -1424,7 +1555,10 @@ fn parse_and_process_song_file(
         hasher.finish()
     });
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    let options = AnalysisOptions::default(); // Use default parsing options
+    let options = AnalysisOptions {
+        mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
+        ..AnalysisOptions::default()
+    };
 
     let summary = analyze(&simfile_data, extension, &options)?;
     let charts: Vec<ChartData> = summary
@@ -1434,6 +1568,7 @@ fn parse_and_process_song_file(
             let lanes = step_type_lanes(&c.step_type_str);
             let parsed_notes =
                 crate::game::parsing::notes::parse_chart_notes(&c.minimized_note_data, lanes);
+            let stamina_counts = build_stamina_counts(&c);
             info!(
                 "  Chart '{}' [{}] loaded with {} bytes of note data.",
                 c.difficulty_str,
@@ -1455,6 +1590,7 @@ fn parse_and_process_song_file(
                 stats: c.stats,
                 tech_counts: c.tech_counts,
                 mines_nonfake: c.mines_nonfake,
+                stamina_counts,
                 total_streams: c.total_streams,
                 total_measures: c.total_measures,
                 max_nps: c.max_nps,

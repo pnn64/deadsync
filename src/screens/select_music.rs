@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
-use crate::config::{self, BreakdownStyle};
+use crate::config::{self, BreakdownStyle, SelectMusicPatternInfoMode};
 use crate::core::audio;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
@@ -116,6 +116,35 @@ const RECENT_SONGS_TO_SHOW: usize = 30;
 const POPULAR_SONGS_TO_SHOW: usize = 50;
 const RECENT_SORT_HEADER: &str = "Recently Played";
 const POPULAR_SORT_HEADER: &str = "Most Popular";
+const AUTO_STAMINA_MIN_METER: u32 = 11;
+const AUTO_STAMINA_MIN_STREAM_PERCENT: f32 = 10.0;
+const AUTO_STAMINA_MAX_CROSSOVERS: u32 = 9;
+const AUTO_STAMINA_MAX_SIDESWITCHES: u32 = 9;
+
+#[inline(always)]
+fn chart_stream_percent(chart: &ChartData) -> f32 {
+    if chart.total_measures == 0 {
+        return 0.0;
+    }
+    (chart.total_streams as f32 / chart.total_measures as f32) * 100.0
+}
+
+#[inline(always)]
+fn chart_is_stamina_like(chart: &ChartData) -> bool {
+    chart.meter >= AUTO_STAMINA_MIN_METER
+        && chart_stream_percent(chart) >= AUTO_STAMINA_MIN_STREAM_PERCENT
+        && chart.tech_counts.crossovers <= AUTO_STAMINA_MAX_CROSSOVERS
+        && chart.tech_counts.sideswitches <= AUTO_STAMINA_MAX_SIDESWITCHES
+}
+
+#[inline(always)]
+fn show_stamina_panel(mode: SelectMusicPatternInfoMode, chart: Option<&ChartData>) -> bool {
+    match mode {
+        SelectMusicPatternInfoMode::Tech => false,
+        SelectMusicPatternInfoMode::Stamina => true,
+        SelectMusicPatternInfoMode::Auto => chart.is_some_and(chart_is_stamina_like),
+    }
+}
 
 #[inline(always)]
 const fn chord_bit(dir: PadDir) -> u8 {
@@ -3939,7 +3968,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Density Graph
     let panel_w = if is_wide() { 286.0 } else { 276.0 };
     let chart_info_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
-    let breakdown_style = config::get().select_music_breakdown_style;
+    let cfg = config::get();
+    let breakdown_style = cfg.select_music_breakdown_style;
+    let pattern_info_mode = cfg.select_music_pattern_info_mode;
     let build_breakdown_panel = |graph_cy: f32,
                                  is_p2_layout: bool,
                                  graph_key: &String,
@@ -4213,61 +4244,256 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     if !is_versus {
-        // Pattern Info
-        let (cross, foot, side, jack, brack, stream) = if let Some(c) = disp_chart_p1 {
-            (
-                c.tech_counts.crossovers.to_string(),
-                c.tech_counts.footswitches.to_string(),
-                c.tech_counts.sideswitches.to_string(),
-                c.tech_counts.jacks.to_string(),
-                c.tech_counts.brackets.to_string(),
-                if c.total_measures > 0 {
-                    format!(
-                        "{}/{} ({:.1}%)",
-                        c.total_streams,
-                        c.total_measures,
-                        (c.total_streams as f32 / c.total_measures as f32) * 100.0
-                    )
-                } else {
-                    "None (0.0%)".to_string()
-                },
-            )
-        } else {
-            (
-                "0".to_string(),
-                "0".to_string(),
-                "0".to_string(),
-                "0".to_string(),
-                "0".to_string(),
-                "None (0.0%)".to_string(),
-            )
-        };
-
         let pat_cx = chart_info_cx;
         let pat_cy = screen_center_y() + if is_p2_single { 23.0 } else { 111.0 };
         actors.push(act!(quad: align(0.5, 0.5): xy(pat_cx, pat_cy): setsize(panel_w, 64.0): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
+        if show_stamina_panel(pattern_info_mode, disp_chart_p1) {
+            let pct = |value: f64| {
+                if value.is_finite() {
+                    value
+                } else {
+                    0.0
+                }
+            };
+            let (
+                boxes,
+                anchors,
+                staircases,
+                sweeps,
+                towers,
+                triangles,
+                doritos,
+                hip_breakers,
+                copters,
+                spirals,
+                mono_value,
+                candles_value,
+                total_stream,
+            ) =
+                if let Some(c) = disp_chart_p1 {
+                    (
+                        c.stamina_counts.boxes.to_string(),
+                        c.stamina_counts.anchors.to_string(),
+                        c.stamina_counts.staircases.to_string(),
+                        c.stamina_counts.sweeps.to_string(),
+                        c.stamina_counts.towers.to_string(),
+                        c.stamina_counts.triangles.to_string(),
+                        c.stamina_counts.doritos.to_string(),
+                        c.stamina_counts.hip_breakers.to_string(),
+                        c.stamina_counts.copters.to_string(),
+                        c.stamina_counts.spirals.to_string(),
+                        format!("{:.1}% Mono", pct(c.stamina_counts.mono_percent)),
+                        format!("{:.1}% Candles", pct(c.stamina_counts.candle_percent)),
+                        format!("{} ({:.1}%)", c.total_streams, chart_stream_percent(c)),
+                    )
+                } else {
+                    (
+                        "0".to_string(),
+                        "0".to_string(),
+                        "0".to_string(),
+                        "0".to_string(),
+                        "0".to_string(),
+                        "0".to_string(),
+                        "0".to_string(),
+                        "0".to_string(),
+                        "0".to_string(),
+                        "0".to_string(),
+                        "0.0% Mono".to_string(),
+                        "0.0% Candles".to_string(),
+                        "0 (0.0%)".to_string(),
+                    )
+                };
 
-        let p_v_x = pat_cx - panel_w * 0.5 + 40.0;
-        let p_l_x = pat_cx - panel_w * 0.5 + 50.0;
-        let p_base_y = pat_cy - 19.0;
-        let items = [
-            (&cross, "Crossovers", 0, 0, None),
-            (&foot, "Footswitches", 1, 0, None),
-            (&side, "Sideswitches", 0, 1, None),
-            (&jack, "Jacks", 1, 1, None),
-            (&brack, "Brackets", 0, 2, None),
-            (&stream, "Total Stream", 1, 2, Some(100.0)),
-        ];
+            let panel_left = pat_cx - panel_w * 0.5;
+            let col_w1 = panel_w / 3.0;
+            let col_w2 = panel_w / 3.0;
+            let col_w3 = panel_w / 3.0;
+            let col1_left = panel_left + 4.0;
+            let col2_left = col1_left + col_w1;
+            let col3_left = col2_left + col_w2;
 
-        for (val, lbl, c, r, mw) in items {
-            let y = p_base_y + r as f32 * 20.0;
-            let vx = p_v_x + c as f32 * 150.0;
-            let lx = p_l_x + c as f32 * 150.0;
-            match mw {
-                Some(w) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(w): zoom(0.8): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
-                None => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(0.8): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+            let stamina_row_step = 14.5;
+            let stamina_zoom = 0.85;
+            let stamina_base_y = pat_cy - 21.75;
+
+            let push_pattern_line =
+                |actors: &mut Vec<Actor>,
+                 col_left: f32,
+                 col_w: f32,
+                 num_right_x: f32,
+                 row: usize,
+                 num: &str,
+                 label: &str| {
+                    let y = stamina_base_y + row as f32 * stamina_row_step;
+                    let label_x = num_right_x + 3.0;
+                    let num_w = (num_right_x - col_left).max(8.0);
+                    let label_w = (col_left + col_w - label_x - 2.0).max(8.0);
+                    actors.push(act!(text: font("miso"): settext(num): align(1.0, 0.5): horizalign(right): xy(num_right_x, y): maxwidth(num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+                    actors.push(act!(text: font("miso"): settext(label): align(0.0, 0.5): horizalign(left): xy(label_x, y): maxwidth(label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+                };
+
+            let num_anchor_frac = 0.31;
+            let col1_num_x = col1_left + col_w1 * num_anchor_frac;
+            let col2_num_x = col2_left + col_w2 * num_anchor_frac;
+            let col3_num_x = col3_left + col_w3 * num_anchor_frac;
+
+            push_pattern_line(
+                &mut actors,
+                col1_left,
+                col_w1,
+                col1_num_x,
+                0,
+                boxes.as_str(),
+                "Boxes",
+            );
+            push_pattern_line(
+                &mut actors,
+                col1_left,
+                col_w1,
+                col1_num_x,
+                1,
+                anchors.as_str(),
+                "Anchors",
+            );
+            push_pattern_line(
+                &mut actors,
+                col1_left,
+                col_w1,
+                col1_num_x,
+                2,
+                staircases.as_str(),
+                "Staircases",
+            );
+            push_pattern_line(
+                &mut actors,
+                col1_left,
+                col_w1,
+                col1_num_x,
+                3,
+                sweeps.as_str(),
+                "Sweeps",
+            );
+
+            push_pattern_line(
+                &mut actors,
+                col2_left,
+                col_w2,
+                col2_num_x,
+                0,
+                triangles.as_str(),
+                "Triangles",
+            );
+            push_pattern_line(
+                &mut actors,
+                col2_left,
+                col_w2,
+                col2_num_x,
+                1,
+                hip_breakers.as_str(),
+                "Hip Breakers",
+            );
+            push_pattern_line(
+                &mut actors,
+                col2_left,
+                col_w2,
+                col2_num_x,
+                2,
+                doritos.as_str(),
+                "Doritos",
+            );
+            push_pattern_line(
+                &mut actors,
+                col2_left,
+                col_w2,
+                col2_num_x,
+                3,
+                towers.as_str(),
+                "Towers",
+            );
+
+            push_pattern_line(
+                &mut actors,
+                col3_left,
+                col_w3,
+                col3_num_x,
+                0,
+                spirals.as_str(),
+                "Spirals",
+            );
+            push_pattern_line(
+                &mut actors,
+                col3_left,
+                col_w3,
+                col3_num_x,
+                1,
+                copters.as_str(),
+                "Copters",
+            );
+
+            let col3_label_x = col3_num_x + 3.0;
+            let col3_num_w = (col3_num_x - col3_left).max(8.0);
+            let col3_label_w = (col3_left + col_w3 - col3_label_x - 2.0).max(8.0);
+            let relaxed_num_w = col3_num_w * 1.65;
+
+            let mono_y = stamina_base_y + 2.0 * stamina_row_step;
+            actors.push(act!(text: font("miso"): settext(mono_value.as_str()): align(1.0, 0.5): horizalign(right): xy(col3_num_x, mono_y): maxwidth(relaxed_num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+            actors.push(act!(text: font("miso"): settext(candles_value.as_str()): align(0.0, 0.5): horizalign(left): xy(col3_label_x, mono_y): maxwidth(col3_label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+
+            let stream_y = stamina_base_y + 3.0 * stamina_row_step;
+            actors.push(act!(text: font("miso"): settext(total_stream.as_str()): align(1.0, 0.5): horizalign(right): xy(col3_num_x, stream_y): maxwidth(relaxed_num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+            actors.push(act!(text: font("miso"): settext("Total Stream"): align(0.0, 0.5): horizalign(left): xy(col3_label_x, stream_y): maxwidth(col3_label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+        } else {
+            let (cross, foot, side, jack, brack, stream) = if let Some(c) = disp_chart_p1 {
+                (
+                    c.tech_counts.crossovers.to_string(),
+                    c.tech_counts.footswitches.to_string(),
+                    c.tech_counts.sideswitches.to_string(),
+                    c.tech_counts.jacks.to_string(),
+                    c.tech_counts.brackets.to_string(),
+                    if c.total_measures > 0 {
+                        format!(
+                            "{}/{} ({:.1}%)",
+                            c.total_streams,
+                            c.total_measures,
+                            chart_stream_percent(c)
+                        )
+                    } else {
+                        "None (0.0%)".to_string()
+                    },
+                )
+            } else {
+                (
+                    "0".to_string(),
+                    "0".to_string(),
+                    "0".to_string(),
+                    "0".to_string(),
+                    "0".to_string(),
+                    "None (0.0%)".to_string(),
+                )
+            };
+
+            let p_v_x = pat_cx - panel_w * 0.5 + 39.0;
+            let p_l_x = pat_cx - panel_w * 0.5 + 48.0;
+            let p_base_y = pat_cy - 18.0;
+            let items = [
+                (cross, "Crossovers", 0_u8, 0_u8, None),
+                (foot, "Footswitches", 1_u8, 0_u8, None),
+                (side, "Sideswitches", 0_u8, 1_u8, None),
+                (jack, "Jacks", 1_u8, 1_u8, None),
+                (brack, "Brackets", 0_u8, 2_u8, None),
+                (stream, "Total Stream", 1_u8, 2_u8, Some(100.0)),
+            ];
+
+            for (val, lbl, c, r, mw) in items {
+                let y = p_base_y + r as f32 * 19.0;
+                let vx = p_v_x + c as f32 * 148.0;
+                let lx = p_l_x + c as f32 * 148.0;
+                match mw {
+                    Some(w) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(w): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+                    None => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+                }
+                actors.push(act!(text: font("miso"): settext(lbl): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
             }
-            actors.push(act!(text: font("miso"): settext(lbl): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(0.8): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
         }
     }
 

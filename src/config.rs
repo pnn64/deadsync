@@ -127,6 +127,36 @@ impl FromStr for BreakdownStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectMusicPatternInfoMode {
+    Tech,
+    Stamina,
+    Auto,
+}
+
+impl SelectMusicPatternInfoMode {
+    const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Tech => "Tech",
+            Self::Stamina => "Stamina",
+            Self::Auto => "Auto",
+        }
+    }
+}
+
+impl FromStr for SelectMusicPatternInfoMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "tech" => Ok(Self::Tech),
+            "stamina" => Ok(Self::Stamina),
+            "auto" => Ok(Self::Auto),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisplayMode {
     Windowed,
     Fullscreen(FullscreenType),
@@ -174,6 +204,7 @@ pub struct Config {
     pub simply_love_color: i32,
     pub show_select_music_gameplay_timer: bool,
     pub select_music_breakdown_style: BreakdownStyle,
+    pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub global_offset_seconds: f32,
     pub visual_delay_seconds: f32,
     pub master_volume: u8,
@@ -217,6 +248,7 @@ impl Default for Config {
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             show_select_music_gameplay_timer: true,
             select_music_breakdown_style: BreakdownStyle::Sl,
+            select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             global_offset_seconds: -0.008,
             visual_delay_seconds: 0.0,
             master_volume: 90,
@@ -355,6 +387,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "SelectMusicBreakdown={}\n",
         default.select_music_breakdown_style.as_str()
+    ));
+    content.push_str(&format!(
+        "SelectMusicPatternInfo={}\n",
+        default.select_music_pattern_info_mode.as_str()
     ));
     content.push_str(&format!(
         "ShowStats={}\n",
@@ -610,6 +646,10 @@ pub fn load() {
                     .get("Options", "SelectMusicBreakdown")
                     .and_then(|v| BreakdownStyle::from_str(&v).ok())
                     .unwrap_or(default.select_music_breakdown_style);
+                cfg.select_music_pattern_info_mode = conf
+                    .get("Options", "SelectMusicPatternInfo")
+                    .and_then(|v| SelectMusicPatternInfoMode::from_str(&v).ok())
+                    .unwrap_or(default.select_music_pattern_info_mode);
                 cfg.fastload = conf
                     .get("Options", "FastLoad")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -706,6 +746,7 @@ pub fn load() {
                     "SongParsingThreads",
                     "RateModPreservesPitch",
                     "SelectMusicBreakdown",
+                    "SelectMusicPatternInfo",
                     "ShowStats",
                     "ShowStatsMode",
                     "SmoothHistogram",
@@ -1419,6 +1460,10 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "SelectMusicBreakdown={}\n",
         cfg.select_music_breakdown_style.as_str()
+    ));
+    content.push_str(&format!(
+        "SelectMusicPatternInfo={}\n",
+        cfg.select_music_pattern_info_mode.as_str()
     ));
     content.push_str(&format!(
         "ShowStats={}\n",
