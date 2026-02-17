@@ -32,9 +32,8 @@ const TIME_PER_ARROW: f32 = 0.2;
 const ARROW_H: f32 = 20.0;
 const ARROW_PAD_Y: f32 = 5.0;
 const LOOP_RESET_Y: f32 = 24.0 * ARROW_H;
-const ARROW_SPRITE_SZ: f32 = 128.0;
-const ARROW_SPRITE_ZOOM: f32 = 0.16;
-const SQRT_2: f32 = 1.414_213_56;
+const ARROW_SPRITE_SZ: f32 = 150.0;
+const ARROW_SPRITE_ZOOM: f32 = 0.18;
 
 const CHOICES: [&str; 2] = ["Regular", "Marathon"];
 const REGULAR_DESC: &str = "Choose your songs with a\nshort break between each.\n\nThese are dance games\nas we know and love them!";
@@ -115,6 +114,8 @@ pub fn on_enter(state: &mut State) {
         crate::game::profile::PlayMode::Regular => 0,
         crate::game::profile::PlayMode::Marathon => 1,
     };
+    // Match SL behavior where switching mode requeues FirstLoopRegular/Marathon.
+    state.demo_time = 0.0;
     state.cursor_y = -60.0 + CURSOR_H * (state.selected_index as f32);
     for (i, z) in state.choice_zooms.iter_mut().enumerate() {
         *z = if i == state.selected_index {
@@ -254,11 +255,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match nav {
         Some(-1) => {
             state.selected_index = (state.selected_index + CHOICES.len() - 1) % CHOICES.len();
+            state.demo_time = 0.0;
             audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
         Some(1) => {
             state.selected_index = (state.selected_index + 1) % CHOICES.len();
+            state.demo_time = 0.0;
             audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
@@ -295,20 +298,20 @@ fn root_sz(w: f32, h: f32) -> (f32, f32) {
 }
 
 #[inline(always)]
-fn u8_cell(idx: usize) -> [f32; 4] {
-    let u0 = (idx as f32) / 8.0;
-    let u1 = ((idx + 1) as f32) / 8.0;
-    [u0, 0.0, u1, 1.0]
-}
-
-#[inline(always)]
-fn arrow_frame(dir: &str) -> usize {
+fn arrow_rotation(dir: &str) -> f32 {
     match dir {
-        "left" => 0,
-        "down" => 1,
-        "up" => 2,
-        "right" => 3,
-        _ => 2,
+        "center" => 0.0,
+        // StepMania's positive Z rotation is opposite of our renderer.
+        // Use mirrored angles so SL's direction mapping stays 1:1.
+        "up" => 315.0,
+        "upright" => 270.0,
+        "right" => 225.0,
+        "downright" => 180.0,
+        "down" => 135.0,
+        "downleft" => 90.0,
+        "left" => 45.0,
+        "upleft" => 0.0,
+        _ => 315.0,
     }
 }
 
@@ -562,13 +565,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let base_t = state.demo_time;
 
     let (nfx, nfy) = root_pt(90.0, 15.0);
-    // Simply Love uses MaskSource/MaskDest to clip the moving arrows. Approximate by
-    // clipping to the inner SelectMode box (300x160, centered at root (0,0)).
-    // Convert that box into notefield-local coordinates by subtracting the notefield offset.
-    let clip_top = -95.0;
-    let clip_bottom = 65.0;
-    let arrow_half = ARROW_SPRITE_SZ * ARROW_SPRITE_ZOOM * 0.5;
-    let arrow_half_diag = arrow_half * SQRT_2;
+    // Use a mask source quad for SM-style MaskSource/MaskDest clipping.
+    let (mx, my) = root_pt(0.0, 0.0);
+    let (mw, mh) = root_sz(300.0, 160.0);
+    actors.push(act!(quad:
+        align(0.5, 0.5): xy(mx, my):
+        zoomto(mw, mh):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        MaskSource()
+    ));
+
     let columns = [
         ("left", -36.0),
         ("down", -12.0),
@@ -577,31 +583,28 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     ];
 
     for (dir, x_off) in columns {
-        let idx = arrow_frame(dir);
-        let uv = u8_cell(idx);
         let (x, y) = (nfx + x_off * ROOT_ZOOM, nfy + (-55.0) * ROOT_ZOOM);
         let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
-        actors.push(act!(sprite("dance.png"):
+        actors.push(act!(sprite("select_mode/arrow-body.png"):
             align(0.5, 0.5): xy(x, y):
             setsize(aw, ah):
             zoom(ARROW_SPRITE_ZOOM):
+            rotationz(arrow_rotation(dir)):
             diffuse(1.0, 1.0, 1.0, field_alpha):
-            customtexturerect(uv[0], uv[1], uv[2], uv[3])
+            MaskDest():
         ));
     }
 
     for (i, dir) in PATTERN.iter().enumerate() {
-        let idx = arrow_frame(dir);
-        let uv = u8_cell(idx);
         let (_, col_x) = columns
             .iter()
             .find(|(d, _)| d == dir)
             .copied()
             .unwrap_or(("up", 12.0));
 
-        let i1 = (i + 1) as f32;
+        let i1 = (i as f32) + 1.0;
         let first_dur = TIME_PER_ARROW * i1;
-        let (y0, t_local, base_rot) = if base_t < first_dur {
+        let (y0, t_local, spin_base) = if base_t < first_dur {
             (
                 -55.0 + i1 * (ARROW_H + ARROW_PAD_Y),
                 (base_t / first_dur).clamp(0.0, 1.0),
@@ -623,45 +626,40 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             t_local
         };
         let y = y0 + (-55.0 - y0) * p;
-        let rot = if marathon { base_rot + 720.0 * p } else { 0.0 };
-
-        let mut croptop = 0.0;
-        let mut cropbottom = 0.0;
-        if marathon {
-            // For rotating quads, avoid edge leakage by only drawing when fully inside.
-            if y < clip_top + arrow_half_diag || y > clip_bottom - arrow_half_diag {
-                continue;
-            }
+        let rot = if marathon {
+            // Match SL's clockwise spin in our opposite-sign rotation space.
+            arrow_rotation(dir) - spin_base - 720.0 * p
         } else {
-            // For axis-aligned quads, crop to match the box window.
-            if y < clip_top - arrow_half || y > clip_bottom + arrow_half {
-                continue;
-            }
-            let top_edge = y - arrow_half;
-            let bottom_edge = y + arrow_half;
-            if top_edge < clip_top {
-                croptop = ((clip_top - top_edge) / (2.0 * arrow_half)).clamp(0.0, 1.0);
-            }
-            if bottom_edge > clip_bottom {
-                cropbottom = ((bottom_edge - clip_bottom) / (2.0 * arrow_half)).clamp(0.0, 1.0);
-            }
-            if croptop + cropbottom >= 1.0 {
-                continue;
-            }
-        }
+            arrow_rotation(dir)
+        };
 
         let tint = color::decorative_rgba(state.active_color_index + i as i32);
         let (x, y) = (nfx + col_x * ROOT_ZOOM, nfy + y * ROOT_ZOOM);
         let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
-        actors.push(act!(sprite("dance.png"):
+        actors.push(act!(sprite("select_mode/arrow-border.png"):
+            align(0.5, 0.5): xy(x, y):
+            setsize(aw, ah):
+            zoom(ARROW_SPRITE_ZOOM):
+            diffuse(1.0, 1.0, 1.0, field_alpha):
+            MaskDest():
+            rotationz(rot):
+        ));
+        actors.push(act!(sprite("select_mode/arrow-body.png"):
             align(0.5, 0.5): xy(x, y):
             setsize(aw, ah):
             zoom(ARROW_SPRITE_ZOOM):
             diffuse(tint[0], tint[1], tint[2], tint[3] * field_alpha):
+            MaskDest():
             rotationz(rot):
-            croptop(croptop):
-            cropbottom(cropbottom):
-            customtexturerect(uv[0], uv[1], uv[2], uv[3])
+        ));
+        actors.push(act!(sprite("select_mode/arrow-stripes.png"):
+            align(0.5, 0.5): xy(x, y):
+            setsize(aw, ah):
+            zoom(ARROW_SPRITE_ZOOM):
+            diffuse(1.0, 1.0, 1.0, field_alpha):
+            blend(multiply):
+            MaskDest():
+            rotationz(rot):
         ));
     }
 

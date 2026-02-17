@@ -923,6 +923,31 @@ impl AssetManager {
             ("logo.png".to_string(), "logo.png".to_string()),
             ("init_arrow.png".to_string(), "init_arrow.png".to_string()),
             ("dance.png".to_string(), "dance.png".to_string()),
+            // ScreenSelectPlayMode demo arrows (ported from Simply Love).
+            (
+                "select_mode/arrow-body.png".to_string(),
+                "select_mode/arrow-body.png".to_string(),
+            ),
+            (
+                "select_mode/arrow-border.png".to_string(),
+                "select_mode/arrow-border.png".to_string(),
+            ),
+            (
+                "select_mode/arrow-stripes.png".to_string(),
+                "select_mode/arrow-stripes.png".to_string(),
+            ),
+            (
+                "select_mode/center-body.png".to_string(),
+                "select_mode/center-body.png".to_string(),
+            ),
+            (
+                "select_mode/center-border.png".to_string(),
+                "select_mode/center-border.png".to_string(),
+            ),
+            (
+                "select_mode/center-feet.png".to_string(),
+                "select_mode/center-feet.png".to_string(),
+            ),
             // Test Input pad assets (Simply Love-style)
             (
                 "test_input/dance.png".to_string(),

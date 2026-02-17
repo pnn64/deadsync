@@ -20,6 +20,7 @@ pub fn build_screen<'a>(
     let mut cameras: Vec<Matrix4<f32>> = Vec::with_capacity(4);
     cameras.push(cgmath::ortho(m.left, m.right, m.bottom, m.top, -1.0, 1.0));
     let mut order_counter: u32 = 0;
+    let mut masks: Vec<WorldRect> = Vec::with_capacity(8);
 
     let root_rect = SmRect {
         x: 0.0,
@@ -39,6 +40,7 @@ pub fn build_screen<'a>(
             parent_z,
             camera,
             &mut cameras,
+            &mut masks,
             &mut order_counter,
             &mut objects,
             total_elapsed,
@@ -230,6 +232,7 @@ fn build_actor_recursive<'a>(
     base_z: i16,
     camera: u8,
     cameras: &mut Vec<Matrix4<f32>>,
+    masks: &mut Vec<WorldRect>,
     order_counter: &mut u32,
     out: &mut Vec<RenderObject<'a>>,
     total_elapsed: f32,
@@ -253,6 +256,8 @@ fn build_actor_recursive<'a>(
             croptop,
             cropbottom,
             blend,
+            mask_source,
+            mask_dest,
             glow: _,
             fadeleft,
             faderight,
@@ -326,6 +331,16 @@ fn build_actor_recursive<'a>(
             );
 
             let rect = place_rect(parent, *align, *offset, resolved_size);
+            let mask_rect = sm_rect_to_world_edges(rect, m);
+            if *mask_source {
+                masks.push(mask_rect);
+            }
+            if *mask_source && !*mask_dest {
+                return;
+            }
+            if *mask_dest && masks.is_empty() {
+                return;
+            }
 
             let before = out.len();
             push_sprite(
@@ -356,6 +371,9 @@ fn build_actor_recursive<'a>(
                 *texcoordvelocity,
                 total_elapsed,
             );
+            if *mask_dest {
+                clip_objects_range_to_world_masks(out, before, masks);
+            }
 
             let layer = base_z.saturating_add(*z);
             for obj in out.iter_mut().skip(before) {
@@ -483,6 +501,7 @@ fn build_actor_recursive<'a>(
                 base_z,
                 camera,
                 cameras,
+                masks,
                 order_counter,
                 out,
                 total_elapsed,
@@ -567,6 +586,7 @@ fn build_actor_recursive<'a>(
                     base_z,
                     id,
                     cameras,
+                    masks,
                     order_counter,
                     out,
                     total_elapsed,
@@ -786,6 +806,7 @@ fn build_actor_recursive<'a>(
                     layer,
                     camera,
                     cameras,
+                    masks,
                     order_counter,
                     out,
                     total_elapsed,
@@ -1411,6 +1432,77 @@ fn sm_rect_to_world_edges(rect: SmRect, m: &Metrics) -> WorldRect {
     }
 }
 
+fn clip_objects_range_to_world_masks(
+    objects: &mut Vec<RenderObject<'_>>,
+    start: usize,
+    masks: &[WorldRect],
+) {
+    if start >= objects.len() {
+        return;
+    }
+    if masks.is_empty() {
+        objects.truncate(start);
+        return;
+    }
+    let mut kept = Vec::with_capacity(objects.len() - start);
+    for mut obj in objects.drain(start..) {
+        if clip_object_to_world_masks(&mut obj, masks) {
+            kept.push(obj);
+        }
+    }
+    objects.extend(kept);
+}
+
+#[inline(always)]
+fn sprite_object_world_area(obj: &RenderObject<'_>) -> f32 {
+    match &obj.object_type {
+        renderer::ObjectType::Sprite { .. } => {
+            let t = &obj.transform;
+            (t.x.x * t.y.y).abs()
+        }
+        renderer::ObjectType::TexturedMesh { vertices, .. } => {
+            if vertices.len() < 3 {
+                return 0.0;
+            }
+            let t = &obj.transform;
+            let mut area = 0.0_f32;
+            let mut i = 0usize;
+            while i + 2 < vertices.len() {
+                let p0 = world_xy(t, vertices[i].pos);
+                let p1 = world_xy(t, vertices[i + 1].pos);
+                let p2 = world_xy(t, vertices[i + 2].pos);
+                let a = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]);
+                area += 0.5 * a.abs();
+                i += 3;
+            }
+            area
+        }
+        renderer::ObjectType::Mesh { .. } => 0.0,
+    }
+}
+
+fn clip_object_to_world_masks(obj: &mut RenderObject<'_>, masks: &[WorldRect]) -> bool {
+    let mut best_obj: Option<RenderObject<'_>> = None;
+    let mut best_area = -1.0_f32;
+    for &mask in masks {
+        let mut candidate = obj.clone();
+        if !clip_sprite_object_to_world_rect(&mut candidate, mask) {
+            continue;
+        }
+        let area = sprite_object_world_area(&candidate);
+        if area > best_area {
+            best_area = area;
+            best_obj = Some(candidate);
+        }
+    }
+    if let Some(chosen) = best_obj {
+        *obj = chosen;
+        true
+    } else {
+        false
+    }
+}
+
 fn clip_objects_to_world_rect(objects: &mut Vec<RenderObject<'_>>, clip: WorldRect) {
     if clip.left >= clip.right || clip.bottom >= clip.top {
         objects.clear();
@@ -1427,6 +1519,9 @@ fn clip_objects_to_world_rect(objects: &mut Vec<RenderObject<'_>>, clip: WorldRe
 }
 
 fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect) -> bool {
+    if clip.left >= clip.right || clip.bottom >= clip.top {
+        return false;
+    }
     let renderer::ObjectType::Sprite {
         uv_scale,
         uv_offset,
@@ -1440,7 +1535,7 @@ fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect)
     let eps = 1e-6;
     let t = &obj.transform;
     if t.x.y.abs() > eps || t.y.x.abs() > eps || t.x.z.abs() > eps || t.y.z.abs() > eps {
-        return true;
+        return clip_rotated_sprite_object_to_world_rect(obj, clip);
     }
 
     let w = t.x.x;
@@ -1499,5 +1594,139 @@ fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect)
         center_x, center_y, 0.0, 1.0,
     );
 
+    true
+}
+
+#[derive(Clone, Copy)]
+struct ClipVertex {
+    pos: [f32; 2],
+    uv: [f32; 2],
+}
+
+#[inline(always)]
+fn world_xy(t: &Matrix4<f32>, p: [f32; 2]) -> [f32; 2] {
+    [
+        t.x.x.mul_add(p[0], t.y.x.mul_add(p[1], t.w.x)),
+        t.x.y.mul_add(p[0], t.y.y.mul_add(p[1], t.w.y)),
+    ]
+}
+
+#[inline(always)]
+fn lerp_clip(a: ClipVertex, b: ClipVertex, t: f32) -> ClipVertex {
+    let t = t.clamp(0.0, 1.0);
+    ClipVertex {
+        pos: [
+            (b.pos[0] - a.pos[0]).mul_add(t, a.pos[0]),
+            (b.pos[1] - a.pos[1]).mul_add(t, a.pos[1]),
+        ],
+        uv: [
+            (b.uv[0] - a.uv[0]).mul_add(t, a.uv[0]),
+            (b.uv[1] - a.uv[1]).mul_add(t, a.uv[1]),
+        ],
+    }
+}
+
+fn clip_poly_edge(poly: &[ClipVertex], axis: usize, bound: f32, keep_greater: bool) -> Vec<ClipVertex> {
+    if poly.is_empty() {
+        return vec![];
+    }
+    let mut out = Vec::with_capacity(poly.len() + 2);
+    let mut prev = poly[poly.len() - 1];
+    let mut prev_in = if keep_greater {
+        prev.pos[axis] >= bound
+    } else {
+        prev.pos[axis] <= bound
+    };
+
+    for &curr in poly {
+        let curr_in = if keep_greater {
+            curr.pos[axis] >= bound
+        } else {
+            curr.pos[axis] <= bound
+        };
+        if prev_in && curr_in {
+            out.push(curr);
+        } else if prev_in && !curr_in {
+            let denom = curr.pos[axis] - prev.pos[axis];
+            if denom.abs() > 1e-6 {
+                let t = (bound - prev.pos[axis]) / denom;
+                out.push(lerp_clip(prev, curr, t));
+            }
+        } else if !prev_in && curr_in {
+            let denom = curr.pos[axis] - prev.pos[axis];
+            if denom.abs() > 1e-6 {
+                let t = (bound - prev.pos[axis]) / denom;
+                out.push(lerp_clip(prev, curr, t));
+            }
+            out.push(curr);
+        }
+        prev = curr;
+        prev_in = curr_in;
+    }
+    out
+}
+
+fn clip_polygon_to_world_rect(poly: &[ClipVertex], clip: WorldRect) -> Vec<ClipVertex> {
+    let mut p = clip_poly_edge(poly, 0, clip.left, true);
+    p = clip_poly_edge(&p, 0, clip.right, false);
+    p = clip_poly_edge(&p, 1, clip.bottom, true);
+    clip_poly_edge(&p, 1, clip.top, false)
+}
+
+fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect) -> bool {
+    let (texture_id, tint, uv_scale, uv_offset) = match &obj.object_type {
+        renderer::ObjectType::Sprite {
+            texture_id,
+            tint,
+            uv_scale,
+            uv_offset,
+            ..
+        } => (texture_id.to_string(), *tint, *uv_scale, *uv_offset),
+        _ => return true,
+    };
+
+    let t = obj.transform;
+    let quad = [
+        ([-0.5_f32, -0.5_f32], [0.0_f32, 1.0_f32]),
+        ([0.5_f32, -0.5_f32], [1.0_f32, 1.0_f32]),
+        ([0.5_f32, 0.5_f32], [1.0_f32, 0.0_f32]),
+        ([-0.5_f32, 0.5_f32], [0.0_f32, 0.0_f32]),
+    ];
+    let mut poly = Vec::with_capacity(4);
+    for (local, base_uv) in quad {
+        poly.push(ClipVertex {
+            pos: world_xy(&t, local),
+            uv: [
+                uv_offset[0] + base_uv[0] * uv_scale[0],
+                uv_offset[1] + base_uv[1] * uv_scale[1],
+            ],
+        });
+    }
+
+    let clipped = clip_polygon_to_world_rect(&poly, clip);
+    if clipped.len() < 3 {
+        return false;
+    }
+
+    let mut out = Vec::with_capacity((clipped.len() - 2) * 3);
+    let base = clipped[0];
+    let mut i = 1usize;
+    while i + 1 < clipped.len() {
+        for v in [base, clipped[i], clipped[i + 1]] {
+            out.push(renderer::TexturedMeshVertex {
+                pos: v.pos,
+                uv: v.uv,
+                color: tint,
+            });
+        }
+        i += 1;
+    }
+
+    obj.object_type = renderer::ObjectType::TexturedMesh {
+        texture_id: std::borrow::Cow::Owned(texture_id),
+        vertices: std::borrow::Cow::Owned(out),
+        mode: renderer::MeshMode::Triangles,
+    };
+    obj.transform = Matrix4::from_scale(1.0);
     true
 }

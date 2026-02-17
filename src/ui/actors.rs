@@ -61,6 +61,8 @@ pub enum Actor {
         fadetop: f32,
         fadebottom: f32,
         blend: BlendMode,
+        mask_source: bool,
+        mask_dest: bool,
         rot_x_deg: f32,
         rot_y_deg: f32,
         rot_z_deg: f32,

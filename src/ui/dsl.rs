@@ -60,6 +60,8 @@ pub enum Mod<'a> {
     FadeRight(f32),
     FadeTop(f32),
     FadeBottom(f32),
+    MaskSource,
+    MaskDest,
 
     // texture scroll (kept)
     TexVel([f32; 2]),
@@ -222,6 +224,8 @@ fn build_sprite_like<'a>(
     let (mut cl, mut cr, mut ct, mut cb) = (0.0, 0.0, 0.0, 0.0);
     let (mut fl, mut fr, mut ft, mut fb) = (0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32);
     let mut blend = BlendMode::Alpha;
+    let mut mask_source = false;
+    let mut mask_dest = false;
     let mut rot_x = 0.0_f32;
     let mut rot_y = 0.0_f32;
     let mut rot_z = 0.0_f32;
@@ -288,6 +292,12 @@ fn build_sprite_like<'a>(
             Mod::StrokeColor(_) => {}
             Mod::Blend(bm) => {
                 blend = *bm;
+            }
+            Mod::MaskSource => {
+                mask_source = true;
+            }
+            Mod::MaskDest => {
+                mask_dest = true;
             }
 
             Mod::SizePx(a, b) => {
@@ -637,6 +647,8 @@ fn build_sprite_like<'a>(
         fadetop: ft,
         fadebottom: fb,
         blend,
+        mask_source,
+        mask_dest,
         rot_x_deg: rot_x,
         rot_y_deg: rot_y,
         rot_z_deg: rot_z,
@@ -1458,6 +1470,18 @@ macro_rules! __dsl_apply_one {
     }};
     (blend (subtract) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::Blend($crate::core::gfx::BlendMode::Subtract));
+    }};
+    (MaskSource () $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::MaskSource);
+    }};
+    (masksource () $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::MaskSource);
+    }};
+    (MaskDest () $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::MaskDest);
+    }};
+    (maskdest () $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::MaskDest);
     }};
 
     // Text properties (SM-compatible)
