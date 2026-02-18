@@ -18,7 +18,10 @@ use crate::ui::color;
 use cgmath::{Deg, Matrix4, Point3, Vector3};
 use rssp::streams::StreamSegment;
 use std::array::from_fn;
+use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
 use std::sync::Arc;
+use twox_hash::XxHash64;
 
 // --- CONSTANTS ---
 
@@ -95,7 +98,7 @@ struct MineFillState {
     layers: [[f32; 4]; MINE_FILL_LAYERS],
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct ModelMeshCacheKey {
     slot: *const SpriteSlot,
     size: [u32; 2],
@@ -108,21 +111,16 @@ struct ModelMeshCacheKey {
     tint: [u32; 4],
 }
 
-struct ModelMeshCacheEntry {
-    key: ModelMeshCacheKey,
-    vertices: Arc<[TexturedMeshVertex]>,
-}
-
 #[derive(Default)]
 struct ModelMeshCache {
-    entries: Vec<ModelMeshCacheEntry>,
+    entries: HashMap<ModelMeshCacheKey, Arc<[TexturedMeshVertex]>, BuildHasherDefault<XxHash64>>,
 }
 
 impl ModelMeshCache {
     #[inline(always)]
     fn with_capacity(capacity: usize) -> Self {
         Self {
-            entries: Vec::with_capacity(capacity),
+            entries: HashMap::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
         }
     }
 
@@ -135,14 +133,11 @@ impl ModelMeshCache {
     where
         F: FnOnce() -> Arc<[TexturedMeshVertex]>,
     {
-        if let Some(entry) = self.entries.iter().find(|entry| entry.key == key) {
-            return entry.vertices.clone();
+        if let Some(vertices) = self.entries.get(&key) {
+            return vertices.clone();
         }
         let vertices = build();
-        self.entries.push(ModelMeshCacheEntry {
-            key,
-            vertices: vertices.clone(),
-        });
+        self.entries.insert(key, vertices.clone());
         vertices
     }
 }
