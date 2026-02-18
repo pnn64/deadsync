@@ -160,13 +160,15 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                 let anchor_x = if is_p1 { anchor_p1 } else { anchor_p2 };
                 let group_origin_y = screen_center_y() + group_y;
 
-                let show_fa_plus_window = state.player_profiles[player_idx].show_fa_plus_window;
-                let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
+                let player_profile = &state.player_profiles[player_idx];
+                let show_fa_plus_window = player_profile.show_fa_plus_window;
+                let show_fa_split = show_fa_plus_window || player_profile.custom_fantastic_window;
+                let row_height = if show_fa_split { 29.0 } else { 35.0 };
 
                 let (start, end) = state.note_ranges[player_idx];
-                if show_fa_plus_window && end > start {
-                    let use_10ms_blue = state.player_profiles[player_idx].fa_plus_10ms_blue_window;
-                    let wc = gameplay::display_window_counts(state, player_idx, use_10ms_blue);
+                if show_fa_split && end > start {
+                    let blue_window_ms = gameplay::player_blue_window_ms(state, player_idx);
+                    let wc = gameplay::display_window_counts(state, player_idx, Some(blue_window_ms));
                     let rows: [([f32; 4], [f32; 4], u32); 7] = [
                         (fantastic_color, dim_fantastic, wc.w0),
                         (white_fa_color, dim_white_fa, wc.w1),
@@ -408,9 +410,13 @@ pub fn build_double_step_stats(
             4
         };
         let show_fa_plus_window = state.player_profiles[0].show_fa_plus_window;
-        let use_10ms_blue =
-            show_fa_plus_window && state.player_profiles[0].fa_plus_10ms_blue_window;
-        let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
+        let player_profile = &state.player_profiles[0];
+        let show_fa_split = show_fa_plus_window || player_profile.custom_fantastic_window;
+        let show_blue_ms_label = player_profile.custom_fantastic_window
+            || (show_fa_plus_window && player_profile.fa_plus_10ms_blue_window);
+        let blue_window_ms = gameplay::player_blue_window_ms(state, 0);
+        let blue_window_label = format!("({}ms)", blue_window_ms.round() as i32);
+        let row_height = if show_fa_split { 29.0 } else { 35.0 };
         let y_base = -280.0;
 
         asset_manager.with_fonts(|all_fonts| {
@@ -427,7 +433,7 @@ pub fn build_double_step_stats(
                     origin_x + ((80.0 + (digits.saturating_sub(4) as f32 * 16.0)) * base_zoom);
                 let label_zoom = base_zoom * 0.833;
 
-                let rows: Vec<(&str, [f32; 4], [f32; 4], u32)> = if !show_fa_plus_window {
+                let rows: Vec<(&str, [f32; 4], [f32; 4], u32)> = if !show_fa_split {
                     JUDGMENT_ORDER
                         .iter()
                         .enumerate()
@@ -440,7 +446,7 @@ pub fn build_double_step_stats(
                         })
                         .collect()
                 } else {
-                    let wc = gameplay::display_window_counts(state, 0, use_10ms_blue);
+                    let wc = gameplay::display_window_counts(state, 0, Some(blue_window_ms));
                     let fantastic_color = JUDGMENT_INFO
                         .get(&JudgeGrade::Fantastic)
                         .map(|info| info.color)
@@ -523,10 +529,10 @@ pub fn build_double_step_stats(
                         z(71)
                     ));
 
-                    if use_10ms_blue && row_i == 0 {
+                    if show_blue_ms_label && row_i == 0 {
                         let y = y_label + (12.0 * base_zoom);
                         actors.push(act!(text:
-                            font("miso"): settext("(10ms)".to_string()):
+                            font("miso"): settext(blue_window_label.clone()):
                             align(1.0, 0.5): horizalign(right):
                             xy(label_x, y):
                             zoom(0.6 * base_zoom):
@@ -1423,7 +1429,13 @@ fn build_side_pane(
     const NUMBER_TO_LABEL_GAP: f32 = 8.0;
     let base_numbers_local_x_offset = base_label_local_x_offset - NUMBER_TO_LABEL_GAP;
     let show_fa_plus_window = state.player_profiles[player_idx].show_fa_plus_window;
-    let row_height = if show_fa_plus_window { 29.0 } else { 35.0 };
+    let player_profile = &state.player_profiles[player_idx];
+    let show_fa_split = show_fa_plus_window || player_profile.custom_fantastic_window;
+    let show_blue_ms_label = player_profile.custom_fantastic_window
+        || (show_fa_plus_window && player_profile.fa_plus_10ms_blue_window);
+    let blue_window_ms = gameplay::player_blue_window_ms(state, player_idx);
+    let blue_window_label = format!("({}ms)", blue_window_ms.round() as i32);
+    let row_height = if show_fa_split { 29.0 } else { 35.0 };
     let y_base = -280.0;
 
     asset_manager.with_fonts(|all_fonts| asset_manager.with_font("wendy_screenevaluation", |f| {
@@ -1439,7 +1451,7 @@ fn build_side_pane(
         let numbers_cx =
             final_judgments_center_x + (x_sign * numbers_local_x_offset * final_text_base_zoom);
 
-        if !show_fa_plus_window {
+        if !show_fa_split {
             // Standard ITG-style rows: Fantastic..Miss using aggregate grade counts.
             for (index, grade) in JUDGMENT_ORDER.iter().enumerate() {
                 let info = JUDGMENT_INFO.get(grade).unwrap();
@@ -1501,8 +1513,7 @@ fn build_side_pane(
         } else {
             // FA+ mode: split Fantastic into W0 (blue) and W1 (white) using per-note windows,
             // matching Simply Love's FA+ Step Statistics semantics.
-            let use_10ms_blue = state.player_profiles[player_idx].fa_plus_10ms_blue_window;
-            let wc = gameplay::display_window_counts(state, player_idx, use_10ms_blue);
+            let wc = gameplay::display_window_counts(state, player_idx, Some(blue_window_ms));
 	            let fantastic_color = JUDGMENT_INFO
 	                .get(&JudgeGrade::Fantastic)
 	                .map(|info| info.color)
@@ -1594,9 +1605,9 @@ fn build_side_pane(
                         diffuse(bright[0], bright[1], bright[2], bright[3]):
                         z(71)
                     ));
-                    if use_10ms_blue && index == 0 {
+                    if show_blue_ms_label && index == 0 {
                         actors.push(act!(text:
-                            font("miso"): settext("(10ms)".to_string()): align(0.0, 0.5):
+                            font("miso"): settext(blue_window_label.clone()): align(0.0, 0.5):
                             xy(label_world_x, sublabel_y): zoom(sublabel_zoom):
                             maxwidth(72.0 * final_text_base_zoom): horizalign(left):
                             diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -1611,9 +1622,9 @@ fn build_side_pane(
                         diffuse(bright[0], bright[1], bright[2], bright[3]):
                         z(71)
                     ));
-                    if use_10ms_blue && index == 0 {
+                    if show_blue_ms_label && index == 0 {
                         actors.push(act!(text:
-                            font("miso"): settext("(10ms)".to_string()): align(1.0, 0.5):
+                            font("miso"): settext(blue_window_label.clone()): align(1.0, 0.5):
                             xy(label_world_x, sublabel_y): zoom(sublabel_zoom):
                             maxwidth(72.0 * final_text_base_zoom): horizalign(right):
                             diffuse(bright[0], bright[1], bright[2], bright[3]):

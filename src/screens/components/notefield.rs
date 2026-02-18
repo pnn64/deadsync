@@ -3538,6 +3538,9 @@ pub fn build(
             styles[style_count] = profile::ErrorBarStyle::Average;
             style_count += 1;
         }
+        let fa_plus_window_s = Some(crate::game::gameplay::player_fa_plus_window_s(
+            state, player_idx,
+        ));
 
         for style in styles.into_iter().take(style_count) {
             match style {
@@ -3552,7 +3555,7 @@ pub fn build(
                     };
                     let (bounds_s, bounds_len) = error_bar_boundaries_s(
                         state.timing_profile.windows_s,
-                        state.timing_profile.fa_plus_window_s,
+                        fa_plus_window_s,
                         profile.show_fa_plus_window,
                         profile.error_bar_trim,
                     );
@@ -3679,7 +3682,7 @@ pub fn build(
                     };
                     let (bounds_s, bounds_len) = error_bar_boundaries_s(
                         state.timing_profile.windows_s,
-                        state.timing_profile.fa_plus_window_s,
+                        fa_plus_window_s,
                         profile.show_fa_plus_window,
                         profile.error_bar_trim,
                     );
@@ -3772,7 +3775,7 @@ pub fn build(
                     };
                     let (bounds_s, bounds_len) = error_bar_boundaries_s(
                         state.timing_profile.windows_s,
-                        state.timing_profile.fa_plus_window_s,
+                        fa_plus_window_s,
                         profile.show_fa_plus_window,
                         profile.error_bar_trim,
                     );

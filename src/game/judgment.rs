@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use crate::game::note::{HoldResult, MineResult, Note, NoteType};
-use crate::game::timing::{FA_PLUS_W010_MS, WindowCounts};
+use crate::game::timing::{FA_PLUS_W010_MS, FA_PLUS_W0_MS, WindowCounts};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TimingWindow {
@@ -227,12 +227,13 @@ fn compute_ex_score_counts(
         if let Some(j) = aggregate_row_final_judgment(row_judgments.iter().copied()) {
             match j.grade {
                 JudgeGrade::Fantastic => {
+                    if j.time_error_ms.abs() <= FA_PLUS_W0_MS {
+                        windows.w0 = windows.w0.saturating_add(1);
+                    } else {
+                        windows.w1 = windows.w1.saturating_add(1);
+                    }
                     if j.time_error_ms.abs() <= FA_PLUS_W010_MS {
                         w010 = w010.saturating_add(1);
-                    }
-                    match j.window {
-                        Some(TimingWindow::W0) => windows.w0 = windows.w0.saturating_add(1),
-                        _ => windows.w1 = windows.w1.saturating_add(1),
                     }
                 }
                 JudgeGrade::Excellent => windows.w2 = windows.w2.saturating_add(1),

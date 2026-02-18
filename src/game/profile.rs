@@ -485,6 +485,21 @@ pub const fn error_bar_text_from_mask(mask: u8) -> bool {
     (normalize_error_bar_mask(mask) & ERROR_BAR_BIT_TEXT) != 0
 }
 
+pub const CUSTOM_FANTASTIC_WINDOW_MIN_MS: u8 = 1;
+pub const CUSTOM_FANTASTIC_WINDOW_MAX_MS: u8 = 22;
+pub const CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS: u8 = 10;
+
+#[inline(always)]
+pub const fn clamp_custom_fantastic_window_ms(ms: u8) -> u8 {
+    if ms < CUSTOM_FANTASTIC_WINDOW_MIN_MS {
+        CUSTOM_FANTASTIC_WINDOW_MIN_MS
+    } else if ms > CUSTOM_FANTASTIC_WINDOW_MAX_MS {
+        CUSTOM_FANTASTIC_WINDOW_MAX_MS
+    } else {
+        ms
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ErrorBarTrim {
     #[default]
@@ -938,6 +953,9 @@ pub struct Profile {
     pub show_fa_plus_pane: bool,
     // 10ms blue Fantastic window for FA+ window display (Arrow Cloud: "SmallerWhite").
     pub fa_plus_10ms_blue_window: bool,
+    // Custom blue Fantastic window in milliseconds (1..22), shared by FA+ W0 and H.EX split.
+    pub custom_fantastic_window: bool,
+    pub custom_fantastic_window_ms: u8,
     // Judgment tilt (Simply Love semantics).
     pub judgment_tilt: bool,
     pub column_cues: bool,
@@ -1032,6 +1050,8 @@ impl Default for Profile {
             show_hard_ex_score: false,
             show_fa_plus_pane: false,
             fa_plus_10ms_blue_window: false,
+            custom_fantastic_window: false,
+            custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
             judgment_tilt: false,
             column_cues: false,
             error_ms_display: false,
@@ -1298,6 +1318,14 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             i32::from(default_profile.fa_plus_10ms_blue_window)
         ));
         content.push_str(&format!(
+            "CustomFantasticWindow = {}\n",
+            i32::from(default_profile.custom_fantastic_window)
+        ));
+        content.push_str(&format!(
+            "CustomFantasticWindowMs = {}\n",
+            default_profile.custom_fantastic_window_ms
+        ));
+        content.push_str(&format!(
             "JudgmentTilt = {}\n",
             i32::from(default_profile.judgment_tilt)
         ));
@@ -1551,6 +1579,14 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!(
         "SmallerWhite={}\n",
         i32::from(profile.fa_plus_10ms_blue_window)
+    ));
+    content.push_str(&format!(
+        "CustomFantasticWindow={}\n",
+        i32::from(profile.custom_fantastic_window)
+    ));
+    content.push_str(&format!(
+        "CustomFantasticWindowMs={}\n",
+        profile.custom_fantastic_window_ms
     ));
     content.push_str(&format!(
         "JudgmentTilt={}\n",
@@ -1822,6 +1858,15 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "SmallerWhite")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.fa_plus_10ms_blue_window, |v| v != 0);
+            profile.custom_fantastic_window = profile_conf
+                .get("PlayerOptions", "CustomFantasticWindow")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.custom_fantastic_window, |v| v != 0);
+            profile.custom_fantastic_window_ms = profile_conf
+                .get("PlayerOptions", "CustomFantasticWindowMs")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map(clamp_custom_fantastic_window_ms)
+                .unwrap_or(default_profile.custom_fantastic_window_ms);
             profile.judgment_tilt = profile_conf
                 .get("PlayerOptions", "JudgmentTilt")
                 .and_then(|s| s.parse::<u8>().ok())
@@ -2939,6 +2984,37 @@ pub fn update_fa_plus_10ms_blue_window_for_side(side: PlayerSide, enabled: bool)
             return;
         }
         profile.fa_plus_10ms_blue_window = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_custom_fantastic_window_for_side(side: PlayerSide, enabled: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.custom_fantastic_window == enabled {
+            return;
+        }
+        profile.custom_fantastic_window = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_custom_fantastic_window_ms_for_side(side: PlayerSide, ms: u8) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    let clamped = clamp_custom_fantastic_window_ms(ms);
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.custom_fantastic_window_ms == clamped {
+            return;
+        }
+        profile.custom_fantastic_window_ms = clamped;
     }
     save_profile_ini_for_side(side);
 }

@@ -424,6 +424,16 @@ fn tilt_intensity_choices() -> Vec<String> {
     out
 }
 
+fn custom_fantastic_window_choices() -> Vec<String> {
+    let lo = crate::game::profile::CUSTOM_FANTASTIC_WINDOW_MIN_MS;
+    let hi = crate::game::profile::CUSTOM_FANTASTIC_WINDOW_MAX_MS;
+    let mut out = Vec::with_capacity((hi - lo + 1) as usize);
+    for ms in lo..=hi {
+        out.push(format!("{ms}ms"));
+    }
+    out
+}
+
 // Prefer #DISPLAYBPM for reference BPM (use max of range or single value); fallback to song.max_bpm, then 120.
 fn reference_bpm_for_song(song: &SongData) -> f32 {
     let bpm = song
@@ -1162,6 +1172,22 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
+            name: "Custom Blue Fantastic Window".to_string(),
+            choices: vec!["Yes".to_string(), "No".to_string()],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![
+                "Override the default FA+ blue Fantastic split with a custom window.".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Custom Blue Fantastic Window (ms)".to_string(),
+            choices: custom_fantastic_window_choices(),
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec!["Pick the blue Fantastic window size in milliseconds.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
             name: "What comes next?".to_string(),
             choices: what_comes_next_choices(OptionsPane::Advanced, return_screen),
             selected_choice_index: [0; PLAYER_SLOTS],
@@ -1706,6 +1732,24 @@ fn apply_profile_defaults(
     if profile.fa_plus_10ms_blue_window {
         fa_plus_active_mask |= 1u8 << 4;
     }
+    if let Some(row) = rows
+        .iter_mut()
+        .find(|r| r.name == ROW_CUSTOM_FANTASTIC_WINDOW)
+    {
+        row.selected_choice_index[player_idx] = if profile.custom_fantastic_window { 0 } else { 1 };
+    }
+    if let Some(row) = rows
+        .iter_mut()
+        .find(|r| r.name == ROW_CUSTOM_FANTASTIC_WINDOW_MS)
+    {
+        let ms = crate::game::profile::clamp_custom_fantastic_window_ms(
+            profile.custom_fantastic_window_ms,
+        );
+        let target = format!("{ms}ms");
+        if let Some(idx) = row.choices.iter().position(|c| c == &target) {
+            row.selected_choice_index[player_idx] = idx;
+        }
+    }
 
     // Initialize Gameplay Extras row from profile (multi-choice toggle group).
     if profile.column_flash_on_miss {
@@ -2082,12 +2126,15 @@ const ROW_JUDGMENT_TILT_INTENSITY: &str = "Judgment Tilt Intensity";
 const ROW_ERROR_BAR: &str = "Error Bar";
 const ROW_ERROR_BAR_TRIM: &str = "Error Bar Trim";
 const ROW_ERROR_BAR_OPTIONS: &str = "Error Bar Options";
+const ROW_CUSTOM_FANTASTIC_WINDOW: &str = "Custom Blue Fantastic Window";
+const ROW_CUSTOM_FANTASTIC_WINDOW_MS: &str = "Custom Blue Fantastic Window (ms)";
 
 #[derive(Clone, Copy, Debug)]
 struct RowVisibility {
     show_measure_counter_children: bool,
     show_judgment_tilt_intensity: bool,
     show_error_bar_children: bool,
+    show_custom_fantastic_window_ms: bool,
 }
 
 #[inline(always)]
@@ -2100,6 +2147,9 @@ fn row_visible_with_flags(row_name: &str, visibility: RowVisibility) -> bool {
     }
     if row_name == ROW_ERROR_BAR_TRIM || row_name == ROW_ERROR_BAR_OPTIONS {
         return visibility.show_error_bar_children;
+    }
+    if row_name == ROW_CUSTOM_FANTASTIC_WINDOW_MS {
+        return visibility.show_custom_fantastic_window_ms;
     }
     true
 }
@@ -2114,6 +2164,9 @@ fn conditional_row_parent(row_name: &str) -> Option<&'static str> {
     }
     if row_name == ROW_ERROR_BAR_TRIM || row_name == ROW_ERROR_BAR_OPTIONS {
         return Some(ROW_ERROR_BAR);
+    }
+    if row_name == ROW_CUSTOM_FANTASTIC_WINDOW_MS {
+        return Some(ROW_CUSTOM_FANTASTIC_WINDOW);
     }
     None
 }
@@ -2171,6 +2224,25 @@ fn error_bar_children_visible(active: [bool; PLAYER_SLOTS], error_bar_active_mas
     !any_active
 }
 
+fn custom_fantastic_window_ms_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = rows.iter().find(|r| r.name == ROW_CUSTOM_FANTASTIC_WINDOW) else {
+        return true;
+    };
+    let max_choice = row.choices.len().saturating_sub(1);
+    let mut any_active = false;
+    for player_idx in 0..PLAYER_SLOTS {
+        if !active[player_idx] {
+            continue;
+        }
+        any_active = true;
+        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
+        if choice_idx == 0 {
+            return true;
+        }
+    }
+    !any_active
+}
+
 #[inline(always)]
 fn row_visibility(
     rows: &[Row],
@@ -2181,6 +2253,7 @@ fn row_visibility(
         show_measure_counter_children: measure_counter_children_visible(rows, active),
         show_judgment_tilt_intensity: judgment_tilt_intensity_visible(rows, active),
         show_error_bar_children: error_bar_children_visible(active, error_bar_active_mask),
+        show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(rows, active),
     }
 }
 
@@ -2353,6 +2426,7 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "Data Visualizations"
         || row_name.starts_with("Gameplay Extras")
         || row_name == "Rescore Early Hits"
+        || row_name == ROW_CUSTOM_FANTASTIC_WINDOW
         || row_name == "Early Decent/Way Off Options"
         || row_name == "FA+ Options"
         || row_name == "Insert"
@@ -2689,6 +2763,23 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         state.player_profiles[player_idx].rescore_early_hits = enabled;
         if should_persist {
             crate::game::profile::update_rescore_early_hits_for_side(persist_side, enabled);
+        }
+    } else if row_name == ROW_CUSTOM_FANTASTIC_WINDOW {
+        let enabled = row.selected_choice_index[player_idx] == 0;
+        state.player_profiles[player_idx].custom_fantastic_window = enabled;
+        if should_persist {
+            crate::game::profile::update_custom_fantastic_window_for_side(persist_side, enabled);
+        }
+        visibility_changed = true;
+    } else if row_name == ROW_CUSTOM_FANTASTIC_WINDOW_MS {
+        if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
+            && let Ok(raw) = choice.trim_end_matches("ms").parse::<u8>()
+        {
+            let ms = crate::game::profile::clamp_custom_fantastic_window_ms(raw);
+            state.player_profiles[player_idx].custom_fantastic_window_ms = ms;
+            if should_persist {
+                crate::game::profile::update_custom_fantastic_window_ms_for_side(persist_side, ms);
+            }
         }
     } else if row_name == "Mini Indicator" {
         let choice = row

@@ -1437,8 +1437,12 @@ pub struct PlayerRuntime {
 pub struct CourseDisplayCarry {
     pub judgment_counts: [u32; 6],
     pub scoring_counts: [u32; 6],
+    // Canonical FA+ split (15ms) used for EX scoring/evaluation.
     pub window_counts: crate::game::timing::WindowCounts,
+    // Canonical 10ms split used for H.EX scoring/evaluation.
     pub window_counts_10ms_blue: crate::game::timing::WindowCounts,
+    // Display split used by gameplay counters (legacy 10ms or custom ms option).
+    pub window_counts_display_blue: crate::game::timing::WindowCounts,
     pub holds_held_for_score: u32,
     pub rolls_held_for_score: u32,
     pub mines_hit_for_score: u32,
@@ -3043,8 +3047,14 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
             scoring_counts[ix] = previous.scoring_counts[ix].saturating_add(stage_scoring);
         }
         let stage_window_counts = crate::game::timing::compute_window_counts(&state.notes[start..end]);
-        let stage_window_counts_10ms_blue =
-            crate::game::timing::compute_window_counts_10ms_blue(&state.notes[start..end]);
+        let stage_window_counts_10ms = crate::game::timing::compute_window_counts_10ms_blue(
+            &state.notes[start..end],
+        );
+        let stage_blue_window_ms = player_blue_window_ms(state, player);
+        let stage_window_counts_display_blue = crate::game::timing::compute_window_counts_blue_ms(
+            &state.notes[start..end],
+            stage_blue_window_ms,
+        );
         let window_counts = crate::game::timing::WindowCounts {
             w0: previous.window_counts.w0.saturating_add(stage_window_counts.w0),
             w1: previous.window_counts.w1.saturating_add(stage_window_counts.w1),
@@ -3061,37 +3071,68 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
             w0: previous
                 .window_counts_10ms_blue
                 .w0
-                .saturating_add(stage_window_counts_10ms_blue.w0),
+                .saturating_add(stage_window_counts_10ms.w0),
             w1: previous
                 .window_counts_10ms_blue
                 .w1
-                .saturating_add(stage_window_counts_10ms_blue.w1),
+                .saturating_add(stage_window_counts_10ms.w1),
             w2: previous
                 .window_counts_10ms_blue
                 .w2
-                .saturating_add(stage_window_counts_10ms_blue.w2),
+                .saturating_add(stage_window_counts_10ms.w2),
             w3: previous
                 .window_counts_10ms_blue
                 .w3
-                .saturating_add(stage_window_counts_10ms_blue.w3),
+                .saturating_add(stage_window_counts_10ms.w3),
             w4: previous
                 .window_counts_10ms_blue
                 .w4
-                .saturating_add(stage_window_counts_10ms_blue.w4),
+                .saturating_add(stage_window_counts_10ms.w4),
             w5: previous
                 .window_counts_10ms_blue
                 .w5
-                .saturating_add(stage_window_counts_10ms_blue.w5),
+                .saturating_add(stage_window_counts_10ms.w5),
             miss: previous
                 .window_counts_10ms_blue
                 .miss
-                .saturating_add(stage_window_counts_10ms_blue.miss),
+                .saturating_add(stage_window_counts_10ms.miss),
+        };
+        let window_counts_display_blue = crate::game::timing::WindowCounts {
+            w0: previous
+                .window_counts_display_blue
+                .w0
+                .saturating_add(stage_window_counts_display_blue.w0),
+            w1: previous
+                .window_counts_display_blue
+                .w1
+                .saturating_add(stage_window_counts_display_blue.w1),
+            w2: previous
+                .window_counts_display_blue
+                .w2
+                .saturating_add(stage_window_counts_display_blue.w2),
+            w3: previous
+                .window_counts_display_blue
+                .w3
+                .saturating_add(stage_window_counts_display_blue.w3),
+            w4: previous
+                .window_counts_display_blue
+                .w4
+                .saturating_add(stage_window_counts_display_blue.w4),
+            w5: previous
+                .window_counts_display_blue
+                .w5
+                .saturating_add(stage_window_counts_display_blue.w5),
+            miss: previous
+                .window_counts_display_blue
+                .miss
+                .saturating_add(stage_window_counts_display_blue.miss),
         };
         carry[player] = CourseDisplayCarry {
             judgment_counts,
             scoring_counts,
             window_counts,
             window_counts_10ms_blue,
+            window_counts_display_blue,
             holds_held_for_score: previous
                 .holds_held_for_score
                 .saturating_add(p.holds_held_for_score),
@@ -3118,6 +3159,49 @@ fn display_carry_for_player(state: &State, player_idx: usize) -> CourseDisplayCa
         .course_display_carry
         .as_ref()
         .map_or(CourseDisplayCarry::default(), |carry| carry[player_idx])
+}
+
+#[inline(always)]
+fn default_fa_plus_window_s(state: &State) -> f32 {
+    state
+        .timing_profile
+        .fa_plus_window_s
+        .unwrap_or(state.timing_profile.windows_s[0])
+}
+
+#[inline(always)]
+fn profile_custom_window_ms(profile: &profile::Profile) -> f32 {
+    let ms = profile.custom_fantastic_window_ms;
+    f32::from(crate::game::profile::clamp_custom_fantastic_window_ms(ms))
+}
+
+#[inline(always)]
+pub fn player_fa_plus_window_s(state: &State, player_idx: usize) -> f32 {
+    let base = default_fa_plus_window_s(state);
+    if player_idx >= state.num_players {
+        return base;
+    }
+    let profile = &state.player_profiles[player_idx];
+    if profile.custom_fantastic_window {
+        profile_custom_window_ms(profile) / 1000.0
+    } else {
+        base
+    }
+}
+
+#[inline(always)]
+pub fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
+    if player_idx >= state.num_players {
+        return default_fa_plus_window_s(state) * 1000.0;
+    }
+    let profile = &state.player_profiles[player_idx];
+    if profile.custom_fantastic_window {
+        return profile_custom_window_ms(profile);
+    }
+    if profile.fa_plus_10ms_blue_window {
+        return 10.0;
+    }
+    default_fa_plus_window_s(state) * 1000.0
 }
 
 #[inline(always)]
@@ -3169,24 +3253,35 @@ pub fn display_judgment_count(state: &State, player_idx: usize, grade: JudgeGrad
 pub fn display_window_counts(
     state: &State,
     player_idx: usize,
-    use_10ms_blue: bool,
+    blue_window_ms: Option<f32>,
 ) -> crate::game::timing::WindowCounts {
     if player_idx >= state.num_players {
         return crate::game::timing::WindowCounts::default();
     }
     let (start, end) = state.note_ranges[player_idx];
-    let current = if use_10ms_blue {
-        crate::game::timing::compute_window_counts_10ms_blue(&state.notes[start..end])
+    let current = if let Some(ms) = blue_window_ms {
+        crate::game::timing::compute_window_counts_blue_ms(&state.notes[start..end], ms)
     } else {
         crate::game::timing::compute_window_counts(&state.notes[start..end])
     };
     let carry = display_carry_for_player(state, player_idx);
-    let carry_counts = if use_10ms_blue {
-        carry.window_counts_10ms_blue
+    let carry_counts = if blue_window_ms.is_some() {
+        carry.window_counts_display_blue
     } else {
         carry.window_counts
     };
     add_window_counts(current, carry_counts)
+}
+
+#[inline(always)]
+fn display_window_counts_10ms(state: &State, player_idx: usize) -> crate::game::timing::WindowCounts {
+    if player_idx >= state.num_players {
+        return crate::game::timing::WindowCounts::default();
+    }
+    let (start, end) = state.note_ranges[player_idx];
+    let current = crate::game::timing::compute_window_counts_10ms_blue(&state.notes[start..end]);
+    let carry = display_carry_for_player(state, player_idx);
+    add_window_counts(current, carry.window_counts_10ms_blue)
 }
 
 pub fn display_itg_score_percent(state: &State, player_idx: usize) -> f64 {
@@ -3280,7 +3375,7 @@ pub fn display_ex_score_percent(state: &State, player_idx: usize) -> f64 {
         return 0.0;
     }
     let carry = display_carry_for_player(state, player_idx);
-    let counts = display_window_counts(state, player_idx, false);
+    let counts = display_window_counts(state, player_idx, None);
     let holds_held = state.players[player_idx]
         .holds_held_for_score
         .saturating_add(carry.holds_held_for_score);
@@ -3304,8 +3399,8 @@ pub fn display_hard_ex_score_percent(state: &State, player_idx: usize) -> f64 {
         return 0.0;
     }
     let carry = display_carry_for_player(state, player_idx);
-    let counts = display_window_counts(state, player_idx, false);
-    let counts_10ms = display_window_counts(state, player_idx, true);
+    let counts = display_window_counts(state, player_idx, None);
+    let counts_10ms = display_window_counts_10ms(state, player_idx);
     let holds_held = state.players[player_idx]
         .holds_held_for_score
         .saturating_add(carry.holds_held_for_score);
@@ -4000,6 +4095,7 @@ fn error_bar_register_tap(
     let show_highlight = (error_bar_mask & profile::ERROR_BAR_BIT_HIGHLIGHT) != 0;
     let show_average = (error_bar_mask & profile::ERROR_BAR_BIT_AVERAGE) != 0;
     let show_fa_plus_window = prof.show_fa_plus_window;
+    let fa_plus_window_s = player_fa_plus_window_s(state, player);
     let error_bar_trim = prof.error_bar_trim;
     let error_bar_multi_tick = prof.error_bar_multi_tick;
     let error_ms_display = prof.error_ms_display;
@@ -4021,10 +4117,7 @@ fn error_bar_register_tap(
 
     if show_text {
         let threshold_s = if show_fa_plus_window {
-            state
-                .timing_profile
-                .fa_plus_window_s
-                .unwrap_or(state.timing_profile.windows_s[0])
+            fa_plus_window_s
         } else {
             state.timing_profile.windows_s[0]
         };
@@ -4248,7 +4341,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 return false;
             }
 
-            let (grade, window) = classify_offset_s(time_error_real, &state.timing_profile);
+            let mut timing_profile = state.timing_profile;
+            timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player));
+            let (grade, window) = classify_offset_s(time_error_real, &timing_profile);
 
             // Capture the current audio stream position (device sample clock) once
             // per tap window evaluation so we can compare it against both the
