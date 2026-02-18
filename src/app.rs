@@ -1766,11 +1766,44 @@ impl App {
         Ok(())
     }
 
+    #[inline(always)]
+    const fn should_log_command_timing(command: &Command) -> bool {
+        matches!(
+            command,
+            Command::SetBanner(_)
+                | Command::SetPackBanner(_)
+                | Command::SetDensityGraph { .. }
+                | Command::SetDynamicBackground(_)
+                | Command::PlayMusic { .. }
+        )
+    }
+
+    #[inline(always)]
+    const fn command_label(command: &Command) -> &'static str {
+        match command {
+            Command::ExitNow => "ExitNow",
+            Command::SetBanner(_) => "SetBanner",
+            Command::SetPackBanner(_) => "SetPackBanner",
+            Command::SetDensityGraph { .. } => "SetDensityGraph",
+            Command::FetchOnlineGrade(_) => "FetchOnlineGrade",
+            Command::PlayMusic { .. } => "PlayMusic",
+            Command::StopMusic => "StopMusic",
+            Command::SetDynamicBackground(_) => "SetDynamicBackground",
+            Command::UpdateScrollSpeed { .. } => "UpdateScrollSpeed",
+            Command::UpdateSessionMusicRate(_) => "UpdateSessionMusicRate",
+            Command::UpdatePreferredDifficulty(_) => "UpdatePreferredDifficulty",
+            Command::UpdateLastPlayed { .. } => "UpdateLastPlayed",
+        }
+    }
+
     fn execute_command(
         &mut self,
         command: Command,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
+        let label = Self::command_label(&command);
+        let always_log_timing = Self::should_log_command_timing(&command);
+        let started = Instant::now();
         match command {
             Command::ExitNow => {
                 event_loop.exit();
@@ -1810,6 +1843,24 @@ impl App {
                     difficulty_index,
                 );
             }
+        }
+        let elapsed = started.elapsed();
+        let elapsed_ms = elapsed.as_secs_f64() * 1000.0;
+        if elapsed_ms >= 100.0 {
+            warn!(
+                "Slow command: {} took {:.2}ms on screen {:?}",
+                label, elapsed_ms, self.state.screens.current_screen
+            );
+        } else if elapsed_ms >= 16.7 {
+            info!(
+                "Frame-cost command: {} took {:.2}ms on screen {:?}",
+                label, elapsed_ms, self.state.screens.current_screen
+            );
+        } else if always_log_timing {
+            info!(
+                "Command timing: {} took {:.2}ms on screen {:?}",
+                label, elapsed_ms, self.state.screens.current_screen
+            );
         }
         Ok(())
     }
