@@ -553,6 +553,7 @@ pub struct State {
     cached_chart_ix_p1: Option<usize>,
     cached_chart_ix_p2: Option<usize>,
     cached_edits: Option<EditSortCache>,
+    pack_total_seconds_by_index: Vec<f64>,
     pub pack_song_counts: HashMap<String, usize>,
     group_pack_song_counts: HashMap<String, usize>,
     title_pack_song_counts: HashMap<String, usize>,
@@ -1429,6 +1430,7 @@ pub fn init() -> State {
 
     let mut all_entries = Vec::with_capacity(total_packs.saturating_add(total_songs));
     let mut pack_song_counts = HashMap::with_capacity(total_packs);
+    let mut pack_total_seconds_by_index = vec![0.0_f64; total_packs];
 
     let profile_data = profile::get();
     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
@@ -1449,6 +1451,7 @@ pub fn init() -> State {
     for (i, pack) in song_cache.iter().enumerate() {
         let mut pack_name: Option<String> = None;
         let mut pack_song_count = 0usize;
+        let mut pack_total_seconds = 0.0_f64;
 
         for song in &pack.songs {
             let ok = song
@@ -1472,6 +1475,13 @@ pub fn init() -> State {
 
             pack_song_count += 1;
             matched_songs += 1;
+            pack_total_seconds += if song.music_length_seconds.is_finite()
+                && song.music_length_seconds > 0.0
+            {
+                song.music_length_seconds as f64
+            } else {
+                song.total_length_seconds.max(0) as f64
+            };
             all_entries.push(MusicWheelEntry::Song(song.clone()));
 
             // Check for last played song
@@ -1490,6 +1500,7 @@ pub fn init() -> State {
         if let Some(name) = pack_name {
             // Compute cache for get_actors (HOT PATH OPTIMIZATION)
             pack_song_counts.insert(name, pack_song_count);
+            pack_total_seconds_by_index[i] = pack_total_seconds;
         }
     }
 
@@ -1579,6 +1590,7 @@ pub fn init() -> State {
         cached_chart_ix_p1: None,
         cached_chart_ix_p2: None,
         cached_edits: None,
+        pack_total_seconds_by_index,
         pack_song_counts: pack_song_counts.clone(),
         group_pack_song_counts: pack_song_counts,
         title_pack_song_counts,
@@ -3781,25 +3793,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             format_chart_length(((s.total_length_seconds.max(0) as f32) / music_rate) as i32),
         ),
         Some(MusicWheelEntry::PackHeader { original_index, .. }) => {
-            let total_sec: f64 = get_song_cache()
+            let total_sec = state
+                .pack_total_seconds_by_index
                 .get(*original_index)
-                .map(|p| {
-                    p.songs
-                        .iter()
-                        .filter(|song| {
-                            song.charts
-                                .iter()
-                                .any(|c| c.chart_type.eq_ignore_ascii_case(target_chart_type))
-                        })
-                        .map(|s| {
-                            (if s.music_length_seconds > 0.0 {
-                                s.music_length_seconds
-                            } else {
-                                s.total_length_seconds.max(0) as f32
-                            }) as f64
-                        })
-                        .sum()
-                })
+                .copied()
                 .unwrap_or(0.0);
             (
                 "".to_string(),
