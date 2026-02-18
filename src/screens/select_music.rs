@@ -689,20 +689,16 @@ fn ensure_chart_cache_for_song(
         state.cached_edits = None;
     }
 
-    let need_edits = state.selected_steps_index >= color::FILE_DIFFICULTY_NAMES.len()
-        || (is_versus && state.p2_selected_steps_index >= color::FILE_DIFFICULTY_NAMES.len());
-    if need_edits {
-        let rebuild_edits = state
-            .cached_edits
-            .as_ref()
-            .is_none_or(|c| !Arc::ptr_eq(&c.song, song) || c.chart_type != chart_type);
-        if rebuild_edits {
-            state.cached_edits = Some(EditSortCache {
-                song: song.clone(),
-                chart_type,
-                indices: edit_chart_indices_sorted(song, chart_type),
-            });
-        }
+    let rebuild_edits = state
+        .cached_edits
+        .as_ref()
+        .is_none_or(|c| !Arc::ptr_eq(&c.song, song) || c.chart_type != chart_type);
+    if rebuild_edits {
+        state.cached_edits = Some(EditSortCache {
+            song: song.clone(),
+            chart_type,
+            indices: edit_chart_indices_sorted(song, chart_type),
+        });
     }
 
     let edits: &[usize] = state
@@ -3335,6 +3331,20 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         }
     }
 
+    let selected_song_for_cache = match state.entries.get(state.selected_index) {
+        Some(MusicWheelEntry::Song(song)) => Some(song.clone()),
+        _ => None,
+    };
+    if let Some(song) = selected_song_for_cache {
+        let play_style = profile::get_session_play_style();
+        ensure_chart_cache_for_song(
+            state,
+            &song,
+            play_style.chart_type(),
+            play_style == profile::PlayStyle::Versus,
+        );
+    }
+
     if state.sort_menu != sort_menu::State::Hidden
         || !matches!(
             state.leaderboard,
@@ -4513,11 +4523,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         && !c.notes.is_empty()
                 }));
             }
-            v.extend(
-                edit_charts_sorted(song, target_chart_type)
-                    .into_iter()
-                    .map(Some),
-            );
+            let cached_edit_indices = state.cached_edits.as_ref().and_then(|c| {
+                if Arc::ptr_eq(&c.song, song) && c.chart_type == target_chart_type {
+                    Some(c.indices.as_slice())
+                } else {
+                    None
+                }
+            });
+            if let Some(indices) = cached_edit_indices {
+                v.reserve(indices.len());
+                for &chart_ix in indices {
+                    v.push(song.charts.get(chart_ix));
+                }
+            } else {
+                v.extend(
+                    edit_charts_sorted(song, target_chart_type)
+                        .into_iter()
+                        .map(Some),
+                );
+            }
             (v, state.selected_steps_index, state.p2_selected_steps_index)
         }
         _ => (
