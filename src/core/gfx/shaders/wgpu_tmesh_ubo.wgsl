@@ -10,6 +10,10 @@ struct VertexIn {
     @location(0) pos: vec2<f32>,
     @location(1) uv: vec2<f32>,
     @location(2) color: vec4<f32>,
+    @location(3) model_col0: vec4<f32>,
+    @location(4) model_col1: vec4<f32>,
+    @location(5) model_col2: vec4<f32>,
+    @location(6) model_col3: vec4<f32>,
 };
 
 struct VertexOut {
@@ -21,7 +25,13 @@ struct VertexOut {
 @vertex
 fn vs_main(input: VertexIn) -> VertexOut {
     var out: VertexOut;
-    out.pos = u_proj.proj * vec4<f32>(input.pos, 0.0, 1.0);
+    let model = mat4x4<f32>(
+        input.model_col0,
+        input.model_col1,
+        input.model_col2,
+        input.model_col3,
+    );
+    out.pos = u_proj.proj * model * vec4<f32>(input.pos, 0.0, 1.0);
     out.uv = input.uv;
     out.color = input.color;
     return out;

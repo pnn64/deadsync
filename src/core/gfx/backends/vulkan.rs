@@ -49,6 +49,21 @@ struct TexturedMeshVertexGpu {
     color: [f32; 4], // offset 16
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct TexturedMeshInstanceGpu {
+    model_col0: [f32; 4], // offset 0
+    model_col1: [f32; 4], // offset 16
+    model_col2: [f32; 4], // offset 32
+    model_col3: [f32; 4], // offset 48
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct TMeshGeomKey {
+    ptr: usize,
+    len: usize,
+}
+
 struct PipelinePair {
     layout: vk::PipelineLayout,
     pipe: vk::Pipeline,
@@ -141,6 +156,10 @@ pub struct State {
     tmesh_ring_ptr: *mut TexturedMeshVertexGpu, // persistently mapped pointer
     tmesh_capacity_vertices: usize,        // total textured mesh vertices across ring
     per_frame_stride_tmesh_vertices: usize, // textured mesh vertices reserved per frame
+    tmesh_instance_ring: Option<BufferResource>, // one big instanced VB for textured meshes
+    tmesh_instance_ring_ptr: *mut TexturedMeshInstanceGpu, // persistently mapped pointer
+    tmesh_capacity_instances: usize,       // total textured mesh instances across ring
+    per_frame_stride_tmesh_instances: usize, // textured mesh instances reserved per frame
 }
 
 // --- Main Procedural Functions ---
@@ -262,6 +281,10 @@ pub fn init(
         tmesh_ring_ptr: std::ptr::null_mut(),
         tmesh_capacity_vertices: 0,
         per_frame_stride_tmesh_vertices: 0,
+        tmesh_instance_ring: None,
+        tmesh_instance_ring_ptr: std::ptr::null_mut(),
+        tmesh_capacity_instances: 0,
+        per_frame_stride_tmesh_instances: 0,
     };
 
     // Static unit quad buffers
@@ -830,6 +853,63 @@ fn ensure_tmesh_ring_capacity(
     Ok((state.current_frame * state.per_frame_stride_tmesh_vertices) as u32)
 }
 
+fn ensure_tmesh_instance_ring_capacity(
+    state: &mut State,
+    needed_instances: usize,
+) -> Result<u32, Box<dyn Error>> {
+    let requested_stride = next_pow2_usize(needed_instances.max(1));
+
+    let stride = if state.per_frame_stride_tmesh_instances == 0 {
+        requested_stride
+    } else {
+        state
+            .per_frame_stride_tmesh_instances
+            .max(requested_stride)
+    };
+
+    let need_total_instances = stride * MAX_FRAMES_IN_FLIGHT;
+    let bytes_per_instance = std::mem::size_of::<TexturedMeshInstanceGpu>() as vk::DeviceSize;
+    let need_bytes = (need_total_instances as u64) * (bytes_per_instance as u64);
+
+    let dev = state.device.as_ref().unwrap();
+
+    if state.tmesh_instance_ring.is_none() || state.tmesh_capacity_instances < need_total_instances
+    {
+        if let Some(old) = state.tmesh_instance_ring.take() {
+            unsafe {
+                dev.device_wait_idle()?;
+                if !state.tmesh_instance_ring_ptr.is_null() {
+                    dev.unmap_memory(old.memory);
+                }
+            }
+            destroy_buffer(dev, &old);
+            state.tmesh_instance_ring_ptr = std::ptr::null_mut();
+        }
+
+        let (buf, mem) = create_gpu_buffer(
+            &state.instance,
+            dev,
+            state.pdevice,
+            need_bytes,
+            vk::BufferUsageFlags::VERTEX_BUFFER,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        )?;
+        let mapped = unsafe { dev.map_memory(mem, 0, need_bytes, vk::MemoryMapFlags::empty())? };
+
+        state.tmesh_instance_ring = Some(BufferResource {
+            buffer: buf,
+            memory: mem,
+        });
+        state.tmesh_instance_ring_ptr = mapped.cast::<TexturedMeshInstanceGpu>();
+        state.tmesh_capacity_instances = need_total_instances;
+        state.per_frame_stride_tmesh_instances = stride;
+    } else if state.per_frame_stride_tmesh_instances != stride {
+        state.per_frame_stride_tmesh_instances = stride;
+    }
+
+    Ok((state.current_frame * state.per_frame_stride_tmesh_instances) as u32)
+}
+
 fn transition_image_layout_cmd(
     device: &Device,
     cmd: vk::CommandBuffer,
@@ -1027,10 +1107,16 @@ pub fn draw(
             .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
     }
 
-    let (needed_instances, needed_mesh_vertices, needed_tmesh_vertices) = {
+    let (
+        needed_instances,
+        needed_mesh_vertices,
+        needed_tmesh_vertices,
+        needed_tmesh_instances,
+    ) = {
         let mut inst: usize = 0;
         let mut mesh: usize = 0;
         let mut tmesh: usize = 0;
+        let mut tmesh_inst: usize = 0;
         for o in &render_list.objects {
             match &o.object_type {
                 ObjectType::Sprite { .. } => inst += 1,
@@ -1042,11 +1128,14 @@ pub fn draw(
                 ObjectType::TexturedMesh { vertices, mode, .. } => {
                     if *mode == MeshMode::Triangles {
                         tmesh += vertices.len();
+                        if !vertices.is_empty() {
+                            tmesh_inst += 1;
+                        }
                     }
                 }
             }
         }
-        (inst, mesh, tmesh)
+        (inst, mesh, tmesh, tmesh_inst)
     };
 
     let base_first_instance = if needed_instances > 0 {
@@ -1064,6 +1153,14 @@ pub fn draw(
     } else {
         None
     };
+    let base_first_tmesh_instance = if needed_tmesh_instances > 0 {
+        Some(ensure_tmesh_instance_ring_capacity(
+            state,
+            needed_tmesh_instances,
+        )?)
+    } else {
+        None
+    };
 
     struct SpriteRun {
         set: vk::DescriptorSet,
@@ -1078,8 +1175,10 @@ pub fn draw(
     }
     struct TexturedMeshDraw {
         set: vk::DescriptorSet,
-        start: u32,
-        count: u32,
+        vertex_start: u32,
+        vertex_count: u32,
+        instance_start: u32,
+        instance_count: u32,
         camera: u8,
     }
 
@@ -1093,6 +1192,7 @@ pub fn draw(
     let mut sprite_written: u32 = 0;
     let mut mesh_written: u32 = 0;
     let mut tmesh_written: u32 = 0;
+    let mut tmesh_instance_written: u32 = 0;
 
     unsafe {
         let device = state.device.as_ref().unwrap();
@@ -1140,6 +1240,11 @@ pub fn draw(
         let tmesh_base_ptr = base_first_tmesh_vertex.map_or(std::ptr::null_mut(), |b| {
             state.tmesh_ring_ptr.add(b as usize)
         });
+        let tmesh_instance_base_ptr = base_first_tmesh_instance.map_or(std::ptr::null_mut(), |b| {
+            state.tmesh_instance_ring_ptr.add(b as usize)
+        });
+        let mut tmesh_geom: HashMap<TMeshGeomKey, (u32, u32)> =
+            HashMap::with_capacity(needed_tmesh_instances);
 
         for obj in &render_list.objects {
             match &obj.object_type {
@@ -1241,30 +1346,63 @@ pub fn draw(
                     };
 
                     debug_assert!(!tmesh_base_ptr.is_null(), "textured mesh ring missing");
-                    let start = tmesh_written;
-                    for v in vertices.iter() {
-                        let p = obj.transform * Vector4::new(v.pos[0], v.pos[1], 0.0, 1.0);
-                        std::ptr::write(
-                            tmesh_base_ptr.add(tmesh_written as usize),
-                            TexturedMeshVertexGpu {
-                                pos: [p.x, p.y],
-                                uv: v.uv,
-                                color: v.color,
-                            },
-                        );
-                        tmesh_written += 1;
-                    }
+                    debug_assert!(
+                        !tmesh_instance_base_ptr.is_null(),
+                        "textured mesh instance ring missing"
+                    );
+                    let geom_key = TMeshGeomKey {
+                        ptr: vertices.as_ptr() as usize,
+                        len: vertices.len(),
+                    };
+                    let (vertex_start, vertex_count) =
+                        if let Some(&geom) = tmesh_geom.get(&geom_key) {
+                            geom
+                        } else {
+                            let start = tmesh_written;
+                            for v in vertices.iter() {
+                                std::ptr::write(
+                                    tmesh_base_ptr.add(tmesh_written as usize),
+                                    TexturedMeshVertexGpu {
+                                        pos: v.pos,
+                                        uv: v.uv,
+                                        color: v.color,
+                                    },
+                                );
+                                tmesh_written += 1;
+                            }
+                            let count = tmesh_written - start;
+                            let geom = (start, count);
+                            tmesh_geom.insert(geom_key, geom);
+                            geom
+                        };
+                    let instance_start = tmesh_instance_written;
+                    let model: [[f32; 4]; 4] = obj.transform.into();
+                    std::ptr::write(
+                        tmesh_instance_base_ptr.add(tmesh_instance_written as usize),
+                        TexturedMeshInstanceGpu {
+                            model_col0: model[0],
+                            model_col1: model[1],
+                            model_col2: model[2],
+                            model_col3: model[3],
+                        },
+                    );
+                    tmesh_instance_written += 1;
 
                     if let Some(Op::TexturedMesh(run)) = ops.last_mut()
                         && run.set == set
                         && run.camera == obj.camera
+                        && run.vertex_start == vertex_start
+                        && run.vertex_count == vertex_count
+                        && run.instance_start + run.instance_count == instance_start
                     {
-                        run.count += tmesh_written - start;
+                        run.instance_count += 1;
                     } else {
                         ops.push(Op::TexturedMesh(TexturedMeshDraw {
                             set,
-                            start,
-                            count: tmesh_written - start,
+                            vertex_start,
+                            vertex_count,
+                            instance_start,
+                            instance_count: 1,
                             camera: obj.camera,
                         }));
                     }
@@ -1407,7 +1545,8 @@ pub fn draw(
                             state.textured_mesh_pipeline,
                         );
                         let vb = state.tmesh_ring.as_ref().unwrap().buffer;
-                        device.cmd_bind_vertex_buffers(cmd, 0, &[vb], &[0]);
+                        let inst = state.tmesh_instance_ring.as_ref().unwrap().buffer;
+                        device.cmd_bind_vertex_buffers(cmd, 0, &[vb, inst], &[0, 0]);
                         bound = Bound::TexturedMesh;
                         last_set = vk::DescriptorSet::null();
                         last_camera = None;
@@ -1442,9 +1581,19 @@ pub fn draw(
                         last_set = draw.set;
                     }
 
-                    let first_vertex = base_first_tmesh_vertex.unwrap_or(0) + draw.start;
-                    device.cmd_draw(cmd, draw.count, 1, first_vertex, 0);
-                    vertices_drawn = vertices_drawn.saturating_add(draw.count);
+                    let first_vertex = base_first_tmesh_vertex.unwrap_or(0) + draw.vertex_start;
+                    let first_instance =
+                        base_first_tmesh_instance.unwrap_or(0) + draw.instance_start;
+                    device.cmd_draw(
+                        cmd,
+                        draw.vertex_count,
+                        draw.instance_count,
+                        first_vertex,
+                        first_instance,
+                    );
+                    vertices_drawn = vertices_drawn.saturating_add(
+                        draw.vertex_count.saturating_mul(draw.instance_count),
+                    );
                 }
             }
         }
@@ -1543,6 +1692,14 @@ pub fn cleanup(state: &mut State) {
             if !state.tmesh_ring_ptr.is_null() {
                 state.device.as_ref().unwrap().unmap_memory(ring.memory);
                 state.tmesh_ring_ptr = std::ptr::null_mut();
+            }
+            destroy_buffer(state.device.as_ref().unwrap(), &ring);
+        }
+
+        if let Some(ring) = state.tmesh_instance_ring.take() {
+            if !state.tmesh_instance_ring_ptr.is_null() {
+                state.device.as_ref().unwrap().unmap_memory(ring.memory);
+                state.tmesh_instance_ring_ptr = std::ptr::null_mut();
             }
             destroy_buffer(state.device.as_ref().unwrap(), &ring);
         }
@@ -1893,13 +2050,17 @@ fn vertex_input_descriptions_mesh() -> (
 
 #[inline(always)]
 fn vertex_input_descriptions_tmesh() -> (
-    [vk::VertexInputBindingDescription; 1],
-    [vk::VertexInputAttributeDescription; 3],
+    [vk::VertexInputBindingDescription; 2],
+    [vk::VertexInputAttributeDescription; 7],
 ) {
     let b0 = vk::VertexInputBindingDescription::default()
         .binding(0)
         .stride(std::mem::size_of::<TexturedMeshVertexGpu>() as u32)
         .input_rate(vk::VertexInputRate::VERTEX);
+    let b1 = vk::VertexInputBindingDescription::default()
+        .binding(1)
+        .stride(std::mem::size_of::<TexturedMeshInstanceGpu>() as u32)
+        .input_rate(vk::VertexInputRate::INSTANCE);
 
     let a_pos = vk::VertexInputAttributeDescription::default()
         .binding(0)
@@ -1916,8 +2077,31 @@ fn vertex_input_descriptions_tmesh() -> (
         .location(2)
         .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(16);
+    let a_model0 = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(3)
+        .format(vk::Format::R32G32B32A32_SFLOAT)
+        .offset(0);
+    let a_model1 = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(4)
+        .format(vk::Format::R32G32B32A32_SFLOAT)
+        .offset(16);
+    let a_model2 = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(5)
+        .format(vk::Format::R32G32B32A32_SFLOAT)
+        .offset(32);
+    let a_model3 = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(6)
+        .format(vk::Format::R32G32B32A32_SFLOAT)
+        .offset(48);
 
-    ([b0], [a_pos, a_uv, a_color])
+    (
+        [b0, b1],
+        [a_pos, a_uv, a_color, a_model0, a_model1, a_model2, a_model3],
+    )
 }
 
 fn begin_single_time_commands(

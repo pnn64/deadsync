@@ -30,6 +30,40 @@ struct TexturedMeshVertexRaw {
     color: [f32; 4],
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct TexturedMeshInstanceRaw {
+    model_col0: [f32; 4],
+    model_col1: [f32; 4],
+    model_col2: [f32; 4],
+    model_col3: [f32; 4],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct TMeshGeomKey {
+    ptr: usize,
+    len: usize,
+}
+
+#[derive(Clone, Copy)]
+struct TexturedMeshRun {
+    vertex_start: u32,
+    vertex_count: u32,
+    instance_start: u32,
+    instance_count: u32,
+    mode: MeshMode,
+    blend: BlendMode,
+    texture: glow::Texture,
+    camera: u8,
+}
+
+#[derive(Clone, Copy)]
+enum DrawOp {
+    Sprite(usize),
+    Mesh(usize),
+    TexturedMesh(TexturedMeshRun),
+}
+
 pub struct State {
     pub gl: glow::Context,
     gl_surface: Surface<WindowSurface>,
@@ -54,6 +88,10 @@ pub struct State {
     mesh_vbo: glow::Buffer,
     tmesh_vao: glow::VertexArray,
     tmesh_vbo: glow::Buffer,
+    tmesh_instance_vbo: glow::Buffer,
+    scratch_tmesh_vertices: Vec<TexturedMeshVertexRaw>,
+    scratch_tmesh_instances: Vec<TexturedMeshInstanceRaw>,
+    scratch_ops: Vec<DrawOp>,
     uv_scale_location: UniformLocation,
     uv_offset_location: UniformLocation,
     edge_fade_location: UniformLocation,
@@ -159,9 +197,10 @@ pub fn init(
         gl.bind_vertex_array(None);
         (vao, vbo)
     };
-    let (tmesh_vao, tmesh_vbo) = unsafe {
+    let (tmesh_vao, tmesh_vbo, tmesh_instance_vbo) = unsafe {
         let vao = gl.create_vertex_array()?;
         let vbo = gl.create_buffer()?;
+        let instance_vbo = gl.create_buffer()?;
 
         gl.bind_vertex_array(Some(vao));
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
@@ -190,8 +229,27 @@ pub fn init(
             (4 * std::mem::size_of::<f32>()) as i32,
         );
 
+        // i_model_col0..i_model_col3 (locations 3..6)
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_vbo));
+        gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
+
+        let inst_stride = std::mem::size_of::<TexturedMeshInstanceRaw>() as i32;
+        let col_size = (4 * std::mem::size_of::<f32>()) as i32;
+        gl.enable_vertex_attrib_array(3);
+        gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, inst_stride, 0);
+        gl.vertex_attrib_divisor(3, 1);
+        gl.enable_vertex_attrib_array(4);
+        gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, inst_stride, col_size);
+        gl.vertex_attrib_divisor(4, 1);
+        gl.enable_vertex_attrib_array(5);
+        gl.vertex_attrib_pointer_f32(5, 4, glow::FLOAT, false, inst_stride, 2 * col_size);
+        gl.vertex_attrib_divisor(5, 1);
+        gl.enable_vertex_attrib_array(6);
+        gl.vertex_attrib_pointer_f32(6, 4, glow::FLOAT, false, inst_stride, 3 * col_size);
+        gl.vertex_attrib_divisor(6, 1);
+
         gl.bind_vertex_array(None);
-        (vao, vbo)
+        (vao, vbo, instance_vbo)
     };
 
     let initial_size = window.inner_size();
@@ -234,6 +292,10 @@ pub fn init(
         mesh_vbo,
         tmesh_vao,
         tmesh_vbo,
+        tmesh_instance_vbo,
+        scratch_tmesh_vertices: Vec::with_capacity(1024),
+        scratch_tmesh_instances: Vec::with_capacity(256),
+        scratch_ops: Vec::with_capacity(64),
         uv_scale_location,
         uv_offset_location,
         edge_fade_location,
@@ -355,6 +417,111 @@ pub fn draw(
         *last = Some(want);
     }
 
+    {
+        let objects_len = render_list.objects.len();
+        let tmesh_vertices = &mut state.scratch_tmesh_vertices;
+        tmesh_vertices.clear();
+        let want_tmesh = objects_len.saturating_mul(4);
+        if tmesh_vertices.capacity() < want_tmesh {
+            tmesh_vertices.reserve(want_tmesh - tmesh_vertices.capacity());
+        }
+
+        let tmesh_instances = &mut state.scratch_tmesh_instances;
+        tmesh_instances.clear();
+        if tmesh_instances.capacity() < objects_len {
+            tmesh_instances.reserve(objects_len - tmesh_instances.capacity());
+        }
+
+        let ops = &mut state.scratch_ops;
+        ops.clear();
+        if ops.capacity() < objects_len {
+            ops.reserve(objects_len - ops.capacity());
+        }
+
+        let mut tmesh_geom: HashMap<TMeshGeomKey, (u32, u32)> = HashMap::with_capacity(objects_len);
+
+        for (idx, obj) in render_list.objects.iter().enumerate() {
+            match &obj.object_type {
+                ObjectType::Sprite { .. } => ops.push(DrawOp::Sprite(idx)),
+                ObjectType::Mesh { vertices, .. } => {
+                    if !vertices.is_empty() {
+                        ops.push(DrawOp::Mesh(idx));
+                    }
+                }
+                ObjectType::TexturedMesh {
+                    texture_id,
+                    vertices,
+                    mode,
+                } => {
+                    if *mode != MeshMode::Triangles || vertices.is_empty() {
+                        continue;
+                    }
+
+                    let Some(RendererTexture::OpenGL(gl_tex)) =
+                        lookup_texture_case_insensitive(textures, texture_id.as_ref())
+                    else {
+                        continue;
+                    };
+
+                    let geom_key = TMeshGeomKey {
+                        ptr: vertices.as_ptr() as usize,
+                        len: vertices.len(),
+                    };
+                    let (vertex_start, vertex_count) = if let Some(&geom) = tmesh_geom.get(&geom_key)
+                    {
+                        geom
+                    } else {
+                        let start = tmesh_vertices.len() as u32;
+                        tmesh_vertices.reserve(vertices.len());
+                        for v in vertices.iter() {
+                            tmesh_vertices.push(TexturedMeshVertexRaw {
+                                pos: v.pos,
+                                uv: v.uv,
+                                color: v.color,
+                            });
+                        }
+                        let count = vertices.len() as u32;
+                        tmesh_geom.insert(geom_key, (start, count));
+                        (start, count)
+                    };
+
+                    let instance_start = tmesh_instances.len() as u32;
+                    let model: [[f32; 4]; 4] = obj.transform.into();
+                    tmesh_instances.push(TexturedMeshInstanceRaw {
+                        model_col0: model[0],
+                        model_col1: model[1],
+                        model_col2: model[2],
+                        model_col3: model[3],
+                    });
+
+                    if let Some(DrawOp::TexturedMesh(last)) = ops.last_mut()
+                        && last.texture == gl_tex.0
+                        && last.blend == obj.blend
+                        && last.camera == obj.camera
+                        && last.mode == *mode
+                        && last.vertex_start == vertex_start
+                        && last.vertex_count == vertex_count
+                        && last.instance_start + last.instance_count == instance_start
+                    {
+                        last.instance_count += 1;
+                        continue;
+                    }
+
+                    ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
+                        vertex_start,
+                        vertex_count,
+                        instance_start,
+                        instance_count: 1,
+                        mode: *mode,
+                        blend: obj.blend,
+                        texture: gl_tex.0,
+                        camera: obj.camera,
+                    }));
+                }
+            }
+        }
+    }
+
     let mut vertices: u32 = 0;
 
     unsafe {
@@ -377,24 +544,48 @@ pub fn draw(
         let mut last_color: Option<[f32; 4]> = None;
         let mut last_edge_fade: Option<[f32; 4]> = None;
         let mut last_prog: Option<u8> = None; // 0=sprite, 1=mesh, 2=textured mesh
+        let mut last_tmesh_instance_start: Option<u32> = None;
 
-        for obj in &render_list.objects {
-            apply_blend(gl, obj.blend, &mut last_blend);
+        if !state.scratch_tmesh_vertices.is_empty() {
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_vbo));
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                bytemuck::cast_slice(state.scratch_tmesh_vertices.as_slice()),
+                glow::DYNAMIC_DRAW,
+            );
+        }
+        if !state.scratch_tmesh_instances.is_empty() {
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_instance_vbo));
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                bytemuck::cast_slice(state.scratch_tmesh_instances.as_slice()),
+                glow::DYNAMIC_DRAW,
+            );
+        }
 
-            let cam = render_list
-                .cameras
-                .get(obj.camera as usize)
-                .copied()
-                .unwrap_or(state.projection);
+        for op in state.scratch_ops.iter().copied() {
+            match op {
+                DrawOp::Sprite(idx) => {
+                    let obj = &render_list.objects[idx];
+                    let ObjectType::Sprite {
+                        texture_id,
+                        tint,
+                        uv_scale,
+                        uv_offset,
+                        edge_fade,
+                    } = &obj.object_type
+                    else {
+                        continue;
+                    };
 
-            match &obj.object_type {
-                ObjectType::Sprite {
-                    texture_id,
-                    tint,
-                    uv_scale,
-                    uv_offset,
-                    edge_fade,
-                } => {
+                    apply_blend(gl, obj.blend, &mut last_blend);
+
+                    let cam = render_list
+                        .cameras
+                        .get(obj.camera as usize)
+                        .copied()
+                        .unwrap_or(state.projection);
+
                     if last_prog != Some(0) {
                         gl.use_program(Some(state.program));
                         gl.bind_vertex_array(Some(state.shared_vao));
@@ -450,10 +641,23 @@ pub fn draw(
                         vertices += 4;
                     }
                 }
-                ObjectType::Mesh { vertices: vs, mode } => {
+                DrawOp::Mesh(idx) => {
+                    let obj = &render_list.objects[idx];
+                    let ObjectType::Mesh { vertices: vs, mode } = &obj.object_type else {
+                        continue;
+                    };
                     if vs.is_empty() {
                         continue;
                     }
+
+                    apply_blend(gl, obj.blend, &mut last_blend);
+
+                    let cam = render_list
+                        .cameras
+                        .get(obj.camera as usize)
+                        .copied()
+                        .unwrap_or(state.projection);
+
                     if last_prog != Some(1) {
                         gl.use_program(Some(state.mesh_program));
                         gl.bind_vertex_array(Some(state.mesh_vao));
@@ -480,59 +684,78 @@ pub fn draw(
                     gl.draw_arrays(prim, 0, vs.len() as i32);
                     vertices = vertices.saturating_add(vs.len() as u32);
                 }
-                ObjectType::TexturedMesh {
-                    texture_id,
-                    vertices: vs,
-                    mode,
-                } => {
-                    if vs.is_empty() {
-                        continue;
-                    }
+                DrawOp::TexturedMesh(run) => {
+                    apply_blend(gl, run.blend, &mut last_blend);
+
                     if last_prog != Some(2) {
                         gl.use_program(Some(state.tmesh_program));
                         gl.bind_vertex_array(Some(state.tmesh_vao));
                         gl.uniform_1_i32(Some(&state.tmesh_texture_location), 0);
                         last_prog = Some(2);
+                        last_tmesh_instance_start = None;
                     }
 
-                    let mvp_array: [[f32; 4]; 4] = (cam * obj.transform).into();
+                    if last_tmesh_instance_start != Some(run.instance_start) {
+                        let inst_stride = std::mem::size_of::<TexturedMeshInstanceRaw>() as i32;
+                        let col_size = (4 * std::mem::size_of::<f32>()) as i32;
+                        let base = (run.instance_start as i32) * inst_stride;
+                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_instance_vbo));
+                        gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, inst_stride, base);
+                        gl.vertex_attrib_pointer_f32(
+                            4,
+                            4,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + col_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            5,
+                            4,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 2 * col_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            6,
+                            4,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 3 * col_size,
+                        );
+                        last_tmesh_instance_start = Some(run.instance_start);
+                    }
+
+                    let cam = render_list
+                        .cameras
+                        .get(run.camera as usize)
+                        .copied()
+                        .unwrap_or(state.projection);
+                    let mvp_array: [[f32; 4]; 4] = cam.into();
                     gl.uniform_matrix_4_f32_slice(
                         Some(&state.tmesh_mvp_location),
                         false,
                         bytemuck::cast_slice(&mvp_array),
                     );
 
-                    let Some(RendererTexture::OpenGL(gl_tex)) =
-                        lookup_texture_case_insensitive(textures, texture_id.as_ref())
-                    else {
-                        continue;
-                    };
-                    if last_bound_tex != Some(gl_tex.0) {
-                        gl.bind_texture(glow::TEXTURE_2D, Some(gl_tex.0));
-                        last_bound_tex = Some(gl_tex.0);
+                    if last_bound_tex != Some(run.texture) {
+                        gl.bind_texture(glow::TEXTURE_2D, Some(run.texture));
+                        last_bound_tex = Some(run.texture);
                     }
 
-                    let mut transformed: Vec<TexturedMeshVertexRaw> = Vec::with_capacity(vs.len());
-                    for v in vs.iter() {
-                        transformed.push(TexturedMeshVertexRaw {
-                            pos: v.pos,
-                            uv: v.uv,
-                            color: v.color,
-                        });
-                    }
-
-                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_vbo));
-                    gl.buffer_data_u8_slice(
-                        glow::ARRAY_BUFFER,
-                        bytemuck::cast_slice(transformed.as_slice()),
-                        glow::DYNAMIC_DRAW,
-                    );
-
-                    let prim = match mode {
+                    let prim = match run.mode {
                         MeshMode::Triangles => glow::TRIANGLES,
                     };
-                    gl.draw_arrays(prim, 0, transformed.len() as i32);
-                    vertices = vertices.saturating_add(transformed.len() as u32);
+                    gl.draw_arrays_instanced(
+                        prim,
+                        run.vertex_start as i32,
+                        run.vertex_count as i32,
+                        run.instance_count as i32,
+                    );
+                    vertices = vertices
+                        .saturating_add(run.vertex_count.saturating_mul(run.instance_count));
                 }
             }
         }
@@ -573,6 +796,7 @@ pub fn cleanup(state: &mut State) {
         state.gl.delete_buffer(state.mesh_vbo);
         state.gl.delete_vertex_array(state.tmesh_vao);
         state.gl.delete_buffer(state.tmesh_vbo);
+        state.gl.delete_buffer(state.tmesh_instance_vbo);
     }
     info!("OpenGL resources cleaned up.");
 }

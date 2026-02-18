@@ -70,6 +70,15 @@ struct TexturedMeshVertexRaw {
     color: [f32; 4],
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct TexturedMeshInstanceRaw {
+    model_col0: [f32; 4],
+    model_col1: [f32; 4],
+    model_col2: [f32; 4],
+    model_col3: [f32; 4],
+}
+
 struct PipelineSet {
     alpha: wgpu::RenderPipeline,
     add: wgpu::RenderPipeline,
@@ -138,13 +147,21 @@ struct SpriteRun {
 }
 
 struct TexturedMeshRun {
-    start: u32,
-    count: u32,
+    vertex_start: u32,
+    vertex_count: u32,
+    instance_start: u32,
+    instance_count: u32,
     mode: MeshMode,
     blend: BlendMode,
     bind_group: Arc<wgpu::BindGroup>,
     key: u64,
     camera: u8,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct TMeshGeomKey {
+    ptr: usize,
+    len: usize,
 }
 
 enum Op {
@@ -201,11 +218,14 @@ pub struct State {
     scratch_instances: Vec<InstanceRaw>,
     scratch_mesh_vertices: Vec<crate::core::gfx::MeshVertex>,
     scratch_tmesh_vertices: Vec<TexturedMeshVertexRaw>,
+    scratch_tmesh_instances: Vec<TexturedMeshInstanceRaw>,
     scratch_ops: Vec<Op>,
     mesh_vertex_buffer: wgpu::Buffer,
     mesh_vertex_capacity: usize,
     tmesh_vertex_buffer: wgpu::Buffer,
     tmesh_vertex_capacity: usize,
+    tmesh_instance_buffer: wgpu::Buffer,
+    tmesh_instance_capacity: usize,
     window_size: (u32, u32),
     vsync_enabled: bool,
     next_texture_id: u64,
@@ -412,6 +432,13 @@ fn init(
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+    let tmesh_instance_capacity = 256usize;
+    let tmesh_instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu textured-mesh instance buffer"),
+        size: (tmesh_instance_capacity * mem::size_of::<TexturedMeshInstanceRaw>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
 
     info!("{} (wgpu) backend initialized.", api.name());
 
@@ -444,11 +471,14 @@ fn init(
         scratch_instances: Vec::with_capacity(instance_capacity),
         scratch_mesh_vertices: Vec::with_capacity(mesh_vertex_capacity),
         scratch_tmesh_vertices: Vec::with_capacity(tmesh_vertex_capacity),
+        scratch_tmesh_instances: Vec::with_capacity(tmesh_instance_capacity),
         scratch_ops: Vec::with_capacity(64),
         mesh_vertex_buffer,
         mesh_vertex_capacity,
         tmesh_vertex_buffer,
         tmesh_vertex_capacity,
+        tmesh_instance_buffer,
+        tmesh_instance_capacity,
         window_size: (size.width, size.height),
         vsync_enabled,
         next_texture_id: 1,
@@ -664,6 +694,13 @@ pub fn draw(
         if tmesh_vertices.capacity() < want_tmesh {
             tmesh_vertices.reserve(want_tmesh - tmesh_vertices.capacity());
         }
+        let tmesh_instances = &mut state.scratch_tmesh_instances;
+        tmesh_instances.clear();
+        if tmesh_instances.capacity() < objects_len {
+            tmesh_instances.reserve(objects_len - tmesh_instances.capacity());
+        }
+        let mut tmesh_geom: HashMap<TMeshGeomKey, (u32, u32)> = HashMap::new();
+        tmesh_geom.reserve(objects_len);
 
         let ops = &mut state.scratch_ops;
         ops.clear();
@@ -752,30 +789,54 @@ pub fn draw(
                     let Some(tex) = tex else {
                         continue;
                     };
-                    let start = tmesh_vertices.len() as u32;
-                    tmesh_vertices.reserve(vertices.len());
-                    for v in vertices.iter() {
-                        let p = obj.transform * Vector4::new(v.pos[0], v.pos[1], 0.0, 1.0);
-                        tmesh_vertices.push(TexturedMeshVertexRaw {
-                            pos: [p.x, p.y],
-                            uv: v.uv,
-                            color: v.color,
-                        });
-                    }
+                    let geom_key = TMeshGeomKey {
+                        ptr: vertices.as_ptr() as usize,
+                        len: vertices.len(),
+                    };
+                    let (vertex_start, vertex_count) =
+                        if let Some(&geom) = tmesh_geom.get(&geom_key) {
+                            geom
+                        } else {
+                            let start = tmesh_vertices.len() as u32;
+                            tmesh_vertices.reserve(vertices.len());
+                            for v in vertices.iter() {
+                                tmesh_vertices.push(TexturedMeshVertexRaw {
+                                    pos: v.pos,
+                                    uv: v.uv,
+                                    color: v.color,
+                                });
+                            }
+                            let count = vertices.len() as u32;
+                            tmesh_geom.insert(geom_key, (start, count));
+                            (start, count)
+                        };
+                    let instance_start = tmesh_instances.len() as u32;
+                    let model: [[f32; 4]; 4] = obj.transform.into();
+                    tmesh_instances.push(TexturedMeshInstanceRaw {
+                        model_col0: model[0],
+                        model_col1: model[1],
+                        model_col2: model[2],
+                        model_col3: model[3],
+                    });
                     let key = tex.id.wrapping_shl(1) | 1;
                     if let Some(Op::TexturedMesh(last)) = ops.last_mut()
                         && last.key == key
                         && last.blend == obj.blend
                         && last.camera == obj.camera
                         && last.mode == *mode
+                        && last.vertex_start == vertex_start
+                        && last.vertex_count == vertex_count
+                        && last.instance_start + last.instance_count == instance_start
                     {
-                        last.count += vertices.len() as u32;
+                        last.instance_count += 1;
                         continue;
                     }
 
                     ops.push(Op::TexturedMesh(TexturedMeshRun {
-                        start,
-                        count: vertices.len() as u32,
+                        vertex_start,
+                        vertex_count,
+                        instance_start,
+                        instance_count: 1,
                         mode: *mode,
                         blend: obj.blend,
                         bind_group: tex.bind_group_repeat.clone(),
@@ -812,6 +873,15 @@ pub fn draw(
             &state.tmesh_vertex_buffer,
             0,
             cast_slice(state.scratch_tmesh_vertices.as_slice()),
+        );
+    }
+    let tmesh_instance_len = state.scratch_tmesh_instances.len();
+    ensure_tmesh_instance_capacity(state, tmesh_instance_len);
+    if tmesh_instance_len > 0 {
+        state.queue.write_buffer(
+            &state.tmesh_instance_buffer,
+            0,
+            cast_slice(state.scratch_tmesh_instances.as_slice()),
         );
     }
     upload_projections(state, &render_list.cameras);
@@ -942,11 +1012,12 @@ pub fn draw(
                     }
                 }
                 Op::TexturedMesh(run) => {
-                    if run.count == 0 {
+                    if run.vertex_count == 0 || run.instance_count == 0 {
                         continue;
                     }
                     if last_kind != Some(2) {
                         pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
+                        pass.set_vertex_buffer(1, state.tmesh_instance_buffer.slice(..));
                         last_kind = Some(2);
                         last_blend = None;
                         last_bind = None;
@@ -973,7 +1044,10 @@ pub fn draw(
                         last_bind = Some(run.key);
                     }
                     match run.mode {
-                        MeshMode::Triangles => pass.draw(run.start..(run.start + run.count), 0..1),
+                        MeshMode::Triangles => pass.draw(
+                            run.vertex_start..(run.vertex_start + run.vertex_count),
+                            run.instance_start..(run.instance_start + run.instance_count),
+                        ),
                     }
                 }
             }
@@ -984,7 +1058,14 @@ pub fn draw(
     state.queue.submit(Some(encoder.finish()));
     frame.present();
 
-    Ok((instance_len as u32) * 4 + mesh_len as u32 + tmesh_len as u32)
+    let mut tmesh_vpf = 0u32;
+    for op in &state.scratch_ops {
+        if let Op::TexturedMesh(run) = op {
+            tmesh_vpf =
+                tmesh_vpf.saturating_add(run.vertex_count.saturating_mul(run.instance_count));
+        }
+    }
+    Ok((instance_len as u32) * 4 + mesh_len as u32 + tmesh_vpf)
 }
 
 fn upload_projections(state: &mut State, cameras: &[Matrix4<f32>]) {
@@ -1089,6 +1170,20 @@ fn ensure_tmesh_vertex_capacity(state: &mut State, needed: usize) {
         mapped_at_creation: false,
     });
     state.tmesh_vertex_capacity = new_cap;
+}
+
+fn ensure_tmesh_instance_capacity(state: &mut State, needed: usize) {
+    if needed <= state.tmesh_instance_capacity {
+        return;
+    }
+    let new_cap = needed.next_power_of_two().max(256);
+    state.tmesh_instance_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu textured-mesh instance buffer"),
+        size: (new_cap * mem::size_of::<TexturedMeshInstanceRaw>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    state.tmesh_instance_capacity = new_cap;
 }
 
 fn ensure_projection_capacity(state: &mut State, needed: usize) {
@@ -1526,7 +1621,7 @@ fn build_tmesh_pipeline(
         vertex: wgpu::VertexState {
             module: shader,
             entry_point: Some("vs_main"),
-            buffers: &[textured_mesh_vertex_layout()],
+            buffers: &[textured_mesh_vertex_layout(), textured_mesh_instance_layout()],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {
@@ -1587,6 +1682,14 @@ const fn textured_mesh_vertex_layout() -> wgpu::VertexBufferLayout<'static> {
     }
 }
 
+const fn textured_mesh_instance_layout() -> wgpu::VertexBufferLayout<'static> {
+    wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<TexturedMeshInstanceRaw>() as u64,
+        step_mode: wgpu::VertexStepMode::Instance,
+        attributes: &TMESH_INSTANCE_ATTRS,
+    }
+}
+
 const VERT_ATTRS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
     0 => Float32x2,
     1 => Float32x2,
@@ -1601,6 +1704,13 @@ const TMESH_ATTRS: [wgpu::VertexAttribute; 3] = wgpu::vertex_attr_array![
     0 => Float32x2, // pos
     1 => Float32x2, // uv
     2 => Float32x4, // color
+];
+
+const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
+    3 => Float32x4, // model column 0
+    4 => Float32x4, // model column 1
+    5 => Float32x4, // model column 2
+    6 => Float32x4, // model column 3
 ];
 
 const INSTANCE_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
