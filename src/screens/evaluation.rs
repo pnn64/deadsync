@@ -2763,6 +2763,54 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 1.0
             };
 
+            // Record Texts (Simply Love PerPlayer/Upper/RecordTexts.lua)
+            let has_recordable_score = si.score_percent >= 0.01;
+            let machine_record_rank = if has_recordable_score {
+                si.machine_record_highlight_rank.filter(|rank| *rank > 0)
+            } else {
+                None
+            };
+            let personal_record_rank = if has_recordable_score {
+                si.personal_record_highlight_rank.filter(|rank| *rank > 0)
+            } else {
+                None
+            };
+            if machine_record_rank.is_some() || personal_record_rank.is_some() {
+                let record_color = eval_player_color_rgba(side, state.active_color_index);
+                // Simply Love/zmod:
+                // RecordTexts frame @ x(-45|95), y(54), zoom(0.225)
+                // MachineRecord child @ xy(-110,-18), PersonalRecord @ xy(-110,24)
+                // Final world pos = frame + child * frame_zoom.
+                let record_frame_x = if side == profile::PlayerSide::P1 {
+                    upper_origin_x - 45.0
+                } else {
+                    upper_origin_x + 95.0
+                };
+                let record_frame_y = 54.0_f32;
+                let record_frame_zoom = 0.225_f32;
+                let record_x = record_frame_x - 110.0 * record_frame_zoom;
+
+                if let Some(rank) = machine_record_rank {
+                    actors.push(act!(text: font("wendy"):
+                        settext(format!("Machine Record {rank}")):
+                        align(0.5, 0.5):
+                        xy(record_x, record_frame_y - 18.0 * record_frame_zoom):
+                        zoom(record_frame_zoom): z(101):
+                        diffuse(record_color[0], record_color[1], record_color[2], 1.0)
+                    ));
+                }
+
+                if let Some(rank) = personal_record_rank {
+                    actors.push(act!(text: font("wendy"):
+                        settext(format!("Personal Record {rank}")):
+                        align(0.5, 0.5):
+                        xy(record_x, record_frame_y + 24.0 * record_frame_zoom):
+                        zoom(record_frame_zoom): z(101):
+                        diffuse(record_color[0], record_color[1], record_color[2], 1.0)
+                    ));
+                }
+            }
+
             // Letter Grade
             actors.extend(eval_grades::actors(
                 si.grade,
