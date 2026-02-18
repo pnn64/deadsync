@@ -1471,6 +1471,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         selected_steps_index: 0,
         song_box_color: None,
         song_text_color: Some(COURSE_WHEEL_SONG_TEXT_COLOR),
+        song_has_edit_ptrs: None,
     }));
 
     if !matches!(selected_entry, Some(MusicWheelEntry::Song(_))) {

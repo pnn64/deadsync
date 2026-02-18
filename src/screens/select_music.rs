@@ -24,7 +24,7 @@ use crate::ui::font;
 use log::info;
 use rssp::bpm::parse_bpm_map;
 use std::cmp::Reverse;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -554,6 +554,7 @@ pub struct State {
     cached_chart_ix_p2: Option<usize>,
     cached_edits: Option<EditSortCache>,
     pack_total_seconds_by_index: Vec<f64>,
+    song_has_edit_ptrs: HashSet<usize>,
     pub pack_song_counts: HashMap<String, usize>,
     group_pack_song_counts: HashMap<String, usize>,
     title_pack_song_counts: HashMap<String, usize>,
@@ -1431,6 +1432,7 @@ pub fn init() -> State {
     let mut all_entries = Vec::with_capacity(total_packs.saturating_add(total_songs));
     let mut pack_song_counts = HashMap::with_capacity(total_packs);
     let mut pack_total_seconds_by_index = vec![0.0_f64; total_packs];
+    let mut song_has_edit_ptrs = HashSet::with_capacity(total_songs);
 
     let profile_data = profile::get();
     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
@@ -1454,12 +1456,23 @@ pub fn init() -> State {
         let mut pack_total_seconds = 0.0_f64;
 
         for song in &pack.songs {
-            let ok = song
-                .charts
-                .iter()
-                .any(|c| c.chart_type.eq_ignore_ascii_case(target_chart_type));
-            if !ok {
+            let mut has_target_chart_type = false;
+            let mut has_edit = false;
+            for chart in &song.charts {
+                if !chart.chart_type.eq_ignore_ascii_case(target_chart_type) {
+                    continue;
+                }
+                has_target_chart_type = true;
+                if chart.difficulty.eq_ignore_ascii_case("edit") && !chart.notes.is_empty() {
+                    has_edit = true;
+                    break;
+                }
+            }
+            if !has_target_chart_type {
                 continue;
+            }
+            if has_edit {
+                song_has_edit_ptrs.insert(Arc::as_ptr(song) as usize);
             }
 
             let pack_name = pack_name.get_or_insert_with(|| {
@@ -1591,6 +1604,7 @@ pub fn init() -> State {
         cached_chart_ix_p2: None,
         cached_edits: None,
         pack_total_seconds_by_index,
+        song_has_edit_ptrs,
         pack_song_counts: pack_song_counts.clone(),
         group_pack_song_counts: pack_song_counts,
         title_pack_song_counts,
@@ -4558,6 +4572,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         selected_steps_index: state.selected_steps_index,
         song_box_color: None,
         song_text_color: None,
+        song_has_edit_ptrs: Some(&state.song_has_edit_ptrs),
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());
 

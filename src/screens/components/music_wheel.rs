@@ -6,7 +6,7 @@ use crate::game::scores;
 use crate::screens::select_music::MusicWheelEntry;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 // --- Colors ---
 fn col_music_wheel_box() -> [f32; 4] {
@@ -79,6 +79,7 @@ pub struct MusicWheelParams<'a> {
     pub selected_steps_index: usize,
     pub song_box_color: Option<[f32; 4]>,
     pub song_text_color: Option<[f32; 4]>,
+    pub song_has_edit_ptrs: Option<&'a HashSet<usize>>,
 }
 
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
@@ -149,11 +150,15 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
             let (is_pack, bg_col, txt_col, title_str, subtitle_str, pack_name_opt, has_edit) =
                 match p.entries.get(list_index) {
                     Some(MusicWheelEntry::Song(info)) => {
-                        let has_edit = info.charts.iter().any(|c| {
-                            c.chart_type.eq_ignore_ascii_case(target_chart_type)
-                                && c.difficulty.eq_ignore_ascii_case("edit")
-                                && !c.notes.is_empty()
-                        });
+                        let has_edit = if let Some(cached) = p.song_has_edit_ptrs {
+                            cached.contains(&(std::sync::Arc::as_ptr(info) as usize))
+                        } else {
+                            info.charts.iter().any(|c| {
+                                c.chart_type.eq_ignore_ascii_case(target_chart_type)
+                                    && c.difficulty.eq_ignore_ascii_case("edit")
+                                    && !c.notes.is_empty()
+                            })
+                        };
                         let bg = p.song_box_color.unwrap_or_else(col_music_wheel_box);
                         let txt = p.song_text_color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
                         (
