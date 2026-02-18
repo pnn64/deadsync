@@ -121,6 +121,7 @@ const AUTO_STAMINA_MIN_METER: u32 = 11;
 const AUTO_STAMINA_MIN_STREAM_PERCENT: f32 = 10.0;
 const AUTO_STAMINA_MAX_CROSSOVERS: u32 = 9;
 const AUTO_STAMINA_MAX_SIDESWITCHES: u32 = 9;
+const NUM_STANDARD_DIFFICULTIES: usize = color::FILE_DIFFICULTY_NAMES.len();
 
 #[inline(always)]
 fn chart_stream_percent(chart: &ChartData) -> f32 {
@@ -553,6 +554,7 @@ pub struct State {
     cached_chart_ix_p1: Option<usize>,
     cached_chart_ix_p2: Option<usize>,
     cached_edits: Option<EditSortCache>,
+    cached_standard_chart_ixs: [Option<usize>; NUM_STANDARD_DIFFICULTIES],
     pack_total_seconds_by_index: Vec<f64>,
     song_has_edit_ptrs: HashSet<usize>,
     pub pack_song_counts: HashMap<String, usize>,
@@ -647,24 +649,33 @@ fn edit_chart_indices_sorted(song: &SongData, chart_type: &str) -> Vec<usize> {
 }
 
 #[inline]
-fn chart_ix_for_steps_index(
+fn standard_chart_indices(
     song: &SongData,
     chart_type: &str,
+) -> [Option<usize>; NUM_STANDARD_DIFFICULTIES] {
+    let mut out = [None; NUM_STANDARD_DIFFICULTIES];
+    for (chart_ix, chart) in song.charts.iter().enumerate() {
+        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || chart.notes.is_empty() {
+            continue;
+        }
+        for (diff_ix, &diff_name) in color::FILE_DIFFICULTY_NAMES.iter().enumerate() {
+            if out[diff_ix].is_none() && chart.difficulty.eq_ignore_ascii_case(diff_name) {
+                out[diff_ix] = Some(chart_ix);
+                break;
+            }
+        }
+    }
+    out
+}
+
+#[inline]
+fn chart_ix_for_steps_index(
+    standard_charts: &[Option<usize>; NUM_STANDARD_DIFFICULTIES],
     steps_index: usize,
     edits_sorted: &[usize],
 ) -> Option<usize> {
     if steps_index < color::FILE_DIFFICULTY_NAMES.len() {
-        let diff_name = color::FILE_DIFFICULTY_NAMES[steps_index];
-        return song
-            .charts
-            .iter()
-            .enumerate()
-            .find(|(_, c)| {
-                c.chart_type.eq_ignore_ascii_case(chart_type)
-                    && c.difficulty.eq_ignore_ascii_case(diff_name)
-                    && !c.notes.is_empty()
-            })
-            .map(|(i, _)| i);
+        return standard_charts[steps_index];
     }
 
     let edit_index = steps_index - color::FILE_DIFFICULTY_NAMES.len();
@@ -686,6 +697,7 @@ fn ensure_chart_cache_for_song(
     let p2_changed = state.cached_steps_index_p2 != state.p2_selected_steps_index;
 
     if song_changed || type_changed {
+        state.cached_standard_chart_ixs = standard_chart_indices(song, chart_type);
         state.cached_edits = None;
     }
 
@@ -707,14 +719,20 @@ fn ensure_chart_cache_for_song(
         .map_or(&[], |c| c.indices.as_slice());
 
     if song_changed || type_changed || p1_changed {
-        state.cached_chart_ix_p1 =
-            chart_ix_for_steps_index(song, chart_type, state.selected_steps_index, edits);
+        state.cached_chart_ix_p1 = chart_ix_for_steps_index(
+            &state.cached_standard_chart_ixs,
+            state.selected_steps_index,
+            edits,
+        );
     }
     if !is_versus {
         state.cached_chart_ix_p2 = None;
     } else if song_changed || type_changed || p2_changed {
-        state.cached_chart_ix_p2 =
-            chart_ix_for_steps_index(song, chart_type, state.p2_selected_steps_index, edits);
+        state.cached_chart_ix_p2 = chart_ix_for_steps_index(
+            &state.cached_standard_chart_ixs,
+            state.p2_selected_steps_index,
+            edits,
+        );
     }
 
     state.cached_song = Some(song.clone());
@@ -1412,6 +1430,7 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
     state.cached_chart_ix_p1 = None;
     state.cached_chart_ix_p2 = None;
     state.cached_edits = None;
+    state.cached_standard_chart_ixs = [None; NUM_STANDARD_DIFFICULTIES];
 }
 
 pub fn init() -> State {
@@ -1599,6 +1618,7 @@ pub fn init() -> State {
         cached_chart_ix_p1: None,
         cached_chart_ix_p2: None,
         cached_edits: None,
+        cached_standard_chart_ixs: [None; NUM_STANDARD_DIFFICULTIES],
         pack_total_seconds_by_index,
         song_has_edit_ptrs,
         pack_song_counts: pack_song_counts.clone(),
@@ -3502,6 +3522,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.cached_chart_ix_p1 = None;
             state.cached_chart_ix_p2 = None;
             state.cached_edits = None;
+            state.cached_standard_chart_ixs = [None; NUM_STANDARD_DIFFICULTIES];
         }
     }
 
@@ -4514,14 +4535,26 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     const VISIBLE_STEPS_SLOTS: usize = 5;
     let (steps_charts, sel_p1, sel_p2) = match entry_opt {
         Some(MusicWheelEntry::Song(song)) => {
-            let mut v: Vec<Option<&ChartData>> =
-                Vec::with_capacity(color::FILE_DIFFICULTY_NAMES.len());
-            for &diff in &color::FILE_DIFFICULTY_NAMES {
-                v.push(song.charts.iter().find(|c| {
-                    c.chart_type.eq_ignore_ascii_case(target_chart_type)
-                        && c.difficulty.eq_ignore_ascii_case(diff)
-                        && !c.notes.is_empty()
-                }));
+            let cached_standard_indices = state.cached_song.as_ref().and_then(|cached_song| {
+                if Arc::ptr_eq(cached_song, song) && state.cached_chart_type == target_chart_type {
+                    Some(&state.cached_standard_chart_ixs)
+                } else {
+                    None
+                }
+            });
+            let mut v: Vec<Option<&ChartData>> = Vec::with_capacity(NUM_STANDARD_DIFFICULTIES);
+            for diff_ix in 0..NUM_STANDARD_DIFFICULTIES {
+                let chart = if let Some(indices) = cached_standard_indices {
+                    indices[diff_ix].and_then(|ix| song.charts.get(ix))
+                } else {
+                    let diff = color::FILE_DIFFICULTY_NAMES[diff_ix];
+                    song.charts.iter().find(|c| {
+                        c.chart_type.eq_ignore_ascii_case(target_chart_type)
+                            && c.difficulty.eq_ignore_ascii_case(diff)
+                            && !c.notes.is_empty()
+                    })
+                };
+                v.push(chart);
             }
             let cached_edit_indices = state.cached_edits.as_ref().and_then(|c| {
                 if Arc::ptr_eq(&c.song, song) && c.chart_type == target_chart_type {
@@ -4545,7 +4578,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             (v, state.selected_steps_index, state.p2_selected_steps_index)
         }
         _ => (
-            vec![None; color::FILE_DIFFICULTY_NAMES.len()],
+            vec![None; NUM_STANDARD_DIFFICULTIES],
             state.preferred_difficulty_index,
             state.p2_preferred_difficulty_index,
         ),
