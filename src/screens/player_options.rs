@@ -161,34 +161,66 @@ fn row_layout_params() -> (f32, f32) {
 
 #[inline(always)]
 fn init_row_tweens(
-    total_rows: usize,
+    rows: &[Row],
     selected_row: [usize; PLAYER_SLOTS],
     active: [bool; PLAYER_SLOTS],
 ) -> Vec<RowTween> {
+    let total_rows = rows.len();
+    if total_rows == 0 {
+        return Vec::new();
+    }
+
     let (first_row_center_y, row_step) = row_layout_params();
-    let w = compute_row_window(total_rows, selected_row, active);
+    let show_measure_counter_children = measure_counter_children_visible(rows, active);
+    let visible_rows = count_visible_rows(rows, show_measure_counter_children);
+    if visible_rows == 0 {
+        let y = first_row_center_y - row_step * 0.5;
+        return (0..total_rows)
+            .map(|_| RowTween {
+                from_y: y,
+                to_y: y,
+                from_a: 0.0,
+                to_a: 0.0,
+                t: 1.0,
+            })
+            .collect();
+    }
+
+    let selected_visible = std::array::from_fn(|player_idx| {
+        let idx = selected_row[player_idx].min(total_rows.saturating_sub(1));
+        row_to_visible_index(rows, idx, show_measure_counter_children).unwrap_or(0)
+    });
+    let w = compute_row_window(visible_rows, selected_visible, active);
     let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
     let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
+    let measure_counter_anchor_visible_idx = rows
+        .iter()
+        .position(|row| row.name == ROW_MEASURE_COUNTER)
+        .and_then(|idx| row_to_visible_index(rows, idx, show_measure_counter_children))
+        .map(|idx| idx as i32);
 
     let mut out: Vec<RowTween> = Vec::with_capacity(total_rows);
-    let mut pos = 0i32;
+    let mut visible_idx = 0i32;
     for i in 0..total_rows {
-        let ii = i as i32;
-        let hidden_above = ii < w.first_start;
-        let hidden_mid = ii >= w.first_end && ii < w.second_start;
-        let hidden_below = ii >= w.second_end;
-        let hidden = hidden_above || hidden_mid || hidden_below;
-
-        let f_pos = if hidden_above {
-            -0.5
-        } else if hidden_mid {
-            mid_pos
-        } else if hidden_below {
-            bottom_pos
+        let visible = is_row_visible(rows, i, show_measure_counter_children);
+        let (f_pos, hidden) = if visible {
+            let ii = visible_idx;
+            visible_idx += 1;
+            f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
         } else {
-            let p = pos as f32;
-            pos += 1;
-            p
+            let anchor = rows.get(i).and_then(|row| {
+                if row_uses_measure_counter_anchor(row.name.as_str()) {
+                    measure_counter_anchor_visible_idx
+                } else {
+                    None
+                }
+            });
+            if let Some(anchor_idx) = anchor {
+                let (anchor_f_pos, _) = f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);
+                (anchor_f_pos, true)
+            } else {
+                (-0.5, true)
+            }
         };
 
         let y = (row_step * f_pos) + first_row_center_y;
@@ -1914,7 +1946,7 @@ pub fn init(
         )
     });
     let active = session_active_players();
-    let row_tweens = init_row_tweens(rows.len(), [0; PLAYER_SLOTS], active);
+    let row_tweens = init_row_tweens(&rows, [0; PLAYER_SLOTS], active);
     State {
         song,
         return_screen,
@@ -2031,6 +2063,175 @@ fn session_persisted_player_idx() -> usize {
     }
 }
 
+const ROW_MEASURE_COUNTER: &str = "Measure Counter";
+const ROW_MEASURE_COUNTER_LOOKAHEAD: &str = "Measure Counter Lookahead";
+const ROW_MEASURE_COUNTER_OPTIONS: &str = "Measure Counter Options";
+
+#[inline(always)]
+fn row_visible_with_measure_counter(row_name: &str, show_measure_counter_children: bool) -> bool {
+    if row_name == ROW_MEASURE_COUNTER_LOOKAHEAD || row_name == ROW_MEASURE_COUNTER_OPTIONS {
+        show_measure_counter_children
+    } else {
+        true
+    }
+}
+
+#[inline(always)]
+fn row_uses_measure_counter_anchor(row_name: &str) -> bool {
+    row_name == ROW_MEASURE_COUNTER_LOOKAHEAD || row_name == ROW_MEASURE_COUNTER_OPTIONS
+}
+
+fn measure_counter_children_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = rows.iter().find(|r| r.name == ROW_MEASURE_COUNTER) else {
+        return true;
+    };
+    let max_choice = row.choices.len().saturating_sub(1);
+    let mut any_active = false;
+    for player_idx in 0..PLAYER_SLOTS {
+        if !active[player_idx] {
+            continue;
+        }
+        any_active = true;
+        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
+        if choice_idx != 0 {
+            return true;
+        }
+    }
+    !any_active
+}
+
+#[inline(always)]
+fn is_row_visible(rows: &[Row], row_idx: usize, show_measure_counter_children: bool) -> bool {
+    rows.get(row_idx).is_some_and(|row| {
+        row_visible_with_measure_counter(row.name.as_str(), show_measure_counter_children)
+    })
+}
+
+fn count_visible_rows(rows: &[Row], show_measure_counter_children: bool) -> usize {
+    rows.iter()
+        .filter(|row| {
+            row_visible_with_measure_counter(row.name.as_str(), show_measure_counter_children)
+        })
+        .count()
+}
+
+fn row_to_visible_index(
+    rows: &[Row],
+    row_idx: usize,
+    show_measure_counter_children: bool,
+) -> Option<usize> {
+    if row_idx >= rows.len() {
+        return None;
+    }
+    if !is_row_visible(rows, row_idx, show_measure_counter_children) {
+        return None;
+    }
+    let mut pos = 0usize;
+    for i in 0..row_idx {
+        if is_row_visible(rows, i, show_measure_counter_children) {
+            pos += 1;
+        }
+    }
+    Some(pos)
+}
+
+fn fallback_visible_row(
+    rows: &[Row],
+    row_idx: usize,
+    show_measure_counter_children: bool,
+) -> Option<usize> {
+    if rows.is_empty() {
+        return None;
+    }
+    let start = row_idx.min(rows.len().saturating_sub(1));
+    for i in start..rows.len() {
+        if is_row_visible(rows, i, show_measure_counter_children) {
+            return Some(i);
+        }
+    }
+    (0..start)
+        .rev()
+        .find(|&i| is_row_visible(rows, i, show_measure_counter_children))
+}
+
+fn next_visible_row(
+    rows: &[Row],
+    current_row: usize,
+    dir: NavDirection,
+    show_measure_counter_children: bool,
+) -> Option<usize> {
+    if rows.is_empty() {
+        return None;
+    }
+    let len = rows.len();
+    let mut idx = current_row.min(len.saturating_sub(1));
+    if !is_row_visible(rows, idx, show_measure_counter_children) {
+        idx = fallback_visible_row(rows, idx, show_measure_counter_children)?;
+    }
+    for _ in 0..len {
+        idx = match dir {
+            NavDirection::Up => (idx + len - 1) % len,
+            NavDirection::Down => (idx + 1) % len,
+            NavDirection::Left | NavDirection::Right => return Some(idx),
+        };
+        if is_row_visible(rows, idx, show_measure_counter_children) {
+            return Some(idx);
+        }
+    }
+    None
+}
+
+#[inline(always)]
+fn f_pos_for_visible_idx(
+    visible_idx: i32,
+    window: RowWindow,
+    mid_pos: f32,
+    bottom_pos: f32,
+) -> (f32, bool) {
+    let hidden_above = visible_idx < window.first_start;
+    let hidden_mid = visible_idx >= window.first_end && visible_idx < window.second_start;
+    let hidden_below = visible_idx >= window.second_end;
+    if hidden_above {
+        return (-0.5, true);
+    }
+    if hidden_mid {
+        return (mid_pos, true);
+    }
+    if hidden_below {
+        return (bottom_pos, true);
+    }
+
+    let shown_pos = if visible_idx < window.first_end {
+        visible_idx - window.first_start
+    } else {
+        (window.first_end - window.first_start) + (visible_idx - window.second_start)
+    };
+    (shown_pos as f32, false)
+}
+
+fn sync_selected_rows_with_visibility(state: &mut State, active: [bool; PLAYER_SLOTS]) {
+    if state.rows.is_empty() {
+        state.selected_row = [0; PLAYER_SLOTS];
+        state.prev_selected_row = [0; PLAYER_SLOTS];
+        return;
+    }
+    let show_measure_counter_children = measure_counter_children_visible(&state.rows, active);
+    for player_idx in 0..PLAYER_SLOTS {
+        let idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
+        if is_row_visible(&state.rows, idx, show_measure_counter_children) {
+            state.selected_row[player_idx] = idx;
+            continue;
+        }
+        if let Some(fallback) = fallback_visible_row(&state.rows, idx, show_measure_counter_children)
+        {
+            state.selected_row[player_idx] = fallback;
+            if active[player_idx] {
+                state.prev_selected_row[player_idx] = fallback;
+            }
+        }
+    }
+}
+
 #[inline(always)]
 fn row_is_shared(row_name: &str) -> bool {
     row_name.is_empty() || row_name == "What comes next?" || row_name.starts_with("Music Rate")
@@ -2100,7 +2301,12 @@ fn cursor_dest_for_player(
         return None;
     }
     let player_idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
+    let show_measure_counter_children =
+        measure_counter_children_visible(&state.rows, session_active_players());
+    let mut row_idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
+    if !is_row_visible(&state.rows, row_idx, show_measure_counter_children) {
+        row_idx = fallback_visible_row(&state.rows, row_idx, show_measure_counter_children)?;
+    }
     let row = state.rows.get(row_idx)?;
 
     let y = state
@@ -2314,6 +2520,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
     if num_choices == 0 {
         return;
     }
+    let mut measure_counter_changed = false;
 
     let current_idx = row.selected_choice_index[player_idx] as isize;
     let new_index = ((current_idx + delta + num_choices as isize) % num_choices as isize) as usize;
@@ -2559,6 +2766,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
             crate::game::profile::update_error_bar_trim_for_side(persist_side, setting);
         }
     } else if row_name == "Measure Counter" {
+        measure_counter_changed = true;
         let setting = match row.selected_choice_index[player_idx] {
             0 => crate::game::profile::MeasureCounter::None,
             1 => crate::game::profile::MeasureCounter::Eighth,
@@ -2676,6 +2884,9 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         }
     }
 
+    if measure_counter_changed {
+        sync_selected_rows_with_visibility(state, session_active_players());
+    }
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
@@ -2702,6 +2913,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
     state.preview_beat += dt * beats_per_second;
     let active = session_active_players();
     let now = Instant::now();
+    sync_selected_rows_with_visibility(state, active);
 
     // Hold-to-scroll per player.
     for player_idx in 0..PLAYER_SLOTS {
@@ -2721,17 +2933,30 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
             continue;
         }
 
-        let total_rows = state.rows.len();
-        if total_rows == 0 {
+        if state.rows.is_empty() {
             continue;
         }
+        let show_measure_counter_children = measure_counter_children_visible(&state.rows, active);
         match direction {
             NavDirection::Up => {
-                state.selected_row[player_idx] =
-                    (state.selected_row[player_idx] + total_rows - 1) % total_rows;
+                if let Some(next_row) = next_visible_row(
+                    &state.rows,
+                    state.selected_row[player_idx],
+                    NavDirection::Up,
+                    show_measure_counter_children,
+                ) {
+                    state.selected_row[player_idx] = next_row;
+                }
             }
             NavDirection::Down => {
-                state.selected_row[player_idx] = (state.selected_row[player_idx] + 1) % total_rows;
+                if let Some(next_row) = next_visible_row(
+                    &state.rows,
+                    state.selected_row[player_idx],
+                    NavDirection::Down,
+                    show_measure_counter_children,
+                ) {
+                    state.selected_row[player_idx] = next_row;
+                }
             }
             NavDirection::Left => {
                 change_choice_for_player(state, player_idx, -1);
@@ -2810,49 +3035,90 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
     if total_rows == 0 {
         state.row_tweens.clear();
     } else if state.row_tweens.len() != total_rows {
-        state.row_tweens = init_row_tweens(total_rows, state.selected_row, active);
+        state.row_tweens = init_row_tweens(&state.rows, state.selected_row, active);
     } else {
-        let w = compute_row_window(total_rows, state.selected_row, active);
-        let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
-        let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
-        let mut pos = 0i32;
-        for i in 0..total_rows {
-            let ii = i as i32;
-            let hidden_above = ii < w.first_start;
-            let hidden_mid = ii >= w.first_end && ii < w.second_start;
-            let hidden_below = ii >= w.second_end;
-            let hidden = hidden_above || hidden_mid || hidden_below;
-
-            let f_pos = if hidden_above {
-                -0.5
-            } else if hidden_mid {
-                mid_pos
-            } else if hidden_below {
-                bottom_pos
-            } else {
-                let p = pos as f32;
-                pos += 1;
-                p
-            };
-
-            let dest_y = first_row_center_y + row_step * f_pos;
-            let dest_a = if hidden { 0.0 } else { 1.0 };
-
-            let tw = &mut state.row_tweens[i];
-            let cur_y = tw.y();
-            let cur_a = tw.a();
-            if (dest_y - tw.to_y).abs() > 0.01 || dest_a != tw.to_a {
-                tw.from_y = cur_y;
-                tw.from_a = cur_a;
-                tw.to_y = dest_y;
-                tw.to_a = dest_a;
-                tw.t = 0.0;
+        let show_measure_counter_children = measure_counter_children_visible(&state.rows, active);
+        let visible_rows = count_visible_rows(&state.rows, show_measure_counter_children);
+        if visible_rows == 0 {
+            let y = first_row_center_y - row_step * 0.5;
+            for tw in &mut state.row_tweens {
+                let cur_y = tw.y();
+                let cur_a = tw.a();
+                if (y - tw.to_y).abs() > 0.01 || tw.to_a != 0.0 {
+                    tw.from_y = cur_y;
+                    tw.from_a = cur_a;
+                    tw.to_y = y;
+                    tw.to_a = 0.0;
+                    tw.t = 0.0;
+                }
+                if tw.t < 1.0 {
+                    if ROW_TWEEN_SECONDS > 0.0 {
+                        tw.t = (tw.t + dt / ROW_TWEEN_SECONDS).min(1.0);
+                    } else {
+                        tw.t = 1.0;
+                    }
+                }
             }
-            if tw.t < 1.0 {
-                if ROW_TWEEN_SECONDS > 0.0 {
-                    tw.t = (tw.t + dt / ROW_TWEEN_SECONDS).min(1.0);
+        } else {
+            let selected_visible = std::array::from_fn(|player_idx| {
+                let row_idx = state.selected_row[player_idx].min(total_rows.saturating_sub(1));
+                row_to_visible_index(&state.rows, row_idx, show_measure_counter_children)
+                    .unwrap_or(0)
+            });
+            let w = compute_row_window(visible_rows, selected_visible, active);
+            let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
+            let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
+            let measure_counter_anchor_visible_idx = state
+                .rows
+                .iter()
+                .position(|row| row.name == ROW_MEASURE_COUNTER)
+                .and_then(|idx| {
+                    row_to_visible_index(&state.rows, idx, show_measure_counter_children)
+                })
+                .map(|idx| idx as i32);
+            let mut visible_idx = 0i32;
+            for i in 0..total_rows {
+                let visible = is_row_visible(&state.rows, i, show_measure_counter_children);
+                let (f_pos, hidden) = if visible {
+                    let ii = visible_idx;
+                    visible_idx += 1;
+                    f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
                 } else {
-                    tw.t = 1.0;
+                    let anchor = state.rows.get(i).and_then(|row| {
+                        if row_uses_measure_counter_anchor(row.name.as_str()) {
+                            measure_counter_anchor_visible_idx
+                        } else {
+                            None
+                        }
+                    });
+                    if let Some(anchor_idx) = anchor {
+                        let (anchor_f_pos, _) =
+                            f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);
+                        (anchor_f_pos, true)
+                    } else {
+                        (-0.5, true)
+                    }
+                };
+
+                let dest_y = first_row_center_y + row_step * f_pos;
+                let dest_a = if hidden { 0.0 } else { 1.0 };
+
+                let tw = &mut state.row_tweens[i];
+                let cur_y = tw.y();
+                let cur_a = tw.a();
+                if (dest_y - tw.to_y).abs() > 0.01 || dest_a != tw.to_a {
+                    tw.from_y = cur_y;
+                    tw.from_a = cur_a;
+                    tw.to_y = dest_y;
+                    tw.to_a = dest_a;
+                    tw.t = 0.0;
+                }
+                if tw.t < 1.0 {
+                    if ROW_TWEEN_SECONDS > 0.0 {
+                        tw.t = (tw.t + dt / ROW_TWEEN_SECONDS).min(1.0);
+                    } else {
+                        tw.t = 1.0;
+                    }
                 }
             }
         }
@@ -3522,7 +3788,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
     state.cursor_t = [1.0; PLAYER_SLOTS];
     state.help_anim_time = [0.0; PLAYER_SLOTS];
     let active = session_active_players();
-    state.row_tweens = init_row_tweens(state.rows.len(), state.selected_row, active);
+    state.row_tweens = init_row_tweens(&state.rows, state.selected_row, active);
 }
 
 fn switch_to_pane(state: &mut State, pane: OptionsPane) {
@@ -3555,14 +3821,28 @@ fn handle_nav_event(
         return;
     }
     if pressed {
-        let num_rows = state.rows.len();
+        sync_selected_rows_with_visibility(state, active);
+        let show_measure_counter_children = measure_counter_children_visible(&state.rows, active);
         match dir {
             NavDirection::Up => {
-                state.selected_row[player_idx] =
-                    (state.selected_row[player_idx] + num_rows - 1) % num_rows;
+                if let Some(next_row) = next_visible_row(
+                    &state.rows,
+                    state.selected_row[player_idx],
+                    NavDirection::Up,
+                    show_measure_counter_children,
+                ) {
+                    state.selected_row[player_idx] = next_row;
+                }
             }
             NavDirection::Down => {
-                state.selected_row[player_idx] = (state.selected_row[player_idx] + 1) % num_rows;
+                if let Some(next_row) = next_visible_row(
+                    &state.rows,
+                    state.selected_row[player_idx],
+                    NavDirection::Down,
+                    show_measure_counter_children,
+                ) {
+                    state.selected_row[player_idx] = next_row;
+                }
             }
             NavDirection::Left => apply_choice_delta(state, player_idx, -1),
             NavDirection::Right => apply_choice_delta(state, player_idx, 1),
@@ -3581,6 +3861,7 @@ fn handle_start_event(
     if !active[player_idx] {
         return None;
     }
+    sync_selected_rows_with_visibility(state, active);
     let num_rows = state.rows.len();
     if num_rows == 0 {
         return None;
