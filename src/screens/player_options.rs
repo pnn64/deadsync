@@ -164,6 +164,7 @@ fn init_row_tweens(
     rows: &[Row],
     selected_row: [usize; PLAYER_SLOTS],
     active: [bool; PLAYER_SLOTS],
+    error_bar_active_mask: [u8; PLAYER_SLOTS],
 ) -> Vec<RowTween> {
     let total_rows = rows.len();
     if total_rows == 0 {
@@ -171,8 +172,8 @@ fn init_row_tweens(
     }
 
     let (first_row_center_y, row_step) = row_layout_params();
-    let show_measure_counter_children = measure_counter_children_visible(rows, active);
-    let visible_rows = count_visible_rows(rows, show_measure_counter_children);
+    let visibility = row_visibility(rows, active, error_bar_active_mask);
+    let visible_rows = count_visible_rows(rows, visibility);
     if visible_rows == 0 {
         let y = first_row_center_y - row_step * 0.5;
         return (0..total_rows)
@@ -188,32 +189,31 @@ fn init_row_tweens(
 
     let selected_visible = std::array::from_fn(|player_idx| {
         let idx = selected_row[player_idx].min(total_rows.saturating_sub(1));
-        row_to_visible_index(rows, idx, show_measure_counter_children).unwrap_or(0)
+        row_to_visible_index(rows, idx, visibility).unwrap_or(0)
     });
     let w = compute_row_window(visible_rows, selected_visible, active);
     let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
     let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
-    let measure_counter_anchor_visible_idx = rows
-        .iter()
-        .position(|row| row.name == ROW_MEASURE_COUNTER)
-        .and_then(|idx| row_to_visible_index(rows, idx, show_measure_counter_children))
-        .map(|idx| idx as i32);
+    let measure_counter_anchor_visible_idx =
+        parent_anchor_visible_index(rows, ROW_MEASURE_COUNTER, visibility);
+    let judgment_tilt_anchor_visible_idx =
+        parent_anchor_visible_index(rows, ROW_JUDGMENT_TILT, visibility);
+    let error_bar_anchor_visible_idx = parent_anchor_visible_index(rows, ROW_ERROR_BAR, visibility);
 
     let mut out: Vec<RowTween> = Vec::with_capacity(total_rows);
     let mut visible_idx = 0i32;
     for i in 0..total_rows {
-        let visible = is_row_visible(rows, i, show_measure_counter_children);
+        let visible = is_row_visible(rows, i, visibility);
         let (f_pos, hidden) = if visible {
             let ii = visible_idx;
             visible_idx += 1;
             f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
         } else {
-            let anchor = rows.get(i).and_then(|row| {
-                if row_uses_measure_counter_anchor(row.name.as_str()) {
-                    measure_counter_anchor_visible_idx
-                } else {
-                    None
-                }
+            let anchor = rows.get(i).and_then(|row| match conditional_row_parent(row.name.as_str()) {
+                Some(ROW_MEASURE_COUNTER) => measure_counter_anchor_visible_idx,
+                Some(ROW_JUDGMENT_TILT) => judgment_tilt_anchor_visible_idx,
+                Some(ROW_ERROR_BAR) => error_bar_anchor_visible_idx,
+                _ => None,
             });
             if let Some(anchor_idx) = anchor {
                 let (anchor_f_pos, _) = f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);
@@ -350,7 +350,7 @@ pub struct State {
     // bit0 = Flash Column for Miss, bit1 = Density Graph at Top.
     pub gameplay_extras_active_mask: [u8; PLAYER_SLOTS],
     // For Gameplay Extras (More) row: bitmask of which options are enabled.
-    // bit0 = Judgment Tilt, bit1 = Column Cues, bit2 = Display Scorebox.
+    // bit0 = Column Cues, bit1 = Display Scorebox.
     pub gameplay_extras_more_active_mask: [u8; PLAYER_SLOTS],
     // For Error Bar row: bitmask of which options are enabled.
     // bit0 = Colorful, bit1 = Monochrome, bit2 = Text, bit3 = Highlight, bit4 = Average.
@@ -848,8 +848,7 @@ fn build_main_rows(
 }
 
 fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
-    let mut gameplay_extras_more_choices =
-        vec!["Judgment Tilt".to_string(), "Column Cues".to_string()];
+    let mut gameplay_extras_more_choices = vec!["Column Cues".to_string()];
     if crate::game::scores::is_gs_get_scores_service_allowed() {
         gameplay_extras_more_choices.push("Display Scorebox".to_string());
     }
@@ -988,6 +987,13 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             choices: gameplay_extras_more_choices,
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Additional visual effects, cues, and score display options.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Judgment Tilt".to_string(),
+            choices: vec!["No".to_string(), "Yes".to_string()],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec!["Toggle left/right tilt for judgment sprites.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
@@ -1470,7 +1476,10 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = idx;
         }
     }
-    // Initialize Judgment Tilt Intensity from profile (Simply Love semantics).
+    // Initialize Judgment Tilt rows from profile (Simply Love semantics).
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Judgment Tilt") {
+        row.selected_choice_index[player_idx] = if profile.judgment_tilt { 1 } else { 0 };
+    }
     if let Some(row) = rows
         .iter_mut()
         .find(|r| r.name == "Judgment Tilt Intensity")
@@ -1720,14 +1729,11 @@ fn apply_profile_defaults(
     }
 
     // Initialize Gameplay Extras (More) row from profile (multi-choice toggle group).
-    if profile.judgment_tilt {
+    if profile.column_cues {
         gameplay_extras_more_active_mask |= 1u8 << 0;
     }
-    if profile.column_cues {
-        gameplay_extras_more_active_mask |= 1u8 << 1;
-    }
     if profile.display_scorebox {
-        gameplay_extras_more_active_mask |= 1u8 << 2;
+        gameplay_extras_more_active_mask |= 1u8 << 1;
     }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Gameplay Extras (More)") {
         if gameplay_extras_more_active_mask != 0 {
@@ -1946,7 +1952,12 @@ pub fn init(
         )
     });
     let active = session_active_players();
-    let row_tweens = init_row_tweens(&rows, [0; PLAYER_SLOTS], active);
+    let row_tweens = init_row_tweens(
+        &rows,
+        [0; PLAYER_SLOTS],
+        active,
+        [error_bar_active_mask_p1, error_bar_active_mask_p2],
+    );
     State {
         song,
         return_screen,
@@ -2066,19 +2077,45 @@ fn session_persisted_player_idx() -> usize {
 const ROW_MEASURE_COUNTER: &str = "Measure Counter";
 const ROW_MEASURE_COUNTER_LOOKAHEAD: &str = "Measure Counter Lookahead";
 const ROW_MEASURE_COUNTER_OPTIONS: &str = "Measure Counter Options";
+const ROW_JUDGMENT_TILT: &str = "Judgment Tilt";
+const ROW_JUDGMENT_TILT_INTENSITY: &str = "Judgment Tilt Intensity";
+const ROW_ERROR_BAR: &str = "Error Bar";
+const ROW_ERROR_BAR_TRIM: &str = "Error Bar Trim";
+const ROW_ERROR_BAR_OPTIONS: &str = "Error Bar Options";
 
-#[inline(always)]
-fn row_visible_with_measure_counter(row_name: &str, show_measure_counter_children: bool) -> bool {
-    if row_name == ROW_MEASURE_COUNTER_LOOKAHEAD || row_name == ROW_MEASURE_COUNTER_OPTIONS {
-        show_measure_counter_children
-    } else {
-        true
-    }
+#[derive(Clone, Copy, Debug)]
+struct RowVisibility {
+    show_measure_counter_children: bool,
+    show_judgment_tilt_intensity: bool,
+    show_error_bar_children: bool,
 }
 
 #[inline(always)]
-fn row_uses_measure_counter_anchor(row_name: &str) -> bool {
-    row_name == ROW_MEASURE_COUNTER_LOOKAHEAD || row_name == ROW_MEASURE_COUNTER_OPTIONS
+fn row_visible_with_flags(row_name: &str, visibility: RowVisibility) -> bool {
+    if row_name == ROW_MEASURE_COUNTER_LOOKAHEAD || row_name == ROW_MEASURE_COUNTER_OPTIONS {
+        return visibility.show_measure_counter_children;
+    }
+    if row_name == ROW_JUDGMENT_TILT_INTENSITY {
+        return visibility.show_judgment_tilt_intensity;
+    }
+    if row_name == ROW_ERROR_BAR_TRIM || row_name == ROW_ERROR_BAR_OPTIONS {
+        return visibility.show_error_bar_children;
+    }
+    true
+}
+
+#[inline(always)]
+fn conditional_row_parent(row_name: &str) -> Option<&'static str> {
+    if row_name == ROW_MEASURE_COUNTER_LOOKAHEAD || row_name == ROW_MEASURE_COUNTER_OPTIONS {
+        return Some(ROW_MEASURE_COUNTER);
+    }
+    if row_name == ROW_JUDGMENT_TILT_INTENSITY {
+        return Some(ROW_JUDGMENT_TILT);
+    }
+    if row_name == ROW_ERROR_BAR_TRIM || row_name == ROW_ERROR_BAR_OPTIONS {
+        return Some(ROW_ERROR_BAR);
+    }
+    None
 }
 
 fn measure_counter_children_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
@@ -2101,34 +2138,78 @@ fn measure_counter_children_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) 
 }
 
 #[inline(always)]
-fn is_row_visible(rows: &[Row], row_idx: usize, show_measure_counter_children: bool) -> bool {
-    rows.get(row_idx).is_some_and(|row| {
-        row_visible_with_measure_counter(row.name.as_str(), show_measure_counter_children)
-    })
+fn judgment_tilt_intensity_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = rows.iter().find(|r| r.name == ROW_JUDGMENT_TILT) else {
+        return true;
+    };
+    let max_choice = row.choices.len().saturating_sub(1);
+    let mut any_active = false;
+    for player_idx in 0..PLAYER_SLOTS {
+        if !active[player_idx] {
+            continue;
+        }
+        any_active = true;
+        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
+        if choice_idx != 0 {
+            return true;
+        }
+    }
+    !any_active
 }
 
-fn count_visible_rows(rows: &[Row], show_measure_counter_children: bool) -> usize {
+fn error_bar_children_visible(active: [bool; PLAYER_SLOTS], error_bar_active_mask: [u8; PLAYER_SLOTS]) -> bool {
+    let mut any_active = false;
+    for player_idx in 0..PLAYER_SLOTS {
+        if !active[player_idx] {
+            continue;
+        }
+        any_active = true;
+        if crate::game::profile::normalize_error_bar_mask(error_bar_active_mask[player_idx]) != 0 {
+            return true;
+        }
+    }
+    !any_active
+}
+
+#[inline(always)]
+fn row_visibility(
+    rows: &[Row],
+    active: [bool; PLAYER_SLOTS],
+    error_bar_active_mask: [u8; PLAYER_SLOTS],
+) -> RowVisibility {
+    RowVisibility {
+        show_measure_counter_children: measure_counter_children_visible(rows, active),
+        show_judgment_tilt_intensity: judgment_tilt_intensity_visible(rows, active),
+        show_error_bar_children: error_bar_children_visible(active, error_bar_active_mask),
+    }
+}
+
+#[inline(always)]
+fn is_row_visible(rows: &[Row], row_idx: usize, visibility: RowVisibility) -> bool {
+    rows.get(row_idx)
+        .is_some_and(|row| row_visible_with_flags(row.name.as_str(), visibility))
+}
+
+fn count_visible_rows(rows: &[Row], visibility: RowVisibility) -> usize {
     rows.iter()
-        .filter(|row| {
-            row_visible_with_measure_counter(row.name.as_str(), show_measure_counter_children)
-        })
+        .filter(|row| row_visible_with_flags(row.name.as_str(), visibility))
         .count()
 }
 
 fn row_to_visible_index(
     rows: &[Row],
     row_idx: usize,
-    show_measure_counter_children: bool,
+    visibility: RowVisibility,
 ) -> Option<usize> {
     if row_idx >= rows.len() {
         return None;
     }
-    if !is_row_visible(rows, row_idx, show_measure_counter_children) {
+    if !is_row_visible(rows, row_idx, visibility) {
         return None;
     }
     let mut pos = 0usize;
     for i in 0..row_idx {
-        if is_row_visible(rows, i, show_measure_counter_children) {
+        if is_row_visible(rows, i, visibility) {
             pos += 1;
         }
     }
@@ -2138,35 +2219,35 @@ fn row_to_visible_index(
 fn fallback_visible_row(
     rows: &[Row],
     row_idx: usize,
-    show_measure_counter_children: bool,
+    visibility: RowVisibility,
 ) -> Option<usize> {
     if rows.is_empty() {
         return None;
     }
     let start = row_idx.min(rows.len().saturating_sub(1));
     for i in start..rows.len() {
-        if is_row_visible(rows, i, show_measure_counter_children) {
+        if is_row_visible(rows, i, visibility) {
             return Some(i);
         }
     }
     (0..start)
         .rev()
-        .find(|&i| is_row_visible(rows, i, show_measure_counter_children))
+        .find(|&i| is_row_visible(rows, i, visibility))
 }
 
 fn next_visible_row(
     rows: &[Row],
     current_row: usize,
     dir: NavDirection,
-    show_measure_counter_children: bool,
+    visibility: RowVisibility,
 ) -> Option<usize> {
     if rows.is_empty() {
         return None;
     }
     let len = rows.len();
     let mut idx = current_row.min(len.saturating_sub(1));
-    if !is_row_visible(rows, idx, show_measure_counter_children) {
-        idx = fallback_visible_row(rows, idx, show_measure_counter_children)?;
+    if !is_row_visible(rows, idx, visibility) {
+        idx = fallback_visible_row(rows, idx, visibility)?;
     }
     for _ in 0..len {
         idx = match dir {
@@ -2174,11 +2255,22 @@ fn next_visible_row(
             NavDirection::Down => (idx + 1) % len,
             NavDirection::Left | NavDirection::Right => return Some(idx),
         };
-        if is_row_visible(rows, idx, show_measure_counter_children) {
+        if is_row_visible(rows, idx, visibility) {
             return Some(idx);
         }
     }
     None
+}
+
+fn parent_anchor_visible_index(
+    rows: &[Row],
+    parent_name: &str,
+    visibility: RowVisibility,
+) -> Option<i32> {
+    rows.iter()
+        .position(|row| row.name == parent_name)
+        .and_then(|idx| row_to_visible_index(rows, idx, visibility))
+        .map(|idx| idx as i32)
 }
 
 #[inline(always)]
@@ -2215,15 +2307,14 @@ fn sync_selected_rows_with_visibility(state: &mut State, active: [bool; PLAYER_S
         state.prev_selected_row = [0; PLAYER_SLOTS];
         return;
     }
-    let show_measure_counter_children = measure_counter_children_visible(&state.rows, active);
+    let visibility = row_visibility(&state.rows, active, state.error_bar_active_mask);
     for player_idx in 0..PLAYER_SLOTS {
         let idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
-        if is_row_visible(&state.rows, idx, show_measure_counter_children) {
+        if is_row_visible(&state.rows, idx, visibility) {
             state.selected_row[player_idx] = idx;
             continue;
         }
-        if let Some(fallback) = fallback_visible_row(&state.rows, idx, show_measure_counter_children)
-        {
+        if let Some(fallback) = fallback_visible_row(&state.rows, idx, visibility) {
             state.selected_row[player_idx] = fallback;
             if active[player_idx] {
                 state.prev_selected_row[player_idx] = fallback;
@@ -2253,6 +2344,7 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "Measure Counter Options"
         || row_name == "Measure Lines"
         || row_name == "Timing Windows"
+        || row_name == ROW_JUDGMENT_TILT
         || row_name == "Mini Indicator"
         || row_name == "Turn"
         || row_name == "Scroll"
@@ -2301,11 +2393,14 @@ fn cursor_dest_for_player(
         return None;
     }
     let player_idx = player_idx.min(PLAYER_SLOTS - 1);
-    let show_measure_counter_children =
-        measure_counter_children_visible(&state.rows, session_active_players());
+    let visibility = row_visibility(
+        &state.rows,
+        session_active_players(),
+        state.error_bar_active_mask,
+    );
     let mut row_idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
-    if !is_row_visible(&state.rows, row_idx, show_measure_counter_children) {
-        row_idx = fallback_visible_row(&state.rows, row_idx, show_measure_counter_children)?;
+    if !is_row_visible(&state.rows, row_idx, visibility) {
+        row_idx = fallback_visible_row(&state.rows, row_idx, visibility)?;
     }
     let row = state.rows.get(row_idx)?;
 
@@ -2520,7 +2615,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
     if num_choices == 0 {
         return;
     }
-    let mut measure_counter_changed = false;
+    let mut visibility_changed = false;
 
     let current_idx = row.selected_choice_index[player_idx] as isize;
     let new_index = ((current_idx + delta + num_choices as isize) % num_choices as isize) as usize;
@@ -2690,6 +2785,13 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
                 crate::game::profile::update_visual_delay_ms_for_side(persist_side, raw);
             }
         }
+    } else if row_name == ROW_JUDGMENT_TILT {
+        let enabled = row.selected_choice_index[player_idx] == 1;
+        state.player_profiles[player_idx].judgment_tilt = enabled;
+        if should_persist {
+            crate::game::profile::update_judgment_tilt_for_side(persist_side, enabled);
+        }
+        visibility_changed = true;
     } else if row_name == "Judgment Tilt Intensity" {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(mult) = choice.parse::<f32>()
@@ -2766,7 +2868,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
             crate::game::profile::update_error_bar_trim_for_side(persist_side, setting);
         }
     } else if row_name == "Measure Counter" {
-        measure_counter_changed = true;
+        visibility_changed = true;
         let setting = match row.selected_choice_index[player_idx] {
             0 => crate::game::profile::MeasureCounter::None,
             1 => crate::game::profile::MeasureCounter::Eighth,
@@ -2884,7 +2986,7 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
         }
     }
 
-    if measure_counter_changed {
+    if visibility_changed {
         sync_selected_rows_with_visibility(state, session_active_players());
     }
     audio::play_sfx("assets/sounds/change_value.ogg");
@@ -2936,14 +3038,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
         if state.rows.is_empty() {
             continue;
         }
-        let show_measure_counter_children = measure_counter_children_visible(&state.rows, active);
+        let visibility = row_visibility(&state.rows, active, state.error_bar_active_mask);
         match direction {
             NavDirection::Up => {
                 if let Some(next_row) = next_visible_row(
                     &state.rows,
                     state.selected_row[player_idx],
                     NavDirection::Up,
-                    show_measure_counter_children,
+                    visibility,
                 ) {
                     state.selected_row[player_idx] = next_row;
                 }
@@ -2953,7 +3055,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
                     &state.rows,
                     state.selected_row[player_idx],
                     NavDirection::Down,
-                    show_measure_counter_children,
+                    visibility,
                 ) {
                     state.selected_row[player_idx] = next_row;
                 }
@@ -3035,10 +3137,15 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
     if total_rows == 0 {
         state.row_tweens.clear();
     } else if state.row_tweens.len() != total_rows {
-        state.row_tweens = init_row_tweens(&state.rows, state.selected_row, active);
+        state.row_tweens = init_row_tweens(
+            &state.rows,
+            state.selected_row,
+            active,
+            state.error_bar_active_mask,
+        );
     } else {
-        let show_measure_counter_children = measure_counter_children_visible(&state.rows, active);
-        let visible_rows = count_visible_rows(&state.rows, show_measure_counter_children);
+        let visibility = row_visibility(&state.rows, active, state.error_bar_active_mask);
+        let visible_rows = count_visible_rows(&state.rows, visibility);
         if visible_rows == 0 {
             let y = first_row_center_y - row_step * 0.5;
             for tw in &mut state.row_tweens {
@@ -3062,35 +3169,34 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
         } else {
             let selected_visible = std::array::from_fn(|player_idx| {
                 let row_idx = state.selected_row[player_idx].min(total_rows.saturating_sub(1));
-                row_to_visible_index(&state.rows, row_idx, show_measure_counter_children)
-                    .unwrap_or(0)
+                row_to_visible_index(&state.rows, row_idx, visibility).unwrap_or(0)
             });
             let w = compute_row_window(visible_rows, selected_visible, active);
             let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
             let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
-            let measure_counter_anchor_visible_idx = state
-                .rows
-                .iter()
-                .position(|row| row.name == ROW_MEASURE_COUNTER)
-                .and_then(|idx| {
-                    row_to_visible_index(&state.rows, idx, show_measure_counter_children)
-                })
-                .map(|idx| idx as i32);
+            let measure_counter_anchor_visible_idx =
+                parent_anchor_visible_index(&state.rows, ROW_MEASURE_COUNTER, visibility);
+            let judgment_tilt_anchor_visible_idx =
+                parent_anchor_visible_index(&state.rows, ROW_JUDGMENT_TILT, visibility);
+            let error_bar_anchor_visible_idx =
+                parent_anchor_visible_index(&state.rows, ROW_ERROR_BAR, visibility);
             let mut visible_idx = 0i32;
             for i in 0..total_rows {
-                let visible = is_row_visible(&state.rows, i, show_measure_counter_children);
+                let visible = is_row_visible(&state.rows, i, visibility);
                 let (f_pos, hidden) = if visible {
                     let ii = visible_idx;
                     visible_idx += 1;
                     f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
                 } else {
-                    let anchor = state.rows.get(i).and_then(|row| {
-                        if row_uses_measure_counter_anchor(row.name.as_str()) {
-                            measure_counter_anchor_visible_idx
-                        } else {
-                            None
-                        }
-                    });
+                    let anchor =
+                        state.rows
+                            .get(i)
+                            .and_then(|row| match conditional_row_parent(row.name.as_str()) {
+                                Some(ROW_MEASURE_COUNTER) => measure_counter_anchor_visible_idx,
+                                Some(ROW_JUDGMENT_TILT) => judgment_tilt_anchor_visible_idx,
+                                Some(ROW_ERROR_BAR) => error_bar_anchor_visible_idx,
+                                _ => None,
+                            });
                     if let Some(anchor_idx) = anchor {
                         let (anchor_f_pos, _) =
                             f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);
@@ -3458,6 +3564,7 @@ fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
         crate::game::profile::update_error_bar_mask_for_side(side, mask);
     }
 
+    sync_selected_rows_with_visibility(state, session_active_players());
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
@@ -3680,9 +3787,8 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
     let bit = match choice_index {
-        0 => 1u8 << 0, // Judgment Tilt
-        1 => 1u8 << 1, // Column Cues
-        2 => 1u8 << 2, // Display Scorebox
+        0 => 1u8 << 0, // Column Cues
+        1 => 1u8 << 1, // Display Scorebox
         _ => return,
     };
 
@@ -3692,10 +3798,8 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
         state.gameplay_extras_more_active_mask[idx] |= bit;
     }
 
-    let judgment_tilt = (state.gameplay_extras_more_active_mask[idx] & (1u8 << 0)) != 0;
-    let column_cues = (state.gameplay_extras_more_active_mask[idx] & (1u8 << 1)) != 0;
-    let display_scorebox = (state.gameplay_extras_more_active_mask[idx] & (1u8 << 2)) != 0;
-    state.player_profiles[idx].judgment_tilt = judgment_tilt;
+    let column_cues = (state.gameplay_extras_more_active_mask[idx] & (1u8 << 0)) != 0;
+    let display_scorebox = (state.gameplay_extras_more_active_mask[idx] & (1u8 << 1)) != 0;
     state.player_profiles[idx].column_cues = column_cues;
     state.player_profiles[idx].display_scorebox = display_scorebox;
 
@@ -3708,7 +3812,6 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
         } else {
             crate::game::profile::PlayerSide::P2
         };
-        crate::game::profile::update_judgment_tilt_for_side(side, judgment_tilt);
         crate::game::profile::update_column_cues_for_side(side, column_cues);
         crate::game::profile::update_display_scorebox_for_side(side, display_scorebox);
     }
@@ -3788,7 +3891,12 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
     state.cursor_t = [1.0; PLAYER_SLOTS];
     state.help_anim_time = [0.0; PLAYER_SLOTS];
     let active = session_active_players();
-    state.row_tweens = init_row_tweens(&state.rows, state.selected_row, active);
+    state.row_tweens = init_row_tweens(
+        &state.rows,
+        state.selected_row,
+        active,
+        state.error_bar_active_mask,
+    );
 }
 
 fn switch_to_pane(state: &mut State, pane: OptionsPane) {
@@ -3822,14 +3930,14 @@ fn handle_nav_event(
     }
     if pressed {
         sync_selected_rows_with_visibility(state, active);
-        let show_measure_counter_children = measure_counter_children_visible(&state.rows, active);
+        let visibility = row_visibility(&state.rows, active, state.error_bar_active_mask);
         match dir {
             NavDirection::Up => {
                 if let Some(next_row) = next_visible_row(
                     &state.rows,
                     state.selected_row[player_idx],
                     NavDirection::Up,
-                    show_measure_counter_children,
+                    visibility,
                 ) {
                     state.selected_row[player_idx] = next_row;
                 }
@@ -3839,7 +3947,7 @@ fn handle_nav_event(
                     &state.rows,
                     state.selected_row[player_idx],
                     NavDirection::Down,
-                    show_measure_counter_children,
+                    visibility,
                 ) {
                     state.selected_row[player_idx] = next_row;
                 }
