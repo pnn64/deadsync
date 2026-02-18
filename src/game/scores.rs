@@ -24,7 +24,7 @@ const API_URL: &str = "https://api.groovestats.com/player-leaderboards.php";
 
 // --- Grade Definitions ---
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 #[allow(dead_code)] // Quint will be used eventually for W0 tracking
 pub enum Grade {
     Quint,
@@ -76,7 +76,7 @@ impl Grade {
 }
 
 /// A struct to hold both the calculated grade and the precise score percentage.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode)]
 pub struct CachedScore {
     pub grade: Grade,
     pub score_percent: f64, // Stored as 0.0 to 1.0
@@ -109,6 +109,43 @@ fn gs_scores_dir_for_profile_and_hash(profile_id: &str, chart_hash: &str) -> Pat
     gs_scores_dir_for_profile(profile_id).join(shard2_for_hash(chart_hash))
 }
 
+fn gs_score_index_path_for_profile(profile_id: &str) -> PathBuf {
+    gs_scores_dir_for_profile(profile_id).join("index.bin")
+}
+
+fn load_gs_score_index(path: &Path) -> Option<HashMap<String, CachedScore>> {
+    let bytes = fs::read(path).ok()?;
+    let (by_chart, _) = bincode::decode_from_slice::<HashMap<String, CachedScore>, _>(
+        &bytes,
+        bincode::config::standard(),
+    )
+    .ok()?;
+    Some(by_chart)
+}
+
+fn save_gs_score_index(path: &Path, by_chart: &HashMap<String, CachedScore>) {
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    if let Err(e) = fs::create_dir_all(parent) {
+        warn!("Failed to create GS score index dir {parent:?}: {e}");
+        return;
+    }
+    let Ok(buf) = bincode::encode_to_vec(by_chart, bincode::config::standard()) else {
+        warn!("Failed to encode GS score index at {path:?}");
+        return;
+    };
+    let tmp_path = path.with_extension("tmp");
+    if let Err(e) = fs::write(&tmp_path, buf) {
+        warn!("Failed to write GS score index temp file {tmp_path:?}: {e}");
+        return;
+    }
+    if let Err(e) = fs::rename(&tmp_path, path) {
+        warn!("Failed to commit GS score index file {path:?}: {e}");
+        let _ = fs::remove_file(&tmp_path);
+    }
+}
+
 fn ensure_gs_score_cache_loaded_for_profile(profile_id: &str) {
     let needs_load = {
         let state = GS_SCORE_CACHE.lock().unwrap();
@@ -119,7 +156,12 @@ fn ensure_gs_score_cache_loaded_for_profile(profile_id: &str) {
     }
 
     let load_started = Instant::now();
-    let disk_cache = best_scores_from_disk(&gs_scores_dir_for_profile(profile_id));
+    let index_path = gs_score_index_path_for_profile(profile_id);
+    let disk_cache = load_gs_score_index(&index_path).unwrap_or_else(|| {
+        let scanned = best_scores_from_disk(&gs_scores_dir_for_profile(profile_id));
+        save_gs_score_index(&index_path, &scanned);
+        scanned
+    });
     let loaded_entries = disk_cache.len();
     let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
     if load_ms >= 25.0 {
@@ -151,22 +193,26 @@ pub fn get_cached_gs_score_for_side(
 fn set_cached_gs_score_for_profile(profile_id: &str, chart_hash: String, score: CachedScore) {
     info!("Caching GrooveStats score {score:?} for chart hash {chart_hash}");
     ensure_gs_score_cache_loaded_for_profile(profile_id);
-    let mut state = GS_SCORE_CACHE.lock().unwrap();
-    let Some(map) = state.loaded_profiles.get_mut(profile_id) else {
-        return;
+    let snapshot = {
+        let mut state = GS_SCORE_CACHE.lock().unwrap();
+        let Some(map) = state.loaded_profiles.get_mut(profile_id) else {
+            return;
+        };
+        map.insert(chart_hash, score);
+        map.clone()
     };
-    map.insert(chart_hash, score);
+    save_gs_score_index(&gs_score_index_path_for_profile(profile_id), &snapshot);
 }
 
 // --- Local score cache (on-disk, one file per play) ---
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Encode, Decode)]
 struct BestScalar {
     grade: Grade,
     percent: f64,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Clone, Encode, Decode)]
 struct LocalScoreIndex {
     best_itg: HashMap<String, CachedScore>,
     best_ex: HashMap<String, BestScalar>,
@@ -201,6 +247,43 @@ fn local_scores_root_for_profile(profile_id: &str) -> PathBuf {
         .join(profile_id)
         .join("scores")
         .join("local")
+}
+
+fn local_score_index_path_for_profile(profile_id: &str) -> PathBuf {
+    local_scores_root_for_profile(profile_id).join("index.bin")
+}
+
+fn load_local_score_index_file(path: &Path) -> Option<LocalScoreIndex> {
+    let bytes = fs::read(path).ok()?;
+    let (index, _) = bincode::decode_from_slice::<LocalScoreIndex, _>(
+        &bytes,
+        bincode::config::standard(),
+    )
+    .ok()?;
+    Some(index)
+}
+
+fn save_local_score_index_file(path: &Path, index: &LocalScoreIndex) {
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    if let Err(e) = fs::create_dir_all(parent) {
+        warn!("Failed to create local score index dir {parent:?}: {e}");
+        return;
+    }
+    let Ok(buf) = bincode::encode_to_vec(index, bincode::config::standard()) else {
+        warn!("Failed to encode local score index at {path:?}");
+        return;
+    };
+    let tmp_path = path.with_extension("tmp");
+    if let Err(e) = fs::write(&tmp_path, buf) {
+        warn!("Failed to write local score index temp file {tmp_path:?}: {e}");
+        return;
+    }
+    if let Err(e) = fs::rename(&tmp_path, path) {
+        warn!("Failed to commit local score index file {path:?}: {e}");
+        let _ = fs::remove_file(&tmp_path);
+    }
 }
 
 fn count_local_score_bins_in_dir(dir: &Path) -> u32 {
@@ -1095,10 +1178,15 @@ fn scan_local_scores_dir(dir: &Path, index: &mut LocalScoreIndex) {
 }
 
 fn load_local_score_index(root: &Path) -> LocalScoreIndex {
-    let mut index = LocalScoreIndex::default();
     if !root.is_dir() {
+        return LocalScoreIndex::default();
+    }
+    let index_path = root.join("index.bin");
+    if let Some(index) = load_local_score_index_file(&index_path) {
         return index;
     }
+
+    let mut index = LocalScoreIndex::default();
 
     // Support both sharded (root/ab/*.bin) and unsharded (root/*.bin) layouts.
     scan_local_scores_dir(root, &mut index);
@@ -1112,6 +1200,7 @@ fn load_local_score_index(root: &Path) -> LocalScoreIndex {
         }
     }
 
+    save_local_score_index_file(&index_path, &index);
     index
 }
 
@@ -1228,9 +1317,22 @@ fn append_local_score_on_disk(
         fail_time: entry.fail_time,
         beat0_time_seconds: entry.beat0_time_seconds,
     };
-    let mut state = LOCAL_SCORE_CACHE.lock().unwrap();
-    if let Some(idx) = state.loaded_profiles.get_mut(profile_id) {
-        update_local_index_with_header(idx, chart_hash, &header);
+    let loaded_snapshot = {
+        let mut state = LOCAL_SCORE_CACHE.lock().unwrap();
+        if let Some(idx) = state.loaded_profiles.get_mut(profile_id) {
+            update_local_index_with_header(idx, chart_hash, &header);
+            Some(idx.clone())
+        } else {
+            None
+        }
+    };
+    if let Some(index) = loaded_snapshot {
+        save_local_score_index_file(&local_score_index_path_for_profile(profile_id), &index);
+    } else {
+        let index_path = local_score_index_path_for_profile(profile_id);
+        let mut index = load_local_score_index_file(&index_path).unwrap_or_default();
+        update_local_index_with_header(&mut index, chart_hash, &header);
+        save_local_score_index_file(&index_path, &index);
     }
 
     let cached = CachedScore {
