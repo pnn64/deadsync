@@ -259,6 +259,7 @@ impl Backend {
     pub fn wait_for_idle(&mut self) {
         match &mut self.0 {
             BackendImpl::Vulkan(state) => {
+                let _ = vulkan::flush_pending_uploads(state);
                 if let Some(device) = &state.device {
                     unsafe {
                         let _ = device.device_wait_idle();

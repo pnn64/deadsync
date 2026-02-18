@@ -160,6 +160,8 @@ pub struct State {
     tmesh_instance_ring_ptr: *mut TexturedMeshInstanceGpu, // persistently mapped pointer
     tmesh_capacity_instances: usize,       // total textured mesh instances across ring
     per_frame_stride_tmesh_instances: usize, // textured mesh instances reserved per frame
+    pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
+    pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
 }
 
 // --- Main Procedural Functions ---
@@ -285,6 +287,8 @@ pub fn init(
         tmesh_instance_ring_ptr: std::ptr::null_mut(),
         tmesh_capacity_instances: 0,
         per_frame_stride_tmesh_instances: 0,
+        pending_tex_upload_cmd: None,
+        pending_tex_staging: Vec::new(),
     };
 
     // Static unit quad buffers
@@ -963,6 +967,51 @@ fn transition_image_layout_cmd(
     }
 }
 
+fn begin_pending_texture_upload_cmd(state: &mut State) -> Result<vk::CommandBuffer, Box<dyn Error>> {
+    if let Some(cmd) = state.pending_tex_upload_cmd {
+        return Ok(cmd);
+    }
+
+    let device = state.device.as_ref().unwrap();
+    let alloc_info = vk::CommandBufferAllocateInfo::default()
+        .level(vk::CommandBufferLevel::PRIMARY)
+        .command_pool(state.command_pool)
+        .command_buffer_count(1);
+    let cmd = unsafe { device.allocate_command_buffers(&alloc_info)?[0] };
+    let begin_info =
+        vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+    unsafe {
+        device.begin_command_buffer(cmd, &begin_info)?;
+    }
+    state.pending_tex_upload_cmd = Some(cmd);
+    Ok(cmd)
+}
+
+fn flush_pending_texture_uploads(state: &mut State) -> Result<(), Box<dyn Error>> {
+    let Some(cmd) = state.pending_tex_upload_cmd.take() else {
+        return Ok(());
+    };
+
+    let device = state.device.as_ref().unwrap();
+    unsafe {
+        device.end_command_buffer(cmd)?;
+        let submit = vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&cmd));
+        device.queue_submit(state.queue, &[submit], vk::Fence::null())?;
+        device.queue_wait_idle(state.queue)?;
+        device.free_command_buffers(state.command_pool, &[cmd]);
+    }
+
+    for staging in state.pending_tex_staging.drain(..) {
+        destroy_buffer(device, &staging);
+    }
+
+    Ok(())
+}
+
+pub fn flush_pending_uploads(state: &mut State) -> Result<(), Box<dyn Error>> {
+    flush_pending_texture_uploads(state)
+}
+
 pub fn create_texture(
     state: &mut State,
     image: &RgbaImage,
@@ -973,17 +1022,33 @@ pub fn create_texture(
 
     let (width, height) = image.dimensions();
     let image_data = image.as_raw();
-
-    let staging = create_buffer(
+    let staging_size = image_data.len() as vk::DeviceSize;
+    let (staging_buffer, staging_memory) = create_gpu_buffer(
         &state.instance,
         device,
         state.pdevice,
-        state.command_pool,
-        state.queue,
+        staging_size,
         vk::BufferUsageFlags::TRANSFER_SRC,
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        Some(image_data),
     )?;
+    unsafe {
+        let mapped = device.map_memory(
+            staging_memory,
+            0,
+            staging_size,
+            vk::MemoryMapFlags::empty(),
+        )?;
+        std::ptr::copy_nonoverlapping(
+            image_data.as_ptr(),
+            mapped.cast::<u8>(),
+            image_data.len(),
+        );
+        device.unmap_memory(staging_memory);
+    }
+    let staging = BufferResource {
+        buffer: staging_buffer,
+        memory: staging_memory,
+    };
 
     let fmt = vk::Format::R8G8B8A8_UNORM;
     let (tex_image, tex_mem) = create_image(
@@ -996,7 +1061,7 @@ pub fn create_texture(
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
     )?;
 
-    let cmd = begin_single_time_commands(device, state.command_pool)?;
+    let cmd = begin_pending_texture_upload_cmd(state)?;
 
     transition_image_layout_cmd(
         device,
@@ -1037,9 +1102,7 @@ pub fn create_texture(
         vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
     );
 
-    end_single_time_commands(device, state.command_pool, state.queue, cmd)?;
-
-    destroy_buffer(device, &staging);
+    state.pending_tex_staging.push(staging);
     let view = create_image_view(device, tex_image, fmt)?;
     let sampler_default = get_sampler(state, sampler)?;
     let set = create_texture_descriptor_set(state, view, sampler_default)?;
@@ -1078,6 +1141,8 @@ pub fn draw(
     render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
 ) -> Result<u32, Box<dyn Error>> {
+    flush_pending_texture_uploads(state)?;
+
     if !state.swapchain_valid || state.window_size.width == 0 || state.window_size.height == 0 {
         return Ok(0);
     }
@@ -1637,6 +1702,9 @@ pub fn draw(
 
 pub fn cleanup(state: &mut State) {
     info!("Cleaning up Vulkan resources...");
+    if let Err(e) = flush_pending_texture_uploads(state) {
+        error!("Failed to flush pending texture uploads during cleanup: {e}");
+    }
     unsafe {
         if let Some(device) = &state.device {
             let _ = device.device_wait_idle();
