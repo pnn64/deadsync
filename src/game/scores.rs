@@ -16,7 +16,7 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use bincode::{Decode, Encode};
 
@@ -118,7 +118,15 @@ fn ensure_gs_score_cache_loaded_for_profile(profile_id: &str) {
         return;
     }
 
+    let load_started = Instant::now();
     let disk_cache = best_scores_from_disk(&gs_scores_dir_for_profile(profile_id));
+    let loaded_entries = disk_cache.len();
+    let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
+    if load_ms >= 25.0 {
+        info!(
+            "Loaded GrooveStats score cache for profile {profile_id}: {loaded_entries} chart(s) in {load_ms:.2}ms."
+        );
+    }
     let mut state = GS_SCORE_CACHE.lock().unwrap();
     state
         .loaded_profiles
@@ -425,7 +433,16 @@ fn ensure_local_score_cache_loaded(profile_id: &str) {
         return;
     }
 
+    let load_started = Instant::now();
     let loaded = load_local_score_index(&local_scores_root_for_profile(profile_id));
+    let loaded_itg = loaded.best_itg.len();
+    let loaded_ex = loaded.best_ex.len();
+    let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
+    if load_ms >= 25.0 {
+        info!(
+            "Loaded local score cache for profile {profile_id}: ITG={loaded_itg}, EX={loaded_ex} in {load_ms:.2}ms."
+        );
+    }
     let mut state = LOCAL_SCORE_CACHE.lock().unwrap();
     state
         .loaded_profiles
@@ -458,6 +475,7 @@ fn ensure_machine_local_score_cache_loaded() {
         return;
     }
 
+    let load_started = Instant::now();
     let mut best_itg: HashMap<String, MachineBest> = HashMap::new();
     for p in profile::scan_local_profiles() {
         let initials = profile_initials_for_id(&p.id).unwrap_or_else(|| "----".to_string());
@@ -487,7 +505,35 @@ fn ensure_machine_local_score_cache_loaded() {
     if !state.loaded {
         state.loaded = true;
         state.best_itg = best_itg;
+        let total = state.best_itg.len();
+        let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
+        if load_ms >= 25.0 {
+            info!("Loaded machine local score cache: {total} chart(s) in {load_ms:.2}ms.");
+        }
     }
+}
+
+pub fn prewarm_select_music_score_caches() {
+    let started = Instant::now();
+
+    let p1_profile_id = profile::active_local_profile_id_for_side(profile::PlayerSide::P1);
+    let p2_profile_id = profile::active_local_profile_id_for_side(profile::PlayerSide::P2);
+
+    if let Some(profile_id) = p1_profile_id.as_deref() {
+        ensure_local_score_cache_loaded(profile_id);
+        ensure_gs_score_cache_loaded_for_profile(profile_id);
+    }
+    if let Some(profile_id) = p2_profile_id.as_deref()
+        && p1_profile_id.as_deref() != Some(profile_id)
+    {
+        ensure_local_score_cache_loaded(profile_id);
+        ensure_gs_score_cache_loaded_for_profile(profile_id);
+    }
+
+    ensure_machine_local_score_cache_loaded();
+
+    let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+    info!("Prewarmed SelectMusic score caches in {elapsed_ms:.2}ms.");
 }
 
 fn update_machine_cache_if_loaded(chart_hash: &str, score: CachedScore, initials: &str) {

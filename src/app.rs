@@ -1179,25 +1179,8 @@ impl App {
                         self.handle_navigation_action(CurrentScreen::SelectMusic);
                     }
                 } else {
-                    self.state.screens.select_music_state = select_music::init();
-                    self.state.screens.select_music_state.active_color_index = current_color_index;
-                    self.state
-                        .screens
-                        .select_music_state
-                        .preferred_difficulty_index = preferred_active;
-                    self.state.screens.select_music_state.selected_steps_index = preferred_active;
-                    self.state
-                        .screens
-                        .select_music_state
-                        .p2_preferred_difficulty_index = preferred_p2;
-                    self.state
-                        .screens
-                        .select_music_state
-                        .p2_selected_steps_index = preferred_p2;
-
-                    self.state.screens.select_course_state = select_course::init();
-                    self.state.screens.select_course_state.active_color_index = current_color_index;
-
+                    // ProfileLoad asynchronously prepares SelectMusic/SelectCourse state;
+                    // avoid redundant eager init here.
                     self.handle_navigation_action(CurrentScreen::SelectColor);
                 }
                 Vec::new()

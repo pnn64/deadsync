@@ -55,6 +55,7 @@ pub fn on_enter(state: &mut State) {
                 PreparedState::Course(crate::screens::select_course::init())
             }
             profile::PlayMode::Regular => {
+                crate::game::scores::prewarm_select_music_score_caches();
                 PreparedState::Music(crate::screens::select_music::init())
             }
         };
