@@ -705,7 +705,9 @@ fn push_rpg_logo_overlay(
         center_x,
         center_y,
         zoom,
-        0.07,
+        // StepMania treats `(doubleres)` textures at half logical size.
+        // Match the visual result of Lua's `zoom(0.07)` for this asset.
+        0.035,
         z_base,
         alpha,
     );
