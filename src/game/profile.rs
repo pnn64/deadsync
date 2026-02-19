@@ -2255,11 +2255,12 @@ pub struct LocalProfileSummary {
     pub avatar_path: Option<PathBuf>,
 }
 
-pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
-    fn is_profile_id(s: &str) -> bool {
-        s.len() == 8 && s.bytes().all(|b| b.is_ascii_hexdigit())
-    }
+#[inline(always)]
+fn is_local_profile_id(s: &str) -> bool {
+    s.len() == 8 && s.bytes().all(|b| b.is_ascii_hexdigit())
+}
 
+pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
     let root = Path::new(PROFILES_ROOT);
     let Ok(read_dir) = fs::read_dir(root) else {
         return Vec::new();
@@ -2280,7 +2281,7 @@ pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
         else {
             continue;
         };
-        if !is_profile_id(&id) {
+        if !is_local_profile_id(&id) {
             continue;
         }
 
@@ -2437,6 +2438,36 @@ pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error
     fs::write(groovestats_ini_path(&id), gs)?;
 
     Ok(id)
+}
+
+pub fn delete_local_profile(id: &str) -> Result<(), std::io::Error> {
+    if !is_local_profile_id(id) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Invalid local profile id",
+        ));
+    }
+
+    let dir = local_profile_dir(id);
+    if !dir.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Profile does not exist",
+        ));
+    }
+
+    fs::remove_dir_all(&dir)?;
+
+    for side in [PlayerSide::P1, PlayerSide::P2] {
+        let is_active = active_local_profile_id_for_side(side)
+            .as_deref()
+            .is_some_and(|active_id| active_id == id);
+        if is_active {
+            let _ = set_active_profile_for_side(side, ActiveProfile::Guest);
+        }
+    }
+
+    Ok(())
 }
 
 pub fn get_session_music_rate() -> f32 {

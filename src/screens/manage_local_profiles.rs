@@ -78,6 +78,13 @@ struct NameEntryState {
     blink_t: f32,
 }
 
+#[derive(Clone, Debug)]
+struct DeleteConfirmState {
+    id: String,
+    display_name: String,
+    error: Option<&'static str>,
+}
+
 pub struct State {
     pub selected: usize,
     prev_selected: usize,
@@ -88,6 +95,7 @@ pub struct State {
     nav_key_held_since: Option<Instant>,
     nav_key_last_scrolled_at: Option<Instant>,
     name_entry: Option<NameEntryState>,
+    delete_confirm: Option<DeleteConfirmState>,
 }
 
 pub fn init() -> State {
@@ -102,6 +110,7 @@ pub fn init() -> State {
         nav_key_held_since: None,
         nav_key_last_scrolled_at: None,
         name_entry: None,
+        delete_confirm: None,
     }
 }
 
@@ -187,7 +196,7 @@ fn scroll_offset(selected: usize, total_rows: usize) -> usize {
 }
 
 fn update_hold_scroll(state: &mut State) {
-    if state.name_entry.is_some() {
+    if state.name_entry.is_some() || state.delete_confirm.is_some() {
         return;
     }
     let Some(dir) = state.nav_key_held_direction else {
@@ -303,11 +312,71 @@ fn cancel_name_entry(state: &mut State) {
     reset_nav_hold(state);
 }
 
+fn begin_delete_confirm(state: &mut State, id: &str, display_name: &str) {
+    reset_nav_hold(state);
+    state.delete_confirm = Some(DeleteConfirmState {
+        id: id.to_string(),
+        display_name: display_name.to_string(),
+        error: None,
+    });
+}
+
+#[inline(always)]
+fn selected_after_delete(selected_before: usize, total_after: usize) -> usize {
+    if total_after == 0 {
+        return 0;
+    }
+    let mut selected = selected_before.min(total_after - 1);
+    if selected + 1 == total_after && selected > 0 {
+        selected -= 1;
+    }
+    selected
+}
+
+fn confirm_delete(state: &mut State) {
+    let Some(confirm) = state.delete_confirm.take() else {
+        return;
+    };
+
+    let selected_before = state.selected;
+    match profile::delete_local_profile(&confirm.id) {
+        Ok(()) => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            refresh_rows(state);
+            reset_nav_hold(state);
+            let selected = selected_after_delete(selected_before, state.rows.len());
+            state.selected = selected;
+            state.prev_selected = selected;
+        }
+        Err(_) => {
+            state.delete_confirm = Some(DeleteConfirmState {
+                id: confirm.id,
+                display_name: confirm.display_name,
+                error: Some("Failed to delete profile."),
+            });
+        }
+    }
+}
+
+fn cancel_delete_confirm(state: &mut State) {
+    state.delete_confirm = None;
+    reset_nav_hold(state);
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if state.name_entry.is_some() {
         match ev.action {
             VirtualAction::p1_start if ev.pressed => confirm_name_entry(state),
             VirtualAction::p1_back if ev.pressed => cancel_name_entry(state),
+            _ => {}
+        }
+        return ScreenAction::None;
+    }
+
+    if state.delete_confirm.is_some() {
+        match ev.action {
+            VirtualAction::p1_start if ev.pressed => confirm_delete(state),
+            VirtualAction::p1_back if ev.pressed => cancel_delete_confirm(state),
             _ => {}
         }
         return ScreenAction::None;
@@ -337,7 +406,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 return ScreenAction::None;
             }
             let sel = state.selected.min(total - 1);
-            match &state.rows[sel].kind {
+            let start_row = state.rows[sel].kind.clone();
+            match start_row {
                 RowKind::CreateNew => {
                     reset_nav_hold(state);
                     state.name_entry = Some(NameEntryState {
@@ -350,7 +420,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     audio::play_sfx("assets/sounds/start.ogg");
                     return ScreenAction::Navigate(Screen::Options);
                 }
-                RowKind::Profile { .. } => {}
+                RowKind::Profile { id, display_name } => {
+                    begin_delete_confirm(state, &id, &display_name);
+                }
             }
         }
         _ => {}
@@ -542,7 +614,11 @@ fn help_for_selected(state: &State, p1_id: Option<&str>, p2_id: Option<&str>) ->
                 Some(tag) => format!("Assigned: {tag}"),
                 None => "Assigned: (none)".to_string(),
             };
-            let bullets = make_bullets(&[&format!("ID: {id}"), &assigned]);
+            let bullets = make_bullets(&[
+                &format!("ID: {id}"),
+                &assigned,
+                "Press Start to delete this profile.",
+            ]);
             (title, bullets)
         }
     }
@@ -629,6 +705,60 @@ fn push_name_entry_overlay(ui: &mut Vec<Actor>, state: &State) {
     push_overlay_value(ui, entry, cx, cy, box_w);
     push_overlay_footer(ui, cx, cy, box_h);
     push_overlay_error(ui, entry.error, cx, cy, box_w, box_h);
+}
+
+fn push_delete_confirm_overlay(ui: &mut Vec<Actor>, state: &State) {
+    let Some(confirm) = &state.delete_confirm else {
+        return;
+    };
+
+    let w = screen_width();
+    let h = screen_height();
+    let box_w = 700.0_f32.min(w * 0.92);
+    let box_h = 190.0_f32;
+    let cx = w * 0.5;
+    let cy = h * 0.5;
+
+    push_overlay_backdrop(ui, w, h);
+    push_overlay_box(ui, cx, cy, box_w, box_h);
+
+    let prompt = format!(
+        "Are you sure you want to delete the profile '{}'?",
+        confirm.display_name
+    );
+    ui.push(act!(text:
+        align(0.5, 0.0):
+        xy(cx, cy - box_h * 0.5 + 16.0):
+        font("miso"):
+        zoom(1.0):
+        maxwidth(box_w - 40.0):
+        settext(prompt):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1002):
+        horizalign(center)
+    ));
+    ui.push(act!(text:
+        align(0.5, 0.0):
+        xy(cx, cy - box_h * 0.5 + 58.0):
+        font("miso"):
+        zoom(0.9):
+        settext("This cannot be undone."):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1002):
+        horizalign(center)
+    ));
+    ui.push(act!(text:
+        align(0.5, 1.0):
+        xy(cx, cy + box_h * 0.5 - 10.0):
+        font("miso"):
+        zoom(0.9):
+        settext("Start: Yes    Back: No"):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1002):
+        horizalign(center)
+    ));
+
+    push_overlay_error(ui, confirm.error, cx, cy, box_w, box_h);
 }
 
 fn push_overlay_backdrop(ui: &mut Vec<Actor>, w: f32, h: f32) {
@@ -974,6 +1104,7 @@ pub fn get_actors(
     let desc_x = list_x + list_w + sep_w;
     push_desc(&mut ui, state, s, desc_x, list_y);
     push_name_entry_overlay(&mut ui, state);
+    push_delete_confirm_overlay(&mut ui, state);
 
     for actor in &mut ui {
         apply_alpha_to_actor(actor, alpha_multiplier);
