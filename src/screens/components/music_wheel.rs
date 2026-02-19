@@ -269,7 +269,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     xy(title_x_local, half_item_h + subtitle_y_offset): // FIX: Center vertically
                     maxwidth(title_max_w_local):
                     zoom(0.85):
-                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    diffuse(txt_col[0], txt_col[1], txt_col[2], txt_col[3]):
                     z(2)
                 ));
                 if has_subtitle {
@@ -280,7 +280,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         xy(title_x_local, half_item_h + line_gap_units): // FIX: Center vertically
                         maxwidth(title_max_w_local):
                         zoom(0.7):
-                        diffuse(1.0, 1.0, 1.0, 1.0):
+                        diffuse(txt_col[0], txt_col[1], txt_col[2], txt_col[3]):
                         z(2)
                     ));
                 }
