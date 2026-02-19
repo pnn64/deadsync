@@ -659,7 +659,7 @@ fn score_info_from_stage(
         scatter_worst_window_ms: 45.0,
         histogram: crate::game::timing::HistogramMs::default(),
         graph_first_second: 0.0,
-        graph_last_second: stage.song.total_length_seconds.max(0) as f32,
+        graph_last_second: stage.song.precise_last_second(),
         music_rate: if stage.music_rate.is_finite() && stage.music_rate > 0.0 {
             stage.music_rate
         } else {
@@ -3714,7 +3714,7 @@ impl App {
                         measure_nps_vec: c.measure_nps_vec.clone(),
                         timing: c.timing.clone(),
                         first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
-                        last_second: song.total_length_seconds.max(0) as f32,
+                        last_second: song.precise_last_second(),
                     })
                 }
                 _ => None,
@@ -3747,7 +3747,7 @@ impl App {
                             measure_nps_vec: c.measure_nps_vec.clone(),
                             timing: c.timing.clone(),
                             first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
-                            last_second: song.total_length_seconds.max(0) as f32,
+                            last_second: song.precise_last_second(),
                         })
                     }
                     _ => None,

@@ -2812,7 +2812,7 @@ pub fn init(
         0.0_f32
     };
     let density_graph_first_second = timing.get_time_for_beat(0.0).min(0.0_f32);
-    let density_graph_last_second = song.total_length_seconds.max(0) as f32;
+    let density_graph_last_second = song.precise_last_second();
     let density_graph_duration =
         (density_graph_last_second - density_graph_first_second).max(0.001_f32);
 
