@@ -3091,21 +3091,12 @@ pub fn apply_choice_delta(state: &mut State, player_idx: usize, delta: isize) {
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
-    // Update preview animation time and beat based on song BPM
+    // Keep options-screen noteskin previews on a stable clock.
+    // ITG/SL preview actors are not driven by selected chart BPM, so tying this to song BPM
+    // makes beat-based skins (e.g. cel) appear too fast/slow depending on the selected chart.
+    const PREVIEW_BPM: f32 = 120.0;
     state.preview_time += dt;
-
-    // Calculate beat increment based on the song's BPM
-    // Use the song's min_bpm (or max_bpm if they're the same)
-    let bpm = if (state.song.min_bpm - state.song.max_bpm).abs() < 1e-6 {
-        state.song.min_bpm as f32
-    } else {
-        // For variable BPM songs, use min_bpm as a reasonable default
-        state.song.min_bpm as f32
-    };
-    let bpm = if bpm > 0.0 { bpm } else { 120.0 }; // Fallback to 120 BPM
-
-    let beats_per_second = bpm / 60.0;
-    state.preview_beat += dt * beats_per_second;
+    state.preview_beat += dt * (PREVIEW_BPM / 60.0);
     let active = session_active_players();
     let now = Instant::now();
     sync_selected_rows_with_visibility(state, active);
