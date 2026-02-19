@@ -4229,7 +4229,7 @@ pub fn build(
                 };
                 let rot_deg = if profile.judgment_tilt && judgment.grade != JudgeGrade::Miss {
                     let abs_sec = offset_sec.abs().min(0.050);
-                    let dir = if offset_sec < 0.0 { -1.0 } else { 1.0 };
+                    let dir = if offset_sec < 0.0 { 1.0 } else { -1.0 };
                     dir * abs_sec * 300.0 * profile.tilt_multiplier
                 } else {
                     0.0
