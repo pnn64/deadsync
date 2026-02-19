@@ -742,6 +742,22 @@ fn zmod_layout_ys(
     }
 }
 
+#[inline(always)]
+fn stream_segment_index_exclusive_end(segs: &[StreamSegment], curr_measure: f32) -> usize {
+    if curr_measure.is_nan() {
+        return segs.len();
+    }
+    segs.partition_point(|s| curr_measure >= s.end as f32)
+}
+
+#[inline(always)]
+fn stream_segment_index_inclusive_end(segs: &[StreamSegment], curr_measure: f32) -> usize {
+    if curr_measure.is_nan() {
+        return segs.len();
+    }
+    segs.partition_point(|s| curr_measure > s.end as f32)
+}
+
 fn zmod_measure_counter_text(
     curr_beat_floor: f32,
     curr_measure: f32,
@@ -859,14 +875,12 @@ fn zmod_broken_run_segment(
 }
 
 fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option<usize> {
-    for (i, seg) in segs.iter().copied().enumerate() {
-        let len = (seg.end - seg.start) as f32;
-        let curr_count = (curr_measure - seg.start as f32).ceil();
-        if curr_count <= len {
-            return Some(i);
-        }
+    let i = stream_segment_index_inclusive_end(segs, curr_measure);
+    if i < segs.len() {
+        Some(i)
+    } else {
+        None
     }
-    None
 }
 
 fn zmod_run_timer_fmt(seconds: i32, minute_threshold: i32) -> String {
@@ -1041,12 +1055,18 @@ fn zmod_stream_prog_completion(state: &State, player_idx: usize) -> Option<f64> 
         return Some(0.0);
     }
     let upper_beat = (beat_floor as i32).saturating_add(1).max(0);
+    if upper_beat <= 0 {
+        return Some(0.0);
+    }
     let mut completed_stream_beats: i64 = 0;
     for seg in segs {
+        let start_beat = (seg.start as i32).saturating_mul(4);
+        if start_beat >= upper_beat {
+            break;
+        }
         if seg.is_break {
             continue;
         }
-        let start_beat = (seg.start as i32).saturating_mul(4);
         let end_beat = (seg.end as i32).saturating_mul(4);
         let lo = start_beat.max(0);
         let hi = upper_beat.min(end_beat);
@@ -3944,10 +3964,7 @@ pub fn build(
 
             let beat_floor = state.current_beat_visible[player_idx].floor();
             let curr_measure = beat_floor / 4.0;
-            let base_index = segs
-                .iter()
-                .position(|s| curr_measure < s.end as f32)
-                .unwrap_or(segs.len());
+            let base_index = stream_segment_index_exclusive_end(segs, curr_measure);
 
             let mut column_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
             if profile.measure_counter_left {
