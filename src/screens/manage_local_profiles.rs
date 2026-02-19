@@ -52,6 +52,10 @@ const DESC_TITLE_ZOOM: f32 = 1.0;
 const DESC_BODY_ZOOM: f32 = 1.0;
 
 const NAME_MAX_LEN: usize = 32;
+const PROFILE_MENU_W: f32 = 450.0;
+const PROFILE_MENU_HEADER_H: f32 = 56.0;
+const PROFILE_MENU_ITEM_H: f32 = 44.0;
+const PROFILE_MENU_BORDER: f32 = 3.0;
 
 #[derive(Clone, Debug)]
 enum RowKind {
@@ -73,9 +77,50 @@ enum NavDirection {
 
 #[derive(Clone, Debug)]
 struct NameEntryState {
+    mode: NameEntryMode,
     value: String,
     error: Option<&'static str>,
     blink_t: f32,
+}
+
+#[derive(Clone, Debug)]
+enum NameEntryMode {
+    Create,
+    Rename { id: String },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProfileMenuAction {
+    SetP1,
+    SetP2,
+    Rename,
+    Delete,
+}
+
+impl ProfileMenuAction {
+    #[inline(always)]
+    const fn label(self) -> &'static str {
+        match self {
+            Self::SetP1 => "Set P1",
+            Self::SetP2 => "Set P2",
+            Self::Rename => "Rename",
+            Self::Delete => "Delete",
+        }
+    }
+}
+
+const PROFILE_MENU_ACTIONS: [ProfileMenuAction; 4] = [
+    ProfileMenuAction::SetP1,
+    ProfileMenuAction::SetP2,
+    ProfileMenuAction::Rename,
+    ProfileMenuAction::Delete,
+];
+
+#[derive(Clone, Debug)]
+struct ProfileMenuState {
+    id: String,
+    display_name: String,
+    selected_action: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -95,6 +140,7 @@ pub struct State {
     nav_key_held_since: Option<Instant>,
     nav_key_last_scrolled_at: Option<Instant>,
     name_entry: Option<NameEntryState>,
+    profile_menu: Option<ProfileMenuState>,
     delete_confirm: Option<DeleteConfirmState>,
 }
 
@@ -110,6 +156,7 @@ pub fn init() -> State {
         nav_key_held_since: None,
         nav_key_last_scrolled_at: None,
         name_entry: None,
+        profile_menu: None,
         delete_confirm: None,
     }
 }
@@ -196,7 +243,8 @@ fn scroll_offset(selected: usize, total_rows: usize) -> usize {
 }
 
 fn update_hold_scroll(state: &mut State) {
-    if state.name_entry.is_some() || state.delete_confirm.is_some() {
+    if state.name_entry.is_some() || state.profile_menu.is_some() || state.delete_confirm.is_some()
+    {
         return;
     }
     let Some(dir) = state.nav_key_held_direction else {
@@ -234,16 +282,20 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     None
 }
 
-fn name_conflicts(state: &State, name: &str) -> bool {
+fn name_conflicts(state: &State, name: &str, skip_profile_id: Option<&str>) -> bool {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return false;
     }
     for row in &state.rows {
-        if let RowKind::Profile { display_name, .. } = &row.kind {
-            if display_name.trim() == trimmed {
-                return true;
-            }
+        let RowKind::Profile { id, display_name } = &row.kind else {
+            continue;
+        };
+        if skip_profile_id.is_some_and(|skip| skip == id) {
+            continue;
+        }
+        if display_name.trim() == trimmed {
+            return true;
         }
     }
     false
@@ -252,20 +304,24 @@ fn name_conflicts(state: &State, name: &str) -> bool {
 fn default_new_profile_name(state: &State) -> String {
     for i in 1..1000 {
         let candidate = format!("New{i:04}");
-        if !name_conflicts(state, &candidate) {
+        if !name_conflicts(state, &candidate, None) {
             return candidate;
         }
     }
     "New0001".to_string()
 }
 
-fn validate_new_profile_name(state: &State, name: &str) -> Result<(), &'static str> {
+fn validate_profile_name(state: &State, mode: &NameEntryMode, name: &str) -> Result<(), &'static str> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err("Profile name cannot be blank.");
     }
 
-    if name_conflicts(state, trimmed) {
+    let skip_id = match mode {
+        NameEntryMode::Create => None,
+        NameEntryMode::Rename { id } => Some(id.as_str()),
+    };
+    if name_conflicts(state, trimmed, skip_id) {
         return Err(
             "The name you chose conflicts with another profile. Please use a different name.",
         );
@@ -273,10 +329,17 @@ fn validate_new_profile_name(state: &State, name: &str) -> Result<(), &'static s
     Ok(())
 }
 
-fn try_create_profile(state: &mut State, name: &str) -> Result<String, &'static str> {
-    validate_new_profile_name(state, name)?;
-    let trimmed = name.trim();
-    profile::create_local_profile(trimmed).map_err(|_| "Failed to create profile.")
+fn try_submit_name_entry(state: &mut State, entry: &NameEntryState) -> Result<String, &'static str> {
+    validate_profile_name(state, &entry.mode, &entry.value)?;
+    let trimmed = entry.value.trim();
+    match &entry.mode {
+        NameEntryMode::Create => {
+            profile::create_local_profile(trimmed).map_err(|_| "Failed to create profile.")
+        }
+        NameEntryMode::Rename { id } => profile::rename_local_profile(id, trimmed)
+            .map(|()| id.clone())
+            .map_err(|_| "Failed to rename profile."),
+    }
 }
 
 fn confirm_name_entry(state: &mut State) {
@@ -284,7 +347,7 @@ fn confirm_name_entry(state: &mut State) {
         return;
     };
 
-    match try_create_profile(state, &entry.value) {
+    match try_submit_name_entry(state, &entry) {
         Ok(id) => {
             audio::play_sfx("assets/sounds/start.ogg");
             refresh_rows(state);
@@ -299,6 +362,7 @@ fn confirm_name_entry(state: &mut State) {
         }
         Err(e) => {
             state.name_entry = Some(NameEntryState {
+                mode: entry.mode,
                 value: entry.value,
                 error: Some(e),
                 blink_t: entry.blink_t,
@@ -312,8 +376,108 @@ fn cancel_name_entry(state: &mut State) {
     reset_nav_hold(state);
 }
 
+fn begin_name_entry_create(state: &mut State) {
+    reset_nav_hold(state);
+    state.name_entry = Some(NameEntryState {
+        mode: NameEntryMode::Create,
+        value: default_new_profile_name(state),
+        error: None,
+        blink_t: 0.0,
+    });
+}
+
+fn begin_name_entry_rename(state: &mut State, id: &str, display_name: &str) {
+    reset_nav_hold(state);
+    state.name_entry = Some(NameEntryState {
+        mode: NameEntryMode::Rename { id: id.to_string() },
+        value: display_name.to_string(),
+        error: None,
+        blink_t: 0.0,
+    });
+}
+
+fn begin_profile_menu(state: &mut State, id: &str, display_name: &str) {
+    reset_nav_hold(state);
+    state.profile_menu = Some(ProfileMenuState {
+        id: id.to_string(),
+        display_name: display_name.to_string(),
+        selected_action: 0,
+    });
+}
+
+fn cancel_profile_menu(state: &mut State) {
+    state.profile_menu = None;
+    reset_nav_hold(state);
+}
+
+fn move_profile_menu_selected(state: &mut State, dir: NavDirection) {
+    let Some(menu) = state.profile_menu.as_mut() else {
+        return;
+    };
+    let len = PROFILE_MENU_ACTIONS.len();
+    if len == 0 {
+        menu.selected_action = 0;
+        return;
+    }
+    menu.selected_action = match dir {
+        NavDirection::Up => {
+            if menu.selected_action == 0 {
+                len - 1
+            } else {
+                menu.selected_action - 1
+            }
+        }
+        NavDirection::Down => (menu.selected_action + 1) % len,
+    };
+}
+
+fn confirm_profile_menu(state: &mut State) {
+    let Some(menu) = state.profile_menu.clone() else {
+        return;
+    };
+    let Some(action) = PROFILE_MENU_ACTIONS.get(menu.selected_action).copied() else {
+        return;
+    };
+
+    match action {
+        ProfileMenuAction::SetP1 => {
+            let _ = profile::set_active_profile_for_side(
+                profile::PlayerSide::P1,
+                profile::ActiveProfile::Local {
+                    id: menu.id.clone(),
+                },
+            );
+            refresh_rows(state);
+            cancel_profile_menu(state);
+            audio::play_sfx("assets/sounds/start.ogg");
+        }
+        ProfileMenuAction::SetP2 => {
+            let _ = profile::set_active_profile_for_side(
+                profile::PlayerSide::P2,
+                profile::ActiveProfile::Local {
+                    id: menu.id.clone(),
+                },
+            );
+            refresh_rows(state);
+            cancel_profile_menu(state);
+            audio::play_sfx("assets/sounds/start.ogg");
+        }
+        ProfileMenuAction::Rename => {
+            state.profile_menu = None;
+            begin_name_entry_rename(state, &menu.id, &menu.display_name);
+            audio::play_sfx("assets/sounds/start.ogg");
+        }
+        ProfileMenuAction::Delete => {
+            state.profile_menu = None;
+            begin_delete_confirm(state, &menu.id, &menu.display_name);
+            audio::play_sfx("assets/sounds/start.ogg");
+        }
+    }
+}
+
 fn begin_delete_confirm(state: &mut State, id: &str, display_name: &str) {
     reset_nav_hold(state);
+    state.profile_menu = None;
     state.delete_confirm = Some(DeleteConfirmState {
         id: id.to_string(),
         display_name: display_name.to_string(),
@@ -382,6 +546,23 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
+    if state.profile_menu.is_some() {
+        match ev.action {
+            VirtualAction::p1_back if ev.pressed => cancel_profile_menu(state),
+            VirtualAction::p1_up | VirtualAction::p1_menu_up if ev.pressed => {
+                move_profile_menu_selected(state, NavDirection::Up);
+                audio::play_sfx("assets/sounds/change.ogg");
+            }
+            VirtualAction::p1_down | VirtualAction::p1_menu_down if ev.pressed => {
+                move_profile_menu_selected(state, NavDirection::Down);
+                audio::play_sfx("assets/sounds/change.ogg");
+            }
+            VirtualAction::p1_start if ev.pressed => confirm_profile_menu(state),
+            _ => {}
+        }
+        return ScreenAction::None;
+    }
+
     match ev.action {
         VirtualAction::p1_back if ev.pressed => return ScreenAction::Navigate(Screen::Options),
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
@@ -409,19 +590,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             let start_row = state.rows[sel].kind.clone();
             match start_row {
                 RowKind::CreateNew => {
-                    reset_nav_hold(state);
-                    state.name_entry = Some(NameEntryState {
-                        value: default_new_profile_name(state),
-                        error: None,
-                        blink_t: 0.0,
-                    });
+                    begin_name_entry_create(state);
                 }
                 RowKind::Exit => {
                     audio::play_sfx("assets/sounds/start.ogg");
                     return ScreenAction::Navigate(Screen::Options);
                 }
                 RowKind::Profile { id, display_name } => {
-                    begin_delete_confirm(state, &id, &display_name);
+                    begin_profile_menu(state, &id, &display_name);
+                    audio::play_sfx("assets/sounds/start.ogg");
                 }
             }
         }
@@ -617,7 +794,7 @@ fn help_for_selected(state: &State, p1_id: Option<&str>, p2_id: Option<&str>) ->
             let bullets = make_bullets(&[
                 &format!("ID: {id}"),
                 &assigned,
-                "Press Start to delete this profile.",
+                "Press Start to open profile actions.",
             ]);
             (title, bullets)
         }
@@ -693,18 +870,81 @@ fn push_name_entry_overlay(ui: &mut Vec<Actor>, state: &State) {
 
     let w = screen_width();
     let h = screen_height();
-
-    let box_w = 560.0_f32.min(w * 0.9);
-    let box_h = 170.0_f32;
+    let accent = color::simply_love_rgba(state.active_color_index);
+    let border = 4.0;
+    let box_w = (w * 0.75).clamp(560.0, 1200.0);
+    let top_h = 210.0;
+    let bottom_h = 72.0;
+    let box_h = top_h + bottom_h + 2.0 * border;
     let cx = w * 0.5;
     let cy = h * 0.5;
+    let top_cy = cy - box_h * 0.5 + border + top_h * 0.5;
+    let bottom_cy = cy + box_h * 0.5 - border - bottom_h * 0.5;
 
-    push_overlay_backdrop(ui, w, h);
-    push_overlay_box(ui, cx, cy, box_w, box_h);
-    push_overlay_prompt(ui, cx, cy, box_h);
-    push_overlay_value(ui, entry, cx, cy, box_w);
-    push_overlay_footer(ui, cx, cy, box_h);
-    push_overlay_error(ui, entry.error, cx, cy, box_w, box_h);
+    ui.push(act!(quad:
+        align(0.5, 0.5):
+        xy(cx, cy):
+        zoomto(box_w, box_h):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1001)
+    ));
+    ui.push(act!(quad:
+        align(0.5, 0.5):
+        xy(cx, top_cy):
+        zoomto(box_w - 2.0 * border, top_h):
+        diffuse(accent[0], accent[1], accent[2], 1.0):
+        z(1002)
+    ));
+    ui.push(act!(quad:
+        align(0.5, 0.5):
+        xy(cx, bottom_cy):
+        zoomto(box_w - 2.0 * border, bottom_h):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        z(1002)
+    ));
+
+    ui.push(act!(text:
+        align(0.5, 0.5):
+        xy(cx, top_cy):
+        font("miso"):
+        zoom(1.0):
+        settext("Enter a name for the profile."):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1003):
+        horizalign(center)
+    ));
+
+    let cursor = if entry.blink_t < 0.5 { "_" } else { " " };
+    let mut value = entry.value.clone();
+    if value.chars().count() < NAME_MAX_LEN {
+        value.push_str(cursor);
+    }
+    ui.push(act!(text:
+        align(0.5, 0.5):
+        xy(cx, bottom_cy):
+        font("miso"):
+        zoom(1.55):
+        maxwidth(box_w - 40.0):
+        settext(value):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1003):
+        horizalign(center)
+    ));
+
+    let Some(err) = entry.error else {
+        return;
+    };
+    ui.push(act!(text:
+        align(0.5, 0.0):
+        xy(cx, cy + box_h * 0.5 + 8.0):
+        font("miso"):
+        zoom(0.9):
+        maxwidth(box_w - 40.0):
+        settext(err):
+        diffuse(1.0, 0.2, 0.2, 1.0):
+        z(1003):
+        horizalign(center)
+    ));
 }
 
 fn push_delete_confirm_overlay(ui: &mut Vec<Actor>, state: &State) {
@@ -781,52 +1021,6 @@ fn push_overlay_box(ui: &mut Vec<Actor>, cx: f32, cy: f32, w: f32, h: f32) {
     ));
 }
 
-fn push_overlay_prompt(ui: &mut Vec<Actor>, cx: f32, cy: f32, box_h: f32) {
-    ui.push(act!(text:
-        align(0.5, 0.0):
-        xy(cx, cy - box_h * 0.5 + 14.0):
-        font("miso"):
-        zoom(1.0):
-        settext("Enter a name for the profile."):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        z(1002):
-        horizalign(center)
-    ));
-}
-
-fn push_overlay_value(ui: &mut Vec<Actor>, entry: &NameEntryState, cx: f32, cy: f32, box_w: f32) {
-    let cursor = if entry.blink_t < 0.5 { "▮" } else { " " };
-    let mut value = entry.value.clone();
-    if value.chars().count() < NAME_MAX_LEN {
-        value.push_str(cursor);
-    }
-
-    ui.push(act!(text:
-        align(0.5, 0.5):
-        xy(cx, cy):
-        font("miso"):
-        zoom(1.2):
-        maxwidth(box_w - 40.0):
-        settext(value):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        z(1002):
-        horizalign(center)
-    ));
-}
-
-fn push_overlay_footer(ui: &mut Vec<Actor>, cx: f32, cy: f32, box_h: f32) {
-    ui.push(act!(text:
-        align(0.5, 1.0):
-        xy(cx, cy + box_h * 0.5 - 10.0):
-        font("miso"):
-        zoom(0.9):
-        settext("Start: Confirm    Back: Cancel"):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        z(1002):
-        horizalign(center)
-    ));
-}
-
 fn push_overlay_error(
     ui: &mut Vec<Actor>,
     err: Option<&'static str>,
@@ -889,7 +1083,7 @@ struct RowColors {
 
 fn row_label(kind: &RowKind) -> &str {
     match kind {
-        RowKind::CreateNew => "Create New Profile",
+        RowKind::CreateNew => "Create Profile",
         RowKind::Exit => "Exit",
         RowKind::Profile { display_name, .. } => display_name.as_str(),
     }
@@ -1052,6 +1246,100 @@ fn push_rows(
     }
 }
 
+fn selected_row_top_y(state: &State, s: f32, list_y: f32) -> f32 {
+    if state.rows.is_empty() {
+        return list_y;
+    }
+    let offset = scroll_offset(state.selected, state.rows.len());
+    let vis = state.selected.saturating_sub(offset).min(VISIBLE_ROWS - 1);
+    ((vis as f32) * (ROW_H + ROW_GAP)).mul_add(s, list_y)
+}
+
+fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x: f32, list_y: f32) {
+    let Some(menu) = &state.profile_menu else {
+        return;
+    };
+
+    let row_top = selected_row_top_y(state, s, list_y);
+    let menu_w = PROFILE_MENU_W * s;
+    let header_h = PROFILE_MENU_HEADER_H * s;
+    let item_h = PROFILE_MENU_ITEM_H * s;
+    let border = PROFILE_MENU_BORDER * s;
+    let body_h = item_h * PROFILE_MENU_ACTIONS.len() as f32;
+    let menu_h = header_h + body_h + 2.0 * border;
+    let mut menu_x = (LIST_W * 0.52).mul_add(s, list_x);
+    let mut menu_y = row_top;
+
+    menu_x = menu_x.clamp(10.0, (screen_width() - menu_w - 10.0).max(10.0));
+    menu_y = menu_y.clamp(BAR_H + 4.0, (screen_height() - BAR_H - menu_h - 4.0).max(BAR_H + 4.0));
+
+    let inner_x = menu_x + border;
+    let inner_y = menu_y + border;
+    let inner_w = (menu_w - 2.0 * border).max(0.0);
+    let accent = color::simply_love_rgba(state.active_color_index);
+
+    ui.push(act!(quad:
+        align(0.0, 0.0):
+        xy(menu_x, menu_y):
+        zoomto(menu_w, menu_h):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1004)
+    ));
+    ui.push(act!(quad:
+        align(0.0, 0.0):
+        xy(inner_x, inner_y):
+        zoomto(inner_w, header_h):
+        diffuse(0.92, 0.92, 0.92, 1.0):
+        z(1005)
+    ));
+    ui.push(act!(quad:
+        align(0.0, 0.0):
+        xy(inner_x, inner_y + header_h):
+        zoomto(inner_w, body_h):
+        diffuse(0.0, 0.06, 0.10, 0.96):
+        z(1005)
+    ));
+    ui.push(act!(text:
+        align(0.0, 0.5):
+        xy(14.0_f32.mul_add(s, inner_x), inner_y + header_h * 0.5):
+        font("miso"):
+        zoom(1.20):
+        settext(menu.display_name.clone()):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        z(1006):
+        horizalign(left)
+    ));
+
+    for (i, action) in PROFILE_MENU_ACTIONS.iter().enumerate() {
+        let row_y = (i as f32).mul_add(item_h, inner_y + header_h);
+        let selected = i == menu.selected_action;
+        if selected {
+            ui.push(act!(quad:
+                align(0.0, 0.0):
+                xy(inner_x, row_y):
+                zoomto(inner_w, item_h):
+                diffuse(0.17, 0.23, 0.28, 0.95):
+                z(1005)
+            ));
+        }
+        let text_col = if selected {
+            [accent[0], accent[1], accent[2], 1.0]
+        } else {
+            [1.0, 1.0, 1.0, 1.0]
+        };
+        ui.push(act!(text:
+            align(0.0, 0.5):
+            xy(14.0_f32.mul_add(s, inner_x), row_y + item_h * 0.5):
+            font("miso"):
+            zoom(1.0):
+            settext(action.label()):
+            diffuse(text_col[0], text_col[1], text_col[2], text_col[3]):
+            z(1006):
+            horizalign(left)
+        ));
+    }
+}
+
 pub fn get_actors(
     state: &State,
     _asset_manager: &AssetManager,
@@ -1103,6 +1391,7 @@ pub fn get_actors(
     let sep_w = SEP_W * s;
     let desc_x = list_x + list_w + sep_w;
     push_desc(&mut ui, state, s, desc_x, list_y);
+    push_profile_menu_overlay(&mut ui, state, s, list_x, list_y);
     push_name_entry_overlay(&mut ui, state);
     push_delete_confirm_overlay(&mut ui, state);
 

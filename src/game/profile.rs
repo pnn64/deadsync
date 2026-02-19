@@ -2440,6 +2440,108 @@ pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error
     Ok(id)
 }
 
+fn rewrite_profile_display_name(path: &Path, display_name: &str) -> Result<(), std::io::Error> {
+    let src = fs::read_to_string(path)?;
+    let mut out = String::with_capacity(src.len() + display_name.len() + 32);
+    let mut in_userprofile = false;
+    let mut saw_userprofile = false;
+    let mut wrote_display = false;
+
+    for raw_line in src.lines() {
+        let trimmed = raw_line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            if in_userprofile && !wrote_display {
+                out.push_str("DisplayName=");
+                out.push_str(display_name);
+                out.push('\n');
+                wrote_display = true;
+            }
+            let section = trimmed[1..trimmed.len() - 1].trim();
+            in_userprofile = section.eq_ignore_ascii_case("userprofile");
+            if in_userprofile {
+                saw_userprofile = true;
+            }
+            out.push_str(raw_line);
+            out.push('\n');
+            continue;
+        }
+
+        if in_userprofile && let Some(eq) = trimmed.find('=') {
+            let key = trimmed[..eq].trim();
+            if key.eq_ignore_ascii_case("DisplayName") {
+                out.push_str("DisplayName=");
+                out.push_str(display_name);
+                out.push('\n');
+                wrote_display = true;
+                continue;
+            }
+        }
+
+        out.push_str(raw_line);
+        out.push('\n');
+    }
+
+    if !saw_userprofile {
+        if !out.is_empty() && !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str("[userprofile]\n");
+        out.push_str("DisplayName=");
+        out.push_str(display_name);
+        out.push('\n');
+    } else if in_userprofile && !wrote_display {
+        out.push_str("DisplayName=");
+        out.push_str(display_name);
+        out.push('\n');
+    }
+
+    fs::write(path, out)
+}
+
+pub fn rename_local_profile(id: &str, display_name: &str) -> Result<(), std::io::Error> {
+    if !is_local_profile_id(id) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Invalid local profile id",
+        ));
+    }
+
+    let name = display_name.trim();
+    if name.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Display name is empty",
+        ));
+    }
+
+    let ini_path = profile_ini_path(id);
+    if !ini_path.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Profile does not exist",
+        ));
+    }
+    rewrite_profile_display_name(&ini_path, name)?;
+
+    let p1_active = active_local_profile_id_for_side(PlayerSide::P1)
+        .as_deref()
+        .is_some_and(|active_id| active_id == id);
+    let p2_active = active_local_profile_id_for_side(PlayerSide::P2)
+        .as_deref()
+        .is_some_and(|active_id| active_id == id);
+    if p1_active || p2_active {
+        let mut profiles = PROFILES.lock().unwrap();
+        if p1_active {
+            profiles[side_ix(PlayerSide::P1)].display_name = name.to_string();
+        }
+        if p2_active {
+            profiles[side_ix(PlayerSide::P2)].display_name = name.to_string();
+        }
+    }
+
+    Ok(())
+}
+
 pub fn delete_local_profile(id: &str) -> Result<(), std::io::Error> {
     if !is_local_profile_id(id) {
         return Err(std::io::Error::new(
