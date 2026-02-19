@@ -1731,9 +1731,7 @@ fn ogg_sample_rate_hz(data: &[u8]) -> Result<f64, String> {
     match ogg_sample_rate_hz_lewton(data) {
         Ok(rate) => Ok(rate),
         Err(lewton_err) => ogg_sample_rate_hz_ident_packet(data).ok_or_else(|| {
-            format!(
-                "lewton header error: {lewton_err}; fallback OGG ident parse failed"
-            )
+            format!("lewton header error: {lewton_err}; fallback OGG ident parse failed")
         }),
     }
 }

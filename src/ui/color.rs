@@ -82,6 +82,78 @@ pub const DEFAULT_COLOR_INDEX: i32 = 2;
 
 pub const FILE_DIFFICULTY_NAMES: [&str; 5] = ["Beginner", "Easy", "Medium", "Hard", "Challenge"];
 pub const DISPLAY_DIFFICULTY_NAMES: [&str; 5] = ["Beginner", "Easy", "Medium", "Hard", "Challenge"];
+pub const ZMOD_DISPLAY_DIFFICULTY_NAMES: [&str; 5] =
+    ["Beginner", "Easy", "Medium", "Hard", "Expert"];
+
+#[inline(always)]
+fn contains_ascii_ci(haystack: &str, needle: &[u8]) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    let hay = haystack.as_bytes();
+    if hay.len() < needle.len() {
+        return false;
+    }
+    let limit = hay.len() - needle.len();
+    let mut i = 0;
+    while i <= limit {
+        let mut j = 0;
+        while j < needle.len() {
+            if !hay[i + j].eq_ignore_ascii_case(&needle[j]) {
+                break;
+            }
+            j += 1;
+        }
+        if j == needle.len() {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+#[inline(always)]
+pub fn difficulty_display_name(difficulty_name: &str, zmod_rating_box_text: bool) -> &'static str {
+    if difficulty_name.eq_ignore_ascii_case("edit") {
+        return "Edit";
+    }
+    let difficulty_index = FILE_DIFFICULTY_NAMES
+        .iter()
+        .position(|&name| name.eq_ignore_ascii_case(difficulty_name))
+        .unwrap_or(2);
+    if zmod_rating_box_text {
+        ZMOD_DISPLAY_DIFFICULTY_NAMES[difficulty_index]
+    } else {
+        DISPLAY_DIFFICULTY_NAMES[difficulty_index]
+    }
+}
+
+#[inline(always)]
+pub fn difficulty_display_name_for_song(
+    difficulty_name: &str,
+    song_main_title: &str,
+    zmod_rating_box_text: bool,
+) -> &'static str {
+    if !zmod_rating_box_text || !difficulty_name.eq_ignore_ascii_case("challenge") {
+        return difficulty_display_name(difficulty_name, zmod_rating_box_text);
+    }
+    if contains_ascii_ci(song_main_title, b"(NOVICE)") {
+        return difficulty_display_name("Beginner", true);
+    }
+    if contains_ascii_ci(song_main_title, b"(EASY)") {
+        return difficulty_display_name("Easy", true);
+    }
+    if contains_ascii_ci(song_main_title, b"(MEDIUM)") {
+        return difficulty_display_name("Medium", true);
+    }
+    if contains_ascii_ci(song_main_title, b"(HARD)") {
+        return difficulty_display_name("Hard", true);
+    }
+    if contains_ascii_ci(song_main_title, b"(EDIT)") {
+        return difficulty_display_name("Edit", true);
+    }
+    difficulty_display_name(difficulty_name, true)
+}
 
 /// Decorative / sprite tint palette (hearts, backgrounds, sprites)
 pub const DECORATIVE_RGBA: [[f32; 4]; 12] = [

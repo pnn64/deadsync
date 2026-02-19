@@ -168,7 +168,8 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                 let (start, end) = state.note_ranges[player_idx];
                 if show_fa_split && end > start {
                     let blue_window_ms = gameplay::player_blue_window_ms(state, player_idx);
-                    let wc = gameplay::display_window_counts(state, player_idx, Some(blue_window_ms));
+                    let wc =
+                        gameplay::display_window_counts(state, player_idx, Some(blue_window_ms));
                     let rows: [([f32; 4], [f32; 4], u32); 7] = [
                         (fantastic_color, dim_fantastic, wc.w0),
                         (white_fa_color, dim_white_fa, wc.w1),

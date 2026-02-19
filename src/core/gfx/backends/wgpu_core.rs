@@ -1621,7 +1621,10 @@ fn build_tmesh_pipeline(
         vertex: wgpu::VertexState {
             module: shader,
             entry_point: Some("vs_main"),
-            buffers: &[textured_mesh_vertex_layout(), textured_mesh_instance_layout()],
+            buffers: &[
+                textured_mesh_vertex_layout(),
+                textured_mesh_instance_layout(),
+            ],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {

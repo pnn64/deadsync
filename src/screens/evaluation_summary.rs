@@ -147,15 +147,8 @@ fn steps_type_label(chart_type: &str) -> &'static str {
     }
 }
 
-fn difficulty_display_name(difficulty: &str) -> &'static str {
-    if difficulty.eq_ignore_ascii_case("edit") {
-        return "Edit";
-    }
-    let difficulty_index = color::FILE_DIFFICULTY_NAMES
-        .iter()
-        .position(|&n| n.eq_ignore_ascii_case(difficulty))
-        .unwrap_or(2);
-    color::DISPLAY_DIFFICULTY_NAMES[difficulty_index]
+fn difficulty_display_name(difficulty: &str, zmod_rating_box_text: bool) -> &'static str {
+    color::difficulty_display_name(difficulty, zmod_rating_box_text)
 }
 
 fn should_display_profile_names(stages: &[stage_stats::StageSummary]) -> bool {
@@ -177,6 +170,7 @@ fn build_player_stats(
     p: &stage_stats::PlayerStageSummary,
     show_profile_names: bool,
     active_color_index: i32,
+    zmod_rating_box_text: bool,
     elapsed: f32,
 ) -> Vec<Actor> {
     let (col1x, col2x, grade_x, align1_x, align2_x, align1_text, align2_text, col1_eps) = match side
@@ -277,7 +271,7 @@ fn build_player_stats(
     // Stepchart style + difficulty text
     {
         let style = steps_type_label(&p.chart.chart_type);
-        let diff = difficulty_display_name(&p.chart.difficulty);
+        let diff = difficulty_display_name(&p.chart.difficulty, zmod_rating_box_text);
         let text = format!("{style} / {diff}");
         let mut a = act!(text:
             font("miso"):
@@ -394,6 +388,8 @@ fn build_row(
     stage: &stage_stats::StageSummary,
     show_profile_names: bool,
     active_color_index: i32,
+    translated_titles: bool,
+    zmod_rating_box_text: bool,
     elapsed: f32,
 ) -> Actor {
     let cx = screen_center_x();
@@ -409,9 +405,7 @@ fn build_row(
             format!("banner{banner_num}.png")
         });
 
-    let full_title = stage
-        .song
-        .display_full_title(crate::config::get().translated_titles);
+    let full_title = stage.song.display_full_title(translated_titles);
 
     let bpm_str = stringify_display_bpms(&stage.song, stage.music_rate);
     let bpm_line = if bpm_str.is_empty() {
@@ -481,6 +475,7 @@ fn build_row(
             p,
             show_profile_names,
             active_color_index,
+            zmod_rating_box_text,
             elapsed,
         ));
     }
@@ -500,6 +495,7 @@ pub fn get_actors(
     stages: &[stage_stats::StageSummary],
     _asset_manager: &AssetManager,
 ) -> Vec<Actor> {
+    let cfg = crate::config::get();
     let mut actors: Vec<Actor> = Vec::with_capacity(32);
 
     // Background
@@ -577,6 +573,8 @@ pub fn get_actors(
             stage,
             show_profile_names,
             state.active_color_index,
+            cfg.translated_titles,
+            cfg.zmod_rating_box_text,
             state.elapsed,
         ));
     }

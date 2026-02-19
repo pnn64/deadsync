@@ -3046,22 +3046,40 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
             judgment_counts[ix] = previous.judgment_counts[ix].saturating_add(stage_judgment);
             scoring_counts[ix] = previous.scoring_counts[ix].saturating_add(stage_scoring);
         }
-        let stage_window_counts = crate::game::timing::compute_window_counts(&state.notes[start..end]);
-        let stage_window_counts_10ms = crate::game::timing::compute_window_counts_10ms_blue(
-            &state.notes[start..end],
-        );
+        let stage_window_counts =
+            crate::game::timing::compute_window_counts(&state.notes[start..end]);
+        let stage_window_counts_10ms =
+            crate::game::timing::compute_window_counts_10ms_blue(&state.notes[start..end]);
         let stage_blue_window_ms = player_blue_window_ms(state, player);
         let stage_window_counts_display_blue = crate::game::timing::compute_window_counts_blue_ms(
             &state.notes[start..end],
             stage_blue_window_ms,
         );
         let window_counts = crate::game::timing::WindowCounts {
-            w0: previous.window_counts.w0.saturating_add(stage_window_counts.w0),
-            w1: previous.window_counts.w1.saturating_add(stage_window_counts.w1),
-            w2: previous.window_counts.w2.saturating_add(stage_window_counts.w2),
-            w3: previous.window_counts.w3.saturating_add(stage_window_counts.w3),
-            w4: previous.window_counts.w4.saturating_add(stage_window_counts.w4),
-            w5: previous.window_counts.w5.saturating_add(stage_window_counts.w5),
+            w0: previous
+                .window_counts
+                .w0
+                .saturating_add(stage_window_counts.w0),
+            w1: previous
+                .window_counts
+                .w1
+                .saturating_add(stage_window_counts.w1),
+            w2: previous
+                .window_counts
+                .w2
+                .saturating_add(stage_window_counts.w2),
+            w3: previous
+                .window_counts
+                .w3
+                .saturating_add(stage_window_counts.w3),
+            w4: previous
+                .window_counts
+                .w4
+                .saturating_add(stage_window_counts.w4),
+            w5: previous
+                .window_counts
+                .w5
+                .saturating_add(stage_window_counts.w5),
             miss: previous
                 .window_counts
                 .miss
@@ -3274,7 +3292,10 @@ pub fn display_window_counts(
 }
 
 #[inline(always)]
-fn display_window_counts_10ms(state: &State, player_idx: usize) -> crate::game::timing::WindowCounts {
+fn display_window_counts_10ms(
+    state: &State,
+    player_idx: usize,
+) -> crate::game::timing::WindowCounts {
     if player_idx >= state.num_players {
         return crate::game::timing::WindowCounts::default();
     }

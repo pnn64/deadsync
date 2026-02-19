@@ -516,7 +516,8 @@ fn build_init_data() -> InitData {
             if let Some((difficulty_name, meter)) = course_difficulty_from_meters(course) {
                 (difficulty_name.to_string(), Some(meter))
             } else if let Some(first_entry) = entries.first() {
-                if let Some(normalized) = normalize_difficulty_file_name(first_entry.difficulty.as_str())
+                if let Some(normalized) =
+                    normalize_difficulty_file_name(first_entry.difficulty.as_str())
                 {
                     (normalized.to_string(), first_entry.meter)
                 } else {

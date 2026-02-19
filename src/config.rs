@@ -203,6 +203,8 @@ pub struct Config {
     pub song_parsing_threads: u8,
     pub simply_love_color: i32,
     pub show_select_music_gameplay_timer: bool,
+    /// zmod parity: gameplay/eval difficulty meter also displays text labels.
+    pub zmod_rating_box_text: bool,
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub global_offset_seconds: f32,
@@ -247,6 +249,7 @@ impl Default for Config {
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             show_select_music_gameplay_timer: true,
+            zmod_rating_box_text: false,
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             global_offset_seconds: -0.008,
@@ -474,6 +477,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!("SimplyLoveColor={}\n", default.simply_love_color));
+    content.push_str(&format!(
+        "ZmodRatingBoxText={}\n",
+        if default.zmod_rating_box_text {
+            "1"
+        } else {
+            "0"
+        }
+    ));
     content.push('\n');
 
     std::fs::write(CONFIG_PATH, content)
@@ -709,6 +720,27 @@ pub fn load() {
                         }
                     })
                     .unwrap_or(default.show_select_music_gameplay_timer);
+                cfg.zmod_rating_box_text = conf
+                    .get("Theme", "ZmodRatingBoxText")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.zmod_rating_box_text);
 
                 info!("Configuration loaded from '{CONFIG_PATH}'.");
             } // Lock on CONFIG is released here.
@@ -768,6 +800,9 @@ pub fn load() {
                     miss = true;
                 }
                 if !miss && !has("Theme", "ShowSelectMusicGameplayTimer") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "ZmodRatingBoxText") {
                     miss = true;
                 }
                 miss
@@ -1525,6 +1560,10 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!("SimplyLoveColor={}\n", cfg.simply_love_color));
+    content.push_str(&format!(
+        "ZmodRatingBoxText={}\n",
+        if cfg.zmod_rating_box_text { "1" } else { "0" }
+    ));
     content.push('\n');
 
     if let Err(e) = std::fs::write(CONFIG_PATH, content) {

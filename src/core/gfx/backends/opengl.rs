@@ -467,23 +467,23 @@ pub fn draw(
                         ptr: vertices.as_ptr() as usize,
                         len: vertices.len(),
                     };
-                    let (vertex_start, vertex_count) = if let Some(&geom) = tmesh_geom.get(&geom_key)
-                    {
-                        geom
-                    } else {
-                        let start = tmesh_vertices.len() as u32;
-                        tmesh_vertices.reserve(vertices.len());
-                        for v in vertices.iter() {
-                            tmesh_vertices.push(TexturedMeshVertexRaw {
-                                pos: v.pos,
-                                uv: v.uv,
-                                color: v.color,
-                            });
-                        }
-                        let count = vertices.len() as u32;
-                        tmesh_geom.insert(geom_key, (start, count));
-                        (start, count)
-                    };
+                    let (vertex_start, vertex_count) =
+                        if let Some(&geom) = tmesh_geom.get(&geom_key) {
+                            geom
+                        } else {
+                            let start = tmesh_vertices.len() as u32;
+                            tmesh_vertices.reserve(vertices.len());
+                            for v in vertices.iter() {
+                                tmesh_vertices.push(TexturedMeshVertexRaw {
+                                    pos: v.pos,
+                                    uv: v.uv,
+                                    color: v.color,
+                                });
+                            }
+                            let count = vertices.len() as u32;
+                            tmesh_geom.insert(geom_key, (start, count));
+                            (start, count)
+                        };
 
                     let instance_start = tmesh_instances.len() as u32;
                     let model: [[f32; 4]; 4] = obj.transform.into();

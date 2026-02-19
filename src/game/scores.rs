@@ -4,8 +4,8 @@ use crate::core::network;
 use crate::game::gameplay;
 use crate::game::judgment;
 use crate::game::profile::{self, Profile};
-use crate::game::stage_stats;
 use crate::game::song::get_song_cache;
+use crate::game::stage_stats;
 use chrono::{Local, TimeZone};
 use log::{info, warn};
 use serde::Deserialize;
@@ -255,11 +255,9 @@ fn local_score_index_path_for_profile(profile_id: &str) -> PathBuf {
 
 fn load_local_score_index_file(path: &Path) -> Option<LocalScoreIndex> {
     let bytes = fs::read(path).ok()?;
-    let (index, _) = bincode::decode_from_slice::<LocalScoreIndex, _>(
-        &bytes,
-        bincode::config::standard(),
-    )
-    .ok()?;
+    let (index, _) =
+        bincode::decode_from_slice::<LocalScoreIndex, _>(&bytes, bincode::config::standard())
+            .ok()?;
     Some(index)
 }
 
@@ -1523,7 +1521,10 @@ pub fn save_local_summary_score_for_side(
         .unwrap_or(0);
     let profile_initials = profile::get_for_side(side).player_initials;
     let counts = [
-        summary.window_counts.w0.saturating_add(summary.window_counts.w1),
+        summary
+            .window_counts
+            .w0
+            .saturating_add(summary.window_counts.w1),
         summary.window_counts.w2,
         summary.window_counts.w3,
         summary.window_counts.w4,
@@ -1557,7 +1558,12 @@ pub fn save_local_summary_score_for_side(
         beat0_time_seconds: 0.0,
         replay: Vec::new(),
     };
-    append_local_score_on_disk(&profile_id, profile_initials.as_str(), chart_hash, &mut entry);
+    append_local_score_on_disk(
+        &profile_id,
+        profile_initials.as_str(),
+        chart_hash,
+        &mut entry,
+    );
 }
 
 // --- API Response Structs ---

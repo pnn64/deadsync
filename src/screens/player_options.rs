@@ -209,12 +209,14 @@ fn init_row_tweens(
             visible_idx += 1;
             f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
         } else {
-            let anchor = rows.get(i).and_then(|row| match conditional_row_parent(row.name.as_str()) {
-                Some(ROW_MEASURE_COUNTER) => measure_counter_anchor_visible_idx,
-                Some(ROW_JUDGMENT_TILT) => judgment_tilt_anchor_visible_idx,
-                Some(ROW_ERROR_BAR) => error_bar_anchor_visible_idx,
-                _ => None,
-            });
+            let anchor =
+                rows.get(i)
+                    .and_then(|row| match conditional_row_parent(row.name.as_str()) {
+                        Some(ROW_MEASURE_COUNTER) => measure_counter_anchor_visible_idx,
+                        Some(ROW_JUDGMENT_TILT) => judgment_tilt_anchor_visible_idx,
+                        Some(ROW_ERROR_BAR) => error_bar_anchor_visible_idx,
+                        _ => None,
+                    });
             if let Some(anchor_idx) = anchor {
                 let (anchor_f_pos, _) = f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);
                 (anchor_f_pos, true)
@@ -611,9 +613,10 @@ fn build_main_rows(
                     stepchart_choice_indices.push(i);
                 }
             }
-            for (i, chart) in crate::screens::select_music::edit_charts_sorted(song, target_chart_type)
-                .into_iter()
-                .enumerate()
+            for (i, chart) in
+                crate::screens::select_music::edit_charts_sorted(song, target_chart_type)
+                    .into_iter()
+                    .enumerate()
             {
                 let desc = chart.description.trim();
                 if desc.is_empty() {
@@ -1736,7 +1739,11 @@ fn apply_profile_defaults(
         .iter_mut()
         .find(|r| r.name == ROW_CUSTOM_FANTASTIC_WINDOW)
     {
-        row.selected_choice_index[player_idx] = if profile.custom_fantastic_window { 0 } else { 1 };
+        row.selected_choice_index[player_idx] = if profile.custom_fantastic_window {
+            0
+        } else {
+            1
+        };
     }
     if let Some(row) = rows
         .iter_mut()
@@ -2210,7 +2217,10 @@ fn judgment_tilt_intensity_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -
     !any_active
 }
 
-fn error_bar_children_visible(active: [bool; PLAYER_SLOTS], error_bar_active_mask: [u8; PLAYER_SLOTS]) -> bool {
+fn error_bar_children_visible(
+    active: [bool; PLAYER_SLOTS],
+    error_bar_active_mask: [u8; PLAYER_SLOTS],
+) -> bool {
     let mut any_active = false;
     for player_idx in 0..PLAYER_SLOTS {
         if !active[player_idx] {
@@ -2269,11 +2279,7 @@ fn count_visible_rows(rows: &[Row], visibility: RowVisibility) -> usize {
         .count()
 }
 
-fn row_to_visible_index(
-    rows: &[Row],
-    row_idx: usize,
-    visibility: RowVisibility,
-) -> Option<usize> {
+fn row_to_visible_index(rows: &[Row], row_idx: usize, visibility: RowVisibility) -> Option<usize> {
     if row_idx >= rows.len() {
         return None;
     }
@@ -2289,11 +2295,7 @@ fn row_to_visible_index(
     Some(pos)
 }
 
-fn fallback_visible_row(
-    rows: &[Row],
-    row_idx: usize,
-    visibility: RowVisibility,
-) -> Option<usize> {
+fn fallback_visible_row(rows: &[Row], row_idx: usize, visibility: RowVisibility) -> Option<usize> {
     if rows.is_empty() {
         return None;
     }
@@ -3279,15 +3281,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
                     visible_idx += 1;
                     f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
                 } else {
-                    let anchor =
-                        state.rows
-                            .get(i)
-                            .and_then(|row| match conditional_row_parent(row.name.as_str()) {
-                                Some(ROW_MEASURE_COUNTER) => measure_counter_anchor_visible_idx,
-                                Some(ROW_JUDGMENT_TILT) => judgment_tilt_anchor_visible_idx,
-                                Some(ROW_ERROR_BAR) => error_bar_anchor_visible_idx,
-                                _ => None,
-                            });
+                    let anchor = state.rows.get(i).and_then(|row| {
+                        match conditional_row_parent(row.name.as_str()) {
+                            Some(ROW_MEASURE_COUNTER) => measure_counter_anchor_visible_idx,
+                            Some(ROW_JUDGMENT_TILT) => judgment_tilt_anchor_visible_idx,
+                            Some(ROW_ERROR_BAR) => error_bar_anchor_visible_idx,
+                            _ => None,
+                        }
+                    });
                     if let Some(anchor_idx) = anchor {
                         let (anchor_f_pos, _) =
                             f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);

@@ -591,13 +591,7 @@ pub(crate) fn edit_charts_sorted<'a>(song: &'a SongData, chart_type: &str) -> Ve
                 && !c.notes.is_empty()
         })
         .collect();
-    edits.sort_by_cached_key(|c| {
-        (
-            c.description.to_lowercase(),
-            c.meter,
-            c.short_hash.as_str(),
-        )
-    });
+    edits.sort_by_cached_key(|c| (c.description.to_lowercase(), c.meter, c.short_hash.as_str()));
     edits
 }
 
@@ -639,11 +633,7 @@ fn edit_chart_indices_sorted(song: &SongData, chart_type: &str) -> Vec<usize> {
         .collect();
     indices.sort_by_cached_key(|&idx| {
         let c = &song.charts[idx];
-        (
-            c.description.to_lowercase(),
-            c.meter,
-            c.short_hash.as_str(),
-        )
+        (c.description.to_lowercase(), c.meter, c.short_hash.as_str())
     });
     indices
 }
@@ -1052,7 +1042,10 @@ fn build_bpm_grouped_entries(
         .collect();
 
     songs.sort_by_cached_key(|song| {
-        (song_bpm_for_sort(song.as_ref()), song_title_sort_key(song.as_ref()))
+        (
+            song_bpm_for_sort(song.as_ref()),
+            song_title_sort_key(song.as_ref()),
+        )
     });
 
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
@@ -1503,13 +1496,12 @@ pub fn init() -> State {
 
             pack_song_count += 1;
             matched_songs += 1;
-            pack_total_seconds += if song.music_length_seconds.is_finite()
-                && song.music_length_seconds > 0.0
-            {
-                song.music_length_seconds as f64
-            } else {
-                song.total_length_seconds.max(0) as f64
-            };
+            pack_total_seconds +=
+                if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
+                    song.music_length_seconds as f64
+                } else {
+                    song.total_length_seconds.max(0) as f64
+                };
             all_entries.push(MusicWheelEntry::Song(song.clone()));
 
             // Check for last played song
@@ -3453,12 +3445,16 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
             ensure_chart_cache_for_song(state, song, target_chart_type, is_versus);
 
-            if !displayed_chart_matches(state.displayed_chart_p1.as_ref(), song, state.cached_chart_ix_p1)
-            {
-                state.displayed_chart_p1 = state.cached_chart_ix_p1.map(|chart_ix| DisplayedChart {
-                    song: song.clone(),
-                    chart_ix,
-                });
+            if !displayed_chart_matches(
+                state.displayed_chart_p1.as_ref(),
+                song,
+                state.cached_chart_ix_p1,
+            ) {
+                state.displayed_chart_p1 =
+                    state.cached_chart_ix_p1.map(|chart_ix| DisplayedChart {
+                        song: song.clone(),
+                        chart_ix,
+                    });
             }
             let desired_hash_p1 = state
                 .cached_chart_ix_p1
@@ -3487,10 +3483,11 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                     song,
                     state.cached_chart_ix_p2,
                 ) {
-                    state.displayed_chart_p2 = state.cached_chart_ix_p2.map(|chart_ix| DisplayedChart {
-                        song: song.clone(),
-                        chart_ix,
-                    });
+                    state.displayed_chart_p2 =
+                        state.cached_chart_ix_p2.map(|chart_ix| DisplayedChart {
+                            song: song.clone(),
+                            chart_ix,
+                        });
                 }
                 let desired_hash_p2 = state
                     .cached_chart_ix_p2
@@ -3589,10 +3586,9 @@ pub fn prime_displayed_chart_data(state: &mut State) {
         song: song.clone(),
         chart_ix,
     });
-    state.displayed_chart_p2 = state.cached_chart_ix_p2.map(|chart_ix| DisplayedChart {
-        song,
-        chart_ix,
-    });
+    state.displayed_chart_p2 = state
+        .cached_chart_ix_p2
+        .map(|chart_ix| DisplayedChart { song, chart_ix });
 }
 
 pub fn take_pending_replay(state: &mut State) -> Option<sort_menu::ReplayStartPayload> {
@@ -3718,8 +3714,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         Some(MusicWheelEntry::Song(song)) => Some(song.as_ref()),
         _ => None,
     };
-    let immediate_chart_p1 = selected_song
-        .and_then(|song| chart_for_steps_index(song, target_chart_type, state.selected_steps_index));
+    let immediate_chart_p1 = selected_song.and_then(|song| {
+        chart_for_steps_index(song, target_chart_type, state.selected_steps_index)
+    });
     let immediate_chart_p2 = if is_versus {
         selected_song.and_then(|song| {
             chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index)
@@ -4279,11 +4276,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.push(act!(quad: align(0.5, 0.5): xy(pat_cx, pat_cy): setsize(panel_w, 64.0): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
         if show_stamina_panel(pattern_info_mode, disp_chart_p1) {
             let pct = |value: f64| {
-                if value.is_finite() {
-                    value
-                } else {
-                    0.0
-                }
+                if value.is_finite() { value } else { 0.0 }
             };
             let (
                 boxes,
@@ -4299,40 +4292,39 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 mono_value,
                 candles_value,
                 total_stream,
-            ) =
-                if let Some(c) = disp_chart_p1 {
-                    (
-                        c.stamina_counts.boxes.to_string(),
-                        c.stamina_counts.anchors.to_string(),
-                        c.stamina_counts.staircases.to_string(),
-                        c.stamina_counts.sweeps.to_string(),
-                        c.stamina_counts.towers.to_string(),
-                        c.stamina_counts.triangles.to_string(),
-                        c.stamina_counts.doritos.to_string(),
-                        c.stamina_counts.hip_breakers.to_string(),
-                        c.stamina_counts.copters.to_string(),
-                        c.stamina_counts.spirals.to_string(),
-                        format!("{:.1}% Mono", pct(c.stamina_counts.mono_percent)),
-                        format!("{:.1}% Candles", pct(c.stamina_counts.candle_percent)),
-                        format!("{} ({:.1}%)", c.total_streams, chart_stream_percent(c)),
-                    )
-                } else {
-                    (
-                        "0".to_string(),
-                        "0".to_string(),
-                        "0".to_string(),
-                        "0".to_string(),
-                        "0".to_string(),
-                        "0".to_string(),
-                        "0".to_string(),
-                        "0".to_string(),
-                        "0".to_string(),
-                        "0".to_string(),
-                        "0.0% Mono".to_string(),
-                        "0.0% Candles".to_string(),
-                        "0 (0.0%)".to_string(),
-                    )
-                };
+            ) = if let Some(c) = disp_chart_p1 {
+                (
+                    c.stamina_counts.boxes.to_string(),
+                    c.stamina_counts.anchors.to_string(),
+                    c.stamina_counts.staircases.to_string(),
+                    c.stamina_counts.sweeps.to_string(),
+                    c.stamina_counts.towers.to_string(),
+                    c.stamina_counts.triangles.to_string(),
+                    c.stamina_counts.doritos.to_string(),
+                    c.stamina_counts.hip_breakers.to_string(),
+                    c.stamina_counts.copters.to_string(),
+                    c.stamina_counts.spirals.to_string(),
+                    format!("{:.1}% Mono", pct(c.stamina_counts.mono_percent)),
+                    format!("{:.1}% Candles", pct(c.stamina_counts.candle_percent)),
+                    format!("{} ({:.1}%)", c.total_streams, chart_stream_percent(c)),
+                )
+            } else {
+                (
+                    "0".to_string(),
+                    "0".to_string(),
+                    "0".to_string(),
+                    "0".to_string(),
+                    "0".to_string(),
+                    "0".to_string(),
+                    "0".to_string(),
+                    "0".to_string(),
+                    "0".to_string(),
+                    "0".to_string(),
+                    "0.0% Mono".to_string(),
+                    "0.0% Candles".to_string(),
+                    "0 (0.0%)".to_string(),
+                )
+            };
 
             let panel_left = pat_cx - panel_w * 0.5;
             let col_w1 = panel_w / 3.0;
@@ -4346,21 +4338,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let stamina_zoom = 0.85;
             let stamina_base_y = pat_cy - 21.75;
 
-            let push_pattern_line =
-                |actors: &mut Vec<Actor>,
-                 col_left: f32,
-                 col_w: f32,
-                 num_right_x: f32,
-                 row: usize,
-                 num: &str,
-                 label: &str| {
-                    let y = stamina_base_y + row as f32 * stamina_row_step;
-                    let label_x = num_right_x + 3.0;
-                    let num_w = (num_right_x - col_left).max(8.0);
-                    let label_w = (col_left + col_w - label_x - 2.0).max(8.0);
-                    actors.push(act!(text: font("miso"): settext(num): align(1.0, 0.5): horizalign(right): xy(num_right_x, y): maxwidth(num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
-                    actors.push(act!(text: font("miso"): settext(label): align(0.0, 0.5): horizalign(left): xy(label_x, y): maxwidth(label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
-                };
+            let push_pattern_line = |actors: &mut Vec<Actor>,
+                                     col_left: f32,
+                                     col_w: f32,
+                                     num_right_x: f32,
+                                     row: usize,
+                                     num: &str,
+                                     label: &str| {
+                let y = stamina_base_y + row as f32 * stamina_row_step;
+                let label_x = num_right_x + 3.0;
+                let num_w = (num_right_x - col_left).max(8.0);
+                let label_w = (col_left + col_w - label_x - 2.0).max(8.0);
+                actors.push(act!(text: font("miso"): settext(num): align(1.0, 0.5): horizalign(right): xy(num_right_x, y): maxwidth(num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+                actors.push(act!(text: font("miso"): settext(label): align(0.0, 0.5): horizalign(left): xy(label_x, y): maxwidth(label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+            };
 
             let num_anchor_frac = 0.31;
             let col1_num_x = col1_left + col_w1 * num_anchor_frac;

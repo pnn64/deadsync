@@ -2552,6 +2552,7 @@ fn build_modifiers_pane(score_info: &ScoreInfo, bar_center_x: f32, bar_width: f3
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+    let cfg = crate::config::get();
     let mut actors = Vec::with_capacity(20);
 
     // 1. Background
@@ -2579,7 +2580,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     actors.push(select_shared::build_session_timer(format_session_time(
         state.session_elapsed,
     )));
-    if crate::config::get().show_select_music_gameplay_timer {
+    if cfg.show_select_music_gameplay_timer {
         actors.push(select_shared::build_gameplay_timer(format_session_time(
             state.gameplay_elapsed,
         )));
@@ -2646,9 +2647,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 format!("banner{banner_num}.png")
             });
 
-        let full_title = score_info
-            .song
-            .display_full_title(crate::config::get().translated_titles);
+        let full_title = score_info.song.display_full_title(cfg.translated_titles);
 
         let title_and_banner_frame = Actor::Frame {
             align: [0.5, 0.5],
@@ -2825,92 +2824,228 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
             // Difficulty Text and Meter Block
             {
-                let difficulty_display_name = if si.chart.difficulty.eq_ignore_ascii_case("edit") {
-                    "Edit"
-                } else {
-                    let difficulty_index = color::FILE_DIFFICULTY_NAMES
-                        .iter()
-                        .position(|&n| n.eq_ignore_ascii_case(&si.chart.difficulty))
-                        .unwrap_or(2);
-                    color::DISPLAY_DIFFICULTY_NAMES[difficulty_index]
-                };
-
                 let difficulty_color =
                     color::difficulty_rgba(&si.chart.difficulty, state.active_color_index);
-                let difficulty_text = format!("{style_label} / {difficulty_display_name}");
-                let text_x = upper_origin_x + 115.0 * dir;
-                let box_x = upper_origin_x + 134.5 * dir;
-                let align_x = if side == profile::PlayerSide::P1 {
-                    0.0
-                } else {
-                    1.0
-                };
-
-                if side == profile::PlayerSide::P1 {
-                    actors.push(act!(text: font("miso"): settext(difficulty_text):
-                        align(align_x, 0.5): xy(text_x, cy - 65.0): zoom(0.7): z(101):
-                        diffuse(1.0, 1.0, 1.0, 1.0)
+                if cfg.zmod_rating_box_text {
+                    let difficulty_display_name = color::difficulty_display_name_for_song(
+                        &si.chart.difficulty,
+                        &si.song.title,
+                        true,
+                    );
+                    let box_x = upper_origin_x + 129.5 * dir;
+                    actors.push(act!(quad:
+                        align(0.5, 0.5):
+                        xy(box_x, cy - 76.0):
+                        zoomto(40.0, 40.0):
+                        z(101):
+                        diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
+                    ));
+                    actors.push(act!(text:
+                        font("wendy"):
+                        settext(si.chart.meter.to_string()):
+                        align(0.5, 0.5):
+                        xy(box_x, cy - 76.0):
+                        zoom(0.55):
+                        z(102):
+                        diffuse(0.0, 0.0, 0.0, 1.0)
+                    ));
+                    actors.push(act!(text:
+                        font("miso"):
+                        settext(style_label):
+                        align(0.5, 0.5):
+                        xy(box_x, cy - 92.0):
+                        zoom(0.5):
+                        z(102):
+                        diffuse(0.0, 0.0, 0.0, 1.0)
+                    ));
+                    actors.push(act!(text:
+                        font("miso"):
+                        settext(difficulty_display_name):
+                        align(0.5, 0.5):
+                        xy(box_x, cy - 61.0):
+                        zoom(0.5):
+                        z(102):
+                        diffuse(0.0, 0.0, 0.0, 1.0)
                     ));
                 } else {
-                    actors.push(act!(text: font("miso"): settext(difficulty_text):
-                        align(align_x, 0.5): xy(text_x, cy - 65.0): zoom(0.7): z(101):
-                        diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
+                    let difficulty_display_name =
+                        color::difficulty_display_name(&si.chart.difficulty, false);
+                    let difficulty_text = format!("{style_label} / {difficulty_display_name}");
+                    let text_x = upper_origin_x + 115.0 * dir;
+                    let box_x = upper_origin_x + 134.5 * dir;
+                    let align_x = if side == profile::PlayerSide::P1 {
+                        0.0
+                    } else {
+                        1.0
+                    };
+
+                    if side == profile::PlayerSide::P1 {
+                        actors.push(act!(text: font("miso"): settext(difficulty_text):
+                            align(align_x, 0.5): xy(text_x, cy - 65.0): zoom(0.7): z(101):
+                            diffuse(1.0, 1.0, 1.0, 1.0)
+                        ));
+                    } else {
+                        actors.push(act!(text: font("miso"): settext(difficulty_text):
+                            align(align_x, 0.5): xy(text_x, cy - 65.0): zoom(0.7): z(101):
+                            diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
+                        ));
+                    }
+
+                    actors.push(act!(quad:
+                        align(0.5, 0.5):
+                        xy(box_x, cy - 71.0):
+                        zoomto(30.0, 30.0):
+                        z(101):
+                        diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
+                    ));
+                    actors.push(act!(text:
+                        font("wendy"):
+                        settext(si.chart.meter.to_string()):
+                        align(0.5, 0.5):
+                        xy(box_x, cy - 71.0):
+                        zoom(0.4):
+                        z(102):
+                        diffuse(0.0, 0.0, 0.0, 1.0)
                     ));
                 }
-
-                actors.push(act!(quad:
-                    align(0.5, 0.5):
-                    xy(box_x, cy - 71.0):
-                    zoomto(30.0, 30.0):
-                    z(101):
-                    diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
-                ));
-                actors.push(act!(text:
-                    font("wendy"):
-                    settext(si.chart.meter.to_string()):
-                    align(0.5, 0.5):
-                    xy(box_x, cy - 71.0):
-                    zoom(0.4):
-                    z(102):
-                    diffuse(0.0, 0.0, 0.0, 1.0)
-                ));
             }
 
-            // Step Artist (or Edit description)
-            let step_artist_text = if si.chart.difficulty.eq_ignore_ascii_case("edit")
-                && !si.chart.description.trim().is_empty()
-            {
-                si.chart.description.clone()
+            // Step artist / description:
+            // SL-style source list is [AuthorCredit, Description] (if distinct).
+            let mut step_artist_lines: Vec<String> = Vec::with_capacity(2);
+            let author = si.chart.step_artist.trim();
+            if !author.is_empty() {
+                step_artist_lines.push(author.to_owned());
+            }
+            let description = si.chart.description.trim();
+            if !description.is_empty() && step_artist_lines.iter().all(|line| line != description) {
+                step_artist_lines.push(description.to_owned());
+            }
+
+            if cfg.zmod_rating_box_text {
+                let step_artist_text = step_artist_lines.join("\n");
+                if !step_artist_text.is_empty() {
+                    let line_count = step_artist_lines.len().max(1);
+                    let zmod_diff_box_x = upper_origin_x + 129.5 * dir;
+                    let x = zmod_diff_box_x - 21.5 * dir;
+                    let y_base = if line_count > 2 { cy - 62.0 } else { cy - 59.0 };
+                    let align_x = if side == profile::PlayerSide::P1 {
+                        0.0
+                    } else {
+                        1.0
+                    };
+                    let (text_zoom, y_nudge, bg_w, text_h_px) = asset_manager
+                        .with_fonts(|all_fonts| {
+                            asset_manager.with_font("miso", |miso_font| {
+                                let mut max_w = 0.0_f32;
+                                for line in step_artist_text.lines() {
+                                    let line_w =
+                                        font::measure_line_width_logical(miso_font, line, all_fonts)
+                                            as f32;
+                                    if line_w > max_w {
+                                        max_w = line_w;
+                                    }
+                                }
+
+                                let line_spacing = miso_font.line_spacing.max(1) as f32;
+                                let text_h = line_spacing * line_count as f32;
+
+                                let mut zoom = if line_count > 2 { 0.6_f32 } else { 0.7_f32 };
+                                let mut nudge = 0.0_f32;
+                                while max_w * zoom > 120.0 && zoom > 0.45 {
+                                    zoom -= 0.05;
+                                    nudge -= 1.0;
+                                }
+                                let bg_w = (max_w + 20.0).max(10.0) * zoom;
+                                let text_h_px = text_h * zoom;
+                                (zoom, nudge, bg_w, text_h_px)
+                            })
+                        })
+                        .unwrap_or((0.7, 0.0, 24.0, 8.0));
+                    let y = y_base + y_nudge;
+
+                    let bg_x = zmod_diff_box_x - 19.5 * dir;
+                    let bg_y = cy - 56.0;
+                    let bg_h = (bg_y - y + text_h_px - 3.0).max(1.0);
+                    let (fadeleft, faderight) = if side == profile::PlayerSide::P1 {
+                        (0.0, 0.1)
+                    } else {
+                        (0.1, 0.0)
+                    };
+                    actors.push(act!(quad:
+                        align(align_x, 1.0): xy(bg_x, bg_y):
+                        zoomto(bg_w, bg_h):
+                        diffuse(0.0, 0.0, 0.0, 0.7):
+                        fadeleft(fadeleft): faderight(faderight):
+                        z(102)
+                    ));
+
+                    if side == profile::PlayerSide::P1 {
+                        actors.push(act!(text: font("miso"): settext(step_artist_text):
+                            align(align_x, 1.0): xy(x, y): zoom(text_zoom): z(103):
+                            diffuse(1.0, 1.0, 1.0, 1.0)
+                        ));
+                    } else {
+                        actors.push(act!(text: font("miso"): settext(step_artist_text):
+                            align(align_x, 1.0): xy(x, y): zoom(text_zoom): z(103):
+                            diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
+                        ));
+                    }
+                }
             } else {
-                si.chart.step_artist.clone()
-            };
-            {
-                let x = upper_origin_x + 115.0 * dir;
-                let align_x = if side == profile::PlayerSide::P1 {
-                    0.0
+                let step_artist_text = if step_artist_lines.is_empty() {
+                    String::new()
                 } else {
-                    1.0
+                    // Simply Love StepArtist.lua marquee cadence: 2s per entry.
+                    let cycle_idx =
+                        ((state.screen_elapsed.max(0.0) / 2.0).floor() as usize) % step_artist_lines.len();
+                    step_artist_lines[cycle_idx].clone()
                 };
-                if side == profile::PlayerSide::P1 {
-                    actors.push(act!(text: font("miso"): settext(step_artist_text):
-                        align(align_x, 0.5): xy(x, cy - 81.0): zoom(0.7): z(101):
-                        diffuse(1.0, 1.0, 1.0, 1.0)
-                    ));
-                } else {
-                    actors.push(act!(text: font("miso"): settext(step_artist_text):
-                        align(align_x, 0.5): xy(x, cy - 81.0): zoom(0.7): z(101):
-                        diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
-                    ));
+                if !step_artist_text.is_empty() {
+                    let x = upper_origin_x + 115.0 * dir;
+                    let align_x = if side == profile::PlayerSide::P1 {
+                        0.0
+                    } else {
+                        1.0
+                    };
+                    if side == profile::PlayerSide::P1 {
+                        actors.push(act!(text: font("miso"): settext(step_artist_text):
+                            align(align_x, 0.5): xy(x, cy - 81.0): zoom(0.7): z(101):
+                            diffuse(1.0, 1.0, 1.0, 1.0)
+                        ));
+                    } else {
+                        actors.push(act!(text: font("miso"): settext(step_artist_text):
+                            align(align_x, 0.5): xy(x, cy - 81.0): zoom(0.7): z(101):
+                            diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
+                        ));
+                    }
                 }
             }
 
             // Breakdown Text (under grade)
+            let breakdown_width = if cfg.zmod_rating_box_text {
+                screen_width() * 0.26
+            } else {
+                155.0
+            };
             let breakdown_text = {
                 let chart = &si.chart;
+                let (detailed, partial, simple) = match cfg.select_music_breakdown_style {
+                    crate::config::BreakdownStyle::Sn => (
+                        &chart.sn_detailed_breakdown,
+                        &chart.sn_partial_breakdown,
+                        &chart.sn_simple_breakdown,
+                    ),
+                    crate::config::BreakdownStyle::Sl => (
+                        &chart.detailed_breakdown,
+                        &chart.partial_breakdown,
+                        &chart.simple_breakdown,
+                    ),
+                };
                 asset_manager
                     .with_fonts(|all_fonts| {
                         asset_manager.with_font("miso", |miso_font| -> Option<String> {
-                            let width_constraint = 155.0;
+                            let width_constraint = breakdown_width;
                             let text_zoom = 0.7;
                             let max_allowed_logical_width = width_constraint / text_zoom;
 
@@ -2921,38 +3056,80 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 logical_width <= max_allowed_logical_width
                             };
 
-                            if fits(&chart.detailed_breakdown) {
-                                Some(chart.detailed_breakdown.clone())
-                            } else if fits(&chart.partial_breakdown) {
-                                Some(chart.partial_breakdown.clone())
-                            } else if fits(&chart.simple_breakdown) {
-                                Some(chart.simple_breakdown.clone())
+                            if fits(detailed) {
+                                Some(detailed.clone())
+                            } else if fits(partial) {
+                                Some(partial.clone())
+                            } else if fits(simple) {
+                                Some(simple.clone())
                             } else {
                                 Some(format!("{} Total", chart.total_streams))
                             }
                         })
                     })
                     .flatten()
-                    .unwrap_or_else(|| chart.simple_breakdown.clone())
+                    .unwrap_or_else(|| simple.clone())
             };
 
             {
-                let x = upper_origin_x + 150.0 * dir;
+                let x = if cfg.zmod_rating_box_text {
+                    upper_origin_x + 148.0 * dir
+                } else {
+                    upper_origin_x + 150.0 * dir
+                };
+                let y = if cfg.zmod_rating_box_text {
+                    cy - 97.0
+                } else {
+                    cy - 95.0
+                };
                 let align_x = if side == profile::PlayerSide::P1 {
                     0.0
                 } else {
                     1.0
                 };
+                let align_y = if cfg.zmod_rating_box_text { 1.0 } else { 0.5 };
+                if cfg.zmod_rating_box_text {
+                    let (bg_w, bg_h) = asset_manager
+                        .with_fonts(|all_fonts| {
+                            asset_manager.with_font("miso", |miso_font| {
+                                let text_w = font::measure_line_width_logical(
+                                    miso_font,
+                                    &breakdown_text,
+                                    all_fonts,
+                                ) as f32;
+                                let line_h = miso_font.height.max(1) as f32;
+                                let bg_w = (text_w + 10.0).min(breakdown_width).max(10.0) * 0.7;
+                                let bg_h = (line_h + 4.0).max(4.0) * 0.7;
+                                (bg_w, bg_h)
+                            })
+                        })
+                        .unwrap_or((breakdown_width * 0.7, 14.0));
+                    let bg_x = upper_origin_x + 150.0 * dir;
+                    let bg_y = cy - 95.5;
+                    let (fadeleft, faderight) = if side == profile::PlayerSide::P1 {
+                        (0.0, 0.1)
+                    } else {
+                        (0.1, 0.0)
+                    };
+                    actors.push(act!(quad:
+                        align(align_x, 1.0): xy(bg_x, bg_y):
+                        zoomto(bg_w, bg_h):
+                        diffuse(0.0, 0.0, 0.0, 0.7):
+                        fadeleft(fadeleft): faderight(faderight):
+                        z(102)
+                    ));
+                }
+                let text_z = if cfg.zmod_rating_box_text { 103 } else { 101 };
                 if side == profile::PlayerSide::P1 {
                     actors.push(act!(text: font("miso"): settext(breakdown_text):
-                        align(align_x, 0.5): xy(x, cy - 95.0): zoom(0.7):
-                        maxwidth(155.0): horizalign(left): z(101):
+                        align(align_x, align_y): xy(x, y): zoom(0.7):
+                        maxwidth(breakdown_width): horizalign(left): z(text_z):
                         diffuse(1.0, 1.0, 1.0, 1.0)
                     ));
                 } else {
                     actors.push(act!(text: font("miso"): settext(breakdown_text):
-                        align(align_x, 0.5): xy(x, cy - 95.0): zoom(0.7):
-                        maxwidth(155.0): horizalign(right): z(101):
+                        align(align_x, align_y): xy(x, y): zoom(0.7):
+                        maxwidth(breakdown_width): horizalign(right): z(text_z):
                         diffuse(1.0, 1.0, 1.0, 1.0)
                     ));
                 }

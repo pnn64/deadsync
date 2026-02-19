@@ -94,7 +94,8 @@ struct CourseRunState {
     course_stepchart_label: String,
     song_stub: Arc<crate::game::song::SongData>,
     stages: Vec<CourseStageRuntime>,
-    course_display_totals: [crate::game::gameplay::CourseDisplayTotals; crate::game::gameplay::MAX_PLAYERS],
+    course_display_totals:
+        [crate::game::gameplay::CourseDisplayTotals; crate::game::gameplay::MAX_PLAYERS],
     next_stage_index: usize,
     stage_summaries: Vec<stage_stats::StageSummary>,
     stage_eval_pages: Vec<evaluation::State>,
@@ -388,7 +389,9 @@ fn course_stage_runtime_from_plan(
     })
 }
 
-fn build_course_run_from_selection(selection: select_course::SelectedCoursePlan) -> Option<CourseRunState> {
+fn build_course_run_from_selection(
+    selection: select_course::SelectedCoursePlan,
+) -> Option<CourseRunState> {
     let chart_type = profile::get_session_play_style().chart_type();
     let mut stages = Vec::with_capacity(selection.stages.len());
     for stage in &selection.stages {
@@ -400,8 +403,8 @@ fn build_course_run_from_selection(selection: select_course::SelectedCoursePlan)
         return None;
     }
     let global_offset_seconds = crate::config::get().global_offset_seconds;
-    let mut course_display_totals = [crate::game::gameplay::CourseDisplayTotals::default();
-        crate::game::gameplay::MAX_PLAYERS];
+    let mut course_display_totals =
+        [crate::game::gameplay::CourseDisplayTotals::default(); crate::game::gameplay::MAX_PLAYERS];
     for stage in &stages {
         for player_idx in 0..crate::game::gameplay::MAX_PLAYERS {
             let Some(chart) = select_music::chart_for_steps_index(
@@ -411,8 +414,10 @@ fn build_course_run_from_selection(selection: select_course::SelectedCoursePlan)
             ) else {
                 continue;
             };
-            let add =
-                crate::game::gameplay::course_display_totals_for_chart(chart, global_offset_seconds);
+            let add = crate::game::gameplay::course_display_totals_for_chart(
+                chart,
+                global_offset_seconds,
+            );
             let total = &mut course_display_totals[player_idx];
             total.possible_grade_points = total
                 .possible_grade_points
@@ -595,25 +600,43 @@ fn score_info_from_stage(
             .w0
             .saturating_add(player.window_counts.w1),
     );
-    judgment_counts.insert(crate::game::judgment::JudgeGrade::Excellent, player.window_counts.w2);
-    judgment_counts.insert(crate::game::judgment::JudgeGrade::Great, player.window_counts.w3);
-    judgment_counts.insert(crate::game::judgment::JudgeGrade::Decent, player.window_counts.w4);
-    judgment_counts.insert(crate::game::judgment::JudgeGrade::WayOff, player.window_counts.w5);
-    judgment_counts.insert(crate::game::judgment::JudgeGrade::Miss, player.window_counts.miss);
+    judgment_counts.insert(
+        crate::game::judgment::JudgeGrade::Excellent,
+        player.window_counts.w2,
+    );
+    judgment_counts.insert(
+        crate::game::judgment::JudgeGrade::Great,
+        player.window_counts.w3,
+    );
+    judgment_counts.insert(
+        crate::game::judgment::JudgeGrade::Decent,
+        player.window_counts.w4,
+    );
+    judgment_counts.insert(
+        crate::game::judgment::JudgeGrade::WayOff,
+        player.window_counts.w5,
+    );
+    judgment_counts.insert(
+        crate::game::judgment::JudgeGrade::Miss,
+        player.window_counts.miss,
+    );
 
     let chart_hash = player.chart.short_hash.as_str();
     let machine_records = scores::get_machine_leaderboard_local(chart_hash, usize::MAX);
-    let personal_records = scores::get_personal_leaderboard_local_for_side(chart_hash, side, usize::MAX);
+    let personal_records =
+        scores::get_personal_leaderboard_local_for_side(chart_hash, side, usize::MAX);
     let initials = profile::get_for_side(side).player_initials;
-    let machine_record_highlight_rank =
-        highlight_rank_for_initials(machine_records.as_slice(), initials.as_str(), player.score_percent);
+    let machine_record_highlight_rank = highlight_rank_for_initials(
+        machine_records.as_slice(),
+        initials.as_str(),
+        player.score_percent,
+    );
     let personal_record_highlight_rank = highlight_rank_for_initials(
         personal_records.as_slice(),
         initials.as_str(),
         player.score_percent,
     );
-    let earned_machine_record = machine_record_highlight_rank
-        .is_some_and(|rank| rank <= 10);
+    let earned_machine_record = machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
     let earned_top2_personal = personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
 
     Some(evaluation::ScoreInfo {
@@ -1088,7 +1111,9 @@ impl App {
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
         let action = match action {
-            ScreenAction::Navigate(CurrentScreen::Evaluation) if self.should_chain_course_to_next_stage() => {
+            ScreenAction::Navigate(CurrentScreen::Evaluation)
+                if self.should_chain_course_to_next_stage() =>
+            {
                 ScreenAction::Navigate(CurrentScreen::Gameplay)
             }
             ScreenAction::Navigate(CurrentScreen::SelectMusic)
@@ -1344,7 +1369,8 @@ impl App {
     }
 
     fn start_course_run_from_selected(&mut self) -> bool {
-        let Some(selection) = select_course::selected_course_plan(&self.state.screens.select_course_state)
+        let Some(selection) =
+            select_course::selected_course_plan(&self.state.screens.select_course_state)
         else {
             warn!("Unable to start course run: selected course has no playable stages.");
             return false;
@@ -3088,14 +3114,10 @@ impl App {
             }
         } else if target == CurrentScreen::Gameplay && prev == CurrentScreen::Gameplay {
             if self.state.session.course_run.is_some() {
-                let color_index = self
-                    .state
-                    .screens
-                    .gameplay_state
-                    .as_ref()
-                    .map_or(self.state.screens.select_course_state.active_color_index, |gs| {
-                        gs.active_color_index
-                    });
+                let color_index = self.state.screens.gameplay_state.as_ref().map_or(
+                    self.state.screens.select_course_state.active_color_index,
+                    |gs| gs.active_color_index,
+                );
                 if !self.prepare_player_options_for_course_stage(color_index) {
                     self.state.screens.player_options_state = None;
                     warn!("Unable to prepare gameplay for the next course stage.");
@@ -3172,8 +3194,9 @@ impl App {
                 .map(|course| course.course_display_totals);
             if prev == CurrentScreen::Gameplay && self.state.session.course_run.is_some() {
                 if let Some(gameplay_results) = self.state.screens.gameplay_state.take() {
-                    course_display_carry =
-                        Some(crate::game::gameplay::course_display_carry_from_state(&gameplay_results));
+                    course_display_carry = Some(
+                        crate::game::gameplay::course_display_carry_from_state(&gameplay_results),
+                    );
                     let color_idx = gameplay_results.active_color_index;
                     let mut eval_state = evaluation::init(Some(gameplay_results));
                     eval_state.active_color_index = color_idx;
@@ -3393,7 +3416,8 @@ impl App {
                         }
                         self.state.session.played_stages.push(course_stage.clone());
 
-                        let gameplay_elapsed = total_gameplay_elapsed(&self.state.session.played_stages);
+                        let gameplay_elapsed =
+                            total_gameplay_elapsed(&self.state.session.played_stages);
                         let session_elapsed = self.state.screens.evaluation_state.session_elapsed;
                         let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
                         let mut course_page = build_course_summary_eval_state(

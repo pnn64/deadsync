@@ -876,11 +876,7 @@ fn zmod_broken_run_segment(
 
 fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option<usize> {
     let i = stream_segment_index_inclusive_end(segs, curr_measure);
-    if i < segs.len() {
-        Some(i)
-    } else {
-        None
-    }
+    if i < segs.len() { Some(i) } else { None }
 }
 
 fn zmod_run_timer_fmt(seconds: i32, minute_threshold: i32) -> String {

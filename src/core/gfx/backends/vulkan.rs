@@ -866,9 +866,7 @@ fn ensure_tmesh_instance_ring_capacity(
     let stride = if state.per_frame_stride_tmesh_instances == 0 {
         requested_stride
     } else {
-        state
-            .per_frame_stride_tmesh_instances
-            .max(requested_stride)
+        state.per_frame_stride_tmesh_instances.max(requested_stride)
     };
 
     let need_total_instances = stride * MAX_FRAMES_IN_FLIGHT;
@@ -967,7 +965,9 @@ fn transition_image_layout_cmd(
     }
 }
 
-fn begin_pending_texture_upload_cmd(state: &mut State) -> Result<vk::CommandBuffer, Box<dyn Error>> {
+fn begin_pending_texture_upload_cmd(
+    state: &mut State,
+) -> Result<vk::CommandBuffer, Box<dyn Error>> {
     if let Some(cmd) = state.pending_tex_upload_cmd {
         return Ok(cmd);
     }
@@ -1032,17 +1032,9 @@ pub fn create_texture(
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
     )?;
     unsafe {
-        let mapped = device.map_memory(
-            staging_memory,
-            0,
-            staging_size,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        std::ptr::copy_nonoverlapping(
-            image_data.as_ptr(),
-            mapped.cast::<u8>(),
-            image_data.len(),
-        );
+        let mapped =
+            device.map_memory(staging_memory, 0, staging_size, vk::MemoryMapFlags::empty())?;
+        std::ptr::copy_nonoverlapping(image_data.as_ptr(), mapped.cast::<u8>(), image_data.len());
         device.unmap_memory(staging_memory);
     }
     let staging = BufferResource {
@@ -1172,12 +1164,7 @@ pub fn draw(
             .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
     }
 
-    let (
-        needed_instances,
-        needed_mesh_vertices,
-        needed_tmesh_vertices,
-        needed_tmesh_instances,
-    ) = {
+    let (needed_instances, needed_mesh_vertices, needed_tmesh_vertices, needed_tmesh_instances) = {
         let mut inst: usize = 0;
         let mut mesh: usize = 0;
         let mut tmesh: usize = 0;
@@ -1656,9 +1643,8 @@ pub fn draw(
                         first_vertex,
                         first_instance,
                     );
-                    vertices_drawn = vertices_drawn.saturating_add(
-                        draw.vertex_count.saturating_mul(draw.instance_count),
-                    );
+                    vertices_drawn = vertices_drawn
+                        .saturating_add(draw.vertex_count.saturating_mul(draw.instance_count));
                 }
             }
         }

@@ -1613,7 +1613,12 @@ fn lerp_clip(a: ClipVertex, b: ClipVertex, t: f32) -> ClipVertex {
     }
 }
 
-fn clip_poly_edge(poly: &[ClipVertex], axis: usize, bound: f32, keep_greater: bool) -> Vec<ClipVertex> {
+fn clip_poly_edge(
+    poly: &[ClipVertex],
+    axis: usize,
+    bound: f32,
+    keep_greater: bool,
+) -> Vec<ClipVertex> {
     if poly.is_empty() {
         return vec![];
     }

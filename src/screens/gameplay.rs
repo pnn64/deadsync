@@ -76,6 +76,7 @@ fn build_background(state: &State, bg_brightness: f32) -> Actor {
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+    let cfg = crate::config::get();
     let mut actors = Vec::new();
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
@@ -100,7 +101,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             z(-100)
         ));
     } else {
-        actors.push(build_background(state, crate::config::get().bg_brightness));
+        actors.push(build_background(state, cfg.bg_brightness));
     }
 
     // ITGmania/Simply Love parity: ScreenSyncOverlay status text.
@@ -355,23 +356,35 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let chart = &state.charts[player_idx];
         let difficulty_color = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
         let meter_text = chart.meter.to_string();
+        let meter_detail_text =
+            color::difficulty_display_name_for_song(&chart.difficulty, &state.song.title, true);
 
         // Difficulty Box
         let y = 56.0;
+        let mut diff_children = Vec::with_capacity(if cfg.zmod_rating_box_text { 3 } else { 2 });
+        diff_children.push(act!(quad:
+            align(0.5, 0.5): xy(0.0, 0.0): zoomto(30.0, 30.0):
+            diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
+        ));
+        let meter_y = if cfg.zmod_rating_box_text { -4.0 } else { 0.0 };
+        diff_children.push(act!(text:
+            font("wendy"): settext(meter_text.clone()): align(0.5, 0.5): xy(0.0, meter_y):
+            zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0)
+        ));
+        if cfg.zmod_rating_box_text {
+            diff_children.push(act!(text:
+                font("miso"):
+                settext(meter_detail_text):
+                align(0.5, 0.5): xy(0.0, 9.5):
+                zoom(0.5):
+                diffuse(0.0, 0.0, 0.0, 1.0)
+            ));
+        }
         actors.push(Actor::Frame {
             align: [0.5, 0.5],
             offset: [diff_x, y],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-            children: vec![
-                act!(quad:
-                    align(0.5, 0.5): xy(0.0, 0.0): zoomto(30.0, 30.0):
-                    diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
-                ),
-                act!(text:
-                    font("wendy"): settext(meter_text.clone()): align(0.5, 0.5): xy(0.0, 0.0):
-                    zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0)
-                ),
-            ],
+            children: diff_children,
             background: None,
             z: 90,
         });
