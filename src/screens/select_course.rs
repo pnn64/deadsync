@@ -38,6 +38,7 @@ const ENTERING_OPTIONS_TOTAL_SECONDS: f32 = ENTERING_OPTIONS_FADE_OUT_SECONDS
     + ENTERING_OPTIONS_FADE_IN_SECONDS
     + ENTERING_OPTIONS_HOLD_SECONDS;
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
+const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
 const MUSIC_WHEEL_SWITCH_SECONDS: f32 = 0.10;
 const MUSIC_WHEEL_SETTLE_MIN_SPEED: f32 = 0.2;
 const MUSIC_WHEEL_HOLD_SPIN_SPEED: f32 = 15.0;
@@ -50,6 +51,9 @@ const COURSE_TRACKLIST_SCROLL_STEP_SECONDS: f32 = 0.5;
 const COURSE_TRACKLIST_SCROLL_END_PAUSE_SECONDS: f32 = 0.5;
 const COURSE_TRACKLIST_TARGET_VISIBLE_ROWS: usize = 6;
 const COURSE_TRACKLIST_SCROLL_MIN_ENTRIES: usize = 6;
+const COURSE_RATING_VISIBLE_SLOTS: usize = 5;
+const COURSE_TRACKLIST_RATING_BOX_W: f32 = 32.0;
+const COURSE_TRACKLIST_RATING_BOX_H: f32 = 152.0;
 // Manual tune knob for the whole course tracklist text block.
 // Negative moves up, positive moves down.
 const COURSE_TRACKLIST_TEXT_Y_OFFSET: f32 = 0.0;
@@ -122,6 +126,16 @@ struct CourseMeta {
     scripter: String,
     description: String,
     banner_path: Option<PathBuf>,
+    ratings: Vec<Option<CourseRatingMeta>>,
+    default_rating_index: usize,
+    min_bpm: Option<f64>,
+    max_bpm: Option<f64>,
+    total_length_seconds: i32,
+    has_random_entries: bool,
+}
+
+#[derive(Clone, Debug)]
+struct CourseRatingMeta {
     entries: Vec<CourseSongEntry>,
     totals: CourseTotals,
     rated_entry_count: usize,
@@ -130,11 +144,7 @@ struct CourseMeta {
     course_meter: Option<u32>,
     meter_sum: u32,
     meter_count: usize,
-    min_bpm: Option<f64>,
-    max_bpm: Option<f64>,
-    total_length_seconds: i32,
     runtime_stages: Vec<CourseStagePlan>,
-    has_random_entries: bool,
 }
 
 struct InitData {
@@ -190,6 +200,11 @@ pub struct State {
     time_since_selection_change: f32,
     out_prompt: OutPromptState,
     exit_prompt: ExitPromptState,
+    selected_rating_index_by_path: HashMap<PathBuf, usize>,
+    last_rating_nav_dir_p1: Option<PadDir>,
+    last_rating_nav_time_p1: Option<Instant>,
+    last_rating_nav_dir_p2: Option<PadDir>,
+    last_rating_nav_time_p2: Option<Instant>,
 }
 
 #[inline(always)]
@@ -333,6 +348,62 @@ fn course_entry_song_label(entry: &rssp::course::CourseEntry) -> String {
     }
 }
 
+const COURSE_RATING_ORDER: [rssp::course::Difficulty; 6] = [
+    rssp::course::Difficulty::Beginner,
+    rssp::course::Difficulty::Easy,
+    rssp::course::Difficulty::Medium,
+    rssp::course::Difficulty::Hard,
+    rssp::course::Difficulty::Challenge,
+    rssp::course::Difficulty::Edit,
+];
+
+#[inline(always)]
+fn nearest_filled_slot<T>(slots: &[Option<T>], preferred: usize) -> Option<usize> {
+    if slots.is_empty() {
+        return None;
+    }
+    let preferred = preferred.min(slots.len().saturating_sub(1));
+    if slots[preferred].is_some() {
+        return Some(preferred);
+    }
+    let mut best = None;
+    let mut best_dist = usize::MAX;
+    for (idx, slot) in slots.iter().enumerate() {
+        if slot.is_none() {
+            continue;
+        }
+        let dist = idx.abs_diff(preferred);
+        if best.is_none() || dist < best_dist {
+            best = Some(idx);
+            best_dist = dist;
+        }
+    }
+    best
+}
+
+#[inline(always)]
+fn shifted_course_difficulty(
+    base: rssp::course::Difficulty,
+    course: rssp::course::Difficulty,
+) -> rssp::course::Difficulty {
+    let base = base as i32;
+    let delta = (course as i32) - (rssp::course::Difficulty::Medium as i32);
+    let mut idx = base + delta;
+    if idx < 0 {
+        idx = 0;
+    }
+    if idx > rssp::course::Difficulty::Challenge as i32 {
+        idx = rssp::course::Difficulty::Challenge as i32;
+    }
+    match idx {
+        0 => rssp::course::Difficulty::Beginner,
+        1 => rssp::course::Difficulty::Easy,
+        2 => rssp::course::Difficulty::Medium,
+        3 => rssp::course::Difficulty::Hard,
+        _ => rssp::course::Difficulty::Challenge,
+    }
+}
+
 #[inline(always)]
 fn course_difficulty_from_meters(course: &rssp::course::CourseFile) -> Option<(&'static str, u32)> {
     use rssp::course::Difficulty;
@@ -350,19 +421,6 @@ fn course_difficulty_from_meters(course: &rssp::course::CourseFile) -> Option<(&
         }
     }
     None
-}
-
-#[inline(always)]
-fn normalize_difficulty_file_name(raw: &str) -> Option<&'static str> {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "beginner" => Some("Beginner"),
-        "easy" | "basic" | "light" => Some("Easy"),
-        "regular" | "medium" | "another" | "trick" | "standard" => Some("Medium"),
-        "difficult" | "hard" | "ssr" | "maniac" | "heavy" => Some("Hard"),
-        "challenge" | "expert" | "oni" | "smaniac" => Some("Challenge"),
-        "edit" => Some("Edit"),
-        _ => None,
-    }
 }
 
 #[inline(always)]
@@ -394,12 +452,21 @@ fn resolve_course_chart<'a>(
     song: &'a SongData,
     entry: &rssp::course::CourseEntry,
     chart_type: &str,
+    course_difficulty: rssp::course::Difficulty,
 ) -> Option<&'a ChartData> {
     let mut first_chart = None;
     let mut first_playable = None;
     let mut meter_match = None;
     let target_diff = match &entry.steps {
-        rssp::course::StepsSpec::Difficulty(diff) => Some(rssp::course::difficulty_label(*diff)),
+        rssp::course::StepsSpec::Difficulty(diff) => {
+            let selected =
+                if course_difficulty != rssp::course::Difficulty::Medium && !entry.no_difficult {
+                    shifted_course_difficulty(*diff, course_difficulty)
+                } else {
+                    *diff
+                };
+            Some(rssp::course::difficulty_label(selected))
+        }
         _ => None,
     };
 
@@ -442,7 +509,8 @@ fn resolve_sort_pick_song(
 ) -> Option<Arc<SongData>> {
     let mut ranked: Vec<(u32, Arc<SongData>)> = Vec::new();
     for song in all_songs {
-        if resolve_course_chart(song, entry, chart_type).is_none() {
+        if resolve_course_chart(song, entry, chart_type, rssp::course::Difficulty::Medium).is_none()
+        {
             continue;
         }
         let plays = song_play_counts
@@ -499,7 +567,8 @@ fn resolve_random_song(
     let mut all_candidates = Vec::new();
     let mut unused_candidates = Vec::new();
     for song in pool {
-        if resolve_course_chart(song, entry, chart_type).is_none() {
+        if resolve_course_chart(song, entry, chart_type, rssp::course::Difficulty::Medium).is_none()
+        {
             continue;
         }
         all_candidates.push(song.clone());
@@ -592,13 +661,9 @@ fn build_init_data() -> InitData {
     let mut course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>> = HashMap::new();
 
     for (path, course) in course_cache.iter() {
-        let mut entries = Vec::with_capacity(course.entries.len());
-        let mut runtime_stages = Vec::with_capacity(course.entries.len());
+        let mut entry_titles: Vec<String> = Vec::with_capacity(course.entries.len());
+        let mut entry_songs: Vec<Option<Arc<SongData>>> = Vec::with_capacity(course.entries.len());
         let mut total_seconds = 0i32;
-        let mut totals = CourseTotals::default();
-        let mut rated_entry_count = 0usize;
-        let mut meter_sum = 0u32;
-        let mut meter_count = 0usize;
         let mut min_bpm = None;
         let mut max_bpm = None;
         let mut used_song_keys = HashSet::new();
@@ -609,13 +674,6 @@ fn build_init_data() -> InitData {
 
         for (entry_idx, entry) in course.entries.iter().enumerate() {
             let mut title = course_entry_song_label(entry);
-            let mut difficulty = course_steps_label(&entry.steps);
-            let mut meter = None;
-            let mut step_artist = if course.scripter.trim().is_empty() {
-                "Unknown".to_string()
-            } else {
-                course.scripter.clone()
-            };
 
             if matches!(
                 &entry.song,
@@ -667,8 +725,41 @@ fn build_init_data() -> InitData {
                 };
                 total_seconds = total_seconds.saturating_add(len.max(0));
                 push_song_bpm_range(&mut min_bpm, &mut max_bpm, song_data);
+            }
+            entry_titles.push(title);
+            entry_songs.push(resolved);
+        }
 
-                if let Some(chart) = resolve_course_chart(song_data, entry, target_chart_type) {
+        let mut available_course_diffs: Vec<rssp::course::Difficulty> = COURSE_RATING_ORDER
+            .iter()
+            .copied()
+            .filter(|diff| course.meter_for(*diff).is_some_and(|meter| meter >= 0))
+            .collect();
+        if available_course_diffs.is_empty() {
+            available_course_diffs.push(rssp::course::Difficulty::Medium);
+        }
+
+        let mut ratings: Vec<Option<CourseRatingMeta>> = vec![None; COURSE_RATING_ORDER.len()];
+        for course_diff in available_course_diffs {
+            let mut entries = Vec::with_capacity(course.entries.len());
+            let mut runtime_stages = Vec::with_capacity(course.entries.len());
+            let mut totals = CourseTotals::default();
+            let mut rated_entry_count = 0usize;
+            let mut meter_sum = 0u32;
+            let mut meter_count = 0usize;
+
+            for (entry_idx, entry) in course.entries.iter().enumerate() {
+                let mut difficulty = course_steps_label(&entry.steps);
+                let mut meter = None;
+                let mut step_artist = if course.scripter.trim().is_empty() {
+                    "Unknown".to_string()
+                } else {
+                    course.scripter.clone()
+                };
+                if let Some(song_data) = entry_songs[entry_idx].as_ref()
+                    && let Some(chart) =
+                        resolve_course_chart(song_data, entry, target_chart_type, course_diff)
+                {
                     difficulty = chart.difficulty.to_ascii_lowercase();
                     meter = Some(chart.meter);
                     step_artist = chart_step_artist(chart);
@@ -681,51 +772,69 @@ fn build_init_data() -> InitData {
                     meter_sum = meter_sum.saturating_add(chart.meter);
                     meter_count = meter_count.saturating_add(1);
                 }
+                entries.push(CourseSongEntry {
+                    title: entry_titles[entry_idx].clone(),
+                    difficulty,
+                    meter,
+                    step_artist,
+                });
             }
-            entries.push(CourseSongEntry {
-                title,
-                difficulty,
-                meter,
-                step_artist,
+
+            let explicit_meter = course
+                .meter_for(course_diff)
+                .filter(|v| *v >= 0)
+                .map(|v| v as u32);
+            if rated_entry_count == 0
+                && explicit_meter.is_none()
+                && course_diff != rssp::course::Difficulty::Medium
+            {
+                continue;
+            }
+
+            let course_meter = explicit_meter.or_else(|| {
+                if meter_count > 0 {
+                    Some((meter_sum as f32 / meter_count as f32).round() as u32)
+                } else {
+                    None
+                }
+            });
+            let course_difficulty_name = rssp::course::difficulty_label(course_diff).to_string();
+            let course_stepchart_label =
+                course_stepchart_label(course_difficulty_name.as_str(), course_meter);
+
+            ratings[course_diff as usize] = Some(CourseRatingMeta {
+                entries,
+                totals,
+                rated_entry_count,
+                course_difficulty_name,
+                course_stepchart_label,
+                course_meter,
+                meter_sum,
+                meter_count,
+                runtime_stages,
             });
         }
 
-        let (course_difficulty_name, course_meter) =
-            if let Some((difficulty_name, meter)) = course_difficulty_from_meters(course) {
-                (difficulty_name.to_string(), Some(meter))
-            } else if let Some(first_entry) = entries.first() {
-                if let Some(normalized) =
-                    normalize_difficulty_file_name(first_entry.difficulty.as_str())
-                {
-                    (normalized.to_string(), first_entry.meter)
-                } else {
-                    ("Medium".to_string(), first_entry.meter)
-                }
-            } else {
-                ("Medium".to_string(), None)
-            };
-        let course_stepchart_label =
-            course_stepchart_label(course_difficulty_name.as_str(), course_meter);
-
         let group_name = course_group_name(path);
+        let preferred_default = course_difficulty_from_meters(course)
+            .and_then(|(difficulty_name, _)| {
+                COURSE_RATING_ORDER.iter().position(|diff| {
+                    rssp::course::difficulty_label(*diff).eq_ignore_ascii_case(difficulty_name)
+                })
+            })
+            .unwrap_or(rssp::course::Difficulty::Medium as usize);
+        let default_rating_index = nearest_filled_slot(&ratings, preferred_default).unwrap_or(0);
         let meta = Arc::new(CourseMeta {
             path: path.clone(),
             name: course_name(path, course),
             scripter: course.scripter.clone(),
             description: course.description.clone(),
             banner_path: rssp::course::resolve_course_banner_path(path, &course.banner),
-            entries,
-            totals,
-            rated_entry_count,
-            course_difficulty_name,
-            course_stepchart_label,
-            course_meter,
-            meter_sum,
-            meter_count,
+            ratings,
+            default_rating_index,
             min_bpm,
             max_bpm,
             total_length_seconds: total_seconds.max(0),
-            runtime_stages,
             has_random_entries,
         });
 
@@ -771,9 +880,44 @@ fn selected_course_meta(state: &State) -> Option<Arc<CourseMeta>> {
     state.course_meta_by_path.get(&song.simfile_path).cloned()
 }
 
+#[inline(always)]
+fn selected_course_rating_index(state: &State, meta: &CourseMeta) -> usize {
+    let len = meta.ratings.len();
+    if len == 0 {
+        return 0;
+    }
+    let preferred = state
+        .selected_rating_index_by_path
+        .get(meta.path.as_path())
+        .copied()
+        .unwrap_or(meta.default_rating_index)
+        .min(len.saturating_sub(1));
+    nearest_filled_slot(&meta.ratings, preferred).unwrap_or(preferred)
+}
+
+#[inline(always)]
+fn selected_course_rating<'a>(state: &State, meta: &'a CourseMeta) -> Option<&'a CourseRatingMeta> {
+    meta.ratings
+        .get(selected_course_rating_index(state, meta))
+        .and_then(Option::as_ref)
+}
+
+#[inline(always)]
+fn set_selected_course_rating_index(state: &mut State, meta: &CourseMeta, idx: usize) {
+    if meta.ratings.is_empty() {
+        return;
+    }
+    let preferred = idx.min(meta.ratings.len().saturating_sub(1));
+    let selected = nearest_filled_slot(&meta.ratings, preferred).unwrap_or(preferred);
+    state
+        .selected_rating_index_by_path
+        .insert(meta.path.clone(), selected);
+}
+
 pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
     let meta = selected_course_meta(state)?;
-    if meta.runtime_stages.is_empty() {
+    let rating = selected_course_rating(state, &meta)?;
+    if rating.runtime_stages.is_empty() {
         return None;
     }
     Some(SelectedCoursePlan {
@@ -781,10 +925,10 @@ pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
         name: meta.name.clone(),
         banner_path: meta.banner_path.clone(),
         song_stub: Arc::new(make_course_song(&meta)),
-        course_difficulty_name: meta.course_difficulty_name.clone(),
-        course_meter: meta.course_meter,
-        course_stepchart_label: meta.course_stepchart_label.clone(),
-        stages: meta.runtime_stages.clone(),
+        course_difficulty_name: rating.course_difficulty_name.clone(),
+        course_meter: rating.course_meter,
+        course_stepchart_label: rating.course_stepchart_label.clone(),
+        stages: rating.runtime_stages.clone(),
     })
 }
 
@@ -820,6 +964,11 @@ pub fn init() -> State {
         time_since_selection_change: 0.0,
         out_prompt: OutPromptState::None,
         exit_prompt: ExitPromptState::None,
+        selected_rating_index_by_path: HashMap::new(),
+        last_rating_nav_dir_p1: None,
+        last_rating_nav_time_p1: None,
+        last_rating_nav_dir_p2: None,
+        last_rating_nav_time_p2: None,
     };
     rebuild_displayed_entries(&mut state);
     state
@@ -931,6 +1080,62 @@ fn handle_wheel_dir(state: &mut State, dir: PadDir, pressed: bool, ts: Instant) 
     ScreenAction::None
 }
 
+fn handle_rating_dir(
+    state: &mut State,
+    side: profile::PlayerSide,
+    dir: PadDir,
+    pressed: bool,
+    timestamp: Instant,
+) -> ScreenAction {
+    if !pressed || !matches!(dir, PadDir::Up | PadDir::Down) {
+        return ScreenAction::None;
+    }
+    let (last_dir, last_time) = match side {
+        profile::PlayerSide::P1 => (
+            &mut state.last_rating_nav_dir_p1,
+            &mut state.last_rating_nav_time_p1,
+        ),
+        profile::PlayerSide::P2 => (
+            &mut state.last_rating_nav_dir_p2,
+            &mut state.last_rating_nav_time_p2,
+        ),
+    };
+    if *last_dir != Some(dir)
+        || last_time.is_none_or(|t| timestamp.duration_since(t) >= DOUBLE_TAP_WINDOW)
+    {
+        *last_dir = Some(dir);
+        *last_time = Some(timestamp);
+        return ScreenAction::None;
+    }
+    *last_dir = None;
+    *last_time = None;
+
+    let Some(meta) = selected_course_meta(state) else {
+        return ScreenAction::None;
+    };
+    let available = meta.ratings.iter().filter(|r| r.is_some()).count();
+    if available <= 1 {
+        return ScreenAction::None;
+    }
+    let current = selected_course_rating_index(state, &meta);
+    let next = match dir {
+        PadDir::Up => (0..current).rev().find(|&idx| meta.ratings[idx].is_some()),
+        PadDir::Down => {
+            ((current + 1)..meta.ratings.len()).find(|&idx| meta.ratings[idx].is_some())
+        }
+        _ => None,
+    };
+    if let Some(next) = next {
+        set_selected_course_rating_index(state, &meta, next);
+        audio::play_sfx(if matches!(dir, PadDir::Up) {
+            "assets/sounds/easier.ogg"
+        } else {
+            "assets/sounds/harder.ogg"
+        });
+    }
+    ScreenAction::None
+}
+
 pub fn handle_confirm(state: &mut State) -> ScreenAction {
     if state.out_prompt != OutPromptState::None {
         return ScreenAction::None;
@@ -986,6 +1191,34 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             VirtualAction::p2_right | VirtualAction::p2_menu_right => {
                 handle_wheel_dir(state, PadDir::Right, ev.pressed, ev.timestamp)
             }
+            VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_rating_dir(
+                state,
+                profile::PlayerSide::P1,
+                PadDir::Up,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p2_up | VirtualAction::p2_menu_up => handle_rating_dir(
+                state,
+                profile::PlayerSide::P2,
+                PadDir::Up,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p1_down | VirtualAction::p1_menu_down => handle_rating_dir(
+                state,
+                profile::PlayerSide::P1,
+                PadDir::Down,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p2_down | VirtualAction::p2_menu_down => handle_rating_dir(
+                state,
+                profile::PlayerSide::P2,
+                PadDir::Down,
+                ev.pressed,
+                ev.timestamp,
+            ),
             VirtualAction::p1_start | VirtualAction::p2_start if ev.pressed => {
                 handle_confirm(state)
             }
@@ -1005,6 +1238,20 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             VirtualAction::p1_right | VirtualAction::p1_menu_right => {
                 handle_wheel_dir(state, PadDir::Right, ev.pressed, ev.timestamp)
             }
+            VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_rating_dir(
+                state,
+                profile::PlayerSide::P1,
+                PadDir::Up,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p1_down | VirtualAction::p1_menu_down => handle_rating_dir(
+                state,
+                profile::PlayerSide::P1,
+                PadDir::Down,
+                ev.pressed,
+                ev.timestamp,
+            ),
             VirtualAction::p1_start if ev.pressed => handle_confirm(state),
             VirtualAction::p1_back if ev.pressed => {
                 begin_exit_prompt(state);
@@ -1019,6 +1266,20 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             VirtualAction::p2_right | VirtualAction::p2_menu_right => {
                 handle_wheel_dir(state, PadDir::Right, ev.pressed, ev.timestamp)
             }
+            VirtualAction::p2_up | VirtualAction::p2_menu_up => handle_rating_dir(
+                state,
+                profile::PlayerSide::P2,
+                PadDir::Up,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p2_down | VirtualAction::p2_menu_down => handle_rating_dir(
+                state,
+                profile::PlayerSide::P2,
+                PadDir::Down,
+                ev.pressed,
+                ev.timestamp,
+            ),
             VirtualAction::p2_start if ev.pressed => handle_confirm(state),
             VirtualAction::p2_back if ev.pressed => {
                 begin_exit_prompt(state);
@@ -1090,6 +1351,16 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     if state.selected_index != state.prev_selected_index {
         state.prev_selected_index = state.selected_index;
         state.time_since_selection_change = 0.0;
+        state.last_rating_nav_dir_p1 = None;
+        state.last_rating_nav_time_p1 = None;
+        state.last_rating_nav_dir_p2 = None;
+        state.last_rating_nav_time_p2 = None;
+        if let Some(meta) = selected_course_meta(state) {
+            let idx = selected_course_rating_index(state, &meta);
+            state
+                .selected_rating_index_by_path
+                .insert(meta.path.clone(), idx);
+        }
         audio::play_sfx("assets/sounds/change.ogg");
     }
 
@@ -1263,6 +1534,12 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     let is_p2_single = play_style == profile::PlayStyle::Single && side == profile::PlayerSide::P2;
     let selected_entry = state.entries.get(state.selected_index);
     let selected_meta = selected_course_meta(state);
+    let selected_rating = selected_meta
+        .as_ref()
+        .and_then(|meta| selected_course_rating(state, meta));
+    let selected_rating_index = selected_meta
+        .as_ref()
+        .map_or(0, |meta| selected_course_rating_index(state, meta));
 
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
@@ -1311,7 +1588,9 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         match (selected_entry, selected_meta.as_ref()) {
             (Some(MusicWheelEntry::Song(_)), Some(meta)) => (
                 "SONGS".to_string(),
-                meta.entries.len().to_string(),
+                selected_rating
+                    .map_or(0, |rating| rating.entries.len())
+                    .to_string(),
                 format_bpm_range(meta.min_bpm, meta.max_bpm),
                 format_len(((meta.total_length_seconds as f32) / music_rate).round() as i32),
                 meta.description.clone(),
@@ -1326,26 +1605,26 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         };
 
     let (steps_text, jumps_text, holds_text, mines_text, hands_text, rolls_text, meter_text) =
-        match selected_meta.as_ref() {
-            Some(meta) => {
-                let meter = if let Some(course_meter) = meta.course_meter {
+        match selected_rating {
+            Some(rating) => {
+                let meter = if let Some(course_meter) = rating.course_meter {
                     course_meter.to_string()
-                } else if meta.meter_count > 0 {
+                } else if rating.meter_count > 0 {
                     format!(
                         "{}",
-                        (meta.meter_sum as f32 / meta.meter_count as f32).round() as i32
+                        (rating.meter_sum as f32 / rating.meter_count as f32).round() as i32
                     )
                 } else {
                     "?".to_string()
                 };
-                if meta.rated_entry_count > 0 {
+                if rating.rated_entry_count > 0 {
                     (
-                        meta.totals.steps.to_string(),
-                        meta.totals.jumps.to_string(),
-                        meta.totals.holds.to_string(),
-                        meta.totals.mines.to_string(),
-                        meta.totals.hands.to_string(),
-                        meta.totals.rolls.to_string(),
+                        rating.totals.steps.to_string(),
+                        rating.totals.jumps.to_string(),
+                        rating.totals.holds.to_string(),
+                        rating.totals.mines.to_string(),
+                        rating.totals.hands.to_string(),
+                        rating.totals.rolls.to_string(),
                         meter,
                     )
                 } else {
@@ -1373,7 +1652,8 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
 
     let pane_sel_col = selected_meta
         .as_ref()
-        .and_then(|meta| meta.entries.first())
+        .and_then(|meta| selected_course_rating(state, meta))
+        .and_then(|rating| rating.entries.first())
         .map(|entry| color::difficulty_rgba(&entry.difficulty, state.active_color_index))
         .unwrap_or_else(|| color::simply_love_rgba(state.active_color_index));
     let pane_side = if is_p2_single {
@@ -1491,13 +1771,18 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         ],
     });
 
-    let panel_w = (BANNER_NATIVE_WIDTH * banner_zoom).round();
-    let panel_h = 145.0;
-    let panel_cx = banner_cx;
-    // Keep panel top flush with the Step Artist bar bottom.
-    let panel_top = screen_center_y() - 9.0;
+    let panel_w = if is_wide() { 286.0 } else { 276.0 };
+    let rating_box_cx = screen_center_x() - 26.0;
+    let rating_box_cy = screen_center_y() + 67.0;
+    let rating_box_left = rating_box_cx - COURSE_TRACKLIST_RATING_BOX_W * 0.5;
+    let rating_box_top = rating_box_cy - COURSE_TRACKLIST_RATING_BOX_H * 0.5;
+    let rating_box_bottom = rating_box_cy + COURSE_TRACKLIST_RATING_BOX_H * 0.5;
+    let panel_right = rating_box_left - 2.0;
+    let panel_h = rating_box_bottom - rating_box_top;
+    let panel_cx = panel_right - panel_w * 0.5;
+    let panel_top = rating_box_top;
+    let panel_bottom = rating_box_bottom;
     let panel_cy = panel_top + panel_h * 0.5;
-    let panel_bottom = panel_top + panel_h;
     actors.push(act!(quad:
         align(0.5, 0.5):
         xy(panel_cx, panel_cy):
@@ -1506,10 +1791,10 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])
     ));
 
-    let (step_idx_text, step_artist_text, step_artist_col) = match selected_meta.as_ref() {
-        Some(meta) if !meta.entries.is_empty() => {
-            let idx = ((state.session_elapsed / 2.0).floor() as usize) % meta.entries.len();
-            let entry = &meta.entries[idx];
+    let (step_idx_text, step_artist_text, step_artist_col) = match selected_rating {
+        Some(rating) if !rating.entries.is_empty() => {
+            let idx = ((state.session_elapsed / 2.0).floor() as usize) % rating.entries.len();
+            let entry = &rating.entries[idx];
             (
                 format!("#{}", idx + 1),
                 entry.step_artist.clone(),
@@ -1526,26 +1811,27 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     let list_left_x = panel_cx - panel_w * 0.5 + 10.0;
     let list_title_x = list_left_x + 38.0;
     let list_start_y = panel_top + 8.0 + COURSE_TRACKLIST_TEXT_Y_OFFSET;
+    let list_right_pad = 14.0;
     let list_clip = Some([panel_cx - panel_w * 0.5, panel_top, panel_w, panel_h]);
-    if let Some(meta) = selected_meta.as_ref()
-        && !meta.entries.is_empty()
+    if let Some(rating) = selected_rating
+        && !rating.entries.is_empty()
     {
-        let visible_rows = meta
+        let visible_rows = rating
             .entries
             .len()
             .min(COURSE_TRACKLIST_TARGET_VISIBLE_ROWS)
             .max(1);
         let row_spacing = COURSE_TRACKLIST_ROW_SPACING;
         let (start_idx, frac, _) =
-            course_tracklist_scroll(meta.entries.len(), visible_rows, state.session_elapsed);
+            course_tracklist_scroll(rating.entries.len(), visible_rows, state.session_elapsed);
         let rows_to_draw = visible_rows + 2;
-        let title_maxwidth = (panel_w - (list_title_x - list_left_x) - 14.0).max(40.0);
+        let title_maxwidth = (panel_w - (list_title_x - list_left_x) - list_right_pad).max(40.0);
         for row in 0..rows_to_draw {
             let idx = start_idx + row;
-            if idx >= meta.entries.len() {
+            if idx >= rating.entries.len() {
                 break;
             }
-            let entry = &meta.entries[idx];
+            let entry = &rating.entries[idx];
             let y = list_start_y + row as f32 * row_spacing - frac * row_spacing;
             if y > panel_bottom + row_spacing {
                 break;
@@ -1602,7 +1888,79 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         actors.push(no_course_actor);
     }
 
-    let step_artist_x0 = if is_wide() {
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(rating_box_cx, rating_box_cy):
+        setsize(COURSE_TRACKLIST_RATING_BOX_W, COURSE_TRACKLIST_RATING_BOX_H):
+        z(120):
+        diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])
+    ));
+    let rating_len = selected_meta.as_ref().map_or(0, |meta| meta.ratings.len());
+    let rating_top_index = if rating_len > COURSE_RATING_VISIBLE_SLOTS {
+        selected_rating_index
+            .saturating_sub(COURSE_RATING_VISIBLE_SLOTS - 1)
+            .min(rating_len - COURSE_RATING_VISIBLE_SLOTS)
+    } else {
+        0
+    };
+    if let Some(meta) = selected_meta.as_ref() {
+        for slot in 0..COURSE_RATING_VISIBLE_SLOTS {
+            let y = rating_box_cy + (slot as i32 - 2) as f32 * 30.0;
+            actors.push(act!(quad:
+                align(0.5, 0.5):
+                xy(rating_box_cx, y):
+                setsize(28.0, 28.0):
+                z(121):
+                diffuse(0.059, 0.059, 0.059, 1.0)
+            ));
+            let idx = rating_top_index + slot;
+            if idx >= meta.ratings.len() {
+                continue;
+            }
+            if let Some(rating) = meta.ratings[idx].as_ref() {
+                let meter_text = rating
+                    .course_meter
+                    .map_or_else(|| "?".to_string(), |meter| meter.to_string());
+                let color = color::difficulty_rgba(
+                    rating.course_difficulty_name.as_str(),
+                    state.active_color_index,
+                );
+                actors.push(act!(text:
+                    font("wendy"):
+                    settext(meter_text):
+                    align(0.5, 0.5):
+                    xy(rating_box_cx, y):
+                    zoom(0.45):
+                    z(122):
+                    diffuse(color[0], color[1], color[2], 1.0)
+                ));
+            }
+        }
+    }
+    if rating_len > 0 {
+        let selected_slot = (selected_rating_index.saturating_sub(rating_top_index))
+            .min(COURSE_RATING_VISIBLE_SLOTS - 1);
+        let arrow_y = rating_box_cy + (selected_slot as i32 - 2) as f32 * 30.0 + 1.0;
+        let bounce = (state.session_elapsed * 2.5 * std::f32::consts::PI)
+            .sin()
+            .clamp(0.0, 1.0);
+        let (arrow_x0, arrow_dx, arrow_rot) = if is_p2_single {
+            (rating_box_cx + 8.0, 3.0 * bounce, 180.0)
+        } else {
+            (rating_box_cx - 27.0, -3.0 * bounce, 0.0)
+        };
+        actors.push(act!(sprite("meter_arrow.png"):
+            align(0.0, 0.5):
+            xy(arrow_x0 + arrow_dx, arrow_y):
+            rotationz(arrow_rot):
+            zoom(0.575):
+            z(122)
+        ));
+    }
+
+    let step_artist_x0 = if is_p2_single {
+        screen_center_x() - 244.0
+    } else if is_wide() {
         screen_center_x() - 355.5
     } else {
         screen_center_x() - 345.5
