@@ -1,8 +1,10 @@
 use crate::act;
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::game::chart::ChartData;
 use crate::game::profile;
 use crate::game::scores;
+use crate::game::song::SongData;
 use crate::screens::select_music::MusicWheelEntry;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -65,6 +67,44 @@ fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
         (b[2] - a[2]).mul_add(t, a[2]),
         (b[3] - a[3]).mul_add(t, a[3]),
     ]
+}
+
+fn chart_for_preferred_or_nearest_standard<'a>(
+    song: &'a SongData,
+    chart_type: &str,
+    preferred_index: usize,
+) -> Option<&'a ChartData> {
+    let num_standard = color::FILE_DIFFICULTY_NAMES.len();
+    if num_standard == 0 {
+        return None;
+    }
+
+    let preferred = preferred_index.min(num_standard - 1);
+    if let Some(chart) =
+        crate::screens::select_music::chart_for_steps_index(song, chart_type, preferred)
+    {
+        return Some(chart);
+    }
+
+    let mut best_chart = None;
+    let mut best_distance = usize::MAX;
+    for chart in &song.charts {
+        if chart.notes.is_empty() || !chart.chart_type.eq_ignore_ascii_case(chart_type) {
+            continue;
+        }
+        let Some(diff_ix) = color::FILE_DIFFICULTY_NAMES
+            .iter()
+            .position(|diff| chart.difficulty.eq_ignore_ascii_case(diff))
+        else {
+            continue;
+        };
+        let distance = diff_ix.abs_diff(preferred);
+        if distance < best_distance {
+            best_distance = distance;
+            best_chart = Some(chart);
+        }
+    }
+    best_chart
 }
 
 pub struct MusicWheelParams<'a> {
@@ -312,7 +352,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                 // Find the relevant chart to check for a grade (and lamp).
                 if let Some(MusicWheelEntry::Song(info)) = p.entries.get(list_index) {
                     // For the selected item, use the *actual* selected difficulty.
-                    // For all other items, use the player's *preferred* difficulty.
+                    // For all other items, prefer the player's preferred difficulty, but
+                    // fall back to the nearest available standard chart when missing.
                     let chart = if is_selected_slot {
                         crate::screens::select_music::chart_for_steps_index(
                             info,
@@ -320,7 +361,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             p.selected_steps_index,
                         )
                     } else {
-                        crate::screens::select_music::chart_for_steps_index(
+                        chart_for_preferred_or_nearest_standard(
                             info,
                             target_chart_type,
                             p.preferred_difficulty_index,
