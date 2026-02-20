@@ -1800,8 +1800,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                             life_children.push(act!(text:
                                 font("miso"): settext("BARELY!"):
-                                align(0.5, 1.0): xy(x, text_start_y):
-                                zoom(0.52):
+                                align(0.5, 0.5): xy(x, text_start_y):
+                                zoom(0.75):
                                 diffuse(1.0, 1.0, 1.0, 1.0): alpha(0.0):
                                 sleep(GRAPH_BARELY_ANIM_DELAY_SECONDS):
                                 accelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): alpha(1.0): y(text_end_y):
@@ -1811,7 +1811,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             ));
                             life_children.push(act!(sprite("meter_arrow.png"):
                                 align(0.5, 0.5): xy(x, arrow_start_y):
-                                rotationz(90.0): zoom(0.50):
+                                // SL uses rotationz(90); deadsync's current z-rotation sign
+                                // is opposite in screen space, so -90 is the visual parity.
+                                rotationz(-90.0): zoom(0.50):
                                 diffuse(1.0, 1.0, 1.0, 1.0): alpha(0.0):
                                 sleep(GRAPH_BARELY_ANIM_DELAY_SECONDS):
                                 accelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): alpha(1.0): y(arrow_end_y):
