@@ -45,6 +45,11 @@ const EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS: f32 = 0.4;
 const EVAL_STAGE_IN_TOTAL_SECONDS: f32 = EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS
     + EVAL_STAGE_IN_TEXT_HOLD_SECONDS
     + EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS;
+const GRAPH_BARELY_SAMPLE_COUNT: usize = 100;
+const GRAPH_BARELY_LIFE_MAX: f32 = 0.1;
+const GRAPH_BARELY_ANIM_DELAY_SECONDS: f32 = 2.0;
+const GRAPH_BARELY_ANIM_SEG_SECONDS: f32 = 0.2;
+const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
 const MACHINE_RECORD_ROWS: usize = 10;
 const GS_RECORD_ROWS: usize = 10;
 
@@ -763,6 +768,67 @@ fn format_session_time(seconds_total: f32) -> String {
     } else {
         format!("{hours:02}:{minutes:02}:{seconds:02}")
     }
+}
+
+#[inline(always)]
+fn life_record_lerp_at(life_history: &[(f32, f32)], sample_time: f32) -> f32 {
+    let Some(&(_, first_life)) = life_history.first() else {
+        return 0.0;
+    };
+    if life_history.len() == 1 {
+        return first_life.clamp(0.0, 1.0);
+    }
+
+    // Match ITGmania's PlayerStageStats::GetLifeRecordLerpAt() upper_bound behavior:
+    // choose the first key > sample_time, then lerp from the previous sample.
+    let later_ix = life_history.partition_point(|&(t, _)| t <= sample_time);
+    let earlier_ix = later_ix.saturating_sub(1).min(life_history.len() - 1);
+    let (earlier_t, earlier_life) = life_history[earlier_ix];
+
+    if later_ix >= life_history.len() {
+        return earlier_life.clamp(0.0, 1.0);
+    }
+
+    let (later_t, later_life) = life_history[later_ix];
+    let dt = later_t - earlier_t;
+    if dt.abs() <= f32::EPSILON {
+        return earlier_life.clamp(0.0, 1.0);
+    }
+
+    let alpha = ((sample_time - earlier_t) / dt).clamp(0.0, 1.0);
+    (earlier_life + (later_life - earlier_life) * alpha).clamp(0.0, 1.0)
+}
+
+#[inline(always)]
+fn barely_marker_sample(si: &ScoreInfo) -> Option<(f32, f32)> {
+    // ITGmania GraphDisplay only shows "Barely" if the chart was cleared.
+    if si.grade == scores::Grade::Failed || si.fail_time.is_some() || si.life_history.is_empty() {
+        return None;
+    }
+
+    let sample_end = si.graph_last_second.max(0.0);
+    if !sample_end.is_finite() || sample_end <= 0.0 {
+        return None;
+    }
+
+    let mut min_life = 1.0_f32;
+    let mut min_ix = 0usize;
+    let inv_samples = 1.0_f32 / GRAPH_BARELY_SAMPLE_COUNT as f32;
+    for i in 0..GRAPH_BARELY_SAMPLE_COUNT {
+        let t = (i as f32) * inv_samples * sample_end;
+        let life = life_record_lerp_at(&si.life_history, t);
+        if life < min_life {
+            min_life = life;
+            min_ix = i;
+        }
+    }
+
+    if min_life <= 0.0 || min_life >= GRAPH_BARELY_LIFE_MAX {
+        return None;
+    }
+
+    let t = (min_ix as f32) * inv_samples * sample_end;
+    Some((t, min_life))
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -1708,6 +1774,55 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     z(4)
                                 ));
                             }
+                        }
+
+                        if let Some((barely_time, barely_life)) = barely_marker_sample(si) {
+                            let x = ((barely_time - first) / (dur + padding)).clamp(0.0, 1.0)
+                                * graph_width;
+                            let y = ((1.0 - barely_life).clamp(0.0, 1.0) * graph_height + 1.0)
+                                .clamp(1.0, (graph_height - 1.0).max(1.0));
+                            // Keep a tiny marker on the life line, then animate the label/arrow
+                            // in the same timing pattern as Simply Love GraphDisplay Barely.
+                            life_children.push(act!(quad:
+                                align(0.5, 0.5): xy(x, y):
+                                setsize(3.0, 3.0):
+                                diffuse(1.0, 1.0, 1.0, 0.95):
+                                z(6)
+                            ));
+
+                            let anchor_y = (y - 12.0).clamp(18.0, graph_height - 24.0);
+                            let text_start_y = anchor_y - 20.0;
+                            let text_mid_y = anchor_y - 5.0;
+                            let text_end_y = anchor_y + 10.0;
+                            let arrow_start_y = anchor_y - 10.0;
+                            let arrow_mid_y = anchor_y + 5.0;
+                            let arrow_end_y = anchor_y + 20.0;
+
+                            life_children.push(act!(text:
+                                font("miso"): settext("BARELY!"):
+                                align(0.5, 1.0): xy(x, text_start_y):
+                                zoom(0.52):
+                                diffuse(1.0, 1.0, 1.0, 1.0): alpha(0.0):
+                                sleep(GRAPH_BARELY_ANIM_DELAY_SECONDS):
+                                accelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): alpha(1.0): y(text_end_y):
+                                decelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): y(text_mid_y):
+                                accelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): y(text_end_y):
+                                z(8)
+                            ));
+                            life_children.push(act!(sprite("meter_arrow.png"):
+                                align(0.5, 0.5): xy(x, arrow_start_y):
+                                rotationz(90.0): zoom(0.50):
+                                diffuse(1.0, 1.0, 1.0, 1.0): alpha(0.0):
+                                sleep(GRAPH_BARELY_ANIM_DELAY_SECONDS):
+                                accelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): alpha(1.0): y(arrow_end_y):
+                                decelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): y(arrow_mid_y):
+                                accelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): y(arrow_end_y):
+                                sleep(GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS):
+                                diffuseshift():
+                                effectcolor1(1.0, 1.0, 1.0, 1.0):
+                                effectcolor2(1.0, 1.0, 1.0, 0.2):
+                                z(8)
+                            ));
                         }
 
                         if let Some(fail_time) = si.fail_time {
