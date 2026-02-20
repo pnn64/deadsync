@@ -717,7 +717,8 @@ fn ensure_chart_cache_for_song(
     }
     if !is_versus {
         state.cached_chart_ix_p2 = None;
-    } else if song_changed || type_changed || p2_changed {
+    } else if song_changed || type_changed || p2_changed || state.cached_chart_ix_p2.is_none() {
+        // Recover from stale/missing P2 cache without requiring wheel movement.
         state.cached_chart_ix_p2 = chart_ix_for_steps_index(
             &state.cached_standard_chart_ixs,
             state.p2_selected_steps_index,
