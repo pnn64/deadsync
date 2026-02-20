@@ -568,18 +568,18 @@ pub fn init_from_score_info(
     let play_style = profile::get_session_play_style();
     match play_style {
         profile::PlayStyle::Versus => {
-            active_pane[0] = score_info[0]
-                .as_ref()
-                .map_or(EvalPane::Standard, |si| EvalPane::default_for(si.show_fa_plus_pane));
-            active_pane[1] = score_info[1]
-                .as_ref()
-                .map_or(EvalPane::Standard, |si| EvalPane::default_for(si.show_fa_plus_pane));
+            active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
+                EvalPane::default_for(si.show_fa_plus_pane)
+            });
+            active_pane[1] = score_info[1].as_ref().map_or(EvalPane::Standard, |si| {
+                EvalPane::default_for(si.show_fa_plus_pane)
+            });
         }
         profile::PlayStyle::Single | profile::PlayStyle::Double => {
             let joined = profile::get_session_player_side();
-            let primary = score_info[0]
-                .as_ref()
-                .map_or(EvalPane::Standard, |si| EvalPane::default_for(si.show_fa_plus_pane));
+            let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
+                EvalPane::default_for(si.show_fa_plus_pane)
+            });
             let secondary = EvalPane::Timing;
             active_pane = match joined {
                 profile::PlayerSide::P1 => [primary, secondary],
@@ -1243,9 +1243,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             asset_manager.with_font("miso", |miso_font| {
                                 let mut max_w = 0.0_f32;
                                 for line in step_artist_text.lines() {
-                                    let line_w =
-                                        font::measure_line_width_logical(miso_font, line, all_fonts)
-                                            as f32;
+                                    let line_w = font::measure_line_width_logical(
+                                        miso_font, line, all_fonts,
+                                    ) as f32;
                                     if line_w > max_w {
                                         max_w = line_w;
                                     }
@@ -1301,8 +1301,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     String::new()
                 } else {
                     // Simply Love StepArtist.lua marquee cadence: 2s per entry.
-                    let cycle_idx =
-                        ((state.screen_elapsed.max(0.0) / 2.0).floor() as usize) % step_artist_lines.len();
+                    let cycle_idx = ((state.screen_elapsed.max(0.0) / 2.0).floor() as usize)
+                        % step_artist_lines.len();
                     step_artist_lines[cycle_idx].clone()
                 };
                 if !step_artist_text.is_empty() {
@@ -1464,7 +1464,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 player_side
             };
 
-            actors.extend(eval_panes::build_pane_percentage_display(si, pane, controller));
+            actors.extend(eval_panes::build_pane_percentage_display(
+                si, pane, controller,
+            ));
 
             match pane {
                 EvalPane::Timing => actors.extend(eval_panes::build_timing_pane(
@@ -1532,7 +1534,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
         } else if let Some(si) = state.score_info.get(0).and_then(|s| s.as_ref()) {
-            actors.extend(eval_panes::build_modifiers_pane(si, screen_center_x(), graph_width));
+            actors.extend(eval_panes::build_modifiers_pane(
+                si,
+                screen_center_x(),
+                graph_width,
+            ));
         }
     }
 

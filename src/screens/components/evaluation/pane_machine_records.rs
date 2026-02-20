@@ -207,7 +207,9 @@ pub fn build_machine_records_pane(
             };
             push_machine_record_row(
                 &mut children,
-                score_info.machine_records.get(rank.saturating_sub(1) as usize),
+                score_info
+                    .machine_records
+                    .get(rank.saturating_sub(1) as usize),
                 rank,
                 first_row_y + row_idx as f32 * row_height,
                 rank_x,

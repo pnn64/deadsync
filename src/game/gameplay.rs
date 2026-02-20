@@ -1664,6 +1664,10 @@ pub struct State {
     pub density_graph_life_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub density_graph_life_mesh_offset_px: [i32; MAX_PLAYERS],
     pub density_graph_life_dirty: [bool; MAX_PLAYERS],
+    pub density_graph_top_h: f32,
+    pub density_graph_top_w: [f32; MAX_PLAYERS],
+    pub density_graph_top_scale_y: [f32; MAX_PLAYERS],
+    pub density_graph_top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
 
     pub hold_to_exit_key: Option<HoldToExitKey>,
     pub hold_to_exit_start: Option<Instant>,
@@ -2262,6 +2266,48 @@ fn get_reference_bpm_from_display_tag(display_bpm_str: &str) -> Option<f32> {
     s.parse::<f32>().ok()
 }
 
+fn upper_density_graph_width(
+    noteskin: Option<&Noteskin>,
+    field_zoom: f32,
+    cols_per_player: usize,
+    play_style: profile::PlayStyle,
+) -> f32 {
+    let Some(ns) = noteskin else {
+        return 0.0;
+    };
+    let cols = cols_per_player
+        .min(ns.column_xs.len())
+        .min(ns.receptor_off.len());
+    if cols == 0 {
+        return 0.0;
+    }
+
+    let mut min_x = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    for x in ns.column_xs.iter().take(cols) {
+        let xf = *x as f32;
+        min_x = min_x.min(xf);
+        max_x = max_x.max(xf);
+    }
+
+    let zoom = field_zoom.max(0.0);
+    let target_arrow_px = 64.0 * zoom;
+    let size = ns.receptor_off[0].size();
+    let w = size[0].max(0) as f32;
+    let h = size[1].max(0) as f32;
+    let arrow_w = if h > 0.0 && target_arrow_px > 0.0 {
+        w * (target_arrow_px / h)
+    } else {
+        w * zoom
+    };
+
+    let mut width = ((max_x - min_x) * zoom) + arrow_w;
+    if play_style == profile::PlayStyle::Double {
+        width *= 0.5;
+    }
+    (width - 30.0).max(0.0)
+}
+
 pub fn init(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
@@ -2832,6 +2878,63 @@ pub fn init(
             1.0_f32
         };
     let density_graph_u0 = 0.0_f32;
+    let density_graph_top_h = 30.0_f32;
+    let density_graph_top_w: [f32; MAX_PLAYERS] = std::array::from_fn(|p| {
+        if p >= num_players || !player_profiles[p].nps_graph_at_top {
+            return 0.0;
+        }
+        upper_density_graph_width(
+            noteskin[p].as_ref(),
+            field_zoom[p],
+            cols_per_player,
+            play_style,
+        )
+    });
+    let density_graph_top_scale_y: [f32; MAX_PLAYERS] = {
+        let mut scale = [1.0_f32; MAX_PLAYERS];
+        if num_players == 2
+            && player_profiles[0].nps_graph_at_top
+            && player_profiles[1].nps_graph_at_top
+        {
+            let p1_peak = charts[0].max_nps as f32;
+            let p2_peak = charts[1].max_nps as f32;
+            if p1_peak.is_finite() && p2_peak.is_finite() && p1_peak > 0.0 && p2_peak > 0.0 {
+                if p1_peak < p2_peak {
+                    scale[0] = (p1_peak / p2_peak).clamp(0.0, 1.0);
+                } else if p2_peak < p1_peak {
+                    scale[1] = (p2_peak / p1_peak).clamp(0.0, 1.0);
+                }
+            }
+        }
+        scale
+    };
+    let density_graph_top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|p| {
+            let graph_w = density_graph_top_w[p];
+            let graph_h = density_graph_top_h * density_graph_top_scale_y[p].clamp(0.0, 1.0);
+            if p >= num_players || graph_w <= 0.0 || graph_h <= 0.0 {
+                return None;
+            }
+            let chart = charts[p].as_ref();
+            let verts = crate::screens::components::density_graph::build_density_histogram_mesh(
+                &chart.measure_nps_vec,
+                chart.max_nps,
+                &timing,
+                density_graph_first_second,
+                density_graph_last_second,
+                graph_w,
+                graph_h,
+                0.0,
+                graph_w,
+                None,
+                1.0,
+            );
+            if verts.is_empty() {
+                None
+            } else {
+                Some(Arc::from(verts.into_boxed_slice()))
+            }
+        });
 
     let density_graph_cache: [Option<DensityHistCache>; MAX_PLAYERS] = std::array::from_fn(|p| {
         if !density_graph_enabled || p >= num_players {
@@ -3004,6 +3107,10 @@ pub fn init(
         density_graph_life_mesh,
         density_graph_life_mesh_offset_px,
         density_graph_life_dirty,
+        density_graph_top_h,
+        density_graph_top_w,
+        density_graph_top_scale_y,
+        density_graph_top_mesh,
         hold_to_exit_key: None,
         hold_to_exit_start: None,
         hold_to_exit_aborted_at: None,

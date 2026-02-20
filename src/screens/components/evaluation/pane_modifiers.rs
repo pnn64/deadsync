@@ -3,7 +3,11 @@ use crate::screens::evaluation::ScoreInfo;
 use crate::ui::actors::Actor;
 use crate::ui::color;
 
-pub fn build_modifiers_pane(score_info: &ScoreInfo, bar_center_x: f32, bar_width: f32) -> Vec<Actor> {
+pub fn build_modifiers_pane(
+    score_info: &ScoreInfo,
+    bar_center_x: f32,
+    bar_width: f32,
+) -> Vec<Actor> {
     let frame_center_y = crate::core::space::screen_center_y() + 200.5;
     let font_zoom = 0.7;
 

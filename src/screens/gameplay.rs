@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
+use crate::core::gfx::{BlendMode, MeshMode};
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
@@ -326,33 +327,117 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
     actors.extend(p1_actors);
     let clamped_width = screen_width().clamp(640.0, 854.0);
+    let score_x_p1 = screen_center_x() - clamped_width / 4.3;
+    let score_x_p2 = screen_center_x() + clamped_width / 2.75;
+    let diff_x_p1 = screen_center_x() - widescale(292.5, 342.5);
+    let diff_x_p2 = screen_center_x() + widescale(292.5, 342.5);
 
-    let players: &[(usize, f32, f32)] = match play_style {
-        profile::PlayStyle::Versus => &[
-            (
+    let mut players: Vec<(usize, profile::PlayerSide, f32, f32, f32, f32)> =
+        Vec::with_capacity(state.num_players);
+    match play_style {
+        profile::PlayStyle::Versus => {
+            players.push((
                 0,
-                screen_center_x() - widescale(292.5, 342.5),
-                screen_center_x() - clamped_width / 4.3,
-            ),
-            (
+                profile::PlayerSide::P1,
+                per_player_fields[0].1,
+                diff_x_p1,
+                score_x_p1,
+                score_x_p2,
+            ));
+            players.push((
                 1,
-                screen_center_x() + widescale(292.5, 342.5),
-                screen_center_x() + clamped_width / 2.75,
-            ),
-        ],
-        _ if is_p2_single => &[(
-            0,
-            screen_center_x() + widescale(292.5, 342.5),
-            screen_center_x() + clamped_width / 2.75,
-        )],
-        _ => &[(
-            0,
-            screen_center_x() - widescale(292.5, 342.5),
-            screen_center_x() - clamped_width / 4.3,
-        )],
-    };
+                profile::PlayerSide::P2,
+                per_player_fields[1].1,
+                diff_x_p2,
+                score_x_p2,
+                score_x_p1,
+            ));
+        }
+        _ if is_p2_single => {
+            players.push((
+                0,
+                profile::PlayerSide::P2,
+                per_player_fields[0].1,
+                diff_x_p2,
+                score_x_p2,
+                score_x_p1,
+            ));
+        }
+        _ => {
+            players.push((
+                0,
+                profile::PlayerSide::P1,
+                per_player_fields[0].1,
+                diff_x_p1,
+                score_x_p1,
+                score_x_p2,
+            ));
+        }
+    }
 
-    for &(player_idx, diff_x, score_x) in players {
+    let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
+    let graph_center_shift = widescale(45.0, 95.0);
+
+    for &(player_idx, player_side, field_x, _, _, _) in &players {
+        if !state.player_profiles[player_idx].nps_graph_at_top {
+            continue;
+        }
+        let graph_w = state.density_graph_top_w[player_idx];
+        let graph_h = state.density_graph_top_h;
+        let graph_mesh_h = graph_h * state.density_graph_top_scale_y[player_idx].clamp(0.0, 1.0);
+        if graph_w <= 0.0 || graph_h <= 0.0 || graph_mesh_h <= 0.0 {
+            continue;
+        }
+        let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
+        let x = if note_field_is_centered {
+            screen_center_x() - graph_w * 0.5
+        } else if player_side == profile::PlayerSide::P1 {
+            screen_center_x() - graph_w - graph_center_shift
+        } else {
+            screen_center_x() + graph_center_shift
+        };
+        let y_bottom = 71.0;
+        let y_top = y_bottom - graph_h;
+        let y_mesh_top = y_bottom - graph_mesh_h;
+
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(x, y_top):
+            zoomto(graph_w, graph_h):
+            diffuse(30.0 / 255.0, 40.0 / 255.0, 47.0 / 255.0, 1.0):
+            z(84)
+        ));
+
+        if let Some(mesh) = &state.density_graph_top_mesh[player_idx]
+            && !mesh.is_empty()
+        {
+            actors.push(Actor::Mesh {
+                align: [0.0, 0.0],
+                offset: [x, y_mesh_top],
+                size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_mesh_h)],
+                vertices: mesh.clone(),
+                mode: MeshMode::Triangles,
+                visible: true,
+                blend: BlendMode::Alpha,
+                z: 85,
+            });
+        }
+
+        let duration =
+            (state.density_graph_last_second - state.density_graph_first_second).max(0.001_f32);
+        let progress_w =
+            (((state.current_music_time - state.density_graph_first_second) / duration) * graph_w)
+                .clamp(0.0, graph_w);
+        if progress_w > 0.0 {
+            actors.push(act!(quad:
+                align(0.0, 0.0): xy(x, y_top):
+                zoomto(progress_w, graph_h):
+                diffuse(0.0, 0.0, 0.0, 0.85):
+                z(86)
+            ));
+        }
+    }
+
+    for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in &players {
         let chart = &state.charts[player_idx];
         let difficulty_color = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
         let meter_text = chart.meter.to_string();
@@ -390,7 +475,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         });
 
         // Score Display
-        if !state.player_profiles[player_idx].hide_score {
+        let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
+        let nps_graph_at_top = state.player_profiles[player_idx].nps_graph_at_top;
+        let single_score_swapped = state.num_players == 1
+            && play_style != profile::PlayStyle::Double
+            && nps_graph_at_top
+            && !note_field_is_centered;
+        let score_x = if single_score_swapped {
+            score_x_other
+        } else {
+            score_x_normal
+        };
+        let hide_score_for_top_graph = state.num_players > 1 && nps_graph_at_top && !is_ultrawide;
+
+        if !state.player_profiles[player_idx].hide_score && !hide_score_for_top_graph {
             let score_y = 56.0;
             let show_ex_score = state.player_profiles[player_idx].show_ex_score;
             let show_hard_ex_score =
@@ -408,7 +506,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 (format!("{score_percent:.2}"), [1.0, 1.0, 1.0, 1.0])
             };
 
-            let is_p2_side = player_idx == 1 || is_p2_single;
+            let is_p2_side = player_side == profile::PlayerSide::P2;
             // Arrow Cloud parity: EX remains the "normal" score position/anchor.
             // H.EX is placed at a different x on P2 so it appears to the left of EX.
             actors.push(act!(text:
@@ -423,7 +521,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 let hard_ex_percent =
                     crate::game::gameplay::display_hard_ex_score_percent(state, player_idx);
                 let hex = color::HARD_EX_SCORE_RGBA;
-                let hard_ex_x = if is_p2_side {
+                let hard_ex_x = if single_score_swapped {
+                    let swapped_base = if is_p2_side {
+                        screen_center_x() - clamped_width / 4.3
+                    } else {
+                        screen_center_x() + clamped_width / 4.3
+                    };
+                    swapped_base + 115.0
+                } else if is_p2_side {
                     // Arrow Cloud: HardEX uses /4.3 on P2 (while EX uses /2.75).
                     screen_center_x() + clamped_width / 4.3
                 } else {
@@ -478,7 +583,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let rate_center_y = 12.0f64.mul_add(frame_zoom, frame_origin_y);
         let bpm_final_zoom = 1.0 * frame_zoom;
         let rate_final_zoom = 0.5 * frame_zoom;
-        let bpm_x = screen_center_x();
+        let mut bpm_x = screen_center_x();
+        let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
+        if state.num_players == 1
+            && note_field_is_centered
+            && state.player_profiles[0].nps_graph_at_top
+        {
+            let side_shift = if player_side == profile::PlayerSide::P1 {
+                0.3
+            } else {
+                -0.3
+            };
+            bpm_x = screen_center_x() + screen_width() * side_shift;
+        }
         actors.push(act!(text:
             font("miso"): settext(bpm_text):
             align(0.5, 0.5): xy(bpm_x, bpm_center_y):

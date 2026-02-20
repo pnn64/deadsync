@@ -311,7 +311,11 @@ fn default_new_profile_name(state: &State) -> String {
     "New0001".to_string()
 }
 
-fn validate_profile_name(state: &State, mode: &NameEntryMode, name: &str) -> Result<(), &'static str> {
+fn validate_profile_name(
+    state: &State,
+    mode: &NameEntryMode,
+    name: &str,
+) -> Result<(), &'static str> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err("Profile name cannot be blank.");
@@ -329,7 +333,10 @@ fn validate_profile_name(state: &State, mode: &NameEntryMode, name: &str) -> Res
     Ok(())
 }
 
-fn try_submit_name_entry(state: &mut State, entry: &NameEntryState) -> Result<String, &'static str> {
+fn try_submit_name_entry(
+    state: &mut State,
+    entry: &NameEntryState,
+) -> Result<String, &'static str> {
     validate_profile_name(state, &entry.mode, &entry.value)?;
     let trimmed = entry.value.trim();
     match &entry.mode {
@@ -1271,7 +1278,10 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
     let mut menu_y = row_top;
 
     menu_x = menu_x.clamp(10.0, (screen_width() - menu_w - 10.0).max(10.0));
-    menu_y = menu_y.clamp(BAR_H + 4.0, (screen_height() - BAR_H - menu_h - 4.0).max(BAR_H + 4.0));
+    menu_y = menu_y.clamp(
+        BAR_H + 4.0,
+        (screen_height() - BAR_H - menu_h - 4.0).max(BAR_H + 4.0),
+    );
 
     let inner_x = menu_x + border;
     let inner_y = menu_y + border;
