@@ -144,6 +144,9 @@ struct CourseRatingMeta {
     course_meter: Option<u32>,
     meter_sum: u32,
     meter_count: usize,
+    min_bpm: Option<f64>,
+    max_bpm: Option<f64>,
+    total_length_seconds: i32,
     runtime_stages: Vec<CourseStagePlan>,
 }
 
@@ -504,13 +507,13 @@ fn resolve_sort_pick_song(
     song_play_counts: &HashMap<String, u32>,
     entry: &rssp::course::CourseEntry,
     chart_type: &str,
+    course_difficulty: rssp::course::Difficulty,
     sort: rssp::course::SongSort,
     index: i32,
 ) -> Option<Arc<SongData>> {
     let mut ranked: Vec<(u32, Arc<SongData>)> = Vec::new();
     for song in all_songs {
-        if resolve_course_chart(song, entry, chart_type, rssp::course::Difficulty::Medium).is_none()
-        {
+        if resolve_course_chart(song, entry, chart_type, course_difficulty).is_none() {
             continue;
         }
         let plays = song_play_counts
@@ -552,6 +555,7 @@ fn resolve_random_song(
     used_song_keys: &HashSet<String>,
     entry: &rssp::course::CourseEntry,
     chart_type: &str,
+    course_difficulty: rssp::course::Difficulty,
 ) -> Option<Arc<SongData>> {
     let pool: &[Arc<SongData>] = match &entry.song {
         rssp::course::CourseSong::RandomAny => all_songs,
@@ -567,8 +571,7 @@ fn resolve_random_song(
     let mut all_candidates = Vec::new();
     let mut unused_candidates = Vec::new();
     for song in pool {
-        if resolve_course_chart(song, entry, chart_type, rssp::course::Difficulty::Medium).is_none()
-        {
+        if resolve_course_chart(song, entry, chart_type, course_difficulty).is_none() {
             continue;
         }
         all_candidates.push(song.clone());
@@ -588,6 +591,59 @@ fn resolve_random_song(
 
     let idx = random_pick_index(random_seed, course_path, entry_index, picked_pool.len());
     picked_pool.get(idx).cloned()
+}
+
+#[inline(always)]
+fn resolve_entry_song(
+    course_path: &Path,
+    entry_index: usize,
+    random_seed: u64,
+    entry: &rssp::course::CourseEntry,
+    by_group_song: &HashMap<(String, String), Arc<SongData>>,
+    by_song: &HashMap<String, Arc<SongData>>,
+    all_songs: &[Arc<SongData>],
+    songs_by_group: &HashMap<String, Vec<Arc<SongData>>>,
+    song_play_counts: &HashMap<String, u32>,
+    used_song_keys: &HashSet<String>,
+    chart_type: &str,
+    course_difficulty: rssp::course::Difficulty,
+) -> Option<Arc<SongData>> {
+    match &entry.song {
+        rssp::course::CourseSong::Fixed { group, song } => {
+            let song_key = song.trim().to_ascii_lowercase();
+            if let Some(group) = group.as_deref().map(str::trim) {
+                let group_key = group.to_ascii_lowercase();
+                by_group_song.get(&(group_key, song_key)).cloned()
+            } else {
+                by_song.get(&song_key).cloned()
+            }
+        }
+        rssp::course::CourseSong::SortPick { sort, index } => resolve_sort_pick_song(
+            all_songs,
+            song_play_counts,
+            entry,
+            chart_type,
+            course_difficulty,
+            *sort,
+            *index,
+        ),
+        rssp::course::CourseSong::RandomAny
+        | rssp::course::CourseSong::RandomWithinGroup { .. } => {
+            let seeded = random_seed ^ ((course_difficulty as u64) << 32);
+            resolve_random_song(
+                course_path,
+                entry_index,
+                seeded,
+                all_songs,
+                songs_by_group,
+                used_song_keys,
+                entry,
+                chart_type,
+                course_difficulty,
+            )
+        }
+        rssp::course::CourseSong::Unknown { .. } => None,
+    }
 }
 
 #[inline(always)]
@@ -661,8 +717,6 @@ fn build_init_data() -> InitData {
     let mut course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>> = HashMap::new();
 
     for (path, course) in course_cache.iter() {
-        let mut entry_titles: Vec<String> = Vec::with_capacity(course.entries.len());
-        let mut entry_songs: Vec<Option<Arc<SongData>>> = Vec::with_capacity(course.entries.len());
         let mut total_seconds = 0i32;
         let mut min_bpm = None;
         let mut max_bpm = None;
@@ -673,8 +727,6 @@ fn build_init_data() -> InitData {
             .map_or(0_u64, |d| d.as_nanos() as u64);
 
         for (entry_idx, entry) in course.entries.iter().enumerate() {
-            let mut title = course_entry_song_label(entry);
-
             if matches!(
                 &entry.song,
                 rssp::course::CourseSong::RandomAny
@@ -683,41 +735,23 @@ fn build_init_data() -> InitData {
                 has_random_entries = true;
             }
 
-            let resolved = match &entry.song {
-                rssp::course::CourseSong::Fixed { group, song } => {
-                    let song_key = song.trim().to_ascii_lowercase();
-                    if let Some(group) = group.as_deref().map(str::trim) {
-                        let group_key = group.to_ascii_lowercase();
-                        by_group_song.get(&(group_key, song_key)).cloned()
-                    } else {
-                        by_song.get(&song_key).cloned()
-                    }
-                }
-                rssp::course::CourseSong::SortPick { sort, index } => resolve_sort_pick_song(
-                    &all_songs,
-                    &song_play_counts,
-                    entry,
-                    target_chart_type,
-                    *sort,
-                    *index,
-                ),
-                rssp::course::CourseSong::RandomAny
-                | rssp::course::CourseSong::RandomWithinGroup { .. } => resolve_random_song(
-                    path,
-                    entry_idx,
-                    random_seed,
-                    &all_songs,
-                    &songs_by_group,
-                    &used_song_keys,
-                    entry,
-                    target_chart_type,
-                ),
-                _ => None,
-            };
+            let resolved = resolve_entry_song(
+                path,
+                entry_idx,
+                random_seed,
+                entry,
+                &by_group_song,
+                &by_song,
+                &all_songs,
+                &songs_by_group,
+                &song_play_counts,
+                &used_song_keys,
+                target_chart_type,
+                rssp::course::Difficulty::Medium,
+            );
 
             if let Some(song_data) = resolved.as_ref() {
                 used_song_keys.insert(song_unique_key(song_data));
-                title = song_data.display_full_title(translated_titles);
                 let len = if song_data.music_length_seconds > 0.0 {
                     song_data.music_length_seconds.round() as i32
                 } else {
@@ -726,17 +760,26 @@ fn build_init_data() -> InitData {
                 total_seconds = total_seconds.saturating_add(len.max(0));
                 push_song_bpm_range(&mut min_bpm, &mut max_bpm, song_data);
             }
-            entry_titles.push(title);
-            entry_songs.push(resolved);
         }
 
+        let preferred_default_idx = course_difficulty_from_meters(course)
+            .and_then(|(difficulty_name, _)| {
+                COURSE_RATING_ORDER.iter().position(|diff| {
+                    rssp::course::difficulty_label(*diff).eq_ignore_ascii_case(difficulty_name)
+                })
+            })
+            .unwrap_or(rssp::course::Difficulty::Medium as usize);
+        let preferred_default_diff = COURSE_RATING_ORDER[preferred_default_idx];
         let mut available_course_diffs: Vec<rssp::course::Difficulty> = COURSE_RATING_ORDER
             .iter()
             .copied()
             .filter(|diff| course.meter_for(*diff).is_some_and(|meter| meter >= 0))
             .collect();
+        if has_random_entries && available_course_diffs.len() <= 1 {
+            available_course_diffs = COURSE_RATING_ORDER.to_vec();
+        }
         if available_course_diffs.is_empty() {
-            available_course_diffs.push(rssp::course::Difficulty::Medium);
+            available_course_diffs.push(preferred_default_diff);
         }
 
         let mut ratings: Vec<Option<CourseRatingMeta>> = vec![None; COURSE_RATING_ORDER.len()];
@@ -747,8 +790,13 @@ fn build_init_data() -> InitData {
             let mut rated_entry_count = 0usize;
             let mut meter_sum = 0u32;
             let mut meter_count = 0usize;
+            let mut rating_used_song_keys = HashSet::new();
+            let mut rating_total_seconds = 0i32;
+            let mut rating_min_bpm = None;
+            let mut rating_max_bpm = None;
 
             for (entry_idx, entry) in course.entries.iter().enumerate() {
+                let mut title = course_entry_song_label(entry);
                 let mut difficulty = course_steps_label(&entry.steps);
                 let mut meter = None;
                 let mut step_artist = if course.scripter.trim().is_empty() {
@@ -756,24 +804,48 @@ fn build_init_data() -> InitData {
                 } else {
                     course.scripter.clone()
                 };
-                if let Some(song_data) = entry_songs[entry_idx].as_ref()
-                    && let Some(chart) =
+                let resolved = resolve_entry_song(
+                    path,
+                    entry_idx,
+                    random_seed,
+                    entry,
+                    &by_group_song,
+                    &by_song,
+                    &all_songs,
+                    &songs_by_group,
+                    &song_play_counts,
+                    &rating_used_song_keys,
+                    target_chart_type,
+                    course_diff,
+                );
+                if let Some(song_data) = resolved.as_ref() {
+                    rating_used_song_keys.insert(song_unique_key(song_data));
+                    title = song_data.display_full_title(translated_titles);
+                    let len = if song_data.music_length_seconds > 0.0 {
+                        song_data.music_length_seconds.round() as i32
+                    } else {
+                        song_data.total_length_seconds.max(0)
+                    };
+                    rating_total_seconds = rating_total_seconds.saturating_add(len.max(0));
+                    push_song_bpm_range(&mut rating_min_bpm, &mut rating_max_bpm, song_data);
+                    if let Some(chart) =
                         resolve_course_chart(song_data, entry, target_chart_type, course_diff)
-                {
-                    difficulty = chart.difficulty.to_ascii_lowercase();
-                    meter = Some(chart.meter);
-                    step_artist = chart_step_artist(chart);
-                    runtime_stages.push(CourseStagePlan {
-                        song: song_data.clone(),
-                        chart_hash: chart.short_hash.clone(),
-                    });
-                    add_chart_totals(&mut totals, chart);
-                    rated_entry_count = rated_entry_count.saturating_add(1);
-                    meter_sum = meter_sum.saturating_add(chart.meter);
-                    meter_count = meter_count.saturating_add(1);
+                    {
+                        difficulty = chart.difficulty.to_ascii_lowercase();
+                        meter = Some(chart.meter);
+                        step_artist = chart_step_artist(chart);
+                        runtime_stages.push(CourseStagePlan {
+                            song: song_data.clone(),
+                            chart_hash: chart.short_hash.clone(),
+                        });
+                        add_chart_totals(&mut totals, chart);
+                        rated_entry_count = rated_entry_count.saturating_add(1);
+                        meter_sum = meter_sum.saturating_add(chart.meter);
+                        meter_count = meter_count.saturating_add(1);
+                    }
                 }
                 entries.push(CourseSongEntry {
-                    title: entry_titles[entry_idx].clone(),
+                    title,
                     difficulty,
                     meter,
                     step_artist,
@@ -811,19 +883,27 @@ fn build_init_data() -> InitData {
                 course_meter,
                 meter_sum,
                 meter_count,
+                min_bpm: rating_min_bpm,
+                max_bpm: rating_max_bpm,
+                total_length_seconds: rating_total_seconds.max(0),
                 runtime_stages,
             });
         }
 
         let group_name = course_group_name(path);
-        let preferred_default = course_difficulty_from_meters(course)
-            .and_then(|(difficulty_name, _)| {
-                COURSE_RATING_ORDER.iter().position(|diff| {
-                    rssp::course::difficulty_label(*diff).eq_ignore_ascii_case(difficulty_name)
-                })
+        let default_rating_index =
+            nearest_filled_slot(&ratings, preferred_default_idx).unwrap_or(preferred_default_idx);
+        let (meta_min_bpm, meta_max_bpm, meta_total_length_seconds) = ratings
+            .get(default_rating_index)
+            .and_then(Option::as_ref)
+            .map(|rating| {
+                (
+                    rating.min_bpm,
+                    rating.max_bpm,
+                    rating.total_length_seconds.max(0),
+                )
             })
-            .unwrap_or(rssp::course::Difficulty::Medium as usize);
-        let default_rating_index = nearest_filled_slot(&ratings, preferred_default).unwrap_or(0);
+            .unwrap_or((min_bpm, max_bpm, total_seconds.max(0)));
         let meta = Arc::new(CourseMeta {
             path: path.clone(),
             name: course_name(path, course),
@@ -832,9 +912,9 @@ fn build_init_data() -> InitData {
             banner_path: rssp::course::resolve_course_banner_path(path, &course.banner),
             ratings,
             default_rating_index,
-            min_bpm,
-            max_bpm,
-            total_length_seconds: total_seconds.max(0),
+            min_bpm: meta_min_bpm,
+            max_bpm: meta_max_bpm,
+            total_length_seconds: meta_total_length_seconds,
             has_random_entries,
         });
 
@@ -878,6 +958,47 @@ fn selected_course_meta(state: &State) -> Option<Arc<CourseMeta>> {
         return None;
     };
     state.course_meta_by_path.get(&song.simfile_path).cloned()
+}
+
+pub fn restore_selection_for_course(
+    state: &mut State,
+    course_path: &Path,
+    course_difficulty_name: Option<&str>,
+) -> bool {
+    let Some(index) = state.entries.iter().position(
+        |entry| matches!(entry, MusicWheelEntry::Song(song) if song.simfile_path == course_path),
+    ) else {
+        return false;
+    };
+    state.selected_index = index;
+    state.prev_selected_index = index;
+    state.wheel_offset_from_selection = 0.0;
+    state.time_since_selection_change = 0.0;
+
+    if let Some(meta) = selected_course_meta(state) {
+        if let Some(diff_name) = course_difficulty_name
+            && let Some(slot_idx) = meta.ratings.iter().position(|slot| {
+                slot.as_ref().is_some_and(|rating| {
+                    rating
+                        .course_difficulty_name
+                        .eq_ignore_ascii_case(diff_name)
+                })
+            })
+        {
+            set_selected_course_rating_index(state, &meta, slot_idx);
+        } else {
+            let idx = selected_course_rating_index(state, &meta);
+            state
+                .selected_rating_index_by_path
+                .insert(meta.path.clone(), idx);
+        }
+    }
+
+    state.last_rating_nav_dir_p1 = None;
+    state.last_rating_nav_time_p1 = None;
+    state.last_rating_nav_dir_p2 = None;
+    state.last_rating_nav_time_p2 = None;
+    true
 }
 
 #[inline(always)]
@@ -1468,6 +1589,20 @@ fn format_bpm_range(min_bpm: Option<f64>, max_bpm: Option<f64>) -> String {
 }
 
 #[inline(always)]
+fn course_selection_anim_beat(state: &State) -> f32 {
+    // Keep course wheel pulse speed aligned with SelectMusic fallback (150 BPM).
+    state.session_elapsed * 2.5
+}
+
+#[inline(always)]
+fn course_arrow_bounce01(selection_beat: f32) -> f32 {
+    // Match SelectMusic arrow timing: effectperiod(1) + effectoffset(-10*GlobalOffsetSeconds).
+    let effect_offset = -10.0 * crate::config::get().global_offset_seconds;
+    let t = (selection_beat + effect_offset).rem_euclid(1.0);
+    (t * std::f32::consts::PI).sin().clamp(0.0, 1.0)
+}
+
+#[inline(always)]
 fn course_tracklist_scroll(
     entry_count: usize,
     visible_rows: usize,
@@ -1540,6 +1675,13 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     let selected_rating_index = selected_meta
         .as_ref()
         .map_or(0, |meta| selected_course_rating_index(state, meta));
+    let selection_animation_beat = course_selection_anim_beat(state);
+    let selected_diff_col = selected_rating.map(|rating| {
+        color::difficulty_rgba(
+            rating.course_difficulty_name.as_str(),
+            state.active_color_index,
+        )
+    });
 
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
@@ -1586,15 +1728,27 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     let music_rate = profile::get_session_music_rate();
     let (songs_label, songs_value, bpm_text, len_text, desc_text) =
         match (selected_entry, selected_meta.as_ref()) {
-            (Some(MusicWheelEntry::Song(_)), Some(meta)) => (
-                "SONGS".to_string(),
-                selected_rating
-                    .map_or(0, |rating| rating.entries.len())
-                    .to_string(),
-                format_bpm_range(meta.min_bpm, meta.max_bpm),
-                format_len(((meta.total_length_seconds as f32) / music_rate).round() as i32),
-                meta.description.clone(),
-            ),
+            (Some(MusicWheelEntry::Song(_)), Some(meta)) => {
+                let diff_min_bpm = selected_rating
+                    .and_then(|rating| rating.min_bpm)
+                    .or(meta.min_bpm);
+                let diff_max_bpm = selected_rating
+                    .and_then(|rating| rating.max_bpm)
+                    .or(meta.max_bpm);
+                let diff_len_secs = selected_rating
+                    .map(|rating| rating.total_length_seconds.max(0))
+                    .filter(|secs| *secs > 0)
+                    .unwrap_or(meta.total_length_seconds.max(0));
+                (
+                    "SONGS".to_string(),
+                    selected_rating
+                        .map_or(0, |rating| rating.entries.len())
+                        .to_string(),
+                    format_bpm_range(diff_min_bpm, diff_max_bpm),
+                    format_len(((diff_len_secs as f32) / music_rate).round() as i32),
+                    meta.description.clone(),
+                )
+            }
             _ => (
                 "SONGS".to_string(),
                 "0".to_string(),
@@ -1650,12 +1804,8 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             ),
         };
 
-    let pane_sel_col = selected_meta
-        .as_ref()
-        .and_then(|meta| selected_course_rating(state, meta))
-        .and_then(|rating| rating.entries.first())
-        .map(|entry| color::difficulty_rgba(&entry.difficulty, state.active_color_index))
-        .unwrap_or_else(|| color::simply_love_rgba(state.active_color_index));
+    let pane_sel_col =
+        selected_diff_col.unwrap_or_else(|| color::simply_love_rgba(state.active_color_index));
     let pane_side = if is_p2_single {
         profile::PlayerSide::P2
     } else {
@@ -1798,9 +1948,14 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             (
                 format!("#{}", idx + 1),
                 entry.step_artist.clone(),
-                color::difficulty_rgba(&entry.difficulty, state.active_color_index),
+                selected_diff_col.unwrap_or([0.5, 0.5, 0.5, 1.0]),
             )
         }
+        Some(_) => (
+            "#-".to_string(),
+            "Step Artist".to_string(),
+            selected_diff_col.unwrap_or([0.5, 0.5, 0.5, 1.0]),
+        ),
         _ => (
             "#-".to_string(),
             "Step Artist".to_string(),
@@ -1941,9 +2096,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         let selected_slot = (selected_rating_index.saturating_sub(rating_top_index))
             .min(COURSE_RATING_VISIBLE_SLOTS - 1);
         let arrow_y = rating_box_cy + (selected_slot as i32 - 2) as f32 * 30.0 + 1.0;
-        let bounce = (state.session_elapsed * 2.5 * std::f32::consts::PI)
-            .sin()
-            .clamp(0.0, 1.0);
+        let bounce = course_arrow_bounce01(selection_animation_beat);
         let (arrow_x0, arrow_dx, arrow_rot) = if is_p2_single {
             (rating_box_cx + 8.0, 3.0 * bounce, 180.0)
         } else {
@@ -2011,7 +2164,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         selected_index: state.selected_index,
         position_offset_from_selection: state.wheel_offset_from_selection,
         selection_animation_timer: state.selection_animation_timer,
-        selection_animation_beat: state.session_elapsed * 2.5,
+        selection_animation_beat,
         pack_song_counts: &state.pack_course_counts,
         color_pack_headers: true,
         preferred_difficulty_index: 0,

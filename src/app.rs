@@ -260,6 +260,8 @@ pub struct SessionState {
     course_run: Option<CourseRunState>,
     course_eval_pages: Vec<evaluation::State>,
     course_eval_page_index: usize,
+    last_course_wheel_path: Option<PathBuf>,
+    last_course_wheel_difficulty_name: Option<String>,
 }
 
 /// Pure-ish container for the high-level game state.
@@ -361,6 +363,8 @@ impl SessionState {
             course_run: None,
             course_eval_pages: Vec::new(),
             course_eval_page_index: 0,
+            last_course_wheel_path: None,
+            last_course_wheel_difficulty_name: None,
         }
     }
 }
@@ -1375,6 +1379,9 @@ impl App {
             warn!("Unable to start course run: selected course has no playable stages.");
             return false;
         };
+        self.state.session.last_course_wheel_path = Some(selection.path.clone());
+        self.state.session.last_course_wheel_difficulty_name =
+            Some(selection.course_difficulty_name.clone());
         let Some(course_run) = build_course_run_from_selection(selection) else {
             warn!("Unable to start course run: failed to resolve course stages.");
             return false;
@@ -3001,6 +3008,8 @@ impl App {
             self.state.session.session_start_time = None;
             self.state.session.played_stages.clear();
             self.clear_course_runtime();
+            self.state.session.last_course_wheel_path = None;
+            self.state.session.last_course_wheel_difficulty_name = None;
             let current_color_index = self.state.screens.menu_state.active_color_index;
             self.state.screens.menu_state = menu::init();
             self.state.screens.menu_state.active_color_index = current_color_index;
@@ -3764,6 +3773,29 @@ impl App {
         }
 
         if target == CurrentScreen::SelectCourse {
+            let restore_course_selection = self
+                .state
+                .session
+                .course_run
+                .as_ref()
+                .map(|course| {
+                    (
+                        course.path.clone(),
+                        Some(course.course_difficulty_name.clone()),
+                    )
+                })
+                .or_else(|| {
+                    self.state
+                        .session
+                        .last_course_wheel_path
+                        .as_ref()
+                        .map(|path| {
+                            (
+                                path.clone(),
+                                self.state.session.last_course_wheel_difficulty_name.clone(),
+                            )
+                        })
+                });
             self.clear_course_runtime();
             if self.state.session.session_start_time.is_none() {
                 self.state.session.session_start_time = Some(Instant::now());
@@ -3786,6 +3818,13 @@ impl App {
                         &mut self.state.screens.select_course_state,
                     );
                 }
+            }
+            if let Some((course_path, course_diff_name)) = restore_course_selection.as_ref() {
+                select_course::restore_selection_for_course(
+                    &mut self.state.screens.select_course_state,
+                    course_path.as_path(),
+                    course_diff_name.as_deref(),
+                );
             }
 
             let banner_path = match self
