@@ -823,7 +823,7 @@ impl ScreensState {
         select_color_state.bg_from_index = color_index;
         select_color_state.bg_to_index = color_index;
 
-        let mut select_music_state = select_music::init();
+        let mut select_music_state = select_music::init_placeholder();
         select_music_state.active_color_index = color_index;
         select_music_state.preferred_difficulty_index = preferred_difficulty_index;
         select_music_state.selected_steps_index = preferred_difficulty_index;

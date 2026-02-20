@@ -1429,7 +1429,7 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
 
 pub fn init() -> State {
     let started = Instant::now();
-    info!("Initializing SelectMusic screen...");
+    info!("Preparing SelectMusic state...");
     let lock_started = Instant::now();
     let song_cache = get_song_cache();
     let lock_wait = lock_started.elapsed();
@@ -1650,7 +1650,7 @@ pub fn init() -> State {
                     state.p2_preferred_difficulty_index = state.preferred_difficulty_index;
                     state.prev_selected_index = state.selected_index;
                     info!(
-                        "SelectMusic init done: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
+                        "SelectMusic state ready: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
                         total_songs,
                         lock_wait,
                         rebuild_dur,
@@ -1682,13 +1682,113 @@ pub fn init() -> State {
 
     state.prev_selected_index = state.selected_index;
     info!(
-        "SelectMusic init done: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
+        "SelectMusic state ready: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
         total_songs,
         lock_wait,
         rebuild_dur,
         started.elapsed()
     );
     state
+}
+
+pub fn init_placeholder() -> State {
+    let profile_data = profile::get();
+    let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
+    let initial_diff_index = if max_diff_index == 0 {
+        0
+    } else {
+        profile_data.last_difficulty_index.min(max_diff_index)
+    };
+
+    State {
+        all_entries: Vec::new(),
+        group_entries: Vec::new(),
+        title_entries: Vec::new(),
+        artist_entries: Vec::new(),
+        bpm_entries: Vec::new(),
+        length_entries: Vec::new(),
+        meter_entries: Vec::new(),
+        popularity_entries: Vec::new(),
+        recent_entries: Vec::new(),
+        entries: Vec::new(),
+        selected_index: 0,
+        selected_steps_index: initial_diff_index,
+        preferred_difficulty_index: initial_diff_index,
+        p2_selected_steps_index: initial_diff_index,
+        p2_preferred_difficulty_index: initial_diff_index,
+        active_color_index: color::DEFAULT_COLOR_INDEX,
+        selection_animation_timer: 0.0,
+        wheel_offset_from_selection: 0.0,
+        out_prompt: OutPromptState::None,
+        exit_prompt: ExitPromptState::None,
+        reload_ui: None,
+        song_search: sort_menu::SongSearchState::Hidden,
+        song_search_ignore_next_back_select: false,
+        replay_overlay: sort_menu::ReplayOverlayState::Hidden,
+        test_input_overlay_visible: false,
+        test_input_overlay: test_input::State::default(),
+        profile_switch_overlay: None,
+        pending_replay: None,
+        sort_menu: sort_menu::State::Hidden,
+        leaderboard: sort_menu::LeaderboardOverlayState::Hidden,
+        sort_mode: WheelSortMode::Group,
+        expanded_pack_name: None,
+        bg: heart_bg::State::new(),
+        last_requested_banner_path: None,
+        banner_high_quality_requested: false,
+        current_banner_key: "banner1.png".to_string(),
+        last_requested_chart_hash: None,
+        current_graph_key: "__white".to_string(),
+        current_graph_key_p2: "__white".to_string(),
+        current_graph_mesh: None,
+        current_graph_mesh_p2: None,
+        displayed_chart_p1: None,
+        displayed_chart_p2: None,
+        last_requested_chart_hash_p2: None,
+        chord_mask_p1: 0,
+        chord_mask_p2: 0,
+        menu_chord_mask: 0,
+        p1_chord_up_pressed_at: None,
+        p1_chord_down_pressed_at: None,
+        p2_chord_up_pressed_at: None,
+        p2_chord_down_pressed_at: None,
+        menu_chord_left_pressed_at: None,
+        menu_chord_right_pressed_at: None,
+        last_steps_nav_dir_p1: None,
+        last_steps_nav_time_p1: None,
+        last_steps_nav_dir_p2: None,
+        last_steps_nav_time_p2: None,
+        nav_key_held_direction: None,
+        nav_key_held_since: None,
+        sort_menu_prev_selected_index: 0,
+        sort_menu_focus_anim_elapsed: sort_menu::FOCUS_TWEEN_SECONDS,
+        currently_playing_preview_path: None,
+        currently_playing_preview_start_sec: None,
+        currently_playing_preview_length_sec: None,
+        session_elapsed: 0.0,
+        gameplay_elapsed: 0.0,
+        prev_selected_index: 0,
+        time_since_selection_change: 0.0,
+        cached_song: None,
+        cached_chart_type: "",
+        cached_steps_index_p1: usize::MAX,
+        cached_steps_index_p2: usize::MAX,
+        cached_chart_ix_p1: None,
+        cached_chart_ix_p2: None,
+        cached_edits: None,
+        cached_standard_chart_ixs: [None; NUM_STANDARD_DIFFICULTIES],
+        pack_total_seconds_by_index: Vec::new(),
+        song_has_edit_ptrs: HashSet::new(),
+        pack_song_counts: HashMap::new(),
+        group_pack_song_counts: HashMap::new(),
+        title_pack_song_counts: HashMap::new(),
+        artist_pack_song_counts: HashMap::new(),
+        bpm_pack_song_counts: HashMap::new(),
+        length_pack_song_counts: HashMap::new(),
+        meter_pack_song_counts: HashMap::new(),
+        popularity_pack_song_counts: HashMap::new(),
+        recent_pack_song_counts: HashMap::new(),
+    }
 }
 
 #[inline(always)]
