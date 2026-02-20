@@ -3,7 +3,7 @@ use crate::game::{
     course::set_course_cache,
     note::NoteType,
     parsing::notes::ParsedNote,
-    song::{SongData, SongPack, set_song_cache},
+    song::{SongData, SongPack, get_song_cache, set_song_cache},
     timing::{
         DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment, TimingData,
         TimingSegments, WarpSegment,
@@ -1177,11 +1177,11 @@ fn resolve_song_dir(
     group: Option<&str>,
     song: &str,
 ) -> Option<PathBuf> {
-    fn group_dir<'a>(
+    fn resolve_group_dir(
         songs_dir: &Path,
-        group_dirs: &'a mut HashMap<String, PathBuf>,
+        group_dirs: &mut HashMap<String, PathBuf>,
         group: &str,
-    ) -> Option<&'a Path> {
+    ) -> Option<PathBuf> {
         let key = group.trim().to_ascii_lowercase();
         if key.is_empty() {
             return None;
@@ -1195,7 +1195,7 @@ fn resolve_song_dir(
             }?;
             group_dirs.insert(key.clone(), path);
         }
-        group_dirs.get(&key).map(std::path::PathBuf::as_path)
+        group_dirs.get(&key).cloned()
     }
 
     let song = song.trim();
@@ -1204,12 +1204,12 @@ fn resolve_song_dir(
     }
 
     if let Some(group) = group.map(str::trim).filter(|g| !g.is_empty()) {
-        let group_dir = group_dir(songs_dir, group_dirs, group)?;
+        let group_dir = resolve_group_dir(songs_dir, group_dirs, group)?;
         let direct = group_dir.join(song);
         return if direct.is_dir() {
             Some(direct)
         } else {
-            is_dir_ci(group_dir, song)
+            is_dir_ci(&group_dir, song)
         };
     }
 
@@ -1230,6 +1230,28 @@ fn resolve_song_dir(
         }
     }
     None
+}
+
+fn resolve_course_group_dir(
+    songs_dir: &Path,
+    group_dirs: &mut HashMap<String, PathBuf>,
+    group: &str,
+) -> Option<PathBuf> {
+    let key = group.trim().to_ascii_lowercase();
+    if key.is_empty() {
+        return None;
+    }
+    if let Some(path) = group_dirs.get(&key) {
+        return Some(path.clone());
+    }
+    let direct = songs_dir.join(group);
+    let path = if direct.is_dir() {
+        Some(direct)
+    } else {
+        is_dir_ci(songs_dir, group)
+    }?;
+    group_dirs.insert(key, path.clone());
+    Some(path)
 }
 
 pub fn scan_and_load_courses(courses_root_str: &'static str, songs_root_str: &'static str) {
@@ -1269,6 +1291,13 @@ fn scan_and_load_courses_impl(
     let mut loaded_courses = Vec::new();
     let mut courses_failed = 0usize;
     let mut group_dirs: HashMap<String, PathBuf> = HashMap::new();
+    let total_song_count = {
+        let song_cache = get_song_cache();
+        song_cache
+            .iter()
+            .map(|pack| pack.songs.len())
+            .sum::<usize>()
+    };
 
     for course_path in collect_course_paths(courses_root) {
         if let Some(cb) = progress.as_mut() {
@@ -1305,51 +1334,102 @@ fn scan_and_load_courses_impl(
 
         let mut ok = true;
         for (idx, entry) in course.entries.iter().enumerate() {
-            let rssp::course::CourseSong::Fixed { group, song } = &entry.song else {
-                warn!(
-                    "Course '{}' has unsupported song selector in entry {} (only fixed #SONG is supported).",
-                    course.name,
-                    idx + 1
-                );
-                ok = false;
-                break;
-            };
+            match &entry.song {
+                rssp::course::CourseSong::Fixed { group, song } => {
+                    let Some(song_dir) =
+                        resolve_song_dir(songs_root, &mut group_dirs, group.as_deref(), song)
+                    else {
+                        warn!(
+                            "Course '{}' entry {} references missing song '{}{}'.",
+                            course.name,
+                            idx + 1,
+                            group
+                                .as_deref()
+                                .map(|g| format!("{g}/"))
+                                .unwrap_or_default(),
+                            song
+                        );
+                        ok = false;
+                        break;
+                    };
 
-            let Some(song_dir) =
-                resolve_song_dir(songs_root, &mut group_dirs, group.as_deref(), song)
-            else {
-                warn!(
-                    "Course '{}' entry {} references missing song '{}{}'.",
-                    course.name,
-                    idx + 1,
-                    group
-                        .as_deref()
-                        .map(|g| format!("{g}/"))
-                        .unwrap_or_default(),
-                    song
-                );
-                ok = false;
-                break;
-            };
-
-            match rssp::pack::scan_song_dir(&song_dir, rssp::pack::ScanOpt::default()) {
-                Ok(Some(_)) => {}
-                Ok(None) => {
-                    warn!(
-                        "Course '{}' entry {} song dir has no simfile: {}",
-                        course.name,
-                        idx + 1,
-                        song_dir.display()
-                    );
-                    ok = false;
-                    break;
+                    match rssp::pack::scan_song_dir(&song_dir, rssp::pack::ScanOpt::default()) {
+                        Ok(Some(_)) => {}
+                        Ok(None) => {
+                            warn!(
+                                "Course '{}' entry {} song dir has no simfile: {}",
+                                course.name,
+                                idx + 1,
+                                song_dir.display()
+                            );
+                            ok = false;
+                            break;
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Course '{}' entry {} failed scanning song dir {}: {e:?}",
+                                course.name,
+                                idx + 1,
+                                song_dir.display()
+                            );
+                            ok = false;
+                            break;
+                        }
+                    }
                 }
-                Err(e) => {
+                rssp::course::CourseSong::SortPick { sort, index } => {
+                    let supports_sort = matches!(
+                        sort,
+                        rssp::course::SongSort::MostPlays | rssp::course::SongSort::FewestPlays
+                    );
+                    if !supports_sort {
+                        warn!(
+                            "Course '{}' has unsupported sort selector in entry {} ({sort:?}).",
+                            course.name,
+                            idx + 1,
+                        );
+                        ok = false;
+                        break;
+                    }
+
+                    let choose_index = (*index).max(0) as usize;
+                    if choose_index >= total_song_count {
+                        let label = match sort {
+                            rssp::course::SongSort::MostPlays => "BEST",
+                            rssp::course::SongSort::FewestPlays => "WORST",
+                            rssp::course::SongSort::TopGrades => "GRADEBEST",
+                            rssp::course::SongSort::LowestGrades => "GRADEWORST",
+                        };
+                        warn!(
+                            "Course '{}' entry {} references out-of-range sort pick '{}{}' with only {} songs installed.",
+                            course.name,
+                            idx + 1,
+                            label,
+                            choose_index.saturating_add(1),
+                            total_song_count
+                        );
+                        ok = false;
+                        break;
+                    }
+                }
+                rssp::course::CourseSong::RandomAny => {}
+                rssp::course::CourseSong::RandomWithinGroup { group } => {
+                    if resolve_course_group_dir(songs_root, &mut group_dirs, group).is_none() {
+                        warn!(
+                            "Course '{}' entry {} references missing group '{}/*'.",
+                            course.name,
+                            idx + 1,
+                            group
+                        );
+                        ok = false;
+                        break;
+                    }
+                }
+                _ => {
                     warn!(
-                        "Course '{}' entry {} failed scanning song dir {}: {e:?}",
+                        "Course '{}' has unsupported song selector in entry {}.",
                         course.name,
-                        idx + 1,
-                        song_dir.display()
+                        idx + 1
                     );
                     ok = false;
                     break;

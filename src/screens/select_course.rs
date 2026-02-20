@@ -17,7 +17,7 @@ use crate::screens::components::{
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -197,17 +197,42 @@ fn song_dir_key(song: &SongData) -> Option<String> {
         .map(|s| s.trim().to_ascii_lowercase())
 }
 
+#[inline(always)]
+fn song_unique_key(song: &SongData) -> String {
+    song.simfile_path
+        .parent()
+        .map(|p| p.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_else(|| song.simfile_path.to_string_lossy().to_ascii_lowercase())
+}
+
 fn build_song_lookup() -> (
     HashMap<(String, String), Arc<SongData>>,
     HashMap<String, Arc<SongData>>,
+    HashMap<String, Vec<Arc<SongData>>>,
+    Vec<Arc<SongData>>,
+    HashMap<String, u32>,
 ) {
     let song_cache = get_song_cache();
     let mut by_group_song: HashMap<(String, String), Arc<SongData>> = HashMap::new();
     let mut by_song: HashMap<String, Arc<SongData>> = HashMap::new();
+    let mut songs_by_group: HashMap<String, Vec<Arc<SongData>>> = HashMap::new();
+    let mut all_songs = Vec::new();
+    let mut chart_to_song_key: HashMap<String, String> = HashMap::new();
 
     for pack in song_cache.iter() {
         let group_key = pack.group_name.trim().to_ascii_lowercase();
         for song in &pack.songs {
+            let unique_song_key = song_unique_key(song);
+            all_songs.push(song.clone());
+            songs_by_group
+                .entry(group_key.clone())
+                .or_default()
+                .push(song.clone());
+            for chart in &song.charts {
+                chart_to_song_key
+                    .entry(chart.short_hash.clone())
+                    .or_insert_with(|| unique_song_key.clone());
+            }
             let Some(song_key) = song_dir_key(song) else {
                 continue;
             };
@@ -216,7 +241,25 @@ fn build_song_lookup() -> (
         }
     }
 
-    (by_group_song, by_song)
+    drop(song_cache);
+
+    let mut song_play_counts: HashMap<String, u32> = HashMap::new();
+    for (chart_hash, plays) in scores::played_chart_counts_for_machine() {
+        if let Some(song_key) = chart_to_song_key.get(chart_hash.as_str()) {
+            song_play_counts
+                .entry(song_key.clone())
+                .and_modify(|count| *count = count.saturating_add(plays))
+                .or_insert(plays);
+        }
+    }
+
+    (
+        by_group_song,
+        by_song,
+        songs_by_group,
+        all_songs,
+        song_play_counts,
+    )
 }
 
 #[inline(always)]
@@ -272,7 +315,16 @@ fn course_entry_song_label(entry: &rssp::course::CourseEntry) -> String {
         rssp::course::CourseSong::Fixed { song, .. } => song.clone(),
         rssp::course::CourseSong::RandomAny => "RANDOM".to_string(),
         rssp::course::CourseSong::RandomWithinGroup { group } => format!("{group}/*"),
-        rssp::course::CourseSong::SortPick { .. } => "SORT PICK".to_string(),
+        rssp::course::CourseSong::SortPick { sort, index } => {
+            let rank = index.saturating_add(1).max(1);
+            let prefix = match sort {
+                rssp::course::SongSort::MostPlays => "BEST",
+                rssp::course::SongSort::FewestPlays => "WORST",
+                rssp::course::SongSort::TopGrades => "GRADEBEST",
+                rssp::course::SongSort::LowestGrades => "GRADEWORST",
+            };
+            format!("{prefix}{rank}")
+        }
         rssp::course::CourseSong::Unknown { raw } => raw.clone(),
     }
 }
@@ -376,6 +428,95 @@ fn resolve_course_chart<'a>(
     meter_match.or(first_playable).or(first_chart)
 }
 
+fn resolve_sort_pick_song(
+    all_songs: &[Arc<SongData>],
+    song_play_counts: &HashMap<String, u32>,
+    entry: &rssp::course::CourseEntry,
+    chart_type: &str,
+    sort: rssp::course::SongSort,
+    index: i32,
+) -> Option<Arc<SongData>> {
+    let mut ranked: Vec<(u32, Arc<SongData>)> = Vec::new();
+    for song in all_songs {
+        if resolve_course_chart(song, entry, chart_type).is_none() {
+            continue;
+        }
+        let plays = song_play_counts
+            .get(song_unique_key(song).as_str())
+            .copied()
+            .unwrap_or(0);
+        ranked.push((plays, song.clone()));
+    }
+
+    let pick = index.max(0) as usize;
+    match sort {
+        rssp::course::SongSort::MostPlays => ranked.sort_by(|a, b| b.0.cmp(&a.0)),
+        rssp::course::SongSort::FewestPlays => ranked.sort_by(|a, b| a.0.cmp(&b.0)),
+        rssp::course::SongSort::TopGrades | rssp::course::SongSort::LowestGrades => {
+            return None;
+        }
+    }
+
+    ranked.get(pick).map(|(_, song)| song.clone())
+}
+
+#[inline(always)]
+fn random_pick_index(seed: u64, course_path: &Path, entry_index: usize, len: usize) -> usize {
+    if len == 0 {
+        return 0;
+    }
+    let mut hasher = XxHash64::with_seed(seed);
+    hasher.write(course_path.to_string_lossy().as_bytes());
+    hasher.write_u64(entry_index as u64);
+    (hasher.finish() as usize) % len
+}
+
+fn resolve_random_song(
+    course_path: &Path,
+    entry_index: usize,
+    random_seed: u64,
+    all_songs: &[Arc<SongData>],
+    songs_by_group: &HashMap<String, Vec<Arc<SongData>>>,
+    used_song_keys: &HashSet<String>,
+    entry: &rssp::course::CourseEntry,
+    chart_type: &str,
+) -> Option<Arc<SongData>> {
+    let pool: &[Arc<SongData>] = match &entry.song {
+        rssp::course::CourseSong::RandomAny => all_songs,
+        rssp::course::CourseSong::RandomWithinGroup { group } => songs_by_group
+            .get(group.trim().to_ascii_lowercase().as_str())
+            .map_or(&[], Vec::as_slice),
+        _ => return None,
+    };
+    if pool.is_empty() {
+        return None;
+    }
+
+    let mut all_candidates = Vec::new();
+    let mut unused_candidates = Vec::new();
+    for song in pool {
+        if resolve_course_chart(song, entry, chart_type).is_none() {
+            continue;
+        }
+        all_candidates.push(song.clone());
+        if !used_song_keys.contains(song_unique_key(song).as_str()) {
+            unused_candidates.push(song.clone());
+        }
+    }
+
+    let picked_pool = if unused_candidates.is_empty() {
+        &all_candidates
+    } else {
+        &unused_candidates
+    };
+    if picked_pool.is_empty() {
+        return None;
+    }
+
+    let idx = random_pick_index(random_seed, course_path, entry_index, picked_pool.len());
+    picked_pool.get(idx).cloned()
+}
+
 #[inline(always)]
 fn push_song_bpm_range(min_bpm: &mut Option<f64>, max_bpm: &mut Option<f64>, song: &SongData) {
     let mut lo = song.min_bpm;
@@ -440,7 +581,7 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
 fn build_init_data() -> InitData {
     let translated_titles = crate::config::get().translated_titles;
     let target_chart_type = profile::get_session_play_style().chart_type();
-    let (by_group_song, by_song) = build_song_lookup();
+    let (by_group_song, by_song, songs_by_group, all_songs, song_play_counts) = build_song_lookup();
     let course_cache = get_course_cache();
 
     let mut grouped: HashMap<String, Vec<Arc<CourseMeta>>> = HashMap::new();
@@ -456,8 +597,12 @@ fn build_init_data() -> InitData {
         let mut meter_count = 0usize;
         let mut min_bpm = None;
         let mut max_bpm = None;
+        let mut used_song_keys = HashSet::new();
+        let random_seed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0_u64, |d| d.as_nanos() as u64);
 
-        for entry in &course.entries {
+        for (entry_idx, entry) in course.entries.iter().enumerate() {
             let mut title = course_entry_song_label(entry);
             let mut difficulty = course_steps_label(&entry.steps);
             let mut meter = None;
@@ -477,10 +622,30 @@ fn build_init_data() -> InitData {
                         by_song.get(&song_key).cloned()
                     }
                 }
+                rssp::course::CourseSong::SortPick { sort, index } => resolve_sort_pick_song(
+                    &all_songs,
+                    &song_play_counts,
+                    entry,
+                    target_chart_type,
+                    *sort,
+                    *index,
+                ),
+                rssp::course::CourseSong::RandomAny
+                | rssp::course::CourseSong::RandomWithinGroup { .. } => resolve_random_song(
+                    path,
+                    entry_idx,
+                    random_seed,
+                    &all_songs,
+                    &songs_by_group,
+                    &used_song_keys,
+                    entry,
+                    target_chart_type,
+                ),
                 _ => None,
             };
 
             if let Some(song_data) = resolved.as_ref() {
+                used_song_keys.insert(song_unique_key(song_data));
                 title = song_data.display_full_title(translated_titles);
                 let len = if song_data.music_length_seconds > 0.0 {
                     song_data.music_length_seconds.round() as i32
