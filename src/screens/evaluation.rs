@@ -1799,7 +1799,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let arrow_end_y = anchor_y + 20.0;
 
                             life_children.push(act!(text:
-                                font("miso"): settext("BARELY!"):
+                                font("miso"): settext("Barely!"):
                                 align(0.5, 0.5): xy(x, text_start_y):
                                 zoom(0.75):
                                 diffuse(1.0, 1.0, 1.0, 1.0): alpha(0.0):
