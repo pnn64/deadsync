@@ -79,6 +79,7 @@ pub struct MusicWheelParams<'a> {
     pub selected_steps_index: usize,
     pub song_box_color: Option<[f32; 4]>,
     pub song_text_color: Option<[f32; 4]>,
+    pub song_text_color_overrides: Option<&'a HashMap<usize, [f32; 4]>>,
     pub song_has_edit_ptrs: Option<&'a HashSet<usize>>,
 }
 
@@ -160,7 +161,12 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             })
                         };
                         let bg = p.song_box_color.unwrap_or_else(col_music_wheel_box);
-                        let txt = p.song_text_color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
+                        let song_ptr = std::sync::Arc::as_ptr(info) as usize;
+                        let txt = p
+                            .song_text_color_overrides
+                            .and_then(|m| m.get(&song_ptr).copied())
+                            .or(p.song_text_color)
+                            .unwrap_or([1.0, 1.0, 1.0, 1.0]);
                         (
                             false,
                             bg,

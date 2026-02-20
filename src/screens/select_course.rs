@@ -77,6 +77,7 @@ const SL_EXIT_PROMPT_CHOICES_FADE_SECONDS: f32 = 0.15;
 
 rgba_const!(UI_BOX_BG_COLOR, "#1E282F");
 rgba_const!(COURSE_WHEEL_SONG_TEXT_COLOR, "#D77272");
+rgba_const!(COURSE_WHEEL_RANDOM_TEXT_COLOR, "#FFFF00");
 
 #[derive(Clone, Debug)]
 pub struct CourseStagePlan {
@@ -133,12 +134,14 @@ struct CourseMeta {
     max_bpm: Option<f64>,
     total_length_seconds: i32,
     runtime_stages: Vec<CourseStagePlan>,
+    has_random_entries: bool,
 }
 
 struct InitData {
     all_entries: Vec<MusicWheelEntry>,
     pack_course_counts: HashMap<String, usize>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
+    course_text_color_overrides: HashMap<usize, [f32; 4]>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -177,6 +180,7 @@ pub struct State {
     all_entries: Vec<MusicWheelEntry>,
     pack_course_counts: HashMap<String, usize>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
+    course_text_color_overrides: HashMap<usize, [f32; 4]>,
     bg: heart_bg::State,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
@@ -598,6 +602,7 @@ fn build_init_data() -> InitData {
         let mut min_bpm = None;
         let mut max_bpm = None;
         let mut used_song_keys = HashSet::new();
+        let mut has_random_entries = false;
         let random_seed = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0_u64, |d| d.as_nanos() as u64);
@@ -611,6 +616,14 @@ fn build_init_data() -> InitData {
             } else {
                 course.scripter.clone()
             };
+
+            if matches!(
+                &entry.song,
+                rssp::course::CourseSong::RandomAny
+                    | rssp::course::CourseSong::RandomWithinGroup { .. }
+            ) {
+                has_random_entries = true;
+            }
 
             let resolved = match &entry.song {
                 rssp::course::CourseSong::Fixed { group, song } => {
@@ -713,6 +726,7 @@ fn build_init_data() -> InitData {
             max_bpm,
             total_length_seconds: total_seconds.max(0),
             runtime_stages,
+            has_random_entries,
         });
 
         grouped.entry(group_name).or_default().push(meta.clone());
@@ -723,8 +737,15 @@ fn build_init_data() -> InitData {
     all_courses.sort_by_cached_key(|c| c.name.to_ascii_lowercase());
 
     let mut all_entries = Vec::with_capacity(all_courses.len());
+    let mut course_text_color_overrides = HashMap::with_capacity(all_courses.len());
     for meta in all_courses {
         let song_stub = Arc::new(make_course_song(&meta));
+        if meta.has_random_entries {
+            course_text_color_overrides.insert(
+                Arc::as_ptr(&song_stub) as usize,
+                COURSE_WHEEL_RANDOM_TEXT_COLOR,
+            );
+        }
         all_entries.push(MusicWheelEntry::Song(song_stub));
     }
 
@@ -732,6 +753,7 @@ fn build_init_data() -> InitData {
         all_entries,
         pack_course_counts: HashMap::new(),
         course_meta_by_path,
+        course_text_color_overrides,
     }
 }
 
@@ -788,6 +810,7 @@ pub fn init() -> State {
         all_entries: init.all_entries,
         pack_course_counts: init.pack_course_counts,
         course_meta_by_path: init.course_meta_by_path,
+        course_text_color_overrides: init.course_text_color_overrides,
         bg: heart_bg::State::new(),
         nav_key_held_direction: None,
         nav_key_held_since: None,
@@ -1637,6 +1660,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         selected_steps_index: 0,
         song_box_color: None,
         song_text_color: Some(COURSE_WHEEL_SONG_TEXT_COLOR),
+        song_text_color_overrides: Some(&state.course_text_color_overrides),
         song_has_edit_ptrs: None,
     }));
 

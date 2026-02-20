@@ -4621,6 +4621,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         selected_steps_index: state.selected_steps_index,
         song_box_color: None,
         song_text_color: None,
+        song_text_color_overrides: None,
         song_has_edit_ptrs: Some(&state.song_has_edit_ptrs),
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());

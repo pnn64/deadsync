@@ -1254,6 +1254,67 @@ fn resolve_course_group_dir(
     Some(path)
 }
 
+fn autogen_nonstop_group_courses() -> Vec<(PathBuf, rssp::course::CourseFile)> {
+    let song_cache = get_song_cache();
+    let mut out = Vec::with_capacity(song_cache.len());
+
+    for pack in song_cache.iter() {
+        if pack.songs.is_empty() {
+            continue;
+        }
+
+        let group_name = pack.group_name.trim();
+        if group_name.is_empty() {
+            continue;
+        }
+        let display_name = if pack.name.trim().is_empty() {
+            group_name
+        } else {
+            pack.name.trim()
+        };
+
+        let mut entries = Vec::with_capacity(4);
+        for _ in 0..4 {
+            entries.push(rssp::course::CourseEntry {
+                song: rssp::course::CourseSong::RandomWithinGroup {
+                    group: group_name.to_string(),
+                },
+                steps: rssp::course::StepsSpec::Difficulty(rssp::course::Difficulty::Medium),
+                modifiers: String::new(),
+                secret: true,
+                no_difficult: false,
+                gain_lives: -1,
+            });
+        }
+
+        let mut path = PathBuf::from("courses");
+        path.push(group_name);
+        path.push("__deadsync_autogen_nonstop_random.crs");
+
+        out.push((
+            path,
+            rssp::course::CourseFile {
+                name: format!("{display_name} Random"),
+                name_translit: String::new(),
+                scripter: "Autogen".to_string(),
+                description: String::new(),
+                banner: pack
+                    .banner_path
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                background: String::new(),
+                repeat: false,
+                lives: -1,
+                meters: [None; 6],
+                entries,
+            },
+        ));
+    }
+
+    out
+}
+
 pub fn scan_and_load_courses(courses_root_str: &'static str, songs_root_str: &'static str) {
     scan_and_load_courses_impl(courses_root_str, songs_root_str, None);
 }
@@ -1444,9 +1505,14 @@ fn scan_and_load_courses_impl(
         }
     }
 
+    let autogen_courses = autogen_nonstop_group_courses();
+    let autogen_count = autogen_courses.len();
+    loaded_courses.extend(autogen_courses);
+
     info!(
-        "Finished course scan. Loaded {} courses (failed {}) in {}.",
+        "Finished course scan. Loaded {} courses ({} autogen, failed {}) in {}.",
         loaded_courses.len(),
+        autogen_count,
         courses_failed,
         fmt_scan_time(started.elapsed())
     );
