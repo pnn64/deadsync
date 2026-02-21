@@ -8,12 +8,64 @@ use crate::screens::components::screen_bar::{self, AvatarParams, ScreenBarParams
 use crate::screens::components::{gameplay_stats, notefield};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::{Arc, OnceLock};
+use std::thread::LocalKey;
+
+const TEXT_CACHE_LIMIT: usize = 2048;
+type TextCache<K> = HashMap<K, Arc<str>>;
 
 pub use crate::game::gameplay::{State, init, update};
 use crate::game::gameplay::{
     TRANSITION_IN_DURATION, TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION,
     TRANSITION_OUT_FADE_DURATION, assist_clap_is_enabled,
 };
+
+thread_local! {
+    static SCORE_2DP_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
+    static RATE_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(128));
+}
+
+#[inline(always)]
+fn empty_text() -> Arc<str> {
+    static EMPTY: OnceLock<Arc<str>> = OnceLock::new();
+    EMPTY.get_or_init(|| Arc::<str>::from("")).clone()
+}
+
+#[inline(always)]
+fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
+where
+    K: Copy + Eq + std::hash::Hash,
+    F: FnOnce() -> String,
+{
+    cache.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&key) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(build());
+        if cache.len() < TEXT_CACHE_LIMIT {
+            cache.insert(key, text.clone());
+        }
+        text
+    })
+}
+
+#[inline(always)]
+fn cached_score_2dp(value: f64) -> Arc<str> {
+    cached_text(&SCORE_2DP_CACHE, value.to_bits(), || format!("{value:.2}"))
+}
+
+#[inline(always)]
+fn cached_rate_text(rate: f32) -> Arc<str> {
+    if (rate - 1.0).abs() <= 0.001 {
+        return empty_text();
+    }
+    cached_text(&RATE_TEXT_CACHE, rate.to_bits(), || {
+        format!("{rate:.2}x rate")
+    })
+}
 
 // --- TRANSITIONS ---
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -496,14 +548,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let (score_text, score_color) = if show_ex_score {
                 let ex_percent = crate::game::gameplay::display_ex_score_percent(state, player_idx);
                 (
-                    format!("{:.2}", ex_percent.max(0.0)),
+                    cached_score_2dp(ex_percent.max(0.0)),
                     color::JUDGMENT_RGBA[0],
                 )
             } else {
                 let score_percent =
                     (crate::game::gameplay::display_itg_score_percent(state, player_idx) * 100.0)
                         as f32;
-                (format!("{score_percent:.2}"), [1.0, 1.0, 1.0, 1.0])
+                (cached_score_2dp(score_percent as f64), [1.0, 1.0, 1.0, 1.0])
             };
 
             let is_p2_side = player_side == profile::PlayerSide::P2;
@@ -538,7 +590,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 if is_p2_side {
                     actors.push(act!(text:
                         font("wendy_monospace_numbers"):
-                        settext(format!("{:.2}", hard_ex_percent.max(0.0))):
+                        settext(cached_score_2dp(hard_ex_percent.max(0.0))):
                         align(1.0, 0.0): xy(hard_ex_x, score_y):
                         zoom(0.25): horizalign(right):
                         diffuse(hex[0], hex[1], hex[2], hex[3]):
@@ -547,7 +599,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 } else {
                     actors.push(act!(text:
                         font("wendy_monospace_numbers"):
-                        settext(format!("{:.2}", hard_ex_percent.max(0.0))):
+                        settext(cached_score_2dp(hard_ex_percent.max(0.0))):
                         align(0.0, 0.0): xy(hard_ex_x, score_y):
                         zoom(0.25): horizalign(left):
                         diffuse(hex[0], hex[1], hex[2], hex[3]):
@@ -606,11 +658,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else {
             1.0
         };
-        let rate_text = if (rate - 1.0).abs() > 0.001 {
-            format!("{rate:.2}x rate")
-        } else {
-            String::new()
-        };
+        let rate_text = cached_rate_text(rate);
         actors.push(act!(text:
             font("miso"): settext(rate_text):
             align(0.5, 0.5): xy(bpm_x, rate_center_y):

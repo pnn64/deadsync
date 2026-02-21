@@ -9,8 +9,94 @@ use crate::screens::components::gs_scorebox;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use crate::ui::font;
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
+use std::thread::LocalKey;
+
+const TEXT_CACHE_LIMIT: usize = 8192;
+type TextCache<K> = HashMap<K, Arc<str>>;
+
+thread_local! {
+    static PADDED_NUM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
+    static BLUE_WINDOW_LABEL_CACHE: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity(64));
+    static PEAK_NPS_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
+    static GAME_TIME_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(1024));
+}
+
+#[inline(always)]
+fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
+where
+    K: Copy + Eq + std::hash::Hash,
+    F: FnOnce() -> String,
+{
+    cache.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&key) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(build());
+        if cache.len() < TEXT_CACHE_LIMIT {
+            cache.insert(key, text.clone());
+        }
+        text
+    })
+}
+
+#[inline(always)]
+fn cached_padded_num(count: u32, digits: usize) -> Arc<str> {
+    let digits = digits.clamp(1, u8::MAX as usize) as u8;
+    cached_text(&PADDED_NUM_CACHE, (count, digits), || {
+        format!("{:0width$}", count, width = digits as usize)
+    })
+}
+
+#[inline(always)]
+fn cached_blue_window_label(ms: i32) -> Arc<str> {
+    cached_text(&BLUE_WINDOW_LABEL_CACHE, ms, || format!("({ms}ms)"))
+}
+
+#[inline(always)]
+fn cached_peak_nps_text(peak: f32) -> Arc<str> {
+    cached_text(&PEAK_NPS_CACHE, peak.to_bits(), || {
+        format!("Peak NPS: {:.2}", peak.max(0.0))
+    })
+}
+
+#[inline(always)]
+fn cached_game_time(seconds: u32, mode: u8) -> Arc<str> {
+    cached_text(&GAME_TIME_CACHE, (seconds, mode), || {
+        let seconds = seconds as u64;
+        let minutes = seconds / 60;
+        let secs = seconds % 60;
+        match mode {
+            0 => {
+                let hours = seconds / 3600;
+                let mins = (seconds % 3600) / 60;
+                format!("{hours}:{mins:02}:{secs:02}")
+            }
+            1 => format!("{minutes:02}:{secs:02}"),
+            _ => format!("{minutes}:{secs:02}"),
+        }
+    })
+}
+
+#[inline(always)]
+const fn digit_text(ch: char) -> &'static str {
+    match ch {
+        '0' => "0",
+        '1' => "1",
+        '2' => "2",
+        '3' => "3",
+        '4' => "4",
+        '5' => "5",
+        '6' => "6",
+        '7' => "7",
+        '8' => "8",
+        '9' => "9",
+        _ => "",
+    }
+}
 
 pub fn build(
     state: &State,
@@ -182,7 +268,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                     for (row_i, (bright, dim, count)) in rows.iter().enumerate() {
                         let y =
                             group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
-                        let s = format!("{:0width$}", count, width = digits);
+                        let s = cached_padded_num(*count, digits);
                         let first_nonzero = s.find(|c: char| c != '0').unwrap_or(s.len());
 
                         for (i, ch) in s.chars().enumerate() {
@@ -195,7 +281,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                             if is_p1 {
                                 let x = anchor_x + (i as f32) * digit_w;
                                 let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(ch.to_string()):
+                                    font("wendy_screenevaluation"): settext(digit_text(ch)):
                                     align(0.0, 0.5): xy(x, y):
                                     zoom(numbers_zoom_y):
                                     diffuse(c[0], c[1], c[2], c[3]):
@@ -211,7 +297,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                                 let idx_from_right = digits.saturating_sub(1).saturating_sub(i);
                                 let x = anchor_x - (idx_from_right as f32) * digit_w;
                                 let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(ch.to_string()):
+                                    font("wendy_screenevaluation"): settext(digit_text(ch)):
                                     align(1.0, 0.5): xy(x, y):
                                     zoom(numbers_zoom_y):
                                     diffuse(c[0], c[1], c[2], c[3]):
@@ -247,7 +333,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                         };
                         let y =
                             group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
-                        let s = format!("{:0width$}", count, width = digits);
+                        let s = cached_padded_num(count, digits);
                         let first_nonzero = s.find(|c: char| c != '0').unwrap_or(s.len());
 
                         for (i, ch) in s.chars().enumerate() {
@@ -260,7 +346,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                             if is_p1 {
                                 let x = anchor_x + (i as f32) * digit_w;
                                 let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(ch.to_string()):
+                                    font("wendy_screenevaluation"): settext(digit_text(ch)):
                                     align(0.0, 0.5): xy(x, y):
                                     zoom(numbers_zoom_y):
                                     diffuse(c[0], c[1], c[2], c[3]):
@@ -276,7 +362,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                                 let idx_from_right = digits.saturating_sub(1).saturating_sub(i);
                                 let x = anchor_x - (idx_from_right as f32) * digit_w;
                                 let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(ch.to_string()):
+                                    font("wendy_screenevaluation"): settext(digit_text(ch)):
                                     align(1.0, 0.5): xy(x, y):
                                     zoom(numbers_zoom_y):
                                     diffuse(c[0], c[1], c[2], c[3]):
@@ -416,7 +502,7 @@ pub fn build_double_step_stats(
         let show_blue_ms_label = player_profile.custom_fantastic_window
             || (show_fa_plus_window && player_profile.fa_plus_10ms_blue_window);
         let blue_window_ms = gameplay::player_blue_window_ms(state, 0);
-        let blue_window_label = format!("({}ms)", blue_window_ms.round() as i32);
+        let blue_window_label = cached_blue_window_label(blue_window_ms.round() as i32);
         let row_height = if show_fa_split { 29.0 } else { 35.0 };
         let y_base = -280.0;
 
@@ -499,7 +585,7 @@ pub fn build_double_step_stats(
                     let y_numbers = origin_y + (local_y * base_zoom);
                     let y_label = origin_y + ((local_y + 1.0) * base_zoom);
 
-                    let s = format!("{:0width$}", count, width = digits);
+                    let s = cached_padded_num(*count, digits);
                     let first_nonzero = s.find(|c: char| c != '0').unwrap_or(s.len());
 
                     for (i, ch) in s.chars().enumerate() {
@@ -511,7 +597,7 @@ pub fn build_double_step_stats(
                         let c = if is_dim { *dim } else { *bright };
                         let x = numbers_left_x + (i as f32) * digit_w;
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(ch.to_string()):
+                            font("wendy_screenevaluation"): settext(digit_text(ch)):
                             align(0.0, 0.5): xy(x, y_numbers):
                             zoom(numbers_zoom):
                             diffuse(c[0], c[1], c[2], c[3]):
@@ -521,7 +607,7 @@ pub fn build_double_step_stats(
                     }
 
                     actors.push(act!(text:
-                        font("miso"): settext(label.to_string()):
+                        font("miso"): settext(*label):
                         align(1.0, 0.5): horizalign(right):
                         xy(label_x, y_label):
                         zoom(label_zoom):
@@ -678,7 +764,7 @@ pub fn build_double_step_stats(
     // Peak NPS text (DensityGraph.lua drives this in SL).
     {
         let scaled_peak = (state.charts[0].max_nps as f32 * state.music_rate).max(0.0);
-        let peak_nps_text = format!("Peak NPS: {:.2}", scaled_peak);
+        let peak_nps_text = cached_peak_nps_text(scaled_peak);
         // Simply Love computes this inside DensityGraph.lua with a funky halign() in double,
         // but the visual intent is that the Peak NPS label lives in the right dark pane.
         let x = pane_cx + nf_half_w + 96.0;
@@ -761,27 +847,16 @@ static JUDGMENT_INFO: LazyLock<HashMap<JudgeGrade, JudgmentDisplayInfo>> = LazyL
     ])
 });
 
-fn format_game_time(s: f32, total_seconds: f32) -> String {
-    if s < 0.0 {
-        return format_game_time(0.0, total_seconds);
-    }
-    let s_u64 = s as u64;
-
-    let minutes = s_u64 / 60;
-    let seconds = s_u64 % 60;
-
-    if total_seconds >= 3600.0 {
-        // Over an hour total? use H:MM:SS
-        let hours = s_u64 / 3600;
-        let minutes = (s_u64 % 3600) / 60;
-        format!("{}:{:02}:{:02}", hours, minutes, seconds)
+fn format_game_time(s: f32, total_seconds: f32) -> Arc<str> {
+    let seconds = s.max(0.0) as u32;
+    let mode = if total_seconds >= 3600.0 {
+        0
     } else if total_seconds >= 600.0 {
-        // Over 10 mins total? use MM:SS
-        format!("{:02}:{:02}", minutes, seconds)
+        1
     } else {
-        // Under 10 mins total? use M:SS
-        format!("{}:{:02}", minutes, seconds)
-    }
+        2
+    };
+    cached_game_time(seconds, mode)
 }
 
 fn build_banner(
@@ -1072,8 +1147,8 @@ fn build_holds_mines_rolls_pane_at(
                 let right_anchor_x = 0.0;
                 let mut cursor_x = right_anchor_x;
 
-                let possible_str = format!("{:0width$}", *total as usize, width = digits_to_fmt);
-                let achieved_str = format!("{:0width$}", *achieved as usize, width = digits_to_fmt);
+                let possible_str = cached_padded_num(*total as u32, digits_to_fmt);
+                let achieved_str = cached_padded_num(*achieved as u32, digits_to_fmt);
 
                 let first_nonzero_possible = possible_str
                     .find(|c: char| c != '0')
@@ -1088,7 +1163,7 @@ fn build_holds_mines_rolls_pane_at(
                     let color = if is_dim { GRAY } else { white };
                     let x_pos = cursor_x - (char_idx as f32 * digit_width);
                     children.push(act!(text:
-                        font("wendy_screenevaluation"): settext(ch.to_string()):
+                        font("wendy_screenevaluation"): settext(digit_text(ch)):
                         align(1.0, 0.5): xy(x_pos, item_y):
                         zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
                     ));
@@ -1116,7 +1191,7 @@ fn build_holds_mines_rolls_pane_at(
                     let color = if is_dim { GRAY } else { white };
                     let x_pos = achieved_block_right_x - (char_idx as f32 * digit_width);
                     children.push(act!(text:
-                        font("wendy_screenevaluation"): settext(ch.to_string()):
+                        font("wendy_screenevaluation"): settext(digit_text(ch)):
                         align(1.0, 0.5): xy(x_pos, item_y):
                         zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
                     ));
@@ -1260,8 +1335,8 @@ fn build_holds_mines_rolls_pane(
             };
             let mut cursor_x = right_anchor_x;
 
-            let possible_str = format!("{:0width$}", *total as usize, width = digits_to_fmt);
-            let achieved_str = format!("{:0width$}", *achieved as usize, width = digits_to_fmt);
+            let possible_str = cached_padded_num(*total as u32, digits_to_fmt);
+            let achieved_str = cached_padded_num(*achieved as u32, digits_to_fmt);
 
             // --- Layout Numbers using MEASURED widths ---
             // 1. Draw "possible" number (right-most part)
@@ -1274,7 +1349,7 @@ fn build_holds_mines_rolls_pane(
                 let color = if is_dim { gray } else { white };
                 let x_pos = cursor_x - (char_idx as f32 * digit_width);
                 children.push(act!(text:
-                    font("wendy_screenevaluation"): settext(ch.to_string()):
+                    font("wendy_screenevaluation"): settext(digit_text(ch)):
                     align(1.0, 0.5): xy(x_pos, item_y):
                     zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
                 ));
@@ -1296,7 +1371,7 @@ fn build_holds_mines_rolls_pane(
                 let color = if is_dim { gray } else { white };
                 let x_pos = achieved_block_right_x - (char_idx as f32 * digit_width);
                 children.push(act!(text:
-                    font("wendy_screenevaluation"): settext(ch.to_string()):
+                    font("wendy_screenevaluation"): settext(digit_text(ch)):
                     align(1.0, 0.5): xy(x_pos, item_y):
                     zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
                 ));
@@ -1435,7 +1510,7 @@ fn build_side_pane(
     let show_blue_ms_label = player_profile.custom_fantastic_window
         || (show_fa_plus_window && player_profile.fa_plus_10ms_blue_window);
     let blue_window_ms = gameplay::player_blue_window_ms(state, player_idx);
-    let blue_window_label = format!("({}ms)", blue_window_ms.round() as i32);
+    let blue_window_label = cached_blue_window_label(blue_window_ms.round() as i32);
     let row_height = if show_fa_split { 29.0 } else { 35.0 };
     let y_base = -280.0;
 
@@ -1463,7 +1538,7 @@ fn build_side_pane(
 
                 let bright = info.color;
                 let dim = color::JUDGMENT_DIM_RGBA[index];
-                let full_number_str = format!("{:0width$}", count, width = digits);
+                let full_number_str = cached_padded_num(count, digits);
 
                 for (i, ch) in full_number_str.chars().enumerate() {
                     let is_dim = if count == 0 { i < digits - 1 } else {
@@ -1475,14 +1550,14 @@ fn build_side_pane(
                         let index_from_right = digits - 1 - i;
                         let cell_right_x = numbers_cx - (index_from_right as f32 * max_digit_w);
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(ch.to_string()):
+                            font("wendy_screenevaluation"): settext(digit_text(ch)):
                             align(1.0, 0.5): xy(cell_right_x, world_y): zoom(numbers_zoom):
                             diffuse(color[0], color[1], color[2], color[3]): z(71)
                         ));
                     } else {
                         let cell_left_x = numbers_cx + (i as f32 * max_digit_w);
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(ch.to_string()):
+                            font("wendy_screenevaluation"): settext(digit_text(ch)):
                             align(0.0, 0.5): xy(cell_left_x, world_y): zoom(numbers_zoom):
                             diffuse(color[0], color[1], color[2], color[3]): z(71):
                             horizalign(left)
@@ -1566,7 +1641,7 @@ fn build_side_pane(
                 let local_y = y_base + (index as f32 * row_height);
                 let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
 
-                let full_number_str = format!("{:0width$}", count, width = digits);
+                let full_number_str = cached_padded_num(*count, digits);
 
                 for (i, ch) in full_number_str.chars().enumerate() {
                     let is_dim = if *count == 0 { i < digits - 1 } else {
@@ -1578,14 +1653,14 @@ fn build_side_pane(
                         let index_from_right = digits - 1 - i;
                         let cell_right_x = numbers_cx - (index_from_right as f32 * max_digit_w);
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(ch.to_string()):
+                            font("wendy_screenevaluation"): settext(digit_text(ch)):
                             align(1.0, 0.5): xy(cell_right_x, world_y): zoom(numbers_zoom):
                             diffuse(color[0], color[1], color[2], color[3]): z(71)
                         ));
                     } else {
                         let cell_left_x = numbers_cx + (i as f32 * max_digit_w);
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(ch.to_string()):
+                            font("wendy_screenevaluation"): settext(digit_text(ch)):
                             align(0.0, 0.5): xy(cell_left_x, world_y): zoom(numbers_zoom):
                             diffuse(color[0], color[1], color[2], color[3]): z(71):
                             horizalign(left)
@@ -1600,7 +1675,7 @@ fn build_side_pane(
 
                 if player_side == profile::PlayerSide::P1 {
                     actors.push(act!(text:
-                        font("miso"): settext(label.to_string()): align(0.0, 0.5):
+                        font("miso"): settext(*label): align(0.0, 0.5):
                         xy(label_world_x, label_world_y): zoom(label_zoom):
                         maxwidth(72.0 * final_text_base_zoom): horizalign(left):
                         diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -1617,7 +1692,7 @@ fn build_side_pane(
                     }
                 } else {
                     actors.push(act!(text:
-                        font("miso"): settext(label.to_string()): align(1.0, 0.5):
+                        font("miso"): settext(*label): align(1.0, 0.5):
                         xy(label_world_x, label_world_y): zoom(label_zoom):
                         maxwidth(72.0 * final_text_base_zoom): horizalign(right):
                         diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -1856,7 +1931,7 @@ fn build_side_pane(
     // --- Peak NPS Display (as seen in Simply Love's Step Statistics) ---
     if is_wide() {
         let scaled_peak = (state.charts[0].max_nps as f32 * state.music_rate).max(0.0);
-        let peak_nps_text = format!("Peak NPS: {:.2}", scaled_peak);
+        let peak_nps_text = cached_peak_nps_text(scaled_peak);
 
         // Positioned based on visual parity with Simply Love's Step Statistics pane
         // for Player 1, which is on the right side of the screen.

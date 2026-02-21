@@ -17,10 +17,12 @@ use crate::screens::components::{
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+use std::thread::LocalKey;
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
@@ -82,6 +84,50 @@ const SL_EXIT_PROMPT_CHOICES_FADE_SECONDS: f32 = 0.15;
 rgba_const!(UI_BOX_BG_COLOR, "#1E282F");
 rgba_const!(COURSE_WHEEL_SONG_TEXT_COLOR, "#D77272");
 rgba_const!(COURSE_WHEEL_RANDOM_TEXT_COLOR, "#FFFF00");
+const TEXT_CACHE_LIMIT: usize = 4096;
+
+type TextCache<K> = HashMap<K, Arc<str>>;
+
+thread_local! {
+    static SCORE_PERCENT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(1024));
+}
+
+#[inline(always)]
+fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
+where
+    K: Copy + Eq + std::hash::Hash,
+    F: FnOnce() -> String,
+{
+    cache.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&key) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(build());
+        if cache.len() < TEXT_CACHE_LIMIT {
+            cache.insert(key, text.clone());
+        }
+        text
+    })
+}
+
+#[inline(always)]
+fn placeholder_score_percent() -> Arc<str> {
+    static UNKNOWN: OnceLock<Arc<str>> = OnceLock::new();
+    UNKNOWN.get_or_init(|| Arc::<str>::from("??.??%")).clone()
+}
+
+#[inline(always)]
+fn cached_score_percent_text(score_percent: f64) -> Arc<str> {
+    let score = if score_percent.is_finite() {
+        score_percent.clamp(0.0, 1.0) * 100.0
+    } else {
+        0.0
+    };
+    cached_text(&SCORE_PERCENT_CACHE, score.to_bits(), || {
+        format!("{score:.2}%")
+    })
+}
 
 #[derive(Clone, Debug)]
 pub struct CourseStagePlan {
@@ -1817,7 +1863,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         screen_width() * 0.25 - 5.0
     };
-    let placeholder = ("----".to_string(), "??.??%".to_string());
+    let placeholder = ("----".to_string(), placeholder_score_percent());
     let selected_course_hash = selected_meta
         .as_ref()
         .map(|meta| course_score_hash(meta.path.as_path()));
@@ -1827,7 +1873,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     {
         (
             pane_profile.player_initials.clone(),
-            format!("{:.2}%", sc.score_percent * 100.0),
+            cached_score_percent_text(sc.score_percent),
         )
     } else {
         placeholder.clone()
@@ -1836,7 +1882,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         && let Some((initials, sc)) = scores::get_machine_record_local(hash)
         && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
     {
-        (initials, format!("{:.2}%", sc.score_percent * 100.0))
+        (initials, cached_score_percent_text(sc.score_percent))
     } else {
         placeholder
     };
@@ -1846,7 +1892,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         machine_score: fallback_machine.1,
         player_name: fallback_player.0,
         player_score: fallback_player.1,
-        rivals: std::array::from_fn(|_| ("----".to_string(), "??.??%".to_string())),
+        rivals: std::array::from_fn(|_| ("----".to_string(), placeholder_score_percent())),
         show_rivals: false,
         loading_text: None,
     };
@@ -1867,9 +1913,9 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     let lines = [
         (
             gs_view.machine_name.as_str(),
-            gs_view.machine_score.as_str(),
+            gs_view.machine_score.as_ref(),
         ),
-        (gs_view.player_name.as_str(), gs_view.player_score.as_str()),
+        (gs_view.player_name.as_str(), gs_view.player_score.as_ref()),
     ];
     for i in 0..2 {
         let (name, pct) = lines[i];
@@ -1882,6 +1928,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     if gs_view.show_rivals {
         for i in 0..3 {
             let (name, pct) = (&gs_view.rivals[i].0, &gs_view.rivals[i].1);
+            let pct = pct.as_ref();
             actors.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + pane_layout.cols[2] + 50.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
             actors.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + pane_layout.cols[2] + 125.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
         }

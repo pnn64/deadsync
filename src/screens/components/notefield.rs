@@ -18,9 +18,11 @@ use crate::ui::color;
 use cgmath::{Deg, Matrix4, Point3, Vector3};
 use rssp::streams::StreamSegment;
 use std::array::from_fn;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 use std::sync::Arc;
+use std::thread::LocalKey;
 use twox_hash::XxHash64;
 
 // --- CONSTANTS ---
@@ -67,6 +69,7 @@ const ERROR_BAR_LABEL_HOLD_S: f32 = 2.0;
 const OFFSET_INDICATOR_DUR_S: f32 = 0.5;
 
 const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
+const TEXT_CACHE_LIMIT: usize = 4096;
 
 // Visual Feedback
 const SHOW_COMBO_AT: u32 = 4; // From Simply Love metrics
@@ -85,6 +88,138 @@ const Z_TAP_NOTE: i32 = 140;
 const Z_COLUMN_CUE: i32 = 90;
 const MINE_CORE_SIZE_RATIO: f32 = 0.45;
 const Z_MEASURE_LINES: i32 = 80;
+
+type TextCache<K> = HashMap<K, Arc<str>, BuildHasherDefault<XxHash64>>;
+
+thread_local! {
+    static FMT2_CACHE_F32: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+        512,
+        BuildHasherDefault::default(),
+    ));
+    static PERCENT2_CACHE_F64: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity_and_hasher(
+        512,
+        BuildHasherDefault::default(),
+    ));
+    static SIGNED_PERCENT2_CACHE_F64: RefCell<TextCache<(u64, bool)>> = RefCell::new(
+        HashMap::with_capacity_and_hasher(512, BuildHasherDefault::default()),
+    );
+    static NEG_INT_CACHE_U32: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+        256,
+        BuildHasherDefault::default(),
+    ));
+    static PAREN_INT_CACHE_I32: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+        512,
+        BuildHasherDefault::default(),
+    ));
+    static INT_CACHE_I32: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+        512,
+        BuildHasherDefault::default(),
+    ));
+    static RATIO_CACHE_I32: RefCell<TextCache<(i32, i32)>> = RefCell::new(
+        HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
+    );
+    static OFFSET_MS_CACHE_F32: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+        512,
+        BuildHasherDefault::default(),
+    ));
+    static RUN_TIMER_CACHE: RefCell<TextCache<(i32, i32, bool)>> = RefCell::new(
+        HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
+    );
+}
+
+#[inline(always)]
+fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
+where
+    K: Copy + Eq + std::hash::Hash,
+    F: FnOnce() -> String,
+{
+    cache.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&key) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(build());
+        if cache.len() < TEXT_CACHE_LIMIT {
+            cache.insert(key, text.clone());
+        }
+        text
+    })
+}
+
+#[inline(always)]
+fn cached_fmt2_f32(value: f32) -> Arc<str> {
+    cached_text(&FMT2_CACHE_F32, value.to_bits(), || format!("{value:.2}"))
+}
+
+#[inline(always)]
+fn cached_percent2_f64(value: f64) -> Arc<str> {
+    cached_text(&PERCENT2_CACHE_F64, value.to_bits(), || {
+        format!("{value:.2}%")
+    })
+}
+
+#[inline(always)]
+fn cached_signed_percent2_f64(value: f64, neg: bool) -> Arc<str> {
+    cached_text(&SIGNED_PERCENT2_CACHE_F64, (value.to_bits(), neg), || {
+        if neg {
+            format!("-{value:.2}%")
+        } else {
+            format!("+{value:.2}%")
+        }
+    })
+}
+
+#[inline(always)]
+fn cached_neg_int_u32(value: u32) -> Arc<str> {
+    cached_text(&NEG_INT_CACHE_U32, value, || format!("-{value}"))
+}
+
+#[inline(always)]
+fn cached_paren_i32(value: i32) -> Arc<str> {
+    cached_text(&PAREN_INT_CACHE_I32, value, || format!("({value})"))
+}
+
+#[inline(always)]
+fn cached_int_i32(value: i32) -> Arc<str> {
+    cached_text(&INT_CACHE_I32, value, || value.to_string())
+}
+
+#[inline(always)]
+fn cached_ratio_i32(curr: i32, total: i32) -> Arc<str> {
+    cached_text(&RATIO_CACHE_I32, (curr, total), || {
+        format!("{curr}/{total}")
+    })
+}
+
+#[inline(always)]
+fn cached_offset_ms(value: f32) -> Arc<str> {
+    cached_text(&OFFSET_MS_CACHE_F32, value.to_bits(), || {
+        format!("{value:.2}ms")
+    })
+}
+
+fn cached_run_timer(seconds: i32, minute_threshold: i32, trailing_space: bool) -> Arc<str> {
+    let seconds = seconds.max(0);
+    cached_text(
+        &RUN_TIMER_CACHE,
+        (seconds, minute_threshold, trailing_space),
+        || {
+            let mut s = if seconds < 10 {
+                format!("0.0{seconds}")
+            } else if seconds > minute_threshold {
+                let minutes = seconds / 60;
+                let secs = seconds % 60;
+                format!("{minutes}.{secs:02}")
+            } else {
+                format!("0.{seconds}")
+            };
+            if trailing_space {
+                s.push(' ');
+            }
+            s
+        },
+    )
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum FieldPlacement {
@@ -437,8 +572,8 @@ fn smoothstep01(t: f32) -> f32 {
 #[inline(always)]
 fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
     let fmt_float = |v: f32| -> String {
-        let s = format!("{v:.2}");
-        s.trim_end_matches('0').trim_end_matches('.').to_string()
+        let s = cached_fmt2_f32(v);
+        s.trim_end_matches('0').trim_end_matches('.').to_owned()
     };
 
     match speed {
@@ -446,21 +581,31 @@ fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
             if (mult - 1.0).abs() <= 0.000_1 {
                 "1x".to_string()
             } else {
-                format!("{}x", fmt_float(mult))
+                let mut out = fmt_float(mult);
+                out.push('x');
+                out
             }
         }
         ScrollSpeedSetting::CMod(bpm) => {
             if (bpm - bpm.round()).abs() <= 0.000_1 {
-                format!("C{}", bpm.round() as i32)
+                let mut out = String::from("C");
+                out.push_str(&(bpm.round() as i32).to_string());
+                out
             } else {
-                format!("C{}", fmt_float(bpm))
+                let mut out = String::from("C");
+                out.push_str(&fmt_float(bpm));
+                out
             }
         }
         ScrollSpeedSetting::MMod(bpm) => {
             if (bpm - bpm.round()).abs() <= 0.000_1 {
-                format!("M{}", bpm.round() as i32)
+                let mut out = String::from("M");
+                out.push_str(&(bpm.round() as i32).to_string());
+                out
             } else {
-                format!("M{}", fmt_float(bpm))
+                let mut out = String::from("M");
+                out.push_str(&fmt_float(bpm));
+                out
             }
         }
     }
@@ -490,11 +635,15 @@ fn gameplay_mods_text(scroll_speed: ScrollSpeedSetting, profile: &profile::Profi
         parts.push(profile.turn_option.to_string());
     }
     if profile.mini_percent != 0 {
-        parts.push(format!("{}% Mini", profile.mini_percent));
+        let mut part = profile.mini_percent.to_string();
+        part.push_str("% Mini");
+        parts.push(part);
     }
     parts.push(profile.perspective.to_string());
     if profile.visual_delay_ms != 0 {
-        parts.push(format!("{}ms VisualDelay", profile.visual_delay_ms));
+        let mut part = profile.visual_delay_ms.to_string();
+        part.push_str("ms VisualDelay");
+        parts.push(part);
     }
     parts.join(", ")
 }
@@ -738,9 +887,9 @@ fn zmod_measure_counter_text(
     is_lookahead: bool,
     lookahead: u8,
     multiplier: f32,
-) -> String {
+) -> Option<Arc<str>> {
     if segs.is_empty() {
-        return String::new();
+        return None;
     }
 
     let mut stream_index = stream_index_unshifted as isize;
@@ -751,12 +900,12 @@ fn zmod_measure_counter_text(
             let first = segs[0];
             if !first.is_break {
                 let v = ((beat_div4 * -1.0) + (1.0 * multiplier)).floor() as i32;
-                return format!("({v})");
+                return Some(cached_paren_i32(v));
             }
             let len = (first.end - first.start) as i32;
             let v_unscaled = (beat_div4 * -1.0).floor() as i32 + 1 + len;
             let v = ((v_unscaled as f32) * multiplier).floor() as i32;
-            return format!("({v})");
+            return Some(cached_paren_i32(v));
         }
         if !segs[0].is_break {
             stream_index -= 1;
@@ -768,7 +917,7 @@ fn zmod_measure_counter_text(
         .ok()
         .and_then(|i: usize| segs.get(i).copied())
     else {
-        return String::new();
+        return None;
     };
 
     let segment_start = seg.start as f32;
@@ -778,18 +927,18 @@ fn zmod_measure_counter_text(
 
     if seg.is_break {
         if lookahead == 0 {
-            return String::new();
+            return None;
         }
         if is_lookahead {
-            format!("({seg_len})")
+            Some(cached_paren_i32(seg_len))
         } else {
             let remaining = seg_len - curr_count + 1;
-            format!("({remaining})")
+            Some(cached_paren_i32(remaining))
         }
     } else if !is_lookahead && curr_count != 0 {
-        format!("{curr_count}/{seg_len}")
+        Some(cached_ratio_i32(curr_count, seg_len))
     } else {
-        seg_len.to_string()
+        Some(cached_int_i32(seg_len))
     }
 }
 
@@ -851,17 +1000,9 @@ fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option<usi
     if i < segs.len() { Some(i) } else { None }
 }
 
-fn zmod_run_timer_fmt(seconds: i32, minute_threshold: i32) -> String {
-    let seconds = seconds.max(0);
-    if seconds < 10 {
-        format!("0.0{seconds}")
-    } else if seconds > minute_threshold {
-        let minutes = seconds / 60;
-        let secs = seconds % 60;
-        format!("{minutes}.{secs:02}")
-    } else {
-        format!("0.{seconds}")
-    }
+#[inline(always)]
+fn zmod_run_timer_fmt(seconds: i32, minute_threshold: i32, trailing_space: bool) -> Arc<str> {
+    cached_run_timer(seconds, minute_threshold, trailing_space)
 }
 
 #[inline(always)]
@@ -1051,7 +1192,7 @@ fn zmod_mini_indicator_text(
     p: &PlayerRuntime,
     profile: &profile::Profile,
     player_idx: usize,
-) -> Option<(String, [f32; 4])> {
+) -> Option<(Arc<str>, [f32; 4])> {
     let mode = zmod_indicator_mode(profile);
     if mode == profile::MiniIndicator::None {
         return None;
@@ -1074,22 +1215,28 @@ fn zmod_mini_indicator_text(
                 || p.life <= 0.0
                 || progress.w2 > 10;
             if !entered_percent_mode && progress.w2 > 0 {
-                return Some((format!("-{}", progress.w2), color::rgba_hex("#ff55cc")));
+                return Some((cached_neg_int_u32(progress.w2), color::rgba_hex("#ff55cc")));
             }
 
             let score = progress.kept_percent.clamp(0.0, 100.0);
             Some((
-                format!("-{:.2}%", progress.lost_percent.clamp(0.0, 100.0)),
+                cached_signed_percent2_f64(progress.lost_percent.clamp(0.0, 100.0), true),
                 zmod_indicator_default_color(score),
             ))
         }
         profile::MiniIndicator::PredictiveScoring => {
             let score = progress.kept_percent.clamp(0.0, 100.0);
-            Some((format!("{score:.2}%"), zmod_indicator_default_color(score)))
+            Some((
+                cached_percent2_f64(score),
+                zmod_indicator_default_color(score),
+            ))
         }
         profile::MiniIndicator::PaceScoring => {
             let pace = progress.pace_percent.clamp(0.0, 100.0);
-            Some((format!("{pace:.2}%"), zmod_indicator_default_color(pace)))
+            Some((
+                cached_percent2_f64(pace),
+                zmod_indicator_default_color(pace),
+            ))
         }
         profile::MiniIndicator::RivalScoring => {
             let possible = f64::from(progress.possible_dp.max(1));
@@ -1101,11 +1248,7 @@ fn zmod_mini_indicator_text(
             let rival_pace =
                 ((current_possible / possible) * 10000.0 * rival_score).floor() / 10000.0;
             let diff = (pace - rival_pace).abs();
-            let text = if pace < rival_pace {
-                format!("-{diff:.2}%")
-            } else {
-                format!("+{diff:.2}%")
-            };
+            let text = cached_signed_percent2_f64(diff, pace < rival_pace);
             Some((text, zmod_rival_color(pace, rival_pace)))
         }
         profile::MiniIndicator::Pacemaker => {
@@ -1120,10 +1263,10 @@ fn zmod_mini_indicator_text(
 
             let text = if pace < rival_pace {
                 let diff = ((rival_pace - pace).floor() / 100.0).max(0.0);
-                format!("-{diff:.2}%")
+                cached_signed_percent2_f64(diff, true)
             } else {
                 let diff = ((pace - rival_pace).floor() / 100.0).max(0.0);
-                format!("+{diff:.2}%")
+                cached_signed_percent2_f64(diff, false)
             };
             Some((text, zmod_pacemaker_color(pace, rival_pace)))
         }
@@ -1152,7 +1295,7 @@ fn zmod_mini_indicator_text(
                 ]
             };
             Some((
-                format!("{:.2}%", (completion * 100.0).clamp(0.0, 100.0)),
+                cached_percent2_f64((completion * 100.0).clamp(0.0, 100.0)),
                 rgba,
             ))
         }
@@ -3493,7 +3636,7 @@ pub fn build(
             }
             let c = error_bar_color_for_window(text.window, profile.show_fa_plus_window);
             hud_actors.push(act!(text:
-                font("wendy"): settext(format!("{:.2}ms", text.offset_ms)):
+                font("wendy"): settext(cached_offset_ms(text.offset_ms)):
                 align(0.5, 0.5): xy(playfield_center_x, offset_y):
                 zoom(0.25): shadowlength(1.0):
                 diffuse(c[0], c[1], c[2], 1.0):
@@ -3952,9 +4095,7 @@ pub fn build(
                         lookahead,
                         multiplier,
                     );
-                    if text.is_empty() {
-                        continue;
-                    }
+                    let Some(text) = text else { continue };
 
                     let seg_unshifted = segs[seg_index_unshifted];
                     let rgba = if seg_unshifted.is_break {
@@ -4012,16 +4153,16 @@ pub fn build(
                             let first = segs[0];
                             if !first.is_break {
                                 let v = (curr_measure * -1.0).floor() as i32 + 1;
-                                format!("({v})")
+                                cached_paren_i32(v)
                             } else {
                                 let first_len = (first.end - first.start) as i32;
                                 let v = (curr_measure * -1.0).floor() as i32 + 1 + first_len;
-                                format!("({v})")
+                                cached_paren_i32(v)
                             }
                         } else if curr_count != 0 {
-                            format!("{curr_count}/{len}")
+                            cached_ratio_i32(curr_count, len)
                         } else {
-                            len.to_string()
+                            cached_int_i32(len)
                         };
 
                         if text.contains('/') {
@@ -4061,7 +4202,7 @@ pub fn build(
 
                         let seg_len_s =
                             (((seg.end - seg.start) as f32) * measure_seconds).ceil() as i32;
-                        let total = zmod_run_timer_fmt(seg_len_s, 60);
+                        let total = zmod_run_timer_fmt(seg_len_s, 60, false);
 
                         let remaining_s =
                             (((seg.end as f32) * measure_seconds) - curr_time).ceil() as i32;
@@ -4070,10 +4211,9 @@ pub fn build(
                         let text = if remaining_s > seg_len_s {
                             total
                         } else if remaining_s < 1 {
-                            "0.00 ".to_string()
+                            zmod_run_timer_fmt(0, 59, true)
                         } else {
-                            let rem = zmod_run_timer_fmt(remaining_s, 59);
-                            format!("{rem} ")
+                            zmod_run_timer_fmt(remaining_s, 59, true)
                         };
 
                         let active = text.contains(' ');

@@ -23,11 +23,13 @@ use crate::ui::color;
 use crate::ui::font;
 use log::info;
 use rssp::bpm::parse_bpm_map;
+use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::mpsc;
+use std::sync::{Arc, OnceLock};
+use std::thread::LocalKey;
 use std::time::{Duration, Instant};
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
@@ -122,6 +124,140 @@ const AUTO_STAMINA_MIN_STREAM_PERCENT: f32 = 10.0;
 const AUTO_STAMINA_MAX_CROSSOVERS: u32 = 9;
 const AUTO_STAMINA_MAX_SIDESWITCHES: u32 = 9;
 const NUM_STANDARD_DIFFICULTIES: usize = color::FILE_DIFFICULTY_NAMES.len();
+const TEXT_CACHE_LIMIT: usize = 8192;
+
+type TextCache<K> = HashMap<K, Arc<str>>;
+
+thread_local! {
+    static SESSION_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(2048));
+    static CHART_LENGTH_CACHE: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity(2048));
+    static UINT_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(4096));
+    static MUSIC_RATE_FMT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(256));
+    static MUSIC_RATE_BANNER_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(128));
+    static PEAK_NPS_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
+    static STAMINA_MONO_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
+    static STAMINA_CANDLES_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
+    static STREAM_TOTAL_CACHE: RefCell<TextCache<(u32, u32)>> = RefCell::new(HashMap::with_capacity(512));
+    static TECH_STREAM_CACHE: RefCell<TextCache<(u32, usize, u32)>> = RefCell::new(HashMap::with_capacity(512));
+    static TOTAL_LABEL_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
+    static STR_REF_CACHE: RefCell<TextCache<(usize, usize)>> = RefCell::new(HashMap::with_capacity(4096));
+    static SCORE_PERCENT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(2048));
+}
+
+#[inline(always)]
+fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
+where
+    K: Copy + Eq + std::hash::Hash,
+    F: FnOnce() -> String,
+{
+    cache.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&key) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(build());
+        if cache.len() < TEXT_CACHE_LIMIT {
+            cache.insert(key, text.clone());
+        }
+        text
+    })
+}
+
+#[inline(always)]
+fn cached_u32_text(value: u32) -> Arc<str> {
+    cached_text(&UINT_TEXT_CACHE, value, || value.to_string())
+}
+
+#[inline(always)]
+fn cached_total_label_text(total: u32) -> Arc<str> {
+    cached_text(&TOTAL_LABEL_CACHE, total, || {
+        let mut s = total.to_string();
+        s.push_str(" Total");
+        s
+    })
+}
+
+#[inline(always)]
+fn cached_str_ref(text: &str) -> Arc<str> {
+    let key = (text.as_ptr() as usize, text.len());
+    cached_text(&STR_REF_CACHE, key, || text.to_owned())
+}
+
+#[inline(always)]
+fn placeholder_score_percent() -> Arc<str> {
+    static PLACEHOLDER: OnceLock<Arc<str>> = OnceLock::new();
+    PLACEHOLDER
+        .get_or_init(|| Arc::<str>::from("??.??%"))
+        .clone()
+}
+
+#[inline(always)]
+fn cached_score_percent_text(score_percent: f64) -> Arc<str> {
+    let score = if score_percent.is_finite() {
+        score_percent.clamp(0.0, 1.0) * 100.0
+    } else {
+        0.0
+    };
+    cached_text(&SCORE_PERCENT_CACHE, score.to_bits(), || {
+        format!("{score:.2}%")
+    })
+}
+
+#[inline(always)]
+fn cached_peak_nps_text(peak_nps: f64) -> Arc<str> {
+    let peak_nps = if peak_nps.is_finite() { peak_nps } else { 0.0 };
+    cached_text(&PEAK_NPS_CACHE, peak_nps.to_bits(), || {
+        format!("Peak NPS: {:.1}", peak_nps.max(0.0))
+    })
+}
+
+#[inline(always)]
+fn cached_stamina_mono_text(percent: f64) -> Arc<str> {
+    let percent = if percent.is_finite() { percent } else { 0.0 };
+    cached_text(&STAMINA_MONO_CACHE, percent.to_bits(), || {
+        format!("{percent:.1}% Mono")
+    })
+}
+
+#[inline(always)]
+fn cached_stamina_candles_text(percent: f64) -> Arc<str> {
+    let percent = if percent.is_finite() { percent } else { 0.0 };
+    cached_text(&STAMINA_CANDLES_CACHE, percent.to_bits(), || {
+        format!("{percent:.1}% Candles")
+    })
+}
+
+#[inline(always)]
+fn cached_stream_total_text(total_streams: u32, stream_percent: f32) -> Arc<str> {
+    let stream_percent = if stream_percent.is_finite() {
+        stream_percent
+    } else {
+        0.0
+    };
+    cached_text(
+        &STREAM_TOTAL_CACHE,
+        (total_streams, stream_percent.to_bits()),
+        || format!("{total_streams} ({stream_percent:.1}%)"),
+    )
+}
+
+#[inline(always)]
+fn cached_tech_stream_text(
+    total_streams: u32,
+    total_measures: usize,
+    stream_percent: f32,
+) -> Arc<str> {
+    let stream_percent = if stream_percent.is_finite() {
+        stream_percent
+    } else {
+        0.0
+    };
+    cached_text(
+        &TECH_STREAM_CACHE,
+        (total_streams, total_measures, stream_percent.to_bits()),
+        || format!("{total_streams}/{total_measures} ({stream_percent:.1}%)"),
+    )
+}
 
 #[inline(always)]
 fn chart_stream_percent(chart: &ChartData) -> f32 {
@@ -366,20 +502,35 @@ fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cu
 }
 
 // Optimized formatter
-fn fmt_music_rate(rate: f32) -> String {
-    let scaled = (rate * 100.0).round() as i32;
-    if scaled == 100 {
-        return "1.0".to_string();
-    }
-    let int_part = scaled / 100;
-    let frac2 = (scaled % 100).abs();
-    if frac2 == 0 {
-        format!("{}", int_part)
-    } else if frac2 % 10 == 0 {
-        format!("{}.{}", int_part, frac2 / 10)
-    } else {
-        format!("{}.{:02}", int_part, frac2)
-    }
+fn fmt_music_rate(rate: f32) -> Arc<str> {
+    let rate = if rate.is_finite() { rate } else { 1.0 };
+    cached_text(&MUSIC_RATE_FMT_CACHE, rate.to_bits(), || {
+        let scaled = (rate * 100.0).round() as i32;
+        if scaled == 100 {
+            return "1.0".to_string();
+        }
+        let int_part = scaled / 100;
+        let frac2 = (scaled % 100).abs();
+        if frac2 == 0 {
+            int_part.to_string()
+        } else if frac2 % 10 == 0 {
+            format!("{int_part}.{}", frac2 / 10)
+        } else {
+            format!("{int_part}.{frac2:02}")
+        }
+    })
+}
+
+#[inline(always)]
+fn cached_music_rate_banner_text(rate: f32) -> Arc<str> {
+    let rate = if rate.is_finite() { rate } else { 1.0 };
+    cached_text(&MUSIC_RATE_BANNER_CACHE, rate.to_bits(), || {
+        let rate_text = fmt_music_rate(rate);
+        let mut text = String::with_capacity(rate_text.len() + 12);
+        text.push_str(rate_text.as_ref());
+        text.push_str("x Music Rate");
+        text
+    })
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -3713,29 +3864,36 @@ pub fn allows_late_join(state: &State) -> bool {
 }
 
 // Fast non-allocating formatters where possible
-fn format_session_time(seconds: f32) -> String {
-    if !seconds.is_finite() || seconds < 0.0 {
-        return "00:00".to_string();
-    }
-    let s = seconds as u64;
-    let (h, m, sec) = (s / 3600, (s % 3600) / 60, s % 60);
-    if s < 3600 {
-        format!("{m:02}:{sec:02}")
-    } else if s < 36000 {
-        format!("{h}:{m:02}:{sec:02}")
+fn format_session_time(seconds: f32) -> Arc<str> {
+    let s = if !seconds.is_finite() || seconds < 0.0 {
+        0_u64
     } else {
-        format!("{h:02}:{m:02}:{sec:02}")
-    }
+        seconds as u64
+    };
+    let key = s.min(u32::MAX as u64) as u32;
+    cached_text(&SESSION_TIME_CACHE, key, || {
+        let (h, m, sec) = (s / 3600, (s % 3600) / 60, s % 60);
+        if s < 3600 {
+            format!("{m:02}:{sec:02}")
+        } else if s < 36000 {
+            format!("{h}:{m:02}:{sec:02}")
+        } else {
+            format!("{h:02}:{m:02}:{sec:02}")
+        }
+    })
 }
 
-fn format_chart_length(seconds: i32) -> String {
-    let s = seconds.max(0) as u64;
-    let (h, m, s) = (s / 3600, (s % 3600) / 60, s % 60);
-    if h > 0 {
-        format!("{}:{:02}:{:02}", h, m, s)
-    } else {
-        format!("{}:{:02}", m, s)
-    }
+fn format_chart_length(seconds: i32) -> Arc<str> {
+    let key = seconds.max(0);
+    cached_text(&CHART_LENGTH_CACHE, key, || {
+        let s = key as u64;
+        let (h, m, s) = (s / 3600, (s % 3600) / 60, s % 60);
+        if h > 0 {
+            format!("{h}:{m:02}:{s:02}")
+        } else {
+            format!("{m}:{s:02}")
+        }
+    })
 }
 
 #[inline(always)]
@@ -3917,7 +4075,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     let music_rate = crate::game::profile::get_session_music_rate();
     if (music_rate - 1.0).abs() > 0.001 {
-        let text = format!("{}x Music Rate", fmt_music_rate(music_rate));
+        let text = cached_music_rate_banner_text(music_rate);
         actors.push(act!(quad: align(0.5, 0.5): xy(banner_cx, banner_cy + 75.0 * banner_zoom): setsize(BANNER_NATIVE_WIDTH * banner_zoom, 14.0 * banner_zoom): z(52): diffuse(0.117, 0.156, 0.184, 0.8)));
         actors.push(act!(text: font("miso"): settext(text): align(0.5, 0.5): xy(banner_cx, banner_cy + 75.0 * banner_zoom): zoom(0.85 * banner_zoom): shadowlength(1.0): z(53): diffuse(1.0, 1.0, 1.0, 1.0)));
     }
@@ -3929,7 +4087,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         (310.0, screen_center_x() - 165.0, screen_center_y() - 55.0)
     };
     let entry_opt = selected_entry;
-    let (artist, bpm, len_text) = match entry_opt {
+    let (artist, bpm, len_text): (String, String, Arc<str>) = match entry_opt {
         Some(MusicWheelEntry::Song(s)) => (
             s.artist.clone(),
             s.formatted_display_bpm(),
@@ -3947,7 +4105,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 format_session_time((total_sec / music_rate as f64) as f32),
             )
         }
-        None => ("".to_string(), "".to_string(), "".to_string()),
+        None => ("".to_string(), "".to_string(), Arc::<str>::from("")),
     };
 
     actors.push(Actor::Frame {
@@ -4109,18 +4267,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ];
 
         if let Some(c) = chart {
-            let peak = format!(
-                "Peak NPS: {:.1}",
-                if music_rate.is_finite() {
-                    c.max_nps * music_rate as f64
-                } else {
-                    c.max_nps
-                }
-            );
+            let peak = cached_peak_nps_text(if music_rate.is_finite() {
+                c.max_nps * music_rate as f64
+            } else {
+                c.max_nps
+            });
             // Match Simply Love's minimization loop (0 -> 3) based on rendered width.
             let bd_text = asset_manager
                 .with_fonts(|all_fonts| {
-                    asset_manager.with_font("miso", |miso_font| -> Option<String> {
+                    asset_manager.with_font("miso", |miso_font| -> Option<Arc<str>> {
                         let text_zoom = 0.8;
                         let max_allowed_logical_width = panel_w / text_zoom;
                         let (detailed_breakdown, partial_breakdown, simple_breakdown) =
@@ -4142,20 +4297,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         };
 
                         if fits(detailed_breakdown) {
-                            Some(detailed_breakdown.clone())
+                            Some(cached_str_ref(detailed_breakdown))
                         } else if fits(partial_breakdown) {
-                            Some(partial_breakdown.clone())
+                            Some(cached_str_ref(partial_breakdown))
                         } else if fits(simple_breakdown) {
-                            Some(simple_breakdown.clone())
+                            Some(cached_str_ref(simple_breakdown))
                         } else {
-                            Some(format!("{} Total", c.total_streams))
+                            Some(cached_total_label_text(c.total_streams))
                         }
                     })
                 })
                 .flatten()
                 .unwrap_or_else(|| match breakdown_style {
-                    BreakdownStyle::Sl => c.simple_breakdown.clone(),
-                    BreakdownStyle::Sn => c.sn_simple_breakdown.clone(),
+                    BreakdownStyle::Sl => cached_str_ref(&c.simple_breakdown),
+                    BreakdownStyle::Sn => cached_str_ref(&c.sn_simple_breakdown),
                 });
 
             let peak_x = panel_w * 0.5 + if is_p2_layout { -136.0 } else { 60.0 };
@@ -4237,40 +4392,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                       rolls: &str,
                       meter: &str,
                       chart: Option<&ChartData>| {
-        // Scores
-        let placeholder = ("----".to_string(), "??.??%".to_string());
-        let fallback_player = if let Some(c) = chart
-            && let Some(sc) = scores::get_cached_local_score_for_side(&c.short_hash, side)
-            && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
-        {
-            (
-                player_initials.to_string(),
-                format!("{:.2}%", sc.score_percent * 100.0),
-            )
-        } else {
-            placeholder.clone()
-        };
+        let gs_active = scores::is_gs_active_for_side(side);
 
-        let fallback_machine = if let Some(c) = chart
-            && let Some((initials, sc)) = scores::get_machine_record_local(&c.short_hash)
-            && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
-        {
-            (initials, format!("{:.2}%", sc.score_percent * 100.0))
-        } else {
-            placeholder
-        };
-
-        let chart_hash = if allow_gs_fetch {
+        let chart_hash = if allow_gs_fetch && gs_active {
             chart.map(|c| c.short_hash.as_str())
         } else {
             None
         };
-        let gs_view = gs_scorebox::select_music_scorebox_view(
-            side,
-            chart_hash,
-            fallback_machine,
-            fallback_player,
-        );
         let mut out = select_pane::build_base(select_pane::StatsPaneParams {
             pane_cx,
             accent_color: sel_col,
@@ -4282,30 +4410,72 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 holds,
                 rolls,
             },
-            meter: (!gs_view.show_rivals).then_some(meter),
+            meter: (!gs_active).then_some(meter),
         });
 
-        // Simply Love PaneDisplay order: Machine/World first, then Player.
-        let lines = [
-            (
-                gs_view.machine_name.as_str(),
-                gs_view.machine_score.as_str(),
-            ),
-            (gs_view.player_name.as_str(), gs_view.player_score.as_str()),
-        ];
-        for i in 0..2 {
-            let (name, pct) = lines[i];
-            out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-            out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-        }
-        if let Some(status) = gs_view.loading_text {
-            out.push(act!(text: font("miso"): settext(status): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
-        }
-        if gs_view.show_rivals {
-            for i in 0..3 {
-                let (name, pct) = (&gs_view.rivals[i].0, &gs_view.rivals[i].1);
-                out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] + 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-                out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 125.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+        if gs_active {
+            let placeholder = (
+                "----".to_string(),
+                gs_scorebox::unknown_score_percent_text(),
+            );
+            let gs_view = gs_scorebox::select_music_scorebox_view(
+                side,
+                chart_hash,
+                placeholder.clone(),
+                placeholder,
+            );
+
+            // Simply Love PaneDisplay order: Machine/World first, then Player.
+            let lines = [
+                (
+                    gs_view.machine_name.as_str(),
+                    gs_view.machine_score.as_ref(),
+                ),
+                (gs_view.player_name.as_str(), gs_view.player_score.as_ref()),
+            ];
+            for i in 0..2 {
+                let (name, pct) = lines[i];
+                out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+            }
+            if let Some(status) = gs_view.loading_text {
+                out.push(act!(text: font("miso"): settext(status): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
+            }
+            if gs_view.show_rivals {
+                for i in 0..3 {
+                    let (name, pct) = (&gs_view.rivals[i].0, &gs_view.rivals[i].1);
+                    let pct = pct.as_ref();
+                    out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] + 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                    out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 125.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                }
+            }
+        } else {
+            let mut player_name = "----";
+            let mut player_score = placeholder_score_percent();
+            if let Some(c) = chart
+                && let Some(sc) = scores::get_cached_local_score_for_side(&c.short_hash, side)
+                && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
+            {
+                player_name = player_initials;
+                player_score = cached_score_percent_text(sc.score_percent);
+            }
+
+            let mut machine_name_storage: Option<String> = None;
+            let mut machine_score = placeholder_score_percent();
+            if let Some(c) = chart
+                && let Some((initials, sc)) = scores::get_machine_record_local(&c.short_hash)
+                && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
+            {
+                machine_name_storage = Some(initials);
+                machine_score = cached_score_percent_text(sc.score_percent);
+            }
+            let machine_name = machine_name_storage.as_deref().unwrap_or("----");
+
+            let names = [machine_name, player_name];
+            let scores = [machine_score, player_score];
+            for i in 0..2 {
+                out.push(act!(text: font("miso"): settext(names[i]): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                out.push(act!(text: font("miso"): settext(scores[i].clone()): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
             }
         }
 
@@ -4376,9 +4546,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let pat_cy = screen_center_y() + if is_p2_single { 23.0 } else { 111.0 };
         actors.push(act!(quad: align(0.5, 0.5): xy(pat_cx, pat_cy): setsize(panel_w, 64.0): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
         if show_stamina_panel(pattern_info_mode, disp_chart_p1) {
-            let pct = |value: f64| {
-                if value.is_finite() { value } else { 0.0 }
-            };
             let (
                 boxes,
                 anchors,
@@ -4393,37 +4560,51 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 mono_value,
                 candles_value,
                 total_stream,
+            ): (
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
             ) = if let Some(c) = disp_chart_p1 {
                 (
-                    c.stamina_counts.boxes.to_string(),
-                    c.stamina_counts.anchors.to_string(),
-                    c.stamina_counts.staircases.to_string(),
-                    c.stamina_counts.sweeps.to_string(),
-                    c.stamina_counts.towers.to_string(),
-                    c.stamina_counts.triangles.to_string(),
-                    c.stamina_counts.doritos.to_string(),
-                    c.stamina_counts.hip_breakers.to_string(),
-                    c.stamina_counts.copters.to_string(),
-                    c.stamina_counts.spirals.to_string(),
-                    format!("{:.1}% Mono", pct(c.stamina_counts.mono_percent)),
-                    format!("{:.1}% Candles", pct(c.stamina_counts.candle_percent)),
-                    format!("{} ({:.1}%)", c.total_streams, chart_stream_percent(c)),
+                    cached_u32_text(c.stamina_counts.boxes),
+                    cached_u32_text(c.stamina_counts.anchors),
+                    cached_u32_text(c.stamina_counts.staircases),
+                    cached_u32_text(c.stamina_counts.sweeps),
+                    cached_u32_text(c.stamina_counts.towers),
+                    cached_u32_text(c.stamina_counts.triangles),
+                    cached_u32_text(c.stamina_counts.doritos),
+                    cached_u32_text(c.stamina_counts.hip_breakers),
+                    cached_u32_text(c.stamina_counts.copters),
+                    cached_u32_text(c.stamina_counts.spirals),
+                    cached_stamina_mono_text(c.stamina_counts.mono_percent),
+                    cached_stamina_candles_text(c.stamina_counts.candle_percent),
+                    cached_stream_total_text(c.total_streams, chart_stream_percent(c)),
                 )
             } else {
                 (
-                    "0".to_string(),
-                    "0".to_string(),
-                    "0".to_string(),
-                    "0".to_string(),
-                    "0".to_string(),
-                    "0".to_string(),
-                    "0".to_string(),
-                    "0".to_string(),
-                    "0".to_string(),
-                    "0".to_string(),
-                    "0.0% Mono".to_string(),
-                    "0.0% Candles".to_string(),
-                    "0 (0.0%)".to_string(),
+                    cached_u32_text(0),
+                    cached_u32_text(0),
+                    cached_u32_text(0),
+                    cached_u32_text(0),
+                    cached_u32_text(0),
+                    cached_u32_text(0),
+                    cached_u32_text(0),
+                    cached_u32_text(0),
+                    cached_u32_text(0),
+                    cached_u32_text(0),
+                    cached_stamina_mono_text(0.0),
+                    cached_stamina_candles_text(0.0),
+                    cached_stream_total_text(0, 0.0),
                 )
             };
 
@@ -4465,7 +4646,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col_w1,
                 col1_num_x,
                 0,
-                boxes.as_str(),
+                boxes.as_ref(),
                 "Boxes",
             );
             push_pattern_line(
@@ -4474,7 +4655,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col_w1,
                 col1_num_x,
                 1,
-                anchors.as_str(),
+                anchors.as_ref(),
                 "Anchors",
             );
             push_pattern_line(
@@ -4483,7 +4664,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col_w1,
                 col1_num_x,
                 2,
-                staircases.as_str(),
+                staircases.as_ref(),
                 "Staircases",
             );
             push_pattern_line(
@@ -4492,7 +4673,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col_w1,
                 col1_num_x,
                 3,
-                sweeps.as_str(),
+                sweeps.as_ref(),
                 "Sweeps",
             );
 
@@ -4502,7 +4683,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col_w2,
                 col2_num_x,
                 0,
-                triangles.as_str(),
+                triangles.as_ref(),
                 "Triangles",
             );
             push_pattern_line(
@@ -4511,7 +4692,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col_w2,
                 col2_num_x,
                 1,
-                hip_breakers.as_str(),
+                hip_breakers.as_ref(),
                 "Hip Breakers",
             );
             push_pattern_line(
@@ -4520,7 +4701,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col_w2,
                 col2_num_x,
                 2,
-                doritos.as_str(),
+                doritos.as_ref(),
                 "Doritos",
             );
             push_pattern_line(
@@ -4529,7 +4710,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col_w2,
                 col2_num_x,
                 3,
-                towers.as_str(),
+                towers.as_ref(),
                 "Towers",
             );
 
@@ -4539,7 +4720,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col_w3,
                 col3_num_x,
                 0,
-                spirals.as_str(),
+                spirals.as_ref(),
                 "Spirals",
             );
             push_pattern_line(
@@ -4548,7 +4729,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col_w3,
                 col3_num_x,
                 1,
-                copters.as_str(),
+                copters.as_ref(),
                 "Copters",
             );
 
@@ -4558,39 +4739,45 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let relaxed_num_w = col3_num_w * 1.65;
 
             let mono_y = stamina_base_y + 2.0 * stamina_row_step;
-            actors.push(act!(text: font("miso"): settext(mono_value.as_str()): align(1.0, 0.5): horizalign(right): xy(col3_num_x, mono_y): maxwidth(relaxed_num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
-            actors.push(act!(text: font("miso"): settext(candles_value.as_str()): align(0.0, 0.5): horizalign(left): xy(col3_label_x, mono_y): maxwidth(col3_label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+            actors.push(act!(text: font("miso"): settext(mono_value): align(1.0, 0.5): horizalign(right): xy(col3_num_x, mono_y): maxwidth(relaxed_num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+            actors.push(act!(text: font("miso"): settext(candles_value): align(0.0, 0.5): horizalign(left): xy(col3_label_x, mono_y): maxwidth(col3_label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
 
             let stream_y = stamina_base_y + 3.0 * stamina_row_step;
-            actors.push(act!(text: font("miso"): settext(total_stream.as_str()): align(1.0, 0.5): horizalign(right): xy(col3_num_x, stream_y): maxwidth(relaxed_num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+            actors.push(act!(text: font("miso"): settext(total_stream): align(1.0, 0.5): horizalign(right): xy(col3_num_x, stream_y): maxwidth(relaxed_num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
             actors.push(act!(text: font("miso"): settext("Total Stream"): align(0.0, 0.5): horizalign(left): xy(col3_label_x, stream_y): maxwidth(col3_label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
         } else {
-            let (cross, foot, side, jack, brack, stream) = if let Some(c) = disp_chart_p1 {
+            let (cross, foot, side, jack, brack, stream): (
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+                Arc<str>,
+            ) = if let Some(c) = disp_chart_p1 {
                 (
-                    c.tech_counts.crossovers.to_string(),
-                    c.tech_counts.footswitches.to_string(),
-                    c.tech_counts.sideswitches.to_string(),
-                    c.tech_counts.jacks.to_string(),
-                    c.tech_counts.brackets.to_string(),
+                    cached_u32_text(c.tech_counts.crossovers),
+                    cached_u32_text(c.tech_counts.footswitches),
+                    cached_u32_text(c.tech_counts.sideswitches),
+                    cached_u32_text(c.tech_counts.jacks),
+                    cached_u32_text(c.tech_counts.brackets),
                     if c.total_measures > 0 {
-                        format!(
-                            "{}/{} ({:.1}%)",
+                        cached_tech_stream_text(
                             c.total_streams,
                             c.total_measures,
-                            chart_stream_percent(c)
+                            chart_stream_percent(c),
                         )
                     } else {
-                        "None (0.0%)".to_string()
+                        Arc::<str>::from("None (0.0%)")
                     },
                 )
             } else {
                 (
-                    "0".to_string(),
-                    "0".to_string(),
-                    "0".to_string(),
-                    "0".to_string(),
-                    "0".to_string(),
-                    "None (0.0%)".to_string(),
+                    cached_u32_text(0),
+                    cached_u32_text(0),
+                    cached_u32_text(0),
+                    cached_u32_text(0),
+                    cached_u32_text(0),
+                    Arc::<str>::from("None (0.0%)"),
                 )
             };
 

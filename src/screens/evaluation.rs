@@ -24,8 +24,10 @@ use crate::game::song::SongData;
 use crate::game::timing as timing_stats;
 use crate::screens::gameplay;
 use crate::ui::font;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::thread::LocalKey;
 
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::game::profile;
@@ -52,6 +54,126 @@ const GRAPH_BARELY_ANIM_SEG_SECONDS: f32 = 0.2;
 const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
 const MACHINE_RECORD_ROWS: usize = 10;
 const GS_RECORD_ROWS: usize = 10;
+const TEXT_CACHE_LIMIT: usize = 8192;
+const BANNER_FALLBACK_KEYS: [&str; 12] = [
+    "banner1.png",
+    "banner2.png",
+    "banner3.png",
+    "banner4.png",
+    "banner5.png",
+    "banner6.png",
+    "banner7.png",
+    "banner8.png",
+    "banner9.png",
+    "banner10.png",
+    "banner11.png",
+    "banner12.png",
+];
+
+type TextCache<K> = HashMap<K, Arc<str>>;
+
+thread_local! {
+    static SESSION_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(2048));
+    static BPM_TEXT_CACHE: RefCell<TextCache<(i32, i32, u32)>> = RefCell::new(HashMap::with_capacity(1024));
+    static SONG_LENGTH_CACHE: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity(2048));
+    static RECORD_TEXT_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(256));
+    static DIFFICULTY_TEXT_CACHE: RefCell<TextCache<(&'static str, &'static str)>> = RefCell::new(HashMap::with_capacity(64));
+    static REMAINING_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(2048));
+    static TOTAL_LABEL_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
+    static STR_REF_CACHE: RefCell<TextCache<(usize, usize)>> = RefCell::new(HashMap::with_capacity(4096));
+}
+
+#[inline(always)]
+fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
+where
+    K: Copy + Eq + std::hash::Hash,
+    F: FnOnce() -> String,
+{
+    cache.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&key) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(build());
+        if cache.len() < TEXT_CACHE_LIMIT {
+            cache.insert(key, text.clone());
+        }
+        text
+    })
+}
+
+#[inline(always)]
+fn cached_bpm_text(min_bpm: f64, max_bpm: f64, music_rate: f32) -> Arc<str> {
+    let rate = if music_rate.is_finite() {
+        music_rate
+    } else {
+        1.0
+    };
+    let rate_f64 = f64::from(rate);
+    let min = (min_bpm * rate_f64).round() as i32;
+    let max = (max_bpm * rate_f64).round() as i32;
+    cached_text(&BPM_TEXT_CACHE, (min, max, rate.to_bits()), || {
+        let base = if min == max {
+            format!("{min} bpm")
+        } else {
+            format!("{min} - {max} bpm")
+        };
+        if (rate - 1.0).abs() > 0.001 {
+            format!("{base} ({rate:.2}x Music Rate)")
+        } else {
+            base
+        }
+    })
+}
+
+#[inline(always)]
+fn cached_song_length_text(seconds: i32) -> Arc<str> {
+    let key = seconds.max(0);
+    cached_text(&SONG_LENGTH_CACHE, key, || {
+        if key >= 3600 {
+            format!("{}:{:02}:{:02}", key / 3600, (key % 3600) / 60, key % 60)
+        } else {
+            format!("{}:{:02}", key / 60, key % 60)
+        }
+    })
+}
+
+#[inline(always)]
+fn cached_record_text(is_machine: bool, rank: u32) -> Arc<str> {
+    cached_text(
+        &RECORD_TEXT_CACHE,
+        (rank, if is_machine { 0 } else { 1 }),
+        || {
+            if is_machine {
+                format!("Machine Record {rank}")
+            } else {
+                format!("Personal Record {rank}")
+            }
+        },
+    )
+}
+
+#[inline(always)]
+fn cached_difficulty_text(style_label: &'static str, difficulty: &'static str) -> Arc<str> {
+    cached_text(&DIFFICULTY_TEXT_CACHE, (style_label, difficulty), || {
+        format!("{style_label} / {difficulty}")
+    })
+}
+
+#[inline(always)]
+fn cached_total_label_text(total: u32) -> Arc<str> {
+    cached_text(&TOTAL_LABEL_CACHE, total, || {
+        let mut s = total.to_string();
+        s.push_str(" Total");
+        s
+    })
+}
+
+#[inline(always)]
+fn cached_str_ref(text: &str) -> Arc<str> {
+    let key = (text.as_ptr() as usize, text.len());
+    cached_text(&STR_REF_CACHE, key, || text.to_owned())
+}
 
 // A struct to hold a snapshot of the final score data from the gameplay screen.
 #[derive(Clone)]
@@ -751,23 +873,42 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     (vec![actor], TRANSITION_OUT_DURATION)
 }
 
-fn format_session_time(seconds_total: f32) -> String {
-    if !seconds_total.is_finite() || seconds_total < 0.0 {
-        return "00:00".to_string();
-    }
-    let seconds_total = seconds_total as u64;
-
-    let hours = seconds_total / 3600;
-    let minutes = (seconds_total % 3600) / 60;
-    let seconds = seconds_total % 60;
-
-    if seconds_total < 3600 {
-        format!("{minutes:02}:{seconds:02}")
-    } else if seconds_total < 36000 {
-        format!("{hours}:{minutes:02}:{seconds:02}")
+fn format_session_time(seconds_total: f32) -> Arc<str> {
+    let seconds_total = if !seconds_total.is_finite() || seconds_total < 0.0 {
+        0_u64
     } else {
-        format!("{hours:02}:{minutes:02}:{seconds:02}")
-    }
+        seconds_total as u64
+    };
+    let key = seconds_total.min(u32::MAX as u64) as u32;
+    cached_text(&SESSION_TIME_CACHE, key, || {
+        let hours = seconds_total / 3600;
+        let minutes = (seconds_total % 3600) / 60;
+        let seconds = seconds_total % 60;
+        if seconds_total < 3600 {
+            format!("{minutes:02}:{seconds:02}")
+        } else if seconds_total < 36000 {
+            format!("{hours}:{minutes:02}:{seconds:02}")
+        } else {
+            format!("{hours:02}:{minutes:02}:{seconds:02}")
+        }
+    })
+}
+
+#[inline(always)]
+fn cached_remaining_time_text(seconds_total: f32) -> Arc<str> {
+    let seconds_total = if !seconds_total.is_finite() || seconds_total < 0.0 {
+        0_u64
+    } else {
+        seconds_total as u64
+    };
+    let key = seconds_total.min(u32::MAX as u64) as u32;
+    cached_text(&REMAINING_TIME_CACHE, key, || {
+        let t = format_session_time(seconds_total as f32);
+        let mut out = String::with_capacity(t.len() + 1);
+        out.push('-');
+        out.push_str(t.as_ref());
+        out
+    })
 }
 
 #[inline(always)]
@@ -1013,8 +1154,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             .as_ref()
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_else(|| {
-                let banner_num = state.active_color_index.rem_euclid(12) + 1;
-                format!("banner{banner_num}.png")
+                BANNER_FALLBACK_KEYS[state.active_color_index.rem_euclid(12) as usize].to_string()
             });
 
         let full_title = score_info.song.display_full_title(cfg.translated_titles);
@@ -1034,25 +1174,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.push(title_and_banner_frame);
 
         // --- SongFeatures Group ---
-        let bpm_text = {
-            let rate_f64 = f64::from(score_info.music_rate);
-            let min = (score_info.song.min_bpm * rate_f64).round() as i32;
-            let max = (score_info.song.max_bpm * rate_f64).round() as i32;
-            let base = if (score_info.song.min_bpm - score_info.song.max_bpm).abs() < 1e-6 {
-                format!("{min} bpm")
-            } else {
-                format!("{min} - {max} bpm")
-            };
-            if (score_info.music_rate - 1.0).abs() > 0.001 {
-                format!(
-                    "{} ({}x Music Rate)",
-                    base,
-                    format!("{:.2}", score_info.music_rate)
-                )
-            } else {
-                base
-            }
-        };
+        let bpm_text = cached_bpm_text(
+            score_info.song.min_bpm,
+            score_info.song.max_bpm,
+            score_info.music_rate,
+        );
 
         let length_text = {
             // Simply Love uses Song:MusicLengthSeconds() divided by MusicRate
@@ -1072,16 +1198,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let adjusted = base_seconds / rate;
             let seconds = adjusted.round() as i32;
             if seconds < 0 {
-                String::new()
-            } else if seconds >= 3600 {
-                format!(
-                    "{}:{:02}:{:02}",
-                    seconds / 3600,
-                    (seconds % 3600) / 60,
-                    seconds % 60
-                )
+                Arc::<str>::from("")
             } else {
-                format!("{}:{:02}", seconds / 60, seconds % 60)
+                cached_song_length_text(seconds)
             }
         };
 
@@ -1161,7 +1280,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                 if let Some(rank) = machine_record_rank {
                     actors.push(act!(text: font("wendy"):
-                        settext(format!("Machine Record {rank}")):
+                        settext(cached_record_text(true, rank)):
                         align(0.5, 0.5):
                         xy(record_x, record_frame_y - 18.0 * record_frame_zoom):
                         zoom(record_frame_zoom): z(101):
@@ -1171,7 +1290,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                 if let Some(rank) = personal_record_rank {
                     actors.push(act!(text: font("wendy"):
-                        settext(format!("Personal Record {rank}")):
+                        settext(cached_record_text(false, rank)):
                         align(0.5, 0.5):
                         xy(record_x, record_frame_y + 24.0 * record_frame_zoom):
                         zoom(record_frame_zoom): z(101):
@@ -1240,7 +1359,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 } else {
                     let difficulty_display_name =
                         color::difficulty_display_name(&si.chart.difficulty, false);
-                    let difficulty_text = format!("{style_label} / {difficulty_display_name}");
+                    let difficulty_text =
+                        cached_difficulty_text(style_label, difficulty_display_name);
                     let text_x = upper_origin_x + 115.0 * dir;
                     let box_x = upper_origin_x + 134.5 * dir;
                     let align_x = if side == profile::PlayerSide::P1 {
@@ -1414,7 +1534,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 };
                 asset_manager
                     .with_fonts(|all_fonts| {
-                        asset_manager.with_font("miso", |miso_font| -> Option<String> {
+                        asset_manager.with_font("miso", |miso_font| -> Option<Arc<str>> {
                             let width_constraint = breakdown_width;
                             let text_zoom = 0.7;
                             let max_allowed_logical_width = width_constraint / text_zoom;
@@ -1427,18 +1547,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             };
 
                             if fits(detailed) {
-                                Some(detailed.clone())
+                                Some(cached_str_ref(detailed))
                             } else if fits(partial) {
-                                Some(partial.clone())
+                                Some(cached_str_ref(partial))
                             } else if fits(simple) {
-                                Some(simple.clone())
+                                Some(cached_str_ref(simple))
                             } else {
-                                Some(format!("{} Total", chart.total_streams))
+                                Some(cached_total_label_text(chart.total_streams))
                             }
                         })
                     })
                     .flatten()
-                    .unwrap_or_else(|| simple.clone())
+                    .unwrap_or_else(|| cached_str_ref(simple))
             };
 
             {
@@ -1855,7 +1975,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 fail_time.max(0.0) / rate
                             };
                             let remaining = (total_display - death_display).max(0.0);
-                            let remaining_str = format!("-{}", format_session_time(remaining));
+                            let remaining_str = cached_remaining_time_text(remaining);
 
                             let flag_w = 40.0;
                             let flag_h = 14.0;

@@ -2,6 +2,10 @@ use crate::act;
 use crate::game::{profile, scores};
 use crate::ui::actors::Actor;
 use crate::ui::color;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::{Arc, OnceLock};
+use std::thread::LocalKey;
 
 const SCOREBOX_NUM_ENTRIES: usize = 5;
 const SCOREBOX_LOOP_SECONDS: f32 = 5.0;
@@ -19,12 +23,64 @@ const SCOREBOX_GS_LOGO_ALPHA: f32 = 0.5;
 const SCOREBOX_EX_TEXT_ALPHA: f32 = 0.3;
 const SCOREBOX_RPG_LOGO_ALPHA: f32 = 0.5;
 const SCOREBOX_ITL_LOGO_ALPHA: f32 = 0.2;
+const TEXT_CACHE_LIMIT: usize = 8192;
+
+type TextCache<K> = HashMap<K, Arc<str>>;
+
+thread_local! {
+    static SCORE_PERCENT_TEXT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(2048));
+    static SCORE_VALUE_TEXT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(2048));
+    static RANK_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
+}
+
+#[inline(always)]
+fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
+where
+    K: Copy + Eq + std::hash::Hash,
+    F: FnOnce() -> String,
+{
+    cache.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&key) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(build());
+        if cache.len() < TEXT_CACHE_LIMIT {
+            cache.insert(key, text.clone());
+        }
+        text
+    })
+}
+
+#[inline(always)]
+fn empty_text() -> Arc<str> {
+    static EMPTY: OnceLock<Arc<str>> = OnceLock::new();
+    EMPTY.get_or_init(|| Arc::<str>::from("")).clone()
+}
+
+#[inline(always)]
+pub(crate) fn unknown_score_percent_text() -> Arc<str> {
+    static UNKNOWN: OnceLock<Arc<str>> = OnceLock::new();
+    UNKNOWN.get_or_init(|| Arc::<str>::from("??.??%")).clone()
+}
+
+#[inline(always)]
+fn cached_percent_text(percent: f64) -> Arc<str> {
+    let percent = if percent.is_finite() {
+        percent.clamp(0.0, 100.0)
+    } else {
+        0.0
+    };
+    cached_text(&SCORE_PERCENT_TEXT_CACHE, percent.to_bits(), || {
+        format!("{percent:.2}%")
+    })
+}
 
 #[derive(Clone, Debug)]
 struct GameplayScoreboxRow {
-    rank: String,
+    rank: Arc<str>,
     name: String,
-    score: String,
+    score: Arc<str>,
     rank_color: [f32; 4],
     name_color: [f32; 4],
     score_color: [f32; 4],
@@ -60,10 +116,10 @@ enum PaneKind {
 pub struct SelectMusicScoreboxView {
     pub mode_text: String,
     pub machine_name: String,
-    pub machine_score: String,
+    pub machine_score: Arc<str>,
     pub player_name: String,
-    pub player_score: String,
-    pub rivals: [(String, String); 3],
+    pub player_score: Arc<str>,
+    pub rivals: [(String, Arc<str>); 3],
     pub show_rivals: bool,
     pub loading_text: Option<String>,
 }
@@ -133,13 +189,25 @@ fn machine_tag(machine_tag: Option<&str>, name: &str) -> String {
 }
 
 #[inline(always)]
-fn score_text_with_percent(score_10000: f64) -> String {
-    format!("{:.2}%", (score_10000 / 100.0).clamp(0.0, 100.0))
+fn score_text_with_percent(score_10000: f64) -> Arc<str> {
+    cached_percent_text(score_10000 / 100.0)
 }
 
 #[inline(always)]
-fn score_text_without_percent(score_10000: f64) -> String {
-    format!("{:.2}", (score_10000 / 100.0).clamp(0.0, 100.0))
+fn score_text_without_percent(score_10000: f64) -> Arc<str> {
+    let score = if score_10000.is_finite() {
+        (score_10000 / 100.0).clamp(0.0, 100.0)
+    } else {
+        0.0
+    };
+    cached_text(&SCORE_VALUE_TEXT_CACHE, score.to_bits(), || {
+        format!("{score:.2}")
+    })
+}
+
+#[inline(always)]
+fn rank_text(rank: u32) -> Arc<str> {
+    cached_text(&RANK_TEXT_CACHE, rank, || format!("{rank}."))
 }
 
 fn preferred_primary_pane(
@@ -167,8 +235,8 @@ fn default_mode_text_for_side(side: profile::PlayerSide) -> String {
 pub fn select_music_scorebox_view(
     side: profile::PlayerSide,
     chart_hash: Option<&str>,
-    fallback_machine: (String, String),
-    fallback_player: (String, String),
+    fallback_machine: (String, Arc<str>),
+    fallback_player: (String, Arc<str>),
 ) -> SelectMusicScoreboxView {
     let mut view = SelectMusicScoreboxView {
         mode_text: default_mode_text_for_side(side),
@@ -176,7 +244,7 @@ pub fn select_music_scorebox_view(
         machine_score: fallback_machine.1,
         player_name: fallback_player.0,
         player_score: fallback_player.1,
-        rivals: std::array::from_fn(|_| ("----".to_string(), "??.??%".to_string())),
+        rivals: std::array::from_fn(|_| ("----".to_string(), unknown_score_percent_text())),
         show_rivals: false,
         loading_text: None,
     };
@@ -185,9 +253,9 @@ pub fn select_music_scorebox_view(
         return view;
     }
     view.machine_name = "----".to_string();
-    view.machine_score = "??.??%".to_string();
+    view.machine_score = unknown_score_percent_text();
     view.player_name = "----".to_string();
-    view.player_score = "??.??%".to_string();
+    view.player_score = unknown_score_percent_text();
     view.show_rivals = true;
 
     let Some(hash) = chart_hash else {
@@ -252,8 +320,8 @@ pub fn select_music_mode_text(side: profile::PlayerSide, chart_hash: Option<&str
     select_music_scorebox_view(
         side,
         chart_hash,
-        ("----".to_string(), "??.??%".to_string()),
-        ("----".to_string(), "??.??%".to_string()),
+        ("----".to_string(), unknown_score_percent_text()),
+        ("----".to_string(), unknown_score_percent_text()),
     )
     .mode_text
 }
@@ -261,9 +329,9 @@ pub fn select_music_mode_text(side: profile::PlayerSide, chart_hash: Option<&str
 #[inline(always)]
 fn gameplay_empty_row() -> GameplayScoreboxRow {
     GameplayScoreboxRow {
-        rank: String::new(),
+        rank: empty_text(),
         name: String::new(),
-        score: String::new(),
+        score: empty_text(),
         rank_color: [1.0; 4],
         name_color: [1.0; 4],
         score_color: [1.0; 4],
@@ -273,9 +341,9 @@ fn gameplay_empty_row() -> GameplayScoreboxRow {
 #[inline(always)]
 fn gameplay_status_row(text: &str) -> GameplayScoreboxRow {
     GameplayScoreboxRow {
-        rank: String::new(),
+        rank: empty_text(),
         name: text.to_string(),
-        score: String::new(),
+        score: empty_text(),
         rank_color: [1.0; 4],
         name_color: [1.0; 4],
         score_color: [1.0; 4],
@@ -337,7 +405,7 @@ fn gameplay_row_from_entry(
     };
 
     GameplayScoreboxRow {
-        rank: format!("{}.", entry.rank),
+        rank: rank_text(entry.rank),
         name: name.to_string(),
         score: score_text_without_percent(entry.score),
         rank_color,
@@ -787,7 +855,7 @@ fn push_rank_marker(
     }
     actors.push(act!(text:
         font("miso"):
-        settext(row.rank.as_str()):
+        settext(row.rank.clone()):
         align(1.0, 0.5):
         xy(rank_x, y):
         zoom(0.87 * zoom):
@@ -834,7 +902,7 @@ fn push_rows(
         ));
         actors.push(act!(text:
             font("miso"):
-            settext(row.score.as_str()):
+            settext(row.score.clone()):
             align(1.0, 0.5):
             xy(score_x, y):
             zoom(0.87 * zoom):

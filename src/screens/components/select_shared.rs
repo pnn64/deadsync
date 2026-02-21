@@ -4,7 +4,7 @@ use crate::game::profile;
 use crate::screens::components::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::ui::actors::Actor;
+use crate::ui::actors::{Actor, TextContent};
 
 pub fn build_screen_bars(top_title: &'static str) -> Vec<Actor> {
     let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
@@ -76,15 +76,16 @@ pub fn build_screen_bars(top_title: &'static str) -> Vec<Actor> {
     ]
 }
 
-pub fn build_session_timer(text: String) -> Actor {
+pub fn build_session_timer(text: impl Into<TextContent>) -> Actor {
     build_header_timer(text, screen_center_x())
 }
 
-pub fn build_gameplay_timer(text: String) -> Actor {
+pub fn build_gameplay_timer(text: impl Into<TextContent>) -> Actor {
     build_header_timer(text, screen_center_x() + widescale(150.0, 200.0))
 }
 
-fn build_header_timer(text: String, x: f32) -> Actor {
+fn build_header_timer(text: impl Into<TextContent>, x: f32) -> Actor {
+    let text = text.into();
     act!(text:
         font("wendy_monospace_numbers"):
         settext(text):
