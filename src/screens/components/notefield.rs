@@ -1479,6 +1479,8 @@ pub fn build(
     // Use the cached field_zoom from gameplay state so visual layout and
     // scroll math share the exact same scaling as gameplay.
     let field_zoom = state.field_zoom[player_idx];
+    let draw_distance_before_targets = state.draw_distance_before_targets[player_idx];
+    let draw_distance_after_targets = state.draw_distance_after_targets[player_idx];
     let scroll_speed = state.scroll_speed[player_idx];
     let col_start = player_idx * state.cols_per_player;
     let col_end = (col_start + state.cols_per_player)
@@ -2766,8 +2768,8 @@ pub fn build(
                 head_anchor_y
             };
             if should_draw_hold_head
-                && head_draw_y >= lane_receptor_y - state.draw_distance_after_targets
-                && head_draw_y <= lane_receptor_y + state.draw_distance_before_targets
+                && head_draw_y >= lane_receptor_y - draw_distance_after_targets
+                && head_draw_y <= lane_receptor_y + draw_distance_before_targets
             {
                 let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 let head_center = [playfield_center_x + col_x_offset, head_draw_y];
@@ -3042,8 +3044,7 @@ pub fn build(
                     }
                 };
                 let delta = (y_pos - receptor_y_lane) * dir;
-                if delta < -state.draw_distance_after_targets
-                    || delta > state.draw_distance_before_targets
+                if delta < -draw_distance_after_targets || delta > draw_distance_before_targets
                 {
                     continue;
                 }

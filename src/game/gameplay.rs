@@ -93,6 +93,13 @@ const AUTOPLAY_HOLD_RELEASE_SECONDS: f32 = 0.001;
 const AUTOPLAY_OFFSET_EPSILON_SECONDS: f32 = 0.000_001;
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 
+#[inline(always)]
+fn player_draw_scale(profile: &profile::Profile) -> f32 {
+    let tilt = profile.perspective.tilt_skew().0.abs();
+    let mini = (profile.mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
+    (1.0 + 0.5 * tilt) * (1.0 + mini.abs())
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct LeadInTiming {
     pub min_seconds_to_step: f32,
@@ -1627,8 +1634,8 @@ pub struct State {
     pub field_zoom: [f32; MAX_PLAYERS],
     pub scroll_pixels_per_second: [f32; MAX_PLAYERS],
     pub scroll_travel_time: [f32; MAX_PLAYERS],
-    pub draw_distance_before_targets: f32,
-    pub draw_distance_after_targets: f32,
+    pub draw_distance_before_targets: [f32; MAX_PLAYERS],
+    pub draw_distance_after_targets: [f32; MAX_PLAYERS],
     pub reverse_scroll: [bool; MAX_PLAYERS],
     pub column_scroll_dirs: [f32; MAX_COLS],
     pub receptor_glow_timers: [f32; MAX_COLS],
@@ -2686,12 +2693,6 @@ pub fn init(
     let first_note_beat = timing.get_beat_for_time(first_second);
     let initial_bpm = timing.get_bpm_for_beat(first_note_beat);
 
-    let centered = (0..num_players).any(|player| {
-        player_profiles[player]
-            .scroll_option
-            .contains(profile::ScrollOption::Centered)
-    });
-
     let mut reference_bpm =
         get_reference_bpm_from_display_tag(&song.display_bpm).unwrap_or_else(|| {
             let mut actual_max = timing.get_capped_max_bpm(Some(M_MOD_HIGH_CAP));
@@ -2711,29 +2712,37 @@ pub fn init(
         }
         pps
     });
-    let max_perspective_tilt: f32 = (0..num_players)
-        .map(|player| player_profiles[player].perspective.tilt_skew().0.abs())
-        .fold(0.0_f32, f32::max);
-    let draw_scale = (1.0 + 0.5 * max_perspective_tilt).max(1.0);
-    let draw_distance_before_targets =
-        screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale;
-
-    // If Centered, we need to draw arrows well past the center line.
-    let draw_distance_after_targets = if centered {
-        screen_height() * 0.6 * draw_scale
-    } else {
-        DRAW_DISTANCE_AFTER_TARGETS * draw_scale
-    };
+    let draw_distance_before_targets: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            return screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER;
+        }
+        let draw_scale = player_draw_scale(&player_profiles[player]);
+        screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale
+    });
+    let draw_distance_after_targets: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            return DRAW_DISTANCE_AFTER_TARGETS;
+        }
+        let draw_scale = player_draw_scale(&player_profiles[player]);
+        if player_profiles[player]
+            .scroll_option
+            .contains(profile::ScrollOption::Centered)
+        {
+            screen_height() * 0.6 * draw_scale
+        } else {
+            DRAW_DISTANCE_AFTER_TARGETS * draw_scale
+        }
+    });
 
     let travel_time: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         let mut tt = scroll_speed[player].travel_time_seconds(
-            draw_distance_before_targets,
+            draw_distance_before_targets[player],
             initial_bpm,
             reference_bpm,
             rate,
         );
         if !tt.is_finite() || tt <= 0.0 {
-            tt = draw_distance_before_targets / pixels_per_second[player];
+            tt = draw_distance_before_targets[player] / pixels_per_second[player];
         }
         tt
     });
@@ -5679,9 +5688,13 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
                         * final_multiplier
                         * state.field_zoom[player];
                     let lookahead_in_displayed_beats =
-                        state.draw_distance_before_targets / pixels_per_beat;
-                    let target_displayed_beat =
+                        state.draw_distance_before_targets[player] / pixels_per_beat;
+                    let mut target_displayed_beat =
                         current_displayed_beat + lookahead_in_displayed_beats;
+                    if speed_multiplier < 0.75 {
+                        let cap_displayed_beat = timing.get_displayed_beat(spawn_beat + 16.0);
+                        target_displayed_beat = target_displayed_beat.min(cap_displayed_beat);
+                    }
                     while cursor < note_end {
                         let note_disp_beat = state.note_display_beat_cache[cursor];
                         if note_disp_beat >= target_displayed_beat {
@@ -6003,7 +6016,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         let cmod_zoomed = cmod_pps_zoomed[player];
         let cmod_raw = cmod_pps_raw[player];
 
-        let miss_cull_threshold = dir.mul_add(-state.draw_distance_after_targets, receptor_y);
+        let miss_cull_threshold = dir.mul_add(-state.draw_distance_after_targets[player], receptor_y);
         col_arrows.retain(|arrow| {
             let note = &state.notes[arrow.note_index];
             if matches!(note.note_type, NoteType::Mine) {
@@ -6169,42 +6182,31 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         state.scroll_pixels_per_second[player] = dynamic_speed;
     }
 
-    let max_perspective_tilt: f32 = (0..state.num_players)
-        .map(|player| {
-            state.player_profiles[player]
-                .perspective
-                .tilt_skew()
-                .0
-                .abs()
-        })
-        .fold(0.0_f32, f32::max);
-    let draw_scale = (1.0 + 0.5 * max_perspective_tilt).max(1.0);
-    let draw_distance_before_targets =
-        screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale;
-    state.draw_distance_before_targets = draw_distance_before_targets;
-
-    // Dynamic update of draw distance logic based on profile
-    let is_centered = (0..state.num_players).any(|player| {
-        state.player_profiles[player]
+    for player in 0..state.num_players {
+        let draw_scale = player_draw_scale(&state.player_profiles[player]);
+        state.draw_distance_before_targets[player] =
+            screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale;
+        state.draw_distance_after_targets[player] = if state.player_profiles[player]
             .scroll_option
             .contains(profile::ScrollOption::Centered)
-    });
-    state.draw_distance_after_targets = if is_centered {
-        screen_height() * 0.6 * draw_scale
-    } else {
-        DRAW_DISTANCE_AFTER_TARGETS * draw_scale
-    };
+        {
+            screen_height() * 0.6 * draw_scale
+        } else {
+            DRAW_DISTANCE_AFTER_TARGETS * draw_scale
+        };
+    }
 
     for player in 0..state.num_players {
         let dynamic_speed = state.scroll_pixels_per_second[player];
         let mut travel_time = state.scroll_speed[player].travel_time_seconds(
-            draw_distance_before_targets,
+            state.draw_distance_before_targets[player],
             current_bpm,
             state.scroll_reference_bpm,
             state.music_rate,
         );
         if !travel_time.is_finite() || travel_time <= 0.0 {
-            travel_time = draw_distance_before_targets / dynamic_speed.max(f32::EPSILON);
+            travel_time =
+                state.draw_distance_before_targets[player] / dynamic_speed.max(f32::EPSILON);
         }
         state.scroll_travel_time[player] = travel_time;
     }
