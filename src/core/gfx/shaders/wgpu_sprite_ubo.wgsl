@@ -15,7 +15,9 @@ struct VertexIn {
     @location(5) tint: vec4<f32>,
     @location(6) uv_scale: vec2<f32>,
     @location(7) uv_offset: vec2<f32>,
-    @location(8) edge_fade: vec4<f32>,
+    @location(8) local_offset: vec2<f32>,
+    @location(9) local_offset_rot_sin_cos: vec2<f32>,
+    @location(10) edge_fade: vec4<f32>,
 };
 
 struct VertexOut {
@@ -31,7 +33,13 @@ fn vs_main(input: VertexIn) -> VertexOut {
     let s = input.rot.x;
     let c = input.rot.y;
     let rotated = vec2<f32>(c * local.x - s * local.y, s * local.x + c * local.y);
-    let world = input.center + rotated;
+    let os = input.local_offset_rot_sin_cos.x;
+    let oc = input.local_offset_rot_sin_cos.y;
+    let offset_world = vec2<f32>(
+        oc * input.local_offset.x - os * input.local_offset.y,
+        os * input.local_offset.x + oc * input.local_offset.y
+    );
+    let world = input.center + rotated + offset_world;
 
     var out: VertexOut;
     out.pos = u_proj.proj * vec4<f32>(world, 0.0, 1.0);

@@ -156,6 +156,8 @@ pub fn draw(
                                 tint,
                                 uv_scale,
                                 uv_offset,
+                                local_offset,
+                                local_offset_rot_sin_cos,
                                 edge_fade: _,
                             } => {
                                 let tex_key = texture_id.as_ref();
@@ -170,6 +172,8 @@ pub fn draw(
                                     *tint,
                                     *uv_scale,
                                     *uv_offset,
+                                    *local_offset,
+                                    *local_offset_rot_sin_cos,
                                     obj.blend,
                                     &tex.image,
                                     tex.sampler,
@@ -247,6 +251,8 @@ pub fn draw(
                     tint,
                     uv_scale,
                     uv_offset,
+                    local_offset,
+                    local_offset_rot_sin_cos,
                     edge_fade: _,
                 } => {
                     let tex_key = texture_id.as_ref();
@@ -261,6 +267,8 @@ pub fn draw(
                         *tint,
                         *uv_scale,
                         *uv_offset,
+                        *local_offset,
+                        *local_offset_rot_sin_cos,
                         obj.blend,
                         &tex.image,
                         tex.sampler,
@@ -390,6 +398,8 @@ fn rasterize_sprite(
     tint: [f32; 4],
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
+    local_offset: [f32; 2],
+    local_offset_rot_sin_cos: [f32; 2],
     blend: BlendMode,
     image: &RgbaImage,
     sampler: SamplerDesc,
@@ -403,7 +413,16 @@ fn rasterize_sprite(
         return 0;
     }
 
-    let mvp = *proj * *transform;
+    let mut adjusted = *transform;
+    if local_offset[0] != 0.0 || local_offset[1] != 0.0 {
+        let s = local_offset_rot_sin_cos[0];
+        let c = local_offset_rot_sin_cos[1];
+        let ox = c.mul_add(local_offset[0], -(s * local_offset[1]));
+        let oy = s.mul_add(local_offset[0], c * local_offset[1]);
+        adjusted.w.x += ox;
+        adjusted.w.y += oy;
+    }
+    let mvp = *proj * adjusted;
 
     const POS: [(f32, f32); 4] = [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)];
     const UV_BASE: [(f32, f32); 4] = [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)];

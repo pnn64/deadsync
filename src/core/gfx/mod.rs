@@ -64,6 +64,8 @@ pub enum ObjectType<'a> {
         tint: [f32; 4],
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
+        local_offset: [f32; 2],
+        local_offset_rot_sin_cos: [f32; 2],
         edge_fade: [f32; 4],
     },
     Mesh {

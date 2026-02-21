@@ -11,7 +11,9 @@ layout(location = 4) in vec2 i_rot_sin_cos; // (sinθ, cosθ)
 layout(location = 5) in vec4 i_tint;
 layout(location = 6) in vec2 i_uv_scale;
 layout(location = 7) in vec2 i_uv_offset;
-layout(location = 8) in vec4 i_edge_fade;   // (fadeLeft, fadeRight, fadeBottom, fadeTop), in UV units
+layout(location = 8) in vec2 i_local_offset;
+layout(location = 9) in vec2 i_local_offset_rot_sin_cos; // (sinθ, cosθ)
+layout(location = 10) in vec4 i_edge_fade;   // (fadeLeft, fadeRight, fadeBottom, fadeTop), in UV units
 
 // Push constants
 layout(push_constant) uniform ProjPush {
@@ -33,7 +35,14 @@ void main() {
     vec2 rotated = vec2(c * local.x - s * local.y,
                         s * local.x + c * local.y);
 
-    vec2 world = i_center + rotated;
+    float so = i_local_offset_rot_sin_cos.x;
+    float co = i_local_offset_rot_sin_cos.y;
+    vec2 offset_world = vec2(
+        co * i_local_offset.x - so * i_local_offset.y,
+        so * i_local_offset.x + co * i_local_offset.y
+    );
+
+    vec2 world = i_center + rotated + offset_world;
 
     gl_Position = pc.proj * vec4(world, 0.0, 1.0);
 

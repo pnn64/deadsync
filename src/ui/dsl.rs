@@ -652,6 +652,8 @@ fn build_sprite_like<'a>(
         rot_x_deg: rot_x,
         rot_y_deg: rot_y,
         rot_z_deg: rot_z,
+        local_offset: [0.0, 0.0],
+        local_offset_rot_sin_cos: [0.0, 1.0],
         texcoordvelocity: texv,
         animate: anim_enable,
         state_delay,

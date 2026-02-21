@@ -59,6 +59,8 @@ struct InstanceRaw {
     tint: [f32; 4],
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
+    local_offset: [f32; 2],
+    local_offset_rot_sin_cos: [f32; 2],
     edge_fade: [f32; 4],
 }
 
@@ -719,6 +721,8 @@ pub fn draw(
                     tint,
                     uv_scale,
                     uv_offset,
+                    local_offset,
+                    local_offset_rot_sin_cos,
                     edge_fade,
                 } => {
                     let tex = lookup_texture_case_insensitive(textures, texture_id.as_ref())
@@ -737,6 +741,8 @@ pub fn draw(
                         tint: *tint,
                         uv_scale: *uv_scale,
                         uv_offset: *uv_offset,
+                        local_offset: *local_offset,
+                        local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
                         edge_fade: *edge_fade,
                     });
 
@@ -1731,14 +1737,16 @@ const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array
     10 => Float32x2, // uv texture-matrix shift
 ];
 
-const INSTANCE_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
+const INSTANCE_ATTRS: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![
     2 => Float32x2, // center
     3 => Float32x2, // size
     4 => Float32x2, // sin/cos
     5 => Float32x4, // tint
     6 => Float32x2, // uv scale
     7 => Float32x2, // uv offset
-    8 => Float32x4, // edge fade
+    8 => Float32x2, // local offset
+    9 => Float32x2, // local offset sin/cos
+    10 => Float32x4, // edge fade
 ];
 
 const PROJ_BYTES: u64 = mem::size_of::<[[f32; 4]; 4]>() as u64;

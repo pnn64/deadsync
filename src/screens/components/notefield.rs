@@ -370,6 +370,24 @@ const fn model_blend(draw: ModelDrawState, blend: BlendMode) -> BlendMode {
 }
 
 #[inline(always)]
+fn with_sprite_local_offset(
+    mut actor: Actor,
+    local_offset: [f32; 2],
+    local_offset_rot_sin_cos: [f32; 2],
+) -> Actor {
+    if let Actor::Sprite {
+        local_offset: actor_offset,
+        local_offset_rot_sin_cos: actor_rot,
+        ..
+    } = &mut actor
+    {
+        *actor_offset = local_offset;
+        *actor_rot = local_offset_rot_sin_cos;
+    }
+    actor
+}
+
+#[inline(always)]
 fn build_model_vertices(
     slot: &SpriteSlot,
     model: &ModelMesh,
@@ -2790,11 +2808,18 @@ pub fn build(
                         }
                     };
                     let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
-                    let [sin_r, cos_r] = head_slot.base_rot_sin_cos();
-                    let ox = draw.pos[0] * note_scale;
-                    let oy = draw.pos[1] * note_scale;
-                    let offset = [ox * cos_r - oy * sin_r, ox * sin_r + oy * cos_r];
-                    let center = [head_center[0] + offset[0], head_center[1] + offset[1]];
+                    let local_offset = [draw.pos[0] * note_scale, draw.pos[1] * note_scale];
+                    let local_offset_rot_sin_cos = head_slot.base_rot_sin_cos();
+                    let model_center = if head_slot.model.is_some() {
+                        let [sin_r, cos_r] = local_offset_rot_sin_cos;
+                        let offset = [
+                            local_offset[0] * cos_r - local_offset[1] * sin_r,
+                            local_offset[0] * sin_r + local_offset[1] * cos_r,
+                        ];
+                        [head_center[0] + offset[0], head_center[1] + offset[1]]
+                    } else {
+                        head_center
+                    };
                     let size = [
                         base_size[0] * draw.zoom[0].max(0.0),
                         base_size[1] * draw.zoom[1].max(0.0),
@@ -2816,7 +2841,7 @@ pub fn build(
                     if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                         head_slot,
                         draw,
-                        center,
+                        model_center,
                         size,
                         uv,
                         -head_slot.def.rotation_deg as f32,
@@ -2827,27 +2852,27 @@ pub fn build(
                     ) {
                         actors.push(model_actor);
                     } else if draw.blend_add {
-                        actors.push(act!(sprite(head_slot.texture_key().to_string()):
+                        actors.push(with_sprite_local_offset(act!(sprite(head_slot.texture_key().to_string()):
                             align(0.5, 0.5):
-                            xy(center[0], center[1]):
+                            xy(head_center[0], head_center[1]):
                             setsize(size[0], size[1]):
                             rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                             diffuse(color[0], color[1], color[2], color[3]):
                             blend(add):
                             z(Z_TAP_NOTE)
-                        ));
+                        ), local_offset, local_offset_rot_sin_cos));
                     } else {
-                        actors.push(act!(sprite(head_slot.texture_key().to_string()):
+                        actors.push(with_sprite_local_offset(act!(sprite(head_slot.texture_key().to_string()):
                             align(0.5, 0.5):
-                            xy(center[0], center[1]):
+                            xy(head_center[0], head_center[1]):
                             setsize(size[0], size[1]):
                             rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                             diffuse(color[0], color[1], color[2], color[3]):
                             blend(normal):
                             z(Z_TAP_NOTE)
-                        ));
+                        ), local_offset, local_offset_rot_sin_cos));
                     }
                 } else if let Some(note_slots) = ns.note_layers.get(note_idx) {
                     let primary_h = note_slots
@@ -2877,11 +2902,18 @@ pub fn build(
                         let slot_size = logical_slot_size(note_slot);
                         let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
                         let offset_scale = note_scale;
-                        let [sin_r, cos_r] = note_slot.base_rot_sin_cos();
-                        let ox = draw.pos[0] * offset_scale;
-                        let oy = draw.pos[1] * offset_scale;
-                        let offset = [ox * cos_r - oy * sin_r, ox * sin_r + oy * cos_r];
-                        let center = [head_center[0] + offset[0], head_center[1] + offset[1]];
+                        let local_offset = [draw.pos[0] * offset_scale, draw.pos[1] * offset_scale];
+                        let local_offset_rot_sin_cos = note_slot.base_rot_sin_cos();
+                        let model_center = if note_slot.model.is_some() {
+                            let [sin_r, cos_r] = local_offset_rot_sin_cos;
+                            let offset = [
+                                local_offset[0] * cos_r - local_offset[1] * sin_r,
+                                local_offset[0] * sin_r + local_offset[1] * cos_r,
+                            ];
+                            [head_center[0] + offset[0], head_center[1] + offset[1]]
+                        } else {
+                            head_center
+                        };
                         let size = [
                             base_size[0] * draw.zoom[0].max(0.0),
                             base_size[1] * draw.zoom[1].max(0.0),
@@ -2904,7 +2936,7 @@ pub fn build(
                         if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                             note_slot,
                             draw,
-                            center,
+                            model_center,
                             size,
                             uv,
                             -note_slot.def.rotation_deg as f32,
@@ -2915,27 +2947,27 @@ pub fn build(
                         ) {
                             actors.push(model_actor);
                         } else if draw.blend_add {
-                            actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                            actors.push(with_sprite_local_offset(act!(sprite(note_slot.texture_key().to_string()):
                                 align(0.5, 0.5):
-                                xy(center[0], center[1]):
+                                xy(head_center[0], head_center[1]):
                                 setsize(size[0], size[1]):
                                 rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                 diffuse(color[0], color[1], color[2], color[3]):
                                 blend(add):
                                 z(layer_z)
-                            ));
+                            ), local_offset, local_offset_rot_sin_cos));
                         } else {
-                            actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                            actors.push(with_sprite_local_offset(act!(sprite(note_slot.texture_key().to_string()):
                                 align(0.5, 0.5):
-                                xy(center[0], center[1]):
+                                xy(head_center[0], head_center[1]):
                                 setsize(size[0], size[1]):
                                 rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                 diffuse(color[0], color[1], color[2], color[3]):
                                 blend(normal):
                                 z(layer_z)
-                            ));
+                            ), local_offset, local_offset_rot_sin_cos));
                         }
                     }
                 } else if let Some(note_slot) = ns.notes.get(note_idx) {
@@ -3302,11 +3334,18 @@ pub fn build(
                         let slot_size = logical_slot_size(note_slot);
                         let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
                         let offset_scale = note_scale;
-                        let [sin_r, cos_r] = note_slot.base_rot_sin_cos();
-                        let ox = draw.pos[0] * offset_scale;
-                        let oy = draw.pos[1] * offset_scale;
-                        let offset = [ox * cos_r - oy * sin_r, ox * sin_r + oy * cos_r];
-                        let center = [note_center[0] + offset[0], note_center[1] + offset[1]];
+                        let local_offset = [draw.pos[0] * offset_scale, draw.pos[1] * offset_scale];
+                        let local_offset_rot_sin_cos = note_slot.base_rot_sin_cos();
+                        let model_center = if note_slot.model.is_some() {
+                            let [sin_r, cos_r] = local_offset_rot_sin_cos;
+                            let offset = [
+                                local_offset[0] * cos_r - local_offset[1] * sin_r,
+                                local_offset[0] * sin_r + local_offset[1] * cos_r,
+                            ];
+                            [note_center[0] + offset[0], note_center[1] + offset[1]]
+                        } else {
+                            note_center
+                        };
                         let note_size = [
                             base_size[0] * draw.zoom[0].max(0.0),
                             base_size[1] * draw.zoom[1].max(0.0),
@@ -3324,7 +3363,7 @@ pub fn build(
                         if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                             note_slot,
                             draw,
-                            center,
+                            model_center,
                             note_size,
                             note_uv,
                             -note_slot.def.rotation_deg as f32,
@@ -3336,27 +3375,27 @@ pub fn build(
                             actors.push(model_actor);
                         } else {
                             if draw.blend_add {
-                                actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                actors.push(with_sprite_local_offset(act!(sprite(note_slot.texture_key().to_string()):
                                     align(0.5, 0.5):
-                                    xy(center[0], center[1]):
+                                    xy(note_center[0], note_center[1]):
                                     setsize(note_size[0], note_size[1]):
                                     rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
                                     customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                                     diffuse(color[0], color[1], color[2], color[3]):
                                     blend(add):
                                     z(layer_z)
-                                ));
+                                ), local_offset, local_offset_rot_sin_cos));
                             } else {
-                                actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                actors.push(with_sprite_local_offset(act!(sprite(note_slot.texture_key().to_string()):
                                     align(0.5, 0.5):
-                                    xy(center[0], center[1]):
+                                    xy(note_center[0], note_center[1]):
                                     setsize(note_size[0], note_size[1]):
                                     rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
                                     customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                                     diffuse(color[0], color[1], color[2], color[3]):
                                     blend(normal):
                                     z(layer_z)
-                                ));
+                                ), local_offset, local_offset_rot_sin_cos));
                             }
                         }
                     }

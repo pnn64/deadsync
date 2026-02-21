@@ -98,6 +98,8 @@ pub struct State {
     scratch_ops: Vec<DrawOp>,
     uv_scale_location: UniformLocation,
     uv_offset_location: UniformLocation,
+    local_offset_location: UniformLocation,
+    local_offset_rot_location: UniformLocation,
     edge_fade_location: UniformLocation,
     instanced_location: UniformLocation,
 }
@@ -121,6 +123,8 @@ pub fn init(
         texture_location,
         uv_scale_location,
         uv_offset_location,
+        local_offset_location,
+        local_offset_rot_location,
         edge_fade_location,
         instanced_location,
     ) = create_graphics_program(&gl)?;
@@ -302,6 +306,8 @@ pub fn init(
         // Set default values for uniforms
         gl.uniform_2_f32(Some(&uv_scale_location), 1.0, 1.0);
         gl.uniform_2_f32(Some(&uv_offset_location), 0.0, 0.0);
+        gl.uniform_2_f32(Some(&local_offset_location), 0.0, 0.0);
+        gl.uniform_2_f32(Some(&local_offset_rot_location), 0.0, 1.0);
         gl.uniform_4_f32(Some(&edge_fade_location), 0.0, 0.0, 0.0, 0.0);
         gl.use_program(None);
     }
@@ -335,6 +341,8 @@ pub fn init(
         scratch_ops: Vec::with_capacity(64),
         uv_scale_location,
         uv_offset_location,
+        local_offset_location,
+        local_offset_rot_location,
         edge_fade_location,
         instanced_location,
     };
@@ -585,6 +593,8 @@ pub fn draw(
         let mut last_blend = Some(BlendMode::Alpha);
         let mut last_uv_scale: Option<[f32; 2]> = None;
         let mut last_uv_offset: Option<[f32; 2]> = None;
+        let mut last_local_offset: Option<[f32; 2]> = None;
+        let mut last_local_offset_rot: Option<[f32; 2]> = None;
         let mut last_color: Option<[f32; 4]> = None;
         let mut last_edge_fade: Option<[f32; 4]> = None;
         let mut last_prog: Option<u8> = None; // 0=sprite, 1=mesh, 2=textured mesh
@@ -616,6 +626,8 @@ pub fn draw(
                         tint,
                         uv_scale,
                         uv_offset,
+                        local_offset,
+                        local_offset_rot_sin_cos,
                         edge_fade,
                     } = &obj.object_type
                     else {
@@ -667,6 +679,22 @@ pub fn draw(
                                 uv_offset[1],
                             );
                             last_uv_offset = Some(*uv_offset);
+                        }
+                        if last_local_offset != Some(*local_offset) {
+                            gl.uniform_2_f32(
+                                Some(&state.local_offset_location),
+                                local_offset[0],
+                                local_offset[1],
+                            );
+                            last_local_offset = Some(*local_offset);
+                        }
+                        if last_local_offset_rot != Some(*local_offset_rot_sin_cos) {
+                            gl.uniform_2_f32(
+                                Some(&state.local_offset_rot_location),
+                                local_offset_rot_sin_cos[0],
+                                local_offset_rot_sin_cos[1],
+                            );
+                            last_local_offset_rot = Some(*local_offset_rot_sin_cos);
                         }
                         if last_color != Some(*tint) {
                             gl.uniform_4_f32_slice(Some(&state.color_location), tint);
@@ -1007,6 +1035,8 @@ fn create_graphics_program(
         UniformLocation,
         UniformLocation,
         UniformLocation,
+        UniformLocation,
+        UniformLocation,
     ),
     String,
 > {
@@ -1059,6 +1089,8 @@ fn create_graphics_program(
         let texture_location = get("u_texture")?;
         let uv_scale_location = get("u_uv_scale")?;
         let uv_offset_location = get("u_uv_offset")?;
+        let local_offset_location = get("u_local_offset")?;
+        let local_offset_rot_location = get("u_local_offset_rot_sin_cos")?;
         let edge_fade_location = get("u_edge_fade")?;
         let instanced_location = get("u_instanced")?;
 
@@ -1069,6 +1101,8 @@ fn create_graphics_program(
             texture_location,
             uv_scale_location,
             uv_offset_location,
+            local_offset_location,
+            local_offset_rot_location,
             edge_fade_location,
             instanced_location,
         ))

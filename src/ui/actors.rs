@@ -66,6 +66,8 @@ pub enum Actor {
         rot_x_deg: f32,
         rot_y_deg: f32,
         rot_z_deg: f32,
+        local_offset: [f32; 2],
+        local_offset_rot_sin_cos: [f32; 2],
         texcoordvelocity: Option<[f32; 2]>,
         animate: bool,
         state_delay: f32,

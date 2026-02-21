@@ -31,14 +31,16 @@ struct ProjPush {
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct InstanceData {
-    // 72 bytes total
+    // 88 bytes total
     center: [f32; 2],      // offset 0
     size: [f32; 2],        // offset 8
     rot_sin_cos: [f32; 2], // offset 16  (sin, cos)
     tint: [f32; 4],        // offset 24
     uv_scale: [f32; 2],    // offset 40
     uv_offset: [f32; 2],   // offset 48
-    edge_fade: [f32; 4],   // offset 56
+    local_offset: [f32; 2], // offset 56
+    local_offset_rot_sin_cos: [f32; 2], // offset 64
+    edge_fade: [f32; 4],   // offset 72
 }
 
 #[repr(C)]
@@ -1309,6 +1311,8 @@ pub fn draw(
                     tint,
                     uv_scale,
                     uv_offset,
+                    local_offset,
+                    local_offset_rot_sin_cos,
                     edge_fade,
                 } => {
                     let set_opt = lookup_texture_case_insensitive(textures, texture_id.as_ref())
@@ -1335,6 +1339,8 @@ pub fn draw(
                             tint: *tint,
                             uv_scale: *uv_scale,
                             uv_offset: *uv_offset,
+                            local_offset: *local_offset,
+                            local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
                             edge_fade: *edge_fade,
                         },
                     );
@@ -2018,7 +2024,7 @@ fn create_texture_descriptor_set(
 #[inline(always)]
 fn vertex_input_descriptions_textured_instanced() -> (
     [vk::VertexInputBindingDescription; 2],
-    [vk::VertexInputAttributeDescription; 9],
+    [vk::VertexInputAttributeDescription; 11],
 ) {
     // binding 0: unit quad [x,y,u,v]
     let b0 = vk::VertexInputBindingDescription::default()
@@ -2029,7 +2035,7 @@ fn vertex_input_descriptions_textured_instanced() -> (
     // binding 1: compact per-instance payload
     let b1 = vk::VertexInputBindingDescription::default()
         .binding(1)
-        .stride(std::mem::size_of::<InstanceData>() as u32) // 72
+        .stride(std::mem::size_of::<InstanceData>() as u32) // 88
         .input_rate(vk::VertexInputRate::INSTANCE);
 
     // per-vertex
@@ -2075,16 +2081,36 @@ fn vertex_input_descriptions_textured_instanced() -> (
         .location(7)
         .format(vk::Format::R32G32_SFLOAT)
         .offset(48);
-    let i_fade = vk::VertexInputAttributeDescription::default()
+    let i_local_offset = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(8)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
+        .format(vk::Format::R32G32_SFLOAT)
         .offset(56);
+    let i_local_offset_rot = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(9)
+        .format(vk::Format::R32G32_SFLOAT)
+        .offset(64);
+    let i_fade = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(10)
+        .format(vk::Format::R32G32B32A32_SFLOAT)
+        .offset(72);
 
     (
         [b0, b1],
         [
-            a0, a1, i_center, i_size, i_rot, i_tint, i_uvs, i_uvo, i_fade,
+            a0,
+            a1,
+            i_center,
+            i_size,
+            i_rot,
+            i_tint,
+            i_uvs,
+            i_uvo,
+            i_local_offset,
+            i_local_offset_rot,
+            i_fade,
         ],
     )
 }
