@@ -231,7 +231,6 @@ pub enum FieldPlacement {
 struct ModelMeshCacheKey {
     slot: *const SpriteSlot,
     size: [u32; 2],
-    uv_rect: [u32; 4],
     rotation: u32,
     pos: [u32; 3],
     rot: [u32; 3],
@@ -284,7 +283,6 @@ const fn norm_bits(v: f32) -> u32 {
 fn model_cache_key(
     slot: &SpriteSlot,
     size: [f32; 2],
-    uv_rect: [f32; 4],
     rotation_deg: f32,
     draw: ModelDrawState,
     tint: [f32; 4],
@@ -292,12 +290,6 @@ fn model_cache_key(
     ModelMeshCacheKey {
         slot: slot as *const SpriteSlot,
         size: [norm_bits(size[0]), norm_bits(size[1])],
-        uv_rect: [
-            norm_bits(uv_rect[0]),
-            norm_bits(uv_rect[1]),
-            norm_bits(uv_rect[2]),
-            norm_bits(uv_rect[3]),
-        ],
         rotation: norm_bits(rotation_deg),
         pos: [
             norm_bits(draw.pos[0]),
@@ -322,6 +314,23 @@ fn model_cache_key(
             norm_bits(tint[3]),
         ],
     }
+}
+
+#[inline(always)]
+fn model_uv_params(slot: &SpriteSlot, uv_rect: [f32; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
+    let uv_scale = [uv_rect[2] - uv_rect[0], uv_rect[3] - uv_rect[1]];
+    let uv_offset = [uv_rect[0], uv_rect[1]];
+    let uv_tex_shift = match slot.source.as_ref() {
+        crate::game::parsing::noteskin::SpriteSource::Atlas { tex_dims, .. } => {
+            let tw = tex_dims.0.max(1) as f32;
+            let th = tex_dims.1.max(1) as f32;
+            let base_u0 = slot.def.src[0] as f32 / tw;
+            let base_v0 = slot.def.src[1] as f32 / th;
+            [uv_offset[0] - base_u0, uv_offset[1] - base_v0]
+        }
+        crate::game::parsing::noteskin::SpriteSource::Animated { .. } => [0.0, 0.0],
+    };
+    (uv_scale, uv_offset, uv_tex_shift)
 }
 
 #[inline(always)]
@@ -365,7 +374,6 @@ fn build_model_vertices(
     slot: &SpriteSlot,
     model: &ModelMesh,
     size: [f32; 2],
-    uv_rect: [f32; 4],
     rotation_deg: f32,
     draw: ModelDrawState,
     tint: [f32; 4],
@@ -396,18 +404,6 @@ fn build_model_vertices(
         .max(model_size[1])
         .mul_add(6.0, 0.0)
         .max(180.0);
-    let du = uv_rect[2] - uv_rect[0];
-    let dv = uv_rect[3] - uv_rect[1];
-    let (tex_shift_u, tex_shift_v) = match slot.source.as_ref() {
-        crate::game::parsing::noteskin::SpriteSource::Atlas { tex_dims, .. } => {
-            let tw = tex_dims.0.max(1) as f32;
-            let th = tex_dims.1.max(1) as f32;
-            let base_u0 = slot.def.src[0] as f32 / tw;
-            let base_v0 = slot.def.src[1] as f32 / th;
-            (uv_rect[0] - base_u0, uv_rect[1] - base_v0)
-        }
-        crate::game::parsing::noteskin::SpriteSource::Animated { .. } => (0.0, 0.0),
-    };
     let align_y = (0.5 - draw.vert_align) * size[1];
 
     let mut vertices = Vec::with_capacity(model.vertices.len());
@@ -435,24 +431,21 @@ fn build_model_vertices(
         let y_screen = -y3;
         let z3 = z2 + tz;
         let perspective = focal / (focal - z3).max(1.0);
-        let mut u = if slot.def.mirror_h {
-            uv_rect[2] - v.uv[0] * du
+        let u = if slot.def.mirror_h {
+            1.0 - v.uv[0]
         } else {
-            uv_rect[0] + v.uv[0] * du
+            v.uv[0]
         };
-        let mut v_tex = if slot.def.mirror_v {
-            uv_rect[3] - v.uv[1] * dv
+        let v_tex = if slot.def.mirror_v {
+            1.0 - v.uv[1]
         } else {
-            uv_rect[1] + v.uv[1] * dv
+            v.uv[1]
         };
-        // ITG MilkShape vertex flags can opt vertices out of texture-matrix translation.
-        // Apply the same rule by blending between translated and untranslated UVs.
-        u += tex_shift_u * (v.tex_matrix_scale[0] - 1.0);
-        v_tex += tex_shift_v * (v.tex_matrix_scale[1] - 1.0);
 
         vertices.push(TexturedMeshVertex {
             pos: [x3 * perspective, y_screen * perspective],
             uv: [u, v_tex],
+            tex_matrix_scale: v.tex_matrix_scale,
             color: tint,
         });
     }
@@ -464,6 +457,9 @@ fn noteskin_model_actor_from_vertices(
     slot: &SpriteSlot,
     xy: [f32; 2],
     vertices: Arc<[TexturedMeshVertex]>,
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
     blend: BlendMode,
     z: i16,
 ) -> Actor {
@@ -474,6 +470,9 @@ fn noteskin_model_actor_from_vertices(
         texture: slot.texture_key().to_string(),
         vertices,
         mode: MeshMode::Triangles,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
         visible: true,
         blend,
         z,
@@ -499,9 +498,17 @@ fn noteskin_model_actor_from_draw(
 
     let tint = model_tint(color, draw);
     let blend = model_blend(draw, blend);
-    let vertices = build_model_vertices(slot, model, size, uv_rect, rotation_deg, draw, tint);
+    let vertices = build_model_vertices(slot, model, size, rotation_deg, draw, tint);
+    let (uv_scale, uv_offset, uv_tex_shift) = model_uv_params(slot, uv_rect);
     Some(noteskin_model_actor_from_vertices(
-        slot, xy, vertices, blend, z,
+        slot,
+        xy,
+        vertices,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+        blend,
+        z,
     ))
 }
 
@@ -524,14 +531,18 @@ fn noteskin_model_actor_from_draw_cached(
     }
 
     let tint = model_tint(color, draw);
-    let key = model_cache_key(slot, size, uv_rect, rotation_deg, draw, tint);
+    let key = model_cache_key(slot, size, rotation_deg, draw, tint);
     let vertices = cache.get_or_insert_with(key, || {
-        build_model_vertices(slot, model, size, uv_rect, rotation_deg, draw, tint)
+        build_model_vertices(slot, model, size, rotation_deg, draw, tint)
     });
+    let (uv_scale, uv_offset, uv_tex_shift) = model_uv_params(slot, uv_rect);
     Some(noteskin_model_actor_from_vertices(
         slot,
         xy,
         vertices,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
         model_blend(draw, blend),
         z,
     ))

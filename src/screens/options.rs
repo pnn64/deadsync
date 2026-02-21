@@ -2669,6 +2669,7 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
                 out.push(crate::core::gfx::TexturedMeshVertex {
                     pos: v.pos,
                     uv: v.uv,
+                    tex_matrix_scale: v.tex_matrix_scale,
                     color: c,
                 });
             }

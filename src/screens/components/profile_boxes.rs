@@ -831,6 +831,7 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
                 out.push(crate::core::gfx::TexturedMeshVertex {
                     pos: v.pos,
                     uv: v.uv,
+                    tex_matrix_scale: v.tex_matrix_scale,
                     color: c,
                 });
             }
@@ -984,6 +985,7 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                 out.push(crate::core::gfx::TexturedMeshVertex {
                     pos: [v.pos[0] * zoom, v.pos[1] * zoom],
                     uv: v.uv,
+                    tex_matrix_scale: v.tex_matrix_scale,
                     color: v.color,
                 });
             }

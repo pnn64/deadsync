@@ -199,6 +199,9 @@ pub fn draw(
                                 texture_id,
                                 vertices,
                                 mode,
+                                uv_scale,
+                                uv_offset,
+                                uv_tex_shift,
                             } => match mode {
                                 MeshMode::Triangles => {
                                     let tex_key = texture_id.as_ref();
@@ -211,6 +214,9 @@ pub fn draw(
                                         &proj,
                                         &obj.transform,
                                         vertices.as_ref(),
+                                        *uv_scale,
+                                        *uv_offset,
+                                        *uv_tex_shift,
                                         obj.blend,
                                         &tex.image,
                                         tex.sampler,
@@ -282,6 +288,9 @@ pub fn draw(
                     texture_id,
                     vertices,
                     mode,
+                    uv_scale,
+                    uv_offset,
+                    uv_tex_shift,
                 } => match mode {
                     MeshMode::Triangles => {
                         let tex_key = texture_id.as_ref();
@@ -294,6 +303,9 @@ pub fn draw(
                             &proj,
                             &obj.transform,
                             vertices.as_ref(),
+                            *uv_scale,
+                            *uv_offset,
+                            *uv_tex_shift,
                             obj.blend,
                             &tex.image,
                             tex.sampler,
@@ -526,6 +538,9 @@ fn rasterize_textured_mesh_triangles(
     proj: &Matrix4<f32>,
     transform: &Matrix4<f32>,
     vertices: &[crate::core::gfx::TexturedMeshVertex],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
     blend: BlendMode,
     image: &RgbaImage,
     sampler: SamplerDesc,
@@ -569,8 +584,10 @@ fn rasterize_textured_mesh_triangles(
             tri[i] = ScreenVertexTexColor {
                 x: ((ndc_x + 1.0) * 0.5) * width as f32,
                 y: ((1.0 - ndc_y) * 0.5) * height as f32,
-                u: chunk[i].uv[0],
-                v: chunk[i].uv[1],
+                u: chunk[i].uv[0].mul_add(uv_scale[0], uv_offset[0])
+                    + uv_tex_shift[0] * (chunk[i].tex_matrix_scale[0] - 1.0),
+                v: chunk[i].uv[1].mul_add(uv_scale[1], uv_offset[1])
+                    + uv_tex_shift[1] * (chunk[i].tex_matrix_scale[1] - 1.0),
                 color: chunk[i].color,
             };
         }

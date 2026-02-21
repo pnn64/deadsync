@@ -437,6 +437,9 @@ fn build_actor_recursive<'a>(
             texture,
             vertices,
             mode,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
             visible,
             blend,
             z,
@@ -457,6 +460,9 @@ fn build_actor_recursive<'a>(
                     texture_id: std::borrow::Cow::Borrowed(texture.as_str()),
                     vertices: std::borrow::Cow::Borrowed(vertices.as_ref()),
                     mode: *mode,
+                    uv_scale: *uv_scale,
+                    uv_offset: *uv_offset,
+                    uv_tex_shift: *uv_tex_shift,
                 },
                 transform,
                 blend: *blend,
@@ -533,6 +539,7 @@ fn build_actor_recursive<'a>(
                             out.push(renderer::TexturedMeshVertex {
                                 pos: v.pos,
                                 uv: v.uv,
+                                tex_matrix_scale: v.tex_matrix_scale,
                                 color: [
                                     v.color[0] * sc[0],
                                     v.color[1] * sc[1],
@@ -1708,6 +1715,7 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
             out.push(renderer::TexturedMeshVertex {
                 pos: v.pos,
                 uv: v.uv,
+                tex_matrix_scale: [1.0, 1.0],
                 color: tint,
             });
         }
@@ -1718,6 +1726,9 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
         texture_id: std::borrow::Cow::Owned(texture_id),
         vertices: std::borrow::Cow::Owned(out),
         mode: renderer::MeshMode::Triangles,
+        uv_scale: [1.0, 1.0],
+        uv_offset: [0.0, 0.0],
+        uv_tex_shift: [0.0, 0.0],
     };
     obj.transform = Matrix4::from_scale(1.0);
     true

@@ -44,9 +44,10 @@ struct InstanceData {
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct TexturedMeshVertexGpu {
-    pos: [f32; 2],   // offset 0
-    uv: [f32; 2],    // offset 8
-    color: [f32; 4], // offset 16
+    pos: [f32; 2],              // offset 0
+    uv: [f32; 2],               // offset 8
+    color: [f32; 4],            // offset 16
+    tex_matrix_scale: [f32; 2], // offset 32
 }
 
 #[repr(C)]
@@ -56,6 +57,9 @@ struct TexturedMeshInstanceGpu {
     model_col1: [f32; 4], // offset 16
     model_col2: [f32; 4], // offset 32
     model_col3: [f32; 4], // offset 48
+    uv_scale: [f32; 2],   // offset 64
+    uv_offset: [f32; 2],  // offset 72
+    uv_tex_shift: [f32; 2], // offset 80
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -1381,6 +1385,9 @@ pub fn draw(
                     texture_id,
                     vertices,
                     mode,
+                    uv_scale,
+                    uv_offset,
+                    uv_tex_shift,
                 } => {
                     if *mode != MeshMode::Triangles || vertices.is_empty() {
                         continue;
@@ -1418,6 +1425,7 @@ pub fn draw(
                                         pos: v.pos,
                                         uv: v.uv,
                                         color: v.color,
+                                        tex_matrix_scale: v.tex_matrix_scale,
                                     },
                                 );
                                 tmesh_written += 1;
@@ -1436,6 +1444,9 @@ pub fn draw(
                             model_col1: model[1],
                             model_col2: model[2],
                             model_col3: model[3],
+                            uv_scale: *uv_scale,
+                            uv_offset: *uv_offset,
+                            uv_tex_shift: *uv_tex_shift,
                         },
                     );
                     tmesh_instance_written += 1;
@@ -2105,7 +2116,7 @@ fn vertex_input_descriptions_mesh() -> (
 #[inline(always)]
 fn vertex_input_descriptions_tmesh() -> (
     [vk::VertexInputBindingDescription; 2],
-    [vk::VertexInputAttributeDescription; 7],
+    [vk::VertexInputAttributeDescription; 11],
 ) {
     let b0 = vk::VertexInputBindingDescription::default()
         .binding(0)
@@ -2131,30 +2142,62 @@ fn vertex_input_descriptions_tmesh() -> (
         .location(2)
         .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(16);
+    let a_tex_matrix_scale = vk::VertexInputAttributeDescription::default()
+        .binding(0)
+        .location(3)
+        .format(vk::Format::R32G32_SFLOAT)
+        .offset(32);
     let a_model0 = vk::VertexInputAttributeDescription::default()
         .binding(1)
-        .location(3)
+        .location(4)
         .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(0);
     let a_model1 = vk::VertexInputAttributeDescription::default()
         .binding(1)
-        .location(4)
+        .location(5)
         .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(16);
     let a_model2 = vk::VertexInputAttributeDescription::default()
         .binding(1)
-        .location(5)
+        .location(6)
         .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(32);
     let a_model3 = vk::VertexInputAttributeDescription::default()
         .binding(1)
-        .location(6)
+        .location(7)
         .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(48);
+    let a_uv_scale = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(8)
+        .format(vk::Format::R32G32_SFLOAT)
+        .offset(64);
+    let a_uv_offset = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(9)
+        .format(vk::Format::R32G32_SFLOAT)
+        .offset(72);
+    let a_uv_tex_shift = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(10)
+        .format(vk::Format::R32G32_SFLOAT)
+        .offset(80);
 
     (
         [b0, b1],
-        [a_pos, a_uv, a_color, a_model0, a_model1, a_model2, a_model3],
+        [
+            a_pos,
+            a_uv,
+            a_color,
+            a_tex_matrix_scale,
+            a_model0,
+            a_model1,
+            a_model2,
+            a_model3,
+            a_uv_scale,
+            a_uv_offset,
+            a_uv_tex_shift,
+        ],
     )
 }
 

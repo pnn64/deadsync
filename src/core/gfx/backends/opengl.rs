@@ -28,6 +28,7 @@ struct TexturedMeshVertexRaw {
     pos: [f32; 2],
     uv: [f32; 2],
     color: [f32; 4],
+    tex_matrix_scale: [f32; 2],
 }
 
 #[repr(C)]
@@ -37,6 +38,9 @@ struct TexturedMeshInstanceRaw {
     model_col1: [f32; 4],
     model_col2: [f32; 4],
     model_col3: [f32; 4],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -206,7 +210,7 @@ pub fn init(
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
         gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
 
-        // a_pos (location 0), a_uv (location 1), a_color (location 2)
+        // a_pos (location 0), a_uv (location 1), a_color (location 2), a_tex_matrix_scale (location 3)
         let stride = std::mem::size_of::<TexturedMeshVertexRaw>() as i32;
         gl.enable_vertex_attrib_array(0);
         gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
@@ -228,25 +232,58 @@ pub fn init(
             stride,
             (4 * std::mem::size_of::<f32>()) as i32,
         );
+        gl.enable_vertex_attrib_array(3);
+        gl.vertex_attrib_pointer_f32(
+            3,
+            2,
+            glow::FLOAT,
+            false,
+            stride,
+            (8 * std::mem::size_of::<f32>()) as i32,
+        );
 
-        // i_model_col0..i_model_col3 (locations 3..6)
+        // i_model_col0..i_model_col3 (locations 4..7), i_uv_scale/i_uv_offset/i_uv_tex_shift (8..10)
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_vbo));
         gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
 
         let inst_stride = std::mem::size_of::<TexturedMeshInstanceRaw>() as i32;
         let col_size = (4 * std::mem::size_of::<f32>()) as i32;
-        gl.enable_vertex_attrib_array(3);
-        gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, inst_stride, 0);
-        gl.vertex_attrib_divisor(3, 1);
+        let uv_size = (2 * std::mem::size_of::<f32>()) as i32;
         gl.enable_vertex_attrib_array(4);
-        gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, inst_stride, col_size);
+        gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, inst_stride, 0);
         gl.vertex_attrib_divisor(4, 1);
         gl.enable_vertex_attrib_array(5);
-        gl.vertex_attrib_pointer_f32(5, 4, glow::FLOAT, false, inst_stride, 2 * col_size);
+        gl.vertex_attrib_pointer_f32(5, 4, glow::FLOAT, false, inst_stride, col_size);
         gl.vertex_attrib_divisor(5, 1);
         gl.enable_vertex_attrib_array(6);
-        gl.vertex_attrib_pointer_f32(6, 4, glow::FLOAT, false, inst_stride, 3 * col_size);
+        gl.vertex_attrib_pointer_f32(6, 4, glow::FLOAT, false, inst_stride, 2 * col_size);
         gl.vertex_attrib_divisor(6, 1);
+        gl.enable_vertex_attrib_array(7);
+        gl.vertex_attrib_pointer_f32(7, 4, glow::FLOAT, false, inst_stride, 3 * col_size);
+        gl.vertex_attrib_divisor(7, 1);
+        gl.enable_vertex_attrib_array(8);
+        gl.vertex_attrib_pointer_f32(8, 2, glow::FLOAT, false, inst_stride, 4 * col_size);
+        gl.vertex_attrib_divisor(8, 1);
+        gl.enable_vertex_attrib_array(9);
+        gl.vertex_attrib_pointer_f32(
+            9,
+            2,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            4 * col_size + uv_size,
+        );
+        gl.vertex_attrib_divisor(9, 1);
+        gl.enable_vertex_attrib_array(10);
+        gl.vertex_attrib_pointer_f32(
+            10,
+            2,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            4 * col_size + 2 * uv_size,
+        );
+        gl.vertex_attrib_divisor(10, 1);
 
         gl.bind_vertex_array(None);
         (vao, vbo, instance_vbo)
@@ -452,6 +489,9 @@ pub fn draw(
                     texture_id,
                     vertices,
                     mode,
+                    uv_scale,
+                    uv_offset,
+                    uv_tex_shift,
                 } => {
                     if *mode != MeshMode::Triangles || vertices.is_empty() {
                         continue;
@@ -477,6 +517,7 @@ pub fn draw(
                                 tmesh_vertices.push(TexturedMeshVertexRaw {
                                     pos: v.pos,
                                     uv: v.uv,
+                                    tex_matrix_scale: v.tex_matrix_scale,
                                     color: v.color,
                                 });
                             }
@@ -492,6 +533,9 @@ pub fn draw(
                         model_col1: model[1],
                         model_col2: model[2],
                         model_col3: model[3],
+                        uv_scale: *uv_scale,
+                        uv_offset: *uv_offset,
+                        uv_tex_shift: *uv_tex_shift,
                     });
 
                     if let Some(DrawOp::TexturedMesh(last)) = ops.last_mut()
@@ -698,16 +742,16 @@ pub fn draw(
                     if last_tmesh_instance_start != Some(run.instance_start) {
                         let inst_stride = std::mem::size_of::<TexturedMeshInstanceRaw>() as i32;
                         let col_size = (4 * std::mem::size_of::<f32>()) as i32;
+                        let uv_size = (2 * std::mem::size_of::<f32>()) as i32;
                         let base = (run.instance_start as i32) * inst_stride;
                         gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_instance_vbo));
-                        gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, inst_stride, base);
                         gl.vertex_attrib_pointer_f32(
                             4,
                             4,
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + col_size,
+                            base,
                         );
                         gl.vertex_attrib_pointer_f32(
                             5,
@@ -715,7 +759,7 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + 2 * col_size,
+                            base + col_size,
                         );
                         gl.vertex_attrib_pointer_f32(
                             6,
@@ -723,7 +767,39 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             inst_stride,
+                            base + 2 * col_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            7,
+                            4,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
                             base + 3 * col_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            8,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 4 * col_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            9,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 4 * col_size + uv_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            10,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 4 * col_size + 2 * uv_size,
                         );
                         last_tmesh_instance_start = Some(run.instance_start);
                     }

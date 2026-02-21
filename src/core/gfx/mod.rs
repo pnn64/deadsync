@@ -32,11 +32,24 @@ pub struct MeshVertex {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct TexturedMeshVertex {
     pub pos: [f32; 2],
     pub uv: [f32; 2],
+    pub tex_matrix_scale: [f32; 2],
     pub color: [f32; 4],
+}
+
+impl Default for TexturedMeshVertex {
+    #[inline(always)]
+    fn default() -> Self {
+        Self {
+            pos: [0.0, 0.0],
+            uv: [0.0, 0.0],
+            tex_matrix_scale: [1.0, 1.0],
+            color: [0.0, 0.0, 0.0, 0.0],
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -62,6 +75,9 @@ pub enum ObjectType<'a> {
         texture_id: Cow<'a, str>,
         vertices: Cow<'a, [TexturedMeshVertex]>,
         mode: MeshMode,
+        uv_scale: [f32; 2],
+        uv_offset: [f32; 2],
+        uv_tex_shift: [f32; 2],
     },
 }
 

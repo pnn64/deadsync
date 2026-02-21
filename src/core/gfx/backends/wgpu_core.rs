@@ -68,6 +68,7 @@ struct TexturedMeshVertexRaw {
     pos: [f32; 2],
     uv: [f32; 2],
     color: [f32; 4],
+    tex_matrix_scale: [f32; 2],
 }
 
 #[repr(C)]
@@ -77,6 +78,9 @@ struct TexturedMeshInstanceRaw {
     model_col1: [f32; 4],
     model_col2: [f32; 4],
     model_col3: [f32; 4],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
 }
 
 struct PipelineSet {
@@ -780,6 +784,9 @@ pub fn draw(
                     texture_id,
                     vertices,
                     mode,
+                    uv_scale,
+                    uv_offset,
+                    uv_tex_shift,
                 } => {
                     if vertices.is_empty() {
                         continue;
@@ -803,6 +810,7 @@ pub fn draw(
                                 tmesh_vertices.push(TexturedMeshVertexRaw {
                                     pos: v.pos,
                                     uv: v.uv,
+                                    tex_matrix_scale: v.tex_matrix_scale,
                                     color: v.color,
                                 });
                             }
@@ -817,6 +825,9 @@ pub fn draw(
                         model_col1: model[1],
                         model_col2: model[2],
                         model_col3: model[3],
+                        uv_scale: *uv_scale,
+                        uv_offset: *uv_offset,
+                        uv_tex_shift: *uv_tex_shift,
                     });
                     let key = tex.id.wrapping_shl(1) | 1;
                     if let Some(Op::TexturedMesh(last)) = ops.last_mut()
@@ -1703,17 +1714,21 @@ const MESH_ATTRS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
     1 => Float32x4, // color
 ];
 
-const TMESH_ATTRS: [wgpu::VertexAttribute; 3] = wgpu::vertex_attr_array![
+const TMESH_ATTRS: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
     0 => Float32x2, // pos
     1 => Float32x2, // uv
     2 => Float32x4, // color
+    3 => Float32x2, // tex-matrix scale
 ];
 
-const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
-    3 => Float32x4, // model column 0
-    4 => Float32x4, // model column 1
-    5 => Float32x4, // model column 2
-    6 => Float32x4, // model column 3
+const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
+    4 => Float32x4, // model column 0
+    5 => Float32x4, // model column 1
+    6 => Float32x4, // model column 2
+    7 => Float32x4, // model column 3
+    8 => Float32x2, // uv scale
+    9 => Float32x2, // uv offset
+    10 => Float32x2, // uv texture-matrix shift
 ];
 
 const INSTANCE_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![

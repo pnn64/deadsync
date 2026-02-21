@@ -10,10 +10,14 @@ struct VertexIn {
     @location(0) pos: vec2<f32>,
     @location(1) uv: vec2<f32>,
     @location(2) color: vec4<f32>,
-    @location(3) model_col0: vec4<f32>,
-    @location(4) model_col1: vec4<f32>,
-    @location(5) model_col2: vec4<f32>,
-    @location(6) model_col3: vec4<f32>,
+    @location(3) tex_matrix_scale: vec2<f32>,
+    @location(4) model_col0: vec4<f32>,
+    @location(5) model_col1: vec4<f32>,
+    @location(6) model_col2: vec4<f32>,
+    @location(7) model_col3: vec4<f32>,
+    @location(8) uv_scale: vec2<f32>,
+    @location(9) uv_offset: vec2<f32>,
+    @location(10) uv_tex_shift: vec2<f32>,
 };
 
 struct VertexOut {
@@ -32,7 +36,9 @@ fn vs_main(input: VertexIn) -> VertexOut {
         input.model_col3,
     );
     out.pos = u_proj.proj * model * vec4<f32>(input.pos, 0.0, 1.0);
-    out.uv = input.uv;
+    out.uv = input.uv * input.uv_scale
+        + input.uv_offset
+        + input.uv_tex_shift * (input.tex_matrix_scale - vec2<f32>(1.0, 1.0));
     out.color = input.color;
     return out;
 }
