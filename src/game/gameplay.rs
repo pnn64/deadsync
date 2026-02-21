@@ -1614,6 +1614,9 @@ pub struct State {
     replay_mode: bool,
     pub course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     pub course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
+    pub live_window_counts: [crate::game::timing::WindowCounts; MAX_PLAYERS],
+    pub live_window_counts_10ms_blue: [crate::game::timing::WindowCounts; MAX_PLAYERS],
+    pub live_window_counts_display_blue: [crate::game::timing::WindowCounts; MAX_PLAYERS],
 
     pub player_profiles: [profile::Profile; MAX_PLAYERS],
     pub noteskin: [Option<Noteskin>; MAX_PLAYERS],
@@ -3062,6 +3065,10 @@ pub fn init(
         replay_mode,
         course_display_carry,
         course_display_totals,
+        live_window_counts: [crate::game::timing::WindowCounts::default(); MAX_PLAYERS],
+        live_window_counts_10ms_blue: [crate::game::timing::WindowCounts::default(); MAX_PLAYERS],
+        live_window_counts_display_blue: [crate::game::timing::WindowCounts::default();
+            MAX_PLAYERS],
         player_profiles,
         noteskin,
         active_color_index,
@@ -3143,7 +3150,6 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
             .course_display_carry
             .as_ref()
             .map_or(CourseDisplayCarry::default(), |old| old[player]);
-        let (start, end) = state.note_ranges[player];
         let mut judgment_counts = [0u32; 6];
         let mut scoring_counts = [0u32; 6];
         for grade in DISPLAY_JUDGE_ORDER {
@@ -3153,15 +3159,9 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
             judgment_counts[ix] = previous.judgment_counts[ix].saturating_add(stage_judgment);
             scoring_counts[ix] = previous.scoring_counts[ix].saturating_add(stage_scoring);
         }
-        let stage_window_counts =
-            crate::game::timing::compute_window_counts(&state.notes[start..end]);
-        let stage_window_counts_10ms =
-            crate::game::timing::compute_window_counts_10ms_blue(&state.notes[start..end]);
-        let stage_blue_window_ms = player_blue_window_ms(state, player);
-        let stage_window_counts_display_blue = crate::game::timing::compute_window_counts_blue_ms(
-            &state.notes[start..end],
-            stage_blue_window_ms,
-        );
+        let stage_window_counts = state.live_window_counts[player];
+        let stage_window_counts_10ms = state.live_window_counts_10ms_blue[player];
+        let stage_window_counts_display_blue = state.live_window_counts_display_blue[player];
         let window_counts = crate::game::timing::WindowCounts {
             w0: previous
                 .window_counts
@@ -3346,6 +3346,66 @@ fn add_window_counts(
 }
 
 #[inline(always)]
+fn normalized_blue_window_ms(ms: f32) -> f32 {
+    if ms.is_finite() && ms > 0.0 {
+        ms
+    } else {
+        crate::game::timing::FA_PLUS_W010_MS
+    }
+}
+
+#[inline(always)]
+fn add_judgment_to_window_counts(
+    counts: &mut crate::game::timing::WindowCounts,
+    judgment: &Judgment,
+    blue_window_ms: f32,
+) {
+    let split_ms = normalized_blue_window_ms(blue_window_ms);
+    match judgment.grade {
+        JudgeGrade::Fantastic => {
+            if judgment.time_error_ms.abs() <= split_ms {
+                counts.w0 = counts.w0.saturating_add(1);
+            } else {
+                counts.w1 = counts.w1.saturating_add(1);
+            }
+        }
+        JudgeGrade::Excellent => counts.w2 = counts.w2.saturating_add(1),
+        JudgeGrade::Great => counts.w3 = counts.w3.saturating_add(1),
+        JudgeGrade::Decent => counts.w4 = counts.w4.saturating_add(1),
+        JudgeGrade::WayOff => counts.w5 = counts.w5.saturating_add(1),
+        JudgeGrade::Miss => counts.miss = counts.miss.saturating_add(1),
+    }
+}
+
+#[inline(always)]
+fn record_display_window_counts(state: &mut State, player_idx: usize, judgment: &Judgment) {
+    if player_idx >= state.num_players || player_idx >= MAX_PLAYERS {
+        return;
+    }
+    let display_window_ms = player_blue_window_ms(state, player_idx);
+    add_judgment_to_window_counts(
+        &mut state.live_window_counts[player_idx],
+        judgment,
+        crate::game::timing::FA_PLUS_W0_MS,
+    );
+    add_judgment_to_window_counts(
+        &mut state.live_window_counts_10ms_blue[player_idx],
+        judgment,
+        crate::game::timing::FA_PLUS_W010_MS,
+    );
+    add_judgment_to_window_counts(
+        &mut state.live_window_counts_display_blue[player_idx],
+        judgment,
+        display_window_ms,
+    );
+}
+
+#[inline(always)]
+fn float_match(a: f32, b: f32) -> bool {
+    (a - b).abs() <= 0.000_1
+}
+
+#[inline(always)]
 fn display_totals_for_player(state: &State, player_idx: usize) -> CourseDisplayTotals {
     if player_idx >= MAX_PLAYERS {
         return CourseDisplayTotals::default();
@@ -3383,15 +3443,32 @@ pub fn display_window_counts(
     if player_idx >= state.num_players {
         return crate::game::timing::WindowCounts::default();
     }
-    let (start, end) = state.note_ranges[player_idx];
     let current = if let Some(ms) = blue_window_ms {
-        crate::game::timing::compute_window_counts_blue_ms(&state.notes[start..end], ms)
+        let split_ms = normalized_blue_window_ms(ms);
+        let display_split_ms = normalized_blue_window_ms(player_blue_window_ms(state, player_idx));
+        if float_match(split_ms, crate::game::timing::FA_PLUS_W0_MS) {
+            state.live_window_counts[player_idx]
+        } else if float_match(split_ms, crate::game::timing::FA_PLUS_W010_MS) {
+            state.live_window_counts_10ms_blue[player_idx]
+        } else if float_match(split_ms, display_split_ms) {
+            state.live_window_counts_display_blue[player_idx]
+        } else {
+            let (start, end) = state.note_ranges[player_idx];
+            crate::game::timing::compute_window_counts_blue_ms(&state.notes[start..end], split_ms)
+        }
     } else {
-        crate::game::timing::compute_window_counts(&state.notes[start..end])
+        state.live_window_counts[player_idx]
     };
     let carry = display_carry_for_player(state, player_idx);
-    let carry_counts = if blue_window_ms.is_some() {
-        carry.window_counts_display_blue
+    let carry_counts = if let Some(ms) = blue_window_ms {
+        let split_ms = normalized_blue_window_ms(ms);
+        if float_match(split_ms, crate::game::timing::FA_PLUS_W0_MS) {
+            carry.window_counts
+        } else if float_match(split_ms, crate::game::timing::FA_PLUS_W010_MS) {
+            carry.window_counts_10ms_blue
+        } else {
+            carry.window_counts_display_blue
+        }
     } else {
         carry.window_counts
     };
@@ -3406,8 +3483,7 @@ fn display_window_counts_10ms(
     if player_idx >= state.num_players {
         return crate::game::timing::WindowCounts::default();
     }
-    let (start, end) = state.note_ranges[player_idx];
-    let current = crate::game::timing::compute_window_counts_10ms_blue(&state.notes[start..end]);
+    let current = state.live_window_counts_10ms_blue[player_idx];
     let carry = display_carry_for_player(state, player_idx);
     add_window_counts(current, carry.window_counts_10ms_blue)
 }
@@ -5201,6 +5277,7 @@ fn finalize_row_judgment(
     let Some(final_judgment) = final_judgment else {
         return;
     };
+    record_display_window_counts(state, player, &final_judgment);
     let final_grade = final_judgment.grade;
     if scoring_blocked {
         state.players[player].last_judgment = Some(JudgmentRenderInfo {
