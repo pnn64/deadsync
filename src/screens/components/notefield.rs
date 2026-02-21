@@ -84,18 +84,12 @@ const Z_MINE_EXPLOSION: i32 = 101;
 const Z_TAP_NOTE: i32 = 140;
 const Z_COLUMN_CUE: i32 = 90;
 const MINE_CORE_SIZE_RATIO: f32 = 0.45;
-const MINE_FILL_LAYERS: usize = 32;
 const Z_MEASURE_LINES: i32 = 80;
 
 #[derive(Clone, Copy, Debug)]
 pub enum FieldPlacement {
     P1,
     P2,
-}
-
-#[derive(Clone, Debug)]
-struct MineFillState {
-    layers: [[f32; 4]; MINE_FILL_LAYERS],
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -193,28 +187,6 @@ fn model_cache_key(
             norm_bits(tint[3]),
         ],
     }
-}
-
-fn mine_fill_state(colors: &[[f32; 4]], beat: f32) -> Option<MineFillState> {
-    if colors.is_empty() {
-        return None;
-    }
-
-    let phase = beat.rem_euclid(1.0);
-    let len = colors.len();
-
-    let idx_float = phase * len as f32;
-    let idx = (idx_float.floor() as usize) % len;
-
-    let layers = from_fn(|layer| {
-        let offset = layer % len;
-        let sample_index = (idx + len - offset) % len;
-        let mut color = colors[sample_index];
-        color[3] = 1.0;
-        color
-    });
-
-    Some(MineFillState { layers })
 }
 
 #[inline(always)]
@@ -2897,6 +2869,10 @@ pub fn build(
                 }
                 if matches!(arrow.note_type, NoteType::Mine) {
                     let fill_slot = ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
+                    let fill_gradient_slot = ns
+                        .mine_fill_slots
+                        .get(col_idx)
+                        .and_then(|slot| slot.as_ref());
                     let frame_slot = ns.mine_frames.get(col_idx).and_then(|slot| slot.as_ref());
                     if fill_slot.is_none() && frame_slot.is_none() {
                         continue;
@@ -2914,31 +2890,23 @@ pub fn build(
                             TARGET_ARROW_PIXEL_SIZE * field_zoom,
                         ]);
                     if let Some(slot) = fill_slot {
-                        let fill_gradient = ns
-                            .mine_fill_gradients
-                            .get(col_idx)
-                            .and_then(|colors| colors.as_deref());
                         if frame_slot.is_some()
                             && slot.model.is_none()
                             && slot.source.frame_count() <= 1
-                            && let Some(fill_state) = fill_gradient
-                                .and_then(|colors| mine_fill_state(colors, current_beat))
+                            && let Some(gradient_slot) = fill_gradient_slot
                         {
                             let width = circle_reference[0] * MINE_CORE_SIZE_RATIO;
                             let height = circle_reference[1] * MINE_CORE_SIZE_RATIO;
-                            for layer_idx in (0..MINE_FILL_LAYERS).rev() {
-                                let color = fill_state.layers[layer_idx];
-                                let scale = (layer_idx as f32 + 1.0) / MINE_FILL_LAYERS as f32;
-                                let layer_width = width * scale;
-                                let layer_height = height * scale;
-                                if layer_width <= 0.0 || layer_height <= 0.0 {
-                                    continue;
-                                }
-                                actors.push(act!(sprite("circle.png"):
+                            if width > 0.0 && height > 0.0 {
+                                let fill_phase = current_beat.rem_euclid(1.0);
+                                let frame = gradient_slot.frame_index_from_phase(fill_phase);
+                                let uv = gradient_slot.uv_for_frame_at(frame, phase_time);
+                                actors.push(act!(sprite(gradient_slot.texture_key().to_string()):
                                     align(0.5, 0.5):
                                     xy(playfield_center_x + col_x_offset, y_pos):
-                                    zoomto(layer_width, layer_height):
-                                    diffuse(color[0], color[1], color[2], 1.0):
+                                    setsize(width, height):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    diffuse(1.0, 1.0, 1.0, 1.0):
                                     z(Z_TAP_NOTE - 2)
                                 ));
                             }

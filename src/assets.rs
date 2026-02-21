@@ -242,6 +242,15 @@ static TEX_META: std::sync::LazyLock<RwLock<HashMap<String, TexMeta>>> =
 static SHEET_DIMS: std::sync::LazyLock<RwLock<HashMap<String, (u32, u32)>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
+#[derive(Clone)]
+struct GeneratedTexture {
+    image: Arc<RgbaImage>,
+    sampler: SamplerDesc,
+}
+
+static GENERATED_TEXTURES: std::sync::LazyLock<RwLock<HashMap<String, GeneratedTexture>>> =
+    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+
 pub fn register_texture_dims(key: &str, w: u32, h: u32) {
     let sheet = parse_sprite_sheet_dims(key);
     let key = key.to_string();
@@ -262,6 +271,22 @@ pub fn sprite_sheet_dims(key: &str) -> (u32, u32) {
     let dims = parse_sprite_sheet_dims(key);
     SHEET_DIMS.write().unwrap().insert(key.to_string(), dims);
     dims
+}
+
+pub fn register_generated_texture(key: &str, image: RgbaImage, sampler: SamplerDesc) {
+    let (w, h) = (image.width(), image.height());
+    GENERATED_TEXTURES.write().unwrap().insert(
+        key.to_string(),
+        GeneratedTexture {
+            image: Arc::new(image),
+            sampler,
+        },
+    );
+    register_texture_dims(key, w, h);
+}
+
+fn generated_texture(key: &str) -> Option<GeneratedTexture> {
+    GENERATED_TEXTURES.read().unwrap().get(key).cloned()
 }
 
 pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
@@ -1667,7 +1692,21 @@ impl AssetManager {
             return;
         }
         let key = canonical_texture_key(texture_key);
-        if key.starts_with("__") || self.textures.contains_key(&key) {
+        if self.textures.contains_key(&key) {
+            return;
+        }
+        if let Some(generated) = generated_texture(&key) {
+            match backend.create_texture(generated.image.as_ref(), generated.sampler) {
+                Ok(texture) => {
+                    self.textures.insert(key, texture);
+                }
+                Err(e) => {
+                    warn!("Failed to create GPU texture for generated key '{texture_key}': {e}");
+                }
+            }
+            return;
+        }
+        if key.starts_with("__") {
             return;
         }
 
