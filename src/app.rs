@@ -225,6 +225,7 @@ pub struct ShellState {
     gamepad_overlay_state: Option<(String, Instant)>,
     pending_exit: bool,
     shift_held: bool,
+    ctrl_held: bool,
 }
 
 /// Active screen data bundle.
@@ -297,6 +298,7 @@ impl ShellState {
             gamepad_overlay_state: None,
             pending_exit: false,
             shift_held: false,
+            ctrl_held: false,
         }
     }
 
@@ -1412,6 +1414,66 @@ impl App {
         true
     }
 
+    fn prepare_player_options_for_gameplay_restart(&mut self) -> bool {
+        let Some(gs) = self.state.screens.gameplay_state.as_ref() else {
+            return false;
+        };
+
+        let play_style = profile::get_session_play_style();
+        let player_side = profile::get_session_player_side();
+        let target_chart_type = play_style.chart_type();
+        let fallback_steps = self.state.session.preferred_difficulty_index;
+
+        let p1_steps = select_music::steps_index_for_chart_hash(
+            &gs.song,
+            target_chart_type,
+            gs.charts[0].short_hash.as_str(),
+        )
+        .unwrap_or(fallback_steps);
+        let p2_steps = select_music::steps_index_for_chart_hash(
+            &gs.song,
+            target_chart_type,
+            gs.charts[1].short_hash.as_str(),
+        )
+        .unwrap_or(fallback_steps);
+
+        let chart_steps_index = match play_style {
+            profile::PlayStyle::Versus => [p1_steps, p2_steps],
+            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                let idx = side_ix(player_side);
+                let selected = [p1_steps, p2_steps][idx];
+                [selected; 2]
+            }
+        };
+
+        let mut po_state = player_options::init(
+            gs.song.clone(),
+            chart_steps_index,
+            chart_steps_index,
+            gs.active_color_index,
+            CurrentScreen::Gameplay,
+            None,
+        );
+        po_state.music_rate = gs.music_rate;
+        po_state.player_profiles = gs.player_profiles.clone();
+        po_state.speed_mod = std::array::from_fn(|i| match gs.scroll_speed[i] {
+            ScrollSpeedSetting::XMod(v) => player_options::SpeedMod {
+                mod_type: "X".to_string(),
+                value: v,
+            },
+            ScrollSpeedSetting::CMod(v) => player_options::SpeedMod {
+                mod_type: "C".to_string(),
+                value: v,
+            },
+            ScrollSpeedSetting::MMod(v) => player_options::SpeedMod {
+                mod_type: "M".to_string(),
+                value: v,
+            },
+        });
+        self.state.screens.player_options_state = Some(po_state);
+        true
+    }
+
     fn should_chain_course_to_next_stage(&self) -> bool {
         self.state.screens.current_screen == CurrentScreen::Gameplay
             && !self.current_gameplay_stage_failed()
@@ -1706,13 +1768,11 @@ impl App {
                 &mut self.state.screens.profile_load_state,
                 &ev,
             ),
-            CurrentScreen::Options => {
-                crate::screens::options::handle_input(
-                    &mut self.state.screens.options_state,
-                    &self.asset_manager,
-                    &ev,
-                )
-            }
+            CurrentScreen::Options => crate::screens::options::handle_input(
+                &mut self.state.screens.options_state,
+                &self.asset_manager,
+                &ev,
+            ),
             CurrentScreen::ManageLocalProfiles => {
                 crate::screens::manage_local_profiles::handle_input(
                     &mut self.state.screens.manage_local_profiles_state,
@@ -2651,6 +2711,9 @@ impl App {
                 KeyCode::ShiftLeft | KeyCode::ShiftRight => {
                     self.state.shell.shift_held = key_event.state == ElementState::Pressed;
                 }
+                KeyCode::ControlLeft | KeyCode::ControlRight => {
+                    self.state.shell.ctrl_held = key_event.state == ElementState::Pressed;
+                }
                 _ => {}
             }
         }
@@ -2730,19 +2793,38 @@ impl App {
                     _ => {}
                 }
             }
-        } else if self.state.screens.current_screen == CurrentScreen::Gameplay
-            && let Some(gs) = &mut self.state.screens.gameplay_state
-        {
-            let action = crate::game::gameplay::handle_raw_key_event(
-                gs,
-                &key_event,
-                self.state.shell.shift_held,
-            );
-            if !matches!(action, ScreenAction::None) {
-                if let Err(e) = self.handle_action(action, event_loop) {
-                    log::error!("Failed to handle Gameplay raw key action: {e}");
+        } else if self.state.screens.current_screen == CurrentScreen::Gameplay {
+            if key_event.state == winit::event::ElementState::Pressed
+                && !key_event.repeat
+                && self.state.shell.ctrl_held
+                && key_event.physical_key
+                    == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::KeyR)
+                && config::get().keyboard_features
+                && self.state.session.course_run.is_none()
+            {
+                if self.prepare_player_options_for_gameplay_restart() {
+                    if let Err(e) = self
+                        .handle_action(ScreenAction::Navigate(CurrentScreen::Gameplay), event_loop)
+                    {
+                        log::error!("Failed to restart Gameplay with Ctrl+R: {e}");
+                    }
+                } else {
+                    log::warn!("Ignored Ctrl+R restart: no active gameplay state.");
                 }
                 return;
+            }
+            if let Some(gs) = &mut self.state.screens.gameplay_state {
+                let action = crate::game::gameplay::handle_raw_key_event(
+                    gs,
+                    &key_event,
+                    self.state.shell.shift_held,
+                );
+                if !matches!(action, ScreenAction::None) {
+                    if let Err(e) = self.handle_action(action, event_loop) {
+                        log::error!("Failed to handle Gameplay raw key action: {e}");
+                    }
+                    return;
+                }
             }
         }
         let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);

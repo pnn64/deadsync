@@ -203,6 +203,8 @@ pub struct Config {
     pub song_parsing_threads: u8,
     pub simply_love_color: i32,
     pub show_select_music_gameplay_timer: bool,
+    /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart.
+    pub keyboard_features: bool,
     /// zmod parity: gameplay/eval difficulty meter also displays text labels.
     pub zmod_rating_box_text: bool,
     pub select_music_breakdown_style: BreakdownStyle,
@@ -249,6 +251,7 @@ impl Default for Config {
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             show_select_music_gameplay_timer: true,
+            keyboard_features: false,
             zmod_rating_box_text: false,
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
@@ -468,6 +471,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
 
     // [Theme] section should be last
     content.push_str("[Theme]\n");
+    content.push_str(&format!(
+        "KeyboardFeatures={}\n",
+        if default.keyboard_features { "1" } else { "0" }
+    ));
     content.push_str(&format!(
         "ShowSelectMusicGameplayTimer={}\n",
         if default.show_select_music_gameplay_timer {
@@ -720,6 +727,27 @@ pub fn load() {
                         }
                     })
                     .unwrap_or(default.show_select_music_gameplay_timer);
+                cfg.keyboard_features = conf
+                    .get("Theme", "KeyboardFeatures")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.keyboard_features);
                 cfg.zmod_rating_box_text = conf
                     .get("Theme", "ZmodRatingBoxText")
                     .map(|v| v.trim().to_string())
@@ -800,6 +828,9 @@ pub fn load() {
                     miss = true;
                 }
                 if !miss && !has("Theme", "ShowSelectMusicGameplayTimer") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "KeyboardFeatures") {
                     miss = true;
                 }
                 if !miss && !has("Theme", "ZmodRatingBoxText") {
@@ -1551,6 +1582,10 @@ fn save_without_keymaps() {
     // [Theme] – last section
     content.push('\n');
     content.push_str("[Theme]\n");
+    content.push_str(&format!(
+        "KeyboardFeatures={}\n",
+        if cfg.keyboard_features { "1" } else { "0" }
+    ));
     content.push_str(&format!(
         "ShowSelectMusicGameplayTimer={}\n",
         if cfg.show_select_music_gameplay_timer {

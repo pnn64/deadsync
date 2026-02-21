@@ -836,7 +836,9 @@ fn ensure_display_mode_choices(state: &mut State) {
         .sub_choice_indices_graphics
         .get(DISPLAY_MODE_ROW_INDEX)
         .copied()
-        && let Some(cursor_idx) = state.sub_cursor_indices_graphics.get_mut(DISPLAY_MODE_ROW_INDEX)
+        && let Some(cursor_idx) = state
+            .sub_cursor_indices_graphics
+            .get_mut(DISPLAY_MODE_ROW_INDEX)
     {
         *cursor_idx = choice_idx;
     }
@@ -2100,7 +2102,8 @@ fn apply_submenu_choice_delta(
     {
         return None;
     }
-    let choice_index = submenu_cursor_indices(state, kind)[row_index].min(num_choices.saturating_sub(1));
+    let choice_index =
+        submenu_cursor_indices(state, kind)[row_index].min(num_choices.saturating_sub(1));
     let cur = choice_index as isize;
     let n = num_choices as isize;
     let mut new_index = ((cur + delta).rem_euclid(n)) as usize;
@@ -2182,7 +2185,11 @@ fn apply_submenu_choice_delta(
     action
 }
 
-pub fn handle_input(state: &mut State, asset_manager: &AssetManager, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    ev: &InputEvent,
+) -> ScreenAction {
     if state.reload_ui.is_some() {
         return ScreenAction::None;
     }

@@ -3312,8 +3312,7 @@ pub fn apply_choice_delta(
     if let Some(row) = state.rows.get(row_idx)
         && row_supports_inline_nav(row)
     {
-        if state.current_pane == OptionsPane::Main || row_selects_on_focus_move(row.name.as_str())
-        {
+        if state.current_pane == OptionsPane::Main || row_selects_on_focus_move(row.name.as_str()) {
             change_choice_for_player(state, asset_manager, idx, delta);
             return;
         }
@@ -3363,7 +3362,13 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
                 move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up);
             }
             NavDirection::Down => {
-                move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Down);
+                move_selection_vertical(
+                    state,
+                    asset_manager,
+                    active,
+                    player_idx,
+                    NavDirection::Down,
+                );
             }
             NavDirection::Left => {
                 apply_choice_delta(state, asset_manager, player_idx, -1);
@@ -4240,9 +4245,13 @@ fn handle_nav_event(
             NavDirection::Up => {
                 move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up)
             }
-            NavDirection::Down => {
-                move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Down)
-            }
+            NavDirection::Down => move_selection_vertical(
+                state,
+                asset_manager,
+                active,
+                player_idx,
+                NavDirection::Down,
+            ),
             NavDirection::Left => apply_choice_delta(state, asset_manager, player_idx, -1),
             NavDirection::Right => apply_choice_delta(state, asset_manager, player_idx, 1),
         }
@@ -4335,7 +4344,11 @@ fn handle_start_event(
     None
 }
 
-pub fn handle_input(state: &mut State, asset_manager: &AssetManager, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    ev: &InputEvent,
+) -> ScreenAction {
     let active = session_active_players();
     if state.pane_transition.is_active() {
         return match ev.action {
@@ -4356,16 +4369,44 @@ pub fn handle_input(state: &mut State, asset_manager: &AssetManager, ev: &InputE
             return ScreenAction::Navigate(state.return_screen);
         }
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
-            handle_nav_event(state, asset_manager, active, P1, NavDirection::Up, ev.pressed);
+            handle_nav_event(
+                state,
+                asset_manager,
+                active,
+                P1,
+                NavDirection::Up,
+                ev.pressed,
+            );
         }
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
-            handle_nav_event(state, asset_manager, active, P1, NavDirection::Down, ev.pressed);
+            handle_nav_event(
+                state,
+                asset_manager,
+                active,
+                P1,
+                NavDirection::Down,
+                ev.pressed,
+            );
         }
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-            handle_nav_event(state, asset_manager, active, P1, NavDirection::Left, ev.pressed);
+            handle_nav_event(
+                state,
+                asset_manager,
+                active,
+                P1,
+                NavDirection::Left,
+                ev.pressed,
+            );
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-            handle_nav_event(state, asset_manager, active, P1, NavDirection::Right, ev.pressed);
+            handle_nav_event(
+                state,
+                asset_manager,
+                active,
+                P1,
+                NavDirection::Right,
+                ev.pressed,
+            );
         }
         VirtualAction::p1_start if ev.pressed => {
             if let Some(action) = handle_start_event(state, asset_manager, active, P1) {
@@ -4373,16 +4414,44 @@ pub fn handle_input(state: &mut State, asset_manager: &AssetManager, ev: &InputE
             }
         }
         VirtualAction::p2_up | VirtualAction::p2_menu_up => {
-            handle_nav_event(state, asset_manager, active, P2, NavDirection::Up, ev.pressed);
+            handle_nav_event(
+                state,
+                asset_manager,
+                active,
+                P2,
+                NavDirection::Up,
+                ev.pressed,
+            );
         }
         VirtualAction::p2_down | VirtualAction::p2_menu_down => {
-            handle_nav_event(state, asset_manager, active, P2, NavDirection::Down, ev.pressed);
+            handle_nav_event(
+                state,
+                asset_manager,
+                active,
+                P2,
+                NavDirection::Down,
+                ev.pressed,
+            );
         }
         VirtualAction::p2_left | VirtualAction::p2_menu_left => {
-            handle_nav_event(state, asset_manager, active, P2, NavDirection::Left, ev.pressed);
+            handle_nav_event(
+                state,
+                asset_manager,
+                active,
+                P2,
+                NavDirection::Left,
+                ev.pressed,
+            );
         }
         VirtualAction::p2_right | VirtualAction::p2_menu_right => {
-            handle_nav_event(state, asset_manager, active, P2, NavDirection::Right, ev.pressed);
+            handle_nav_event(
+                state,
+                asset_manager,
+                active,
+                P2,
+                NavDirection::Right,
+                ev.pressed,
+            );
         }
         VirtualAction::p2_start if ev.pressed => {
             if let Some(action) = handle_start_event(state, asset_manager, active, P2) {
