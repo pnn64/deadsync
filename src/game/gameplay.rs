@@ -43,6 +43,7 @@ pub const MAX_PLAYERS: usize = 2;
 const MIN_SECONDS_TO_STEP: f32 = 6.0;
 const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
 const M_MOD_HIGH_CAP: f32 = 600.0;
+const MAX_NOTES_AFTER_TARGETS: usize = 64;
 const COLUMN_CUE_MIN_SECONDS: f32 = 1.5;
 
 // Timing windows now sourced from game::timing
@@ -6092,6 +6093,57 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                 y_pos >= miss_cull_threshold
             }
         });
+    }
+
+    // ITG parity guard: cap total past-receptor arrows per player.
+    for player in 0..num_players {
+        let start_col = player.saturating_mul(cols_per_player);
+        let end_col = (start_col + cols_per_player).min(num_cols).min(MAX_COLS);
+        if start_col >= end_col {
+            continue;
+        }
+
+        let cull_beat = player_cull_beat[player];
+        let mut past_notes: Vec<(usize, usize, usize)> = Vec::new();
+        for col_idx in start_col..end_col {
+            for (arrow_idx, arrow) in state.arrows[col_idx].iter().enumerate() {
+                let note = &state.notes[arrow.note_index];
+                if note.beat <= cull_beat {
+                    past_notes.push((note.row_index, col_idx, arrow_idx));
+                }
+            }
+        }
+        if past_notes.len() <= MAX_NOTES_AFTER_TARGETS {
+            continue;
+        }
+
+        past_notes.sort_unstable();
+        let drop_count = past_notes.len() - MAX_NOTES_AFTER_TARGETS;
+        let mut drop_indices: [Vec<usize>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
+        let mut i = 0usize;
+        while i < drop_count {
+            let (_, col_idx, arrow_idx) = past_notes[i];
+            drop_indices[col_idx].push(arrow_idx);
+            i += 1;
+        }
+
+        for col_idx in start_col..end_col {
+            let drops = &mut drop_indices[col_idx];
+            if drops.is_empty() {
+                continue;
+            }
+            drops.sort_unstable();
+            let mut drop_pos = 0usize;
+            let mut arrow_idx = 0usize;
+            state.arrows[col_idx].retain(|_| {
+                let should_drop = drop_pos < drops.len() && arrow_idx == drops[drop_pos];
+                if should_drop {
+                    drop_pos += 1;
+                }
+                arrow_idx += 1;
+                !should_drop
+            });
+        }
     }
 }
 
