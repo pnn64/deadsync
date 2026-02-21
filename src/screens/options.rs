@@ -832,6 +832,14 @@ fn ensure_display_mode_choices(state: &mut State) {
     {
         *idx = 0;
     }
+    if let Some(choice_idx) = state
+        .sub_choice_indices_graphics
+        .get(DISPLAY_MODE_ROW_INDEX)
+        .copied()
+        && let Some(cursor_idx) = state.sub_cursor_indices_graphics.get_mut(DISPLAY_MODE_ROW_INDEX)
+    {
+        *cursor_idx = choice_idx;
+    }
     // Also re-run logic that depends on the selected monitor.
     let current_res = selected_resolution(state);
     rebuild_resolution_choices(state, current_res.0, current_res.1);
@@ -871,6 +879,12 @@ fn set_display_mode_row_selection(
     };
     if let Some(slot) = state
         .sub_choice_indices_graphics
+        .get_mut(DISPLAY_MODE_ROW_INDEX)
+    {
+        *slot = idx;
+    }
+    if let Some(slot) = state
+        .sub_cursor_indices_graphics
         .get_mut(DISPLAY_MODE_ROW_INDEX)
     {
         *slot = idx;
@@ -949,6 +963,12 @@ fn rebuild_refresh_rate_choices(state: &mut State) {
         {
             *slot = 0;
         }
+        if let Some(slot) = state
+            .sub_cursor_indices_graphics
+            .get_mut(REFRESH_RATE_ROW_INDEX)
+        {
+            *slot = 0;
+        }
         return;
     }
 
@@ -980,15 +1000,22 @@ fn rebuild_refresh_rate_choices(state: &mut State) {
 
     state.refresh_rate_choices = rates;
 
+    let next_idx = state
+        .refresh_rate_choices
+        .iter()
+        .position(|&r| r == current_rate)
+        .unwrap_or(0);
     if let Some(slot) = state
         .sub_choice_indices_graphics
         .get_mut(REFRESH_RATE_ROW_INDEX)
     {
-        *slot = state
-            .refresh_rate_choices
-            .iter()
-            .position(|&r| r == current_rate)
-            .unwrap_or(0);
+        *slot = next_idx;
+    }
+    if let Some(slot) = state
+        .sub_cursor_indices_graphics
+        .get_mut(REFRESH_RATE_ROW_INDEX)
+    {
+        *slot = next_idx;
     }
 }
 
@@ -1016,15 +1043,22 @@ fn rebuild_resolution_choices(state: &mut State, width: u32, height: u32) {
     list.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
 
     state.resolution_choices = list;
+    let next_idx = state
+        .resolution_choices
+        .iter()
+        .position(|&(w, h)| w == width && h == height)
+        .unwrap_or(0);
     if let Some(slot) = state
         .sub_choice_indices_graphics
         .get_mut(DISPLAY_RESOLUTION_ROW_INDEX)
     {
-        *slot = state
-            .resolution_choices
-            .iter()
-            .position(|&(w, h)| w == width && h == height)
-            .unwrap_or(0);
+        *slot = next_idx;
+    }
+    if let Some(slot) = state
+        .sub_cursor_indices_graphics
+        .get_mut(DISPLAY_RESOLUTION_ROW_INDEX)
+    {
+        *slot = next_idx;
     }
 
     // Rebuild refresh rates since available rates depend on resolution.
@@ -1078,6 +1112,116 @@ fn row_choices<'a>(
     rows.get(row_idx)
         .map(|row| row.choices.iter().map(|c| Cow::Borrowed(*c)).collect())
         .unwrap_or_default()
+}
+
+fn submenu_inline_choice_centers(
+    state: &State,
+    asset_manager: &AssetManager,
+    kind: SubmenuKind,
+    row_idx: usize,
+) -> Vec<f32> {
+    let rows = submenu_rows(kind);
+    let Some(row) = rows.get(row_idx) else {
+        return Vec::new();
+    };
+    if !row.inline {
+        return Vec::new();
+    }
+    let mut choice_texts = row_choices(state, kind, rows, row_idx);
+    if choice_texts.is_empty() {
+        return Vec::new();
+    }
+    if row.label == "Global Offset (ms)" {
+        choice_texts[0] = Cow::Owned(format_ms(state.global_offset_ms));
+    } else if row.label == "Visual Delay (ms)" {
+        choice_texts[0] = Cow::Owned(format_ms(state.visual_delay_ms));
+    }
+    let value_zoom = 0.835_f32;
+    let mut centers: Vec<f32> = Vec::with_capacity(choice_texts.len());
+    let mut x = 0.0_f32;
+    asset_manager.with_fonts(|all_fonts| {
+        asset_manager.with_font("miso", |metrics_font| {
+            for text in &choice_texts {
+                let mut w =
+                    font::measure_line_width_logical(metrics_font, text.as_ref(), all_fonts) as f32;
+                if !w.is_finite() || w <= 0.0 {
+                    w = 1.0;
+                }
+                let draw_w = w * value_zoom;
+                centers.push(draw_w.mul_add(0.5, x));
+                x += draw_w + INLINE_SPACING;
+            }
+        });
+    });
+    centers
+}
+
+fn sync_submenu_inline_x_from_row(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    kind: SubmenuKind,
+    row_idx: usize,
+) {
+    let centers = submenu_inline_choice_centers(state, asset_manager, kind, row_idx);
+    if centers.is_empty() {
+        return;
+    }
+    let choice_idx = submenu_choice_indices(state, kind)
+        .get(row_idx)
+        .copied()
+        .unwrap_or(0)
+        .min(centers.len().saturating_sub(1));
+    state.sub_inline_x = centers[choice_idx];
+}
+
+fn apply_submenu_inline_x_to_row(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    kind: SubmenuKind,
+    row_idx: usize,
+) {
+    let centers = submenu_inline_choice_centers(state, asset_manager, kind, row_idx);
+    if centers.is_empty() {
+        return;
+    }
+    let choice_idx = submenu_choice_indices(state, kind)
+        .get(row_idx)
+        .copied()
+        .unwrap_or(0)
+        .min(centers.len().saturating_sub(1));
+    if let Some(slot) = submenu_cursor_indices_mut(state, kind).get_mut(row_idx) {
+        *slot = choice_idx;
+    }
+    if let Some(&x) = centers.get(choice_idx) {
+        state.sub_inline_x = x;
+    }
+}
+
+fn move_submenu_selection_vertical(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    kind: SubmenuKind,
+    dir: NavDirection,
+) {
+    let total = submenu_rows(kind).len() + 1;
+    if total == 0 {
+        return;
+    }
+    let current_row = state.sub_selected.min(total.saturating_sub(1));
+    if !state.sub_inline_x.is_finite() {
+        sync_submenu_inline_x_from_row(state, asset_manager, kind, current_row);
+    }
+    state.sub_selected = match dir {
+        NavDirection::Up => {
+            if current_row == 0 {
+                total - 1
+            } else {
+                current_row - 1
+            }
+        }
+        NavDirection::Down => (current_row + 1) % total,
+    };
+    apply_submenu_inline_x_to_row(state, asset_manager, kind, state.sub_selected);
 }
 
 const SOUND_VOLUME_LEVELS: [u8; 6] = [0, 10, 25, 50, 75, 100];
@@ -1165,11 +1309,17 @@ pub struct State {
     // Submenu state
     sub_selected: usize,
     sub_prev_selected: usize,
+    sub_inline_x: f32,
     sub_choice_indices_system: Vec<usize>,
     sub_choice_indices_graphics: Vec<usize>,
     sub_choice_indices_sound: Vec<usize>,
     sub_choice_indices_select_music: Vec<usize>,
     sub_choice_indices_groovestats: Vec<usize>,
+    sub_cursor_indices_system: Vec<usize>,
+    sub_cursor_indices_graphics: Vec<usize>,
+    sub_cursor_indices_sound: Vec<usize>,
+    sub_cursor_indices_select_music: Vec<usize>,
+    sub_cursor_indices_groovestats: Vec<usize>,
     global_offset_ms: i32,
     visual_delay_ms: i32,
     video_renderer_at_load: BackendType,
@@ -1219,11 +1369,17 @@ pub fn init() -> State {
         view: OptionsView::Main,
         sub_selected: 0,
         sub_prev_selected: 0,
+        sub_inline_x: f32::NAN,
         sub_choice_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_choice_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         sub_choice_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         sub_choice_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
         sub_choice_indices_groovestats: vec![0; GROOVESTATS_OPTIONS_ROWS.len()],
+        sub_cursor_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
+        sub_cursor_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
+        sub_cursor_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
+        sub_cursor_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
+        sub_cursor_indices_groovestats: vec![0; GROOVESTATS_OPTIONS_ROWS.len()],
         global_offset_ms: {
             let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
             ms.clamp(GLOBAL_OFFSET_MIN_MS, GLOBAL_OFFSET_MAX_MS)
@@ -1325,6 +1481,7 @@ pub fn init() -> State {
         "Auto Populate GS Scores",
         usize::from(cfg.auto_populate_gs_scores),
     );
+    sync_submenu_cursor_indices(&mut state);
     state
 }
 
@@ -1348,6 +1505,34 @@ const fn submenu_choice_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
     }
 }
 
+fn submenu_cursor_indices(state: &State, kind: SubmenuKind) -> &[usize] {
+    match kind {
+        SubmenuKind::System => &state.sub_cursor_indices_system,
+        SubmenuKind::Graphics => &state.sub_cursor_indices_graphics,
+        SubmenuKind::Sound => &state.sub_cursor_indices_sound,
+        SubmenuKind::SelectMusic => &state.sub_cursor_indices_select_music,
+        SubmenuKind::GrooveStats => &state.sub_cursor_indices_groovestats,
+    }
+}
+
+const fn submenu_cursor_indices_mut(state: &mut State, kind: SubmenuKind) -> &mut Vec<usize> {
+    match kind {
+        SubmenuKind::System => &mut state.sub_cursor_indices_system,
+        SubmenuKind::Graphics => &mut state.sub_cursor_indices_graphics,
+        SubmenuKind::Sound => &mut state.sub_cursor_indices_sound,
+        SubmenuKind::SelectMusic => &mut state.sub_cursor_indices_select_music,
+        SubmenuKind::GrooveStats => &mut state.sub_cursor_indices_groovestats,
+    }
+}
+
+fn sync_submenu_cursor_indices(state: &mut State) {
+    state.sub_cursor_indices_system = state.sub_choice_indices_system.clone();
+    state.sub_cursor_indices_graphics = state.sub_choice_indices_graphics.clone();
+    state.sub_cursor_indices_sound = state.sub_choice_indices_sound.clone();
+    state.sub_cursor_indices_select_music = state.sub_choice_indices_select_music.clone();
+    state.sub_cursor_indices_groovestats = state.sub_choice_indices_groovestats.clone();
+}
+
 pub fn sync_video_renderer(state: &mut State, renderer: BackendType) {
     state.video_renderer_at_load = renderer;
     if let Some(slot) = state
@@ -1356,6 +1541,7 @@ pub fn sync_video_renderer(state: &mut State, renderer: BackendType) {
     {
         *slot = backend_to_renderer_choice_index(renderer);
     }
+    sync_submenu_cursor_indices(state);
 }
 
 pub fn sync_display_mode(
@@ -1378,12 +1564,14 @@ pub fn sync_display_mode(
     {
         *slot = fullscreen_type_to_choice_index(target_type);
     }
+    sync_submenu_cursor_indices(state);
 }
 
 pub fn sync_display_resolution(state: &mut State, width: u32, height: u32) {
     rebuild_resolution_choices(state, width, height);
     state.display_width_at_load = width;
     state.display_height_at_load = height;
+    sync_submenu_cursor_indices(state);
 }
 
 pub fn sync_show_stats_mode(state: &mut State, mode: u8) {
@@ -1393,6 +1581,7 @@ pub fn sync_show_stats_mode(state: &mut State, mode: u8) {
         "Show Stats",
         mode.min(2) as usize,
     );
+    sync_submenu_cursor_indices(state);
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -1535,6 +1724,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 state.pending_submenu_kind = None;
                 state.sub_selected = 0;
                 state.sub_prev_selected = 0;
+                state.sub_inline_x = f32::NAN;
+                sync_submenu_cursor_indices(state);
                 state.cursor_initialized = false;
                 state.cursor_t = 1.0;
                 state.row_tweens.clear();
@@ -1691,22 +1882,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     }
                 }
                 OptionsView::Submenu(kind) => {
-                    let total = submenu_rows(kind).len() + 1; // + Exit row
-                    if total > 0 {
-                        match direction {
-                            NavDirection::Up => {
-                                state.sub_selected = if state.sub_selected == 0 {
-                                    total - 1
-                                } else {
-                                    state.sub_selected - 1
-                                };
-                            }
-                            NavDirection::Down => {
-                                state.sub_selected = (state.sub_selected + 1) % total;
-                            }
-                        }
-                        state.nav_key_last_scrolled_at = Some(now);
-                    }
+                    move_submenu_selection_vertical(state, asset_manager, kind, direction);
+                    state.nav_key_last_scrolled_at = Some(now);
                 }
             }
         }
@@ -1723,9 +1900,9 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             && matches!(state.view, OptionsView::Submenu(_))
         {
             if pending_action.is_none() {
-                pending_action = apply_submenu_choice_delta(state, delta_lr);
+                pending_action = apply_submenu_choice_delta(state, asset_manager, delta_lr);
             } else {
-                apply_submenu_choice_delta(state, delta_lr);
+                apply_submenu_choice_delta(state, asset_manager, delta_lr);
             }
             state.nav_lr_last_adjusted_at = Some(now);
         }
@@ -1857,7 +2034,11 @@ fn on_lr_release(state: &mut State, delta: isize) {
     }
 }
 
-fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenAction> {
+fn apply_submenu_choice_delta(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    delta: isize,
+) -> Option<ScreenAction> {
     if !matches!(state.submenu_transition, SubmenuTransition::None) {
         return None;
     }
@@ -1914,11 +2095,12 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
         return None;
     }
     let mut action: Option<ScreenAction> = None;
-    let choice_indices = submenu_choice_indices_mut(state, kind);
-    if row_index >= choice_indices.len() {
+    if row_index >= submenu_choice_indices(state, kind).len()
+        || row_index >= submenu_cursor_indices(state, kind).len()
+    {
         return None;
     }
-    let choice_index = choice_indices[row_index].min(num_choices.saturating_sub(1));
+    let choice_index = submenu_cursor_indices(state, kind)[row_index].min(num_choices.saturating_sub(1));
     let cur = choice_index as isize;
     let n = num_choices as isize;
     let mut new_index = ((cur + delta).rem_euclid(n)) as usize;
@@ -1929,7 +2111,14 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
         return None;
     }
 
-    choice_indices[row_index] = new_index;
+    submenu_choice_indices_mut(state, kind)[row_index] = new_index;
+    submenu_cursor_indices_mut(state, kind)[row_index] = new_index;
+    if rows.get(row_index).is_some_and(|row| row.inline) {
+        let centers = submenu_inline_choice_centers(state, asset_manager, kind, row_index);
+        if let Some(&x) = centers.get(new_index) {
+            state.sub_inline_x = x;
+        }
+    }
     audio::play_sfx("assets/sounds/change_value.ogg");
 
     if matches!(kind, SubmenuKind::Graphics) {
@@ -1993,7 +2182,7 @@ fn apply_submenu_choice_delta(state: &mut State, delta: isize) -> Option<ScreenA
     action
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, asset_manager: &AssetManager, ev: &InputEvent) -> ScreenAction {
     if state.reload_ui.is_some() {
         return ScreenAction::None;
     }
@@ -2027,14 +2216,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         }
                     }
                     OptionsView::Submenu(kind) => {
-                        let total = submenu_rows(kind).len() + 1;
-                        if total > 0 {
-                            state.sub_selected = if state.sub_selected == 0 {
-                                total - 1
-                            } else {
-                                state.sub_selected - 1
-                            };
-                        }
+                        move_submenu_selection_vertical(
+                            state,
+                            asset_manager,
+                            kind,
+                            NavDirection::Up,
+                        );
                     }
                 }
                 on_nav_press(state, NavDirection::Up);
@@ -2052,10 +2239,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         }
                     }
                     OptionsView::Submenu(kind) => {
-                        let total = submenu_rows(kind).len() + 1;
-                        if total > 0 {
-                            state.sub_selected = (state.sub_selected + 1) % total;
-                        }
+                        move_submenu_selection_vertical(
+                            state,
+                            asset_manager,
+                            kind,
+                            NavDirection::Down,
+                        );
                     }
                 }
                 on_nav_press(state, NavDirection::Down);
@@ -2065,7 +2254,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             if ev.pressed {
-                if let Some(action) = apply_submenu_choice_delta(state, -1) {
+                if let Some(action) = apply_submenu_choice_delta(state, asset_manager, -1) {
                     on_lr_press(state, -1);
                     return action;
                 }
@@ -2076,7 +2265,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             if ev.pressed {
-                if let Some(action) = apply_submenu_choice_delta(state, 1) {
+                if let Some(action) = apply_submenu_choice_delta(state, asset_manager, 1) {
                     on_lr_press(state, 1);
                     return action;
                 }
@@ -2406,7 +2595,7 @@ fn submenu_cursor_dest(
         choice_texts[0] = Cow::Owned(format_ms(state.visual_delay_ms));
     }
 
-    let selected_choice = submenu_choice_indices(state, kind)
+    let selected_choice = submenu_cursor_indices(state, kind)
         .get(row_idx)
         .copied()
         .unwrap_or(0)

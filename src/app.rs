@@ -1707,7 +1707,11 @@ impl App {
                 &ev,
             ),
             CurrentScreen::Options => {
-                crate::screens::options::handle_input(&mut self.state.screens.options_state, &ev)
+                crate::screens::options::handle_input(
+                    &mut self.state.screens.options_state,
+                    &self.asset_manager,
+                    &ev,
+                )
             }
             CurrentScreen::ManageLocalProfiles => {
                 crate::screens::manage_local_profiles::handle_input(
@@ -1731,7 +1735,7 @@ impl App {
             ),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &mut self.state.screens.player_options_state {
-                    crate::screens::player_options::handle_input(pos, &ev)
+                    crate::screens::player_options::handle_input(pos, &self.asset_manager, &ev)
                 } else {
                     ScreenAction::None
                 }

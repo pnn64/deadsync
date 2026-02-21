@@ -373,6 +373,7 @@ pub struct State {
     pub nav_key_held_direction: [Option<NavDirection>; PLAYER_SLOTS],
     pub nav_key_held_since: [Option<Instant>; PLAYER_SLOTS],
     pub nav_key_last_scrolled_at: [Option<Instant>; PLAYER_SLOTS],
+    inline_choice_x: [f32; PLAYER_SLOTS],
     pub player_profiles: [crate::game::profile::Profile; PLAYER_SLOTS],
     noteskin_names: Vec<String>,
     noteskin_cache: HashMap<String, Arc<Noteskin>>,
@@ -2048,6 +2049,7 @@ pub fn init(
         nav_key_held_direction: [None; PLAYER_SLOTS],
         nav_key_held_since: [None; PLAYER_SLOTS],
         nav_key_last_scrolled_at: [None; PLAYER_SLOTS],
+        inline_choice_x: [f32::NAN; PLAYER_SLOTS],
         player_profiles,
         noteskin_names,
         noteskin_cache,
@@ -2443,6 +2445,209 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
 }
 
 #[inline(always)]
+fn row_supports_inline_nav(row: &Row) -> bool {
+    !row.choices.is_empty() && row_shows_all_choices_inline(row.name.as_str())
+}
+
+#[inline(always)]
+fn row_toggles_with_start(row_name: &str) -> bool {
+    row_name == "Scroll"
+        || row_name == "Hide"
+        || row_name == "Gameplay Extras"
+        || row_name == "Gameplay Extras (More)"
+        || row_name == "Error Bar"
+        || row_name == "Error Bar Options"
+        || row_name == "Measure Counter Options"
+        || row_name == "FA+ Options"
+        || row_name == "Early Decent/Way Off Options"
+}
+
+#[inline(always)]
+fn row_selects_on_focus_move(row_name: &str) -> bool {
+    row_name == "Stepchart" || row_name == "What comes next?"
+}
+
+fn inline_choice_centers(choices: &[String], asset_manager: &AssetManager) -> Vec<f32> {
+    if choices.is_empty() {
+        return Vec::new();
+    }
+    let mut centers: Vec<f32> = Vec::with_capacity(choices.len());
+    let mut x = widescale(162.0, 176.0);
+    let zoom = 0.835_f32;
+    for text in choices {
+        let (draw_w, _) = measure_option_text(asset_manager, text, zoom);
+        centers.push(draw_w.mul_add(0.5, x));
+        x += draw_w + INLINE_SPACING;
+    }
+    centers
+}
+
+fn focused_inline_choice_index(
+    state: &State,
+    asset_manager: &AssetManager,
+    player_idx: usize,
+    row_idx: usize,
+) -> Option<usize> {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row = state.rows.get(row_idx)?;
+    if !row_supports_inline_nav(row) {
+        return None;
+    }
+    let centers = inline_choice_centers(&row.choices, asset_manager);
+    if centers.is_empty() {
+        return None;
+    }
+    let mut focus_idx = row.selected_choice_index[idx].min(centers.len().saturating_sub(1));
+    let anchor_x = state.inline_choice_x[idx];
+    if anchor_x.is_finite() {
+        let mut best_dist = f32::INFINITY;
+        for (i, &center_x) in centers.iter().enumerate() {
+            let dist = (center_x - anchor_x).abs();
+            if dist < best_dist {
+                best_dist = dist;
+                focus_idx = i;
+            }
+        }
+    }
+    Some(focus_idx)
+}
+
+fn move_inline_focus(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    player_idx: usize,
+    delta: isize,
+) -> bool {
+    if state.rows.is_empty() || delta == 0 {
+        return false;
+    }
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_idx = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
+    let Some(row) = state.rows.get(row_idx) else {
+        return false;
+    };
+    if !row_supports_inline_nav(row) {
+        return false;
+    }
+    let centers = inline_choice_centers(&row.choices, asset_manager);
+    if centers.is_empty() {
+        return false;
+    }
+    let Some(current_idx) = focused_inline_choice_index(state, asset_manager, idx, row_idx) else {
+        return false;
+    };
+    let n = centers.len() as isize;
+    let next_idx = ((current_idx as isize + delta).rem_euclid(n)) as usize;
+    state.inline_choice_x[idx] = centers[next_idx];
+    true
+}
+
+fn commit_inline_focus_selection(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    player_idx: usize,
+    row_idx: usize,
+) -> bool {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let Some(row) = state.rows.get(row_idx) else {
+        return false;
+    };
+    if !row_supports_inline_nav(row) {
+        return false;
+    }
+    let Some(focus_idx) = focused_inline_choice_index(state, asset_manager, idx, row_idx) else {
+        return false;
+    };
+    let is_shared = row_is_shared(row.name.as_str());
+    if let Some(row) = state.rows.get_mut(row_idx) {
+        if is_shared {
+            let changed = row.selected_choice_index.iter().any(|&v| v != focus_idx);
+            row.selected_choice_index = [focus_idx; PLAYER_SLOTS];
+            return changed;
+        }
+        let changed = row.selected_choice_index[idx] != focus_idx;
+        row.selected_choice_index[idx] = focus_idx;
+        return changed;
+    }
+    false
+}
+
+fn sync_inline_intent_from_row(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    player_idx: usize,
+    row_idx: usize,
+) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let Some(row) = state.rows.get(row_idx) else {
+        return;
+    };
+    if !row_supports_inline_nav(row) {
+        return;
+    }
+    let centers = inline_choice_centers(&row.choices, asset_manager);
+    if centers.is_empty() {
+        return;
+    }
+    let sel = row.selected_choice_index[idx].min(centers.len().saturating_sub(1));
+    state.inline_choice_x[idx] = centers[sel];
+}
+
+fn apply_inline_intent_to_row(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    player_idx: usize,
+    row_idx: usize,
+) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let Some(row) = state.rows.get(row_idx) else {
+        return;
+    };
+    if !row_supports_inline_nav(row) {
+        return;
+    }
+    let centers = inline_choice_centers(&row.choices, asset_manager);
+    if centers.is_empty() {
+        return;
+    }
+    let sel = row.selected_choice_index[idx].min(centers.len().saturating_sub(1));
+    if state.current_pane == OptionsPane::Main {
+        state.inline_choice_x[idx] = centers[sel];
+        return;
+    }
+    if !state.inline_choice_x[idx].is_finite() {
+        state.inline_choice_x[idx] = centers[sel];
+    }
+}
+
+fn move_selection_vertical(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    active: [bool; PLAYER_SLOTS],
+    player_idx: usize,
+    dir: NavDirection,
+) {
+    if !matches!(dir, NavDirection::Up | NavDirection::Down) || state.rows.is_empty() {
+        return;
+    }
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    sync_selected_rows_with_visibility(state, active);
+    let visibility = row_visibility(&state.rows, active, state.error_bar_active_mask);
+    let current_row = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
+    if !state.inline_choice_x[idx].is_finite() {
+        if let Some((anchor_x, _, _, _)) = cursor_dest_for_player(state, asset_manager, idx) {
+            state.inline_choice_x[idx] = anchor_x;
+        } else {
+            sync_inline_intent_from_row(state, asset_manager, idx, current_row);
+        }
+    }
+    if let Some(next_row) = next_visible_row(&state.rows, current_row, dir, visibility) {
+        state.selected_row[idx] = next_row;
+        apply_inline_intent_to_row(state, asset_manager, idx, next_row);
+    }
+}
+
+#[inline(always)]
 fn measure_option_text(asset_manager: &AssetManager, text: &str, zoom: f32) -> (f32, f32) {
     let mut out_w = 40.0_f32;
     let mut out_h = 16.0_f32;
@@ -2556,12 +2761,14 @@ fn cursor_dest_for_player(
             return None;
         }
 
-        let sel_idx = row.selected_choice_index[player_idx].min(widths.len().saturating_sub(1));
+        let focus_idx = focused_inline_choice_index(state, asset_manager, player_idx, row_idx)
+            .unwrap_or_else(|| row.selected_choice_index[player_idx])
+            .min(widths.len().saturating_sub(1));
         let mut left_x = choice_inner_left;
-        for w in widths.iter().take(sel_idx) {
+        for w in widths.iter().take(focus_idx) {
             left_x += *w + spacing;
         }
-        let draw_w = widths[sel_idx];
+        let draw_w = widths[focus_idx];
         let center_x = draw_w.mul_add(0.5, left_x);
 
         let mut size_t = draw_w / width_ref;
@@ -2623,7 +2830,12 @@ fn cursor_dest_for_player(
     Some((center_x, y, ring_w, ring_h))
 }
 
-fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) {
+fn change_choice_for_player(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    player_idx: usize,
+    delta: isize,
+) {
     if state.rows.is_empty() {
         return;
     }
@@ -3082,11 +3294,35 @@ fn change_choice_for_player(state: &mut State, player_idx: usize, delta: isize) 
     if visibility_changed {
         sync_selected_rows_with_visibility(state, session_active_players());
     }
+    sync_inline_intent_from_row(state, asset_manager, player_idx, row_index);
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
-pub fn apply_choice_delta(state: &mut State, player_idx: usize, delta: isize) {
-    change_choice_for_player(state, player_idx, delta);
+pub fn apply_choice_delta(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    player_idx: usize,
+    delta: isize,
+) {
+    if state.rows.is_empty() {
+        return;
+    }
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_idx = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
+    if let Some(row) = state.rows.get(row_idx)
+        && row_supports_inline_nav(row)
+    {
+        if state.current_pane == OptionsPane::Main || row_selects_on_focus_move(row.name.as_str())
+        {
+            change_choice_for_player(state, asset_manager, idx, delta);
+            return;
+        }
+        if move_inline_focus(state, asset_manager, idx, delta) {
+            audio::play_sfx("assets/sounds/change_value.ogg");
+        }
+        return;
+    }
+    change_choice_for_player(state, asset_manager, player_idx, delta);
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
@@ -3122,33 +3358,18 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
         if state.rows.is_empty() {
             continue;
         }
-        let visibility = row_visibility(&state.rows, active, state.error_bar_active_mask);
         match direction {
             NavDirection::Up => {
-                if let Some(next_row) = next_visible_row(
-                    &state.rows,
-                    state.selected_row[player_idx],
-                    NavDirection::Up,
-                    visibility,
-                ) {
-                    state.selected_row[player_idx] = next_row;
-                }
+                move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up);
             }
             NavDirection::Down => {
-                if let Some(next_row) = next_visible_row(
-                    &state.rows,
-                    state.selected_row[player_idx],
-                    NavDirection::Down,
-                    visibility,
-                ) {
-                    state.selected_row[player_idx] = next_row;
-                }
+                move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Down);
             }
             NavDirection::Left => {
-                change_choice_for_player(state, player_idx, -1);
+                apply_choice_delta(state, asset_manager, player_idx, -1);
             }
             NavDirection::Right => {
-                change_choice_for_player(state, player_idx, 1);
+                apply_choice_delta(state, asset_manager, player_idx, 1);
             }
         }
         state.nav_key_last_scrolled_at[player_idx] = Some(now);
@@ -3962,6 +4183,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
     state.current_pane = pane;
     state.selected_row = [0; PLAYER_SLOTS];
     state.prev_selected_row = [0; PLAYER_SLOTS];
+    state.inline_choice_x = [f32::NAN; PLAYER_SLOTS];
     state.cursor_initialized = [false; PLAYER_SLOTS];
     state.cursor_from_x = [0.0; PLAYER_SLOTS];
     state.cursor_from_y = [0.0; PLAYER_SLOTS];
@@ -4003,6 +4225,7 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
 
 fn handle_nav_event(
     state: &mut State,
+    asset_manager: &AssetManager,
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
     dir: NavDirection,
@@ -4013,30 +4236,15 @@ fn handle_nav_event(
     }
     if pressed {
         sync_selected_rows_with_visibility(state, active);
-        let visibility = row_visibility(&state.rows, active, state.error_bar_active_mask);
         match dir {
             NavDirection::Up => {
-                if let Some(next_row) = next_visible_row(
-                    &state.rows,
-                    state.selected_row[player_idx],
-                    NavDirection::Up,
-                    visibility,
-                ) {
-                    state.selected_row[player_idx] = next_row;
-                }
+                move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up)
             }
             NavDirection::Down => {
-                if let Some(next_row) = next_visible_row(
-                    &state.rows,
-                    state.selected_row[player_idx],
-                    NavDirection::Down,
-                    visibility,
-                ) {
-                    state.selected_row[player_idx] = next_row;
-                }
+                move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Down)
             }
-            NavDirection::Left => apply_choice_delta(state, player_idx, -1),
-            NavDirection::Right => apply_choice_delta(state, player_idx, 1),
+            NavDirection::Left => apply_choice_delta(state, asset_manager, player_idx, -1),
+            NavDirection::Right => apply_choice_delta(state, asset_manager, player_idx, 1),
         }
         on_nav_press(state, player_idx, dir);
     } else {
@@ -4046,6 +4254,7 @@ fn handle_nav_event(
 
 fn handle_start_event(
     state: &mut State,
+    asset_manager: &AssetManager,
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
 ) -> Option<ScreenAction> {
@@ -4061,39 +4270,47 @@ fn handle_start_event(
     let Some(row) = state.rows.get(row_index) else {
         return None;
     };
-    if row.name == "Scroll" {
+    let row_name = row.name.clone();
+    if row_supports_inline_nav(row) {
+        let changed = commit_inline_focus_selection(state, asset_manager, player_idx, row_index);
+        if changed && !row_toggles_with_start(row_name.as_str()) {
+            change_choice_for_player(state, asset_manager, player_idx, 0);
+            return None;
+        }
+    }
+    if row_name == "Scroll" {
         toggle_scroll_row(state, player_idx);
         return None;
     }
-    if row.name == "Hide" {
+    if row_name == "Hide" {
         toggle_hide_row(state, player_idx);
         return None;
     }
-    if row.name == "Gameplay Extras" {
+    if row_name == "Gameplay Extras" {
         toggle_gameplay_extras_row(state, player_idx);
         return None;
     }
-    if row.name == "Gameplay Extras (More)" {
+    if row_name == "Gameplay Extras (More)" {
         toggle_gameplay_extras_more_row(state, player_idx);
         return None;
     }
-    if row.name == "Error Bar" {
+    if row_name == "Error Bar" {
         toggle_error_bar_row(state, player_idx);
         return None;
     }
-    if row.name == "Error Bar Options" {
+    if row_name == "Error Bar Options" {
         toggle_error_bar_options_row(state, player_idx);
         return None;
     }
-    if row.name == "Measure Counter Options" {
+    if row_name == "Measure Counter Options" {
         toggle_measure_counter_options_row(state, player_idx);
         return None;
     }
-    if row.name == "FA+ Options" {
+    if row_name == "FA+ Options" {
         toggle_fa_plus_row(state, player_idx);
         return None;
     }
-    if row.name == "Early Decent/Way Off Options" {
+    if row_name == "Early Decent/Way Off Options" {
         toggle_early_dw_row(state, player_idx);
         return None;
     }
@@ -4118,7 +4335,7 @@ fn handle_start_event(
     None
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, asset_manager: &AssetManager, ev: &InputEvent) -> ScreenAction {
     let active = session_active_players();
     if state.pane_transition.is_active() {
         return match ev.action {
@@ -4139,36 +4356,36 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             return ScreenAction::Navigate(state.return_screen);
         }
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
-            handle_nav_event(state, active, P1, NavDirection::Up, ev.pressed);
+            handle_nav_event(state, asset_manager, active, P1, NavDirection::Up, ev.pressed);
         }
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
-            handle_nav_event(state, active, P1, NavDirection::Down, ev.pressed);
+            handle_nav_event(state, asset_manager, active, P1, NavDirection::Down, ev.pressed);
         }
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-            handle_nav_event(state, active, P1, NavDirection::Left, ev.pressed);
+            handle_nav_event(state, asset_manager, active, P1, NavDirection::Left, ev.pressed);
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-            handle_nav_event(state, active, P1, NavDirection::Right, ev.pressed);
+            handle_nav_event(state, asset_manager, active, P1, NavDirection::Right, ev.pressed);
         }
         VirtualAction::p1_start if ev.pressed => {
-            if let Some(action) = handle_start_event(state, active, P1) {
+            if let Some(action) = handle_start_event(state, asset_manager, active, P1) {
                 return action;
             }
         }
         VirtualAction::p2_up | VirtualAction::p2_menu_up => {
-            handle_nav_event(state, active, P2, NavDirection::Up, ev.pressed);
+            handle_nav_event(state, asset_manager, active, P2, NavDirection::Up, ev.pressed);
         }
         VirtualAction::p2_down | VirtualAction::p2_menu_down => {
-            handle_nav_event(state, active, P2, NavDirection::Down, ev.pressed);
+            handle_nav_event(state, asset_manager, active, P2, NavDirection::Down, ev.pressed);
         }
         VirtualAction::p2_left | VirtualAction::p2_menu_left => {
-            handle_nav_event(state, active, P2, NavDirection::Left, ev.pressed);
+            handle_nav_event(state, asset_manager, active, P2, NavDirection::Left, ev.pressed);
         }
         VirtualAction::p2_right | VirtualAction::p2_menu_right => {
-            handle_nav_event(state, active, P2, NavDirection::Right, ev.pressed);
+            handle_nav_event(state, asset_manager, active, P2, NavDirection::Right, ev.pressed);
         }
         VirtualAction::p2_start if ev.pressed => {
-            if let Some(action) = handle_start_event(state, active, P2) {
+            if let Some(action) = handle_start_event(state, asset_manager, active, P2) {
                 return action;
             }
         }
