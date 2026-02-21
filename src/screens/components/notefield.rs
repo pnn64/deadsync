@@ -2790,8 +2790,7 @@ pub fn build(
                         }
                     };
                     let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
-                    let rot_rad = (-head_slot.def.rotation_deg as f32).to_radians();
-                    let (sin_r, cos_r) = rot_rad.sin_cos();
+                    let [sin_r, cos_r] = head_slot.base_rot_sin_cos();
                     let ox = draw.pos[0] * note_scale;
                     let oy = draw.pos[1] * note_scale;
                     let offset = [ox * cos_r - oy * sin_r, ox * sin_r + oy * cos_r];
@@ -2878,8 +2877,7 @@ pub fn build(
                         let slot_size = logical_slot_size(note_slot);
                         let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
                         let offset_scale = note_scale;
-                        let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
-                        let (sin_r, cos_r) = rot_rad.sin_cos();
+                        let [sin_r, cos_r] = note_slot.base_rot_sin_cos();
                         let ox = draw.pos[0] * offset_scale;
                         let oy = draw.pos[1] * offset_scale;
                         let offset = [ox * cos_r - oy * sin_r, ox * sin_r + oy * cos_r];
@@ -3304,8 +3302,7 @@ pub fn build(
                         let slot_size = logical_slot_size(note_slot);
                         let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
                         let offset_scale = note_scale;
-                        let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
-                        let (sin_r, cos_r) = rot_rad.sin_cos();
+                        let [sin_r, cos_r] = note_slot.base_rot_sin_cos();
                         let ox = draw.pos[0] * offset_scale;
                         let oy = draw.pos[1] * offset_scale;
                         let offset = [ox * cos_r - oy * sin_r, ox * sin_r + oy * cos_r];

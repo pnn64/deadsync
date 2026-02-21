@@ -169,6 +169,7 @@ pub struct ModelAutoRotKey {
 #[derive(Debug, Clone)]
 pub struct SpriteSlot {
     pub def: SpriteDefinition,
+    base_rot_sin_cos: [f32; 2],
     pub source_size: [i32; 2],
     pub source: Arc<SpriteSource>,
     pub uv_velocity: [f32; 2],
@@ -182,7 +183,32 @@ pub struct SpriteSlot {
     pub model_auto_rot_z_keys: Arc<[ModelAutoRotKey]>,
 }
 
+#[inline(always)]
+fn neg_rot_sin_cos(rotation_deg: i32) -> [f32; 2] {
+    match rotation_deg.rem_euclid(360) {
+        0 => [0.0, 1.0],
+        90 => [-1.0, 0.0],
+        180 => [0.0, -1.0],
+        270 => [1.0, 0.0],
+        _ => {
+            let (sin_r, cos_r) = (-(rotation_deg as f32)).to_radians().sin_cos();
+            [sin_r, cos_r]
+        }
+    }
+}
+
 impl SpriteSlot {
+    #[inline(always)]
+    pub fn set_rotation_deg(&mut self, rotation_deg: i32) {
+        self.def.rotation_deg = rotation_deg;
+        self.base_rot_sin_cos = neg_rot_sin_cos(rotation_deg);
+    }
+
+    #[inline(always)]
+    pub const fn base_rot_sin_cos(&self) -> [f32; 2] {
+        self.base_rot_sin_cos
+    }
+
     #[inline(always)]
     fn model_effect_mix(effect: ModelEffectState, time: f32, beat: f32) -> Option<f32> {
         ui_anim::effect_mix(effect, time, beat)
@@ -1572,6 +1598,7 @@ fn build_mine_gradient_slot(colors: &[[f32; 4]]) -> SpriteSlot {
             mirror_h: false,
             mirror_v: false,
         },
+        base_rot_sin_cos: [0.0, 1.0],
         source_size: [frame_size, frame_size],
         source,
         uv_velocity: [0.0, 0.0],
@@ -3478,6 +3505,7 @@ fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
             mirror_h: false,
             mirror_v: false,
         },
+        base_rot_sin_cos: [0.0, 1.0],
         source_size: [source_frame.0 as i32, source_frame.1 as i32],
         source,
         uv_velocity: [0.0, 0.0],
@@ -4591,7 +4619,7 @@ fn itg_resolve_actor_file(
             if behavior.parts_to_rotate.contains(element_lower)
                 && let Some(rot) = behavior.rotate.get(&button.to_ascii_lowercase())
             {
-                slot.def.rotation_deg = *rot;
+                slot.set_rotation_deg(*rot);
             }
             out.push(ItgLuaResolvedSprite {
                 element: element.to_string(),
@@ -4643,7 +4671,7 @@ fn itg_resolve_actor_file(
         if behavior.parts_to_rotate.contains(element_lower)
             && let Some(rot) = behavior.rotate.get(&button.to_ascii_lowercase())
         {
-            slot.def.rotation_deg = *rot;
+            slot.set_rotation_deg(*rot);
         }
         out.push(ItgLuaResolvedSprite {
             element: element.to_string(),
@@ -4690,7 +4718,7 @@ fn itg_resolve_actor_file(
                 if behavior.parts_to_rotate.contains(element_lower)
                     && let Some(rot) = behavior.rotate.get(&button.to_ascii_lowercase())
                 {
-                    slot.def.rotation_deg = *rot;
+                    slot.set_rotation_deg(*rot);
                 }
                 out.push(ItgLuaResolvedSprite {
                     element: element.to_string(),
@@ -4729,7 +4757,7 @@ fn itg_resolve_actor_file(
         if behavior.parts_to_rotate.contains(element_lower)
             && let Some(rot) = behavior.rotate.get(&button.to_ascii_lowercase())
         {
-            slot.def.rotation_deg = *rot;
+            slot.set_rotation_deg(*rot);
         }
         out.push(ItgLuaResolvedSprite {
             element: element.to_string(),
@@ -5507,6 +5535,7 @@ fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<SpriteSlot
             mirror_h: false,
             mirror_v: false,
         },
+        base_rot_sin_cos: [0.0, 1.0],
         source_size: [source_frame.0 as i32, source_frame.1 as i32],
         source,
         uv_velocity: [0.0, 0.0],
@@ -5580,6 +5609,7 @@ fn itg_slot_from_path_animated(
             mirror_h: false,
             mirror_v: false,
         },
+        base_rot_sin_cos: [0.0, 1.0],
         source_size: [source_frame.0 as i32, source_frame.1 as i32],
         source,
         uv_velocity: [0.0, 0.0],
