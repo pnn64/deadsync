@@ -2279,46 +2279,19 @@ fn get_reference_bpm_from_display_tag(display_bpm_str: &str) -> Option<f32> {
     s.parse::<f32>().ok()
 }
 
-fn upper_density_graph_width(
-    noteskin: Option<&Noteskin>,
-    field_zoom: f32,
-    cols_per_player: usize,
-    play_style: profile::PlayStyle,
-) -> f32 {
-    let Some(ns) = noteskin else {
-        return 0.0;
+fn upper_density_graph_width(play_style: profile::PlayStyle) -> f32 {
+    // zmod UpperNPSGraph parity:
+    //   width = GetNotefieldWidth()
+    //   if OnePlayerTwoSides then width = width / 2
+    //   width = width - 30
+    let mut width = match play_style {
+        profile::PlayStyle::Double => 512.0_f32,
+        profile::PlayStyle::Single | profile::PlayStyle::Versus => 256.0_f32,
     };
-    let cols = cols_per_player
-        .min(ns.column_xs.len())
-        .min(ns.receptor_off.len());
-    if cols == 0 {
-        return 0.0;
-    }
-
-    let mut min_x = f32::INFINITY;
-    let mut max_x = f32::NEG_INFINITY;
-    for x in ns.column_xs.iter().take(cols) {
-        let xf = *x as f32;
-        min_x = min_x.min(xf);
-        max_x = max_x.max(xf);
-    }
-
-    let zoom = field_zoom.max(0.0);
-    let target_arrow_px = 64.0 * zoom;
-    let size = ns.receptor_off[0].size();
-    let w = size[0].max(0) as f32;
-    let h = size[1].max(0) as f32;
-    let arrow_w = if h > 0.0 && target_arrow_px > 0.0 {
-        w * (target_arrow_px / h)
-    } else {
-        w * zoom
-    };
-
-    let mut width = ((max_x - min_x) * zoom) + arrow_w;
     if play_style == profile::PlayStyle::Double {
-        width *= 0.5;
+        width *= 0.5_f32;
     }
-    (width - 30.0).max(0.0)
+    (width - 30.0_f32).max(0.0_f32)
 }
 
 pub fn init(
@@ -2899,12 +2872,7 @@ pub fn init(
         if p >= num_players || !player_profiles[p].nps_graph_at_top {
             return 0.0;
         }
-        upper_density_graph_width(
-            noteskin[p].as_ref(),
-            field_zoom[p],
-            cols_per_player,
-            play_style,
-        )
+        upper_density_graph_width(play_style)
     });
     let density_graph_top_scale_y: [f32; MAX_PLAYERS] = {
         let mut scale = [1.0_f32; MAX_PLAYERS];
