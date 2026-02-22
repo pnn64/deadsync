@@ -1031,6 +1031,14 @@ impl AssetManager {
                 "combo_100milestone_minisplode.png".to_string(),
             ),
             (
+                "gameplayin_splode.png".to_string(),
+                "gameplayin_splode.png".to_string(),
+            ),
+            (
+                "gameplayin_minisplode.png".to_string(),
+                "gameplayin_minisplode.png".to_string(),
+            ),
+            (
                 "combo_1000milestone_swoosh.png".to_string(),
                 "combo_1000milestone_swoosh.png".to_string(),
             ),

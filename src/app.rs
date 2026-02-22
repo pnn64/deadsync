@@ -2280,7 +2280,9 @@ impl App {
     fn get_in_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
         match screen {
             CurrentScreen::Menu => menu::in_transition(),
-            CurrentScreen::Gameplay => gameplay::in_transition(),
+            CurrentScreen::Gameplay => {
+                gameplay::in_transition(self.state.screens.gameplay_state.as_ref())
+            }
             CurrentScreen::Options => options::in_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::in_transition(),
             CurrentScreen::Mappings => mappings::in_transition(),
@@ -3436,6 +3438,14 @@ impl App {
                         min_seconds_to_music: COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG,
                     })
                 });
+                let stage_intro_text: Arc<str> =
+                    if let Some(course) = self.state.session.course_run.as_ref() {
+                        let stage_num = course.next_stage_index.saturating_add(1);
+                        let total = course.stages.len().max(1);
+                        Arc::from(format!("STAGE {stage_num} / {total}"))
+                    } else {
+                        Arc::from("EVENT")
+                    };
                 let gs = gameplay::init(
                     song_arc,
                     charts,
@@ -3446,6 +3456,7 @@ impl App {
                     replay_edges,
                     replay_offsets,
                     replay_status_text,
+                    stage_intro_text,
                     lead_in_timing,
                     course_display_carry,
                     course_display_totals,
@@ -4228,7 +4239,17 @@ impl ApplicationHandler<UserEvent> for App {
                     }
                     TransitionState::FadingIn { elapsed, duration } => {
                         *elapsed += delta_time;
-                        if *elapsed >= *duration {
+                        let finished = *elapsed >= *duration;
+
+                        if self.state.screens.current_screen == CurrentScreen::Gameplay
+                            && let Some(gs) = self.state.screens.gameplay_state.as_mut()
+                        {
+                            let _ = gameplay::update(gs, delta_time);
+                        }
+
+                        if finished
+                            && matches!(self.state.shell.transition, TransitionState::FadingIn { .. })
+                        {
                             self.state.shell.transition = TransitionState::Idle;
                         }
                     }

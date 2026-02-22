@@ -30,7 +30,8 @@ use twox_hash::XxHash64;
 use winit::event::KeyEvent;
 use winit::keyboard::KeyCode;
 
-pub const TRANSITION_IN_DURATION: f32 = 0.4;
+// Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
+pub const TRANSITION_IN_DURATION: f32 = 2.0;
 // Simply Love ScreenGameplay out.lua: sleep(0.5), linear(1.0).
 pub const TRANSITION_OUT_DELAY: f32 = 0.5;
 pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
@@ -1558,6 +1559,7 @@ pub struct ReplayOffsetSnapshot {
 pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
+    pub stage_intro_text: Arc<str>,
     pub pack_group: Arc<str>,
     pub pack_banner_path: Option<PathBuf>,
     pub background_texture_key: String,
@@ -2329,6 +2331,7 @@ pub fn init(
     replay_edges: Option<Vec<ReplayInputEdge>>,
     replay_offsets: Option<ReplayOffsetSnapshot>,
     replay_status_text: Option<String>,
+    stage_intro_text: Arc<str>,
     lead_in_timing: Option<LeadInTiming>,
     course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
@@ -3018,6 +3021,7 @@ pub fn init(
     State {
         song,
         song_full_title,
+        stage_intro_text,
         pack_group,
         pack_banner_path,
         charts,

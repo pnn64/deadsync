@@ -15,6 +15,7 @@ use std::thread::LocalKey;
 
 const TEXT_CACHE_LIMIT: usize = 2048;
 type TextCache<K> = HashMap<K, Arc<str>>;
+const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 
 pub use crate::game::gameplay::{State, init, update};
 use crate::game::gameplay::{
@@ -68,16 +69,116 @@ fn cached_rate_text(rate: f32) -> Arc<str> {
 }
 
 // --- TRANSITIONS ---
-pub fn in_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        z(1100):
-        linear(TRANSITION_IN_DURATION): alpha(0.0):
-        linear(0.0): visible(false)
-    );
-    (vec![actor], TRANSITION_IN_DURATION)
+pub fn in_transition(state: Option<&State>) -> (Vec<Actor>, f32) {
+    let text = state
+        .map(|gs| gs.stage_intro_text.clone())
+        .unwrap_or_else(|| Arc::from("EVENT"));
+    let intro_color = state.map_or(color::decorative_rgba(0), |gs| gs.player_color);
+    let active_color_index = state.map_or(0, |gs| gs.active_color_index);
+    let heart_color_1 = color::decorative_rgba(active_color_index - 2);
+    let heart_color_2 = color::decorative_rgba(active_color_index - 1);
+
+    let actors = vec![
+        act!(quad:
+            align(0.0, 0.0): xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 1.0):
+            z(1100):
+            sleep(1.4):
+            accelerate(0.6): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite("gameplayin_splode.png"):
+            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
+            diffuse(intro_color[0], intro_color[1], intro_color[2], 0.9):
+            rotationz(10.0): zoom(0.0):
+            z(1101):
+            sleep(0.4):
+            linear(0.6): rotationz(0.0): zoom(1.1): alpha(0.0)
+        ),
+        act!(sprite("gameplayin_splode.png"):
+            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
+            diffuse(intro_color[0], intro_color[1], intro_color[2], 0.8):
+            rotationy(180.0): rotationz(-10.0): zoom(0.0):
+            z(1101):
+            sleep(0.4):
+            decelerate(0.6): rotationz(0.0): zoom(1.3): alpha(0.0)
+        ),
+        act!(sprite("gameplayin_minisplode.png"):
+            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
+            diffuse(intro_color[0], intro_color[1], intro_color[2], 1.0):
+            rotationz(10.0): zoom(0.0):
+            z(1101):
+            sleep(0.4):
+            decelerate(0.8): rotationz(0.0): zoom(0.9): alpha(0.0)
+        ),
+        act!(sprite("titlemenu_flycenter.png"):
+            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
+            zoom(0.0):
+            diffuse(heart_color_1[0], heart_color_1[1], heart_color_1[2], 0.0):
+            z(1101):
+            sleep(0.38):
+            linear(0.9): addx(-165.0): addy(-70.0): zoom(0.75): alpha(0.5):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite("titlemenu_flycenter.png"):
+            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
+            zoom(0.0):
+            diffuse(heart_color_2[0], heart_color_2[1], heart_color_2[2], 0.0):
+            z(1101):
+            sleep(0.38):
+            linear(0.9): addx(165.0): addy(-70.0): zoom(0.75): alpha(0.5):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite("titlemenu_flytop.png"):
+            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
+            zoom(0.0):
+            diffuse(heart_color_2[0], heart_color_2[1], heart_color_2[2], 0.0):
+            z(1101):
+            sleep(0.38):
+            linear(0.9): addx(-95.0): addy(-145.0): zoom(0.65): alpha(0.45):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite("titlemenu_flytop.png"):
+            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
+            zoom(0.0):
+            diffuse(heart_color_1[0], heart_color_1[1], heart_color_1[2], 0.0):
+            z(1101):
+            sleep(0.38):
+            linear(0.9): addx(95.0): addy(-145.0): zoom(0.65): alpha(0.45):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite("titlemenu_flybottom.png"):
+            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
+            zoom(0.0):
+            diffuse(heart_color_1[0], heart_color_1[1], heart_color_1[2], 0.0):
+            z(1101):
+            sleep(0.38):
+            linear(0.9): addx(-120.0): addy(95.0): zoom(0.55): alpha(0.3):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite("titlemenu_flybottom.png"):
+            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
+            zoom(0.0):
+            diffuse(heart_color_2[0], heart_color_2[1], heart_color_2[2], 0.0):
+            z(1101):
+            sleep(0.38):
+            linear(0.9): addx(120.0): addy(95.0): zoom(0.55): alpha(0.3):
+            linear(0.0): visible(false)
+        ),
+        act!(text:
+            font("wendy"): settext(text):
+            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
+            shadowlength(1.0):
+            diffuse(1.0, 1.0, 1.0, 0.0):
+            z(1102):
+            accelerate(0.5): alpha(1.0):
+            sleep(0.66):
+            accelerate(0.33): zoom(0.4): y(screen_height() - 30.0):
+            sleep((TRANSITION_IN_DURATION - INTRO_TEXT_SETTLE_SECONDS).max(0.0))
+        ),
+    ];
+    (actors, TRANSITION_IN_DURATION)
 }
 
 pub fn out_transition() -> (Vec<Actor>, f32) {
@@ -938,6 +1039,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
         }
+    }
+    // Simply Love parity: keep Stage/Event text visible at the footer after intro animation ends.
+    if !state.stage_intro_text.is_empty() && state.total_elapsed_in_screen >= INTRO_TEXT_SETTLE_SECONDS
+    {
+        actors.push(act!(text:
+            font("wendy"): settext(state.stage_intro_text.clone()):
+            align(0.5, 0.5): xy(screen_center_x(), screen_height() - 30.0):
+            zoom(0.4):
+            shadowlength(1.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(110)
+        ));
     }
     let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
     let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
