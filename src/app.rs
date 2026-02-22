@@ -42,6 +42,7 @@ pub enum UserEvent {
 enum Command {
     ExitNow,
     SetBanner(Option<PathBuf>),
+    SetCdTitle(Option<PathBuf>),
     SetPackBanner(Option<PathBuf>),
     SetDensityGraph {
         slot: DensityGraphSlot,
@@ -1217,6 +1218,7 @@ impl App {
                 Vec::new()
             }
             ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
+            ScreenAction::RequestCdTitle(path_opt) => vec![Command::SetCdTitle(path_opt)],
             ScreenAction::RequestDensityGraph { slot, chart_opt } => {
                 vec![Command::SetDensityGraph { slot, chart_opt }]
             }
@@ -1851,6 +1853,7 @@ impl App {
         matches!(
             command,
             Command::SetBanner(_)
+                | Command::SetCdTitle(_)
                 | Command::SetPackBanner(_)
                 | Command::SetDensityGraph { .. }
                 | Command::SetDynamicBackground(_)
@@ -1863,6 +1866,7 @@ impl App {
         match command {
             Command::ExitNow => "ExitNow",
             Command::SetBanner(_) => "SetBanner",
+            Command::SetCdTitle(_) => "SetCdTitle",
             Command::SetPackBanner(_) => "SetPackBanner",
             Command::SetDensityGraph { .. } => "SetDensityGraph",
             Command::FetchOnlineGrade(_) => "FetchOnlineGrade",
@@ -1889,6 +1893,7 @@ impl App {
                 event_loop.exit();
             }
             Command::SetBanner(path_opt) => self.apply_banner(path_opt),
+            Command::SetCdTitle(path_opt) => self.apply_cdtitle(path_opt),
             Command::SetPackBanner(path_opt) => self.apply_pack_banner(path_opt),
             Command::SetDensityGraph { slot, chart_opt } => {
                 self.apply_density_graph(slot, chart_opt)
@@ -1976,6 +1981,13 @@ impl App {
                     }
                 }
             }
+        }
+    }
+
+    fn apply_cdtitle(&mut self, path_opt: Option<PathBuf>) {
+        if let Some(backend) = self.backend.as_mut() {
+            self.state.screens.select_music_state.current_cdtitle_key =
+                self.asset_manager.set_dynamic_cdtitle(backend, path_opt);
         }
     }
 
@@ -2672,6 +2684,7 @@ impl App {
 
     fn reset_dynamic_assets_after_renderer_switch(&mut self) {
         self.apply_banner(None);
+        self.apply_cdtitle(None);
         self.apply_density_graph(DensityGraphSlot::SelectMusicP1, None);
         self.apply_density_graph(DensityGraphSlot::SelectMusicP2, None);
         self.apply_dynamic_background(None);
@@ -3783,6 +3796,17 @@ impl App {
                 None => None,
             };
             commands.push(Command::SetBanner(banner_path));
+            let cdtitle_path = match self
+                .state
+                .screens
+                .select_music_state
+                .entries
+                .get(self.state.screens.select_music_state.selected_index)
+            {
+                Some(select_music::MusicWheelEntry::Song(song)) => song.cdtitle_path.clone(),
+                _ => None,
+            };
+            commands.push(Command::SetCdTitle(cdtitle_path));
 
             // Pre-render the density graph during the fade-in so the panel isn't blank on entry.
             let chart_to_graph = match self
@@ -3922,6 +3946,7 @@ impl App {
                 None => None,
             };
             commands.push(Command::SetBanner(banner_path));
+            commands.push(Command::SetCdTitle(None));
         }
         commands
     }

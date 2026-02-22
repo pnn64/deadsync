@@ -536,6 +536,7 @@ struct SerializableSongData {
     artist: String,
     banner_path: Option<String>,
     background_path: Option<String>,
+    cdtitle_path: Option<String>,
     music_path: Option<String>,
     display_bpm: String,
     offset: f32,
@@ -570,6 +571,10 @@ impl From<&SongData> for SerializableSongData {
                 .map(|p| p.to_string_lossy().into_owned()),
             background_path: song
                 .background_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().into_owned()),
+            cdtitle_path: song
+                .cdtitle_path
                 .as_ref()
                 .map(|p| p.to_string_lossy().into_owned()),
             music_path: song
@@ -611,6 +616,7 @@ impl From<SerializableSongData> for SongData {
             artist: song.artist,
             banner_path: song.banner_path.map(PathBuf::from),
             background_path: song.background_path.map(PathBuf::from),
+            cdtitle_path: song.cdtitle_path.map(PathBuf::from),
             music_path: song.music_path.map(PathBuf::from),
             display_bpm: song.display_bpm,
             offset: song.offset,
@@ -1689,6 +1695,70 @@ fn build_stamina_counts(chart: &rssp::report::ChartSummary) -> StaminaCounts {
     }
 }
 
+#[inline(always)]
+fn collapse_song_asset_path(path: &str) -> String {
+    let has_root = path.starts_with('/');
+    let mut parts: Vec<&str> = Vec::with_capacity(path.split('/').count());
+    for part in path.split('/') {
+        if part.is_empty() || part == "." {
+            continue;
+        }
+        if part == ".." {
+            if parts.last().is_some_and(|last| *last != "..") {
+                parts.pop();
+            } else {
+                parts.push("..");
+            }
+            continue;
+        }
+        parts.push(part);
+    }
+    let collapsed = parts.join("/");
+    if has_root {
+        if collapsed.is_empty() {
+            "/".to_string()
+        } else {
+            format!("/{collapsed}")
+        }
+    } else {
+        collapsed
+    }
+}
+
+#[inline(always)]
+fn resolve_song_asset_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<PathBuf> {
+    let asset_tag = asset_tag.trim();
+    if asset_tag.is_empty() {
+        return None;
+    }
+
+    let asset_tag_slash = asset_tag.replace('\\', "/");
+    let rel_path = song_dir.join(&asset_tag_slash);
+    if rel_path.is_file() {
+        return Some(rel_path);
+    }
+    if !asset_tag_slash.contains('/') {
+        return None;
+    }
+
+    let mut song_dir_slash = song_dir.to_string_lossy().replace('\\', "/");
+    if !song_dir_slash.ends_with('/') {
+        song_dir_slash.push('/');
+    }
+
+    let collapsed = if asset_tag_slash.starts_with("../") {
+        collapse_song_asset_path(&(song_dir_slash + asset_tag_slash.as_str()))
+    } else {
+        collapse_song_asset_path(&asset_tag_slash)
+    };
+    if collapsed.starts_with("../") {
+        return None;
+    }
+
+    let collapsed_path = PathBuf::from(collapsed);
+    collapsed_path.is_file().then_some(collapsed_path)
+}
+
 /// The original parsing logic, now separated to be called on a cache miss.
 fn parse_and_process_song_file(
     path: &Path,
@@ -1767,6 +1837,7 @@ fn parse_and_process_song_file(
         &summary.banner_path,
         &summary.background_path,
     );
+    let cdtitle_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.cdtitle_path);
 
     let music_path = if summary.music_path.is_empty() {
         None
@@ -1802,6 +1873,7 @@ fn parse_and_process_song_file(
             artist: summary.artist_str,
             banner_path, // Keep original logic for banner
             background_path: background_path_opt,
+            cdtitle_path,
             display_bpm: summary.display_bpm_str,
             offset: summary.offset as f32,
             sample_start: if summary.sample_start > 0.0 {

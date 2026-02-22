@@ -39,6 +39,7 @@ pub enum ScreenAction {
         p2: ActiveProfile,
     },
     RequestBanner(Option<PathBuf>),
+    RequestCdTitle(Option<PathBuf>),
     RequestDensityGraph {
         slot: DensityGraphSlot,
         chart_opt: Option<DensityGraphSource>,

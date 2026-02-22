@@ -733,6 +733,7 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
         },
         banner_path: meta.banner_path.clone(),
         background_path: None,
+        cdtitle_path: None,
         music_path: None,
         display_bpm: String::new(),
         offset: 0.0,

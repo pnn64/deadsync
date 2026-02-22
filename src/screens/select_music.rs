@@ -90,6 +90,12 @@ const SL_EXIT_PROMPT_CHOICES_FADE_SECONDS: f32 = 0.15;
 // --- THEME LAYOUT CONSTANTS ---
 const BANNER_NATIVE_WIDTH: f32 = 418.0;
 const BANNER_NATIVE_HEIGHT: f32 = 164.0;
+const CDTITLE_SPIN_SECONDS: f32 = 0.5;
+const CDTITLE_FRAME_DELAY_SECONDS: f32 = 0.1;
+const CDTITLE_ZOOM_BASE: f32 = 22.0;
+const CDTITLE_RATIO_MIN: f32 = 2.5;
+const CDTITLE_OFFSET_X: f32 = (BANNER_NATIVE_WIDTH - 30.0) * 0.5;
+const CDTITLE_OFFSET_Y: f32 = (BANNER_NATIVE_HEIGHT - 30.0) * 0.5;
 rgba_const!(UI_BOX_BG_COLOR, "#1E282F");
 
 // --- Timing & Logic Constants ---
@@ -636,6 +642,7 @@ pub struct State {
     pub selection_animation_timer: f32,
     pub wheel_offset_from_selection: f32,
     pub current_banner_key: String,
+    pub current_cdtitle_key: Option<String>,
     pub current_graph_key: String,
     pub current_graph_key_p2: String,
     pub current_graph_mesh: Option<Arc<[MeshVertex]>>,
@@ -671,7 +678,10 @@ pub struct State {
     expanded_pack_name: Option<String>,
     bg: heart_bg::State,
     last_requested_banner_path: Option<PathBuf>,
+    last_requested_cdtitle_path: Option<PathBuf>,
     banner_high_quality_requested: bool,
+    cdtitle_spin_elapsed: f32,
+    cdtitle_anim_elapsed: f32,
     last_requested_chart_hash: Option<String>,
     last_requested_chart_hash_p2: Option<String>,
     chord_mask_p1: u8,
@@ -1569,6 +1579,9 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
     state.time_since_selection_change = 0.0;
     state.wheel_offset_from_selection = 0.0;
     state.last_requested_banner_path = None;
+    state.last_requested_cdtitle_path = None;
+    state.cdtitle_spin_elapsed = 0.0;
+    state.cdtitle_anim_elapsed = 0.0;
     state.last_requested_chart_hash = None;
     state.last_requested_chart_hash_p2 = None;
     state.cached_song = None;
@@ -1721,8 +1734,12 @@ pub fn init() -> State {
         expanded_pack_name: last_pack_name,
         bg: heart_bg::State::new(),
         last_requested_banner_path: None,
+        last_requested_cdtitle_path: None,
         banner_high_quality_requested: false,
+        cdtitle_spin_elapsed: 0.0,
+        cdtitle_anim_elapsed: 0.0,
         current_banner_key: "banner1.png".to_string(),
+        current_cdtitle_key: None,
         last_requested_chart_hash: None,
         current_graph_key: "__white".to_string(),
         current_graph_key_p2: "__white".to_string(),
@@ -1886,8 +1903,12 @@ pub fn init_placeholder() -> State {
         expanded_pack_name: None,
         bg: heart_bg::State::new(),
         last_requested_banner_path: None,
+        last_requested_cdtitle_path: None,
         banner_high_quality_requested: false,
+        cdtitle_spin_elapsed: 0.0,
+        cdtitle_anim_elapsed: 0.0,
         current_banner_key: "banner1.png".to_string(),
+        current_cdtitle_key: None,
         last_requested_chart_hash: None,
         current_graph_key: "__white".to_string(),
         current_graph_key_p2: "__white".to_string(),
@@ -2229,6 +2250,9 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
         state.time_since_selection_change = 0.0;
         state.wheel_offset_from_selection = 0.0;
         state.last_requested_banner_path = None;
+        state.last_requested_cdtitle_path = None;
+        state.cdtitle_spin_elapsed = 0.0;
+        state.cdtitle_anim_elapsed = 0.0;
         state.last_requested_chart_hash = None;
         state.last_requested_chart_hash_p2 = None;
         return;
@@ -2242,6 +2266,9 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
             state.time_since_selection_change = 0.0;
             state.wheel_offset_from_selection = 0.0;
             state.last_requested_banner_path = None;
+            state.last_requested_cdtitle_path = None;
+            state.cdtitle_spin_elapsed = 0.0;
+            state.cdtitle_anim_elapsed = 0.0;
             state.last_requested_chart_hash = None;
             state.last_requested_chart_hash_p2 = None;
             return;
@@ -2265,6 +2292,9 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
     state.time_since_selection_change = 0.0;
     state.wheel_offset_from_selection = 0.0;
     state.last_requested_banner_path = None;
+    state.last_requested_cdtitle_path = None;
+    state.cdtitle_spin_elapsed = 0.0;
+    state.cdtitle_anim_elapsed = 0.0;
     state.last_requested_chart_hash = None;
     state.last_requested_chart_hash_p2 = None;
 }
@@ -3526,6 +3556,11 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     state.time_since_selection_change += dt;
     if dt > 0.0 {
         state.selection_animation_timer += dt;
+        if state.cdtitle_spin_elapsed < CDTITLE_SPIN_SECONDS {
+            state.cdtitle_spin_elapsed =
+                (state.cdtitle_spin_elapsed + dt).min(CDTITLE_SPIN_SECONDS);
+        }
+        state.cdtitle_anim_elapsed += dt;
         if state.sort_menu != sort_menu::State::Hidden
             && state.sort_menu_focus_anim_elapsed < sort_menu::FOCUS_TWEEN_SECONDS
         {
@@ -3551,6 +3586,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         audio::play_sfx("assets/sounds/change.ogg");
         state.prev_selected_index = state.selected_index;
         state.time_since_selection_change = 0.0;
+        state.cdtitle_spin_elapsed = 0.0;
+        state.cdtitle_anim_elapsed = 0.0;
 
         if matches!(
             state.entries.get(state.selected_index),
@@ -3641,6 +3678,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 .as_ref()
                 .and_then(|(_, p)| p.as_ref().cloned())
         });
+    let new_cdtitle = selected_song.as_ref().and_then(|s| s.cdtitle_path.clone());
 
     if state.last_requested_banner_path != new_banner {
         state.last_requested_banner_path = new_banner.clone();
@@ -3654,6 +3692,14 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     {
         state.banner_high_quality_requested = true;
         return ScreenAction::RequestBanner(new_banner);
+    }
+    if state.last_requested_cdtitle_path != new_cdtitle {
+        if new_cdtitle.is_some() {
+            state.cdtitle_spin_elapsed = 0.0;
+            state.cdtitle_anim_elapsed = 0.0;
+        }
+        state.last_requested_cdtitle_path = new_cdtitle.clone();
+        return ScreenAction::RequestCdTitle(new_cdtitle);
     }
 
     // --- Delayed Updates ---
@@ -3801,7 +3847,10 @@ pub fn trigger_immediate_refresh(state: &mut State) {
     state.last_requested_chart_hash = None;
     state.last_requested_chart_hash_p2 = None;
     state.last_requested_banner_path = None;
+    state.last_requested_cdtitle_path = None;
     state.banner_high_quality_requested = false;
+    state.cdtitle_spin_elapsed = 0.0;
+    state.cdtitle_anim_elapsed = 0.0;
 }
 
 pub fn reset_preview_after_gameplay(state: &mut State) {
@@ -4072,6 +4121,35 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         (0.75, screen_center_x() - 166.0, 96.0)
     };
     actors.push(act!(sprite(state.current_banner_key.clone()): align(0.5, 0.5): xy(banner_cx, banner_cy): setsize(BANNER_NATIVE_WIDTH, BANNER_NATIVE_HEIGHT): zoom(banner_zoom): z(51)));
+    if let Some(cdtitle_key) = state.current_cdtitle_key.as_ref()
+        && asset_manager.textures.contains_key(cdtitle_key)
+        && let Some(tex) = crate::assets::texture_dims(cdtitle_key)
+    {
+        let (cols, rows) = crate::assets::sprite_sheet_dims(cdtitle_key);
+        let cols = cols.max(1);
+        let rows = rows.max(1);
+        let frame_w = (tex.w.max(1) as f32) / cols as f32;
+        let frame_h = (tex.h.max(1) as f32) / rows as f32;
+        let dim1 = frame_w.max(frame_h);
+        let dim2 = frame_w.min(frame_h).max(1.0);
+        let ratio = (dim1 / dim2).max(CDTITLE_RATIO_MIN);
+        let to_scale = dim1.max(1.0);
+        let cdtitle_x = banner_cx + CDTITLE_OFFSET_X * banner_zoom;
+        let cdtitle_y = banner_cy + CDTITLE_OFFSET_Y * banner_zoom;
+        let cdtitle_zoom = (CDTITLE_ZOOM_BASE / to_scale) * ratio * banner_zoom;
+        let cdtitle_rot =
+            360.0 * (state.cdtitle_spin_elapsed / CDTITLE_SPIN_SECONDS).clamp(0.0, 1.0);
+        let total_frames = cols.saturating_mul(rows).max(1);
+        let cdtitle_frame = if total_frames > 1 {
+            ((state.cdtitle_anim_elapsed / CDTITLE_FRAME_DELAY_SECONDS)
+                .floor()
+                .max(0.0) as u32)
+                % total_frames
+        } else {
+            0
+        };
+        actors.push(act!(sprite(cdtitle_key.clone()): align(0.5, 0.5): xy(cdtitle_x, cdtitle_y): zoom(cdtitle_zoom): rotationy(cdtitle_rot): setstate(cdtitle_frame): z(101)));
+    }
 
     let music_rate = crate::game::profile::get_session_music_rate();
     if (music_rate - 1.0).abs() > 0.001 {

@@ -12,6 +12,7 @@ pub struct SongData {
     pub artist: String,
     pub banner_path: Option<PathBuf>,
     pub background_path: Option<PathBuf>,
+    pub cdtitle_path: Option<PathBuf>,
     pub music_path: Option<PathBuf>,
     pub display_bpm: String,
     pub offset: f32,

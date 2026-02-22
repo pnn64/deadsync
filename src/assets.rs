@@ -855,6 +855,7 @@ pub struct AssetManager {
     pub textures: HashMap<String, GfxTexture>,
     fonts: HashMap<&'static str, Font>,
     current_dynamic_banner: Option<DynamicBannerState>,
+    current_dynamic_cdtitle: Option<(String, PathBuf)>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     current_dynamic_background: Option<(String, PathBuf)>,
     current_profile_avatars: [Option<(String, PathBuf)>; 2],
@@ -881,6 +882,7 @@ impl AssetManager {
             textures: HashMap::new(),
             fonts: HashMap::new(),
             current_dynamic_banner: None,
+            current_dynamic_cdtitle: None,
             current_dynamic_pack_banner: None,
             current_dynamic_background: None,
             current_profile_avatars: std::array::from_fn(|_| None),
@@ -1427,12 +1429,16 @@ impl AssetManager {
 
     pub fn destroy_dynamic_assets(&mut self, backend: &mut Backend) {
         if self.current_dynamic_banner.is_some()
+            || self.current_dynamic_cdtitle.is_some()
             || self.current_dynamic_pack_banner.is_some()
             || self.current_dynamic_background.is_some()
         {
             backend.wait_for_idle(); // Wait for GPU to finish using old textures
             if let Some(state) = self.current_dynamic_banner.take() {
                 self.textures.remove(&state.key);
+            }
+            if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
+                self.textures.remove(&key);
             }
             if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
                 self.textures.remove(&key);
@@ -1445,6 +1451,50 @@ impl AssetManager {
 
     pub fn destroy_dynamic_banner(&mut self, backend: &mut Backend) {
         self.destroy_current_dynamic_banner(backend);
+    }
+
+    pub fn set_dynamic_cdtitle(
+        &mut self,
+        backend: &mut Backend,
+        path_opt: Option<PathBuf>,
+    ) -> Option<String> {
+        if let Some(path) = path_opt {
+            if let Some((key, current_path)) = self.current_dynamic_cdtitle.as_ref()
+                && current_path == &path
+            {
+                return Some(key.clone());
+            }
+
+            self.destroy_current_dynamic_cdtitle(backend);
+            match open_image_fallback(&path) {
+                Ok(img) => {
+                    let rgba = img.to_rgba8();
+                    match backend.create_texture(&rgba, SamplerDesc::default()) {
+                        Ok(texture) => {
+                            let path_key = path.to_string_lossy();
+                            let key = format!("__cdtitle::{path_key}");
+                            self.textures.insert(key.clone(), texture);
+                            register_texture_dims(&key, rgba.width(), rgba.height());
+                            self.current_dynamic_cdtitle = Some((key.clone(), path));
+                            Some(key)
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Failed to create GPU texture for CDTitle image {path:?}: {e}. Skipping."
+                            );
+                            None
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to open CDTitle image {path:?}: {e}. Skipping.");
+                    None
+                }
+            }
+        } else {
+            self.destroy_current_dynamic_cdtitle(backend);
+            None
+        }
     }
 
     pub fn set_dynamic_pack_banner(&mut self, backend: &mut Backend, path_opt: Option<PathBuf>) {
@@ -1675,6 +1725,13 @@ impl AssetManager {
         if let Some(state) = self.current_dynamic_banner.take() {
             backend.wait_for_idle();
             self.textures.remove(&state.key);
+        }
+    }
+
+    fn destroy_current_dynamic_cdtitle(&mut self, backend: &mut Backend) {
+        if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
+            backend.wait_for_idle();
+            self.textures.remove(&key);
         }
     }
 
