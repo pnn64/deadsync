@@ -1,7 +1,7 @@
 use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::config::{self, DisplayMode};
 use crate::core::display;
-use crate::core::gfx::{self as renderer, BackendType, RenderList, create_backend};
+use crate::core::gfx::{self as renderer, BackendType, create_backend};
 use crate::core::input::{self, InputEvent};
 use crate::core::space::{self as space, Metrics};
 use crate::game::parsing::{noteskin, simfile as song_loading};
@@ -2074,22 +2074,6 @@ impl App {
                 gs.background_texture_key = key;
             }
         }
-    }
-
-    fn build_screen<'a>(
-        &self,
-        actors: &'a [Actor],
-        clear_color: [f32; 4],
-        total_elapsed: f32,
-    ) -> RenderList<'a> {
-        let fonts = self.asset_manager.fonts();
-        crate::ui::compose::build_screen(
-            actors,
-            clear_color,
-            &self.state.shell.metrics,
-            fonts,
-            total_elapsed,
-        )
     }
 
     fn get_current_actors(&self) -> (Vec<Actor>, [f32; 4]) {
@@ -4284,8 +4268,15 @@ impl ApplicationHandler<UserEvent> for App {
                 }
 
                 let (actors, clear_color) = self.get_current_actors();
-                let screen = self.build_screen(&actors, clear_color, total_elapsed);
                 self.update_fps_title(&window, now);
+                let fonts = self.asset_manager.fonts();
+                let screen = crate::ui::compose::build_screen(
+                    &actors,
+                    clear_color,
+                    &self.state.shell.metrics,
+                    fonts,
+                    total_elapsed,
+                );
 
                 if let Some(backend) = &mut self.backend {
                     match backend.draw(&screen, &self.asset_manager.textures) {

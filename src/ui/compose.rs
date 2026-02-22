@@ -13,7 +13,7 @@ pub fn build_screen<'a>(
     actors: &'a [actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &std::collections::HashMap<&'static str, font::Font>,
+    fonts: &'a std::collections::HashMap<&'static str, font::Font>,
     total_elapsed: f32,
 ) -> RenderList<'a> {
     let mut objects = Vec::with_capacity(estimate_object_count(actors));
@@ -228,7 +228,7 @@ fn build_actor_recursive<'a>(
     actor: &'a actors::Actor,
     parent: SmRect,
     m: &Metrics,
-    fonts: &std::collections::HashMap<&'static str, font::Font>,
+    fonts: &'a std::collections::HashMap<&'static str, font::Font>,
     base_z: i16,
     camera: u8,
     cameras: &mut Vec<Matrix4<f32>>,
@@ -1157,8 +1157,8 @@ const fn quantize_up_even_i32(v: i32) -> i32 {
 }
 
 fn layout_text<'a>(
-    font: &font::Font,
-    fonts: &std::collections::HashMap<&'static str, font::Font>,
+    font: &'a font::Font,
+    fonts: &'a std::collections::HashMap<&'static str, font::Font>,
     text: &str,
     _px_size: f32,
     scale: [f32; 2],
@@ -1381,7 +1381,7 @@ fn layout_text<'a>(
 
                 objects.push(RenderObject {
                     object_type: renderer::ObjectType::Sprite {
-                        texture_id: std::borrow::Cow::Owned(glyph.texture_key.clone()),
+                        texture_id: std::borrow::Cow::Borrowed(glyph.texture_key.as_str()),
                         tint: [1.0; 4],
                         uv_scale,
                         uv_offset,
