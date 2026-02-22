@@ -13,7 +13,12 @@ pub fn build_pane_percentage_display(
 ) -> Vec<Actor> {
     if matches!(
         pane,
-        EvalPane::Timing | EvalPane::MachineRecords | EvalPane::QrCode | EvalPane::GrooveStats
+        EvalPane::Timing
+            | EvalPane::TimingEx
+            | EvalPane::TimingHardEx
+            | EvalPane::MachineRecords
+            | EvalPane::QrCode
+            | EvalPane::GrooveStats
     ) {
         return vec![];
     }
@@ -38,6 +43,8 @@ pub fn build_pane_percentage_display(
 
     match pane {
         EvalPane::Timing => {}
+        EvalPane::TimingEx => {}
+        EvalPane::TimingHardEx => {}
         EvalPane::MachineRecords => {}
         EvalPane::QrCode => {}
         EvalPane::GrooveStats => {}

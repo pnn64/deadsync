@@ -312,6 +312,8 @@ pub(crate) enum EvalPane {
     QrCode,
     GrooveStats,
     Timing,
+    TimingEx,
+    TimingHardEx,
 }
 
 impl EvalPane {
@@ -327,7 +329,7 @@ impl EvalPane {
     #[inline(always)]
     fn next(self, has_hard_ex: bool, has_online_panes: bool, has_gs: bool) -> Self {
         // Order (per user parity request):
-        // ITG -> EX -> H.EX -> Arrow breakdown -> Machine -> QR -> GS -> Timing -> ITG
+        // ITG -> EX -> H.EX -> Arrow breakdown -> Machine -> QR -> GS -> Timing -> Timing EX -> Timing H.EX -> ITG
         match (self, has_hard_ex, has_online_panes, has_gs) {
             (Self::Standard, _, _, _) => Self::FaPlus,
             (Self::FaPlus, true, _, _) => Self::HardEx,
@@ -341,14 +343,20 @@ impl EvalPane {
             (Self::QrCode, _, true, false) => Self::Timing,
             (Self::QrCode, _, false, _) => Self::Timing,
             (Self::GrooveStats, _, _, _) => Self::Timing,
-            (Self::Timing, _, _, _) => Self::Standard,
+            (Self::Timing, _, _, _) => Self::TimingEx,
+            (Self::TimingEx, true, _, _) => Self::TimingHardEx,
+            (Self::TimingEx, false, _, _) => Self::Standard,
+            (Self::TimingHardEx, _, _, _) => Self::Standard,
         }
     }
 
     #[inline(always)]
     fn prev(self, has_hard_ex: bool, has_online_panes: bool, has_gs: bool) -> Self {
         match (self, has_hard_ex, has_online_panes, has_gs) {
-            (Self::Standard, _, _, _) => Self::Timing,
+            (Self::Standard, true, _, _) => Self::TimingHardEx,
+            (Self::Standard, false, _, _) => Self::TimingEx,
+            (Self::TimingHardEx, _, _, _) => Self::TimingEx,
+            (Self::TimingEx, _, _, _) => Self::Timing,
             (Self::Timing, _, true, true) => Self::GrooveStats,
             (Self::Timing, _, true, false) => Self::QrCode,
             (Self::Timing, _, false, _) => Self::MachineRecords,
@@ -376,6 +384,8 @@ pub struct State {
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
     pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub timing_hist_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub scatter_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub density_graph_texture_key: String,
     pub return_to_course: bool,
@@ -389,6 +399,10 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     let mut density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     let mut timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    let mut timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    let mut timing_hist_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     let mut scatter_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|_| None);
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
@@ -639,6 +653,43 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                     PANE_W,
                     graph_h,
                     PANE_H,
+                    crate::screens::components::eval_graphs::TimingHistogramScale::Itg,
+                    crate::config::get().smooth_histogram,
+                );
+                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+            };
+
+            timing_hist_mesh_ex[player_idx] = {
+                const PANE_W: f32 = 300.0;
+                const PANE_H: f32 = 180.0;
+                const TOP_H: f32 = 26.0;
+                const BOT_H: f32 = 13.0;
+
+                let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
+                let verts = crate::screens::components::eval_graphs::build_offset_histogram_mesh(
+                    &si.histogram,
+                    PANE_W,
+                    graph_h,
+                    PANE_H,
+                    crate::screens::components::eval_graphs::TimingHistogramScale::Ex,
+                    crate::config::get().smooth_histogram,
+                );
+                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+            };
+
+            timing_hist_mesh_hard_ex[player_idx] = {
+                const PANE_W: f32 = 300.0;
+                const PANE_H: f32 = 180.0;
+                const TOP_H: f32 = 26.0;
+                const BOT_H: f32 = 13.0;
+
+                let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
+                let verts = crate::screens::components::eval_graphs::build_offset_histogram_mesh(
+                    &si.histogram,
+                    PANE_W,
+                    graph_h,
+                    PANE_H,
+                    crate::screens::components::eval_graphs::TimingHistogramScale::HardEx,
                     crate::config::get().smooth_histogram,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
@@ -678,6 +729,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         score_info,
         density_graph_mesh,
         timing_hist_mesh,
+        timing_hist_mesh_ex,
+        timing_hist_mesh_hard_ex,
         scatter_mesh,
         density_graph_texture_key: "__white".to_string(),
         return_to_course: false,
@@ -725,6 +778,8 @@ pub fn init_from_score_info(
         score_info,
         density_graph_mesh: std::array::from_fn(|_| None),
         timing_hist_mesh: std::array::from_fn(|_| None),
+        timing_hist_mesh_ex: std::array::from_fn(|_| None),
+        timing_hist_mesh_hard_ex: std::array::from_fn(|_| None),
         scatter_mesh: std::array::from_fn(|_| None),
         density_graph_texture_key: "__white".to_string(),
         return_to_course: false,
@@ -1659,6 +1714,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     si,
                     state.timing_hist_mesh[player_idx].as_ref(),
                     controller,
+                    crate::screens::components::eval_graphs::TimingHistogramScale::Itg,
+                )),
+                EvalPane::TimingEx => actors.extend(eval_panes::build_timing_pane(
+                    si,
+                    state.timing_hist_mesh_ex[player_idx].as_ref(),
+                    controller,
+                    crate::screens::components::eval_graphs::TimingHistogramScale::Ex,
+                )),
+                EvalPane::TimingHardEx => actors.extend(eval_panes::build_timing_pane(
+                    si,
+                    state.timing_hist_mesh_hard_ex[player_idx].as_ref(),
+                    controller,
+                    crate::screens::components::eval_graphs::TimingHistogramScale::HardEx,
                 )),
                 EvalPane::QrCode => actors.extend(eval_panes::build_gs_qr_pane(si, controller)),
                 EvalPane::GrooveStats => actors.extend(eval_panes::build_gs_records_pane(

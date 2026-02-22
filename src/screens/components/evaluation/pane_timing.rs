@@ -3,17 +3,143 @@ use std::sync::Arc;
 use crate::act;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::game::profile;
+use crate::screens::components::eval_graphs::TimingHistogramScale;
 use crate::screens::evaluation::ScoreInfo;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 
 use super::utils::pane_origin_x;
 
+#[derive(Clone, Copy)]
+struct TimingBand {
+    label: &'static str,
+    start_ms: f32,
+    end_ms: f32,
+    color: [f32; 4],
+}
+
+const EMPTY_BAND: TimingBand = TimingBand {
+    label: "",
+    start_ms: 0.0,
+    end_ms: 0.0,
+    color: [0.0, 0.0, 0.0, 0.0],
+};
+
+#[inline(always)]
+const fn band(label: &'static str, start_ms: f32, end_ms: f32, color: [f32; 4]) -> TimingBand {
+    TimingBand {
+        label,
+        start_ms,
+        end_ms,
+        color,
+    }
+}
+
+#[inline(always)]
+fn timing_bands_itg(timing_windows: [f32; 5]) -> ([TimingBand; 7], usize) {
+    let blue = color::JUDGMENT_RGBA[0];
+    let excellent = color::JUDGMENT_RGBA[1];
+    let great = color::JUDGMENT_RGBA[2];
+    let decent = color::JUDGMENT_RGBA[3];
+    let wayoff = color::JUDGMENT_RGBA[4];
+    let w1 = timing_windows[0];
+    let w2 = timing_windows[1];
+    let w3 = timing_windows[2];
+    let w4 = timing_windows[3];
+    let w5 = timing_windows[4];
+
+    (
+        [
+            band("Fan", 0.0, w1, blue),
+            band("Ex", w1, w2, excellent),
+            band("Gr", w2, w3, great),
+            band("Dec", w3, w4, decent),
+            band("WO", w4, w5, wayoff),
+            EMPTY_BAND,
+            EMPTY_BAND,
+        ],
+        5,
+    )
+}
+
+#[inline(always)]
+fn timing_bands_ex(timing_windows: [f32; 5]) -> ([TimingBand; 7], usize) {
+    let blue = color::JUDGMENT_RGBA[0];
+    let excellent = color::JUDGMENT_RGBA[1];
+    let great = color::JUDGMENT_RGBA[2];
+    let decent = color::JUDGMENT_RGBA[3];
+    let wayoff = color::JUDGMENT_RGBA[4];
+    let white = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
+    let w0 = crate::game::timing::FA_PLUS_W0_MS;
+    let w1 = timing_windows[0];
+    let w2 = timing_windows[1];
+    let w3 = timing_windows[2];
+    let w4 = timing_windows[3];
+    let w5 = timing_windows[4];
+
+    (
+        [
+            band("Fan", 0.0, w0, blue),
+            band("Fan", w0, w1, white),
+            band("Ex", w1, w2, excellent),
+            band("Gr", w2, w3, great),
+            band("Dec", w3, w4, decent),
+            band("WO", w4, w5, wayoff),
+            EMPTY_BAND,
+        ],
+        6,
+    )
+}
+
+#[inline(always)]
+fn timing_bands_hard_ex(timing_windows: [f32; 5]) -> ([TimingBand; 7], usize) {
+    let pink = color::HARD_EX_SCORE_RGBA;
+    let blue = color::JUDGMENT_RGBA[0];
+    let excellent = color::JUDGMENT_RGBA[1];
+    let great = color::JUDGMENT_RGBA[2];
+    let decent = color::JUDGMENT_RGBA[3];
+    let wayoff = color::JUDGMENT_RGBA[4];
+    let white = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
+    let w010 = crate::game::timing::FA_PLUS_W010_MS;
+    let w0 = crate::game::timing::FA_PLUS_W0_MS;
+    let w1 = timing_windows[0];
+    let w2 = timing_windows[1];
+    let w3 = timing_windows[2];
+    let w4 = timing_windows[3];
+    let w5 = timing_windows[4];
+
+    (
+        [
+            band("Fan", 0.0, w010, pink),
+            band("Fan", w010, w0, blue),
+            band("Fan", w0, w1, white),
+            band("Ex", w1, w2, excellent),
+            band("Gr", w2, w3, great),
+            band("Dec", w3, w4, decent),
+            band("WO", w4, w5, wayoff),
+        ],
+        7,
+    )
+}
+
+#[inline(always)]
+fn timing_bands_ms(
+    scale: TimingHistogramScale,
+    timing_windows: [f32; 5],
+) -> ([TimingBand; 7], usize) {
+    match scale {
+        TimingHistogramScale::Itg => timing_bands_itg(timing_windows),
+        TimingHistogramScale::Ex => timing_bands_ex(timing_windows),
+        TimingHistogramScale::HardEx => timing_bands_hard_ex(timing_windows),
+    }
+}
+
 /// Builds the timing statistics pane (Simply Love Pane5), shown inside a 300px evaluation pane.
 pub fn build_timing_pane(
     score_info: &ScoreInfo,
     timing_hist_mesh: Option<&Arc<[MeshVertex]>>,
     controller: profile::PlayerSide,
+    scale: TimingHistogramScale,
 ) -> Vec<Actor> {
     let pane_width: f32 = 300.0;
     let pane_height: f32 = 180.0;
@@ -59,34 +185,31 @@ pub fn build_timing_pane(
 
     // Bottom bar judgment labels
     let bottom_bar_center_y = pane_height - (bottombar_height / 2.0_f32);
-    let judgment_labels = [("Fan", 0), ("Ex", 1), ("Gr", 2), ("Dec", 3), ("WO", 4)];
     let timing_windows: [f32; 5] = crate::game::timing::effective_windows_ms(); // ms, with +1.5ms
+    let (judgment_bands, band_count) = timing_bands_ms(scale, timing_windows);
     let worst_window = timing_windows[timing_windows.len() - 1];
 
-    for (i, (label, grade_idx)) in judgment_labels.iter().enumerate() {
-        let color = color::JUDGMENT_RGBA[*grade_idx];
-        let window_ms = if i > 0 { timing_windows[i - 1] } else { 0.0 };
-        let next_window_ms = timing_windows[i];
-        let mid_point_ms = f32::midpoint(window_ms, next_window_ms);
+    for (i, band) in judgment_bands.iter().take(band_count).enumerate() {
+        let mid_point_ms = f32::midpoint(band.start_ms, band.end_ms);
 
         // Scale position from ms to pane coordinates
         let x_offset = (mid_point_ms / worst_window) * (pane_width / 2.0_f32);
 
         if i == 0 {
             // "Fan" is centered
-            children.push(act!(text: font("miso"): settext(*label):
+            children.push(act!(text: font("miso"): settext(band.label):
                 align(0.5, 0.5): xy(pane_width / 2.0_f32, bottom_bar_center_y):
-                zoom(0.65): diffuse(color[0], color[1], color[2], color[3])
+                zoom(0.65): diffuse(band.color[0], band.color[1], band.color[2], band.color[3])
             ));
         } else {
             // Others are symmetric
-            children.push(act!(text: font("miso"): settext(*label):
+            children.push(act!(text: font("miso"): settext(band.label):
                 align(0.5, 0.5): xy(pane_width / 2.0_f32 - x_offset, bottom_bar_center_y):
-                zoom(0.65): diffuse(color[0], color[1], color[2], color[3])
+                zoom(0.65): diffuse(band.color[0], band.color[1], band.color[2], band.color[3])
             ));
-            children.push(act!(text: font("miso"): settext(*label):
+            children.push(act!(text: font("miso"): settext(band.label):
                 align(0.5, 0.5): xy(pane_width / 2.0_f32 + x_offset, bottom_bar_center_y):
-                zoom(0.65): diffuse(color[0], color[1], color[2], color[3])
+                zoom(0.65): diffuse(band.color[0], band.color[1], band.color[2], band.color[3])
             ));
         }
     }

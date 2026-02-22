@@ -2,18 +2,72 @@ use crate::core::gfx::MeshVertex;
 use crate::game::timing::{HistogramMs, ScatterPoint};
 use crate::ui::color;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TimingHistogramScale {
+    Itg,
+    Ex,
+    HardEx,
+}
+
 #[inline(always)]
-fn color_for_abs_ms(abs_ms: f32, timing_windows_ms: [f32; 5]) -> [f32; 4] {
-    if abs_ms <= timing_windows_ms[0] {
-        color::JUDGMENT_RGBA[0]
-    } else if abs_ms <= timing_windows_ms[1] {
-        color::JUDGMENT_RGBA[1]
-    } else if abs_ms <= timing_windows_ms[2] {
-        color::JUDGMENT_RGBA[2]
-    } else if abs_ms <= timing_windows_ms[3] {
-        color::JUDGMENT_RGBA[3]
-    } else {
-        color::JUDGMENT_RGBA[4]
+fn color_for_abs_ms(
+    abs_ms: f32,
+    timing_windows_ms: [f32; 5],
+    scale: TimingHistogramScale,
+) -> [f32; 4] {
+    let w1 = timing_windows_ms[0];
+    let w2 = timing_windows_ms[1];
+    let w3 = timing_windows_ms[2];
+    let w4 = timing_windows_ms[3];
+    let w0 = crate::game::timing::FA_PLUS_W0_MS;
+    let w010 = crate::game::timing::FA_PLUS_W010_MS;
+
+    match scale {
+        TimingHistogramScale::Itg => {
+            if abs_ms <= w1 {
+                color::JUDGMENT_RGBA[0]
+            } else if abs_ms <= w2 {
+                color::JUDGMENT_RGBA[1]
+            } else if abs_ms <= w3 {
+                color::JUDGMENT_RGBA[2]
+            } else if abs_ms <= w4 {
+                color::JUDGMENT_RGBA[3]
+            } else {
+                color::JUDGMENT_RGBA[4]
+            }
+        }
+        TimingHistogramScale::Ex => {
+            if abs_ms <= w0 {
+                color::JUDGMENT_RGBA[0]
+            } else if abs_ms <= w1 {
+                color::JUDGMENT_FA_PLUS_WHITE_RGBA
+            } else if abs_ms <= w2 {
+                color::JUDGMENT_RGBA[1]
+            } else if abs_ms <= w3 {
+                color::JUDGMENT_RGBA[2]
+            } else if abs_ms <= w4 {
+                color::JUDGMENT_RGBA[3]
+            } else {
+                color::JUDGMENT_RGBA[4]
+            }
+        }
+        TimingHistogramScale::HardEx => {
+            if abs_ms <= w010 {
+                color::HARD_EX_SCORE_RGBA
+            } else if abs_ms <= w0 {
+                color::JUDGMENT_RGBA[0]
+            } else if abs_ms <= w1 {
+                color::JUDGMENT_FA_PLUS_WHITE_RGBA
+            } else if abs_ms <= w2 {
+                color::JUDGMENT_RGBA[1]
+            } else if abs_ms <= w3 {
+                color::JUDGMENT_RGBA[2]
+            } else if abs_ms <= w4 {
+                color::JUDGMENT_RGBA[3]
+            } else {
+                color::JUDGMENT_RGBA[4]
+            }
+        }
     }
 }
 
@@ -72,7 +126,11 @@ pub fn build_scatter_mesh(
             Some(off_ms) => {
                 let t = ((worst - off_ms) / (2.0 * worst)).clamp(0.0, 1.0);
                 let y = t * h;
-                let base = color_for_abs_ms(off_ms.abs(), timing_windows_ms);
+                let base = color_for_abs_ms(
+                    off_ms.abs(),
+                    timing_windows_ms,
+                    TimingHistogramScale::Itg,
+                );
                 let c = [base[0], base[1], base[2], 0.666];
                 push_quad(&mut out, x, y, 1.5, 1.5, c);
             }
@@ -91,6 +149,7 @@ pub fn build_offset_histogram_mesh(
     pane_width: f32,
     graph_height: f32,
     pane_height: f32,
+    scale: TimingHistogramScale,
     use_smoothing: bool,
 ) -> Vec<MeshVertex> {
     let pw = pane_width.max(0.0);
@@ -148,7 +207,7 @@ pub fn build_offset_histogram_mesh(
         };
         let bar_h = (y / peak) * height_max;
         let top_y = (gh - bar_h).max(0.0);
-        let c = color_for_abs_ms(bin.abs() as f32, timing_windows_ms);
+        let c = color_for_abs_ms(bin.abs() as f32, timing_windows_ms, scale);
         cols.push(Col { x, top_y, color: c });
     }
 
