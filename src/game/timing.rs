@@ -1,6 +1,7 @@
 use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{Note, NoteType};
 use log::info;
+use rssp::streams::StreamSegment;
 use rssp::timing as rssp_timing;
 use std::cmp::Ordering;
 use std::sync::Arc;
@@ -1063,6 +1064,11 @@ pub fn compute_note_timing_stats(notes: &[Note]) -> TimingStats {
 pub struct ScatterPoint {
     pub time_sec: f32,
     pub offset_ms: Option<f32>, // None for Miss
+    // Arrow Cloud-style "direction" code: 1..4 for L/D/U/R, other values for jumps/chords.
+    pub direction_code: u8,
+    pub is_stream: bool,
+    pub is_left_foot: bool,
+    pub miss_because_held: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1079,31 +1085,109 @@ const HIST_BIN_MS: f32 = 1.0; // 1ms bins, like Simply Love using 0.001s
 const GAUSS7: [f32; 7] = [0.045, 0.090, 0.180, 0.370, 0.180, 0.090, 0.045];
 
 #[inline(always)]
-pub fn build_scatter_points(notes: &[Note], note_time_cache: &[f32]) -> Vec<ScatterPoint> {
+fn local_direction_code(note: &Note, col_offset: usize, cols_per_player: usize) -> Option<u8> {
+    if note.column < col_offset {
+        return None;
+    }
+    let local = note.column - col_offset;
+    if local >= cols_per_player {
+        return None;
+    }
+    let code = local.saturating_add(1).min(u8::MAX as usize) as u8;
+    Some(code)
+}
+
+#[inline(always)]
+fn is_stream_beat(beat: f32, stream_segments: &[StreamSegment]) -> bool {
+    if stream_segments.is_empty() {
+        return false;
+    }
+    let measure = (beat.floor() as i32).div_euclid(4).max(0) as usize;
+    stream_segments
+        .iter()
+        .any(|seg| !seg.is_break && measure >= seg.start && measure < seg.end)
+}
+
+#[inline(always)]
+pub fn build_scatter_points(
+    notes: &[Note],
+    note_time_cache: &[f32],
+    col_offset: usize,
+    cols_per_player: usize,
+    stream_segments: &[StreamSegment],
+) -> Vec<ScatterPoint> {
     let mut out = Vec::with_capacity(notes.len());
-    for (idx, n) in notes.iter().enumerate() {
-        if matches!(n.note_type, NoteType::Mine) {
-            continue;
+    let mut foot_left = false;
+    let mut row_start = 0usize;
+
+    while row_start < notes.len() {
+        let row = notes[row_start].row_index;
+        let mut row_end = row_start + 1;
+        while row_end < notes.len() && notes[row_end].row_index == row {
+            row_end += 1;
         }
-        if n.is_fake {
-            continue;
-        }
-        let t = note_time_cache.get(idx).copied().unwrap_or(0.0);
-        let offset_ms = match n.result.as_ref() {
-            Some(j) => {
-                if j.grade == JudgeGrade::Miss {
+
+        let row_notes = &notes[row_start..row_end];
+        let row_judgment = judgment::aggregate_row_final_judgment(
+            row_notes.iter().filter_map(|n| {
+                if n.is_fake || !n.can_be_judged || matches!(n.note_type, NoteType::Mine) {
                     None
                 } else {
-                    Some(j.time_error_ms)
+                    n.result.as_ref()
                 }
-            }
-            None => continue, // do not include unjudged notes
+            }),
+        );
+        let Some(judgment) = row_judgment else {
+            row_start = row_end;
+            continue;
         };
+
+        let mut representative_ix: Option<usize> = None;
+        let mut direction_code = 0u8;
+        for i in row_start..row_end {
+            let n = &notes[i];
+            if n.is_fake || !n.can_be_judged || matches!(n.note_type, NoteType::Mine) {
+                continue;
+            }
+            if representative_ix.is_none() && n.result.is_some() {
+                representative_ix = Some(i);
+            }
+            if let Some(code) = local_direction_code(n, col_offset, cols_per_player) {
+                direction_code = direction_code.saturating_add(code);
+            }
+        }
+
+        if direction_code == 1 {
+            foot_left = true;
+        } else if direction_code == 4 {
+            foot_left = false;
+        } else if direction_code > 0 {
+            foot_left = !foot_left;
+        }
+
+        let Some(idx) = representative_ix else {
+            row_start = row_end;
+            continue;
+        };
+        let t = note_time_cache.get(idx).copied().unwrap_or(0.0);
+        let offset_ms = if judgment.grade == JudgeGrade::Miss {
+            None
+        } else {
+            Some(judgment.time_error_ms)
+        };
+
         out.push(ScatterPoint {
             time_sec: t,
             offset_ms,
+            direction_code,
+            is_stream: is_stream_beat(notes[idx].beat, stream_segments),
+            is_left_foot: foot_left,
+            miss_because_held: judgment.grade == JudgeGrade::Miss && judgment.miss_because_held,
         });
+
+        row_start = row_end;
     }
+
     out
 }
 

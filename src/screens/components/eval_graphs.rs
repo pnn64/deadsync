@@ -9,6 +9,15 @@ pub enum TimingHistogramScale {
     HardEx,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScatterPlotScale {
+    Itg,
+    Ex,
+    HardEx,
+    Arrow,
+    Foot,
+}
+
 #[inline(always)]
 fn color_for_abs_ms(
     abs_ms: f32,
@@ -72,6 +81,47 @@ fn color_for_abs_ms(
 }
 
 #[inline(always)]
+fn color_for_arrow(direction_code: u8) -> [f32; 4] {
+    match direction_code {
+        1 => [1.0, 0.0, 0.0, 1.0],
+        2 => [0.0, 0.0, 1.0, 1.0],
+        3 => [0.0, 1.0, 0.0, 1.0],
+        4 => [1.0, 1.0, 0.0, 1.0],
+        _ => [1.0, 1.0, 1.0, 1.0],
+    }
+}
+
+#[inline(always)]
+fn color_for_foot(is_stream: bool, is_left_foot: bool) -> [f32; 4] {
+    if !is_stream {
+        return [0.0, 0.0, 0.0, 1.0];
+    }
+    if is_left_foot {
+        [1.0, 0.0, 0.0, 1.0]
+    } else {
+        [0.0, 0.0, 1.0, 1.0]
+    }
+}
+
+#[inline(always)]
+fn color_for_scatter(
+    sp: &ScatterPoint,
+    abs_ms: f32,
+    timing_windows_ms: [f32; 5],
+    scale: ScatterPlotScale,
+) -> [f32; 4] {
+    match scale {
+        ScatterPlotScale::Itg => color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::Itg),
+        ScatterPlotScale::Ex => color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::Ex),
+        ScatterPlotScale::HardEx => {
+            color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::HardEx)
+        }
+        ScatterPlotScale::Arrow => color_for_arrow(sp.direction_code),
+        ScatterPlotScale::Foot => color_for_foot(sp.is_stream, sp.is_left_foot),
+    }
+}
+
+#[inline(always)]
 fn push_quad(out: &mut Vec<MeshVertex>, x: f32, y: f32, w: f32, h: f32, color: [f32; 4]) {
     let x1 = x + w;
     let y1 = y + h;
@@ -102,6 +152,7 @@ pub fn build_scatter_mesh(
     graph_width: f32,
     graph_height: f32,
     worst_window_ms: f32,
+    scale: ScatterPlotScale,
 ) -> Vec<MeshVertex> {
     let w = graph_width.max(0.0);
     let h = graph_height.max(0.0);
@@ -126,17 +177,22 @@ pub fn build_scatter_mesh(
             Some(off_ms) => {
                 let t = ((worst - off_ms) / (2.0 * worst)).clamp(0.0, 1.0);
                 let y = t * h;
-                let base = color_for_abs_ms(
-                    off_ms.abs(),
-                    timing_windows_ms,
-                    TimingHistogramScale::Itg,
-                );
+                let base = color_for_scatter(sp, off_ms.abs(), timing_windows_ms, scale);
                 let c = [base[0], base[1], base[2], 0.666];
                 push_quad(&mut out, x, y, 1.5, 1.5, c);
             }
             None => {
-                let c = [1.0, 0.0, 0.0, 0.47];
-                push_quad(&mut out, x, 0.0, 1.0, h, c);
+                let base = color_for_scatter(sp, worst, timing_windows_ms, scale);
+                let miss_alpha = if matches!(scale, ScatterPlotScale::Itg | ScatterPlotScale::Ex | ScatterPlotScale::HardEx)
+                {
+                    0.47
+                } else {
+                    0.333
+                };
+                let c = [base[0], base[1], base[2], miss_alpha];
+                let h1 = if sp.miss_because_held { h * 0.5 } else { 0.0 };
+                let h2 = if sp.miss_because_held { h } else { h * 0.5 };
+                push_quad(&mut out, x, h1, 1.0, (h2 - h1).max(0.0), c);
             }
         }
     }

@@ -1206,6 +1206,10 @@ impl AssetManager {
                 "evaluation/cleared.png".to_string(),
                 "evaluation/cleared.png".to_string(),
             ),
+            (
+                "feet-diagram.png".to_string(),
+                "feet-diagram.png".to_string(),
+            ),
         ];
 
         // Simply Love-style grade assets (used by `screens::components::eval_grades`).

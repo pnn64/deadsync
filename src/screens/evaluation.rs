@@ -373,6 +373,39 @@ impl EvalPane {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EvalGraphPane {
+    Itg,
+    Ex,
+    HardEx,
+    Arrow,
+    Foot,
+}
+
+impl EvalGraphPane {
+    #[inline(always)]
+    const fn next(self) -> Self {
+        match self {
+            Self::Itg => Self::Ex,
+            Self::Ex => Self::HardEx,
+            Self::HardEx => Self::Arrow,
+            Self::Arrow => Self::Foot,
+            Self::Foot => Self::Itg,
+        }
+    }
+
+    #[inline(always)]
+    const fn prev(self) -> Self {
+        match self {
+            Self::Itg => Self::Foot,
+            Self::Ex => Self::Itg,
+            Self::HardEx => Self::Ex,
+            Self::Arrow => Self::HardEx,
+            Self::Foot => Self::Arrow,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct State {
     pub active_color_index: i32,
@@ -386,12 +419,17 @@ pub struct State {
     pub timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
-    pub scatter_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub scatter_mesh_itg: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub scatter_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub scatter_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub scatter_mesh_arrow: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub scatter_mesh_foot: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub density_graph_texture_key: String,
     pub return_to_course: bool,
     pub auto_advance_seconds: Option<f32>,
     pub allow_online_panes: bool,
     active_pane: [EvalPane; MAX_PLAYERS],
+    active_graph: [EvalGraphPane; MAX_PLAYERS],
 }
 
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
@@ -404,8 +442,18 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         std::array::from_fn(|_| None);
     let mut timing_hist_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
-    let mut scatter_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|_| None);
+    let mut scatter_mesh_itg: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    let mut scatter_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    let mut scatter_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    let mut scatter_mesh_arrow: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    let mut scatter_mesh_foot: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
+    let active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let mut stage_duration_seconds: f32 = 0.0;
     let mut machine_records_by_hash: HashMap<String, Vec<scores::LeaderboardEntry>> =
         HashMap::new();
@@ -426,11 +474,18 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let hold_end_times = &gs.hold_end_time_cache[start..end];
             let p = &gs.players[player_idx];
             let prof = &gs.player_profiles[player_idx];
+            let col_offset = player_idx.saturating_mul(cols_per_player);
 
             // Compute timing statistics across all non-miss tap judgments
             let stats = timing_stats::compute_note_timing_stats(notes);
             // Prepare scatter points and histogram bins
-            let scatter = timing_stats::build_scatter_points(notes, note_times);
+            let scatter = timing_stats::build_scatter_points(
+                notes,
+                note_times,
+                col_offset,
+                cols_per_player,
+                &gs.mini_indicator_stream_segments[player_idx],
+            );
             let histogram = timing_stats::build_histogram_ms(notes);
             let scatter_worst_window_ms = {
                 let tw = timing_stats::effective_windows_ms();
@@ -547,7 +602,6 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 grade = scores::Grade::Quint;
             }
 
-            let col_offset = player_idx.saturating_mul(cols_per_player);
             let column_judgments = compute_column_judgments(notes, cols_per_player, col_offset);
 
             score_info[player_idx] = Some(ScoreInfo {
@@ -628,7 +682,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
-            scatter_mesh[player_idx] = {
+            scatter_mesh_itg[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
                 let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
                     &si.scatter,
@@ -637,6 +691,63 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
+                    crate::screens::components::eval_graphs::ScatterPlotScale::Itg,
+                );
+                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+            };
+
+            scatter_mesh_ex[player_idx] = {
+                const GRAPH_H: f32 = 64.0;
+                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                    &si.scatter,
+                    si.graph_first_second,
+                    si.graph_last_second,
+                    graph_width,
+                    GRAPH_H,
+                    si.scatter_worst_window_ms,
+                    crate::screens::components::eval_graphs::ScatterPlotScale::Ex,
+                );
+                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+            };
+
+            scatter_mesh_hard_ex[player_idx] = {
+                const GRAPH_H: f32 = 64.0;
+                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                    &si.scatter,
+                    si.graph_first_second,
+                    si.graph_last_second,
+                    graph_width,
+                    GRAPH_H,
+                    si.scatter_worst_window_ms,
+                    crate::screens::components::eval_graphs::ScatterPlotScale::HardEx,
+                );
+                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+            };
+
+            scatter_mesh_arrow[player_idx] = {
+                const GRAPH_H: f32 = 64.0;
+                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                    &si.scatter,
+                    si.graph_first_second,
+                    si.graph_last_second,
+                    graph_width,
+                    GRAPH_H,
+                    si.scatter_worst_window_ms,
+                    crate::screens::components::eval_graphs::ScatterPlotScale::Arrow,
+                );
+                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+            };
+
+            scatter_mesh_foot[player_idx] = {
+                const GRAPH_H: f32 = 64.0;
+                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                    &si.scatter,
+                    si.graph_first_second,
+                    si.graph_last_second,
+                    graph_width,
+                    GRAPH_H,
+                    si.scatter_worst_window_ms,
+                    crate::screens::components::eval_graphs::ScatterPlotScale::Foot,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
@@ -731,12 +842,17 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         timing_hist_mesh,
         timing_hist_mesh_ex,
         timing_hist_mesh_hard_ex,
-        scatter_mesh,
+        scatter_mesh_itg,
+        scatter_mesh_ex,
+        scatter_mesh_hard_ex,
+        scatter_mesh_arrow,
+        scatter_mesh_foot,
         density_graph_texture_key: "__white".to_string(),
         return_to_course: false,
         auto_advance_seconds: None,
         allow_online_panes: true,
         active_pane,
+        active_graph,
     }
 }
 
@@ -745,6 +861,7 @@ pub fn init_from_score_info(
     stage_duration_seconds: f32,
 ) -> State {
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
+    let active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let play_style = profile::get_session_play_style();
     match play_style {
         profile::PlayStyle::Versus => {
@@ -780,12 +897,17 @@ pub fn init_from_score_info(
         timing_hist_mesh: std::array::from_fn(|_| None),
         timing_hist_mesh_ex: std::array::from_fn(|_| None),
         timing_hist_mesh_hard_ex: std::array::from_fn(|_| None),
-        scatter_mesh: std::array::from_fn(|_| None),
+        scatter_mesh_itg: std::array::from_fn(|_| None),
+        scatter_mesh_ex: std::array::from_fn(|_| None),
+        scatter_mesh_hard_ex: std::array::from_fn(|_| None),
+        scatter_mesh_arrow: std::array::from_fn(|_| None),
+        scatter_mesh_foot: std::array::from_fn(|_| None),
         density_graph_texture_key: "__white".to_string(),
         return_to_course: false,
         auto_advance_seconds: None,
         allow_online_panes: true,
         active_pane,
+        active_graph,
     }
 }
 
@@ -1091,6 +1213,30 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
         }
     };
+    let mut shift_graph_for = |controller: profile::PlayerSide, dir: i32| {
+        let controller_idx = side_idx(controller);
+        let player_idx = player_idx_for_controller(controller);
+        if state
+            .score_info
+            .get(player_idx)
+            .and_then(|s| s.as_ref())
+            .is_none()
+        {
+            return;
+        }
+
+        state.active_graph[controller_idx] = if dir >= 0 {
+            state.active_graph[controller_idx].next()
+        } else {
+            state.active_graph[controller_idx].prev()
+        };
+
+        // Single/double have one lower graph; keep both controller slots in sync.
+        if play_style != profile::PlayStyle::Versus {
+            let other_idx = 1 - controller_idx;
+            state.active_graph[other_idx] = state.active_graph[controller_idx];
+        }
+    };
 
     match ev.action {
         VirtualAction::p1_back
@@ -1105,12 +1251,28 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             shift_pane_for(profile::PlayerSide::P1, -1);
             ScreenAction::None
         }
+        VirtualAction::p1_up | VirtualAction::p1_menu_up => {
+            shift_graph_for(profile::PlayerSide::P1, -1);
+            ScreenAction::None
+        }
+        VirtualAction::p1_down | VirtualAction::p1_menu_down => {
+            shift_graph_for(profile::PlayerSide::P1, 1);
+            ScreenAction::None
+        }
         VirtualAction::p2_right | VirtualAction::p2_menu_right => {
             shift_pane_for(profile::PlayerSide::P2, 1);
             ScreenAction::None
         }
         VirtualAction::p2_left | VirtualAction::p2_menu_left => {
             shift_pane_for(profile::PlayerSide::P2, -1);
+            ScreenAction::None
+        }
+        VirtualAction::p2_up | VirtualAction::p2_menu_up => {
+            shift_graph_for(profile::PlayerSide::P2, -1);
+            ScreenAction::None
+        }
+        VirtualAction::p2_down | VirtualAction::p2_menu_down => {
+            shift_graph_for(profile::PlayerSide::P2, 1);
             ScreenAction::None
         }
         _ => ScreenAction::None,
@@ -1820,8 +1982,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 continue;
             };
 
+            let graph_controller_idx = if play_style == profile::PlayStyle::Versus {
+                player_idx
+            } else if player_side == profile::PlayerSide::P1 {
+                0
+            } else {
+                1
+            };
+            let graph_mode = state.active_graph[graph_controller_idx];
             let density_mesh = state.density_graph_mesh[player_idx].as_ref();
-            let scatter_mesh = state.scatter_mesh[player_idx].as_ref();
+            let scatter_mesh = match graph_mode {
+                EvalGraphPane::Itg => state.scatter_mesh_itg[player_idx].as_ref(),
+                EvalGraphPane::Ex => state.scatter_mesh_ex[player_idx].as_ref(),
+                EvalGraphPane::HardEx => state.scatter_mesh_hard_ex[player_idx].as_ref(),
+                EvalGraphPane::Arrow => state.scatter_mesh_arrow[player_idx].as_ref(),
+                EvalGraphPane::Foot => state.scatter_mesh_foot[player_idx].as_ref(),
+            };
+            let show_feet_overlay = graph_mode == EvalGraphPane::Foot;
 
             let graph_frame = Actor::Frame {
                 align: [0.5, 0.0],
@@ -1891,6 +2068,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 z: 3,
                                 children: Vec::new(),
                             }
+                        }
+                    },
+                    {
+                        if show_feet_overlay {
+                            act!(sprite("feet-diagram.png"):
+                                align(0.5, 0.5):
+                                xy(graph_width / 2.0_f32, graph_height / 2.0_f32):
+                                zoom(0.45):
+                                diffusealpha(0.2):
+                                z(3)
+                            )
+                        } else {
+                            act!(sprite("__white"): visible(false))
                         }
                     },
                     {
