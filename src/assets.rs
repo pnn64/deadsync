@@ -1757,9 +1757,10 @@ impl AssetManager {
     pub(crate) fn ensure_texture_from_path(&mut self, backend: &mut Backend, path: &Path) {
         let key = path.to_string_lossy().into_owned();
         let has_existing = self.textures.contains_key(&key);
-        let needs_high_res_upgrade = self.current_dynamic_banner.as_ref().is_some_and(|state| {
-            state.key == key && state.path == path && !state.high_res_loaded
-        });
+        let needs_high_res_upgrade = self
+            .current_dynamic_banner
+            .as_ref()
+            .is_some_and(|state| state.key == key && state.path == path && !state.high_res_loaded);
 
         if has_existing && !needs_high_res_upgrade {
             return;

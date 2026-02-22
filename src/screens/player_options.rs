@@ -1004,6 +1004,29 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
+            name: "Combo Colors".to_string(),
+            choices: vec![
+                "Glow".to_string(),
+                "Solid".to_string(),
+                "Rainbow".to_string(),
+                "RainbowScroll".to_string(),
+                "None".to_string(),
+            ],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![
+                "Choose whether to show combo color by glowing, solid color, rainbow,".to_string(),
+                "or none.".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Combo Color Mode".to_string(),
+            choices: vec!["FullCombo".to_string(), "CurrentCombo".to_string()],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec!["Choose whether combo colors use full combo or current combo.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
             name: "Judgment Tilt".to_string(),
             choices: vec!["No".to_string(), "Yes".to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
@@ -1453,6 +1476,21 @@ fn apply_profile_defaults(
             crate::game::profile::ComboFont::Work => 5,
             crate::game::profile::ComboFont::WendyCursed => 6,
             crate::game::profile::ComboFont::None => 7,
+        };
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Colors") {
+        row.selected_choice_index[player_idx] = match profile.combo_colors {
+            crate::game::profile::ComboColors::Glow => 0,
+            crate::game::profile::ComboColors::Solid => 1,
+            crate::game::profile::ComboColors::Rainbow => 2,
+            crate::game::profile::ComboColors::RainbowScroll => 3,
+            crate::game::profile::ComboColors::None => 4,
+        };
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Color Mode") {
+        row.selected_choice_index[player_idx] = match profile.combo_mode {
+            crate::game::profile::ComboMode::FullCombo => 0,
+            crate::game::profile::ComboMode::CurrentCombo => 1,
         };
     }
     // Initialize Hold Judgment row from profile setting (Love, mute, ITG2, None)
@@ -2428,6 +2466,8 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "Hide"
         || row_name == "LifeMeter Type"
         || row_name == "Data Visualizations"
+        || row_name == "Combo Colors"
+        || row_name == "Combo Color Mode"
         || row_name.starts_with("Gameplay Extras")
         || row_name == "Rescore Early Hits"
         || row_name == ROW_CUSTOM_FANTASTIC_WINDOW
@@ -3252,6 +3292,29 @@ fn change_choice_for_player(
         state.player_profiles[player_idx].combo_font = setting;
         if should_persist {
             crate::game::profile::update_combo_font_for_side(persist_side, setting);
+        }
+    } else if row_name == "Combo Colors" {
+        let setting = match row.selected_choice_index[player_idx] {
+            0 => crate::game::profile::ComboColors::Glow,
+            1 => crate::game::profile::ComboColors::Solid,
+            2 => crate::game::profile::ComboColors::Rainbow,
+            3 => crate::game::profile::ComboColors::RainbowScroll,
+            4 => crate::game::profile::ComboColors::None,
+            _ => crate::game::profile::ComboColors::Glow,
+        };
+        state.player_profiles[player_idx].combo_colors = setting;
+        if should_persist {
+            crate::game::profile::update_combo_colors_for_side(persist_side, setting);
+        }
+    } else if row_name == "Combo Color Mode" {
+        let setting = match row.selected_choice_index[player_idx] {
+            0 => crate::game::profile::ComboMode::FullCombo,
+            1 => crate::game::profile::ComboMode::CurrentCombo,
+            _ => crate::game::profile::ComboMode::FullCombo,
+        };
+        state.player_profiles[player_idx].combo_mode = setting;
+        if should_persist {
+            crate::game::profile::update_combo_mode_for_side(persist_side, setting);
         }
     } else if row_name == "Hold Judgment" {
         let setting = match row.selected_choice_index[player_idx] {

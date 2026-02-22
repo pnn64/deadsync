@@ -1128,15 +1128,14 @@ pub fn build_scatter_points(
         }
 
         let row_notes = &notes[row_start..row_end];
-        let row_judgment = judgment::aggregate_row_final_judgment(
-            row_notes.iter().filter_map(|n| {
+        let row_judgment =
+            judgment::aggregate_row_final_judgment(row_notes.iter().filter_map(|n| {
                 if n.is_fake || !n.can_be_judged || matches!(n.note_type, NoteType::Mine) {
                     None
                 } else {
                     n.result.as_ref()
                 }
-            }),
-        );
+            }));
         let Some(judgment) = row_judgment else {
             row_start = row_end;
             continue;

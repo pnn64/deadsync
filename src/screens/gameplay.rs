@@ -1041,7 +1041,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
     // Simply Love parity: keep Stage/Event text visible at the footer after intro animation ends.
-    if !state.stage_intro_text.is_empty() && state.total_elapsed_in_screen >= INTRO_TEXT_SETTLE_SECONDS
+    if !state.stage_intro_text.is_empty()
+        && state.total_elapsed_in_screen >= INTRO_TEXT_SETTLE_SECONDS
     {
         actors.push(act!(text:
             font("wendy"): settext(state.stage_intro_text.clone()):

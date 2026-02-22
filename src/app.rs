@@ -4248,7 +4248,10 @@ impl ApplicationHandler<UserEvent> for App {
                         }
 
                         if finished
-                            && matches!(self.state.shell.transition, TransitionState::FadingIn { .. })
+                            && matches!(
+                                self.state.shell.transition,
+                                TransitionState::FadingIn { .. }
+                            )
                         {
                             self.state.shell.transition = TransitionState::Idle;
                         }

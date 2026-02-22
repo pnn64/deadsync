@@ -111,8 +111,12 @@ fn color_for_scatter(
     scale: ScatterPlotScale,
 ) -> [f32; 4] {
     match scale {
-        ScatterPlotScale::Itg => color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::Itg),
-        ScatterPlotScale::Ex => color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::Ex),
+        ScatterPlotScale::Itg => {
+            color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::Itg)
+        }
+        ScatterPlotScale::Ex => {
+            color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::Ex)
+        }
         ScatterPlotScale::HardEx => {
             color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::HardEx)
         }
@@ -183,8 +187,10 @@ pub fn build_scatter_mesh(
             }
             None => {
                 let base = color_for_scatter(sp, worst, timing_windows_ms, scale);
-                let miss_alpha = if matches!(scale, ScatterPlotScale::Itg | ScatterPlotScale::Ex | ScatterPlotScale::HardEx)
-                {
+                let miss_alpha = if matches!(
+                    scale,
+                    ScatterPlotScale::Itg | ScatterPlotScale::Ex | ScatterPlotScale::HardEx
+                ) {
                     0.47
                 } else {
                     0.333

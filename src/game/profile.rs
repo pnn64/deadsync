@@ -800,6 +800,81 @@ impl core::fmt::Display for ComboFont {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ComboColors {
+    #[default]
+    Glow,
+    Solid,
+    Rainbow,
+    RainbowScroll,
+    None,
+}
+
+impl FromStr for ComboColors {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "glow" => Ok(Self::Glow),
+            "solid" => Ok(Self::Solid),
+            "rainbow" => Ok(Self::Rainbow),
+            "rainbowscroll" => Ok(Self::RainbowScroll),
+            "none" => Ok(Self::None),
+            other => Err(format!("'{other}' is not a valid ComboColors setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for ComboColors {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Glow => write!(f, "Glow"),
+            Self::Solid => write!(f, "Solid"),
+            Self::Rainbow => write!(f, "Rainbow"),
+            Self::RainbowScroll => write!(f, "RainbowScroll"),
+            Self::None => write!(f, "None"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ComboMode {
+    #[default]
+    FullCombo,
+    CurrentCombo,
+}
+
+impl FromStr for ComboMode {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "fullcombo" => Ok(Self::FullCombo),
+            "currentcombo" => Ok(Self::CurrentCombo),
+            other => Err(format!("'{other}' is not a valid ComboMode setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for ComboMode {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::FullCombo => write!(f, "FullCombo"),
+            Self::CurrentCombo => write!(f, "CurrentCombo"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MiniIndicator {
     #[default]
     None,
@@ -933,6 +1008,8 @@ pub struct Profile {
     pub hold_judgment_graphic: HoldJudgmentGraphic,
     pub judgment_graphic: JudgmentGraphic,
     pub combo_font: ComboFont,
+    pub combo_colors: ComboColors,
+    pub combo_mode: ComboMode,
     pub noteskin: NoteSkin,
     pub avatar_path: Option<PathBuf>,
     pub avatar_texture_key: Option<String>,
@@ -1035,6 +1112,8 @@ impl Default for Profile {
             hold_judgment_graphic: HoldJudgmentGraphic::default(),
             judgment_graphic: JudgmentGraphic::default(),
             combo_font: ComboFont::default(),
+            combo_colors: ComboColors::default(),
+            combo_mode: ComboMode::default(),
             noteskin: NoteSkin::default(),
             avatar_path: None,
             avatar_texture_key: None,
@@ -1436,6 +1515,8 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             default_profile.judgment_graphic
         ));
         content.push_str(&format!("ComboFont = {}\n", default_profile.combo_font));
+        content.push_str(&format!("ComboColors = {}\n", default_profile.combo_colors));
+        content.push_str(&format!("ComboMode = {}\n", default_profile.combo_mode));
         content.push_str(&format!("NoteSkin = {}\n", default_profile.noteskin));
         content.push_str(&format!("MiniPercent = {}\n", default_profile.mini_percent));
         content.push_str(&format!("Perspective = {}\n", default_profile.perspective));
@@ -1666,6 +1747,8 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     ));
     content.push_str(&format!("JudgmentGraphic={}\n", profile.judgment_graphic));
     content.push_str(&format!("ComboFont={}\n", profile.combo_font));
+    content.push_str(&format!("ComboColors={}\n", profile.combo_colors));
+    content.push_str(&format!("ComboMode={}\n", profile.combo_mode));
     content.push_str(&format!("NoteSkin={}\n", profile.noteskin));
     content.push_str(&format!("MiniPercent={}\n", profile.mini_percent));
     content.push_str(&format!("Perspective={}\n", profile.perspective));
@@ -1813,6 +1896,14 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "ComboFont")
                 .and_then(|s| ComboFont::from_str(&s).ok())
                 .unwrap_or(default_profile.combo_font);
+            profile.combo_colors = profile_conf
+                .get("PlayerOptions", "ComboColors")
+                .and_then(|s| ComboColors::from_str(&s).ok())
+                .unwrap_or(default_profile.combo_colors);
+            profile.combo_mode = profile_conf
+                .get("PlayerOptions", "ComboMode")
+                .and_then(|s| ComboMode::from_str(&s).ok())
+                .unwrap_or(default_profile.combo_mode);
             profile.noteskin = profile_conf
                 .get("PlayerOptions", "NoteSkin")
                 .and_then(|s| NoteSkin::from_str(&s).ok())
@@ -2794,6 +2885,36 @@ pub fn update_combo_font_for_side(side: PlayerSide, setting: ComboFont) {
             return;
         }
         profile.combo_font = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_combo_colors_for_side(side: PlayerSide, setting: ComboColors) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.combo_colors == setting {
+            return;
+        }
+        profile.combo_colors = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_combo_mode_for_side(side: PlayerSide, setting: ComboMode) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.combo_mode == setting {
+            return;
+        }
+        profile.combo_mode = setting;
     }
     save_profile_ini_for_side(side);
 }

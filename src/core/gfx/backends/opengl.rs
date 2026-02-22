@@ -536,14 +536,15 @@ pub fn draw(
     state.tmesh_cache_frame = state.tmesh_cache_frame.wrapping_add(1);
     prune_tmesh_seen_entries(&mut state.tmesh_cache_seen, state.tmesh_cache_frame);
     let mut tmesh_debug_frame = TMeshFrameDebug::default();
-    tmesh_debug_frame.cache_evictions = tmesh_debug_frame.cache_evictions.saturating_add(
-        evict_tmesh_cache_entries(
-        &state.gl,
-        &mut state.tmesh_cache_entries,
-        &mut state.tmesh_cache_total_bytes,
-        state.tmesh_cache_frame,
-    ) as u64,
-    );
+    tmesh_debug_frame.cache_evictions =
+        tmesh_debug_frame
+            .cache_evictions
+            .saturating_add(evict_tmesh_cache_entries(
+                &state.gl,
+                &mut state.tmesh_cache_entries,
+                &mut state.tmesh_cache_total_bytes,
+                state.tmesh_cache_frame,
+            ) as u64);
 
     {
         let objects_len = render_list.objects.len();
@@ -640,24 +641,29 @@ pub fn draw(
                         tmesh_geom.insert(geom_key, geom);
                         geom
                     };
-                    let (vertex_start, vertex_count, dynamic_geom, geom_run_key, cached_vertex_buffer) =
-                        match geom {
-                            FrameTMeshGeom::Dynamic {
-                                vertex_start,
-                                vertex_count,
-                            } => (
-                                vertex_start,
-                                vertex_count,
-                                true,
-                                (1u64 << 63) | u64::from(vertex_start),
-                                None,
-                            ),
-                            FrameTMeshGeom::Cached {
-                                cache_id,
-                                vertex_count,
-                                buffer,
-                            } => (0, vertex_count, false, cache_id, Some(buffer)),
-                        };
+                    let (
+                        vertex_start,
+                        vertex_count,
+                        dynamic_geom,
+                        geom_run_key,
+                        cached_vertex_buffer,
+                    ) = match geom {
+                        FrameTMeshGeom::Dynamic {
+                            vertex_start,
+                            vertex_count,
+                        } => (
+                            vertex_start,
+                            vertex_count,
+                            true,
+                            (1u64 << 63) | u64::from(vertex_start),
+                            None,
+                        ),
+                        FrameTMeshGeom::Cached {
+                            cache_id,
+                            vertex_count,
+                            buffer,
+                        } => (0, vertex_count, false, cache_id, Some(buffer)),
+                    };
 
                     let instance_start = tmesh_instances.len() as u32;
                     let model: [[f32; 4]; 4] = obj.transform.into();
@@ -944,14 +950,7 @@ pub fn draw(
                         let uv_size = (2 * std::mem::size_of::<f32>()) as i32;
                         let base = (run.instance_start as i32) * inst_stride;
                         gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_instance_vbo));
-                        gl.vertex_attrib_pointer_f32(
-                            4,
-                            4,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base,
-                        );
+                        gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, inst_stride, base);
                         gl.vertex_attrib_pointer_f32(
                             5,
                             4,
@@ -1035,7 +1034,8 @@ pub fn draw(
                         run.instance_count as i32,
                     );
                     let tri_count = run.vertex_count / 3;
-                    vertices = vertices.saturating_add(tri_count.saturating_mul(run.instance_count));
+                    vertices =
+                        vertices.saturating_add(tri_count.saturating_mul(run.instance_count));
                 }
             }
         }
@@ -1148,9 +1148,12 @@ fn try_get_or_promote_cached_tmesh_geom(
             buffer,
         },
     );
-    debug_frame.cache_evictions = debug_frame
-        .cache_evictions
-        .saturating_add(evict_tmesh_cache_entries(gl, cache_entries, cache_total_bytes, frame) as u64);
+    debug_frame.cache_evictions =
+        debug_frame
+            .cache_evictions
+            .saturating_add(
+                evict_tmesh_cache_entries(gl, cache_entries, cache_total_bytes, frame) as u64,
+            );
     Some(FrameTMeshGeom::Cached {
         cache_id,
         vertex_count: raw.len() as u32,
@@ -1199,7 +1202,9 @@ fn push_tmesh_debug_sample(state: &mut State, frame: TMeshFrameDebug) {
     accum.frames = accum.frames.saturating_add(1);
     accum.cache_hits = accum.cache_hits.saturating_add(frame.cache_hits);
     accum.cache_misses = accum.cache_misses.saturating_add(frame.cache_misses);
-    accum.cache_promotions = accum.cache_promotions.saturating_add(frame.cache_promotions);
+    accum.cache_promotions = accum
+        .cache_promotions
+        .saturating_add(frame.cache_promotions);
     accum.cache_evictions = accum.cache_evictions.saturating_add(frame.cache_evictions);
     accum.dynamic_upload_vertices = accum
         .dynamic_upload_vertices

@@ -33,15 +33,15 @@ struct ProjPush {
 #[derive(Clone, Copy)]
 struct InstanceData {
     // 88 bytes total
-    center: [f32; 2],      // offset 0
-    size: [f32; 2],        // offset 8
-    rot_sin_cos: [f32; 2], // offset 16  (sin, cos)
-    tint: [f32; 4],        // offset 24
-    uv_scale: [f32; 2],    // offset 40
-    uv_offset: [f32; 2],   // offset 48
-    local_offset: [f32; 2], // offset 56
+    center: [f32; 2],                   // offset 0
+    size: [f32; 2],                     // offset 8
+    rot_sin_cos: [f32; 2],              // offset 16  (sin, cos)
+    tint: [f32; 4],                     // offset 24
+    uv_scale: [f32; 2],                 // offset 40
+    uv_offset: [f32; 2],                // offset 48
+    local_offset: [f32; 2],             // offset 56
     local_offset_rot_sin_cos: [f32; 2], // offset 64
-    edge_fade: [f32; 4],   // offset 72
+    edge_fade: [f32; 4],                // offset 72
 }
 
 #[repr(C)]
@@ -56,12 +56,12 @@ struct TexturedMeshVertexGpu {
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct TexturedMeshInstanceGpu {
-    model_col0: [f32; 4], // offset 0
-    model_col1: [f32; 4], // offset 16
-    model_col2: [f32; 4], // offset 32
-    model_col3: [f32; 4], // offset 48
-    uv_scale: [f32; 2],   // offset 64
-    uv_offset: [f32; 2],  // offset 72
+    model_col0: [f32; 4],   // offset 0
+    model_col1: [f32; 4],   // offset 16
+    model_col2: [f32; 4],   // offset 32
+    model_col3: [f32; 4],   // offset 48
+    uv_scale: [f32; 2],     // offset 64
+    uv_offset: [f32; 2],    // offset 72
     uv_tex_shift: [f32; 2], // offset 80
 }
 
@@ -1332,9 +1332,9 @@ pub fn draw(
             .as_ref()
             .unwrap()
             .wait_for_fences(&[fence], true, u64::MAX)?;
-        tmesh_debug_frame.cache_evictions = tmesh_debug_frame.cache_evictions.saturating_add(
-            evict_tmesh_cache_entries(state, state.tmesh_cache_frame) as u64,
-        );
+        tmesh_debug_frame.cache_evictions = tmesh_debug_frame
+            .cache_evictions
+            .saturating_add(evict_tmesh_cache_entries(state, state.tmesh_cache_frame) as u64);
         let device = state.device.as_ref().unwrap();
 
         let (image_index, acquired_suboptimal) = match state
@@ -1547,24 +1547,29 @@ pub fn draw(
                         tmesh_geom.insert(geom_key, geom);
                         geom
                     };
-                    let (vertex_start, vertex_count, dynamic_geom, geom_run_key, cached_vertex_buffer) =
-                        match geom {
-                            FrameTMeshGeom::Dynamic {
-                                vertex_start,
-                                vertex_count,
-                            } => (
-                                vertex_start,
-                                vertex_count,
-                                true,
-                                (1u64 << 63) | u64::from(vertex_start),
-                                None,
-                            ),
-                            FrameTMeshGeom::Cached {
-                                cache_id,
-                                vertex_count,
-                                buffer,
-                            } => (0, vertex_count, false, cache_id, Some(buffer)),
-                        };
+                    let (
+                        vertex_start,
+                        vertex_count,
+                        dynamic_geom,
+                        geom_run_key,
+                        cached_vertex_buffer,
+                    ) = match geom {
+                        FrameTMeshGeom::Dynamic {
+                            vertex_start,
+                            vertex_count,
+                        } => (
+                            vertex_start,
+                            vertex_count,
+                            true,
+                            (1u64 << 63) | u64::from(vertex_start),
+                            None,
+                        ),
+                        FrameTMeshGeom::Cached {
+                            cache_id,
+                            vertex_count,
+                            buffer,
+                        } => (0, vertex_count, false, cache_id, Some(buffer)),
+                    };
                     let instance_start = tmesh_instance_written;
                     let model: [[f32; 4]; 4] = obj.transform.into();
                     std::ptr::write(
@@ -1808,8 +1813,8 @@ pub fn draw(
                         first_instance,
                     );
                     let tri_count = draw.vertex_count / 3;
-                    vertices_drawn =
-                        vertices_drawn.saturating_add(tri_count.saturating_mul(draw.instance_count));
+                    vertices_drawn = vertices_drawn
+                        .saturating_add(tri_count.saturating_mul(draw.instance_count));
                 }
             }
         }
@@ -1989,7 +1994,8 @@ fn evict_tmesh_cache_entries(state: &mut State, frame: u64) -> u32 {
             break;
         };
         if let Some(entry) = state.tmesh_cache_entries.remove(&oldest_key) {
-            state.tmesh_cache_total_bytes = state.tmesh_cache_total_bytes.saturating_sub(entry.bytes);
+            state.tmesh_cache_total_bytes =
+                state.tmesh_cache_total_bytes.saturating_sub(entry.bytes);
             destroy_buffer(state.device.as_ref().unwrap(), &entry.buffer);
             evicted = evicted.saturating_add(1);
         }
@@ -2011,7 +2017,9 @@ fn push_tmesh_debug_sample(state: &mut State, frame: TMeshFrameDebug) {
     accum.frames = accum.frames.saturating_add(1);
     accum.cache_hits = accum.cache_hits.saturating_add(frame.cache_hits);
     accum.cache_misses = accum.cache_misses.saturating_add(frame.cache_misses);
-    accum.cache_promotions = accum.cache_promotions.saturating_add(frame.cache_promotions);
+    accum.cache_promotions = accum
+        .cache_promotions
+        .saturating_add(frame.cache_promotions);
     accum.cache_evictions = accum.cache_evictions.saturating_add(frame.cache_evictions);
     accum.dynamic_upload_vertices = accum
         .dynamic_upload_vertices

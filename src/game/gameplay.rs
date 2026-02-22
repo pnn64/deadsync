@@ -1400,6 +1400,7 @@ pub struct PlayerRuntime {
     pub combo: u32,
     pub miss_combo: u32,
     pub full_combo_grade: Option<JudgeGrade>,
+    pub current_combo_grade: Option<JudgeGrade>,
     pub first_fc_attempt_broken: bool,
     pub judgment_counts: HashMap<JudgeGrade, u32>,
     pub scoring_counts: HashMap<JudgeGrade, u32>,
@@ -1483,6 +1484,7 @@ fn init_player_runtime() -> PlayerRuntime {
         combo: 0,
         miss_combo: 0,
         full_combo_grade: None,
+        current_combo_grade: None,
         first_fc_attempt_broken: false,
         judgment_counts: HashMap::from_iter([
             (JudgeGrade::Fantastic, 0),
@@ -3717,6 +3719,7 @@ fn handle_mine_hit(
             state.players[player].first_fc_attempt_broken = true;
         }
         state.players[player].full_combo_grade = None;
+        state.players[player].current_combo_grade = None;
     }
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
@@ -3901,6 +3904,7 @@ fn hit_mine_timebased(
             state.players[player].first_fc_attempt_broken = true;
         }
         state.players[player].full_combo_grade = None;
+        state.players[player].current_combo_grade = None;
     }
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
@@ -3979,6 +3983,7 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
             state.players[player].first_fc_attempt_broken = true;
         }
         state.players[player].full_combo_grade = None;
+        state.players[player].current_combo_grade = None;
     }
     state.receptor_glow_timers[column] = 0.0;
 }
@@ -5301,6 +5306,7 @@ fn finalize_row_judgment(
             p.first_fc_attempt_broken = true;
         }
         p.full_combo_grade = None;
+        p.current_combo_grade = None;
     } else {
         let combo_increment: u32 = if let Some(&pos) = state
             .row_map_cache
@@ -5343,6 +5349,12 @@ fn finalize_row_judgment(
             };
             p.full_combo_grade = Some(new_grade);
         }
+        let current_combo_grade = if let Some(curr_grade) = p.current_combo_grade {
+            final_grade.max(curr_grade)
+        } else {
+            final_grade
+        };
+        p.current_combo_grade = Some(current_combo_grade);
     }
     let row_has_wayoff = judgments_in_row
         .iter()
@@ -5989,7 +6001,8 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         let cmod_zoomed = cmod_pps_zoomed[player];
         let cmod_raw = cmod_pps_raw[player];
 
-        let miss_cull_threshold = dir.mul_add(-state.draw_distance_after_targets[player], receptor_y);
+        let miss_cull_threshold =
+            dir.mul_add(-state.draw_distance_after_targets[player], receptor_y);
         col_arrows.retain(|arrow| {
             let note = &state.notes[arrow.note_index];
             if matches!(note.note_type, NoteType::Mine) {

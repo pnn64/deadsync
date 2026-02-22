@@ -1048,6 +1048,93 @@ fn zmod_small_combo_font(combo_font: profile::ComboFont) -> &'static str {
 }
 
 #[inline(always)]
+fn zmod_combo_font_name(combo_font: profile::ComboFont) -> Option<&'static str> {
+    match combo_font {
+        profile::ComboFont::Wendy => Some("wendy_combo"),
+        profile::ComboFont::ArialRounded => Some("combo_arial_rounded"),
+        profile::ComboFont::Asap => Some("combo_asap"),
+        profile::ComboFont::BebasNeue => Some("combo_bebas_neue"),
+        profile::ComboFont::SourceCode => Some("combo_source_code"),
+        profile::ComboFont::Work => Some("combo_work"),
+        profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
+        profile::ComboFont::None => None,
+    }
+}
+
+#[inline(always)]
+fn zmod_combo_quint_active(state: &State, player_idx: usize, profile: &profile::Profile) -> bool {
+    if !profile.show_fa_plus_window || player_idx >= state.num_players {
+        return false;
+    }
+    let counts = state.live_window_counts[player_idx];
+    counts.w0 > 0
+        && counts.w1 == 0
+        && counts.w2 == 0
+        && counts.w3 == 0
+        && counts.w4 == 0
+        && counts.w5 == 0
+        && counts.miss == 0
+}
+
+#[inline(always)]
+fn zmod_combo_glow_pair(grade: JudgeGrade, quint: bool) -> ([f32; 4], [f32; 4]) {
+    if quint && matches!(grade, JudgeGrade::Fantastic) {
+        return (color::rgba_hex("#F7C0FE"), color::rgba_hex("#E928FF"));
+    }
+    match grade {
+        JudgeGrade::Fantastic => (color::rgba_hex("#C8FFFF"), color::rgba_hex("#6BF0FF")),
+        JudgeGrade::Excellent => (color::rgba_hex("#FDFFC9"), color::rgba_hex("#FDDB85")),
+        JudgeGrade::Great => (color::rgba_hex("#C9FFC9"), color::rgba_hex("#94FEC1")),
+        _ => ([1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]),
+    }
+}
+
+#[inline(always)]
+fn zmod_combo_solid_color(grade: JudgeGrade, quint: bool) -> [f32; 4] {
+    if quint && matches!(grade, JudgeGrade::Fantastic) {
+        return color::rgba_hex("#E928FF");
+    }
+    match grade {
+        JudgeGrade::Fantastic => color::rgba_hex("#21CCE8"),
+        JudgeGrade::Excellent => color::rgba_hex("#E29C18"),
+        JudgeGrade::Great => color::rgba_hex("#66C955"),
+        _ => [1.0, 1.0, 1.0, 1.0],
+    }
+}
+
+#[inline(always)]
+fn zmod_combo_glow_color(color1: [f32; 4], color2: [f32; 4], elapsed: f32) -> [f32; 4] {
+    let effect_period = 0.8_f32;
+    let through = (elapsed / effect_period).fract();
+    let anim_t = ((through * 2.0 * std::f32::consts::PI).sin() + 1.0) * 0.5;
+    [
+        color1[0] + (color2[0] - color1[0]) * anim_t,
+        color1[1] + (color2[1] - color1[1]) * anim_t,
+        color1[2] + (color2[2] - color1[2]) * anim_t,
+        1.0,
+    ]
+}
+
+#[inline(always)]
+fn zmod_combo_rainbow_color(elapsed: f32, scroll: bool, combo: u32) -> [f32; 4] {
+    let speed = if scroll { 0.45 } else { 0.35 };
+    let offset = if scroll { combo as f32 * 0.013 } else { 0.0 };
+    let hue = (elapsed * speed + offset).fract();
+    let h6 = hue * 6.0;
+    let i = h6.floor() as i32;
+    let f = h6 - i as f32;
+    let q = 1.0 - f;
+    match i.rem_euclid(6) {
+        0 => [1.0, f, 0.0, 1.0],
+        1 => [q, 1.0, 0.0, 1.0],
+        2 => [0.0, 1.0, f, 1.0],
+        3 => [0.0, q, 1.0, 1.0],
+        4 => [f, 0.0, 1.0, 1.0],
+        _ => [1.0, 0.0, q, 1.0],
+    }
+}
+
+#[inline(always)]
 fn scoring_count(p: &PlayerRuntime, grade: JudgeGrade) -> u32 {
     p.scoring_counts.get(&grade).copied().unwrap_or(0)
 }
@@ -2854,27 +2941,35 @@ pub fn build(
                     ) {
                         actors.push(model_actor);
                     } else if draw.blend_add {
-                        actors.push(with_sprite_local_offset(act!(sprite(head_slot.texture_key().to_string()):
-                            align(0.5, 0.5):
-                            xy(head_center[0], head_center[1]):
-                            setsize(size[0], size[1]):
-                            rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32):
-                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                            diffuse(color[0], color[1], color[2], color[3]):
-                            blend(add):
-                            z(Z_TAP_NOTE)
-                        ), local_offset, local_offset_rot_sin_cos));
+                        actors.push(with_sprite_local_offset(
+                            act!(sprite(head_slot.texture_key().to_string()):
+                                align(0.5, 0.5):
+                                xy(head_center[0], head_center[1]):
+                                setsize(size[0], size[1]):
+                                rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32):
+                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                diffuse(color[0], color[1], color[2], color[3]):
+                                blend(add):
+                                z(Z_TAP_NOTE)
+                            ),
+                            local_offset,
+                            local_offset_rot_sin_cos,
+                        ));
                     } else {
-                        actors.push(with_sprite_local_offset(act!(sprite(head_slot.texture_key().to_string()):
-                            align(0.5, 0.5):
-                            xy(head_center[0], head_center[1]):
-                            setsize(size[0], size[1]):
-                            rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32):
-                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                            diffuse(color[0], color[1], color[2], color[3]):
-                            blend(normal):
-                            z(Z_TAP_NOTE)
-                        ), local_offset, local_offset_rot_sin_cos));
+                        actors.push(with_sprite_local_offset(
+                            act!(sprite(head_slot.texture_key().to_string()):
+                                align(0.5, 0.5):
+                                xy(head_center[0], head_center[1]):
+                                setsize(size[0], size[1]):
+                                rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32):
+                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                diffuse(color[0], color[1], color[2], color[3]):
+                                blend(normal):
+                                z(Z_TAP_NOTE)
+                            ),
+                            local_offset,
+                            local_offset_rot_sin_cos,
+                        ));
                     }
                 } else if let Some(note_slots) = ns.note_layers.get(note_idx) {
                     let primary_h = note_slots
@@ -2949,27 +3044,35 @@ pub fn build(
                         ) {
                             actors.push(model_actor);
                         } else if draw.blend_add {
-                            actors.push(with_sprite_local_offset(act!(sprite(note_slot.texture_key().to_string()):
-                                align(0.5, 0.5):
-                                xy(head_center[0], head_center[1]):
-                                setsize(size[0], size[1]):
-                                rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
-                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                diffuse(color[0], color[1], color[2], color[3]):
-                                blend(add):
-                                z(layer_z)
-                            ), local_offset, local_offset_rot_sin_cos));
+                            actors.push(with_sprite_local_offset(
+                                act!(sprite(note_slot.texture_key().to_string()):
+                                    align(0.5, 0.5):
+                                    xy(head_center[0], head_center[1]):
+                                    setsize(size[0], size[1]):
+                                    rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    diffuse(color[0], color[1], color[2], color[3]):
+                                    blend(add):
+                                    z(layer_z)
+                                ),
+                                local_offset,
+                                local_offset_rot_sin_cos,
+                            ));
                         } else {
-                            actors.push(with_sprite_local_offset(act!(sprite(note_slot.texture_key().to_string()):
-                                align(0.5, 0.5):
-                                xy(head_center[0], head_center[1]):
-                                setsize(size[0], size[1]):
-                                rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
-                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                diffuse(color[0], color[1], color[2], color[3]):
-                                blend(normal):
-                                z(layer_z)
-                            ), local_offset, local_offset_rot_sin_cos));
+                            actors.push(with_sprite_local_offset(
+                                act!(sprite(note_slot.texture_key().to_string()):
+                                    align(0.5, 0.5):
+                                    xy(head_center[0], head_center[1]):
+                                    setsize(size[0], size[1]):
+                                    rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    diffuse(color[0], color[1], color[2], color[3]):
+                                    blend(normal):
+                                    z(layer_z)
+                                ),
+                                local_offset,
+                                local_offset_rot_sin_cos,
+                            ));
                         }
                     }
                 } else if let Some(note_slot) = ns.notes.get(note_idx) {
@@ -3044,8 +3147,7 @@ pub fn build(
                     }
                 };
                 let delta = (y_pos - receptor_y_lane) * dir;
-                if delta < -draw_distance_after_targets || delta > draw_distance_before_targets
-                {
+                if delta < -draw_distance_after_targets || delta > draw_distance_before_targets {
                     continue;
                 }
                 let col_x_offset = ns.column_xs[col_idx] as f32 * field_zoom;
@@ -3579,19 +3681,10 @@ pub fn build(
     }
     // Combo
     if !profile.hide_combo {
+        let combo_y = zmod_layout.combo_y;
+        let combo_font_name = zmod_combo_font_name(profile.combo_font);
         if p.miss_combo >= SHOW_COMBO_AT {
-            let combo_y = zmod_layout.combo_y;
-            let miss_combo_font_name = match profile.combo_font {
-                crate::game::profile::ComboFont::Wendy => Some("wendy_combo"),
-                crate::game::profile::ComboFont::ArialRounded => Some("combo_arial_rounded"),
-                crate::game::profile::ComboFont::Asap => Some("combo_asap"),
-                crate::game::profile::ComboFont::BebasNeue => Some("combo_bebas_neue"),
-                crate::game::profile::ComboFont::SourceCode => Some("combo_source_code"),
-                crate::game::profile::ComboFont::Work => Some("combo_work"),
-                crate::game::profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
-                crate::game::profile::ComboFont::None => None,
-            };
-            if let Some(font_name) = miss_combo_font_name {
+            if let Some(font_name) = combo_font_name {
                 hud_actors.push(act!(text:
                     font(font_name): settext(p.miss_combo.to_string()):
                     align(0.5, 0.5): xy(playfield_center_x, combo_y):
@@ -3601,39 +3694,68 @@ pub fn build(
                 ));
             }
         } else if p.combo >= SHOW_COMBO_AT {
-            let combo_y = zmod_layout.combo_y;
-            let (color1, color2) = if let Some(fc_grade) = &p.full_combo_grade {
-                match fc_grade {
-                    JudgeGrade::Fantastic => {
-                        (color::rgba_hex("#C8FFFF"), color::rgba_hex("#6BF0FF"))
+            let quint_active = zmod_combo_quint_active(state, player_idx, profile);
+            let final_color = match profile.combo_colors {
+                profile::ComboColors::None => [1.0, 1.0, 1.0, 1.0],
+                profile::ComboColors::Rainbow => {
+                    if profile.combo_mode == profile::ComboMode::FullCombo {
+                        if matches!(
+                            p.full_combo_grade,
+                            Some(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)
+                        ) {
+                            zmod_combo_rainbow_color(state.total_elapsed_in_screen, false, p.combo)
+                        } else {
+                            [1.0, 1.0, 1.0, 1.0]
+                        }
+                    } else {
+                        zmod_combo_rainbow_color(state.total_elapsed_in_screen, false, p.combo)
                     }
-                    JudgeGrade::Excellent => {
-                        (color::rgba_hex("#FDFFC9"), color::rgba_hex("#FDDB85"))
-                    }
-                    JudgeGrade::Great => (color::rgba_hex("#C9FFC9"), color::rgba_hex("#94FEC1")),
-                    _ => ([1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]),
                 }
-            } else {
-                ([1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0])
-            };
-            let effect_period = 0.8;
-            let t = (state.total_elapsed_in_screen / effect_period).fract();
-            let anim_t = ((t * 2.0 * std::f32::consts::PI).sin() + 1.0) / 2.0;
-            let final_color = [
-                color1[0] + (color2[0] - color1[0]) * anim_t,
-                color1[1] + (color2[1] - color1[1]) * anim_t,
-                color1[2] + (color2[2] - color1[2]) * anim_t,
-                1.0,
-            ];
-            let combo_font_name = match profile.combo_font {
-                crate::game::profile::ComboFont::Wendy => Some("wendy_combo"),
-                crate::game::profile::ComboFont::ArialRounded => Some("combo_arial_rounded"),
-                crate::game::profile::ComboFont::Asap => Some("combo_asap"),
-                crate::game::profile::ComboFont::BebasNeue => Some("combo_bebas_neue"),
-                crate::game::profile::ComboFont::SourceCode => Some("combo_source_code"),
-                crate::game::profile::ComboFont::Work => Some("combo_work"),
-                crate::game::profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
-                crate::game::profile::ComboFont::None => None,
+                profile::ComboColors::RainbowScroll => {
+                    if profile.combo_mode == profile::ComboMode::FullCombo {
+                        if matches!(
+                            p.full_combo_grade,
+                            Some(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)
+                        ) {
+                            zmod_combo_rainbow_color(state.total_elapsed_in_screen, true, p.combo)
+                        } else {
+                            [1.0, 1.0, 1.0, 1.0]
+                        }
+                    } else {
+                        zmod_combo_rainbow_color(state.total_elapsed_in_screen, true, p.combo)
+                    }
+                }
+                profile::ComboColors::Glow => {
+                    let combo_grade = if profile.combo_mode == profile::ComboMode::FullCombo {
+                        p.full_combo_grade
+                    } else {
+                        p.current_combo_grade
+                    };
+                    if let Some(grade) = combo_grade {
+                        let (color1, color2) = zmod_combo_glow_pair(
+                            grade,
+                            quint_active && grade == JudgeGrade::Fantastic,
+                        );
+                        zmod_combo_glow_color(color1, color2, state.total_elapsed_in_screen)
+                    } else {
+                        [1.0, 1.0, 1.0, 1.0]
+                    }
+                }
+                profile::ComboColors::Solid => {
+                    let combo_grade = if profile.combo_mode == profile::ComboMode::FullCombo {
+                        p.full_combo_grade
+                    } else {
+                        p.current_combo_grade
+                    };
+                    if let Some(grade) = combo_grade {
+                        zmod_combo_solid_color(
+                            grade,
+                            quint_active && grade == JudgeGrade::Fantastic,
+                        )
+                    } else {
+                        [1.0, 1.0, 1.0, 1.0]
+                    }
+                }
             };
             if let Some(font_name) = combo_font_name {
                 hud_actors.push(act!(text:

@@ -10,9 +10,9 @@ use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
 };
 use std::{borrow::Cow, collections::HashMap, error::Error, hash::Hasher, mem, sync::Arc};
+use twox_hash::XxHash64;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
-use twox_hash::XxHash64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Api {
@@ -922,25 +922,30 @@ pub fn draw(
                         tmesh_geom.insert(geom_key, geom.clone());
                         geom
                     };
-                    let (vertex_start, vertex_count, dynamic_geom, geom_run_key, cached_vertex_buffer) =
-                        match resolved_geom {
-                            FrameTMeshGeom::Dynamic {
-                                vertex_start,
-                                vertex_count,
-                            } => {
-                                let key = (((vertex_start as u64) << 32) | (vertex_count as u64))
-                                    .wrapping_shl(1);
-                                (vertex_start, vertex_count, true, key, None)
-                            }
-                            FrameTMeshGeom::Cached {
-                                cache_id,
-                                vertex_count,
-                                buffer,
-                            } => {
-                                let key = cache_id.wrapping_shl(1) | 1;
-                                (0, vertex_count, false, key, Some(buffer))
-                            }
-                        };
+                    let (
+                        vertex_start,
+                        vertex_count,
+                        dynamic_geom,
+                        geom_run_key,
+                        cached_vertex_buffer,
+                    ) = match resolved_geom {
+                        FrameTMeshGeom::Dynamic {
+                            vertex_start,
+                            vertex_count,
+                        } => {
+                            let key = (((vertex_start as u64) << 32) | (vertex_count as u64))
+                                .wrapping_shl(1);
+                            (vertex_start, vertex_count, true, key, None)
+                        }
+                        FrameTMeshGeom::Cached {
+                            cache_id,
+                            vertex_count,
+                            buffer,
+                        } => {
+                            let key = cache_id.wrapping_shl(1) | 1;
+                            (0, vertex_count, false, key, Some(buffer))
+                        }
+                    };
                     let instance_start = tmesh_instances.len() as u32;
                     let model: [[f32; 4]; 4] = obj.transform.into();
                     tmesh_instances.push(TexturedMeshInstanceRaw {
@@ -1194,7 +1199,11 @@ pub fn draw(
                         }
                         last_tmesh_geom_key = Some(run.geom_key);
                     }
-                    let draw_start = if run.dynamic_geom { run.vertex_start } else { 0 };
+                    let draw_start = if run.dynamic_geom {
+                        run.vertex_start
+                    } else {
+                        0
+                    };
                     let draw_end = draw_start + run.vertex_count;
                     match run.mode {
                         MeshMode::Triangles => pass.draw(
@@ -1233,7 +1242,9 @@ fn tmesh_cache_key(vertices: &[crate::core::gfx::TexturedMeshVertex]) -> TMeshCa
 }
 
 #[inline(always)]
-fn build_tmesh_vertex_raw(vertices: &[crate::core::gfx::TexturedMeshVertex]) -> Vec<TexturedMeshVertexRaw> {
+fn build_tmesh_vertex_raw(
+    vertices: &[crate::core::gfx::TexturedMeshVertex],
+) -> Vec<TexturedMeshVertexRaw> {
     let mut out = Vec::with_capacity(vertices.len());
     for v in vertices {
         out.push(TexturedMeshVertexRaw {
@@ -1355,7 +1366,9 @@ fn push_tmesh_debug_sample(state: &mut State, frame: TMeshFrameDebug) {
     accum.frames = accum.frames.saturating_add(1);
     accum.cache_hits = accum.cache_hits.saturating_add(frame.cache_hits);
     accum.cache_misses = accum.cache_misses.saturating_add(frame.cache_misses);
-    accum.cache_promotions = accum.cache_promotions.saturating_add(frame.cache_promotions);
+    accum.cache_promotions = accum
+        .cache_promotions
+        .saturating_add(frame.cache_promotions);
     accum.cache_evictions = accum.cache_evictions.saturating_add(frame.cache_evictions);
     accum.dynamic_upload_vertices = accum
         .dynamic_upload_vertices
