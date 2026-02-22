@@ -19,6 +19,8 @@ type TextCache<K> = HashMap<K, Arc<str>>;
 
 thread_local! {
     static PADDED_NUM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
+    static PADDED_DIM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
+    static PADDED_BRIGHT_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
     static BLUE_WINDOW_LABEL_CACHE: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity(64));
     static PEAK_NPS_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
     static GAME_TIME_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(1024));
@@ -49,6 +51,31 @@ fn cached_padded_num(count: u32, digits: usize) -> Arc<str> {
     cached_text(&PADDED_NUM_CACHE, (count, digits), || {
         format!("{:0width$}", count, width = digits as usize)
     })
+}
+
+#[inline(always)]
+fn padded_dim_len(full: &str, count: u32, digits: usize) -> usize {
+    if count == 0 {
+        digits.saturating_sub(1).min(full.len())
+    } else {
+        full.find(|c: char| c != '0').unwrap_or(full.len())
+    }
+}
+
+#[inline(always)]
+fn cached_padded_runs(count: u32, digits: usize) -> (Arc<str>, Arc<str>) {
+    let digits = digits.clamp(1, u8::MAX as usize) as u8;
+    let dim = cached_text(&PADDED_DIM_CACHE, (count, digits), || {
+        let full = cached_padded_num(count, digits as usize);
+        let split = padded_dim_len(full.as_ref(), count, digits as usize);
+        full[..split].to_string()
+    });
+    let bright = cached_text(&PADDED_BRIGHT_CACHE, (count, digits), || {
+        let full = cached_padded_num(count, digits as usize);
+        let split = padded_dim_len(full.as_ref(), count, digits as usize);
+        full[split..].to_string()
+    });
+    (dim, bright)
 }
 
 #[inline(always)]
@@ -268,23 +295,17 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                     for (row_i, (bright, dim, count)) in rows.iter().enumerate() {
                         let y =
                             group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
-                        let s = cached_padded_num(*count, digits);
-                        let first_nonzero = s.find(|c: char| c != '0').unwrap_or(s.len());
+                        let (dim_text, bright_text) = cached_padded_runs(*count, digits);
+                        let dim_len = dim_text.len() as f32;
+                        let bright_len = bright_text.len() as f32;
 
-                        for (i, ch) in s.chars().enumerate() {
-                            let is_dim = if *count == 0 {
-                                i < digits.saturating_sub(1)
-                            } else {
-                                i < first_nonzero
-                            };
-                            let c = if is_dim { *dim } else { *bright };
-                            if is_p1 {
-                                let x = anchor_x + (i as f32) * digit_w;
+                        if is_p1 {
+                            if !dim_text.is_empty() {
                                 let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(digit_text(ch)):
-                                    align(0.0, 0.5): xy(x, y):
+                                    font("wendy_screenevaluation"): settext(dim_text):
+                                    align(0.0, 0.5): xy(anchor_x, y):
                                     zoom(numbers_zoom_y):
-                                    diffuse(c[0], c[1], c[2], c[3]):
+                                    diffuse(dim[0], dim[1], dim[2], dim[3]):
                                     z(z_fg):
                                     horizalign(left)
                                 );
@@ -293,14 +314,44 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                                     scale[1] = numbers_zoom_y;
                                 }
                                 actors.push(a);
-                            } else {
-                                let idx_from_right = digits.saturating_sub(1).saturating_sub(i);
-                                let x = anchor_x - (idx_from_right as f32) * digit_w;
+                            }
+                            if !bright_text.is_empty() {
                                 let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(digit_text(ch)):
-                                    align(1.0, 0.5): xy(x, y):
+                                    font("wendy_screenevaluation"): settext(bright_text):
+                                    align(0.0, 0.5): xy(anchor_x + dim_len * digit_w, y):
                                     zoom(numbers_zoom_y):
-                                    diffuse(c[0], c[1], c[2], c[3]):
+                                    diffuse(bright[0], bright[1], bright[2], bright[3]):
+                                    z(z_fg):
+                                    horizalign(left)
+                                );
+                                if let Actor::Text { scale, .. } = &mut a {
+                                    scale[0] = numbers_zoom_x;
+                                    scale[1] = numbers_zoom_y;
+                                }
+                                actors.push(a);
+                            }
+                        } else {
+                            if !bright_text.is_empty() {
+                                let mut a = act!(text:
+                                    font("wendy_screenevaluation"): settext(bright_text):
+                                    align(1.0, 0.5): xy(anchor_x, y):
+                                    zoom(numbers_zoom_y):
+                                    diffuse(bright[0], bright[1], bright[2], bright[3]):
+                                    z(z_fg):
+                                    horizalign(right)
+                                );
+                                if let Actor::Text { scale, .. } = &mut a {
+                                    scale[0] = numbers_zoom_x;
+                                    scale[1] = numbers_zoom_y;
+                                }
+                                actors.push(a);
+                            }
+                            if !dim_text.is_empty() {
+                                let mut a = act!(text:
+                                    font("wendy_screenevaluation"): settext(dim_text):
+                                    align(1.0, 0.5): xy(anchor_x - bright_len * digit_w, y):
+                                    zoom(numbers_zoom_y):
+                                    diffuse(dim[0], dim[1], dim[2], dim[3]):
                                     z(z_fg):
                                     horizalign(right)
                                 );
@@ -333,23 +384,17 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                         };
                         let y =
                             group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
-                        let s = cached_padded_num(count, digits);
-                        let first_nonzero = s.find(|c: char| c != '0').unwrap_or(s.len());
+                        let (dim_text, bright_text) = cached_padded_runs(count, digits);
+                        let dim_len = dim_text.len() as f32;
+                        let bright_len = bright_text.len() as f32;
 
-                        for (i, ch) in s.chars().enumerate() {
-                            let is_dim = if count == 0 {
-                                i < digits.saturating_sub(1)
-                            } else {
-                                i < first_nonzero
-                            };
-                            let c = if is_dim { dim } else { bright };
-                            if is_p1 {
-                                let x = anchor_x + (i as f32) * digit_w;
+                        if is_p1 {
+                            if !dim_text.is_empty() {
                                 let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(digit_text(ch)):
-                                    align(0.0, 0.5): xy(x, y):
+                                    font("wendy_screenevaluation"): settext(dim_text):
+                                    align(0.0, 0.5): xy(anchor_x, y):
                                     zoom(numbers_zoom_y):
-                                    diffuse(c[0], c[1], c[2], c[3]):
+                                    diffuse(dim[0], dim[1], dim[2], dim[3]):
                                     z(z_fg):
                                     horizalign(left)
                                 );
@@ -358,14 +403,44 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                                     scale[1] = numbers_zoom_y;
                                 }
                                 actors.push(a);
-                            } else {
-                                let idx_from_right = digits.saturating_sub(1).saturating_sub(i);
-                                let x = anchor_x - (idx_from_right as f32) * digit_w;
+                            }
+                            if !bright_text.is_empty() {
                                 let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(digit_text(ch)):
-                                    align(1.0, 0.5): xy(x, y):
+                                    font("wendy_screenevaluation"): settext(bright_text):
+                                    align(0.0, 0.5): xy(anchor_x + dim_len * digit_w, y):
                                     zoom(numbers_zoom_y):
-                                    diffuse(c[0], c[1], c[2], c[3]):
+                                    diffuse(bright[0], bright[1], bright[2], bright[3]):
+                                    z(z_fg):
+                                    horizalign(left)
+                                );
+                                if let Actor::Text { scale, .. } = &mut a {
+                                    scale[0] = numbers_zoom_x;
+                                    scale[1] = numbers_zoom_y;
+                                }
+                                actors.push(a);
+                            }
+                        } else {
+                            if !bright_text.is_empty() {
+                                let mut a = act!(text:
+                                    font("wendy_screenevaluation"): settext(bright_text):
+                                    align(1.0, 0.5): xy(anchor_x, y):
+                                    zoom(numbers_zoom_y):
+                                    diffuse(bright[0], bright[1], bright[2], bright[3]):
+                                    z(z_fg):
+                                    horizalign(right)
+                                );
+                                if let Actor::Text { scale, .. } = &mut a {
+                                    scale[0] = numbers_zoom_x;
+                                    scale[1] = numbers_zoom_y;
+                                }
+                                actors.push(a);
+                            }
+                            if !dim_text.is_empty() {
+                                let mut a = act!(text:
+                                    font("wendy_screenevaluation"): settext(dim_text):
+                                    align(1.0, 0.5): xy(anchor_x - bright_len * digit_w, y):
+                                    zoom(numbers_zoom_y):
+                                    diffuse(dim[0], dim[1], dim[2], dim[3]):
                                     z(z_fg):
                                     horizalign(right)
                                 );
@@ -585,22 +660,25 @@ pub fn build_double_step_stats(
                     let y_numbers = origin_y + (local_y * base_zoom);
                     let y_label = origin_y + ((local_y + 1.0) * base_zoom);
 
-                    let s = cached_padded_num(*count, digits);
-                    let first_nonzero = s.find(|c: char| c != '0').unwrap_or(s.len());
+                    let (dim_text, bright_text) = cached_padded_runs(*count, digits);
+                    let dim_len = dim_text.len() as f32;
 
-                    for (i, ch) in s.chars().enumerate() {
-                        let is_dim = if *count == 0 {
-                            i < digits.saturating_sub(1)
-                        } else {
-                            i < first_nonzero
-                        };
-                        let c = if is_dim { *dim } else { *bright };
-                        let x = numbers_left_x + (i as f32) * digit_w;
+                    if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(digit_text(ch)):
-                            align(0.0, 0.5): xy(x, y_numbers):
+                            font("wendy_screenevaluation"): settext(dim_text):
+                            align(0.0, 0.5): xy(numbers_left_x, y_numbers):
                             zoom(numbers_zoom):
-                            diffuse(c[0], c[1], c[2], c[3]):
+                            diffuse(dim[0], dim[1], dim[2], dim[3]):
+                            z(71):
+                            horizalign(left)
+                        ));
+                    }
+                    if !bright_text.is_empty() {
+                        actors.push(act!(text:
+                            font("wendy_screenevaluation"): settext(bright_text):
+                            align(0.0, 0.5): xy(numbers_left_x + dim_len * digit_w, y_numbers):
+                            zoom(numbers_zoom):
+                            diffuse(bright[0], bright[1], bright[2], bright[3]):
                             z(71):
                             horizalign(left)
                         ));
@@ -1538,28 +1616,41 @@ fn build_side_pane(
 
                 let bright = info.color;
                 let dim = color::JUDGMENT_DIM_RGBA[index];
-                let full_number_str = cached_padded_num(count, digits);
+                let (dim_text, bright_text) = cached_padded_runs(count, digits);
+                let dim_len = dim_text.len() as f32;
+                let bright_len = bright_text.len() as f32;
 
-                for (i, ch) in full_number_str.chars().enumerate() {
-                    let is_dim = if count == 0 { i < digits - 1 } else {
-                        let first_nonzero = full_number_str.find(|c: char| c != '0').unwrap_or(full_number_str.len());
-                        i < first_nonzero
-                    };
-                    let color = if is_dim { dim } else { bright };
-                    if player_side == profile::PlayerSide::P1 {
-                        let index_from_right = digits - 1 - i;
-                        let cell_right_x = numbers_cx - (index_from_right as f32 * max_digit_w);
+                if player_side == profile::PlayerSide::P1 {
+                    if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(digit_text(ch)):
-                            align(1.0, 0.5): xy(cell_right_x, world_y): zoom(numbers_zoom):
-                            diffuse(color[0], color[1], color[2], color[3]): z(71)
+                            font("wendy_screenevaluation"): settext(bright_text):
+                            align(1.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
+                            diffuse(bright[0], bright[1], bright[2], bright[3]): z(71)
                         ));
-                    } else {
-                        let cell_left_x = numbers_cx + (i as f32 * max_digit_w);
+                    }
+                    if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(digit_text(ch)):
-                            align(0.0, 0.5): xy(cell_left_x, world_y): zoom(numbers_zoom):
-                            diffuse(color[0], color[1], color[2], color[3]): z(71):
+                            font("wendy_screenevaluation"): settext(dim_text):
+                            align(1.0, 0.5): xy(numbers_cx - bright_len * max_digit_w, world_y):
+                            zoom(numbers_zoom):
+                            diffuse(dim[0], dim[1], dim[2], dim[3]): z(71)
+                        ));
+                    }
+                } else {
+                    if !dim_text.is_empty() {
+                        actors.push(act!(text:
+                            font("wendy_screenevaluation"): settext(dim_text):
+                            align(0.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
+                            diffuse(dim[0], dim[1], dim[2], dim[3]): z(71):
+                            horizalign(left)
+                        ));
+                    }
+                    if !bright_text.is_empty() {
+                        actors.push(act!(text:
+                            font("wendy_screenevaluation"): settext(bright_text):
+                            align(0.0, 0.5): xy(numbers_cx + dim_len * max_digit_w, world_y):
+                            zoom(numbers_zoom):
+                            diffuse(bright[0], bright[1], bright[2], bright[3]): z(71):
                             horizalign(left)
                         ));
                     }
@@ -1641,28 +1732,41 @@ fn build_side_pane(
                 let local_y = y_base + (index as f32 * row_height);
                 let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
 
-                let full_number_str = cached_padded_num(*count, digits);
+                let (dim_text, bright_text) = cached_padded_runs(*count, digits);
+                let dim_len = dim_text.len() as f32;
+                let bright_len = bright_text.len() as f32;
 
-                for (i, ch) in full_number_str.chars().enumerate() {
-                    let is_dim = if *count == 0 { i < digits - 1 } else {
-                        let first_nonzero = full_number_str.find(|c: char| c != '0').unwrap_or(full_number_str.len());
-                        i < first_nonzero
-                    };
-                    let color = if is_dim { dim } else { bright };
-                    if player_side == profile::PlayerSide::P1 {
-                        let index_from_right = digits - 1 - i;
-                        let cell_right_x = numbers_cx - (index_from_right as f32 * max_digit_w);
+                if player_side == profile::PlayerSide::P1 {
+                    if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(digit_text(ch)):
-                            align(1.0, 0.5): xy(cell_right_x, world_y): zoom(numbers_zoom):
-                            diffuse(color[0], color[1], color[2], color[3]): z(71)
+                            font("wendy_screenevaluation"): settext(bright_text):
+                            align(1.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
+                            diffuse(bright[0], bright[1], bright[2], bright[3]): z(71)
                         ));
-                    } else {
-                        let cell_left_x = numbers_cx + (i as f32 * max_digit_w);
+                    }
+                    if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(digit_text(ch)):
-                            align(0.0, 0.5): xy(cell_left_x, world_y): zoom(numbers_zoom):
-                            diffuse(color[0], color[1], color[2], color[3]): z(71):
+                            font("wendy_screenevaluation"): settext(dim_text):
+                            align(1.0, 0.5): xy(numbers_cx - bright_len * max_digit_w, world_y):
+                            zoom(numbers_zoom):
+                            diffuse(dim[0], dim[1], dim[2], dim[3]): z(71)
+                        ));
+                    }
+                } else {
+                    if !dim_text.is_empty() {
+                        actors.push(act!(text:
+                            font("wendy_screenevaluation"): settext(dim_text):
+                            align(0.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
+                            diffuse(dim[0], dim[1], dim[2], dim[3]): z(71):
+                            horizalign(left)
+                        ));
+                    }
+                    if !bright_text.is_empty() {
+                        actors.push(act!(text:
+                            font("wendy_screenevaluation"): settext(bright_text):
+                            align(0.0, 0.5): xy(numbers_cx + dim_len * max_digit_w, world_y):
+                            zoom(numbers_zoom):
+                            diffuse(bright[0], bright[1], bright[2], bright[3]): z(71):
                             horizalign(left)
                         ));
                     }
