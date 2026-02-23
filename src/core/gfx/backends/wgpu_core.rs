@@ -409,7 +409,7 @@ fn init(
         .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
 
     let config = wgpu::SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        usage: pick_surface_usage(&caps),
         format,
         width: size.width.max(1),
         height: size.height.max(1),
@@ -1242,6 +1242,14 @@ pub fn draw(
 
     let screenshot_readback = if state.screenshot_requested {
         state.screenshot_requested = false;
+        if !state.config.usage.contains(wgpu::TextureUsages::COPY_SRC) {
+            state.captured_frame = None;
+            warn!(
+                "{} (wgpu) surface does not support COPY_SRC; screenshot unavailable.",
+                state.api.name()
+            );
+            None
+        } else {
         let width = state.config.width.max(1);
         let height = state.config.height.max(1);
         let bytes_per_row = 4 * width;
@@ -1282,6 +1290,7 @@ pub fn draw(
             padded_bytes_per_row as usize,
             state.config.format,
         ))
+        }
     } else {
         None
     };
@@ -1308,7 +1317,8 @@ pub fn draw(
             );
             for y in 0..height {
                 let src = y * padded_row_bytes;
-                let dst = (height - 1 - y) * row_bytes;
+                // Surface readback rows are already top-to-bottom for this path.
+                let dst = y * row_bytes;
                 if swap_rb {
                     let mut x = 0usize;
                     while x < width {
@@ -1673,6 +1683,7 @@ fn reconfigure_surface(state: &mut State) {
         .first()
         .copied()
         .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
+    state.config.usage = pick_surface_usage(&caps);
     state.config.width = state.window_size.0;
     state.config.height = state.window_size.1;
     state.surface.configure(&state.device, &state.config);
@@ -1719,6 +1730,15 @@ fn pick_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
         .copied()
         .find(|f| !f.is_srgb())
         .unwrap_or_else(|| caps.formats[0])
+}
+
+#[inline(always)]
+fn pick_surface_usage(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureUsages {
+    let mut usage = wgpu::TextureUsages::RENDER_ATTACHMENT;
+    if caps.usages.contains(wgpu::TextureUsages::COPY_SRC) {
+        usage |= wgpu::TextureUsages::COPY_SRC;
+    }
+    usage
 }
 
 fn pick_present_mode(modes: &[wgpu::PresentMode], vsync: bool) -> wgpu::PresentMode {
