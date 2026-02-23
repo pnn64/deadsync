@@ -302,13 +302,16 @@ fn remove_controller(ctx: &mut Ctx, controller: RawGameController) {
 }
 
 #[inline(always)]
-fn emit_dir_edges(
-    emit_pad: &mut (dyn FnMut(PadEvent) + Send),
+fn emit_dir_edges<F>(
+    emit_pad: &mut F,
     id: PadId,
     dir_state: &mut [bool; 4],
     timestamp: Instant,
     want: [bool; 4],
-) -> bool {
+) -> bool
+where
+    F: FnMut(PadEvent),
+{
     let mut changed = false;
     let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
     for i in 0..4 {
@@ -327,12 +330,15 @@ fn emit_dir_edges(
     changed
 }
 
-fn pump_gamepad(
-    emit_pad: &mut (dyn FnMut(PadEvent) + Send),
+fn pump_gamepad<F>(
+    emit_pad: &mut F,
     id: PadId,
     uuid: [u8; 16],
     st: &mut GamepadState,
-) -> bool {
+) -> bool
+where
+    F: FnMut(PadEvent),
+{
     let Ok(reading) = st.pad.GetCurrentReading() else {
         return false;
     };
@@ -443,13 +449,16 @@ fn pump_gamepad(
     changed
 }
 
-fn pump_raw(
-    emit_pad: &mut (dyn FnMut(PadEvent) + Send),
+fn pump_raw<F>(
+    emit_pad: &mut F,
     id: PadId,
     uuid: [u8; 16],
     controller: &RawGameController,
     st: &mut RawState,
-) -> bool {
+) -> bool
+where
+    F: FnMut(PadEvent),
+{
     let Ok(time) =
         controller.GetCurrentReading(&mut st.buttons_now, &mut st.switches, &mut st.axes)
     else {
@@ -588,7 +597,7 @@ pub fn run(
             continue;
         }
 
-        let emit_pad = ctx.emit_pad.as_mut();
+        let emit_pad = &mut ctx.emit_pad;
         let mut did_update = false;
         for dev in &mut ctx.devs {
             let id = dev.id;

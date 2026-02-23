@@ -988,7 +988,7 @@ fn music_decoder_thread_loop(
 
         // Produce blocks as long as enough input frames are buffered for the next call.
         #[inline(always)]
-        fn try_produce_blocks(
+        fn try_produce_blocks<F>(
             resampler: &mut Async<f32>,
             in_planar: &mut [Vec<f32>],
             out_ch: usize,
@@ -998,11 +998,11 @@ fn music_decoder_thread_loop(
             frames_emitted_total: &mut u64,
             fade_spec: Option<(u64, u64)>,
             frames_left_out: &mut Option<u64>,
-            push_block: &mut dyn FnMut(
-                &[i16],
-            )
-                -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
-        ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+            push_block: &mut F,
+        ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>
+        where
+            F: FnMut(&[i16]) -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
+        {
             let mut produced_any = false;
 
             loop {

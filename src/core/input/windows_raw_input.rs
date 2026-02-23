@@ -325,12 +325,15 @@ fn enumerate_existing(ctx: &mut Ctx) {
 }
 
 #[inline(always)]
-fn emit_button_diff(
-    emit_pad: &mut (dyn FnMut(PadEvent) + Send),
+fn emit_button_diff<F>(
+    emit_pad: &mut F,
     dev: &Dev,
     timestamp: Instant,
     now: &[u16],
-) {
+)
+where
+    F: FnMut(PadEvent),
+{
     let mut a = 0usize;
     let mut b = 0usize;
     while a < dev.buttons_prev.len() && b < now.len() {
@@ -391,12 +394,15 @@ fn emit_button_diff(
     }
 }
 
-fn process_hid_report(
-    emit_pad: &mut (dyn FnMut(PadEvent) + Send),
+fn process_hid_report<F>(
+    emit_pad: &mut F,
     dev: &mut Dev,
     timestamp: Instant,
     report: &mut [u8],
-) {
+)
+where
+    F: FnMut(PadEvent),
+{
     if dev.max_buttons == 0 || dev.preparsed.is_empty() {
         return;
     }
@@ -560,7 +566,7 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
             }
             let report = &mut reports[start..end];
             let timestamp = Instant::now();
-            process_hid_report(ctx.emit_pad.as_mut(), dev, timestamp, report);
+            process_hid_report(&mut ctx.emit_pad, dev, timestamp, report);
             idx += 1;
         }
     }
