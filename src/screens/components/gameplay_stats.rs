@@ -24,6 +24,7 @@ thread_local! {
     static BLUE_WINDOW_LABEL_CACHE: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity(64));
     static PEAK_NPS_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
     static GAME_TIME_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(1024));
+    static GAME_TIME_WIDTH_CACHE: RefCell<HashMap<(u32, u8), f32>> = RefCell::new(HashMap::with_capacity(1024));
 }
 
 #[inline(always)]
@@ -106,6 +107,44 @@ fn cached_game_time(seconds: u32, mode: u8) -> Arc<str> {
             _ => format!("{minutes}:{secs:02}"),
         }
     })
+}
+
+#[inline(always)]
+fn game_time_mode(total_seconds: f32) -> u8 {
+    if total_seconds >= 3600.0 {
+        0
+    } else if total_seconds >= 600.0 {
+        1
+    } else {
+        2
+    }
+}
+
+#[inline(always)]
+fn game_time_key(seconds: f32, total_seconds: f32) -> (u32, u8) {
+    (seconds.max(0.0) as u32, game_time_mode(total_seconds))
+}
+
+#[inline(always)]
+fn cached_game_time_width_for_key(key: (u32, u8), asset_manager: &AssetManager) -> f32 {
+    if let Some(w) = GAME_TIME_WIDTH_CACHE.with(|cache| cache.borrow().get(&key).copied()) {
+        return w;
+    }
+    let text = cached_game_time(key.0, key.1);
+    let width = asset_manager
+        .with_fonts(|all_fonts| {
+            asset_manager.with_font("miso", |f| {
+                font::measure_line_width_logical(f, text.as_ref(), all_fonts) as f32
+            })
+        })
+        .unwrap_or(0.0);
+    GAME_TIME_WIDTH_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if cache.len() < TEXT_CACHE_LIMIT {
+            cache.insert(key, width);
+        }
+    });
+    width
 }
 
 #[inline(always)]
@@ -769,7 +808,8 @@ pub fn build_double_step_stats(
             state.current_music_time.max(0.0)
         };
 
-        let total_time_str = format_game_time(total_display_seconds, total_display_seconds);
+        let total_time_key = game_time_key(total_display_seconds, total_display_seconds);
+        let total_time_str = cached_game_time(total_time_key.0, total_time_key.1);
         let remaining_display_seconds = if let Some(fail_time) = state.players[0].fail_time {
             let fail_disp = if rate != 0.0 {
                 fail_time.max(0.0) / rate
@@ -780,17 +820,12 @@ pub fn build_double_step_stats(
         } else {
             (total_display_seconds - elapsed_display_seconds).max(0.0)
         };
-        let remaining_time_str = format_game_time(remaining_display_seconds, total_display_seconds);
+        let remaining_time_key = game_time_key(remaining_display_seconds, total_display_seconds);
+        let remaining_time_str = cached_game_time(remaining_time_key.0, remaining_time_key.1);
 
         let number_zoom = banner_data_zoom;
         let label_zoom = 0.833 * number_zoom;
-        let total_w = asset_manager
-            .with_fonts(|all_fonts| {
-                asset_manager.with_font("miso", |f| {
-                    font::measure_line_width_logical(f, &total_time_str, all_fonts) as f32
-                })
-            })
-            .unwrap_or(0.0);
+        let total_w = cached_game_time_width_for_key(total_time_key, asset_manager);
 
         // Simply Love (Time.lua):
         // label x = 32 + (total_width - 28) == total_width + 4
@@ -924,18 +959,6 @@ static JUDGMENT_INFO: LazyLock<HashMap<JudgeGrade, JudgmentDisplayInfo>> = LazyL
         ),
     ])
 });
-
-fn format_game_time(s: f32, total_seconds: f32) -> Arc<str> {
-    let seconds = s.max(0.0) as u32;
-    let mode = if total_seconds >= 3600.0 {
-        0
-    } else if total_seconds >= 600.0 {
-        1
-    } else {
-        2
-    };
-    cached_game_time(seconds, mode)
-}
 
 fn build_banner(
     state: &State,
@@ -1839,7 +1862,8 @@ fn build_side_pane(
                 state.current_music_time.max(0.0)
             };
 
-            let total_time_str = format_game_time(total_display_seconds, total_display_seconds);
+            let total_time_key = game_time_key(total_display_seconds, total_display_seconds);
+            let total_time_str = cached_game_time(total_time_key.0, total_time_key.1);
 
             let remaining_display_seconds = if let Some(fail_time) = state.players[0].fail_time {
                 let fail_disp = if rate != 0.0 {
@@ -1851,8 +1875,9 @@ fn build_side_pane(
             } else {
                 (total_display_seconds - elapsed_display_seconds).max(0.0)
             };
+            let remaining_time_key = game_time_key(remaining_display_seconds, total_display_seconds);
             let remaining_time_str =
-                format_game_time(remaining_display_seconds, total_display_seconds);
+                cached_game_time(remaining_time_key.0, remaining_time_key.1);
 
             let font_name = "miso";
             let text_zoom = banner_data_zoom * 0.833;
@@ -1862,32 +1887,13 @@ fn build_side_pane(
             let numbers_block_width = (digits as f32) * max_digit_w;
             let numbers_left_x = numbers_cx - numbers_block_width + 2.0;
 
-            // Measure dynamic widths so labels always appear after the time text
-            let (total_width_px, remaining_width_px, baseline_width_px) =
-                asset_manager
-                    .with_font(font_name, |time_font| {
-                        let total_w = (font::measure_line_width_logical(
-                            time_font,
-                            &total_time_str,
-                            all_fonts,
-                        ) as f32)
-                            * time_value_zoom;
-                        let remaining_w = (font::measure_line_width_logical(
-                            time_font,
-                            &remaining_time_str,
-                            all_fonts,
-                        ) as f32)
-                            * time_value_zoom;
-                        // Use "9:59" as the baseline look the layout was tuned for
-                        let baseline_w = (font::measure_line_width_logical(
-                            time_font,
-                            "9:59",
-                            all_fonts,
-                        ) as f32)
-                            * time_value_zoom;
-                        (total_w, remaining_w, baseline_w)
-                    })
-                    .unwrap_or((0.0_f32, 0.0_f32, 0.0_f32));
+            let total_width_px =
+                cached_game_time_width_for_key(total_time_key, asset_manager) * time_value_zoom;
+            let remaining_width_px =
+                cached_game_time_width_for_key(remaining_time_key, asset_manager) * time_value_zoom;
+            // Use "9:59" as the baseline look the layout was tuned for.
+            let baseline_width_px =
+                cached_game_time_width_for_key((9 * 60 + 59, 2), asset_manager) * time_value_zoom;
 
             let red_color = color::rgba_hex("#ff3030");
             let white_color = [1.0, 1.0, 1.0, 1.0];
