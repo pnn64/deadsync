@@ -2033,6 +2033,36 @@ fn clear_preview(state: &mut State) {
 }
 
 #[inline(always)]
+fn sync_preview_song(state: &mut State, selected_song: Option<&Arc<SongData>>) {
+    let music_path = selected_song.and_then(|s| s.music_path.clone());
+    if state.currently_playing_preview_path == music_path {
+        return;
+    }
+
+    state.currently_playing_preview_path = music_path;
+    if let Some(song) = selected_song {
+        if let Some((path, cut)) = compute_preview_cut(song) {
+            state.currently_playing_preview_start_sec = Some(cut.start_sec as f32);
+            state.currently_playing_preview_length_sec = Some(cut.length_sec as f32);
+            audio::play_music(
+                path,
+                cut,
+                true,
+                crate::game::profile::get_session_music_rate(),
+            );
+        } else {
+            state.currently_playing_preview_start_sec = None;
+            state.currently_playing_preview_length_sec = None;
+            audio::stop_music();
+        }
+    } else {
+        state.currently_playing_preview_start_sec = None;
+        state.currently_playing_preview_length_sec = None;
+        audio::stop_music();
+    }
+}
+
+#[inline(always)]
 fn clear_menu_chord(state: &mut State) {
     state.menu_chord_mask = 0;
     state.menu_chord_left_pressed_at = None;
@@ -3218,8 +3248,11 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
         return ScreenAction::None;
     }
     match state.entries.get(state.selected_index) {
-        Some(MusicWheelEntry::Song(_)) => {
+        Some(MusicWheelEntry::Song(song)) => {
+            let song = song.clone();
             audio::play_sfx("assets/sounds/start.ogg");
+            // ITGmania parity: force sample preview to start on selection finalize.
+            sync_preview_song(state, Some(&song));
             state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
             ScreenAction::None
         }
@@ -3704,30 +3737,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
 
     // --- Delayed Updates ---
     if state.time_since_selection_change >= PREVIEW_DELAY_SECONDS {
-        let music_path = selected_song.as_ref().and_then(|s| s.music_path.clone());
-        if state.currently_playing_preview_path != music_path {
-            state.currently_playing_preview_path = music_path;
-            if let Some(song) = &selected_song {
-                if let Some((path, cut)) = compute_preview_cut(song) {
-                    state.currently_playing_preview_start_sec = Some(cut.start_sec as f32);
-                    state.currently_playing_preview_length_sec = Some(cut.length_sec as f32);
-                    audio::play_music(
-                        path,
-                        cut,
-                        true,
-                        crate::game::profile::get_session_music_rate(),
-                    );
-                } else {
-                    state.currently_playing_preview_start_sec = None;
-                    state.currently_playing_preview_length_sec = None;
-                    audio::stop_music();
-                }
-            } else {
-                state.currently_playing_preview_start_sec = None;
-                state.currently_playing_preview_length_sec = None;
-                audio::stop_music();
-            }
-        }
+        sync_preview_song(state, selected_song.as_ref());
     } else if state.currently_playing_preview_path.is_some() {
         state.currently_playing_preview_path = None;
         state.currently_playing_preview_start_sec = None;
