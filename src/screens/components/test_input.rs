@@ -3,6 +3,8 @@ use crate::core::input::{InputEvent, PadDir, PadEvent, VirtualAction, with_keyma
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::ui::actors::Actor;
 use std::collections::HashMap;
+use winit::event::{ElementState, KeyEvent};
+use winit::keyboard::{KeyCode, PhysicalKey};
 
 const UNMAPPED_AXIS_HELD_THRESHOLD: f32 = 0.5;
 const SORT_MENU_DIM_ALPHA: f32 = 0.875;
@@ -43,6 +45,7 @@ enum UnmappedKey {
     Dir { dev: usize, dir: PadDir },
     RawButton { dev: usize, code_u32: u32 },
     RawAxis { dev: usize, code_u32: u32 },
+    Keyboard { code: KeyCode },
 }
 
 impl UnmappedTracker {
@@ -74,6 +77,7 @@ impl UnmappedTracker {
                     let value = self.axis_value.get(k).copied().unwrap_or(0.0);
                     format!("Gamepad {dev}: RawAxis [0x{code_u32:08X}] ({value:.3})")
                 }
+                UnmappedKey::Keyboard { code } => format!("Keyboard: KeyCode::{code:?}"),
             };
             out.push(format!("{line} (not mapped)"));
         }
@@ -179,6 +183,21 @@ pub fn apply_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     }
 }
 
+pub fn apply_raw_key_event(state: &mut State, key_event: &KeyEvent) {
+    let PhysicalKey::Code(code) = key_event.physical_key else {
+        return;
+    };
+    if key_event.repeat {
+        return;
+    }
+    let mapped = with_keymap(|km| !km.actions_for_key_event(key_event).is_empty());
+    if mapped {
+        return;
+    }
+    let pressed = key_event.state == ElementState::Pressed;
+    state.unmapped.set(UnmappedKey::Keyboard { code }, pressed);
+}
+
 #[inline(always)]
 fn held_alpha(state: &State, slot: PlayerSlot, button: LogicalButton) -> f32 {
     if *state.buttons_held.get(&(slot, button)).unwrap_or(&false) {
@@ -215,14 +234,14 @@ fn push_pad(
 
     if show_player_label {
         let label = match slot {
-            PlayerSlot::P1 => "P1",
-            PlayerSlot::P2 => "P2",
+            PlayerSlot::P1 => "Player 1",
+            PlayerSlot::P2 => "Player 2",
         };
         actors.push(act!(text:
             align(0.5, 0.5):
-            xy(pad_x, pad_y - 150.0):
+            xy(pad_x, pad_y - 130.0):
             zoom(0.7):
-            font("miso"):
+            font("wendy"):
             settext(label):
             horizalign(center):
             z(z + 1.0)
@@ -328,7 +347,7 @@ pub fn build_test_input_screen_content(state: &State) -> Vec<Actor> {
 
     let lines = state.unmapped.active_lines();
     if !lines.is_empty() {
-        let start_y = cy + 210.0;
+        let start_y = cy + 112.0;
         let line_h = 16.0;
         for (i, line) in lines.iter().enumerate() {
             actors.push(act!(text:
@@ -341,21 +360,11 @@ pub fn build_test_input_screen_content(state: &State) -> Vec<Actor> {
                 z(30)
             ));
         }
-    } else {
-        actors.push(act!(text:
-            font("miso"):
-            settext("Press any button on your dance pad or gamepad to test input."):
-            align(0.5, 0.0):
-            xy(cx, cy + 150.0):
-            zoom(0.8):
-            horizalign(center):
-            z(30)
-        ));
     }
 
     actors.push(act!(text:
         font("miso"):
-        settext("Press START or BACK to return to Options."):
+        settext("Hold &BACK; to return to Options."):
         align(0.5, 0.0):
         xy(cx, screen_height() - 40.0):
         zoom(0.8):

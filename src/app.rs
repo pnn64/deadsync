@@ -1004,8 +1004,7 @@ impl ScreensState {
                 None
             }
             CurrentScreen::Input => {
-                input_screen::update(&mut self.input_state, delta_time);
-                None
+                input_screen::update(&mut self.input_state, delta_time)
             }
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &mut self.player_options_state {
@@ -3080,6 +3079,17 @@ impl App {
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle ManageLocalProfiles raw key action: {e}");
+                }
+                return;
+            }
+        } else if self.state.screens.current_screen == CurrentScreen::Input {
+            let action = crate::screens::input::handle_raw_key_event(
+                &mut self.state.screens.input_state,
+                &key_event,
+            );
+            if !matches!(action, ScreenAction::None) {
+                if let Err(e) = self.handle_action(action, event_loop) {
+                    log::error!("Failed to handle Input raw key action: {e}");
                 }
                 return;
             }
