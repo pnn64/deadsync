@@ -849,20 +849,26 @@ fn process_song(
 /// Scans the provided root directory (e.g., "songs/") for simfiles,
 /// parses them, and populates the global cache. This should be run once at startup.
 pub fn scan_and_load_songs(root_path_str: &'static str) {
-    scan_and_load_songs_impl(root_path_str, None);
+    scan_and_load_songs_impl::<fn(&str, &str)>(root_path_str, None);
 }
 
-pub fn scan_and_load_songs_with_progress(
+pub fn scan_and_load_songs_with_progress<F>(
     root_path_str: &'static str,
-    progress: &mut dyn FnMut(&str, &str),
-) {
+    progress: &mut F,
+)
+where
+    F: FnMut(&str, &str),
+{
     scan_and_load_songs_impl(root_path_str, Some(progress));
 }
 
-fn scan_and_load_songs_impl(
+fn scan_and_load_songs_impl<F>(
     root_path_str: &'static str,
-    mut progress: Option<&mut dyn FnMut(&str, &str)>,
-) {
+    mut progress: Option<&mut F>,
+)
+where
+    F: FnMut(&str, &str),
+{
     info!("Starting simfile scan in '{root_path_str}'...");
 
     let started = Instant::now();
@@ -1322,22 +1328,28 @@ fn autogen_nonstop_group_courses() -> Vec<(PathBuf, rssp::course::CourseFile)> {
 }
 
 pub fn scan_and_load_courses(courses_root_str: &'static str, songs_root_str: &'static str) {
-    scan_and_load_courses_impl(courses_root_str, songs_root_str, None);
+    scan_and_load_courses_impl::<fn(&str, &str)>(courses_root_str, songs_root_str, None);
 }
 
-pub fn scan_and_load_courses_with_progress(
+pub fn scan_and_load_courses_with_progress<F>(
     courses_root_str: &'static str,
     songs_root_str: &'static str,
-    progress: &mut dyn FnMut(&str, &str),
-) {
+    progress: &mut F,
+)
+where
+    F: FnMut(&str, &str),
+{
     scan_and_load_courses_impl(courses_root_str, songs_root_str, Some(progress));
 }
 
-fn scan_and_load_courses_impl(
+fn scan_and_load_courses_impl<F>(
     courses_root_str: &'static str,
     songs_root_str: &'static str,
-    mut progress: Option<&mut dyn FnMut(&str, &str)>,
-) {
+    mut progress: Option<&mut F>,
+)
+where
+    F: FnMut(&str, &str),
+{
     info!("Starting course scan in '{courses_root_str}'...");
     let started = Instant::now();
 
