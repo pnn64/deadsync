@@ -2319,6 +2319,7 @@ pub fn init(
     lead_in_timing: Option<LeadInTiming>,
     course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
+    mut combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
     info!("Initializing Gameplay Screen...");
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
@@ -2340,6 +2341,7 @@ pub fn init(
         scroll_speed[0] = scroll_speed[1];
         player_profiles[0] = player_profiles[1].clone();
         charts[0] = charts[1].clone();
+        combo_carry[0] = combo_carry[1];
     }
     let player_color_index =
         if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
@@ -2992,6 +2994,9 @@ pub fn init(
 
     let mut players = std::array::from_fn(|_| init_player_runtime());
     for p in 0..num_players {
+        if player_profiles[p].carry_combo_between_songs {
+            players[p].combo = combo_carry[p];
+        }
         let life = players[p].life;
         players[p].life_history.push((init_music_time, life));
     }

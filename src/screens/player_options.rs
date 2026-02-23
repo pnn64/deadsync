@@ -1027,6 +1027,13 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
+            name: ROW_CARRY_COMBO.to_string(),
+            choices: vec!["Yes".to_string(), "No".to_string()],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec!["Carry current combo into the next song.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
             name: "Judgment Tilt".to_string(),
             choices: vec!["No".to_string(), "Yes".to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
@@ -1491,6 +1498,13 @@ fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = match profile.combo_mode {
             crate::game::profile::ComboMode::FullCombo => 0,
             crate::game::profile::ComboMode::CurrentCombo => 1,
+        };
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == ROW_CARRY_COMBO) {
+        row.selected_choice_index[player_idx] = if profile.carry_combo_between_songs {
+            0
+        } else {
+            1
         };
     }
     // Initialize Hold Judgment row from profile setting (Love, mute, ITG2, None)
@@ -2175,6 +2189,7 @@ const ROW_ERROR_BAR_TRIM: &str = "Error Bar Trim";
 const ROW_ERROR_BAR_OPTIONS: &str = "Error Bar Options";
 const ROW_CUSTOM_FANTASTIC_WINDOW: &str = "Custom Blue Fantastic Window";
 const ROW_CUSTOM_FANTASTIC_WINDOW_MS: &str = "Custom Blue Fantastic Window (ms)";
+const ROW_CARRY_COMBO: &str = "Carry Combo";
 
 #[derive(Clone, Copy, Debug)]
 struct RowVisibility {
@@ -2468,6 +2483,7 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "Data Visualizations"
         || row_name == "Combo Colors"
         || row_name == "Combo Color Mode"
+        || row_name == ROW_CARRY_COMBO
         || row_name.starts_with("Gameplay Extras")
         || row_name == "Rescore Early Hits"
         || row_name == ROW_CUSTOM_FANTASTIC_WINDOW
@@ -3315,6 +3331,15 @@ fn change_choice_for_player(
         state.player_profiles[player_idx].combo_mode = setting;
         if should_persist {
             crate::game::profile::update_combo_mode_for_side(persist_side, setting);
+        }
+    } else if row_name == ROW_CARRY_COMBO {
+        let enabled = row.selected_choice_index[player_idx] == 0;
+        state.player_profiles[player_idx].carry_combo_between_songs = enabled;
+        if should_persist {
+            crate::game::profile::update_carry_combo_between_songs_for_side(
+                persist_side,
+                enabled,
+            );
         }
     } else if row_name == "Hold Judgment" {
         let setting = match row.selected_choice_index[player_idx] {

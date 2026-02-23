@@ -306,6 +306,7 @@ pub struct SessionState {
     preferred_difficulty_index: usize,
     session_start_time: Option<Instant>,
     played_stages: Vec<stage_stats::StageSummary>,
+    combo_carry: [u32; crate::game::gameplay::MAX_PLAYERS],
     gameplay_restart_count: u32,
     course_run: Option<CourseRunState>,
     course_eval_pages: Vec<evaluation::State>,
@@ -430,11 +431,15 @@ impl ShellState {
 }
 
 impl SessionState {
-    const fn new(preferred_difficulty_index: usize) -> Self {
+    fn new(
+        preferred_difficulty_index: usize,
+        combo_carry: [u32; crate::game::gameplay::MAX_PLAYERS],
+    ) -> Self {
         Self {
             preferred_difficulty_index,
             session_start_time: None,
             played_stages: Vec::new(),
+            combo_carry,
             gameplay_restart_count: 0,
             course_run: None,
             course_eval_pages: Vec::new(),
@@ -451,6 +456,14 @@ const fn side_ix(side: profile::PlayerSide) -> usize {
         profile::PlayerSide::P1 => 0,
         profile::PlayerSide::P2 => 1,
     }
+}
+
+#[inline(always)]
+fn combo_carry_from_profiles() -> [u32; crate::game::gameplay::MAX_PLAYERS] {
+    [
+        profile::get_for_side(profile::PlayerSide::P1).current_combo,
+        profile::get_for_side(profile::PlayerSide::P2).current_combo,
+    ]
 }
 
 fn course_stage_runtime_from_plan(
@@ -1271,7 +1284,7 @@ impl AppState {
         };
 
         let shell = ShellState::new(&cfg, overlay_mode);
-        let session = SessionState::new(preferred);
+        let session = SessionState::new(preferred, combo_carry_from_profiles());
         let screens = ScreensState::new(color_index, preferred);
 
         Self {
@@ -1382,6 +1395,8 @@ impl App {
             ScreenAction::SelectProfiles { p1, p2 } => {
                 let fast_profile_switch = profile::take_fast_profile_switch_from_select_music();
                 let profile_data = profile::set_active_profiles(p1, p2);
+                self.state.session.combo_carry =
+                    [profile_data[0].current_combo, profile_data[1].current_combo];
                 if let Some(backend) = self.backend.as_mut() {
                     self.asset_manager.set_profile_avatar_for_side(
                         backend,
@@ -1795,6 +1810,33 @@ impl App {
         self.state.session.course_eval_page_index = 0;
     }
 
+    fn update_combo_carry_from_gameplay(&mut self, gs: &gameplay::State) {
+        let play_style = profile::get_session_play_style();
+        let player_side = profile::get_session_player_side();
+        match play_style {
+            profile::PlayStyle::Versus => {
+                for idx in 0..gs.num_players.min(crate::game::gameplay::MAX_PLAYERS) {
+                    let combo = gs.players[idx].combo;
+                    self.state.session.combo_carry[idx] = combo;
+                    let side = if idx == 0 {
+                        profile::PlayerSide::P1
+                    } else {
+                        profile::PlayerSide::P2
+                    };
+                    profile::update_current_combo_for_side(side, combo);
+                }
+            }
+            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                if gs.num_players == 0 {
+                    return;
+                }
+                let combo = gs.players[0].combo;
+                self.state.session.combo_carry[side_ix(player_side)] = combo;
+                profile::update_current_combo_for_side(player_side, combo);
+            }
+        }
+    }
+
     fn start_course_run_from_selected(&mut self) -> bool {
         let Some(selection) =
             select_course::selected_course_plan(&self.state.screens.select_course_state)
@@ -2144,7 +2186,9 @@ impl App {
 
         profile::set_session_joined(true, true);
         profile::set_session_play_style(profile::PlayStyle::Versus);
-        let _ = profile::set_active_profile_for_side(join_side, profile::ActiveProfile::Guest);
+        let guest_profile =
+            profile::set_active_profile_for_side(join_side, profile::ActiveProfile::Guest);
+        self.state.session.combo_carry[side_ix(join_side)] = guest_profile.current_combo;
 
         if screen == CurrentScreen::SelectStyle {
             self.state.screens.select_style_state.selected_index = 1;
@@ -3850,6 +3894,7 @@ impl App {
         if target == CurrentScreen::Menu {
             self.state.session.session_start_time = None;
             self.state.session.played_stages.clear();
+            self.state.session.combo_carry = combo_carry_from_profiles();
             self.clear_course_runtime();
             self.state.session.last_course_wheel_path = None;
             self.state.session.last_course_wheel_difficulty_name = None;
@@ -4049,6 +4094,7 @@ impl App {
                 .map(|course| course.course_display_totals);
             if prev == CurrentScreen::Gameplay && self.state.session.course_run.is_some() {
                 if let Some(gameplay_results) = self.state.screens.gameplay_state.take() {
+                    self.update_combo_carry_from_gameplay(&gameplay_results);
                     course_display_carry = Some(
                         crate::game::gameplay::course_display_carry_from_state(&gameplay_results),
                     );
@@ -4211,6 +4257,7 @@ impl App {
                     } else {
                         Arc::from("EVENT")
                     };
+                let combo_carry = self.state.session.combo_carry;
                 let gs = gameplay::init(
                     song_arc,
                     charts,
@@ -4225,6 +4272,7 @@ impl App {
                     lead_in_timing,
                     course_display_carry,
                     course_display_totals,
+                    combo_carry,
                 );
 
                 if let Some(backend) = self.backend.as_mut() {
@@ -4248,6 +4296,9 @@ impl App {
 
         if target == CurrentScreen::Evaluation {
             let gameplay_results = self.state.screens.gameplay_state.take();
+            if let Some(gs) = gameplay_results.as_ref() {
+                self.update_combo_carry_from_gameplay(gs);
+            }
             if let (Some(backend), Some(gs)) = (self.backend.as_mut(), gameplay_results.as_ref())
                 && let Some(path) = gs.song.banner_path.as_ref()
             {

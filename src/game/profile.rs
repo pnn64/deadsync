@@ -1,5 +1,6 @@
 pub use super::scroll::ScrollSpeedSetting;
 use crate::config::SimpleIni;
+use bincode::{Decode, Encode};
 use chrono::Local;
 use log::{info, warn};
 use std::fs;
@@ -217,6 +218,7 @@ impl core::fmt::Display for ScrollOption {
 // --- Profile Data ---
 const PROFILES_ROOT: &str = "save/profiles";
 const DEFAULT_PROFILE_ID: &str = "00000000";
+const PROFILE_STATS_VERSION_V1: u16 = 1;
 
 #[inline(always)]
 fn local_profile_dir(id: &str) -> PathBuf {
@@ -236,6 +238,22 @@ fn groovestats_ini_path(id: &str) -> PathBuf {
 #[inline(always)]
 fn profile_avatar_path(id: &str) -> PathBuf {
     local_profile_dir(id).join("profile.png")
+}
+
+#[inline(always)]
+fn profile_stats_path(id: &str) -> PathBuf {
+    local_profile_dir(id).join("stats.bin")
+}
+
+#[inline(always)]
+fn profile_stats_tmp_path(id: &str) -> PathBuf {
+    local_profile_dir(id).join("stats.bin.tmp")
+}
+
+#[derive(Debug, Clone, Copy, Encode, Decode)]
+struct ProfileStatsV1 {
+    version: u16,
+    current_combo: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1010,6 +1028,8 @@ pub struct Profile {
     pub combo_font: ComboFont,
     pub combo_colors: ComboColors,
     pub combo_mode: ComboMode,
+    pub carry_combo_between_songs: bool,
+    pub current_combo: u32,
     pub noteskin: NoteSkin,
     pub avatar_path: Option<PathBuf>,
     pub avatar_texture_key: Option<String>,
@@ -1114,6 +1134,8 @@ impl Default for Profile {
             combo_font: ComboFont::default(),
             combo_colors: ComboColors::default(),
             combo_mode: ComboMode::default(),
+            carry_combo_between_songs: true,
+            current_combo: 0,
             noteskin: NoteSkin::default(),
             avatar_path: None,
             avatar_texture_key: None,
@@ -1517,6 +1539,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         content.push_str(&format!("ComboFont = {}\n", default_profile.combo_font));
         content.push_str(&format!("ComboColors = {}\n", default_profile.combo_colors));
         content.push_str(&format!("ComboMode = {}\n", default_profile.combo_mode));
+        content.push_str(&format!(
+            "CarryComboBetweenSongs = {}\n",
+            i32::from(default_profile.carry_combo_between_songs)
+        ));
         content.push_str(&format!("NoteSkin = {}\n", default_profile.noteskin));
         content.push_str(&format!("MiniPercent = {}\n", default_profile.mini_percent));
         content.push_str(&format!("Perspective = {}\n", default_profile.perspective));
@@ -1749,6 +1775,10 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!("ComboFont={}\n", profile.combo_font));
     content.push_str(&format!("ComboColors={}\n", profile.combo_colors));
     content.push_str(&format!("ComboMode={}\n", profile.combo_mode));
+    content.push_str(&format!(
+        "CarryComboBetweenSongs={}\n",
+        i32::from(profile.carry_combo_between_songs)
+    ));
     content.push_str(&format!("NoteSkin={}\n", profile.noteskin));
     content.push_str(&format!("MiniPercent={}\n", profile.mini_percent));
     content.push_str(&format!("Perspective={}\n", profile.perspective));
@@ -1805,6 +1835,82 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     let path = profile_ini_path(&profile_id);
     if let Err(e) = fs::write(&path, content) {
         warn!("Failed to save {}: {}", path.display(), e);
+    }
+}
+
+#[inline(always)]
+fn decode_profile_stats_current_combo(bytes: &[u8], path: &Path) -> Option<u32> {
+    let Ok((stats, _)) =
+        bincode::decode_from_slice::<ProfileStatsV1, _>(bytes, bincode::config::standard())
+    else {
+        warn!("Failed to decode profile stats '{}'.", path.display());
+        return None;
+    };
+    if stats.version != PROFILE_STATS_VERSION_V1 {
+        warn!(
+            "Unsupported profile stats version {} in '{}'.",
+            stats.version,
+            path.display()
+        );
+        return None;
+    }
+    Some(stats.current_combo)
+}
+
+fn load_profile_stats_current_combo(path: &Path) -> Option<u32> {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                warn!("Failed to read {}: {}", path.display(), e);
+            }
+            return None;
+        }
+    };
+    decode_profile_stats_current_combo(&bytes, path)
+}
+
+fn save_profile_stats_for_side(side: PlayerSide) {
+    let profile_id = {
+        let session = SESSION.lock().unwrap();
+        match &session.active_profiles[side_ix(side)] {
+            ActiveProfile::Local { id } => Some(id.clone()),
+            ActiveProfile::Guest => None,
+        }
+    };
+    let Some(profile_id) = profile_id else {
+        return;
+    };
+
+    let current_combo = PROFILES.lock().unwrap()[side_ix(side)].current_combo;
+    let payload = ProfileStatsV1 {
+        version: PROFILE_STATS_VERSION_V1,
+        current_combo,
+    };
+    let Ok(buf) = bincode::encode_to_vec(payload, bincode::config::standard()) else {
+        warn!("Failed to encode profile stats for '{}'.", profile_id);
+        return;
+    };
+
+    let path = profile_stats_path(&profile_id);
+    let tmp_path = profile_stats_tmp_path(&profile_id);
+    if let Some(parent) = path.parent()
+        && let Err(e) = fs::create_dir_all(parent)
+    {
+        warn!(
+            "Failed to create profile stats directory '{}': {}",
+            parent.display(),
+            e
+        );
+        return;
+    }
+    if let Err(e) = fs::write(&tmp_path, buf) {
+        warn!("Failed to write {}: {}", tmp_path.display(), e);
+        return;
+    }
+    if let Err(e) = fs::rename(&tmp_path, &path) {
+        warn!("Failed to save {}: {}", path.display(), e);
+        let _ = fs::remove_file(&tmp_path);
     }
 }
 
@@ -1904,6 +2010,11 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "ComboMode")
                 .and_then(|s| ComboMode::from_str(&s).ok())
                 .unwrap_or(default_profile.combo_mode);
+            profile.carry_combo_between_songs = profile_conf
+                .get("PlayerOptions", "CarryComboBetweenSongs")
+                .or_else(|| profile_conf.get("PlayerOptions", "ComboContinuesBetweenSongs"))
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.carry_combo_between_songs, |v| v != 0);
             profile.noteskin = profile_conf
                 .get("PlayerOptions", "NoteSkin")
                 .and_then(|s| NoteSkin::from_str(&s).ok())
@@ -2255,6 +2366,10 @@ fn load_for_side(side: PlayerSide) {
             );
         }
 
+        profile.current_combo =
+            load_profile_stats_current_combo(&profile_stats_path(&profile_id))
+                .unwrap_or(default_profile.current_combo);
+
         // Load groovestats.ini
         let mut gs_conf = SimpleIni::new();
         if gs_conf.load(&groovestats_ini).is_ok() {
@@ -2285,6 +2400,7 @@ fn load_for_side(side: PlayerSide) {
     } // Lock is released here.
 
     save_profile_ini_for_side(side);
+    save_profile_stats_for_side(side);
     save_groovestats_ini_for_side(side);
     info!("Profile configuration files updated with default values for any missing fields.");
 }
@@ -2917,6 +3033,36 @@ pub fn update_combo_mode_for_side(side: PlayerSide, setting: ComboMode) {
         profile.combo_mode = setting;
     }
     save_profile_ini_for_side(side);
+}
+
+pub fn update_carry_combo_between_songs_for_side(side: PlayerSide, enabled: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.carry_combo_between_songs == enabled {
+            return;
+        }
+        profile.carry_combo_between_songs = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_current_combo_for_side(side: PlayerSide, combo: u32) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.current_combo == combo {
+            return;
+        }
+        profile.current_combo = combo;
+    }
+    save_profile_stats_for_side(side);
 }
 
 pub fn update_scroll_option_for_side(side: PlayerSide, setting: ScrollOption) {
