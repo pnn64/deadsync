@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
 
 use crate::game::note::{HoldResult, MineResult, Note, NoteType};
 use crate::game::timing::{FA_PLUS_W0_MS, FA_PLUS_W010_MS, WindowCounts};
@@ -24,6 +23,21 @@ pub enum JudgeGrade {
     Decent,    // W4
     WayOff,    // W5
     Miss,
+}
+
+pub const JUDGE_GRADE_COUNT: usize = 6;
+pub type JudgeCounts = [u32; JUDGE_GRADE_COUNT];
+
+#[inline(always)]
+pub const fn judge_grade_ix(grade: JudgeGrade) -> usize {
+    match grade {
+        JudgeGrade::Fantastic => 0,
+        JudgeGrade::Excellent => 1,
+        JudgeGrade::Great => 2,
+        JudgeGrade::Decent => 3,
+        JudgeGrade::WayOff => 4,
+        JudgeGrade::Miss => 5,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -81,36 +95,28 @@ where
 pub const HOLD_SCORE_HELD: i32 = 5;
 pub const MINE_SCORE_HIT: i32 = -6;
 
-pub const fn grade_points_for(grade: JudgeGrade) -> i32 {
-    match grade {
-        JudgeGrade::Fantastic => 5,
-        JudgeGrade::Excellent => 4,
-        JudgeGrade::Great => 2,
-        JudgeGrade::Decent => 0,
-        JudgeGrade::WayOff => -6,
-        JudgeGrade::Miss => -12,
-    }
-}
+const GRADE_POINTS_BY_IX: [i32; JUDGE_GRADE_COUNT] = [5, 4, 2, 0, -6, -12];
 
-pub fn calculate_itg_grade_points(
-    scoring_counts: &HashMap<JudgeGrade, u32>,
+pub fn calculate_itg_grade_points_from_counts(
+    scoring_counts: &JudgeCounts,
     holds_held_for_score: u32,
     rolls_held_for_score: u32,
     mines_hit_for_score: u32,
 ) -> i32 {
     let mut total = 0i32;
-    for (grade, count) in scoring_counts {
-        total += grade_points_for(*grade) * (*count as i32);
+    let mut i = 0usize;
+    while i < JUDGE_GRADE_COUNT {
+        total += GRADE_POINTS_BY_IX[i] * scoring_counts[i] as i32;
+        i += 1;
     }
-
     total += holds_held_for_score as i32 * HOLD_SCORE_HELD;
     total += rolls_held_for_score as i32 * HOLD_SCORE_HELD;
     total += mines_hit_for_score as i32 * MINE_SCORE_HIT;
     total
 }
 
-pub fn calculate_itg_score_percent(
-    scoring_counts: &HashMap<JudgeGrade, u32>,
+pub fn calculate_itg_score_percent_from_counts(
+    scoring_counts: &JudgeCounts,
     holds_held_for_score: u32,
     rolls_held_for_score: u32,
     mines_hit_for_score: u32,
@@ -120,7 +126,7 @@ pub fn calculate_itg_score_percent(
         return 0.0;
     }
 
-    let total_points = calculate_itg_grade_points(
+    let total_points = calculate_itg_grade_points_from_counts(
         scoring_counts,
         holds_held_for_score,
         rolls_held_for_score,

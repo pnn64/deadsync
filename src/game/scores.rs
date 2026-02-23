@@ -1343,15 +1343,7 @@ fn append_local_score_on_disk(
 }
 
 fn judgment_counts_arr(p: &gameplay::PlayerRuntime) -> [u32; 6] {
-    use crate::game::judgment::JudgeGrade as G;
-    [
-        *p.judgment_counts.get(&G::Fantastic).unwrap_or(&0),
-        *p.judgment_counts.get(&G::Excellent).unwrap_or(&0),
-        *p.judgment_counts.get(&G::Great).unwrap_or(&0),
-        *p.judgment_counts.get(&G::Decent).unwrap_or(&0),
-        *p.judgment_counts.get(&G::WayOff).unwrap_or(&0),
-        *p.judgment_counts.get(&G::Miss).unwrap_or(&0),
-    ]
+    p.judgment_counts
 }
 
 fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalReplayEdgeV1> {
@@ -1419,7 +1411,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
         let chart_hash = gs.charts[player_idx].short_hash.as_str();
         let p = &gs.players[player_idx];
 
-        let score_percent = judgment::calculate_itg_score_percent(
+        let score_percent = judgment::calculate_itg_score_percent_from_counts(
             &p.scoring_counts,
             p.holds_held_for_score,
             p.rolls_held_for_score,

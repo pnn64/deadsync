@@ -1405,8 +1405,8 @@ pub struct PlayerRuntime {
     pub full_combo_grade: Option<JudgeGrade>,
     pub current_combo_grade: Option<JudgeGrade>,
     pub first_fc_attempt_broken: bool,
-    pub judgment_counts: HashMap<JudgeGrade, u32>,
-    pub scoring_counts: HashMap<JudgeGrade, u32>,
+    pub judgment_counts: judgment::JudgeCounts,
+    pub scoring_counts: judgment::JudgeCounts,
     pub last_judgment: Option<JudgmentRenderInfo>,
 
     pub life: f32,
@@ -1472,14 +1472,7 @@ const DISPLAY_JUDGE_ORDER: [JudgeGrade; 6] = [
 
 #[inline(always)]
 const fn display_judge_ix(grade: JudgeGrade) -> usize {
-    match grade {
-        JudgeGrade::Fantastic => 0,
-        JudgeGrade::Excellent => 1,
-        JudgeGrade::Great => 2,
-        JudgeGrade::Decent => 3,
-        JudgeGrade::WayOff => 4,
-        JudgeGrade::Miss => 5,
-    }
+    judgment::judge_grade_ix(grade)
 }
 
 #[inline(always)]
@@ -1501,22 +1494,8 @@ fn init_player_runtime() -> PlayerRuntime {
         full_combo_grade: None,
         current_combo_grade: None,
         first_fc_attempt_broken: false,
-        judgment_counts: HashMap::from_iter([
-            (JudgeGrade::Fantastic, 0),
-            (JudgeGrade::Excellent, 0),
-            (JudgeGrade::Great, 0),
-            (JudgeGrade::Decent, 0),
-            (JudgeGrade::WayOff, 0),
-            (JudgeGrade::Miss, 0),
-        ]),
-        scoring_counts: HashMap::from_iter([
-            (JudgeGrade::Fantastic, 0),
-            (JudgeGrade::Excellent, 0),
-            (JudgeGrade::Great, 0),
-            (JudgeGrade::Decent, 0),
-            (JudgeGrade::WayOff, 0),
-            (JudgeGrade::Miss, 0),
-        ]),
+        judgment_counts: [0; judgment::JUDGE_GRADE_COUNT],
+        scoring_counts: [0; judgment::JUDGE_GRADE_COUNT],
         last_judgment: None,
         life: 0.5,
         combo_after_miss: 0,
@@ -3153,8 +3132,8 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
         let mut scoring_counts = [0u32; 6];
         for grade in DISPLAY_JUDGE_ORDER {
             let ix = display_judge_ix(grade);
-            let stage_judgment = p.judgment_counts.get(&grade).copied().unwrap_or(0);
-            let stage_scoring = p.scoring_counts.get(&grade).copied().unwrap_or(0);
+            let stage_judgment = p.judgment_counts[ix];
+            let stage_scoring = p.scoring_counts[ix];
             judgment_counts[ix] = previous.judgment_counts[ix].saturating_add(stage_judgment);
             scoring_counts[ix] = previous.scoring_counts[ix].saturating_add(stage_scoring);
         }
@@ -3425,11 +3404,7 @@ pub fn display_judgment_count(state: &State, player_idx: usize, grade: JudgeGrad
     if player_idx >= state.num_players {
         return 0;
     }
-    let base = state.players[player_idx]
-        .judgment_counts
-        .get(&grade)
-        .copied()
-        .unwrap_or(0);
+    let base = state.players[player_idx].judgment_counts[display_judge_ix(grade)];
     let carry = display_carry_for_player(state, player_idx);
     base.saturating_add(carry.judgment_counts[display_judge_ix(grade)])
 }
@@ -3492,16 +3467,9 @@ pub fn display_itg_score_percent(state: &State, player_idx: usize) -> f64 {
         return 0.0;
     }
     let carry = display_carry_for_player(state, player_idx);
-    let mut scoring_counts: HashMap<JudgeGrade, u32> =
-        HashMap::with_capacity(DISPLAY_JUDGE_ORDER.len());
-    for grade in DISPLAY_JUDGE_ORDER {
-        let base = state.players[player_idx]
-            .scoring_counts
-            .get(&grade)
-            .copied()
-            .unwrap_or(0);
-        let total = base.saturating_add(carry.scoring_counts[display_judge_ix(grade)]);
-        scoring_counts.insert(grade, total);
+    let mut scoring_counts = state.players[player_idx].scoring_counts;
+    for (ix, total) in scoring_counts.iter_mut().enumerate() {
+        *total = total.saturating_add(carry.scoring_counts[ix]);
     }
     let holds = state.players[player_idx]
         .holds_held_for_score
@@ -3513,7 +3481,7 @@ pub fn display_itg_score_percent(state: &State, player_idx: usize) -> f64 {
         .mines_hit_for_score
         .saturating_add(carry.mines_hit_for_score);
     let possible = display_totals_for_player(state, player_idx).possible_grade_points;
-    judgment::calculate_itg_score_percent(&scoring_counts, holds, rolls, mines, possible)
+    judgment::calculate_itg_score_percent_from_counts(&scoring_counts, holds, rolls, mines, possible)
 }
 
 #[inline(always)]
@@ -3624,7 +3592,7 @@ pub fn display_hard_ex_score_percent(state: &State, player_idx: usize) -> f64 {
 }
 
 fn update_itg_grade_totals(p: &mut PlayerRuntime) {
-    p.earned_grade_points = judgment::calculate_itg_grade_points(
+    p.earned_grade_points = judgment::calculate_itg_grade_points_from_counts(
         &p.scoring_counts,
         p.holds_held_for_score,
         p.rolls_held_for_score,
@@ -5282,9 +5250,10 @@ fn finalize_row_judgment(
         return;
     }
     let p = &mut state.players[player];
-    *p.judgment_counts.entry(final_grade).or_insert(0) += 1;
+    let grade_ix = display_judge_ix(final_grade);
+    p.judgment_counts[grade_ix] = p.judgment_counts[grade_ix].saturating_add(1);
     if !is_player_dead(p) {
-        *p.scoring_counts.entry(final_grade).or_insert(0) += 1;
+        p.scoring_counts[grade_ix] = p.scoring_counts[grade_ix].saturating_add(1);
         update_itg_grade_totals(p);
     }
     let life_delta = judge_life_delta(final_grade);

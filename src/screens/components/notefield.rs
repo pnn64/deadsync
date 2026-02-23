@@ -1136,7 +1136,7 @@ fn zmod_combo_rainbow_color(elapsed: f32, scroll: bool, combo: u32) -> [f32; 4] 
 
 #[inline(always)]
 fn scoring_count(p: &PlayerRuntime, grade: JudgeGrade) -> u32 {
-    p.scoring_counts.get(&grade).copied().unwrap_or(0)
+    p.scoring_counts[crate::game::judgment::judge_grade_ix(grade)]
 }
 
 #[derive(Clone, Copy, Debug)]

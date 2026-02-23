@@ -513,7 +513,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
             let graph_last_second = gs.song.total_length_seconds as f32;
 
-            let score_percent = judgment::calculate_itg_score_percent(
+            let score_percent = judgment::calculate_itg_score_percent_from_counts(
                 &p.scoring_counts,
                 p.holds_held_for_score,
                 p.rolls_held_for_score,
@@ -614,7 +614,32 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 song: gs.song.clone(),
                 chart: gs.charts[player_idx].clone(),
                 profile_name: prof.display_name.clone(),
-                judgment_counts: p.judgment_counts.clone(),
+                judgment_counts: HashMap::from([
+                    (
+                        JudgeGrade::Fantastic,
+                        p.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Fantastic)],
+                    ),
+                    (
+                        JudgeGrade::Excellent,
+                        p.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Excellent)],
+                    ),
+                    (
+                        JudgeGrade::Great,
+                        p.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Great)],
+                    ),
+                    (
+                        JudgeGrade::Decent,
+                        p.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Decent)],
+                    ),
+                    (
+                        JudgeGrade::WayOff,
+                        p.judgment_counts[judgment::judge_grade_ix(JudgeGrade::WayOff)],
+                    ),
+                    (
+                        JudgeGrade::Miss,
+                        p.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Miss)],
+                    ),
+                ]),
                 score_percent,
                 grade,
                 speed_mod: gs.scroll_speed[player_idx],
