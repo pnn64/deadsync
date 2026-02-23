@@ -1745,6 +1745,55 @@ pub fn build(
                 }
             }
         };
+        let hold_head_reached_receptor =
+            |note_index: usize, _local_col: usize, receptor_y_lane: f32, dir: f32| -> bool {
+                let dir = if dir >= 0.0 { 1.0 } else { -1.0 };
+                let note_time = state.note_time_cache[note_index];
+                let head_y = match scroll_speed {
+                    ScrollSpeedSetting::CMod(_) => {
+                        let pps_chart = cmod_pps_opt.expect("cmod pps computed");
+                        let time_diff_real = (note_time - current_time) / rate;
+                        receptor_y_lane + dir * time_diff_real * pps_chart
+                    }
+                    ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                        let note_disp_beat = state.note_display_beat_cache[note_index];
+                        let beat_diff_disp = note_disp_beat - curr_disp_beat;
+                        receptor_y_lane
+                            + dir
+                                * (beat_diff_disp
+                                    * ScrollSpeedSetting::ARROW_SPACING
+                                    * field_zoom
+                                    * beatmod_multiplier)
+                    }
+                };
+                let tail_y = match scroll_speed {
+                    ScrollSpeedSetting::CMod(_) => {
+                        let pps_chart = cmod_pps_opt.expect("cmod pps computed");
+                        let note_end_time = state.hold_end_time_cache[note_index].unwrap_or(note_time);
+                        let time_diff_real = (note_end_time - current_time) / rate;
+                        receptor_y_lane + dir * time_diff_real * pps_chart
+                    }
+                    ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                        let note_disp_beat = state.note_display_beat_cache[note_index];
+                        let note_end_disp_beat =
+                            state.hold_end_display_beat_cache[note_index].unwrap_or(note_disp_beat);
+                        let beat_diff_disp = note_end_disp_beat - curr_disp_beat;
+                        receptor_y_lane
+                            + dir
+                                * (beat_diff_disp
+                                    * ScrollSpeedSetting::ARROW_SPACING
+                                    * field_zoom
+                                    * beatmod_multiplier)
+                    }
+                };
+                let head_anchor_y = if dir < 0.0 && ns.note_display_metrics.flip_head_and_tail_when_reverse
+                {
+                    tail_y
+                } else {
+                    head_y
+                };
+                (head_anchor_y - receptor_y_lane) * dir <= 0.0
+            };
 
         // Measure Lines (Zmod parity: NoteField:SetBeatBarsAlpha)
         if !matches!(
@@ -2010,10 +2059,11 @@ pub fn build(
                     z(Z_RECEPTOR)
                 ));
             }
-            let active_hold = state.active_holds[col]
+            let hold_slot = if let Some(active) = state.active_holds[col]
                 .as_ref()
-                .filter(|active| active_hold_is_engaged(active));
-            let hold_slot = if let Some(active) = active_hold {
+                .filter(|active| active_hold_is_engaged(active))
+                && hold_head_reached_receptor(active.note_index, i, receptor_y_lane, column_dirs[i])
+            {
                 let note_type = &state.notes[active.note_index].note_type;
                 let visuals = ns.hold_visuals_for_col(i, matches!(note_type, NoteType::Roll));
                 if let Some(slot) = visuals.explosion.as_ref() {
@@ -2424,7 +2474,13 @@ pub fn build(
             let hold_life = hold.life.clamp(0.0, 1.0);
             let hold_color_scale = let_go_gray + (1.0 - let_go_gray) * hold_life;
             let hold_diffuse = [hold_color_scale, hold_color_scale, hold_color_scale, 1.0];
-            if engaged {
+            let head_anchor_y = if lane_reverse && note_display.flip_head_and_tail_when_reverse {
+                tail_y
+            } else {
+                head_y
+            };
+            let hold_head_at_receptor = (head_anchor_y - lane_receptor_y) * dir <= 0.0;
+            if engaged && hold_head_at_receptor {
                 if head_is_top {
                     top = top.max(lane_receptor_y);
                 } else {
@@ -2844,12 +2900,7 @@ pub fn build(
                 }
             }
             let should_draw_hold_head = true;
-            let head_anchor_y = if lane_reverse && note_display.flip_head_and_tail_when_reverse {
-                tail_y
-            } else {
-                head_y
-            };
-            let head_draw_y = if engaged {
+            let head_draw_y = if engaged && hold_head_at_receptor {
                 lane_receptor_y
             } else {
                 head_anchor_y
