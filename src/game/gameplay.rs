@@ -12,7 +12,10 @@ use crate::game::scores;
 use crate::game::song::SongData;
 use crate::game::timing::{BeatInfoCache, TimingData, TimingProfile, classify_offset_s};
 use crate::game::{
-    life::{LifeChange, REGEN_COMBO_AFTER_MISS},
+    life::{
+        LIFE_DECENT, LIFE_EXCELLENT, LIFE_FANTASTIC, LIFE_GREAT, LIFE_HELD, LIFE_HIT_MINE,
+        LIFE_LET_GO, LIFE_MISS, LIFE_WAY_OFF, REGEN_COMBO_AFTER_MISS,
+    },
     profile,
     scroll::ScrollSpeedSetting,
 };
@@ -1476,6 +1479,18 @@ const fn display_judge_ix(grade: JudgeGrade) -> usize {
         JudgeGrade::Decent => 3,
         JudgeGrade::WayOff => 4,
         JudgeGrade::Miss => 5,
+    }
+}
+
+#[inline(always)]
+const fn judge_life_delta(grade: JudgeGrade) -> f32 {
+    match grade {
+        JudgeGrade::Fantastic => LIFE_FANTASTIC,
+        JudgeGrade::Excellent => LIFE_EXCELLENT,
+        JudgeGrade::Great => LIFE_GREAT,
+        JudgeGrade::Decent => LIFE_DECENT,
+        JudgeGrade::WayOff => LIFE_WAY_OFF,
+        JudgeGrade::Miss => LIFE_MISS,
     }
 }
 
@@ -3706,7 +3721,7 @@ fn handle_mine_hit(
         apply_life_change(
             &mut state.players[player],
             state.current_music_time,
-            LifeChange::HIT_MINE,
+            LIFE_HIT_MINE,
         );
         if !is_state_dead(state, player) {
             state.players[player].mines_hit_for_score =
@@ -3891,7 +3906,7 @@ fn hit_mine_timebased(
         apply_life_change(
             &mut state.players[player],
             state.current_music_time,
-            LifeChange::HIT_MINE,
+            LIFE_HIT_MINE,
         );
         if !is_state_dead(state, player) {
             state.players[player].mines_hit_for_score =
@@ -3970,7 +3985,7 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
         apply_life_change(
             &mut state.players[player],
             state.current_music_time,
-            LifeChange::LET_GO,
+            LIFE_LET_GO,
         );
     }
     if updated_possible_scoring && !is_state_dead(state, player) {
@@ -4038,7 +4053,7 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
         apply_life_change(
             &mut state.players[player],
             state.current_music_time,
-            LifeChange::HELD,
+            LIFE_HELD,
         );
     }
     if updated_scoring {
@@ -4559,14 +4574,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                             miss_because_held: false,
                         };
                         state.notes[idx].early_result = Some(judgment.clone());
-                        let life_delta = match grade {
-                            JudgeGrade::Fantastic => LifeChange::FANTASTIC,
-                            JudgeGrade::Excellent => LifeChange::EXCELLENT,
-                            JudgeGrade::Great => LifeChange::GREAT,
-                            JudgeGrade::Decent => LifeChange::DECENT,
-                            JudgeGrade::WayOff => LifeChange::WAY_OFF,
-                            JudgeGrade::Miss => LifeChange::MISS,
-                        };
+                        let life_delta = judge_life_delta(grade);
                         {
                             let p = &mut state.players[player];
                             if !scoring_blocked {
@@ -5279,14 +5287,7 @@ fn finalize_row_judgment(
         *p.scoring_counts.entry(final_grade).or_insert(0) += 1;
         update_itg_grade_totals(p);
     }
-    let life_delta = match final_grade {
-        JudgeGrade::Fantastic => LifeChange::FANTASTIC,
-        JudgeGrade::Excellent => LifeChange::EXCELLENT,
-        JudgeGrade::Great => LifeChange::GREAT,
-        JudgeGrade::Decent => LifeChange::DECENT,
-        JudgeGrade::WayOff => LifeChange::WAY_OFF,
-        JudgeGrade::Miss => LifeChange::MISS,
-    };
+    let life_delta = judge_life_delta(final_grade);
     if !skip_life_change {
         apply_life_change(p, state.current_music_time, life_delta);
     }

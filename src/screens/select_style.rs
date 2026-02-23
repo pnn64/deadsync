@@ -39,23 +39,30 @@ enum Choice {
     Double,
 }
 
-impl Choice {
-    #[inline(always)]
-    const fn from_index(idx: usize) -> Self {
-        match idx {
-            0 => Self::Single,
-            1 => Self::Versus,
-            _ => Self::Double,
-        }
+#[inline(always)]
+const fn choice_from_index(idx: usize) -> Choice {
+    match idx {
+        0 => Choice::Single,
+        1 => Choice::Versus,
+        _ => Choice::Double,
     }
+}
 
-    #[inline(always)]
-    const fn label(self) -> &'static str {
-        match self {
-            Self::Single => "1 Player",
-            Self::Versus => "2 Players",
-            Self::Double => "Double",
-        }
+#[inline(always)]
+const fn choice_label(choice: Choice) -> &'static str {
+    match choice {
+        Choice::Single => "1 Player",
+        Choice::Versus => "2 Players",
+        Choice::Double => "Double",
+    }
+}
+
+#[inline(always)]
+const fn choice_play_style(choice: Choice) -> crate::game::profile::PlayStyle {
+    match choice {
+        Choice::Single => crate::game::profile::PlayStyle::Single,
+        Choice::Versus => crate::game::profile::PlayStyle::Versus,
+        Choice::Double => crate::game::profile::PlayStyle::Double,
     }
 }
 
@@ -162,12 +169,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.exit_chosen_anim = true;
             state.exit_target = Some(Screen::SelectPlayMode);
             let _ = exit_anim_t(true);
-            let choice = Choice::from_index(state.selected_index);
-            crate::game::profile::set_session_play_style(match choice {
-                Choice::Single => crate::game::profile::PlayStyle::Single,
-                Choice::Versus => crate::game::profile::PlayStyle::Versus,
-                Choice::Double => crate::game::profile::PlayStyle::Double,
-            });
+            crate::game::profile::set_session_play_style(choice_play_style(choice_from_index(
+                state.selected_index,
+            )));
             audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::None
         }
@@ -342,7 +346,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
     let dual_pad_off = widescale(PAD_DUAL_OFFSET_4_3, PAD_DUAL_OFFSET_16_9);
 
     for i in 0..CHOICE_COUNT {
-        let choice = Choice::from_index(i);
+        let choice = choice_from_index(i);
         let x = match choice {
             Choice::Single => cx - choice_x_off,
             Choice::Versus => cx,
@@ -394,7 +398,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             z(1):
             shadowlength(1.0):
             diffuse(1.0, 1.0, 1.0, alpha):
-            font("wendy"): settext(choice.label()): horizalign(center)
+            font("wendy"): settext(choice_label(choice)): horizalign(center)
         ));
     }
 

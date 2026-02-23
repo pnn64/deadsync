@@ -454,6 +454,14 @@ fn shifted_course_difficulty(
 }
 
 #[inline(always)]
+const fn course_meter(
+    course: &rssp::course::CourseFile,
+    diff: rssp::course::Difficulty,
+) -> Option<i32> {
+    course.meters[diff as usize]
+}
+
+#[inline(always)]
 fn course_difficulty_from_meters(course: &rssp::course::CourseFile) -> Option<(&'static str, u32)> {
     use rssp::course::Difficulty;
     const ORDER: [(Difficulty, &str); 6] = [
@@ -465,7 +473,7 @@ fn course_difficulty_from_meters(course: &rssp::course::CourseFile) -> Option<(&
         (Difficulty::Edit, "Edit"),
     ];
     for (diff, name) in ORDER {
-        if let Some(meter) = course.meter_for(diff).filter(|v| *v >= 0) {
+        if let Some(meter) = course_meter(course, diff).filter(|v| *v >= 0) {
             return Some((name, meter as u32));
         }
     }
@@ -820,7 +828,7 @@ fn build_init_data() -> InitData {
         let mut available_course_diffs: Vec<rssp::course::Difficulty> = COURSE_RATING_ORDER
             .iter()
             .copied()
-            .filter(|diff| course.meter_for(*diff).is_some_and(|meter| meter >= 0))
+            .filter(|diff| course_meter(course, *diff).is_some_and(|meter| meter >= 0))
             .collect();
         if has_random_entries && available_course_diffs.len() <= 1 {
             available_course_diffs = COURSE_RATING_ORDER.to_vec();
@@ -899,8 +907,7 @@ fn build_init_data() -> InitData {
                 });
             }
 
-            let explicit_meter = course
-                .meter_for(course_diff)
+            let explicit_meter = course_meter(course, course_diff)
                 .filter(|v| *v >= 0)
                 .map(|v| v as u32);
             if rated_entry_count == 0

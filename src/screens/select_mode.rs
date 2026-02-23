@@ -50,38 +50,36 @@ enum Choice {
     Marathon,
 }
 
-impl Choice {
-    #[inline(always)]
-    const fn from_index(idx: usize) -> Self {
-        match idx {
-            0 => Self::Regular,
-            _ => Self::Marathon,
-        }
+#[inline(always)]
+const fn choice_from_index(idx: usize) -> Choice {
+    match idx {
+        0 => Choice::Regular,
+        _ => Choice::Marathon,
     }
+}
 
-    #[inline(always)]
-    const fn desc(self) -> &'static str {
-        match self {
-            Self::Regular => REGULAR_DESC,
-            Self::Marathon => MARATHON_DESC,
-        }
+#[inline(always)]
+const fn choice_desc(choice: Choice) -> &'static str {
+    match choice {
+        Choice::Regular => REGULAR_DESC,
+        Choice::Marathon => MARATHON_DESC,
     }
+}
 
-    #[inline(always)]
-    const fn cursor_label_width(self) -> f32 {
-        // Approximation of SM's `choice_actor:GetWidth()`, clamped after dividing by 1.4.
-        match self {
-            Self::Regular => 140.0,
-            Self::Marathon => 168.0,
-        }
+#[inline(always)]
+const fn choice_cursor_label_width(choice: Choice) -> f32 {
+    // Approximation of SM's `choice_actor:GetWidth()`, clamped after dividing by 1.4.
+    match choice {
+        Choice::Regular => 140.0,
+        Choice::Marathon => 168.0,
     }
+}
 
-    #[inline(always)]
-    const fn play_mode(self) -> crate::game::profile::PlayMode {
-        match self {
-            Self::Regular => crate::game::profile::PlayMode::Regular,
-            Self::Marathon => crate::game::profile::PlayMode::Marathon,
-        }
+#[inline(always)]
+const fn choice_play_mode(choice: Choice) -> crate::game::profile::PlayMode {
+    match choice {
+        Choice::Regular => crate::game::profile::PlayMode::Regular,
+        Choice::Marathon => crate::game::profile::PlayMode::Marathon,
     }
 }
 
@@ -269,8 +267,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.exit_requested = true;
             state.exit_target = Some(Screen::ProfileLoad);
             let _ = exit_anim_t(true);
-            let choice = Choice::from_index(state.selected_index);
-            crate::game::profile::set_session_play_mode(choice.play_mode());
+            crate::game::profile::set_session_play_mode(choice_play_mode(choice_from_index(
+                state.selected_index,
+            )));
             audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::None
         }
@@ -441,10 +440,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Description text.
     let desc_alpha = fade_after(exit_t, 0.4, 0.2);
     let (dx, dy) = root_pt(-130.0, -60.0);
-    let choice = Choice::from_index(state.selected_index);
+    let choice = choice_from_index(state.selected_index);
     actors.push(act!(text:
         font("miso"):
-        settext(choice.desc()):
+        settext(choice_desc(choice)):
         align(0.0, 0.0):
         xy(dx, dy):
         zoom(0.825 * ROOT_ZOOM):
@@ -466,7 +465,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let base_w = if measured_w > 0.0 {
         measured_w
     } else {
-        choice.cursor_label_width()
+        choice_cursor_label_width(choice)
     };
     let cursor_w = (base_w / 1.4).clamp(CURSOR_MIN_W, CURSOR_MAX_W);
     let (cw, ch_outer) = root_sz(cursor_w, CURSOR_H + 2.0);
