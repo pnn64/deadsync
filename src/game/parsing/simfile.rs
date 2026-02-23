@@ -846,6 +846,41 @@ fn process_song(
     Ok((song_data, false)) // is_hit = false
 }
 
+/// Re-parse one simfile and replace its in-memory song-cache entry.
+///
+/// This is used after writing sync edits to disk so immediate replays use the
+/// updated timing without a full songs rescan.
+pub fn reload_song_in_cache(simfile_path: &Path) -> Result<Arc<SongData>, String> {
+    let config = crate::config::get();
+    let global_offset_seconds = config.global_offset_seconds;
+    let cachesongs = config.cachesongs;
+    let (song_data, _) = process_song(
+        simfile_path.to_path_buf(),
+        false,
+        cachesongs,
+        global_offset_seconds,
+    )?;
+    let updated = Arc::new(song_data);
+
+    let mut song_cache = get_song_cache();
+    let mut replaced = false;
+    for pack in song_cache.iter_mut() {
+        for song in &mut pack.songs {
+            if song.simfile_path == simfile_path {
+                *song = updated.clone();
+                replaced = true;
+            }
+        }
+    }
+    if !replaced {
+        return Err(format!(
+            "Song '{}' not found in song cache",
+            simfile_path.display()
+        ));
+    }
+    Ok(updated)
+}
+
 /// Scans the provided root directory (e.g., "songs/") for simfiles,
 /// parses them, and populates the global cache. This should be run once at startup.
 pub fn scan_and_load_songs(root_path_str: &'static str) {

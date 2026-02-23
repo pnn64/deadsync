@@ -718,6 +718,40 @@ impl TimingData {
         // scroll_prefix depends only on beats/ratios, not absolute time.
     }
 
+    /// Shift song timing by adjusting beat0 offset in seconds.
+    /// Positive `delta_seconds` moves note times later.
+    #[inline(always)]
+    pub fn shift_song_offset_seconds(&mut self, delta_seconds: f32) {
+        if delta_seconds.abs() < f32::EPSILON {
+            return;
+        }
+        if let Some(first) = Arc::make_mut(&mut self.beat_to_time).first_mut() {
+            first.time_sec += delta_seconds;
+        }
+
+        if !self.speeds.is_empty() {
+            let mut runtime = Vec::with_capacity(self.speeds.len());
+            let mut prev_ratio = 1.0_f32;
+            for seg in &self.speeds {
+                let start_time = self.get_time_for_beat(seg.beat);
+                let end_time = if seg.delay <= 0.0 {
+                    start_time
+                } else if seg.unit == SpeedUnit::Seconds {
+                    start_time + seg.delay
+                } else {
+                    self.get_time_for_beat(seg.beat + seg.delay)
+                };
+                runtime.push(SpeedRuntime {
+                    start_time,
+                    end_time,
+                    prev_ratio,
+                });
+                prev_ratio = seg.ratio;
+            }
+            self.speed_runtime = runtime;
+        }
+    }
+
     fn get_elapsed_time_internal(&self, starts: &mut GetBeatStarts, beat: f32) -> f32 {
         let mut start = *starts;
         self.get_elapsed_time_internal_mut(&mut start, beat, u32::MAX as usize);

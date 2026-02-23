@@ -27,7 +27,13 @@ use winit::{
 use log::{error, info, warn};
 use std::cmp;
 use std::collections::{HashMap, HashSet};
-use std::{error::Error, path::PathBuf, sync::Arc, time::Instant};
+use std::{
+    error::Error,
+    ffi::OsString,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Instant,
+};
 
 use crate::ui::actors::Actor;
 /* -------------------- gamepad -------------------- */
@@ -91,6 +97,9 @@ const SCREENSHOT_PREVIEW_GLOW_PERIOD_SECONDS: f32 = 0.5;
 const SCREENSHOT_PREVIEW_GLOW_ALPHA: f32 = 0.2;
 const SCREENSHOT_PREVIEW_BORDER_PX: f32 = 4.0;
 const SCREENSHOT_PREVIEW_Z: i16 = 32010;
+const GAMEPLAY_OFFSET_PROMPT_Z_BACKDROP: i16 = 31990;
+const GAMEPLAY_OFFSET_PROMPT_Z_CURSOR: i16 = 31991;
+const GAMEPLAY_OFFSET_PROMPT_Z_TEXT: i16 = 31993;
 
 #[derive(Clone, Copy)]
 enum ScreenshotPreviewTarget {
@@ -102,6 +111,13 @@ enum ScreenshotPreviewTarget {
 struct ScreenshotPreviewState {
     started_at: Instant,
     target: ScreenshotPreviewTarget,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct GameplayOffsetSavePrompt {
+    target: CurrentScreen,
+    navigate_no_fade: bool,
+    active_choice: u8, // 0 = Yes, 1 = No
 }
 
 #[derive(Clone)]
@@ -304,6 +320,7 @@ pub struct AppState {
     shell: ShellState,
     screens: ScreensState,
     session: SessionState,
+    gameplay_offset_save_prompt: Option<GameplayOffsetSavePrompt>,
 }
 
 impl ShellState {
@@ -897,6 +914,125 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
     })
 }
 
+#[inline(always)]
+fn quantize_sync_offset_seconds(v: f32) -> f32 {
+    (v / 0.001_f32).round() * 0.001_f32
+}
+
+#[inline(always)]
+fn sync_change_line(label: &str, start: f32, new: f32) -> Option<String> {
+    let start_q = quantize_sync_offset_seconds(start);
+    let new_q = quantize_sync_offset_seconds(new);
+    let delta_q = new_q - start_q;
+    if delta_q.abs() < 0.000_1_f32 {
+        return None;
+    }
+    let direction = if delta_q > 0.0 { "earlier" } else { "later" };
+    Some(format!(
+        "{label} from {start_q:+.3} to {new_q:+.3} (notes {direction})"
+    ))
+}
+
+#[inline(always)]
+fn format_offset_tag_value(value: f32) -> String {
+    let mut v = quantize_sync_offset_seconds(value);
+    if v.abs() < 0.000_5_f32 {
+        v = 0.0;
+    }
+    format!("{v:.3}")
+}
+
+fn rewrite_simfile_offset_tags(simfile_bytes: &[u8], delta: f32) -> Result<(Vec<u8>, usize), String> {
+    const TAG: &[u8] = b"#OFFSET:";
+    let len = simfile_bytes.len();
+    let mut out: Vec<u8> = Vec::with_capacity(len.saturating_add(64));
+    let mut changed = 0usize;
+    let mut cursor = 0usize;
+    let mut i = 0usize;
+
+    while i + TAG.len() <= len {
+        if simfile_bytes[i..i + TAG.len()].eq_ignore_ascii_case(TAG) {
+            out.extend_from_slice(&simfile_bytes[cursor..i + TAG.len()]);
+            let mut value_start = i + TAG.len();
+            while value_start < len
+                && simfile_bytes[value_start].is_ascii_whitespace()
+                && simfile_bytes[value_start] != b';'
+            {
+                value_start += 1;
+            }
+            out.extend_from_slice(&simfile_bytes[i + TAG.len()..value_start]);
+
+            let mut value_end = value_start;
+            while value_end < len && simfile_bytes[value_end] != b';' {
+                value_end += 1;
+            }
+            if value_end >= len {
+                return Err("Malformed #OFFSET tag: missing ';' terminator".to_string());
+            }
+
+            let raw = &simfile_bytes[value_start..value_end];
+            let Some(trim_start) = raw.iter().position(|b| !b.is_ascii_whitespace()) else {
+                return Err("Malformed #OFFSET tag: empty value".to_string());
+            };
+            let Some(trim_end_inclusive) = raw.iter().rposition(|b| !b.is_ascii_whitespace()) else {
+                return Err("Malformed #OFFSET tag: empty value".to_string());
+            };
+            let trim_end = trim_end_inclusive + 1;
+            let value_bytes = &raw[trim_start..trim_end];
+            let value_str = std::str::from_utf8(value_bytes)
+                .map_err(|_| "Malformed #OFFSET tag: value is not valid UTF-8".to_string())?;
+            let parsed_value = value_str
+                .parse::<f32>()
+                .map_err(|_| format!("Malformed #OFFSET tag value: '{value_str}'"))?;
+            let new_value = parsed_value + delta;
+
+            out.extend_from_slice(&raw[..trim_start]);
+            out.extend_from_slice(format_offset_tag_value(new_value).as_bytes());
+            out.extend_from_slice(&raw[trim_end..]);
+            out.push(b';');
+
+            changed = changed.saturating_add(1);
+            i = value_end.saturating_add(1);
+            cursor = i;
+            continue;
+        }
+        i += 1;
+    }
+
+    out.extend_from_slice(&simfile_bytes[cursor..]);
+    Ok((out, changed))
+}
+
+#[inline(always)]
+fn simfile_backup_path(simfile_path: &Path) -> PathBuf {
+    let mut backup = OsString::from(simfile_path.as_os_str());
+    backup.push(".old");
+    PathBuf::from(backup)
+}
+
+fn save_song_offset_delta_to_simfile(simfile_path: &Path, delta: f32) -> Result<usize, String> {
+    let simfile_bytes = std::fs::read(simfile_path)
+        .map_err(|e| format!("Failed to read simfile '{}': {e}", simfile_path.display()))?;
+    let (rewritten, changed_tags) = rewrite_simfile_offset_tags(&simfile_bytes, delta)?;
+    if changed_tags == 0 {
+        return Err(format!(
+            "No #OFFSET tags found in simfile '{}'",
+            simfile_path.display()
+        ));
+    }
+
+    let backup_path = simfile_backup_path(simfile_path);
+    std::fs::copy(simfile_path, &backup_path).map_err(|e| {
+        format!(
+            "Failed to create backup '{}': {e}",
+            backup_path.to_string_lossy()
+        )
+    })?;
+    std::fs::write(simfile_path, rewritten)
+        .map_err(|e| format!("Failed to write simfile '{}': {e}", simfile_path.display()))?;
+    Ok(changed_tags)
+}
+
 impl ScreensState {
     fn new(color_index: i32, preferred_difficulty_index: usize) -> Self {
         let mut menu_state = menu::init();
@@ -1142,6 +1278,7 @@ impl AppState {
             shell,
             screens,
             session,
+            gameplay_offset_save_prompt: None,
         }
     }
 }
@@ -1227,6 +1364,13 @@ impl App {
                 Vec::new()
             }
             ScreenAction::NavigateNoFade(screen) => {
+                if self.maybe_begin_gameplay_offset_prompt(
+                    self.state.screens.current_screen,
+                    screen,
+                    true,
+                ) {
+                    return Ok(());
+                }
                 // Skip the current screen's out-transition and immediately enter `screen`,
                 // letting the target screen's in-transition handle the visual change.
                 if matches!(self.state.shell.transition, TransitionState::Idle) {
@@ -1408,7 +1552,207 @@ impl App {
         self.run_commands(commands, event_loop)
     }
 
+    #[inline(always)]
+    fn gameplay_global_offset_changed(gs: &gameplay::State) -> bool {
+        (gs.global_offset_seconds - gs.initial_global_offset_seconds).abs() > 0.000_001_f32
+    }
+
+    #[inline(always)]
+    fn gameplay_song_offset_changed(gs: &gameplay::State) -> bool {
+        (gs.song_offset_seconds - gs.initial_song_offset_seconds).abs() > 0.000_001_f32
+    }
+
+    #[inline(always)]
+    fn gameplay_offset_changed(gs: &gameplay::State) -> bool {
+        Self::gameplay_global_offset_changed(gs) || Self::gameplay_song_offset_changed(gs)
+    }
+
+    fn gameplay_sync_prompt_text(gs: &gameplay::State) -> String {
+        let mut text = String::with_capacity(320);
+
+        if let Some(line) = sync_change_line(
+            "Global Offset",
+            gs.initial_global_offset_seconds,
+            gs.global_offset_seconds,
+        ) {
+            text.push_str(&line);
+            text.push_str("\n\n");
+        }
+
+        if let Some(line) = sync_change_line(
+            "Song offset",
+            gs.initial_song_offset_seconds,
+            gs.song_offset_seconds,
+        ) {
+            text.push_str("You have changed the timing of\n");
+            text.push_str(&gs.song.display_full_title(false));
+            text.push_str(":\n\n");
+            text.push_str(&line);
+            text.push_str("\n\n");
+        }
+
+        text.push_str("Would you like to save these changes?\n");
+        text.push_str("Choosing NO will discard your changes.");
+        text
+    }
+
+    fn save_gameplay_song_offset(&mut self, simfile_path: &Path, delta: f32) -> Result<(), String> {
+        if delta.abs() < 0.000_001_f32 {
+            return Ok(());
+        }
+        let changed_tags = save_song_offset_delta_to_simfile(simfile_path, delta)?;
+        let _ = song_loading::reload_song_in_cache(simfile_path)?;
+        select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
+        info!(
+            "Saved song offset sync changes to '{}' (updated {} #OFFSET tags; refreshed song cache).",
+            simfile_path.display(),
+            changed_tags
+        );
+        Ok(())
+    }
+
+    fn maybe_begin_gameplay_offset_prompt(
+        &mut self,
+        from: CurrentScreen,
+        target: CurrentScreen,
+        navigate_no_fade: bool,
+    ) -> bool {
+        if self.state.gameplay_offset_save_prompt.is_some() {
+            return true;
+        }
+        if from != CurrentScreen::Gameplay || target == CurrentScreen::Gameplay {
+            return false;
+        }
+        // ITG parity: no save-sync prompt while playing a course.
+        if self.state.session.course_run.is_some() {
+            return false;
+        }
+        let Some(gs) = self.state.screens.gameplay_state.as_ref() else {
+            return false;
+        };
+        if !Self::gameplay_offset_changed(gs) {
+            return false;
+        }
+        self.state.gameplay_offset_save_prompt = Some(GameplayOffsetSavePrompt {
+            target,
+            navigate_no_fade,
+            active_choice: 0,
+        });
+        true
+    }
+
+    fn finalize_gameplay_offset_prompt(
+        &mut self,
+        save_changes: bool,
+        event_loop: &ActiveEventLoop,
+    ) {
+        let Some(prompt) = self.state.gameplay_offset_save_prompt.take() else {
+            return;
+        };
+        if save_changes {
+            let mut song_offset_change: Option<(PathBuf, f32)> = None;
+            if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
+                if Self::gameplay_global_offset_changed(gs) {
+                    config::update_global_offset(gs.global_offset_seconds);
+                }
+                if Self::gameplay_song_offset_changed(gs) {
+                    song_offset_change = Some((
+                        gs.song.simfile_path.clone(),
+                        gs.song_offset_seconds - gs.initial_song_offset_seconds,
+                    ));
+                }
+            }
+            if let Some((simfile_path, delta)) = song_offset_change
+                && let Err(e) = self.save_gameplay_song_offset(simfile_path.as_path(), delta)
+            {
+                warn!("Failed to save song offset sync changes: {e}");
+            }
+        }
+        if prompt.navigate_no_fade {
+            if matches!(self.state.shell.transition, TransitionState::Idle) {
+                self.on_fade_complete(prompt.target, event_loop);
+            }
+            return;
+        }
+        self.handle_navigation_action_after_prompt(prompt.target);
+    }
+
+    fn route_gameplay_offset_prompt_input(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        ev: &InputEvent,
+    ) -> bool {
+        if self.state.screens.current_screen != CurrentScreen::Gameplay
+            || self.state.gameplay_offset_save_prompt.is_none()
+        {
+            return false;
+        }
+        if !ev.pressed {
+            return true;
+        }
+        let decision = match ev.action {
+            input::VirtualAction::p1_left
+            | input::VirtualAction::p1_menu_left
+            | input::VirtualAction::p2_left
+            | input::VirtualAction::p2_menu_left => {
+                let mut moved = false;
+                if let Some(prompt) = self.state.gameplay_offset_save_prompt.as_mut()
+                    && prompt.active_choice > 0
+                {
+                    prompt.active_choice -= 1;
+                    moved = true;
+                }
+                if moved {
+                    crate::core::audio::play_sfx("assets/sounds/change.ogg");
+                }
+                None
+            }
+            input::VirtualAction::p1_right
+            | input::VirtualAction::p1_menu_right
+            | input::VirtualAction::p2_right
+            | input::VirtualAction::p2_menu_right => {
+                let mut moved = false;
+                if let Some(prompt) = self.state.gameplay_offset_save_prompt.as_mut()
+                    && prompt.active_choice < 1
+                {
+                    prompt.active_choice += 1;
+                    moved = true;
+                }
+                if moved {
+                    crate::core::audio::play_sfx("assets/sounds/change.ogg");
+                }
+                None
+            }
+            input::VirtualAction::p1_start
+            | input::VirtualAction::p2_start
+            | input::VirtualAction::p1_select
+            | input::VirtualAction::p2_select => {
+                let save_changes = self
+                    .state
+                    .gameplay_offset_save_prompt
+                    .as_ref()
+                    .is_some_and(|prompt| prompt.active_choice == 0);
+                crate::core::audio::play_sfx("assets/sounds/start.ogg");
+                Some(save_changes)
+            }
+            input::VirtualAction::p1_back | input::VirtualAction::p2_back => None,
+            _ => None,
+        };
+        if let Some(save_changes) = decision {
+            self.finalize_gameplay_offset_prompt(save_changes, event_loop);
+        }
+        true
+    }
+
     fn handle_navigation_action(&mut self, target: CurrentScreen) {
+        self.handle_navigation_action_inner(target, true);
+    }
+
+    fn handle_navigation_action_after_prompt(&mut self, target: CurrentScreen) {
+        self.handle_navigation_action_inner(target, false);
+    }
+
+    fn handle_navigation_action_inner(&mut self, target: CurrentScreen, allow_offset_prompt: bool) {
         let from = self.state.screens.current_screen;
         let mut target = target;
 
@@ -1421,7 +1765,9 @@ impl App {
             target = CurrentScreen::EvaluationSummary;
         }
 
-        self.persist_gameplay_offset_if_changed(from, target);
+        if allow_offset_prompt && self.maybe_begin_gameplay_offset_prompt(from, target, false) {
+            return;
+        }
 
         if from == CurrentScreen::Init && target == CurrentScreen::Menu {
             info!("Instant navigation Init→Menu (out-transition handled by Init screen)");
@@ -1440,17 +1786,6 @@ impl App {
             self.start_actor_fade(from, target);
         } else {
             self.start_global_fade(target);
-        }
-    }
-
-    fn persist_gameplay_offset_if_changed(&self, from: CurrentScreen, to: CurrentScreen) {
-        if from != CurrentScreen::Gameplay || to == CurrentScreen::Gameplay {
-            return;
-        }
-        if let Some(gs) = &self.state.screens.gameplay_state
-            && (gs.global_offset_seconds - gs.initial_global_offset_seconds).abs() > f32::EPSILON
-        {
-            config::update_global_offset(gs.global_offset_seconds);
         }
     }
 
@@ -1827,6 +2162,9 @@ impl App {
         event_loop: &ActiveEventLoop,
         ev: InputEvent,
     ) -> Result<(), Box<dyn Error>> {
+        if self.route_gameplay_offset_prompt_input(event_loop, &ev) {
+            return Ok(());
+        }
         if self.try_handle_late_join(&ev) {
             return Ok(());
         }
@@ -2405,6 +2743,86 @@ impl App {
         ));
     }
 
+    fn append_gameplay_offset_prompt_actors(&self, actors: &mut Vec<Actor>) {
+        if self.state.screens.current_screen != CurrentScreen::Gameplay
+            || self.state.gameplay_offset_save_prompt.is_none()
+        {
+            return;
+        }
+        let Some(gs) = self.state.screens.gameplay_state.as_ref() else {
+            return;
+        };
+        if !Self::gameplay_offset_changed(gs) {
+            return;
+        }
+        let active_choice = self
+            .state
+            .gameplay_offset_save_prompt
+            .as_ref()
+            .map_or(0, |prompt| prompt.active_choice)
+            .min(1);
+        let prompt_text = Self::gameplay_sync_prompt_text(gs);
+        if prompt_text.is_empty() {
+            return;
+        }
+
+        let w = space::screen_width();
+        let h = space::screen_height();
+        let cx = w * 0.5;
+        let cy = h * 0.5;
+        let answer_y = cy + 120.0;
+        let choice_yes_x = cx - 100.0;
+        let choice_no_x = cx + 100.0;
+        let cursor_x = [choice_yes_x, choice_no_x][active_choice as usize];
+        let cursor_color = color::simply_love_rgba(gs.active_color_index);
+
+        actors.push(act!(quad:
+            align(0.0, 0.0):
+            xy(0.0, 0.0):
+            zoomto(w, h):
+            diffuse(0.0, 0.0, 0.0, 0.9):
+            z(GAMEPLAY_OFFSET_PROMPT_Z_BACKDROP)
+        ));
+        actors.push(act!(quad:
+            align(0.5, 0.5):
+            xy(cursor_x, answer_y):
+            setsize(145.0, 40.0):
+            diffuse(cursor_color[0], cursor_color[1], cursor_color[2], 1.0):
+            z(GAMEPLAY_OFFSET_PROMPT_Z_CURSOR)
+        ));
+        actors.push(act!(text:
+            align(0.5, 0.5):
+            xy(cx, cy - 60.0):
+            font("miso"):
+            zoom(0.95):
+            maxwidth(w - 100.0):
+            settext(prompt_text):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(GAMEPLAY_OFFSET_PROMPT_Z_TEXT):
+            horizalign(center)
+        ));
+        actors.push(act!(text:
+            align(0.5, 0.5):
+            xy(choice_yes_x, answer_y):
+            font("wendy"):
+            zoom(0.72):
+            settext("YES"):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(GAMEPLAY_OFFSET_PROMPT_Z_TEXT):
+            horizalign(center)
+        ));
+        actors.push(act!(text:
+            align(0.5, 0.5):
+            xy(choice_no_x, answer_y):
+            font("wendy"):
+            zoom(0.72):
+            settext("NO"):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(GAMEPLAY_OFFSET_PROMPT_Z_TEXT):
+            horizalign(center)
+        ));
+    }
+
     fn get_current_actors(&self) -> (Vec<Actor>, [f32; 4]) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
@@ -2531,6 +2949,7 @@ impl App {
             let params = crate::screens::components::gamepad_overlay::Params { message: msg };
             actors.extend(crate::screens::components::gamepad_overlay::build(params));
         }
+        self.append_gameplay_offset_prompt_actors(&mut actors);
 
         match &self.state.shell.transition {
             TransitionState::FadingOut { .. } => {
@@ -3021,7 +3440,7 @@ impl App {
         event_loop: &ActiveEventLoop,
         key_event: winit::event::KeyEvent,
     ) {
-        // Track Shift key state for raw combos (e.g., global offset adjust)
+        // Track modifier key state for gameplay raw sync combos (F11/F12).
         if let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key {
             use winit::event::ElementState;
             use winit::keyboard::KeyCode;
@@ -3123,39 +3542,42 @@ impl App {
                 }
             }
         } else if self.state.screens.current_screen == CurrentScreen::Gameplay {
-            if key_event.state == winit::event::ElementState::Pressed
-                && !key_event.repeat
-                && self.state.shell.ctrl_held
-                && key_event.physical_key
-                    == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::KeyR)
-                && config::get().keyboard_features
-                && self.state.session.course_run.is_none()
-            {
-                if self.prepare_player_options_for_gameplay_restart() {
-                    let restart_count = self.state.session.gameplay_restart_count.saturating_add(1);
-                    if let Err(e) = self
-                        .handle_action(ScreenAction::Navigate(CurrentScreen::Gameplay), event_loop)
-                    {
-                        log::error!("Failed to restart Gameplay with Ctrl+R: {e}");
+            if self.state.gameplay_offset_save_prompt.is_none() {
+                if key_event.state == winit::event::ElementState::Pressed
+                    && !key_event.repeat
+                    && self.state.shell.ctrl_held
+                    && key_event.physical_key
+                        == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::KeyR)
+                    && config::get().keyboard_features
+                    && self.state.session.course_run.is_none()
+                {
+                    if self.prepare_player_options_for_gameplay_restart() {
+                        let restart_count =
+                            self.state.session.gameplay_restart_count.saturating_add(1);
+                        if let Err(e) = self
+                            .handle_action(ScreenAction::Navigate(CurrentScreen::Gameplay), event_loop)
+                        {
+                            log::error!("Failed to restart Gameplay with Ctrl+R: {e}");
+                        } else {
+                            self.state.session.gameplay_restart_count = restart_count;
+                        }
                     } else {
-                        self.state.session.gameplay_restart_count = restart_count;
-                    }
-                } else {
-                    log::warn!("Ignored Ctrl+R restart: no active gameplay state.");
-                }
-                return;
-            }
-            if let Some(gs) = &mut self.state.screens.gameplay_state {
-                let action = crate::game::gameplay::handle_raw_key_event(
-                    gs,
-                    &key_event,
-                    self.state.shell.shift_held,
-                );
-                if !matches!(action, ScreenAction::None) {
-                    if let Err(e) = self.handle_action(action, event_loop) {
-                        log::error!("Failed to handle Gameplay raw key action: {e}");
+                        log::warn!("Ignored Ctrl+R restart: no active gameplay state.");
                     }
                     return;
+                }
+                if let Some(gs) = &mut self.state.screens.gameplay_state {
+                    let action = crate::game::gameplay::handle_raw_key_event(
+                        gs,
+                        &key_event,
+                        self.state.shell.shift_held,
+                    );
+                    if !matches!(action, ScreenAction::None) {
+                        if let Err(e) = self.handle_action(action, event_loop) {
+                            log::error!("Failed to handle Gameplay raw key action: {e}");
+                        }
+                        return;
+                    }
                 }
             }
         }
@@ -3218,6 +3640,9 @@ impl App {
 
         let prev = self.state.screens.current_screen;
         self.state.screens.current_screen = target;
+        if target != CurrentScreen::Gameplay {
+            self.state.gameplay_offset_save_prompt = None;
+        }
         if target == CurrentScreen::SelectColor {
             select_color::on_enter(&mut self.state.screens.select_color_state);
         }
@@ -4615,14 +5040,19 @@ impl ApplicationHandler<UserEvent> for App {
                         }
                     }
                     TransitionState::Idle => {
-                        if let Some(action) = self.state.screens.step_idle(
-                            delta_time,
-                            now,
-                            &self.state.session,
-                            &self.asset_manager,
-                        ) && !matches!(action, ScreenAction::None)
-                        {
-                            let _ = self.handle_action(action, event_loop);
+                        let gameplay_prompt_active =
+                            self.state.screens.current_screen == CurrentScreen::Gameplay
+                                && self.state.gameplay_offset_save_prompt.is_some();
+                        if !gameplay_prompt_active {
+                            if let Some(action) = self.state.screens.step_idle(
+                                delta_time,
+                                now,
+                                &self.state.session,
+                                &self.asset_manager,
+                            ) && !matches!(action, ScreenAction::None)
+                            {
+                                let _ = self.handle_action(action, event_loop);
+                            }
                         }
                     }
                 }

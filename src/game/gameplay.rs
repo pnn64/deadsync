@@ -1585,6 +1585,8 @@ pub struct State {
     pub play_mine_sounds: bool,
     pub global_offset_seconds: f32,
     pub initial_global_offset_seconds: f32,
+    pub song_offset_seconds: f32,
+    pub initial_song_offset_seconds: f32,
     pub global_visual_delay_seconds: f32,
     pub player_visual_delay_seconds: [f32; MAX_PLAYERS],
     pub current_music_time_visible: [f32; MAX_PLAYERS],
@@ -2981,6 +2983,7 @@ pub fn init(
         players[p].life_history.push((init_music_time, life));
     }
     let assist_clap_rows = build_assist_clap_rows(&notes, note_ranges[0]);
+    let song_offset_seconds = song.offset;
 
     State {
         song,
@@ -3015,6 +3018,8 @@ pub fn init(
         play_mine_sounds: config.mine_hit_sound,
         global_offset_seconds: config.global_offset_seconds,
         initial_global_offset_seconds: config.global_offset_seconds,
+        song_offset_seconds,
+        initial_song_offset_seconds: song_offset_seconds,
         global_visual_delay_seconds,
         player_visual_delay_seconds,
         current_music_time_visible,
@@ -4408,7 +4413,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     } else {
         1.0
     };
-    let song_offset_s = state.song.offset;
+    let song_offset_s = state.song_offset_seconds;
     let global_offset_s = state.global_offset_seconds;
     let lead_in_s = state.audio_lead_in_seconds.max(0.0);
     let player = player_for_col(state, column);
@@ -5108,59 +5113,19 @@ fn run_replay(state: &mut State, now_music_time: f32) {
     }
 }
 
-pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool) -> ScreenAction {
-    use winit::event::ElementState;
-    use winit::keyboard::PhysicalKey;
-
-    if key.state != ElementState::Pressed {
-        return ScreenAction::None;
+#[inline(always)]
+fn mutate_timing_arc(timing: &mut Arc<TimingData>, mut apply: impl FnMut(&mut TimingData)) {
+    if let Some(inner) = Arc::get_mut(timing) {
+        apply(inner);
+        return;
     }
+    let mut cloned = (**timing).clone();
+    apply(&mut cloned);
+    *timing = Arc::new(cloned);
+}
 
-    let PhysicalKey::Code(code) = key.physical_key else {
-        return ScreenAction::None;
-    };
-
-    if code == KeyCode::F7 {
-        let now_music_time = current_music_time_from_stream(state);
-        set_assist_clap_enabled(state, !state.assist_clap_enabled, now_music_time);
-        return ScreenAction::None;
-    }
-
-    if code == KeyCode::F8 {
-        let now_music_time = current_music_time_from_stream(state);
-        set_autoplay_enabled(state, !state.autoplay_enabled, now_music_time);
-        return ScreenAction::None;
-    }
-    if !shift_held {
-        return ScreenAction::None;
-    }
-
-    let delta = match code {
-        KeyCode::F11 => -0.001_f32,
-        KeyCode::F12 => 0.001_f32,
-        _ => return ScreenAction::None,
-    };
-
-    let old_offset = state.global_offset_seconds;
-    let new_offset = old_offset + delta;
-    if (new_offset - old_offset).abs() < 0.000_001_f32 {
-        return ScreenAction::None;
-    }
-
-    let set_global_offset = |timing: &mut Arc<TimingData>| {
-        if let Some(inner) = Arc::get_mut(timing) {
-            inner.set_global_offset_seconds(new_offset);
-            return;
-        }
-        let mut cloned = (**timing).clone();
-        cloned.set_global_offset_seconds(new_offset);
-        *timing = Arc::new(cloned);
-    };
-    set_global_offset(&mut state.timing);
-    for timing in &mut state.timing_players {
-        set_global_offset(timing);
-    }
-
+#[inline(always)]
+fn refresh_timing_after_offset_change(state: &mut State) {
     let num_players = state.num_players;
     let cols_per_player = state.cols_per_player;
     for (time, note) in state.note_time_cache.iter_mut().zip(&state.notes) {
@@ -5192,25 +5157,128 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
     );
     state.notes_end_time = notes_end_time;
     state.music_end_time = music_end_time;
+}
 
-    state.global_offset_seconds = new_offset;
-
-    if (new_offset - state.initial_global_offset_seconds).abs() < 0.000_001_f32 {
-        state.sync_overlay_message = None;
-        return ScreenAction::None;
-    }
-
-    let start_q = quantize_offset_seconds(state.initial_global_offset_seconds);
-    let new_q = quantize_offset_seconds(new_offset);
+#[inline(always)]
+fn quantized_offset_change_line(label: &str, start: f32, new: f32) -> Option<String> {
+    let start_q = quantize_offset_seconds(start);
+    let new_q = quantize_offset_seconds(new);
     let delta_q = new_q - start_q;
     if delta_q.abs() < 0.000_1_f32 {
+        return None;
+    }
+    let direction = if delta_q > 0.0 { "earlier" } else { "later" };
+    Some(format!(
+        "{label} from {start_q:+.3} to {new_q:+.3} (notes {direction})"
+    ))
+}
+
+#[inline(always)]
+fn refresh_sync_overlay_message(state: &mut State) {
+    let mut message = String::new();
+    if let Some(global_line) = quantized_offset_change_line(
+        "Global Offset",
+        state.initial_global_offset_seconds,
+        state.global_offset_seconds,
+    ) {
+        message.push_str(&global_line);
+    }
+    if let Some(song_line) = quantized_offset_change_line(
+        "Song offset",
+        state.initial_song_offset_seconds,
+        state.song_offset_seconds,
+    ) {
+        if !message.is_empty() {
+            message.push('\n');
+        }
+        message.push_str(&song_line);
+    }
+    if message.is_empty() {
         state.sync_overlay_message = None;
+    } else {
+        state.sync_overlay_message = Some(message);
+    }
+}
+
+#[inline(always)]
+fn apply_global_offset_delta(state: &mut State, delta: f32) -> bool {
+    let old_offset = state.global_offset_seconds;
+    let new_offset = old_offset + delta;
+    if (new_offset - old_offset).abs() < 0.000_001_f32 {
+        return false;
+    }
+    mutate_timing_arc(&mut state.timing, |timing| {
+        timing.set_global_offset_seconds(new_offset)
+    });
+    for timing in &mut state.timing_players {
+        mutate_timing_arc(timing, |timing| timing.set_global_offset_seconds(new_offset));
+    }
+    refresh_timing_after_offset_change(state);
+    state.global_offset_seconds = new_offset;
+    refresh_sync_overlay_message(state);
+    true
+}
+
+#[inline(always)]
+fn apply_song_offset_delta(state: &mut State, delta: f32) -> bool {
+    let old_offset = state.song_offset_seconds;
+    let new_offset = old_offset + delta;
+    if (new_offset - old_offset).abs() < 0.000_001_f32 {
+        return false;
+    }
+
+    let timing_shift_seconds = old_offset - new_offset;
+    mutate_timing_arc(&mut state.timing, |timing| {
+        timing.shift_song_offset_seconds(timing_shift_seconds)
+    });
+    for timing in &mut state.timing_players {
+        mutate_timing_arc(timing, |timing| {
+            timing.shift_song_offset_seconds(timing_shift_seconds)
+        });
+    }
+    refresh_timing_after_offset_change(state);
+    state.song_offset_seconds = new_offset;
+    refresh_sync_overlay_message(state);
+    true
+}
+
+pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool) -> ScreenAction {
+    use winit::event::ElementState;
+    use winit::keyboard::PhysicalKey;
+
+    if key.state != ElementState::Pressed {
         return ScreenAction::None;
     }
 
-    let direction = if delta_q > 0.0 { "earlier" } else { "later" };
-    let msg = format!("Global Offset from {start_q:+.3} to {new_q:+.3} (notes {direction})");
-    state.sync_overlay_message = Some(msg);
+    let PhysicalKey::Code(code) = key.physical_key else {
+        return ScreenAction::None;
+    };
+
+    if code == KeyCode::F7 {
+        let now_music_time = current_music_time_from_stream(state);
+        set_assist_clap_enabled(state, !state.assist_clap_enabled, now_music_time);
+        return ScreenAction::None;
+    }
+
+    if code == KeyCode::F8 {
+        let now_music_time = current_music_time_from_stream(state);
+        set_autoplay_enabled(state, !state.autoplay_enabled, now_music_time);
+        return ScreenAction::None;
+    }
+
+    let delta = match code {
+        KeyCode::F11 => -0.001_f32,
+        KeyCode::F12 => 0.001_f32,
+        _ => return ScreenAction::None,
+    };
+
+    if shift_held {
+        let _ = apply_global_offset_delta(state, delta);
+        return ScreenAction::None;
+    }
+    if state.course_display_totals.is_none() {
+        let _ = apply_song_offset_delta(state, delta);
+    }
     ScreenAction::None
 }
 
@@ -5775,7 +5843,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
     } else {
         1.0
     };
-    let song_offset_s = state.song.offset;
+    let song_offset_s = state.song_offset_seconds;
     let global_offset_s = state.global_offset_seconds;
     let lead_in_s = state.audio_lead_in_seconds.max(0.0);
     let cutoff_time = way_off_window.mul_add(-rate, music_time_sec);

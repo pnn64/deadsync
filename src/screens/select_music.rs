@@ -3853,6 +3853,10 @@ pub fn trigger_immediate_refresh(state: &mut State) {
     state.cdtitle_anim_elapsed = 0.0;
 }
 
+pub fn refresh_from_song_cache(state: &mut State) {
+    refresh_after_reload(state);
+}
+
 pub fn reset_preview_after_gameplay(state: &mut State) {
     let was_recent_sort = state.sort_mode == WheelSortMode::Recent;
     let was_popularity_sort = state.sort_mode == WheelSortMode::Popularity;
