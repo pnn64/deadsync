@@ -1985,7 +1985,8 @@ pub fn draw(
             );
             for y in 0..height as usize {
                 let src_row = y * row_bytes;
-                let dst_row = (height as usize - 1 - y) * row_bytes;
+                // Vulkan image copy rows are already top-to-bottom for this swapchain path.
+                let dst_row = y * row_bytes;
                 if swap_rb {
                     let mut x = 0usize;
                     while x < width as usize {
