@@ -219,6 +219,7 @@ pub struct Config {
     pub audio_sample_rate_hz: Option<u32>,
     pub auto_populate_gs_scores: bool,
     pub rate_mod_preserves_pitch: bool,
+    pub enable_arrowcloud: bool,
     pub enable_groovestats: bool,
     pub fastload: bool,
     pub cachesongs: bool,
@@ -264,6 +265,7 @@ impl Default for Config {
             audio_sample_rate_hz: None,
             auto_populate_gs_scores: false,
             rate_mod_preserves_pitch: false,
+            enable_arrowcloud: false,
             enable_groovestats: false,
             fastload: true,
             cachesongs: true,
@@ -344,6 +346,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!("DisplayHeight={}\n", default.display_height));
     content.push_str(&format!("DisplayWidth={}\n", default.display_width));
     content.push_str(&format!("DisplayMonitor={}\n", default.display_monitor));
+    content.push_str(&format!(
+        "EnableArrowCloud={}\n",
+        if default.enable_arrowcloud { "1" } else { "0" }
+    ));
     content.push_str(&format!(
         "EnableGrooveStats={}\n",
         if default.enable_groovestats { "1" } else { "0" }
@@ -538,6 +544,10 @@ pub fn load() {
                     .get("Options", "EnableGrooveStats")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.enable_groovestats, |v| v != 0);
+                cfg.enable_arrowcloud = conf
+                    .get("Options", "EnableArrowCloud")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.enable_arrowcloud, |v| v != 0);
                 cfg.mine_hit_sound = conf
                     .get("Options", "MineHitSound")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -794,6 +804,7 @@ pub fn load() {
                     "DisplayHeight",
                     "DisplayWidth",
                     "FastLoad",
+                    "EnableArrowCloud",
                     "EnableGrooveStats",
                     "FullscreenType",
                     "GamepadBackend",
@@ -1495,6 +1506,10 @@ fn save_without_keymaps() {
     ));
     content.push_str(&format!("DisplayHeight={}\n", cfg.display_height));
     content.push_str(&format!("DisplayWidth={}\n", cfg.display_width));
+    content.push_str(&format!(
+        "EnableArrowCloud={}\n",
+        if cfg.enable_arrowcloud { "1" } else { "0" }
+    ));
     content.push_str(&format!(
         "EnableGrooveStats={}\n",
         if cfg.enable_groovestats { "1" } else { "0" }

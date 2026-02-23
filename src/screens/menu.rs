@@ -1,7 +1,7 @@
 use crate::act;
 // Screen navigation is handled in app.rs
 use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::network::{self, ConnectionStatus};
+use crate::core::network::{self, ArrowCloudConnectionStatus, ConnectionStatus};
 use crate::game::course::get_course_cache;
 use crate::game::song::get_song_cache;
 use crate::screens::components::logo::{self, LogoParams};
@@ -273,6 +273,50 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         }
     }
     actors.extend(groovestats_actors);
+
+    // --- Arrow Cloud Info Pane (top-right) ---
+    let mut arrowcloud_actors = Vec::new();
+    let ac_status = network::get_arrowcloud_status();
+    let ac_enabled = crate::config::get().enable_arrowcloud;
+
+    // Match the GrooveStats frame zoom for parity.
+    let ac_frame_zoom = 0.8;
+    let ac_base_x = screen_width() - 10.0;
+    let ac_base_y = 15.0;
+
+    let (ac_main_text, ac_lines): (String, Vec<String>) = if !ac_enabled {
+        ("❌ Arrow Cloud".to_string(), vec!["Disabled".to_string()])
+    } else {
+        match ac_status {
+            ArrowCloudConnectionStatus::Pending => ("     Arrow Cloud".to_string(), Vec::new()),
+            ArrowCloudConnectionStatus::Connected => ("✔ Arrow Cloud".to_string(), Vec::new()),
+            ArrowCloudConnectionStatus::Error(msg) => {
+                let low = msg.to_ascii_lowercase();
+                let line = if low.contains("timed out") {
+                    "Timed Out"
+                } else if low.contains("blocked") {
+                    "Host Blocked"
+                } else {
+                    "Cannot Connect"
+                };
+                ("❌ Arrow Cloud".to_string(), vec![line.to_string()])
+            }
+        }
+    };
+
+    arrowcloud_actors.push(act!(text: font("miso"): settext(ac_main_text): align(1.0, 0.0): xy(ac_base_x, ac_base_y): zoom(ac_frame_zoom): horizalign(right): z(200) ));
+
+    let ac_line_height_offset = 18.0;
+    for (i, line_text) in ac_lines.iter().enumerate() {
+        arrowcloud_actors.push(act!(text: font("miso"): settext(line_text.clone()): align(1.0, 0.0): xy(ac_base_x, (ac_line_height_offset * (i as f32 + 1.0)).mul_add(ac_frame_zoom, ac_base_y)): zoom(ac_frame_zoom): horizalign(right): z(200)));
+    }
+
+    for actor in &mut arrowcloud_actors {
+        if let Actor::Text { color, .. } = actor {
+            color[3] *= alpha_multiplier;
+        }
+    }
+    actors.extend(arrowcloud_actors);
 
     actors
 }
