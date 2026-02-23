@@ -290,6 +290,7 @@ pub struct SessionState {
     preferred_difficulty_index: usize,
     session_start_time: Option<Instant>,
     played_stages: Vec<stage_stats::StageSummary>,
+    gameplay_restart_count: u32,
     course_run: Option<CourseRunState>,
     course_eval_pages: Vec<evaluation::State>,
     course_eval_page_index: usize,
@@ -417,6 +418,7 @@ impl SessionState {
             preferred_difficulty_index,
             session_start_time: None,
             played_stages: Vec::new(),
+            gameplay_restart_count: 0,
             course_run: None,
             course_eval_pages: Vec::new(),
             course_eval_page_index: 0,
@@ -3120,10 +3122,13 @@ impl App {
                 && self.state.session.course_run.is_none()
             {
                 if self.prepare_player_options_for_gameplay_restart() {
+                    let restart_count = self.state.session.gameplay_restart_count.saturating_add(1);
                     if let Err(e) = self
                         .handle_action(ScreenAction::Navigate(CurrentScreen::Gameplay), event_loop)
                     {
                         log::error!("Failed to restart Gameplay with Ctrl+R: {e}");
+                    } else {
+                        self.state.session.gameplay_restart_count = restart_count;
                     }
                 } else {
                     log::warn!("Ignored Ctrl+R restart: no active gameplay state.");
@@ -3597,6 +3602,9 @@ impl App {
     ) -> Vec<Command> {
         let mut commands = Vec::new();
         if target == CurrentScreen::Gameplay {
+            if prev != CurrentScreen::Gameplay {
+                self.state.session.gameplay_restart_count = 0;
+            }
             let mut course_display_carry = None;
             let course_display_totals = self
                 .state
@@ -3758,6 +3766,13 @@ impl App {
                         let stage_num = course.next_stage_index.saturating_add(1);
                         let total = course.stages.len().max(1);
                         Arc::from(format!("STAGE {stage_num} / {total}"))
+                    } else if config::get().keyboard_features
+                        && self.state.session.gameplay_restart_count > 0
+                    {
+                        Arc::from(format!(
+                            "RESTART {}",
+                            self.state.session.gameplay_restart_count
+                        ))
                     } else {
                         Arc::from("EVENT")
                     };
