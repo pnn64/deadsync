@@ -202,6 +202,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let mut groovestats_actors = Vec::new();
     let status = network::get_status();
     let gs_enabled = crate::config::get().enable_groovestats;
+    let gs_service_name = network::groovestats_service_name();
 
     // Mimic the ActorFrame's zoom(0.8) which affects both size and position offsets.
     let frame_zoom = 0.8;
@@ -212,7 +213,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         ("❌ GrooveStats".to_string(), vec!["Disabled".to_string()])
     } else {
         match status {
-            ConnectionStatus::Pending => ("     GrooveStats".to_string(), Vec::new()),
+            ConnectionStatus::Pending => (format!("     {gs_service_name}"), Vec::new()),
             ConnectionStatus::Error(msg) => {
                 let simplified_msg = match msg.as_str() {
                     "Machine Offline" => "Machine Offline".to_string(),
@@ -223,7 +224,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
                 };
                 // When there is a connection error, SL shows the error message in Service1 and "❌ GrooveStats" as main text.
                 (
-                    "GrooveStats not connected".to_string(),
+                    format!("{gs_service_name} not connected"),
                     vec![simplified_msg],
                 )
             }
@@ -240,7 +241,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
                 }
 
                 let text = if disabled_services.is_empty() {
-                    "✔ GrooveStats".to_string()
+                    format!("✔ {gs_service_name}")
                 } else if disabled_services.len() == 3 {
                     "❌ GrooveStats".to_string()
                 } else {

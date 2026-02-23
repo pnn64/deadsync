@@ -20,8 +20,6 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use bincode::{Decode, Encode};
 
-const API_URL: &str = "https://api.groovestats.com/player-leaderboards.php";
-
 // --- Grade Definitions ---
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
@@ -1834,8 +1832,9 @@ fn fetch_player_leaderboards_internal(
     let max_entries = max_entries.max(1);
     let max_entries_str = max_entries.to_string();
     let agent = network::get_agent();
+    let api_url = network::groovestats_player_leaderboards_url();
     let response = agent
-        .get(API_URL)
+        .get(&api_url)
         .header("x-api-key-player-1", api_key)
         .query("chartHashP1", chart_hash)
         .query("maxLeaderboardResults", &max_entries_str)
@@ -2645,8 +2644,9 @@ pub fn fetch_and_store_grade(
     );
 
     let agent = network::get_agent();
+    let api_url = network::groovestats_player_leaderboards_url();
     let response = agent
-        .get(API_URL)
+        .get(&api_url)
         .header("x-api-key-player-1", &profile.groovestats_api_key)
         .query("chartHashP1", &chart_hash)
         .call()?;

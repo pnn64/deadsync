@@ -220,6 +220,7 @@ pub struct Config {
     pub auto_populate_gs_scores: bool,
     pub rate_mod_preserves_pitch: bool,
     pub enable_arrowcloud: bool,
+    pub enable_boogiestats: bool,
     pub enable_groovestats: bool,
     pub fastload: bool,
     pub cachesongs: bool,
@@ -266,6 +267,7 @@ impl Default for Config {
             auto_populate_gs_scores: false,
             rate_mod_preserves_pitch: false,
             enable_arrowcloud: false,
+            enable_boogiestats: false,
             enable_groovestats: false,
             fastload: true,
             cachesongs: true,
@@ -349,6 +351,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "EnableArrowCloud={}\n",
         if default.enable_arrowcloud { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "EnableBoogieStats={}\n",
+        if default.enable_boogiestats { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "EnableGrooveStats={}\n",
@@ -548,6 +554,10 @@ pub fn load() {
                     .get("Options", "EnableArrowCloud")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.enable_arrowcloud, |v| v != 0);
+                cfg.enable_boogiestats = conf
+                    .get("Options", "EnableBoogieStats")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.enable_boogiestats, |v| v != 0);
                 cfg.mine_hit_sound = conf
                     .get("Options", "MineHitSound")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -805,6 +815,7 @@ pub fn load() {
                     "DisplayWidth",
                     "FastLoad",
                     "EnableArrowCloud",
+                    "EnableBoogieStats",
                     "EnableGrooveStats",
                     "FullscreenType",
                     "GamepadBackend",
@@ -1509,6 +1520,10 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "EnableArrowCloud={}\n",
         if cfg.enable_arrowcloud { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "EnableBoogieStats={}\n",
+        if cfg.enable_boogiestats { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "EnableGrooveStats={}\n",

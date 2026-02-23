@@ -4,7 +4,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-const GROOVESTATS_API_URL: &str = "https://api.groovestats.com/new-session.php?chartHashVersion=3";
+const GROOVESTATS_API_BASE_URL: &str = "https://api.groovestats.com";
+const BOOGIESTATS_API_BASE_URL: &str = "https://boogiestats.andr.host";
+const GROOVESTATS_NEW_SESSION_PATH: &str = "new-session.php?chartHashVersion=3";
 const ARROWCLOUD_API_URL: &str = "https://api.arrowcloud.dance/";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -57,6 +59,39 @@ pub fn get_arrowcloud_status() -> ArrowCloudConnectionStatus {
     ARROWCLOUD_CONNECTION_STATUS.lock().unwrap().clone()
 }
 
+pub fn is_boogiestats_active() -> bool {
+    let cfg = crate::config::get();
+    cfg.enable_groovestats && cfg.enable_boogiestats
+}
+
+pub fn groovestats_service_name() -> &'static str {
+    if is_boogiestats_active() {
+        "BoogieStats"
+    } else {
+        "GrooveStats"
+    }
+}
+
+pub fn groovestats_api_base_url() -> &'static str {
+    if is_boogiestats_active() {
+        BOOGIESTATS_API_BASE_URL
+    } else {
+        GROOVESTATS_API_BASE_URL
+    }
+}
+
+pub fn groovestats_player_leaderboards_url() -> String {
+    format!("{}/player-leaderboards.php", groovestats_api_base_url())
+}
+
+fn groovestats_new_session_url() -> String {
+    format!(
+        "{}/{}",
+        groovestats_api_base_url(),
+        GROOVESTATS_NEW_SESSION_PATH
+    )
+}
+
 fn set_status(new_status: ConnectionStatus) {
     *CONNECTION_STATUS.lock().unwrap() = new_status;
 }
@@ -78,7 +113,10 @@ pub fn init() {
 
     if cfg.enable_groovestats {
         set_status(ConnectionStatus::Pending);
-        info!("Initializing GrooveStats network check...");
+        info!(
+            "Initializing {} network check...",
+            groovestats_service_name()
+        );
         thread::spawn(perform_check);
     } else {
         set_status(ConnectionStatus::Error("Disabled".into()));
@@ -94,17 +132,19 @@ pub fn init() {
 }
 
 fn perform_check() {
-    info!("Performing GrooveStats connectivity check...");
+    let service_name = groovestats_service_name();
+    info!("Performing {service_name} connectivity check...");
 
     let agent = get_agent();
-    match agent.get(GROOVESTATS_API_URL).call() {
+    let api_url = groovestats_new_session_url();
+    match agent.get(&api_url).call() {
         Ok(resp) => {
             let mut body = resp.into_body();
             match body.read_json::<ApiResponse>() {
                 Ok(data) => {
                     if data.services_result == "OK" {
-                        println!("Connected to GrooveStats!"); // per your requirement
-                        info!("Successfully connected to GrooveStats.");
+                        println!("Connected to {service_name}!"); // per your requirement
+                        info!("Successfully connected to {service_name}.");
                         let services = Services {
                             get_scores: data.services_allowed.player_scores,
                             leaderboard: data.services_allowed.player_leaderboards,
@@ -117,13 +157,13 @@ fn perform_check() {
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to parse GrooveStats response: {e}");
+                    warn!("Failed to parse {service_name} response: {e}");
                     set_status(ConnectionStatus::Error("Failed to Parse".into()));
                 }
             }
         }
         Err(e) => {
-            warn!("HTTP error to GrooveStats: {e}");
+            warn!("HTTP error to {service_name}: {e}");
             set_status(ConnectionStatus::Error(format!("HTTP error: {e}")));
         }
     }
