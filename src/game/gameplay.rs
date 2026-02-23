@@ -97,6 +97,8 @@ const AUTOPLAY_TAP_RELEASE_SECONDS: f32 = 0.005;
 const AUTOPLAY_HOLD_RELEASE_SECONDS: f32 = 0.001;
 const AUTOPLAY_OFFSET_EPSILON_SECONDS: f32 = 0.000_001;
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
+pub const AUTOSYNC_OFFSET_SAMPLE_COUNT: usize = 24;
+const AUTOSYNC_STDDEV_MAX_SECONDS: f32 = 0.03;
 
 #[inline(always)]
 fn player_draw_scale(profile: &profile::Profile) -> f32 {
@@ -124,6 +126,13 @@ impl Default for LeadInTiming {
 pub enum HoldToExitKey {
     Start,
     Back,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AutosyncMode {
+    Off,
+    Song,
+    Machine,
 }
 
 #[inline(always)]
@@ -1587,6 +1596,10 @@ pub struct State {
     pub initial_global_offset_seconds: f32,
     pub song_offset_seconds: f32,
     pub initial_song_offset_seconds: f32,
+    pub autosync_mode: AutosyncMode,
+    pub autosync_offset_samples: [f32; AUTOSYNC_OFFSET_SAMPLE_COUNT],
+    pub autosync_offset_sample_count: usize,
+    pub autosync_standard_deviation: f32,
     pub global_visual_delay_seconds: f32,
     pub player_visual_delay_seconds: [f32; MAX_PLAYERS],
     pub current_music_time_visible: [f32; MAX_PLAYERS],
@@ -3020,6 +3033,10 @@ pub fn init(
         initial_global_offset_seconds: config.global_offset_seconds,
         song_offset_seconds,
         initial_song_offset_seconds: song_offset_seconds,
+        autosync_mode: AutosyncMode::Off,
+        autosync_offset_samples: [0.0; AUTOSYNC_OFFSET_SAMPLE_COUNT],
+        autosync_offset_sample_count: 0,
+        autosync_standard_deviation: 0.0,
         global_visual_delay_seconds,
         player_visual_delay_seconds,
         current_music_time_visible,
@@ -5174,6 +5191,106 @@ fn quantized_offset_change_line(label: &str, start: f32, new: f32) -> Option<Str
 }
 
 #[inline(always)]
+pub const fn autosync_mode_status_line(mode: AutosyncMode) -> Option<&'static str> {
+    match mode {
+        AutosyncMode::Off => None,
+        AutosyncMode::Song => Some("AutoSync Song"),
+        AutosyncMode::Machine => Some("AutoSync Machine"),
+    }
+}
+
+#[inline(always)]
+fn cycle_autosync_mode(state: &mut State) {
+    let mut next = match state.autosync_mode {
+        AutosyncMode::Off => AutosyncMode::Song,
+        AutosyncMode::Song => AutosyncMode::Machine,
+        AutosyncMode::Machine => AutosyncMode::Off,
+    };
+    if state.course_display_totals.is_some() && next == AutosyncMode::Song {
+        next = AutosyncMode::Machine;
+    }
+    state.autosync_mode = next;
+}
+
+#[inline(always)]
+fn autosync_mean(samples: &[f32; AUTOSYNC_OFFSET_SAMPLE_COUNT]) -> f32 {
+    let mut sum = 0.0_f32;
+    for value in samples {
+        sum += *value;
+    }
+    sum / AUTOSYNC_OFFSET_SAMPLE_COUNT as f32
+}
+
+#[inline(always)]
+fn autosync_stddev(samples: &[f32; AUTOSYNC_OFFSET_SAMPLE_COUNT], mean: f32) -> f32 {
+    let mut dev = 0.0_f32;
+    for value in samples {
+        let d = *value - mean;
+        dev += d * d;
+    }
+    (dev / AUTOSYNC_OFFSET_SAMPLE_COUNT as f32).sqrt()
+}
+
+#[inline(always)]
+fn apply_autosync_offset_correction(state: &mut State, note_off_by_seconds: f32) {
+    if !note_off_by_seconds.is_finite() || state.autosync_mode == AutosyncMode::Off {
+        return;
+    }
+    let sample_ix = state
+        .autosync_offset_sample_count
+        .min(AUTOSYNC_OFFSET_SAMPLE_COUNT.saturating_sub(1));
+    state.autosync_offset_samples[sample_ix] = note_off_by_seconds;
+    state.autosync_offset_sample_count = state.autosync_offset_sample_count.saturating_add(1);
+    if state.autosync_offset_sample_count < AUTOSYNC_OFFSET_SAMPLE_COUNT {
+        return;
+    }
+
+    let mean = autosync_mean(&state.autosync_offset_samples);
+    let stddev = autosync_stddev(&state.autosync_offset_samples, mean);
+    if stddev < AUTOSYNC_STDDEV_MAX_SECONDS {
+        match state.autosync_mode {
+            AutosyncMode::Off => {}
+            AutosyncMode::Song => {
+                if state.course_display_totals.is_none() {
+                    let _ = apply_song_offset_delta(state, mean);
+                }
+            }
+            AutosyncMode::Machine => {
+                let _ = apply_global_offset_delta(state, mean);
+            }
+        }
+    }
+
+    state.autosync_standard_deviation = stddev;
+    state.autosync_offset_sample_count = 0;
+}
+
+#[inline(always)]
+fn apply_autosync_for_row_hits(state: &mut State, judgments_in_row: &[Judgment]) {
+    if state.replay_mode
+        || autoplay_blocks_scoring(state)
+        || state.autosync_mode == AutosyncMode::Off
+    {
+        return;
+    }
+    // ITG parity: AdjustSync::HandleAutosync() is disabled in course mode.
+    if state.course_display_totals.is_some() {
+        return;
+    }
+    for judgment in judgments_in_row {
+        if !matches!(
+            judgment.grade,
+            JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
+        ) {
+            continue;
+        }
+        // ITG's fNoteOffset is positive when stepping early.
+        let note_off_by_seconds = -judgment.time_error_ms * 0.001;
+        apply_autosync_offset_correction(state, note_off_by_seconds);
+    }
+}
+
+#[inline(always)]
 fn refresh_sync_overlay_message(state: &mut State) {
     let mut message = String::new();
     if let Some(global_line) = quantized_offset_change_line(
@@ -5254,6 +5371,14 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
         return ScreenAction::None;
     };
 
+    if code == KeyCode::F6 {
+        if key.repeat {
+            return ScreenAction::None;
+        }
+        cycle_autosync_mode(state);
+        return ScreenAction::None;
+    }
+
     if code == KeyCode::F7 {
         let now_music_time = current_music_time_from_stream(state);
         set_assist_clap_enabled(state, !state.assist_clap_enabled, now_music_time);
@@ -5307,6 +5432,7 @@ fn finalize_row_judgment(
     let Some(final_judgment) = final_judgment else {
         return;
     };
+    apply_autosync_for_row_hits(state, &judgments_in_row);
     record_display_window_counts(state, player, &final_judgment);
     let final_grade = final_judgment.grade;
     if scoring_blocked {

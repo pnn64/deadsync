@@ -260,7 +260,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // ITGmania/Simply Love parity: ScreenSyncOverlay status text.
     {
-        let mut status_lines: Vec<String> = Vec::with_capacity(2);
+        let mut status_lines: Vec<String> = Vec::with_capacity(4);
         if state.autoplay_enabled {
             if let Some(replay_text) = &state.replay_status_text {
                 status_lines.push(replay_text.clone());
@@ -270,6 +270,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
         if assist_clap_is_enabled(state) {
             status_lines.push("Assist Clap".to_string());
+        }
+        if let Some(line) = crate::game::gameplay::autosync_mode_status_line(state.autosync_mode) {
+            status_lines.push(line.to_string());
         }
         if let Some(msg) = &state.sync_overlay_message {
             status_lines.push(msg.clone());
@@ -283,6 +286,32 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 xy(screen_center_x(), screen_center_y() + 150.0):
                 shadowlength(2.0):
                 strokecolor(0.0, 0.0, 0.0, 1.0):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(901)
+            ));
+        }
+
+        if state.autosync_mode != crate::game::gameplay::AutosyncMode::Off {
+            let (old_offset, new_offset) =
+                if state.autosync_mode == crate::game::gameplay::AutosyncMode::Machine {
+                    (state.initial_global_offset_seconds, state.global_offset_seconds)
+                } else {
+                    (state.initial_song_offset_seconds, state.song_offset_seconds)
+                };
+            let collecting_sample = state
+                .autosync_offset_sample_count
+                .saturating_add(1)
+                .min(crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT);
+            let adjustments = format!(
+                "Old offset: {old_offset:0.3}\nNew offset: {new_offset:0.3}\nStandard deviation: {stddev:0.3}\nCollecting sample: {collecting_sample} / {max_samples}",
+                stddev = state.autosync_standard_deviation,
+                max_samples = crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT,
+            );
+            actors.push(act!(text:
+                font("miso"):
+                settext(adjustments):
+                align(0.5, 0.5):
+                xy(screen_center_x() + 160.0, screen_center_y()):
                 diffuse(1.0, 1.0, 1.0, 1.0):
                 z(901)
             ));
