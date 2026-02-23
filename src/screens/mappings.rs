@@ -169,27 +169,25 @@ pub enum ActiveSlot {
     P2Secondary,
 }
 
-impl ActiveSlot {
-    #[inline(always)]
-    pub const fn next(self) -> Self {
-        use ActiveSlot::{P1Primary, P1Secondary, P2Primary, P2Secondary};
-        match self {
-            P1Primary => P1Secondary,
-            P1Secondary => P2Primary,
-            P2Primary => P2Secondary,
-            P2Secondary => P1Primary,
-        }
+#[inline(always)]
+pub const fn active_slot_next(slot: ActiveSlot) -> ActiveSlot {
+    use ActiveSlot::{P1Primary, P1Secondary, P2Primary, P2Secondary};
+    match slot {
+        P1Primary => P1Secondary,
+        P1Secondary => P2Primary,
+        P2Primary => P2Secondary,
+        P2Secondary => P1Primary,
     }
+}
 
-    #[inline(always)]
-    pub const fn prev(self) -> Self {
-        use ActiveSlot::{P1Primary, P1Secondary, P2Primary, P2Secondary};
-        match self {
-            P1Primary => P2Secondary,
-            P1Secondary => P1Primary,
-            P2Primary => P1Secondary,
-            P2Secondary => P2Primary,
-        }
+#[inline(always)]
+pub const fn active_slot_prev(slot: ActiveSlot) -> ActiveSlot {
+    use ActiveSlot::{P1Primary, P1Secondary, P2Primary, P2Secondary};
+    match slot {
+        P1Primary => P2Secondary,
+        P1Secondary => P1Primary,
+        P2Primary => P1Secondary,
+        P2Secondary => P2Primary,
     }
 }
 
@@ -486,7 +484,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAc
         KeyCode::ArrowLeft => {
             if is_pressed && state.selected_row < NUM_MAPPING_ROWS {
                 let old_slot = state.active_slot;
-                let new_slot = state.active_slot.prev();
+                let new_slot = active_slot_prev(state.active_slot);
                 if new_slot != old_slot {
                     state.active_slot = new_slot;
                     state.slot_anim_from = old_slot;
@@ -499,7 +497,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAc
         KeyCode::ArrowRight => {
             if is_pressed && state.selected_row < NUM_MAPPING_ROWS {
                 let old_slot = state.active_slot;
-                let new_slot = state.active_slot.next();
+                let new_slot = active_slot_next(state.active_slot);
                 if new_slot != old_slot {
                     state.active_slot = new_slot;
                     state.slot_anim_from = old_slot;
@@ -642,7 +640,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
                 let old_slot = state.active_slot;
-                let new_slot = state.active_slot.prev();
+                let new_slot = active_slot_prev(state.active_slot);
                 if new_slot != old_slot {
                     state.active_slot = new_slot;
                     state.slot_anim_from = old_slot;
@@ -655,7 +653,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
                 let old_slot = state.active_slot;
-                let new_slot = state.active_slot.next();
+                let new_slot = active_slot_next(state.active_slot);
                 if new_slot != old_slot {
                     state.active_slot = new_slot;
                     state.slot_anim_from = old_slot;

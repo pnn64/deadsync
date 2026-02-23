@@ -316,60 +316,68 @@ pub(crate) enum EvalPane {
     TimingHardEx,
 }
 
-impl EvalPane {
-    #[inline(always)]
-    const fn default_for(show_fa_plus_pane: bool) -> Self {
-        if show_fa_plus_pane {
-            Self::FaPlus
-        } else {
-            Self::Standard
-        }
+#[inline(always)]
+const fn eval_pane_default_for(show_fa_plus_pane: bool) -> EvalPane {
+    if show_fa_plus_pane {
+        EvalPane::FaPlus
+    } else {
+        EvalPane::Standard
     }
+}
 
-    #[inline(always)]
-    fn next(self, has_hard_ex: bool, has_online_panes: bool, has_gs: bool) -> Self {
-        // Order (per user parity request):
-        // ITG -> EX -> H.EX -> Arrow breakdown -> Machine -> QR -> GS -> Timing -> Timing EX -> Timing H.EX -> ITG
-        match (self, has_hard_ex, has_online_panes, has_gs) {
-            (Self::Standard, _, _, _) => Self::FaPlus,
-            (Self::FaPlus, true, _, _) => Self::HardEx,
-            (Self::FaPlus, false, _, _) => Self::Column,
-            (Self::HardEx, true, _, _) => Self::Column,
-            (Self::HardEx, false, _, _) => Self::Standard,
-            (Self::Column, _, _, _) => Self::MachineRecords,
-            (Self::MachineRecords, _, true, _) => Self::QrCode,
-            (Self::MachineRecords, _, false, _) => Self::Timing,
-            (Self::QrCode, _, true, true) => Self::GrooveStats,
-            (Self::QrCode, _, true, false) => Self::Timing,
-            (Self::QrCode, _, false, _) => Self::Timing,
-            (Self::GrooveStats, _, _, _) => Self::Timing,
-            (Self::Timing, _, _, _) => Self::TimingEx,
-            (Self::TimingEx, true, _, _) => Self::TimingHardEx,
-            (Self::TimingEx, false, _, _) => Self::Standard,
-            (Self::TimingHardEx, _, _, _) => Self::Standard,
-        }
+#[inline(always)]
+fn eval_pane_next(
+    pane: EvalPane,
+    has_hard_ex: bool,
+    has_online_panes: bool,
+    has_gs: bool,
+) -> EvalPane {
+    // Order (per user parity request):
+    // ITG -> EX -> H.EX -> Arrow breakdown -> Machine -> QR -> GS -> Timing -> Timing EX -> Timing H.EX -> ITG
+    match (pane, has_hard_ex, has_online_panes, has_gs) {
+        (EvalPane::Standard, _, _, _) => EvalPane::FaPlus,
+        (EvalPane::FaPlus, true, _, _) => EvalPane::HardEx,
+        (EvalPane::FaPlus, false, _, _) => EvalPane::Column,
+        (EvalPane::HardEx, true, _, _) => EvalPane::Column,
+        (EvalPane::HardEx, false, _, _) => EvalPane::Standard,
+        (EvalPane::Column, _, _, _) => EvalPane::MachineRecords,
+        (EvalPane::MachineRecords, _, true, _) => EvalPane::QrCode,
+        (EvalPane::MachineRecords, _, false, _) => EvalPane::Timing,
+        (EvalPane::QrCode, _, true, true) => EvalPane::GrooveStats,
+        (EvalPane::QrCode, _, true, false) => EvalPane::Timing,
+        (EvalPane::QrCode, _, false, _) => EvalPane::Timing,
+        (EvalPane::GrooveStats, _, _, _) => EvalPane::Timing,
+        (EvalPane::Timing, _, _, _) => EvalPane::TimingEx,
+        (EvalPane::TimingEx, true, _, _) => EvalPane::TimingHardEx,
+        (EvalPane::TimingEx, false, _, _) => EvalPane::Standard,
+        (EvalPane::TimingHardEx, _, _, _) => EvalPane::Standard,
     }
+}
 
-    #[inline(always)]
-    fn prev(self, has_hard_ex: bool, has_online_panes: bool, has_gs: bool) -> Self {
-        match (self, has_hard_ex, has_online_panes, has_gs) {
-            (Self::Standard, true, _, _) => Self::TimingHardEx,
-            (Self::Standard, false, _, _) => Self::TimingEx,
-            (Self::TimingHardEx, _, _, _) => Self::TimingEx,
-            (Self::TimingEx, _, _, _) => Self::Timing,
-            (Self::Timing, _, true, true) => Self::GrooveStats,
-            (Self::Timing, _, true, false) => Self::QrCode,
-            (Self::Timing, _, false, _) => Self::MachineRecords,
-            (Self::GrooveStats, _, true, _) => Self::QrCode,
-            (Self::GrooveStats, _, false, _) => Self::MachineRecords,
-            (Self::QrCode, _, _, _) => Self::MachineRecords,
-            (Self::MachineRecords, _, _, _) => Self::Column,
-            (Self::Column, true, _, _) => Self::HardEx,
-            (Self::Column, false, _, _) => Self::FaPlus,
-            (Self::HardEx, true, _, _) => Self::FaPlus,
-            (Self::HardEx, false, _, _) => Self::Standard,
-            (Self::FaPlus, _, _, _) => Self::Standard,
-        }
+#[inline(always)]
+fn eval_pane_prev(
+    pane: EvalPane,
+    has_hard_ex: bool,
+    has_online_panes: bool,
+    has_gs: bool,
+) -> EvalPane {
+    match (pane, has_hard_ex, has_online_panes, has_gs) {
+        (EvalPane::Standard, true, _, _) => EvalPane::TimingHardEx,
+        (EvalPane::Standard, false, _, _) => EvalPane::TimingEx,
+        (EvalPane::TimingHardEx, _, _, _) => EvalPane::TimingEx,
+        (EvalPane::TimingEx, _, _, _) => EvalPane::Timing,
+        (EvalPane::Timing, _, true, true) => EvalPane::GrooveStats,
+        (EvalPane::Timing, _, true, false) => EvalPane::QrCode,
+        (EvalPane::Timing, _, false, _) => EvalPane::MachineRecords,
+        (EvalPane::GrooveStats, _, true, _) => EvalPane::QrCode,
+        (EvalPane::GrooveStats, _, false, _) => EvalPane::MachineRecords,
+        (EvalPane::QrCode, _, _, _) => EvalPane::MachineRecords,
+        (EvalPane::MachineRecords, _, _, _) => EvalPane::Column,
+        (EvalPane::Column, true, _, _) => EvalPane::HardEx,
+        (EvalPane::Column, false, _, _) => EvalPane::FaPlus,
+        (EvalPane::HardEx, true, _, _) => EvalPane::FaPlus,
+        (EvalPane::HardEx, false, _, _) => EvalPane::Standard,
+        (EvalPane::FaPlus, _, _, _) => EvalPane::Standard,
     }
 }
 
@@ -382,27 +390,25 @@ enum EvalGraphPane {
     Foot,
 }
 
-impl EvalGraphPane {
-    #[inline(always)]
-    const fn next(self) -> Self {
-        match self {
-            Self::Itg => Self::Ex,
-            Self::Ex => Self::HardEx,
-            Self::HardEx => Self::Arrow,
-            Self::Arrow => Self::Foot,
-            Self::Foot => Self::Itg,
-        }
+#[inline(always)]
+const fn eval_graph_next(pane: EvalGraphPane) -> EvalGraphPane {
+    match pane {
+        EvalGraphPane::Itg => EvalGraphPane::Ex,
+        EvalGraphPane::Ex => EvalGraphPane::HardEx,
+        EvalGraphPane::HardEx => EvalGraphPane::Arrow,
+        EvalGraphPane::Arrow => EvalGraphPane::Foot,
+        EvalGraphPane::Foot => EvalGraphPane::Itg,
     }
+}
 
-    #[inline(always)]
-    const fn prev(self) -> Self {
-        match self {
-            Self::Itg => Self::Foot,
-            Self::Ex => Self::Itg,
-            Self::HardEx => Self::Ex,
-            Self::Arrow => Self::HardEx,
-            Self::Foot => Self::Arrow,
-        }
+#[inline(always)]
+const fn eval_graph_prev(pane: EvalGraphPane) -> EvalGraphPane {
+    match pane {
+        EvalGraphPane::Itg => EvalGraphPane::Foot,
+        EvalGraphPane::Ex => EvalGraphPane::Itg,
+        EvalGraphPane::HardEx => EvalGraphPane::Ex,
+        EvalGraphPane::Arrow => EvalGraphPane::HardEx,
+        EvalGraphPane::Foot => EvalGraphPane::Arrow,
     }
 }
 
@@ -809,18 +815,18 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
         match play_style {
             profile::PlayStyle::Versus => {
-                active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
-                    EvalPane::default_for(si.show_fa_plus_pane)
-                });
-                active_pane[1] = score_info[1].as_ref().map_or(EvalPane::Standard, |si| {
-                    EvalPane::default_for(si.show_fa_plus_pane)
-                });
+                active_pane[0] = score_info[0]
+                    .as_ref()
+                    .map_or(EvalPane::Standard, |si| eval_pane_default_for(si.show_fa_plus_pane));
+                active_pane[1] = score_info[1]
+                    .as_ref()
+                    .map_or(EvalPane::Standard, |si| eval_pane_default_for(si.show_fa_plus_pane));
             }
             profile::PlayStyle::Single | profile::PlayStyle::Double => {
                 let joined = profile::get_session_player_side();
-                let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
-                    EvalPane::default_for(si.show_fa_plus_pane)
-                });
+                let primary = score_info[0]
+                    .as_ref()
+                    .map_or(EvalPane::Standard, |si| eval_pane_default_for(si.show_fa_plus_pane));
                 let secondary = EvalPane::Timing;
                 active_pane = match joined {
                     profile::PlayerSide::P1 => [primary, secondary],
@@ -865,18 +871,18 @@ pub fn init_from_score_info(
     let play_style = profile::get_session_play_style();
     match play_style {
         profile::PlayStyle::Versus => {
-            active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
-                EvalPane::default_for(si.show_fa_plus_pane)
-            });
-            active_pane[1] = score_info[1].as_ref().map_or(EvalPane::Standard, |si| {
-                EvalPane::default_for(si.show_fa_plus_pane)
-            });
+            active_pane[0] = score_info[0]
+                .as_ref()
+                .map_or(EvalPane::Standard, |si| eval_pane_default_for(si.show_fa_plus_pane));
+            active_pane[1] = score_info[1]
+                .as_ref()
+                .map_or(EvalPane::Standard, |si| eval_pane_default_for(si.show_fa_plus_pane));
         }
         profile::PlayStyle::Single | profile::PlayStyle::Double => {
             let joined = profile::get_session_player_side();
-            let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
-                EvalPane::default_for(si.show_fa_plus_pane)
-            });
+            let primary = score_info[0]
+                .as_ref()
+                .map_or(EvalPane::Standard, |si| eval_pane_default_for(si.show_fa_plus_pane));
             let secondary = EvalPane::Timing;
             active_pane = match joined {
                 profile::PlayerSide::P1 => [primary, secondary],
@@ -1196,9 +1202,19 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             .is_some();
 
         state.active_pane[controller_idx] = if dir >= 0 {
-            state.active_pane[controller_idx].next(has_hard_ex, has_online_panes, has_gs)
+            eval_pane_next(
+                state.active_pane[controller_idx],
+                has_hard_ex,
+                has_online_panes,
+                has_gs,
+            )
         } else {
-            state.active_pane[controller_idx].prev(has_hard_ex, has_online_panes, has_gs)
+            eval_pane_prev(
+                state.active_pane[controller_idx],
+                has_hard_ex,
+                has_online_panes,
+                has_gs,
+            )
         };
 
         // Don't allow duplicate panes in single/double.
@@ -1206,9 +1222,19 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             let other_idx = 1 - controller_idx;
             if state.active_pane[controller_idx] == state.active_pane[other_idx] {
                 state.active_pane[controller_idx] = if dir >= 0 {
-                    state.active_pane[controller_idx].next(has_hard_ex, has_online_panes, has_gs)
+                    eval_pane_next(
+                        state.active_pane[controller_idx],
+                        has_hard_ex,
+                        has_online_panes,
+                        has_gs,
+                    )
                 } else {
-                    state.active_pane[controller_idx].prev(has_hard_ex, has_online_panes, has_gs)
+                    eval_pane_prev(
+                        state.active_pane[controller_idx],
+                        has_hard_ex,
+                        has_online_panes,
+                        has_gs,
+                    )
                 };
             }
         }
@@ -1226,9 +1252,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
 
         state.active_graph[controller_idx] = if dir >= 0 {
-            state.active_graph[controller_idx].next()
+            eval_graph_next(state.active_graph[controller_idx])
         } else {
-            state.active_graph[controller_idx].prev()
+            eval_graph_prev(state.active_graph[controller_idx])
         };
 
         // Single/double have one lower graph; keep both controller slots in sync.

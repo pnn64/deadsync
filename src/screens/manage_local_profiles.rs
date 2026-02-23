@@ -97,15 +97,13 @@ enum ProfileMenuAction {
     Delete,
 }
 
-impl ProfileMenuAction {
-    #[inline(always)]
-    const fn label(self) -> &'static str {
-        match self {
-            Self::SetP1 => "Set P1",
-            Self::SetP2 => "Set P2",
-            Self::Rename => "Rename",
-            Self::Delete => "Delete",
-        }
+#[inline(always)]
+const fn profile_menu_action_label(action: ProfileMenuAction) -> &'static str {
+    match action {
+        ProfileMenuAction::SetP1 => "Set P1",
+        ProfileMenuAction::SetP2 => "Set P2",
+        ProfileMenuAction::Rename => "Rename",
+        ProfileMenuAction::Delete => "Delete",
     }
 }
 
@@ -1343,7 +1341,7 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
             xy(14.0_f32.mul_add(s, inner_x), row_y + item_h * 0.5):
             font("miso"):
             zoom(1.0):
-            settext(action.label()):
+            settext(profile_menu_action_label(*action)):
             diffuse(text_col[0], text_col[1], text_col[2], text_col[3]):
             z(1006):
             horizalign(left)
