@@ -4472,43 +4472,46 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         let mine_hit_on_press = try_hit_mine_while_held(state, column, current_time);
 
         if abs_time_error <= way_off_window {
-            let notes_on_row: Vec<usize> = if let Some(&pos) = state
+            let mut notes_on_row = [usize::MAX; MAX_COLS];
+            let mut notes_on_row_len = 0usize;
+            if let Some(&pos) = state
                 .row_map_cache
                 .get(note_row_index)
                 .filter(|&&x| x != u32::MAX)
             {
-                state.row_entries[pos as usize]
-                    .nonmine_note_indices
-                    .iter()
-                    .copied()
-                    .filter(|&i| {
-                        let col = state.notes[i].column;
-                        col >= col_start && col < col_end
-                    })
-                    .filter(|&i| state.notes[i].result.is_none())
-                    .collect()
+                for &idx in &state.row_entries[pos as usize].nonmine_note_indices {
+                    let col = state.notes[idx].column;
+                    if col < col_start || col >= col_end || state.notes[idx].result.is_some() {
+                        continue;
+                    }
+                    if notes_on_row_len < MAX_COLS {
+                        notes_on_row[notes_on_row_len] = idx;
+                        notes_on_row_len += 1;
+                    }
+                }
             } else {
-                state
-                    .notes
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, n)| {
-                        n.row_index == note_row_index
-                            && n.column >= col_start
-                            && n.column < col_end
-                            && !matches!(n.note_type, NoteType::Mine)
-                            && !n.is_fake
-                    })
-                    .filter(|(_, n)| n.result.is_none())
-                    .map(|(i, _)| i)
-                    .collect()
-            };
+                for (idx, n) in state.notes.iter().enumerate() {
+                    if n.row_index != note_row_index
+                        || n.column < col_start
+                        || n.column >= col_end
+                        || matches!(n.note_type, NoteType::Mine)
+                        || n.is_fake
+                        || n.result.is_some()
+                    {
+                        continue;
+                    }
+                    if notes_on_row_len < MAX_COLS {
+                        notes_on_row[notes_on_row_len] = idx;
+                        notes_on_row_len += 1;
+                    }
+                }
+            }
 
-            if notes_on_row.is_empty() {
+            if notes_on_row_len == 0 {
                 return false;
             }
-            let all_pressed = notes_on_row.iter().all(|&i| {
-                let col = state.notes[i].column;
+            let all_pressed = notes_on_row[..notes_on_row_len].iter().all(|&idx| {
+                let col = state.notes[idx].column;
                 state.keyboard_lane_state[col] || state.gamepad_lane_state[col]
             });
             if !all_pressed {
@@ -4524,7 +4527,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             // intended note time and the inferred hit time.
             let stream_pos_s = audio::get_music_stream_position_seconds();
 
-            if rescore_early_hits && notes_on_row.len() == 1 {
+            if rescore_early_hits && notes_on_row_len == 1 {
                 let idx = notes_on_row[0];
                 let note_col = state.notes[idx].column;
                 let row_note_time = state.note_time_cache[idx];
@@ -4669,11 +4672,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     stream_delta_hit_ms,
                 );
 
-                for col_arrows in &mut state.arrows {
-                    if let Some(pos) = col_arrows.iter().position(|a| a.note_index == idx) {
-                        col_arrows.remove(pos);
-                        break;
-                    }
+                let col_arrows = &mut state.arrows[note_col];
+                if let Some(pos) = col_arrows.iter().position(|a| a.note_index == idx) {
+                    col_arrows.remove(pos);
                 }
                 trigger_receptor_glow_pulse(state, note_col);
                 trigger_tap_explosion(state, note_col, grade);
@@ -4695,7 +4696,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 return true;
             }
 
-            for &idx in &notes_on_row {
+            for &idx in &notes_on_row[..notes_on_row_len] {
                 let note_col = state.notes[idx].column;
                 let row_note_time = state.note_time_cache[idx];
                 let te_music = current_time - row_note_time;
@@ -4754,11 +4755,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     stream_delta_hit_ms,
                 );
 
-                for col_arrows in &mut state.arrows {
-                    if let Some(pos) = col_arrows.iter().position(|a| a.note_index == idx) {
-                        col_arrows.remove(pos);
-                        break;
-                    }
+                let col_arrows = &mut state.arrows[note_col];
+                if let Some(pos) = col_arrows.iter().position(|a| a.note_index == idx) {
+                    col_arrows.remove(pos);
                 }
                 trigger_receptor_glow_pulse(state, note_col);
                 trigger_tap_explosion(state, note_col, grade);
