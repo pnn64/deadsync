@@ -9,7 +9,14 @@ use log::{info, warn};
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
 };
-use std::{borrow::Cow, collections::HashMap, error::Error, hash::Hasher, mem, sync::Arc};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    error::Error,
+    hash::Hasher,
+    mem,
+    sync::{Arc, mpsc},
+};
 use twox_hash::XxHash64;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
@@ -297,6 +304,8 @@ pub struct State {
     window_size: (u32, u32),
     vsync_enabled: bool,
     next_texture_id: u64,
+    screenshot_requested: bool,
+    captured_frame: Option<RgbaImage>,
 }
 
 pub fn init_vulkan(
@@ -557,6 +566,8 @@ fn init(
         window_size: (size.width, size.height),
         vsync_enabled,
         next_texture_id: 1,
+        screenshot_requested: false,
+        captured_frame: None,
     })
 }
 
@@ -734,6 +745,18 @@ fn lookup_texture_case_insensitive<'a>(
     textures
         .iter()
         .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
+}
+
+#[inline(always)]
+pub fn request_screenshot(state: &mut State) {
+    state.screenshot_requested = true;
+}
+
+pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
+    state
+        .captured_frame
+        .take()
+        .ok_or_else(|| std::io::Error::other("No captured screenshot frame available").into())
 }
 
 pub fn draw(
@@ -1217,8 +1240,101 @@ pub fn draw(
         drop(pass);
     }
 
+    let screenshot_readback = if state.screenshot_requested {
+        state.screenshot_requested = false;
+        let width = state.config.width.max(1);
+        let height = state.config.height.max(1);
+        let bytes_per_row = 4 * width;
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let padded_bytes_per_row = bytes_per_row.div_ceil(align) * align;
+        let readback_size = padded_bytes_per_row as u64 * height as u64;
+        let readback_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("wgpu screenshot readback"),
+            size: readback_size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: &frame.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &readback_buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded_bytes_per_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        Some((
+            readback_buffer,
+            width as usize,
+            height as usize,
+            padded_bytes_per_row as usize,
+            state.config.format,
+        ))
+    } else {
+        None
+    };
+
     state.queue.submit(Some(encoder.finish()));
     frame.present();
+    if let Some((readback_buffer, width, height, padded_row_bytes, format)) = screenshot_readback {
+        let slice = readback_buffer.slice(..);
+        let (tx, rx) = mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |res| {
+            let _ = tx.send(res);
+        });
+        let _ = state.device.poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: None,
+        });
+        if rx.recv().is_ok_and(|res| res.is_ok()) {
+            let data = slice.get_mapped_range();
+            let row_bytes = width * 4;
+            let mut rgba = vec![0u8; row_bytes * height];
+            let swap_rb = matches!(
+                format,
+                wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
+            );
+            for y in 0..height {
+                let src = y * padded_row_bytes;
+                let dst = (height - 1 - y) * row_bytes;
+                if swap_rb {
+                    let mut x = 0usize;
+                    while x < width {
+                        let s = src + x * 4;
+                        let d = dst + x * 4;
+                        rgba[d] = data[s + 2];
+                        rgba[d + 1] = data[s + 1];
+                        rgba[d + 2] = data[s];
+                        rgba[d + 3] = data[s + 3];
+                        x += 1;
+                    }
+                } else {
+                    rgba[dst..dst + row_bytes].copy_from_slice(&data[src..src + row_bytes]);
+                }
+            }
+            drop(data);
+            readback_buffer.unmap();
+            if let Some(img) = RgbaImage::from_raw(width as u32, height as u32, rgba) {
+                state.captured_frame = Some(img);
+            }
+        } else {
+            readback_buffer.unmap();
+            state.captured_frame = None;
+            warn!("wgpu screenshot readback failed: map_async returned error");
+        }
+    }
     push_tmesh_debug_sample(state, tmesh_debug_frame);
 
     let mut tmesh_vpf = 0u32;

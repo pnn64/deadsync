@@ -450,7 +450,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str("P1_Operator=\n");
     content.push_str("P1_Restart=\n");
     content.push_str("P1_Right=KeyCode::ArrowRight,KeyCode::KeyD\n");
-    content.push_str("P1_Select=\n");
+    content.push_str("P1_Select=KeyCode::Slash\n");
     content.push_str("P1_Start=KeyCode::Enter\n");
     content.push_str("P1_Up=KeyCode::ArrowUp,KeyCode::KeyW\n");
     // Player 2 keyboard defaults: numpad directions + Start on NumpadEnter + Back on Numpad0.
@@ -464,7 +464,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str("P2_Operator=\n");
     content.push_str("P2_Restart=\n");
     content.push_str("P2_Right=KeyCode::Numpad6\n");
-    content.push_str("P2_Select=\n");
+    content.push_str("P2_Select=KeyCode::NumpadDecimal\n");
     content.push_str("P2_Start=KeyCode::NumpadEnter\n");
     content.push_str("P2_Up=KeyCode::Numpad8\n");
     content.push('\n');
@@ -915,6 +915,7 @@ fn default_keymap_local() -> Keymap {
             InputBinding::Key(KeyCode::KeyD),
         ],
     );
+    km.bind(A::p1_select, &[InputBinding::Key(KeyCode::Slash)]);
     km.bind(A::p1_start, &[InputBinding::Key(KeyCode::Enter)]);
     km.bind(A::p1_back, &[InputBinding::Key(KeyCode::Escape)]);
     // Player 2 defaults (numpad directions + Start on NumpadEnter).
@@ -922,9 +923,10 @@ fn default_keymap_local() -> Keymap {
     km.bind(A::p2_down, &[InputBinding::Key(KeyCode::Numpad2)]);
     km.bind(A::p2_left, &[InputBinding::Key(KeyCode::Numpad4)]);
     km.bind(A::p2_right, &[InputBinding::Key(KeyCode::Numpad6)]);
+    km.bind(A::p2_select, &[InputBinding::Key(KeyCode::NumpadDecimal)]);
     km.bind(A::p2_start, &[InputBinding::Key(KeyCode::NumpadEnter)]);
     km.bind(A::p2_back, &[InputBinding::Key(KeyCode::Numpad0)]);
-    // Leave P2_Menu/Select/Operator/Restart unbound by default for now.
+    // Leave P2_Menu/Operator/Restart unbound by default for now.
     km
 }
 
@@ -1044,6 +1046,7 @@ fn parse_binding_token(tok: &str) -> Option<InputBinding> {
             "ArrowDown" => KeyCode::ArrowDown,
             "ArrowLeft" => KeyCode::ArrowLeft,
             "ArrowRight" => KeyCode::ArrowRight,
+            "Slash" => KeyCode::Slash,
             // Numpad keys
             "Numpad0" => KeyCode::Numpad0,
             "Numpad1" => KeyCode::Numpad1,
@@ -1283,6 +1286,18 @@ fn load_keymap_from_ini_local(conf: &SimpleIni) -> Keymap {
                     km.bind(act, &bindings);
                 }
             }
+        }
+        if km.binding_at(VirtualAction::p1_select, 0).is_none() {
+            km.bind(
+                VirtualAction::p1_select,
+                &[InputBinding::Key(KeyCode::Slash)],
+            );
+        }
+        if km.binding_at(VirtualAction::p2_select, 0).is_none() {
+            km.bind(
+                VirtualAction::p2_select,
+                &[InputBinding::Key(KeyCode::NumpadDecimal)],
+            );
         }
 
         km

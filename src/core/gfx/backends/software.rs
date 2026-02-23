@@ -53,6 +53,9 @@ pub const fn set_thread_hint(state: &mut State, threads: Option<usize>) {
     state.thread_hint = threads;
 }
 
+#[inline(always)]
+pub const fn request_screenshot(_state: &mut State) {}
+
 pub fn create_texture(image: &RgbaImage, sampler: SamplerDesc) -> Result<Texture, Box<dyn Error>> {
     Ok(Texture {
         image: image.clone(),

@@ -4,7 +4,7 @@ use crate::core::gfx::{
 };
 use crate::core::space::ortho_for_window;
 use cgmath::Matrix4;
-use glow::{HasContext, PixelUnpackData, UniformLocation};
+use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
 use glutin::{
     config::ConfigTemplateBuilder,
     context::{ContextAttributesBuilder, PossiblyCurrentContext},
@@ -480,6 +480,9 @@ pub fn create_texture(
         Ok(Texture(t))
     }
 }
+
+#[inline(always)]
+pub const fn request_screenshot(_state: &mut State) {}
 
 pub fn draw(
     state: &mut State,
@@ -1046,6 +1049,49 @@ pub fn draw(
     state.gl_surface.swap_buffers(&state.gl_context)?;
     push_tmesh_debug_sample(state, tmesh_debug_frame);
     Ok(vertices)
+}
+
+pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
+    let (width, height) = state.window_size;
+    if width == 0 || height == 0 {
+        return Err(std::io::Error::other("Cannot capture screenshot at zero-sized viewport").into());
+    }
+
+    let byte_len = width as usize * height as usize * 4;
+    let mut pixels = vec![0u8; byte_len];
+    unsafe {
+        state.gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
+        state.gl.read_buffer(glow::FRONT);
+        state.gl.read_pixels(
+            0,
+            0,
+            width as i32,
+            height as i32,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            PixelPackData::Slice(Some(pixels.as_mut_slice())),
+        );
+    }
+
+    flip_rows_rgba_in_place(width as usize, height as usize, &mut pixels);
+    RgbaImage::from_raw(width, height, pixels)
+        .ok_or_else(|| std::io::Error::other("Failed to build screenshot image").into())
+}
+
+#[inline(always)]
+fn flip_rows_rgba_in_place(width: usize, height: usize, pixels: &mut [u8]) {
+    let row_bytes = width.saturating_mul(4);
+    if row_bytes == 0 || height <= 1 {
+        return;
+    }
+    let half = height / 2;
+    for y in 0..half {
+        let top = y * row_bytes;
+        let bottom = (height - 1 - y) * row_bytes;
+        for i in 0..row_bytes {
+            pixels.swap(top + i, bottom + i);
+        }
+    }
 }
 
 #[inline(always)]

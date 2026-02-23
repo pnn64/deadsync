@@ -178,6 +178,33 @@ impl Backend {
         }
     }
 
+    pub fn request_screenshot(&mut self) {
+        match &mut self.0 {
+            BackendImpl::Vulkan(state) => vulkan::request_screenshot(state),
+            BackendImpl::VulkanWgpu(state) => wgpu_core::request_screenshot(state),
+            BackendImpl::OpenGL(state) => opengl::request_screenshot(state),
+            BackendImpl::OpenGLWgpu(state) => wgpu_core::request_screenshot(state),
+            BackendImpl::Software(state) => software::request_screenshot(state),
+            #[cfg(target_os = "windows")]
+            BackendImpl::DirectX(state) => wgpu_core::request_screenshot(state),
+        }
+    }
+
+    pub fn capture_frame(&mut self) -> Result<RgbaImage, Box<dyn Error>> {
+        match &mut self.0 {
+            BackendImpl::OpenGL(state) => opengl::capture_frame(state),
+            BackendImpl::Vulkan(state) => vulkan::capture_frame(state),
+            BackendImpl::VulkanWgpu(state) => wgpu_core::capture_frame(state),
+            BackendImpl::OpenGLWgpu(state) => wgpu_core::capture_frame(state),
+            BackendImpl::Software(_) => Err(std::io::Error::other(
+                "Screenshot capture is not implemented for Software renderer yet",
+            )
+            .into()),
+            #[cfg(target_os = "windows")]
+            BackendImpl::DirectX(state) => wgpu_core::capture_frame(state),
+        }
+    }
+
     pub fn configure_software_threads(&mut self, threads: Option<usize>) {
         if let BackendImpl::Software(state) = &mut self.0 {
             software::set_thread_hint(state, threads);

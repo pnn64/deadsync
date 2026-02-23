@@ -165,6 +165,7 @@ struct SwapchainResources {
     framebuffers: Vec<vk::Framebuffer>,
     extent: vk::Extent2D,
     format: vk::SurfaceFormatKHR,
+    supports_transfer_src: bool,
 }
 
 // The main Vulkan state struct, now simplified.
@@ -227,6 +228,8 @@ pub struct State {
     tmesh_debug_accum: TMeshDebugAccum,
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
     pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
+    screenshot_requested: bool,
+    captured_frame: Option<RgbaImage>,
 }
 
 // --- Main Procedural Functions ---
@@ -361,6 +364,8 @@ pub fn init(
         tmesh_debug_accum: TMeshDebugAccum::default(),
         pending_tex_upload_cmd: None,
         pending_tex_staging: Vec::new(),
+        screenshot_requested: false,
+        captured_frame: None,
     };
 
     // Static unit quad buffers
@@ -1200,6 +1205,18 @@ const unsafe fn bytes_of<T>(v: &T) -> &[u8] {
     }
 }
 
+#[inline(always)]
+pub fn request_screenshot(state: &mut State) {
+    state.screenshot_requested = true;
+}
+
+pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
+    state
+        .captured_frame
+        .take()
+        .ok_or_else(|| std::io::Error::other("No captured screenshot frame available").into())
+}
+
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
@@ -1327,15 +1344,11 @@ pub fn draw(
 
     unsafe {
         let fence = state.in_flight_fences[state.current_frame];
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .wait_for_fences(&[fence], true, u64::MAX)?;
+        let device = Arc::clone(state.device.as_ref().unwrap());
+        device.wait_for_fences(&[fence], true, u64::MAX)?;
         tmesh_debug_frame.cache_evictions = tmesh_debug_frame
             .cache_evictions
             .saturating_add(evict_tmesh_cache_entries(state, state.tmesh_cache_frame) as u64);
-        let device = state.device.as_ref().unwrap();
 
         let (image_index, acquired_suboptimal) = match state
             .swapchain_resources
@@ -1820,6 +1833,108 @@ pub fn draw(
         }
 
         device.cmd_end_render_pass(cmd);
+        let screenshot_staging = if state.screenshot_requested {
+            state.screenshot_requested = false;
+            state.captured_frame = None;
+            if !state.swapchain_resources.supports_transfer_src {
+                warn!(
+                    "Vulkan swapchain does not support transfer-src usage; screenshot unavailable"
+                );
+                None
+            } else {
+                let width = state.swapchain_resources.extent.width;
+                let height = state.swapchain_resources.extent.height;
+                let bytes_per_row = width as usize * 4;
+                let copy_size = (bytes_per_row * height as usize) as vk::DeviceSize;
+                let (staging_buffer, staging_memory) = create_gpu_buffer(
+                    &state.instance,
+                    &device,
+                    state.pdevice,
+                    copy_size,
+                    vk::BufferUsageFlags::TRANSFER_DST,
+                    vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+                )?;
+                let swap_image = state.swapchain_resources._images[image_index as usize];
+                let subresource = vk::ImageSubresourceRange::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1);
+                let to_transfer = vk::ImageMemoryBarrier::default()
+                    .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+                    .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
+                    .old_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+                    .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .image(swap_image)
+                    .subresource_range(subresource);
+                device.cmd_pipeline_barrier(
+                    cmd,
+                    vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    std::slice::from_ref(&to_transfer),
+                );
+
+                let copy_region = vk::BufferImageCopy::default()
+                    .buffer_offset(0)
+                    .buffer_row_length(0)
+                    .buffer_image_height(0)
+                    .image_subresource(vk::ImageSubresourceLayers {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        mip_level: 0,
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    })
+                    .image_extent(vk::Extent3D {
+                        width,
+                        height,
+                        depth: 1,
+                    });
+                device.cmd_copy_image_to_buffer(
+                    cmd,
+                    swap_image,
+                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                    staging_buffer,
+                    std::slice::from_ref(&copy_region),
+                );
+
+                let to_present = vk::ImageMemoryBarrier::default()
+                    .src_access_mask(vk::AccessFlags::TRANSFER_READ)
+                    .dst_access_mask(vk::AccessFlags::MEMORY_READ)
+                    .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                    .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .image(swap_image)
+                    .subresource_range(subresource);
+                device.cmd_pipeline_barrier(
+                    cmd,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    std::slice::from_ref(&to_present),
+                );
+
+                Some((
+                    BufferResource {
+                        buffer: staging_buffer,
+                        memory: staging_memory,
+                    },
+                    width,
+                    height,
+                    state.swapchain_resources.format.format,
+                ))
+            }
+        } else {
+            None
+        };
         device.end_command_buffer(cmd)?;
 
         let wait = [state.image_available_semaphores[state.current_frame]];
@@ -1849,6 +1964,47 @@ pub fn draw(
             }
             Ok(_) => {}
             Err(e) => return Err(e.into()),
+        }
+        if let Some((staging, width, height, format)) = screenshot_staging {
+            device.queue_wait_idle(state.queue)?;
+            let map_size = (width as usize * height as usize * 4) as vk::DeviceSize;
+            let mapped =
+                match device.map_memory(staging.memory, 0, map_size, vk::MemoryMapFlags::empty()) {
+                    Ok(ptr) => ptr,
+                    Err(e) => {
+                        destroy_buffer(&device, &staging);
+                        return Err(e.into());
+                    }
+                };
+            let src = std::slice::from_raw_parts(mapped.cast::<u8>(), map_size as usize);
+            let row_bytes = width as usize * 4;
+            let mut rgba = vec![0u8; row_bytes * height as usize];
+            let swap_rb = matches!(
+                format,
+                vk::Format::B8G8R8A8_UNORM | vk::Format::B8G8R8A8_SRGB
+            );
+            for y in 0..height as usize {
+                let src_row = y * row_bytes;
+                let dst_row = (height as usize - 1 - y) * row_bytes;
+                if swap_rb {
+                    let mut x = 0usize;
+                    while x < width as usize {
+                        let s = src_row + x * 4;
+                        let d = dst_row + x * 4;
+                        rgba[d] = src[s + 2];
+                        rgba[d + 1] = src[s + 1];
+                        rgba[d + 2] = src[s];
+                        rgba[d + 3] = src[s + 3];
+                        x += 1;
+                    }
+                } else {
+                    rgba[dst_row..dst_row + row_bytes]
+                        .copy_from_slice(&src[src_row..src_row + row_bytes]);
+                }
+            }
+            device.unmap_memory(staging.memory);
+            destroy_buffer(&device, &staging);
+            state.captured_frame = RgbaImage::from_raw(width, height, rgba);
         }
 
         state.current_frame = (state.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -3045,6 +3201,14 @@ fn create_swapchain(
         extent = fallback;
     }
 
+    let supports_transfer_src = capabilities
+        .supported_usage_flags
+        .contains(vk::ImageUsageFlags::TRANSFER_SRC);
+    let mut image_usage = vk::ImageUsageFlags::COLOR_ATTACHMENT;
+    if supports_transfer_src {
+        image_usage |= vk::ImageUsageFlags::TRANSFER_SRC;
+    }
+
     let create_info = vk::SwapchainCreateInfoKHR::default()
         .surface(surface)
         .min_image_count(image_count)
@@ -3052,7 +3216,7 @@ fn create_swapchain(
         .image_color_space(format.color_space)
         .image_extent(extent)
         .image_array_layers(1)
-        .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+        .image_usage(image_usage)
         .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
         .pre_transform(capabilities.current_transform)
         .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
@@ -3076,6 +3240,7 @@ fn create_swapchain(
         framebuffers: vec![],
         extent,
         format,
+        supports_transfer_src,
     })
 }
 

@@ -1,4 +1,5 @@
 use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
+use crate::act;
 use crate::config::{self, DisplayMode};
 use crate::core::display;
 use crate::core::gfx::{self as renderer, BackendType, create_backend};
@@ -13,6 +14,7 @@ use crate::screens::{
     select_profile, select_style,
 };
 use crate::ui::color;
+use chrono::Local;
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
@@ -76,6 +78,10 @@ const MENU_TO_SELECT_COLOR_OUT_DURATION: f32 = 1.0;
 const MENU_ACTORS_FADE_DURATION: f32 = 0.65;
 const COURSE_MIN_SECONDS_TO_STEP_NEXT_SONG: f32 = 4.0;
 const COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG: f32 = 0.0;
+const SCREENSHOT_FLASH_ATTACK_SECONDS: f32 = 0.02;
+const SCREENSHOT_FLASH_DECAY_SECONDS: f32 = 0.18;
+const SCREENSHOT_FLASH_MAX_ALPHA: f32 = 0.7;
+const SCREENSHOT_DIR: &str = "save/screenshots";
 
 #[derive(Clone)]
 struct CourseStageRuntime {
@@ -227,6 +233,8 @@ pub struct ShellState {
     pending_exit: bool,
     shift_held: bool,
     ctrl_held: bool,
+    screenshot_pending: bool,
+    screenshot_flash_started_at: Option<Instant>,
 }
 
 /// Active screen data bundle.
@@ -300,6 +308,8 @@ impl ShellState {
             pending_exit: false,
             shift_held: false,
             ctrl_held: false,
+            screenshot_pending: false,
+            screenshot_flash_started_at: None,
         }
     }
 
@@ -354,6 +364,25 @@ impl ShellState {
                 self.gamepad_overlay_state = None;
             }
         }
+    }
+
+    #[inline(always)]
+    fn screenshot_flash_alpha(&self, now: Instant) -> f32 {
+        let Some(started_at) = self.screenshot_flash_started_at else {
+            return 0.0;
+        };
+        let elapsed = now.duration_since(started_at).as_secs_f32();
+        let total = SCREENSHOT_FLASH_ATTACK_SECONDS + SCREENSHOT_FLASH_DECAY_SECONDS;
+        if elapsed <= 0.0 || elapsed >= total {
+            return 0.0;
+        }
+        if elapsed <= SCREENSHOT_FLASH_ATTACK_SECONDS {
+            return (elapsed / SCREENSHOT_FLASH_ATTACK_SECONDS).clamp(0.0, 1.0)
+                * SCREENSHOT_FLASH_MAX_ALPHA;
+        }
+        let fade =
+            1.0 - ((elapsed - SCREENSHOT_FLASH_ATTACK_SECONDS) / SCREENSHOT_FLASH_DECAY_SECONDS);
+        fade.clamp(0.0, 1.0) * SCREENSHOT_FLASH_MAX_ALPHA
     }
 }
 
@@ -711,6 +740,28 @@ fn build_course_summary_eval_state(
     state.return_to_course = true;
     state.allow_online_panes = false;
     state
+}
+
+fn save_screenshot_image(image: &image::RgbaImage) -> Result<PathBuf, Box<dyn Error>> {
+    let dir = PathBuf::from(SCREENSHOT_DIR);
+    std::fs::create_dir_all(&dir)?;
+
+    let stamp = Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+    let mut path = dir.join(format!("deadsync-{stamp}.png"));
+    let mut suffix = 1_u32;
+    while path.exists() {
+        path = dir.join(format!("deadsync-{stamp}-{suffix:02}.png"));
+        suffix = suffix.saturating_add(1);
+        if suffix > 9_999 {
+            return Err(std::io::Error::other(
+                "Failed to allocate unique screenshot filename",
+            )
+            .into());
+        }
+    }
+
+    image.save_with_format(&path, image::ImageFormat::Png)?;
+    Ok(path)
 }
 
 fn prewarm_gameplay_assets(
@@ -1746,6 +1797,19 @@ impl App {
         if self.try_handle_late_join(&ev) {
             return Ok(());
         }
+        if ev.pressed
+            && matches!(
+                self.state.screens.current_screen,
+                CurrentScreen::Evaluation | CurrentScreen::EvaluationSummary
+            )
+            && matches!(
+                ev.action,
+                input::VirtualAction::p1_select | input::VirtualAction::p2_select
+            )
+        {
+            self.state.shell.screenshot_pending = true;
+            return Ok(());
+        }
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
                 crate::screens::menu::handle_input(&mut self.state.screens.menu_state, &ev)
@@ -2088,6 +2152,31 @@ impl App {
         }
     }
 
+    fn capture_pending_screenshot(&mut self, now: Instant) {
+        if !self.state.shell.screenshot_pending {
+            return;
+        }
+        self.state.shell.screenshot_pending = false;
+        let Some(backend) = self.backend.as_mut() else {
+            return;
+        };
+
+        match backend.capture_frame() {
+            Ok(image) => match save_screenshot_image(&image) {
+                Ok(path) => {
+                    self.state.shell.screenshot_flash_started_at = Some(now);
+                    crate::core::audio::play_sfx("assets/sounds/screenshot.ogg");
+                    info!("Saved screenshot to {}", path.display());
+                }
+                Err(e) => warn!("Failed to save screenshot: {e}"),
+            },
+            Err(e) => warn!(
+                "Screenshot capture unavailable for renderer {}: {e}",
+                self.backend_type
+            ),
+        }
+    }
+
     fn get_current_actors(&self) -> (Vec<Actor>, [f32; 4]) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
@@ -2241,6 +2330,17 @@ impl App {
                 actors.extend(in_actors);
             }
             _ => {}
+        }
+
+        let flash_alpha = self.state.shell.screenshot_flash_alpha(Instant::now());
+        if flash_alpha > 0.0 {
+            actors.push(act!(quad:
+                align(0.0, 0.0):
+                xy(0.0, 0.0):
+                zoomto(space::screen_width(), space::screen_height()):
+                diffuse(1.0, 1.0, 1.0, flash_alpha):
+                z(32000)
+            ));
         }
 
         (actors, CLEAR)
@@ -4304,8 +4404,14 @@ impl ApplicationHandler<UserEvent> for App {
                 );
 
                 if let Some(backend) = &mut self.backend {
+                    if self.state.shell.screenshot_pending {
+                        backend.request_screenshot();
+                    }
                     match backend.draw(&screen, &self.asset_manager.textures) {
-                        Ok(vpf) => self.state.shell.current_frame_vpf = vpf,
+                        Ok(vpf) => {
+                            self.state.shell.current_frame_vpf = vpf;
+                            self.capture_pending_screenshot(now);
+                        }
                         Err(e) => {
                             error!("Failed to draw frame: {e}");
                             event_loop.exit();
