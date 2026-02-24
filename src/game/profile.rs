@@ -1059,6 +1059,10 @@ pub struct Profile {
     // zmod ExtraAesthetics: offset indicator (ErrorMSDisplay).
     pub error_ms_display: bool,
     pub display_scorebox: bool,
+    // zmod LifeBarOptions (Arrow Cloud semantics).
+    pub rainbow_max: bool,
+    pub responsive_colors: bool,
+    pub show_life_percent: bool,
     pub tilt_multiplier: f32,
     // Error bar (zmod semantics): each bit toggles one submodule in the
     // SelectMultiple row (Colorful/Monochrome/Text/Highlight/Average).
@@ -1157,6 +1161,9 @@ impl Default for Profile {
             column_cues: false,
             error_ms_display: false,
             display_scorebox: true,
+            rainbow_max: false,
+            responsive_colors: false,
+            show_life_percent: false,
             tilt_multiplier: 1.0,
             error_bar: ErrorBarStyle::default(),
             error_bar_active_mask: error_bar_mask_from_style(ErrorBarStyle::default(), false),
@@ -1443,6 +1450,18 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             i32::from(default_profile.display_scorebox)
         ));
         content.push_str(&format!(
+            "RainbowMax = {}\n",
+            i32::from(default_profile.rainbow_max)
+        ));
+        content.push_str(&format!(
+            "ResponsiveColors = {}\n",
+            i32::from(default_profile.responsive_colors)
+        ));
+        content.push_str(&format!(
+            "ShowLifePercent = {}\n",
+            i32::from(default_profile.show_life_percent)
+        ));
+        content.push_str(&format!(
             "TiltMultiplier = {}\n",
             default_profile.tilt_multiplier
         ));
@@ -1707,6 +1726,15 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!(
         "DisplayScorebox={}\n",
         i32::from(profile.display_scorebox)
+    ));
+    content.push_str(&format!("RainbowMax={}\n", i32::from(profile.rainbow_max)));
+    content.push_str(&format!(
+        "ResponsiveColors={}\n",
+        i32::from(profile.responsive_colors)
+    ));
+    content.push_str(&format!(
+        "ShowLifePercent={}\n",
+        i32::from(profile.show_life_percent)
     ));
     content.push_str(&format!("TiltMultiplier={}\n", profile.tilt_multiplier));
     content.push_str(&format!("ErrorBar={}\n", profile.error_bar));
@@ -2085,6 +2113,18 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "DisplayScorebox")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.display_scorebox, |v| v != 0);
+            profile.rainbow_max = profile_conf
+                .get("PlayerOptions", "RainbowMax")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.rainbow_max, |v| v != 0);
+            profile.responsive_colors = profile_conf
+                .get("PlayerOptions", "ResponsiveColors")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.responsive_colors, |v| v != 0);
+            profile.show_life_percent = profile_conf
+                .get("PlayerOptions", "ShowLifePercent")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.show_life_percent, |v| v != 0);
             profile.tilt_multiplier = profile_conf
                 .get("PlayerOptions", "TiltMultiplier")
                 .and_then(|s| s.parse::<f32>().ok())
@@ -3475,6 +3515,51 @@ pub fn update_display_scorebox_for_side(side: PlayerSide, enabled: bool) {
             return;
         }
         profile.display_scorebox = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_rainbow_max_for_side(side: PlayerSide, enabled: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.rainbow_max == enabled {
+            return;
+        }
+        profile.rainbow_max = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_responsive_colors_for_side(side: PlayerSide, enabled: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.responsive_colors == enabled {
+            return;
+        }
+        profile.responsive_colors = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_show_life_percent_for_side(side: PlayerSide, enabled: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.show_life_percent == enabled {
+            return;
+        }
+        profile.show_life_percent = enabled;
     }
     save_profile_ini_for_side(side);
 }

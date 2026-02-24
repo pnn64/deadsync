@@ -794,6 +794,40 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
         };
+        let rainbow_life_color = |elapsed: f32| -> [f32; 4] {
+            let phase = elapsed * 2.0;
+            let r = (phase + 0.0).sin() * 0.5 + 0.5;
+            let g = (phase + std::f32::consts::TAU / 3.0).sin() * 0.5 + 0.5;
+            let b = (phase + (2.0 * std::f32::consts::TAU) / 3.0).sin() * 0.5 + 0.5;
+            [r, g, b, 1.0]
+        };
+        let responsive_life_color = |life: f32| -> [f32; 4] {
+            let life = life.clamp(0.0, 1.0);
+            if life >= 0.9 {
+                [0.0, 1.0, ((life - 0.9) * 10.0).clamp(0.0, 1.0), 1.0]
+            } else if life >= 0.5 {
+                [((0.9 - life) * 2.5).clamp(0.0, 1.0), 1.0, 0.0, 1.0]
+            } else {
+                [1.0, ((life - 0.2) * (10.0 / 3.0)).clamp(0.0, 1.0), 0.0, 1.0]
+            }
+        };
+        let fill_life_color = |player_idx: usize, life: f32, dead: bool| -> [f32; 4] {
+            let profile = &state.player_profiles[player_idx];
+            let is_hot = !dead && life >= 1.0;
+            if is_hot {
+                if profile.rainbow_max {
+                    rainbow_life_color(state.total_elapsed_in_screen)
+                } else {
+                    [1.0, 1.0, 1.0, 1.0]
+                }
+            } else if profile.responsive_colors {
+                responsive_life_color(life)
+            } else {
+                player_life_color(player_idx)
+            }
+        };
+        let show_standard_life_percent =
+            screen_width() / screen_height().max(1.0) >= (16.0 / 9.0);
 
         let players: &[(usize, profile::PlayerSide)] = match play_style {
             profile::PlayStyle::Versus => {
@@ -816,6 +850,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 state.players[player_idx].life.clamp(0.0, 1.0)
             };
+            let is_hot = !dead && life_for_render >= 1.0;
+            let life_color = fill_life_color(player_idx, life_for_render, dead);
+            let life_percent = life_for_render * 100.0;
+            let life_percent_text = format!("{life_percent:.1}%");
 
             match state.player_profiles[player_idx].lifemeter_type {
                 profile::LifeMeterType::Standard => {
@@ -844,12 +882,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         diffuse(0.0, 0.0, 0.0, 1.0): z(91)
                     ));
 
-                    let is_hot = !dead && life_for_render >= 1.0;
-                    let life_color = if is_hot {
-                        [1.0, 1.0, 1.0, 1.0]
-                    } else {
-                        player_life_color(player_idx)
-                    };
                     let filled_width = w * life_for_render;
                     // Never draw swoosh if dead OR nothing to fill.
                     if filled_width > 0.0 && !dead {
@@ -884,6 +916,38 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             z(92)
                         ));
                     }
+
+                    if state.player_profiles[player_idx].show_life_percent
+                        && show_standard_life_percent
+                        && !is_hot
+                    {
+                        let life_text_color = player_life_color(player_idx);
+                        let (outer_x, inner_x, text_x, align_x) = if side == profile::PlayerSide::P1
+                        {
+                            (meter_cx - 76.0, meter_cx - 77.0, meter_cx - 77.0, 1.0)
+                        } else {
+                            (meter_cx + 76.0, meter_cx + 77.0, meter_cx + 78.0, 0.0)
+                        };
+                        actors.push(act!(quad:
+                            align(align_x, 0.5): xy(outer_x, meter_cy):
+                            zoomto(44.0, 18.0):
+                            diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
+                            z(94)
+                        ));
+                        actors.push(act!(quad:
+                            align(align_x, 0.5): xy(inner_x, meter_cy):
+                            zoomto(42.0, 16.0):
+                            diffuse(0.0, 0.0, 0.0, 1.0):
+                            z(95)
+                        ));
+                        actors.push(act!(text:
+                            font("miso"): settext(life_percent_text.clone()):
+                            align(align_x, 0.5): xy(text_x, meter_cy):
+                            zoom(0.40):
+                            diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
+                            z(96)
+                        ));
+                    }
                 }
                 profile::LifeMeterType::Surround => {
                     let sw = screen_width();
@@ -915,12 +979,29 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         break;
                     }
 
+                    let mut surround_color = if state.player_profiles[player_idx].responsive_colors {
+                        let mut c = responsive_life_color(life_for_render);
+                        c[3] = 0.2;
+                        c
+                    } else {
+                        [0.2, 0.2, 0.2, 1.0]
+                    };
+                    if life_for_render >= 1.0 && state.player_profiles[player_idx].rainbow_max {
+                        let mut c = rainbow_life_color(state.total_elapsed_in_screen);
+                        c[3] = if state.player_profiles[player_idx].responsive_colors {
+                            0.2
+                        } else {
+                            1.0
+                        };
+                        surround_color = c;
+                    }
+
                     match side {
                         profile::PlayerSide::P1 => {
                             actors.push(act!(quad:
                                 align(0.0, 0.0): xy(0.0, y):
                                 zoomto(w, h):
-                                diffuse(0.2, 0.2, 0.2, 1.0):
+                                diffuse(surround_color[0], surround_color[1], surround_color[2], surround_color[3]):
                                 faderight(0.8):
                                 croptop(croptop):
                                 z(-98)
@@ -930,7 +1011,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             actors.push(act!(quad:
                                 align(1.0, 0.0): xy(sw, y):
                                 zoomto(w, h):
-                                diffuse(0.2, 0.2, 0.2, 1.0):
+                                diffuse(surround_color[0], surround_color[1], surround_color[2], surround_color[3]):
                                 fadeleft(0.8):
                                 croptop(croptop):
                                 z(-98)
@@ -974,13 +1055,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         diffuse(0.0, 0.0, 0.0, 1.0): z(91)
                     ));
 
-                    let is_hot = !dead && life_for_render >= 1.0;
                     let filled_h = bar_h * life_for_render;
-                    let life_color = if is_hot {
-                        [1.0, 1.0, 1.0, 1.0]
-                    } else {
-                        player_life_color(player_idx)
-                    };
 
                     // MeterFill
                     if filled_h > 0.0 {
@@ -1001,7 +1076,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         } else {
                             -(bps * 0.5)
                         };
-                        let swoosh_alpha = if is_hot { 1.0 } else { 0.65 };
+                        let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
 
                         actors.push(act!(sprite("swoosh.png"):
                             align(0.5, 0.5):
@@ -1011,6 +1086,36 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             rotationz(90.0):
                             texcoordvelocity(velocity_x, 0.0):
                             z(93)
+                        ));
+                    }
+
+                    if state.player_profiles[player_idx].show_life_percent && !is_hot {
+                        let life_text_color = player_life_color(player_idx);
+                        let text_y = cy + bar_h * 0.5 - (bar_h * life_for_render);
+                        let (outer_x, inner_x, text_x, align_x) = if side == profile::PlayerSide::P1
+                        {
+                            (x + 10.0, x + 11.0, x + 12.0, 0.0)
+                        } else {
+                            (x - 11.0, x - 12.0, x - 13.0, 1.0)
+                        };
+                        actors.push(act!(quad:
+                            align(align_x, 0.5): xy(outer_x, text_y):
+                            zoomto(44.0, 18.0):
+                            diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
+                            z(94)
+                        ));
+                        actors.push(act!(quad:
+                            align(align_x, 0.5): xy(inner_x, text_y):
+                            zoomto(42.0, 16.0):
+                            diffuse(0.0, 0.0, 0.0, 1.0):
+                            z(95)
+                        ));
+                        actors.push(act!(text:
+                            font("miso"): settext(life_percent_text.clone()):
+                            align(align_x, 0.5): xy(text_x, text_y):
+                            zoom(0.40):
+                            diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
+                            z(96)
                         ));
                     }
                 }
