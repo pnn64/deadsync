@@ -1098,6 +1098,7 @@ pub struct Profile {
     pub subtractive_scoring: bool,
     pub pacemaker: bool,
     pub nps_graph_at_top: bool,
+    pub transparent_density_graph_bg: bool,
     pub mini_indicator: MiniIndicator,
     // Mini modifier as a percentage, mirroring Simply Love semantics.
     // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
@@ -1193,6 +1194,7 @@ impl Default for Profile {
             subtractive_scoring: false,
             pacemaker: false,
             nps_graph_at_top: false,
+            transparent_density_graph_bg: false,
             mini_indicator: MiniIndicator::None,
             mini_percent: 0,
             perspective: Perspective::default(),
@@ -1396,6 +1398,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         content.push_str(&format!(
             "NPSGraphAtTop = {}\n",
             i32::from(default_profile.nps_graph_at_top)
+        ));
+        content.push_str(&format!(
+            "TransparentDensityGraphBackground = {}\n",
+            i32::from(default_profile.transparent_density_graph_bg)
         ));
         content.push_str(&format!(
             "MiniIndicator = {}\n",
@@ -1680,6 +1686,10 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!(
         "NPSGraphAtTop={}\n",
         i32::from(profile.nps_graph_at_top)
+    ));
+    content.push_str(&format!(
+        "TransparentDensityGraphBackground={}\n",
+        i32::from(profile.transparent_density_graph_bg)
     ));
     content.push_str(&format!("MiniIndicator={}\n", profile.mini_indicator));
     content.push_str(&format!(
@@ -2315,6 +2325,10 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "NPSGraphAtTop")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.nps_graph_at_top, |v| v != 0);
+            profile.transparent_density_graph_bg = profile_conf
+                .get("PlayerOptions", "TransparentDensityGraphBackground")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.transparent_density_graph_bg, |v| v != 0);
             profile.mini_indicator = profile_conf
                 .get("PlayerOptions", "MiniIndicator")
                 .and_then(|s| MiniIndicator::from_str(&s).ok())
@@ -3241,6 +3255,21 @@ pub fn update_gameplay_extras_for_side(
         ) {
             profile.mini_indicator = MiniIndicator::None;
         }
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_transparent_density_graph_bg_for_side(side: PlayerSide, enabled: bool) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.transparent_density_graph_bg == enabled {
+            return;
+        }
+        profile.transparent_density_graph_bg = enabled;
     }
     save_profile_ini_for_side(side);
 }

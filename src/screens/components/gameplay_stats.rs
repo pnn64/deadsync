@@ -1998,11 +1998,16 @@ fn build_side_pane(
         if graph_w > 0.0_f32 && graph_h > 0.0_f32 {
             let x0 = sidepane_center_x - graph_w * 0.5;
             let y0 = sidepane_center_y + 55.0;
+            let bg_alpha = if state.player_profiles[player_idx].transparent_density_graph_bg {
+                0.5
+            } else {
+                1.0
+            };
 
             actors.push(act!(quad:
                 align(0.0, 0.0): xy(x0, y0):
                 zoomto(graph_w, graph_h):
-                diffuse(BG_RGB[0], BG_RGB[1], BG_RGB[2], 1.0):
+                diffuse(BG_RGB[0], BG_RGB[1], BG_RGB[2], bg_alpha):
                 z(59)
             ));
 

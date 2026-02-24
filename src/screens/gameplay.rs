@@ -529,11 +529,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let y_bottom = 71.0;
         let y_top = y_bottom - graph_h;
         let y_mesh_top = y_bottom - graph_mesh_h;
+        let graph_bg_alpha = if state.player_profiles[player_idx].transparent_density_graph_bg {
+            0.5
+        } else {
+            1.0
+        };
 
         actors.push(act!(quad:
             align(0.0, 0.0): xy(x, y_top):
             zoomto(graph_w, graph_h):
-            diffuse(30.0 / 255.0, 40.0 / 255.0, 47.0 / 255.0, 1.0):
+            diffuse(30.0 / 255.0, 40.0 / 255.0, 47.0 / 255.0, graph_bg_alpha):
             z(84)
         ));
 

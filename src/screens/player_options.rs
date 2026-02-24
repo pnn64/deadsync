@@ -1011,6 +1011,13 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
+            name: "Density Graph Background".to_string(),
+            choices: vec!["Solid".to_string(), "Transparent".to_string()],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec!["Choose solid or transparent gameplay density graph background.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
             name: "Gameplay Extras (More)".to_string(),
             choices: gameplay_extras_more_choices,
             selected_choice_index: [0; PLAYER_SLOTS],
@@ -1868,6 +1875,16 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
+    if let Some(row) = rows
+        .iter_mut()
+        .find(|r| r.name == "Density Graph Background")
+    {
+        row.selected_choice_index[player_idx] = if profile.transparent_density_graph_bg {
+            1
+        } else {
+            0
+        };
+    }
 
     // Initialize Gameplay Extras (More) row from profile (multi-choice toggle group).
     if profile.column_cues {
@@ -2526,6 +2543,7 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "LifeMeter Type"
         || row_name == "Life Bar Options"
         || row_name == "Data Visualizations"
+        || row_name == "Density Graph Background"
         || row_name == "Combo Colors"
         || row_name == "Combo Color Mode"
         || row_name == ROW_CARRY_COMBO
@@ -3128,6 +3146,15 @@ fn change_choice_for_player(
                 subtractive_scoring,
                 pacemaker,
                 profile_ref.nps_graph_at_top,
+            );
+        }
+    } else if row_name == "Density Graph Background" {
+        let transparent = row.selected_choice_index[player_idx] == 1;
+        state.player_profiles[player_idx].transparent_density_graph_bg = transparent;
+        if should_persist {
+            crate::game::profile::update_transparent_density_graph_bg_for_side(
+                persist_side,
+                transparent,
             );
         }
     } else if row_name == "Background Filter" {
@@ -3918,7 +3945,7 @@ fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 3 {
+    let bit = if choice_index < 2 {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -4226,7 +4253,7 @@ fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 2 {
+    let bit = if choice_index < 3 {
         1u8 << (choice_index as u8)
     } else {
         0
