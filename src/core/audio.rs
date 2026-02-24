@@ -314,37 +314,151 @@ pub fn get_music_stream_position_seconds() -> f32 {
 
 /* ============================ Engine internals ============================ */
 
+fn output_device_name(device: &cpal::Device) -> String {
+    device
+        .description()
+        .map(|desc| desc.name().to_string())
+        .unwrap_or_else(|_| "<unknown>".to_string())
+}
+
+fn find_output_device_by_token(host: &cpal::Host, token: &str) -> Option<(cpal::Device, String)> {
+    let token = token.trim();
+    if token.is_empty() || token.eq_ignore_ascii_case("auto") {
+        return None;
+    }
+    let token_lc = token.to_ascii_lowercase();
+    let wanted_index = token.parse::<usize>().ok();
+
+    for pass in 0..2 {
+        let fuzzy = pass != 0;
+        let devices = host.output_devices().ok()?;
+        for (idx, dev) in devices.enumerate() {
+            let id = dev.id().ok();
+            let id_full = id.as_ref().map(ToString::to_string);
+            let id_backend = id.as_ref().map(|id| id.1.as_str());
+            let desc = dev.description().ok();
+            let name = desc.as_ref().map(|d| d.name());
+            let driver = desc.as_ref().and_then(|d| d.driver());
+
+            if !fuzzy {
+                if wanted_index.is_some_and(|want| idx == want) {
+                    return Some((dev, format!("device index {idx}")));
+                }
+                if id_full
+                    .as_deref()
+                    .is_some_and(|v| v.eq_ignore_ascii_case(token))
+                {
+                    return Some((dev, format!("device id '{}'", id_full.unwrap_or_default())));
+                }
+                if id_backend.is_some_and(|v| v.eq_ignore_ascii_case(token)) {
+                    return Some((dev, format!("backend id '{token}'")));
+                }
+                if driver.is_some_and(|v| v.eq_ignore_ascii_case(token)) {
+                    return Some((dev, format!("driver '{token}'")));
+                }
+                if name.is_some_and(|v| v.eq_ignore_ascii_case(token)) {
+                    return Some((dev, format!("name '{token}'")));
+                }
+                continue;
+            }
+
+            if id_full
+                .as_deref()
+                .is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
+                || id_backend.is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
+                || driver.is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
+                || name.is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
+            {
+                return Some((dev, format!("substring '{token}'")));
+            }
+        }
+    }
+    None
+}
+
+fn select_output_device(
+    mut host: cpal::Host,
+    sound_device: Option<&str>,
+) -> Result<(cpal::Host, cpal::Device, String), String> {
+    let requested = sound_device
+        .map(str::trim)
+        .filter(|v| !v.is_empty() && !v.eq_ignore_ascii_case("auto"));
+    if let Some(token) = requested {
+        if let Ok(device_id) = token.parse::<cpal::DeviceId>() {
+            if let Ok(forced_host) = cpal::host_from_id(device_id.0) {
+                host = forced_host;
+            } else {
+                warn!(
+                    "SoundDevice '{token}' requested host '{}' which is unavailable.",
+                    device_id.0
+                );
+            }
+
+            if let Some(dev) = host.device_by_id(&device_id) {
+                return Ok((host, dev, format!("device id '{device_id}'")));
+            }
+            warn!(
+                "SoundDevice '{token}' parsed as a device id, but no output device matched on host '{}'.",
+                host.id()
+            );
+        }
+
+        if let Some((dev, matched_by)) = find_output_device_by_token(&host, token) {
+            return Ok((host, dev, format!("token '{token}' via {matched_by}")));
+        }
+        warn!(
+            "SoundDevice '{token}' did not match any output device on host '{}'; using default output.",
+            host.id()
+        );
+    }
+
+    host.default_output_device()
+        .ok_or_else(|| "no audio output device".to_string())
+        .map(|dev| (host, dev, "default output device".to_string()))
+}
+
 fn init_engine_and_thread() -> AudioEngine {
     let (command_sender, command_receiver) = channel();
 
-    let host = cpal::default_host();
-    let device = host
-        .default_output_device()
-        .expect("no audio output device");
-    let device_name = device
-        .description()
-        .map(|desc| desc.name().to_string())
-        .unwrap_or_else(|_| "<unknown>".to_string());
-    let device_id = device.id().ok();
+    let cfg = crate::config::get();
+    let requested_sound_device = crate::config::sound_device();
+    let (host, device, selected_by) =
+        select_output_device(cpal::default_host(), requested_sound_device.as_deref())
+            .expect("no audio output device");
+    let device_name = output_device_name(&device);
+    let selected_device_id = device.id().ok();
+    let default_device_id = host.default_output_device().and_then(|dev| dev.id().ok());
     let default_config = device
         .default_output_config()
         .expect("no default audio config");
     let mut stream_config: StreamConfig = default_config.clone().into();
+
+    info!(
+        "Audio SoundDevice option: {}",
+        requested_sound_device.as_deref().unwrap_or("Auto")
+    );
+    info!("Audio output device selection: {selected_by}.");
 
     // Log all available output devices and their supported configurations for debugging.
     match host.output_devices() {
         Ok(devices) => {
             info!("Enumerating audio output devices for host {:?}:", host.id());
             for (idx, dev) in devices.enumerate() {
-                let name = dev
-                    .description()
-                    .map(|desc| desc.name().to_string())
-                    .unwrap_or_else(|_| "<unknown>".to_string());
-                let is_default = match (&device_id, dev.id()) {
+                let name = output_device_name(&dev);
+                let is_selected = match (&selected_device_id, dev.id()) {
+                    (Some(selected_id), Ok(id)) => *selected_id == id,
+                    _ => false,
+                };
+                let is_default = match (&default_device_id, dev.id()) {
                     (Some(default_id), Ok(id)) => *default_id == id,
                     _ => false,
                 };
-                let tag = if is_default { " (default)" } else { "" };
+                let tag = match (is_selected, is_default) {
+                    (true, true) => " (selected, default)",
+                    (true, false) => " (selected)",
+                    (false, true) => " (default)",
+                    (false, false) => "",
+                };
                 info!("  Device {idx}: '{name}'{tag}");
                 match dev.supported_output_configs() {
                     Ok(configs) => {
@@ -367,7 +481,6 @@ fn init_engine_and_thread() -> AudioEngine {
         }
     }
 
-    let cfg = crate::config::get();
     let requested_rate = cfg.audio_sample_rate_hz;
     if let Some(target_hz) = requested_rate {
         info!(

@@ -289,6 +289,8 @@ impl Config {
 // Global, mutable configuration instance.
 static CONFIG: std::sync::LazyLock<Mutex<Config>> =
     std::sync::LazyLock::new(|| Mutex::new(Config::default()));
+static SOUND_DEVICE: std::sync::LazyLock<Mutex<Option<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(None));
 
 // --- File I/O ---
 
@@ -434,6 +436,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         "SoftwareRendererThreads={}\n",
         default.software_renderer_threads
     ));
+    content.push_str("SoundDevice=Auto\n");
     content.push_str(&format!("SFXVolume={}\n", default.sfx_volume));
     content.push_str(&format!(
         "TranslatedTitles={}\n",
@@ -520,6 +523,20 @@ pub fn load() {
     let mut conf = SimpleIni::new();
     match conf.load(CONFIG_PATH) {
         Ok(()) => {
+            {
+                let sound_device = conf
+                    .get("Options", "SoundDevice")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() || v.eq_ignore_ascii_case("auto") {
+                            None
+                        } else {
+                            Some(v)
+                        }
+                    });
+                *SOUND_DEVICE.lock().unwrap() = sound_device;
+            }
+
             // This block populates the global CONFIG struct from the file,
             // using default values for any missing keys.
             {
@@ -834,6 +851,7 @@ pub fn load() {
                     "SmoothHistogram",
                     "SFXVolume",
                     "SoftwareRendererThreads",
+                    "SoundDevice",
                     "TranslatedTitles",
                     "VideoRenderer",
                     "VisualDelaySeconds",
@@ -869,6 +887,7 @@ pub fn load() {
         }
         Err(e) => {
             warn!("Failed to load '{CONFIG_PATH}': {e}. Using default values.");
+            *SOUND_DEVICE.lock().unwrap() = None;
         }
     }
 }
@@ -1467,8 +1486,9 @@ pub fn update_keymap_binding_unique_gamepad(
 fn save_without_keymaps() {
     // Manual writer that keeps [Options]/[Theme] sorted and emits a stable,
     // CamelCase [Keymaps] section derived from the current in-memory keymap.
-    let cfg = CONFIG.lock().unwrap();
+    let cfg = *CONFIG.lock().unwrap();
     let keymap = crate::core::input::get_keymap();
+    let sound_device = SOUND_DEVICE.lock().unwrap().clone();
 
     let mut content = String::new();
 
@@ -1594,6 +1614,10 @@ fn save_without_keymaps() {
         "SoftwareRendererThreads={}\n",
         cfg.software_renderer_threads
     ));
+    content.push_str(&format!(
+        "SoundDevice={}\n",
+        sound_device.as_deref().unwrap_or("Auto")
+    ));
     content.push_str(&format!("SFXVolume={}\n", cfg.sfx_volume));
     content.push_str(&format!(
         "TranslatedTitles={}\n",
@@ -1653,6 +1677,10 @@ fn save_without_keymaps() {
 
 pub fn get() -> Config {
     *CONFIG.lock().unwrap()
+}
+
+pub fn sound_device() -> Option<String> {
+    SOUND_DEVICE.lock().unwrap().clone()
 }
 
 pub fn update_display_mode(mode: DisplayMode) {
