@@ -943,7 +943,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         actors.push(act!(text:
                             font("miso"): settext(life_percent_text.clone()):
                             align(align_x, 0.5): xy(text_x, meter_cy):
-                            zoom(0.40):
+                            zoom(1.0):
                             diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
                             z(96)
                         ));
@@ -1113,7 +1113,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         actors.push(act!(text:
                             font("miso"): settext(life_percent_text.clone()):
                             align(align_x, 0.5): xy(text_x, text_y):
-                            zoom(0.40):
+                            zoom(1.0):
                             diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
                             z(96)
                         ));
