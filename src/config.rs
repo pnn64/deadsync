@@ -2048,6 +2048,30 @@ pub fn update_master_volume(volume: u8) {
     save_without_keymaps();
 }
 
+pub fn update_music_volume(volume: u8) {
+    let vol = volume.clamp(0, 100);
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.music_volume == vol {
+            return;
+        }
+        cfg.music_volume = vol;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_sfx_volume(volume: u8) {
+    let vol = volume.clamp(0, 100);
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.sfx_volume == vol {
+            return;
+        }
+        cfg.sfx_volume = vol;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_audio_sample_rate(rate: Option<u32>) {
     {
         let mut cfg = CONFIG.lock().unwrap();

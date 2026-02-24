@@ -46,6 +46,8 @@ const GLOBAL_OFFSET_MIN_MS: i32 = -1000;
 const GLOBAL_OFFSET_MAX_MS: i32 = 1000;
 const VISUAL_DELAY_MIN_MS: i32 = -1000;
 const VISUAL_DELAY_MAX_MS: i32 = 1000;
+const VOLUME_MIN_PERCENT: i32 = 0;
+const VOLUME_MAX_PERCENT: i32 = 100;
 
 // --- Monitor & Video Mode Data Structures ---
 
@@ -74,6 +76,11 @@ impl RowTween {
 fn format_ms(value: i32) -> String {
     // Positive values omit a '+' and compact to the Simply Love "Nms" style.
     format!("{value}ms")
+}
+
+#[inline(always)]
+fn format_percent(value: i32) -> String {
+    format!("{value}%")
 }
 
 #[inline(always)]
@@ -202,7 +209,9 @@ pub const ITEMS: &[Item] = &[
         name: "Sound Options",
         help: &[
             "Adjust audio output settings and feedback sounds.",
-            "Sound Volume",
+            "Master Volume",
+            "SFX Volume",
+            "Music Volume",
             "Audio Sample Rate",
             "Mine Sounds",
             "Global Offset",
@@ -726,9 +735,19 @@ pub const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
 
 pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: "Sound Volume",
-        choices: &["Silent", "10%", "25%", "50%", "75%", "100%"],
-        inline: true,
+        label: "Master Volume",
+        choices: &["100%"],
+        inline: false,
+    },
+    SubRow {
+        label: "SFX Volume",
+        choices: &["100%"],
+        inline: false,
+    },
+    SubRow {
+        label: "Music Volume",
+        choices: &["100%"],
+        inline: false,
     },
     SubRow {
         label: "Audio Sample Rate",
@@ -754,8 +773,16 @@ pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
 
 pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     Item {
-        name: "Sound Volume",
-        help: &["Set the master sound volume for gameplay."],
+        name: "Master Volume",
+        help: &["Set the overall volume for all audio."],
+    },
+    Item {
+        name: "SFX Volume",
+        help: &["Set the sound-effect volume before master volume is applied."],
+    },
+    Item {
+        name: "Music Volume",
+        help: &["Set the music volume before master volume is applied."],
     },
     Item {
         name: "Audio Sample Rate",
@@ -1838,6 +1865,9 @@ pub struct State {
     score_import_profile_ids: Vec<Option<String>>,
     score_import_pack_choices: Vec<String>,
     score_import_pack_filters: Vec<Option<String>>,
+    master_volume_pct: i32,
+    sfx_volume_pct: i32,
+    music_volume_pct: i32,
     global_offset_ms: i32,
     visual_delay_ms: i32,
     video_renderer_at_load: BackendType,
@@ -1918,6 +1948,9 @@ pub fn init() -> State {
         score_import_profile_ids: vec![None],
         score_import_pack_choices: vec![SCORE_IMPORT_ALL_PACKS.to_string()],
         score_import_pack_filters: vec![None],
+        master_volume_pct: i32::from(cfg.master_volume.clamp(0, 100)),
+        sfx_volume_pct: i32::from(cfg.sfx_volume.clamp(0, 100)),
+        music_volume_pct: i32::from(cfg.music_volume.clamp(0, 100)),
         global_offset_ms: {
             let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
             ms.clamp(GLOBAL_OFFSET_MIN_MS, GLOBAL_OFFSET_MAX_MS)
@@ -2012,8 +2045,20 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
-        "Sound Volume",
+        "Master Volume",
         master_volume_choice_index(cfg.master_volume),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_sound,
+        SOUND_OPTIONS_ROWS,
+        "SFX Volume",
+        master_volume_choice_index(cfg.sfx_volume),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_sound,
+        SOUND_OPTIONS_ROWS,
+        "Music Volume",
+        master_volume_choice_index(cfg.music_volume),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_sound,
@@ -2781,6 +2826,47 @@ fn apply_submenu_choice_delta(
     }
 
     if let Some(row) = rows.get(row_index) {
+        if matches!(kind, SubmenuKind::Sound) {
+            match row.label {
+                "Master Volume" => {
+                    if adjust_ms_value(
+                        &mut state.master_volume_pct,
+                        delta,
+                        VOLUME_MIN_PERCENT,
+                        VOLUME_MAX_PERCENT,
+                    ) {
+                        config::update_master_volume(state.master_volume_pct as u8);
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                    }
+                    return None;
+                }
+                "SFX Volume" => {
+                    if adjust_ms_value(
+                        &mut state.sfx_volume_pct,
+                        delta,
+                        VOLUME_MIN_PERCENT,
+                        VOLUME_MAX_PERCENT,
+                    ) {
+                        config::update_sfx_volume(state.sfx_volume_pct as u8);
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                    }
+                    return None;
+                }
+                "Music Volume" => {
+                    if adjust_ms_value(
+                        &mut state.music_volume_pct,
+                        delta,
+                        VOLUME_MIN_PERCENT,
+                        VOLUME_MAX_PERCENT,
+                    ) {
+                        config::update_music_volume(state.music_volume_pct as u8);
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                    }
+                    return None;
+                }
+                _ => {}
+            }
+        }
         if matches!(kind, SubmenuKind::Sound) && row.label == "Global Offset (ms)" {
             if adjust_ms_value(
                 &mut state.global_offset_ms,
@@ -2887,9 +2973,17 @@ fn apply_submenu_choice_delta(
     } else if matches!(kind, SubmenuKind::Sound) {
         let row = &rows[row_index];
         match row.label {
-            "Sound Volume" => {
+            "Master Volume" => {
                 let vol = master_volume_from_choice(new_index);
                 config::update_master_volume(vol);
+            }
+            "SFX Volume" => {
+                let vol = master_volume_from_choice(new_index);
+                config::update_sfx_volume(vol);
+            }
+            "Music Volume" => {
+                let vol = master_volume_from_choice(new_index);
+                config::update_music_volume(vol);
             }
             "Audio Sample Rate" => {
                 let rate = sample_rate_from_choice(new_index);
@@ -3445,6 +3539,12 @@ fn submenu_cursor_dest(
     }
     if row.label == "Global Offset (ms)" {
         choice_texts[0] = Cow::Owned(format_ms(state.global_offset_ms));
+    } else if row.label == "Master Volume" {
+        choice_texts[0] = Cow::Owned(format_percent(state.master_volume_pct));
+    } else if row.label == "SFX Volume" {
+        choice_texts[0] = Cow::Owned(format_percent(state.sfx_volume_pct));
+    } else if row.label == "Music Volume" {
+        choice_texts[0] = Cow::Owned(format_percent(state.music_volume_pct));
     } else if row.label == "Visual Delay (ms)" {
         choice_texts[0] = Cow::Owned(format_ms(state.visual_delay_ms));
     }
@@ -4060,6 +4160,15 @@ pub fn get_actors(
                             let value_zoom = 0.835_f32;
                             if row.label == "Global Offset (ms)" {
                                 let formatted = Cow::Owned(format_ms(state.global_offset_ms));
+                                choice_texts[0] = formatted;
+                            } else if row.label == "Master Volume" {
+                                let formatted = Cow::Owned(format_percent(state.master_volume_pct));
+                                choice_texts[0] = formatted;
+                            } else if row.label == "SFX Volume" {
+                                let formatted = Cow::Owned(format_percent(state.sfx_volume_pct));
+                                choice_texts[0] = formatted;
+                            } else if row.label == "Music Volume" {
+                                let formatted = Cow::Owned(format_percent(state.music_volume_pct));
                                 choice_texts[0] = formatted;
                             } else if row.label == "Visual Delay (ms)" {
                                 let formatted = Cow::Owned(format_ms(state.visual_delay_ms));
