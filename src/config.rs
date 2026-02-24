@@ -257,6 +257,8 @@ pub struct Config {
     // Global background brightness during gameplay (ITGmania: Pref "BGBrightness").
     // 1.0 = full brightness, 0.0 = black.
     pub bg_brightness: f32,
+    // ITGmania/Simply Love parity: center the active single-player notefield in gameplay.
+    pub center_1player_notefield: bool,
     /// ITGmania-style wheel banner cache toggle.
     pub banner_cache: bool,
     /// Downscale divisor for cached banners (ITG default: 2).
@@ -327,6 +329,7 @@ impl Default for Config {
             translated_titles: false,
             mine_hit_sound: true,
             bg_brightness: 0.7,
+            center_1player_notefield: false,
             banner_cache: true,
             banner_cache_scale_divisor: 2,
             banner_cache_min_dimension: 32,
@@ -447,6 +450,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "CacheSongs={}\n",
         if default.cachesongs { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "Center1Player={}\n",
+        if default.center_1player_notefield {
+            "1"
+        } else {
+            "0"
+        }
     ));
     content.push_str(&format!("DefaultNoteSkin={DEFAULT_MACHINE_NOTESKIN}\n"));
     content.push_str(&format!("DisplayHeight={}\n", default.display_height));
@@ -743,6 +754,16 @@ pub fn load() {
                     .get("Options", "BGBrightness")
                     .and_then(|v| v.parse::<f32>().ok())
                     .map_or(default.bg_brightness, |v| v.clamp(0.0, 1.0));
+                cfg.center_1player_notefield = conf
+                    .get("Options", "Center1Player")
+                    .or_else(|| conf.get("Options", "CenteredP1Notefield"))
+                    .map(|v| v.trim().to_ascii_lowercase())
+                    .and_then(|v| match v.as_str() {
+                        "1" | "true" | "yes" | "on" => Some(true),
+                        "0" | "false" | "no" | "off" => Some(false),
+                        _ => None,
+                    })
+                    .unwrap_or(default.center_1player_notefield);
                 cfg.banner_cache = conf
                     .get("Options", "BannerCache")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -972,6 +993,7 @@ pub fn load() {
                     "BannerCachePow2",
                     "BannerCacheScaleDivisor",
                     "CacheSongs",
+                    "Center1Player",
                     "DefaultNoteSkin",
                     "DisplayHeight",
                     "DisplayWidth",
@@ -1687,6 +1709,14 @@ fn save_without_keymaps() {
         "CacheSongs={}\n",
         if cfg.cachesongs { "1" } else { "0" }
     ));
+    content.push_str(&format!(
+        "Center1Player={}\n",
+        if cfg.center_1player_notefield {
+            "1"
+        } else {
+            "0"
+        }
+    ));
     content.push_str(&format!("DefaultNoteSkin={machine_default_noteskin}\n"));
     content.push_str(&format!("DisplayHeight={}\n", cfg.display_height));
     content.push_str(&format!("DisplayWidth={}\n", cfg.display_width));
@@ -1991,6 +2021,17 @@ pub fn update_bg_brightness(brightness: f32) {
             return;
         }
         cfg.bg_brightness = clamped;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_center_1player_notefield(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.center_1player_notefield == enabled {
+            return;
+        }
+        cfg.center_1player_notefield = enabled;
     }
     save_without_keymaps();
 }

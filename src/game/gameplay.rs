@@ -2290,6 +2290,38 @@ fn get_reference_bpm_from_display_tag(display_bpm_str: &str) -> Option<f32> {
     s.parse::<f32>().ok()
 }
 
+fn step_stats_notefield_width(
+    noteskin: Option<&Noteskin>,
+    cols_per_player: usize,
+    field_zoom: f32,
+) -> Option<f32> {
+    let ns = noteskin?;
+    let cols = cols_per_player.min(ns.column_xs.len()).min(ns.receptor_off.len());
+    if cols == 0 {
+        return None;
+    }
+
+    let mut min_x = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    for x in ns.column_xs.iter().take(cols) {
+        let xf = *x as f32;
+        min_x = min_x.min(xf);
+        max_x = max_x.max(xf);
+    }
+
+    let zoom = field_zoom.max(0.0);
+    let target_arrow_px = 64.0 * zoom;
+    let size = ns.receptor_off[0].size();
+    let w = size[0].max(0) as f32;
+    let h = size[1].max(0) as f32;
+    let arrow_w = if h > 0.0 && target_arrow_px > 0.0 {
+        w * (target_arrow_px / h)
+    } else {
+        w * zoom
+    };
+    Some(((max_x - min_x) * zoom) + arrow_w)
+}
+
 fn upper_density_graph_width(play_style: profile::PlayStyle) -> f32 {
     // zmod UpperNPSGraph parity:
     //   width = GetNotefieldWidth()
@@ -2849,13 +2881,30 @@ pub fn init(
         .any(|p| p.data_visualizations == profile::DataVisualizations::StepStatistics);
     let wide = is_wide();
     let density_graph_enabled = wide && wants_step_stats;
+    let sw = screen_width();
+    let sh = screen_height().max(1.0_f32);
+    let is_ultrawide = sw / sh > (21.0_f32 / 9.0_f32);
+    let note_field_is_centered = num_players == 1
+        && play_style == profile::PlayStyle::Single
+        && config.center_1player_notefield;
     let density_graph_graph_h = if density_graph_enabled {
         105.0_f32
     } else {
         0.0_f32
     };
     let density_graph_graph_w = if density_graph_enabled {
-        (screen_width() * 0.5).round().max(1.0_f32)
+        let mut sidepane_width = sw * 0.5_f32;
+        if !is_ultrawide && note_field_is_centered && wide {
+            let nf_width =
+                step_stats_notefield_width(noteskin[0].as_ref(), cols_per_player, field_zoom[0])
+                    .unwrap_or(256.0_f32)
+                    .max(1.0_f32);
+            sidepane_width = ((sw - nf_width) * 0.5_f32).max(1.0_f32);
+        }
+        if is_ultrawide && num_players > 1 {
+            sidepane_width = (sw * 0.2_f32).max(1.0_f32);
+        }
+        sidepane_width.round().max(1.0_f32)
     } else {
         0.0_f32
     };

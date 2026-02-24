@@ -190,6 +190,76 @@ pub fn build(
     actors
 }
 
+#[derive(Clone, Copy, Debug)]
+struct StepStatsPaneLayout {
+    sidepane_center_x: f32,
+    sidepane_center_y: f32,
+    sidepane_width: f32,
+    note_field_is_centered: bool,
+    is_ultrawide: bool,
+    banner_data_zoom: f32,
+}
+
+fn step_stats_pane_layout(
+    state: &State,
+    playfield_center_x: f32,
+    player_side: profile::PlayerSide,
+) -> StepStatsPaneLayout {
+    let sw = screen_width();
+    let sh = screen_height().max(1.0);
+    let wide = is_wide();
+    let is_ultrawide = sw / sh > (21.0 / 9.0);
+    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
+
+    let mut sidepane_width = sw * 0.5;
+    let mut sidepane_center_x = match player_side {
+        profile::PlayerSide::P1 => sw * 0.75,
+        profile::PlayerSide::P2 => sw * 0.25,
+    };
+
+    // zmod StepStatistics/default.lua:
+    // when 1P notefield is centered on widescreen, clamp sidepane to the
+    // region between notefield edge and screen edge.
+    if !is_ultrawide && note_field_is_centered && wide {
+        let nf_width = notefield_width(state).unwrap_or(256.0).max(1.0);
+        sidepane_width = ((sw - nf_width) * 0.5).max(1.0);
+        sidepane_center_x = match player_side {
+            profile::PlayerSide::P1 => {
+                screen_center_x() + nf_width + (sidepane_width - nf_width) * 0.5
+            }
+            profile::PlayerSide::P2 => {
+                screen_center_x() - nf_width - (sidepane_width - nf_width) * 0.5
+            }
+        };
+    }
+
+    // zmod ultrawide versus override.
+    if is_ultrawide && state.num_players > 1 {
+        sidepane_width = sw * 0.2;
+        sidepane_center_x = match player_side {
+            profile::PlayerSide::P1 => sidepane_width * 0.5,
+            profile::PlayerSide::P2 => sw - (sidepane_width * 0.5),
+        };
+    }
+
+    let banner_data_zoom = if note_field_is_centered && wide && !is_ultrawide {
+        let ar = sw / sh;
+        let t = ((ar - (16.0 / 10.0)) / ((16.0 / 9.0) - (16.0 / 10.0))).clamp(0.0, 1.0);
+        0.825 + (0.925 - 0.825) * t
+    } else {
+        1.0
+    };
+
+    StepStatsPaneLayout {
+        sidepane_center_x,
+        sidepane_center_y: screen_center_y() + 80.0,
+        sidepane_width,
+        note_field_is_centered,
+        is_ultrawide,
+        banner_data_zoom,
+    }
+}
+
 pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     if !is_wide() {
         return vec![];
@@ -969,32 +1039,21 @@ fn build_banner(
     let mut actors = Vec::new();
     if let Some(banner_path) = &state.song.banner_path {
         let banner_key = banner_path.to_string_lossy().into_owned();
-        let wide = is_wide();
-        let sidepane_center_x = match player_side {
-            profile::PlayerSide::P1 => screen_width() * 0.75,
-            profile::PlayerSide::P2 => screen_width() * 0.25,
-        };
-        let sidepane_center_y = screen_center_y() + 80.0;
-        let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
-        let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
-        let banner_data_zoom = if note_field_is_centered && wide && !is_ultrawide {
-            let ar = screen_width() / screen_height();
-            let t = ((ar - (16.0 / 10.0)) / ((16.0 / 9.0) - (16.0 / 10.0))).clamp(0.0, 1.0);
-            0.825 + (0.925 - 0.825) * t
-        } else {
-            1.0
-        };
+        let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
         let mut local_banner_x = 70.0;
-        if note_field_is_centered && wide {
+        if layout.note_field_is_centered && is_wide() {
             local_banner_x = 72.0;
         }
         if player_side == profile::PlayerSide::P2 {
             local_banner_x *= -1.0;
         }
+        if layout.is_ultrawide && state.num_players > 1 {
+            local_banner_x *= -1.0;
+        }
         let local_banner_y = -200.0;
-        let banner_x = sidepane_center_x + (local_banner_x * banner_data_zoom);
-        let banner_y = sidepane_center_y + (local_banner_y * banner_data_zoom);
-        let final_zoom = 0.4 * banner_data_zoom;
+        let banner_x = layout.sidepane_center_x + (local_banner_x * layout.banner_data_zoom);
+        let banner_y = layout.sidepane_center_y + (local_banner_y * layout.banner_data_zoom);
+        let final_zoom = 0.4 * layout.banner_data_zoom;
         actors.push(act!(sprite(banner_key):
             align(0.5, 0.5): xy(banner_x, banner_y):
             setsize(418.0, 164.0): zoom(final_zoom):
@@ -1016,41 +1075,26 @@ fn build_pack_banner(
         return vec![];
     };
     let pack_key = pack_banner_path.to_string_lossy().into_owned();
-
-    let sidepane_center_x = match player_side {
-        profile::PlayerSide::P1 => screen_width() * 0.75,
-        profile::PlayerSide::P2 => screen_width() * 0.25,
-    };
-    let sidepane_center_y = screen_center_y() + 80.0;
-
-    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
-    let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
-    let banner_data_zoom = if note_field_is_centered && is_wide() && !is_ultrawide {
-        let ar = screen_width() / screen_height();
-        let t = ((ar - (16.0 / 10.0)) / ((16.0 / 9.0) - (16.0 / 10.0))).clamp(0.0, 1.0);
-        0.825 + (0.925 - 0.825) * t
-    } else {
-        1.0
-    };
+    let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
 
     let x_sign = match player_side {
         profile::PlayerSide::P1 => 1.0,
         profile::PlayerSide::P2 => -1.0,
     };
 
-    let (final_offset, final_size) = if note_field_is_centered {
+    let (final_offset, final_size) = if layout.note_field_is_centered {
         (-115.0, 0.2)
     } else {
         (-160.0, 0.25)
     };
-    let x = sidepane_center_x + (final_offset * x_sign * banner_data_zoom);
-    let y = sidepane_center_y + (20.0 * banner_data_zoom);
+    let x = layout.sidepane_center_x + (final_offset * x_sign * layout.banner_data_zoom);
+    let y = layout.sidepane_center_y + (20.0 * layout.banner_data_zoom);
 
     vec![act!(sprite(pack_key):
         align(0.5, 0.5):
         xy(x, y):
         setsize(418.0, 164.0):
-        zoom(final_size * banner_data_zoom):
+        zoom(final_size * layout.banner_data_zoom):
         z(-49)
     )]
 }
@@ -1064,30 +1108,18 @@ fn build_steps_info(
         return vec![];
     }
     let mut actors = Vec::new();
-
-    let sidepane_center_x = match player_side {
-        profile::PlayerSide::P1 => screen_width() * 0.75,
-        profile::PlayerSide::P2 => screen_width() * 0.25,
-    };
-    let sidepane_center_y = screen_center_y() + 80.0;
+    let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
 
     // Dark background for the Step Statistics side pane (Simply Love: DarkBackground.lua).
     actors.push(act!(quad:
         align(0.5, 0.5):
-        xy(sidepane_center_x, screen_center_y()):
-        zoomto(screen_width() * 0.5, screen_height()):
+        xy(layout.sidepane_center_x, screen_center_y()):
+        zoomto(layout.sidepane_width, screen_height()):
         diffuse(0.0, 0.0, 0.0, 0.95):
         z(-80)
     ));
-    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
-    let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
-    let banner_data_zoom = if note_field_is_centered && is_wide() && !is_ultrawide {
-        let ar = screen_width() / screen_height();
-        let t = ((ar - (16.0 / 10.0)) / ((16.0 / 9.0) - (16.0 / 10.0))).clamp(0.0, 1.0);
-        0.825 + (0.925 - 0.825) * t
-    } else {
-        1.0
-    };
+    let note_field_is_centered = layout.note_field_is_centered;
+    let banner_data_zoom = layout.banner_data_zoom;
 
     let player_idx = match (state.num_players, player_side) {
         (2, profile::PlayerSide::P2) => 1,
@@ -1141,8 +1173,8 @@ fn build_steps_info(
         }
     }
 
-    let origin_x = sidepane_center_x + ((x + xoffset) * pos_sign * banner_data_zoom);
-    let origin_y = sidepane_center_y + ((-8.0 + yoffset) * banner_data_zoom);
+    let origin_x = layout.sidepane_center_x + ((x + xoffset) * pos_sign * banner_data_zoom);
+    let origin_y = layout.sidepane_center_y + ((-8.0 + yoffset) * banner_data_zoom);
     let group_zoom = zoom * banner_data_zoom;
 
     let row_h = 16.0;
@@ -1369,28 +1401,15 @@ fn build_holds_mines_rolls_pane(
     }
     let p = &state.players[0];
     let mut actors = Vec::new();
-
-    let sidepane_center_x = match player_side {
-        profile::PlayerSide::P1 => screen_width() * 0.75,
-        profile::PlayerSide::P2 => screen_width() * 0.25,
-    };
-    let sidepane_center_y = screen_center_y() + 80.0;
-    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
-    let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
-    let banner_data_zoom = if note_field_is_centered && is_wide() && !is_ultrawide {
-        let ar = screen_width() / screen_height();
-        let t = ((ar - (16.0 / 10.0)) / ((16.0 / 9.0) - (16.0 / 10.0))).clamp(0.0, 1.0);
-        0.825 + (0.925 - 0.825) * t
-    } else {
-        1.0
-    };
+    let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
+    let banner_data_zoom = layout.banner_data_zoom;
     let local_x = match player_side {
         profile::PlayerSide::P1 => 155.0,
         profile::PlayerSide::P2 => -85.0,
     };
     let local_y = -112.0;
-    let frame_cx = sidepane_center_x + (local_x * banner_data_zoom);
-    let frame_cy = sidepane_center_y + (local_y * banner_data_zoom);
+    let frame_cx = layout.sidepane_center_x + (local_x * banner_data_zoom);
+    let frame_cy = layout.sidepane_center_y + (local_y * banner_data_zoom);
     let frame_zoom = banner_data_zoom;
 
     let categories = [
@@ -1509,34 +1528,21 @@ fn build_scorebox_pane(
     if !is_wide() {
         return Vec::new();
     }
-    let sidepane_center_x = match player_side {
-        profile::PlayerSide::P1 => screen_width() * 0.75,
-        profile::PlayerSide::P2 => screen_width() * 0.25,
-    };
-    let sidepane_center_y = screen_center_y() + 80.0;
-    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
-    let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
-    let banner_data_zoom = if note_field_is_centered && is_wide() && !is_ultrawide {
-        let ar = screen_width() / screen_height();
-        let t = ((ar - (16.0 / 10.0)) / ((16.0 / 9.0) - (16.0 / 10.0))).clamp(0.0, 1.0);
-        0.825 + (0.925 - 0.825) * t
-    } else {
-        1.0
-    };
+    let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
 
     let x_sign = match player_side {
         profile::PlayerSide::P1 => 1.0,
         profile::PlayerSide::P2 => -1.0,
     };
     let mut local_x = 70.0 * x_sign;
-    if note_field_is_centered && is_wide() {
+    if layout.note_field_is_centered && is_wide() {
         local_x += 2.0 * x_sign;
     }
-    if is_ultrawide && state.num_players > 1 {
+    if layout.is_ultrawide && state.num_players > 1 {
         local_x = -local_x;
     }
-    let frame_cx = sidepane_center_x + (local_x * banner_data_zoom);
-    let frame_cy = sidepane_center_y + (-115.0 * banner_data_zoom);
+    let frame_cx = layout.sidepane_center_x + (local_x * layout.banner_data_zoom);
+    let frame_cy = layout.sidepane_center_y + (-115.0 * layout.banner_data_zoom);
 
     let player_idx = if state.num_players >= 2 && player_side == profile::PlayerSide::P2 {
         1
@@ -1551,7 +1557,7 @@ fn build_scorebox_pane(
         profile::get_for_side(player_side).display_scorebox,
         frame_cx,
         frame_cy,
-        banner_data_zoom,
+        layout.banner_data_zoom,
         state.current_music_time,
     )
 }
@@ -1566,21 +1572,7 @@ fn build_side_pane(
         return vec![];
     }
     let mut actors = Vec::new();
-
-    let sidepane_center_x = match player_side {
-        profile::PlayerSide::P1 => screen_width() * 0.75,
-        profile::PlayerSide::P2 => screen_width() * 0.25,
-    };
-    let sidepane_center_y = screen_center_y() + 80.0;
-    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
-    let is_ultrawide = screen_width() / screen_height() > (21.0 / 9.0);
-    let banner_data_zoom = if note_field_is_centered && is_wide() && !is_ultrawide {
-        let ar = screen_width() / screen_height();
-        let t = ((ar - (16.0 / 10.0)) / ((16.0 / 9.0) - (16.0 / 10.0))).clamp(0.0, 1.0);
-        0.825 + (0.925 - 0.825) * t
-    } else {
-        1.0
-    };
+    let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
 
     let x_sign = match player_side {
         profile::PlayerSide::P1 => 1.0,
@@ -1590,11 +1582,18 @@ fn build_side_pane(
         (2, profile::PlayerSide::P2) => 1,
         _ => 0,
     };
-    let judgments_local_x = -widescale(152.0, 204.0) * x_sign;
-    let final_judgments_center_x = sidepane_center_x + (judgments_local_x * banner_data_zoom);
-    let final_judgments_center_y = sidepane_center_y;
+    let judgments_local_x = if layout.is_ultrawide && state.num_players > 1 {
+        154.0 * x_sign
+    } else if layout.note_field_is_centered && is_wide() {
+        -156.0 * x_sign
+    } else {
+        -widescale(152.0, 204.0) * x_sign
+    };
+    let final_judgments_center_x =
+        layout.sidepane_center_x + (judgments_local_x * layout.banner_data_zoom);
+    let final_judgments_center_y = layout.sidepane_center_y;
     let parent_local_zoom = 0.8;
-    let final_text_base_zoom = banner_data_zoom * parent_local_zoom;
+    let final_text_base_zoom = layout.banner_data_zoom * parent_local_zoom;
 
     let total_tapnotes = state.charts[player_idx].stats.total_steps as f32;
     let digits = if total_tapnotes > 0.0 {
@@ -1842,7 +1841,7 @@ fn build_side_pane(
 
         // --- Time Display (Remaining / Total) ---
         {
-            let local_y = -40.0 * banner_data_zoom;
+            let local_y = -40.0 * layout.banner_data_zoom;
 
             // Base chart length in seconds (GetLastSecond semantics).
             let base_total = state.song.total_length_seconds.max(0) as f32;
@@ -1882,7 +1881,7 @@ fn build_side_pane(
                 cached_game_time(remaining_time_key.0, remaining_time_key.1);
 
             let font_name = "miso";
-            let text_zoom = banner_data_zoom * 0.833;
+            let text_zoom = layout.banner_data_zoom * 0.833;
             // Time values currently render without explicit zoom, so treat as 1.0
             let time_value_zoom = 1.0_f32;
 
@@ -1902,7 +1901,7 @@ fn build_side_pane(
             let remaining_color = if state.players[0].is_failing { red_color } else { white_color };
 
             // --- Total Time Row ---
-            let y_pos_total = sidepane_center_y + local_y + 13.0;
+            let y_pos_total = layout.sidepane_center_y + local_y + 13.0;
             let label_offset: f32 = 29.0;
             // Keep original spacing for <= 9:59, otherwise push label after the time width
             let desired_gap_px = (label_offset - baseline_width_px).max(4.0_f32);
@@ -1948,7 +1947,7 @@ fn build_side_pane(
             }
 
             // --- Remaining Time Row ---
-            let y_pos_remaining = sidepane_center_y + local_y - 7.0;
+            let y_pos_remaining = layout.sidepane_center_y + local_y - 7.0;
 
             // Keep original spacing for <= 9:59, otherwise push label after the time width
             let label_offset_remaining = if remaining_width_px > baseline_width_px {
@@ -1998,8 +1997,8 @@ fn build_side_pane(
         let graph_h = state.density_graph_graph_h;
         let graph_w = state.density_graph_graph_w;
         if graph_w > 0.0_f32 && graph_h > 0.0_f32 {
-            let x0 = sidepane_center_x - graph_w * 0.5;
-            let y0 = sidepane_center_y + 55.0;
+            let x0 = layout.sidepane_center_x - graph_w * 0.5;
+            let y0 = layout.sidepane_center_y + 55.0;
             let bg_alpha = if state.player_profiles[player_idx].transparent_density_graph_bg {
                 0.5
             } else {

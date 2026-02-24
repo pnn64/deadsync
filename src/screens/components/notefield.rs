@@ -1,4 +1,5 @@
 use crate::act;
+use crate::config;
 use crate::core::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
 use crate::core::space::*;
 use crate::game::gameplay::{
@@ -1589,12 +1590,17 @@ pub fn build(
     let notefield_offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
+    let play_style = profile::get_session_play_style();
+    let center_1player = config::get().center_1player_notefield;
+    let centered_one_side =
+        state.num_players == 1 && play_style == profile::PlayStyle::Single && center_1player;
+    let centered_both_sides = state.num_players == 1 && play_style == profile::PlayStyle::Double;
     let base_playfield_center_x = if state.num_players == 2 {
         match placement {
             FieldPlacement::P1 => screen_center_x() - (clamped_width * 0.25),
             FieldPlacement::P2 => screen_center_x() + (clamped_width * 0.25),
         }
-    } else if state.cols_per_player > 4 {
+    } else if centered_both_sides || centered_one_side {
         screen_center_x()
     } else {
         match placement {
@@ -1603,6 +1609,13 @@ pub fn build(
         }
     };
     let playfield_center_x = base_playfield_center_x + notefield_offset_x;
+    // Simply Love's GetNotefieldX helper reports base center for centered one-player fields,
+    // ignoring NoteFieldOffsetX for layout decisions.
+    let layout_center_x = if state.num_players == 1 && (centered_both_sides || centered_one_side) {
+        screen_center_x()
+    } else {
+        playfield_center_x
+    };
     let receptor_y_normal = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + notefield_offset_y;
     let receptor_y_reverse =
         screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE + notefield_offset_y;
@@ -4656,10 +4669,10 @@ pub fn build(
     }
 
     if hud_actors.is_empty() {
-        return (actors, playfield_center_x);
+        return (actors, layout_center_x);
     }
     let mut out: Vec<Actor> = Vec::with_capacity(hud_actors.len() + actors.len());
     out.extend(hud_actors);
     out.extend(actors);
-    (out, playfield_center_x)
+    (out, layout_center_x)
 }

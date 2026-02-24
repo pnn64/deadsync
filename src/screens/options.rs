@@ -184,7 +184,11 @@ pub const ITEMS: &[Item] = &[
     },
     Item {
         name: "Gameplay Options",
-        help: &["Adjust gameplay presentation settings.", "BG Brightness"],
+        help: &[
+            "Adjust gameplay presentation settings.",
+            "BG Brightness",
+            "Centered P1 Notefield",
+        ],
     },
     Item {
         name: "Select Music Options",
@@ -536,6 +540,7 @@ const FULLSCREEN_TYPE_ROW_INDEX: usize = 5;
 const BG_BRIGHTNESS_CHOICES: [&str; 11] = [
     "0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%",
 ];
+const CENTERED_P1_NOTEFIELD_CHOICES: [&str; 2] = ["Off", "On"];
 const MUSIC_WHEEL_SCROLL_SPEED_CHOICES: [&str; 4] = ["Slow", "Normal", "Fast", "Really Fast"];
 const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 4] = [5, 10, 15, 25];
 
@@ -691,16 +696,27 @@ pub const INPUT_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-pub const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[SubRow {
-    label: "BG Brightness",
-    choices: &BG_BRIGHTNESS_CHOICES,
-    inline: false,
-}];
+pub const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: "BG Brightness",
+        choices: &BG_BRIGHTNESS_CHOICES,
+        inline: false,
+    },
+    SubRow {
+        label: "Centered P1 Notefield",
+        choices: &CENTERED_P1_NOTEFIELD_CHOICES,
+        inline: true,
+    },
+];
 
 pub const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: "BG Brightness",
         help: &["Adjust the background brightness during gameplay."],
+    },
+    Item {
+        name: "Centered P1 Notefield",
+        help: &["Center the active single-player notefield during gameplay."],
     },
     Item {
         name: "Exit",
@@ -1986,6 +2002,12 @@ pub fn init() -> State {
         "BG Brightness",
         bg_brightness_choice_index(cfg.bg_brightness),
     );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_gameplay,
+        GAMEPLAY_OPTIONS_ROWS,
+        "Centered P1 Notefield",
+        usize::from(cfg.center_1player_notefield),
+    );
 
     set_choice_by_label(
         &mut state.sub_choice_indices_sound,
@@ -2859,6 +2881,8 @@ fn apply_submenu_choice_delta(
         let row = &rows[row_index];
         if row.label == "BG Brightness" {
             config::update_bg_brightness(bg_brightness_from_choice(new_index));
+        } else if row.label == "Centered P1 Notefield" {
+            config::update_center_1player_notefield(new_index == 1);
         }
     } else if matches!(kind, SubmenuKind::Sound) {
         let row = &rows[row_index];
