@@ -4,12 +4,17 @@ use crate::core::display::{self, MonitorSpec};
 use crate::core::gfx::BackendType;
 use crate::core::space::{screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
-use crate::config::{self, BreakdownStyle, DisplayMode, FullscreenType};
+use crate::config::{self, BreakdownStyle, DisplayMode, FullscreenType, SimpleIni};
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::game::parsing::simfile as song_loading;
+use crate::game::{profile, scores};
 use crate::screens::{Screen, ScreenAction};
 use std::borrow::Cow;
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::screens::components::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
@@ -281,33 +286,22 @@ pub const ITEMS: &[Item] = &[
         ],
     },
     Item {
-        name: "Tournament Mode Options",
-        help: &[
-            "Adjust settings to enforce for consistency during tournament play.",
-            "Enable Tournament Mode",
-            "Scoring System",
-            "Step Stats",
-            "Enforce No Cmod",
-        ],
-    },
-    Item {
         name: "GrooveStats Options",
         help: &[
             "Manage GrooveStats settings.",
             "Enable GrooveStats",
             "Auto Populate GS Scores",
-            "Auto-Download Unlocks",
-            "Separate Unlocks By Player",
-            "Display GrooveStats QR Login",
         ],
     },
     Item {
-        name: "StepMania Credits",
-        help: &["Celebrate those who made StepMania possible."],
-    },
-    Item {
-        name: "Clear Credits",
-        help: &["Reset coin credits to 0."],
+        name: "Score Import",
+        help: &[
+            "Import online score data for a selected endpoint/profile and pack scope.",
+            "API Endpoint",
+            "Profile",
+            "Pack",
+            "Start",
+        ],
     },
     Item {
         name: "Reload Songs/Courses",
@@ -332,6 +326,7 @@ pub enum SubmenuKind {
     Sound,
     SelectMusic,
     GrooveStats,
+    ScoreImport,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -383,6 +378,79 @@ impl ReloadUiState {
     }
 }
 
+#[derive(Clone, Debug)]
+struct ScoreImportProfileConfig {
+    id: String,
+    display_name: String,
+    gs_api_key: String,
+    gs_username: String,
+    ac_api_key: String,
+}
+
+#[derive(Clone, Debug)]
+struct ScoreImportSelection {
+    endpoint: scores::ScoreImportEndpoint,
+    profile: ScoreImportProfileConfig,
+    pack_group: Option<String>,
+    pack_label: String,
+}
+
+#[derive(Debug)]
+enum ScoreImportMsg {
+    Progress(scores::ScoreImportProgress),
+    Done(Result<scores::ScoreBulkImportSummary, String>),
+}
+
+struct ScoreImportUiState {
+    endpoint: scores::ScoreImportEndpoint,
+    profile_name: String,
+    pack_label: String,
+    total_charts: usize,
+    processed_charts: usize,
+    imported_scores: usize,
+    missing_scores: usize,
+    failed_requests: usize,
+    detail_line: String,
+    done: bool,
+    done_message: String,
+    done_since: Option<Instant>,
+    cancel_requested: Arc<AtomicBool>,
+    rx: std::sync::mpsc::Receiver<ScoreImportMsg>,
+}
+
+impl ScoreImportUiState {
+    fn new(
+        endpoint: scores::ScoreImportEndpoint,
+        profile_name: String,
+        pack_label: String,
+        cancel_requested: Arc<AtomicBool>,
+        rx: std::sync::mpsc::Receiver<ScoreImportMsg>,
+    ) -> Self {
+        Self {
+            endpoint,
+            profile_name,
+            pack_label,
+            total_charts: 0,
+            processed_charts: 0,
+            imported_scores: 0,
+            missing_scores: 0,
+            failed_requests: 0,
+            detail_line: "Preparing score import...".to_string(),
+            done: false,
+            done_message: String::new(),
+            done_since: None,
+            cancel_requested,
+            rx,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ScoreImportConfirmState {
+    selection: ScoreImportSelection,
+    active_choice: u8, // 0 = Yes, 1 = No
+}
+
 // Local fade timing when swapping between main options list and System Options submenu.
 const SUBMENU_FADE_DURATION: f32 = 0.2;
 
@@ -391,6 +459,15 @@ pub struct SubRow<'a> {
     pub choices: &'a [&'a str],
     pub inline: bool, // whether to lay out choices inline (vs single centered value)
 }
+
+const GS_ROW_ENABLE: &str = "Enable GrooveStats";
+const GS_ROW_AUTO_POPULATE: &str = "Auto Populate GS Scores";
+const SCORE_IMPORT_ROW_ENDPOINT: &str = "API Endpoint";
+const SCORE_IMPORT_ROW_PROFILE: &str = "Profile";
+const SCORE_IMPORT_ROW_PACK: &str = "Pack";
+const SCORE_IMPORT_ROW_START: &str = "Start";
+const SCORE_IMPORT_ALL_PACKS: &str = "All";
+const SCORE_IMPORT_DONE_OVERLAY_SECONDS: f32 = 1.5;
 
 pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
@@ -694,25 +771,85 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
 
 pub const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: "Enable GrooveStats",
+        label: GS_ROW_ENABLE,
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: "Auto Populate GS Scores",
+        label: GS_ROW_AUTO_POPULATE,
         choices: &["No", "Yes"],
         inline: true,
     },
 ];
 
+pub const SCORE_IMPORT_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: SCORE_IMPORT_ROW_ENDPOINT,
+        choices: &["GrooveStats", "BoogieStats", "ArrowCloud"],
+        inline: true,
+    },
+    SubRow {
+        label: SCORE_IMPORT_ROW_PROFILE,
+        choices: &["No eligible profiles"],
+        inline: false,
+    },
+    SubRow {
+        label: SCORE_IMPORT_ROW_PACK,
+        choices: &[SCORE_IMPORT_ALL_PACKS],
+        inline: false,
+    },
+    SubRow {
+        label: SCORE_IMPORT_ROW_START,
+        choices: &["Start"],
+        inline: false,
+    },
+];
+
 pub const GROOVESTATS_OPTIONS_ITEMS: &[Item] = &[
     Item {
-        name: "Enable GrooveStats",
+        name: GS_ROW_ENABLE,
         help: &["Enable connection to GrooveStats services."],
     },
     Item {
-        name: "Auto Populate GS Scores",
+        name: GS_ROW_AUTO_POPULATE,
         help: &["Import GS grade/lamp/score when scorebox leaderboard requests complete."],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
+
+pub const SCORE_IMPORT_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: SCORE_IMPORT_ROW_ENDPOINT,
+        help: &[
+            "Choose the source endpoint to import scores from.",
+            "GrooveStats, BoogieStats, or ArrowCloud.",
+        ],
+    },
+    Item {
+        name: SCORE_IMPORT_ROW_PROFILE,
+        help: &[
+            "Select a local profile that has credentials configured for this endpoint.",
+            "GS/BS require API key + username in groovestats.ini.",
+            "AC requires API key in arrowcloud.ini.",
+        ],
+    },
+    Item {
+        name: SCORE_IMPORT_ROW_PACK,
+        help: &[
+            "Choose which installed pack to include in score import.",
+            "Use All to import across every installed pack.",
+        ],
+    },
+    Item {
+        name: SCORE_IMPORT_ROW_START,
+        help: &[
+            "Bulk-imports this profile's scores for the selected endpoint and pack filter.",
+            "Hard-limited to 3 requests/sec to avoid API spam.",
+            "For many charts, this can take more than one hour.",
+        ],
     },
     Item {
         name: "Exit",
@@ -727,6 +864,7 @@ const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
         SubmenuKind::Sound => SOUND_OPTIONS_ROWS,
         SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ROWS,
         SubmenuKind::GrooveStats => GROOVESTATS_OPTIONS_ROWS,
+        SubmenuKind::ScoreImport => SCORE_IMPORT_OPTIONS_ROWS,
     }
 }
 
@@ -737,6 +875,7 @@ const fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
         SubmenuKind::Sound => SOUND_OPTIONS_ITEMS,
         SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ITEMS,
         SubmenuKind::GrooveStats => GROOVESTATS_OPTIONS_ITEMS,
+        SubmenuKind::ScoreImport => SCORE_IMPORT_OPTIONS_ITEMS,
     }
 }
 
@@ -747,6 +886,7 @@ const fn submenu_title(kind: SubmenuKind) -> &'static str {
         SubmenuKind::Sound => "SOUND OPTIONS",
         SubmenuKind::SelectMusic => "SELECT MUSIC OPTIONS",
         SubmenuKind::GrooveStats => "GROOVESTATS OPTIONS",
+        SubmenuKind::ScoreImport => "SCORE IMPORT",
     }
 }
 
@@ -1067,6 +1207,221 @@ fn rebuild_resolution_choices(state: &mut State, width: u32, height: u32) {
     rebuild_refresh_rate_choices(state);
 }
 
+#[inline(always)]
+const fn score_import_endpoint_from_choice_index(idx: usize) -> scores::ScoreImportEndpoint {
+    match idx {
+        1 => scores::ScoreImportEndpoint::BoogieStats,
+        2 => scores::ScoreImportEndpoint::ArrowCloud,
+        _ => scores::ScoreImportEndpoint::GrooveStats,
+    }
+}
+
+#[inline(always)]
+fn score_import_selected_endpoint(state: &State) -> scores::ScoreImportEndpoint {
+    let idx = state
+        .sub_choice_indices_score_import
+        .get(0)
+        .copied()
+        .unwrap_or(0);
+    score_import_endpoint_from_choice_index(idx)
+}
+
+fn score_import_pack_options() -> (Vec<String>, Vec<Option<String>>) {
+    let cache = crate::game::song::get_song_cache();
+    let mut packs: Vec<(String, String)> = Vec::with_capacity(cache.len());
+    let mut seen_groups: HashSet<String> = HashSet::with_capacity(cache.len());
+
+    for pack in cache.iter() {
+        let group_name = pack.group_name.trim();
+        if group_name.is_empty() {
+            continue;
+        }
+        let group_key = group_name.to_ascii_lowercase();
+        if !seen_groups.insert(group_key) {
+            continue;
+        }
+        let display_name = if pack.name.trim().is_empty() {
+            group_name.to_string()
+        } else {
+            pack.name.trim().to_string()
+        };
+        packs.push((display_name, group_name.to_string()));
+    }
+
+    packs.sort_by(|a, b| {
+        a.0.to_ascii_lowercase()
+            .cmp(&b.0.to_ascii_lowercase())
+            .then_with(|| a.1.cmp(&b.1))
+    });
+
+    let mut choices = Vec::with_capacity(packs.len() + 1);
+    let mut filters = Vec::with_capacity(packs.len() + 1);
+    choices.push(SCORE_IMPORT_ALL_PACKS.to_string());
+    filters.push(None);
+    for (display_name, group_name) in packs {
+        choices.push(display_name);
+        filters.push(Some(group_name));
+    }
+    (choices, filters)
+}
+
+fn load_score_import_profiles() -> Vec<ScoreImportProfileConfig> {
+    let mut profiles = Vec::new();
+    for summary in profile::scan_local_profiles() {
+        let profile_dir = PathBuf::from("save/profiles").join(summary.id.as_str());
+        let mut gs = SimpleIni::new();
+        let mut ac = SimpleIni::new();
+        let gs_api_key = if gs.load(profile_dir.join("groovestats.ini")).is_ok() {
+            gs.get("GrooveStats", "ApiKey")
+                .map_or_else(String::new, |v| v.trim().to_string())
+        } else {
+            String::new()
+        };
+        let gs_username = if gs_api_key.is_empty() {
+            String::new()
+        } else {
+            gs.get("GrooveStats", "Username")
+                .map_or_else(String::new, |v| v.trim().to_string())
+        };
+        let ac_api_key = if ac.load(profile_dir.join("arrowcloud.ini")).is_ok() {
+            ac.get("ArrowCloud", "ApiKey")
+                .map_or_else(String::new, |v| v.trim().to_string())
+        } else {
+            String::new()
+        };
+        profiles.push(ScoreImportProfileConfig {
+            id: summary.id,
+            display_name: summary.display_name.trim().to_string(),
+            gs_api_key,
+            gs_username,
+            ac_api_key,
+        });
+    }
+    profiles.sort_by(|a, b| {
+        let al = a.display_name.to_ascii_lowercase();
+        let bl = b.display_name.to_ascii_lowercase();
+        al.cmp(&bl).then_with(|| a.id.cmp(&b.id))
+    });
+    profiles
+}
+
+#[inline(always)]
+fn score_import_profile_eligible(
+    endpoint: scores::ScoreImportEndpoint,
+    profile_cfg: &ScoreImportProfileConfig,
+) -> bool {
+    match endpoint {
+        scores::ScoreImportEndpoint::GrooveStats | scores::ScoreImportEndpoint::BoogieStats => {
+            !profile_cfg.gs_api_key.is_empty() && !profile_cfg.gs_username.is_empty()
+        }
+        scores::ScoreImportEndpoint::ArrowCloud => !profile_cfg.ac_api_key.is_empty(),
+    }
+}
+
+fn refresh_score_import_profile_options(state: &mut State) {
+    state.score_import_profile_choices.clear();
+    state.score_import_profile_ids.clear();
+
+    let endpoint = score_import_selected_endpoint(state);
+    for profile_cfg in &state.score_import_profiles {
+        if !score_import_profile_eligible(endpoint, profile_cfg) {
+            continue;
+        }
+        let label = if profile_cfg.display_name.is_empty() {
+            profile_cfg.id.clone()
+        } else {
+            format!("{} ({})", profile_cfg.display_name, profile_cfg.id)
+        };
+        state.score_import_profile_choices.push(label);
+        state
+            .score_import_profile_ids
+            .push(Some(profile_cfg.id.clone()));
+    }
+    if state.score_import_profile_choices.is_empty() {
+        state
+            .score_import_profile_choices
+            .push("No eligible profiles".to_string());
+        state.score_import_profile_ids.push(None);
+    }
+
+    let max_idx = state.score_import_profile_choices.len().saturating_sub(1);
+    if let Some(slot) = state.sub_choice_indices_score_import.get_mut(1) {
+        *slot = (*slot).min(max_idx);
+    }
+    if let Some(slot) = state.sub_cursor_indices_score_import.get_mut(1) {
+        *slot = (*slot).min(max_idx);
+    }
+}
+
+fn refresh_score_import_pack_options(state: &mut State) {
+    let (choices, filters) = score_import_pack_options();
+    state.score_import_pack_choices = choices;
+    state.score_import_pack_filters = filters;
+    let max_idx = state.score_import_pack_choices.len().saturating_sub(1);
+    if let Some(slot) = state.sub_choice_indices_score_import.get_mut(2) {
+        *slot = (*slot).min(max_idx);
+    }
+    if let Some(slot) = state.sub_cursor_indices_score_import.get_mut(2) {
+        *slot = (*slot).min(max_idx);
+    }
+}
+
+fn refresh_score_import_options(state: &mut State) {
+    state.score_import_profiles = load_score_import_profiles();
+    refresh_score_import_profile_options(state);
+    refresh_score_import_pack_options(state);
+}
+
+fn selected_score_import_pack_group(state: &State) -> Option<String> {
+    let pack_idx = state
+        .sub_choice_indices_score_import
+        .get(2)
+        .copied()
+        .unwrap_or(0)
+        .min(state.score_import_pack_filters.len().saturating_sub(1));
+    state
+        .score_import_pack_filters
+        .get(pack_idx)
+        .and_then(|opt| opt.clone())
+}
+
+fn selected_score_import_profile(state: &State) -> Option<ScoreImportProfileConfig> {
+    let profile_idx = state
+        .sub_choice_indices_score_import
+        .get(1)
+        .copied()
+        .unwrap_or(0)
+        .min(state.score_import_profile_ids.len().saturating_sub(1));
+    let profile_id = state
+        .score_import_profile_ids
+        .get(profile_idx)
+        .and_then(|id| id.clone())?;
+    state
+        .score_import_profiles
+        .iter()
+        .find(|p| p.id == profile_id)
+        .cloned()
+}
+
+fn selected_score_import_selection(state: &State) -> Option<ScoreImportSelection> {
+    let endpoint = score_import_selected_endpoint(state);
+    let profile_cfg = selected_score_import_profile(state)?;
+    if !score_import_profile_eligible(endpoint, &profile_cfg) {
+        return None;
+    }
+    let pack_group = selected_score_import_pack_group(state);
+    let pack_label = pack_group
+        .as_ref()
+        .cloned()
+        .unwrap_or_else(|| SCORE_IMPORT_ALL_PACKS.to_string());
+    Some(ScoreImportSelection {
+        endpoint,
+        profile: profile_cfg,
+        pack_group,
+        pack_label,
+    })
+}
+
 fn row_choices<'a>(
     state: &'a State,
     kind: SubmenuKind,
@@ -1108,6 +1463,26 @@ fn row_choices<'a>(
                         }
                     }
                 })
+                .collect();
+        }
+    }
+    if let Some(row) = rows.get(row_idx)
+        && matches!(kind, SubmenuKind::ScoreImport)
+    {
+        if row.label == SCORE_IMPORT_ROW_PROFILE {
+            return state
+                .score_import_profile_choices
+                .iter()
+                .cloned()
+                .map(Cow::Owned)
+                .collect();
+        }
+        if row.label == SCORE_IMPORT_ROW_PACK {
+            return state
+                .score_import_pack_choices
+                .iter()
+                .cloned()
+                .map(Cow::Owned)
                 .collect();
         }
     }
@@ -1308,6 +1683,8 @@ pub struct State {
     submenu_fade_t: f32,
     content_alpha: f32,
     reload_ui: Option<ReloadUiState>,
+    score_import_ui: Option<ScoreImportUiState>,
+    score_import_confirm: Option<ScoreImportConfirmState>,
     // Submenu state
     sub_selected: usize,
     sub_prev_selected: usize,
@@ -1317,11 +1694,18 @@ pub struct State {
     sub_choice_indices_sound: Vec<usize>,
     sub_choice_indices_select_music: Vec<usize>,
     sub_choice_indices_groovestats: Vec<usize>,
+    sub_choice_indices_score_import: Vec<usize>,
     sub_cursor_indices_system: Vec<usize>,
     sub_cursor_indices_graphics: Vec<usize>,
     sub_cursor_indices_sound: Vec<usize>,
     sub_cursor_indices_select_music: Vec<usize>,
     sub_cursor_indices_groovestats: Vec<usize>,
+    sub_cursor_indices_score_import: Vec<usize>,
+    score_import_profiles: Vec<ScoreImportProfileConfig>,
+    score_import_profile_choices: Vec<String>,
+    score_import_profile_ids: Vec<Option<String>>,
+    score_import_pack_choices: Vec<String>,
+    score_import_pack_filters: Vec<Option<String>>,
     global_offset_ms: i32,
     visual_delay_ms: i32,
     video_renderer_at_load: BackendType,
@@ -1368,6 +1752,8 @@ pub fn init() -> State {
         submenu_fade_t: 0.0,
         content_alpha: 1.0,
         reload_ui: None,
+        score_import_ui: None,
+        score_import_confirm: None,
         view: OptionsView::Main,
         sub_selected: 0,
         sub_prev_selected: 0,
@@ -1377,11 +1763,18 @@ pub fn init() -> State {
         sub_choice_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         sub_choice_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
         sub_choice_indices_groovestats: vec![0; GROOVESTATS_OPTIONS_ROWS.len()],
+        sub_choice_indices_score_import: vec![0; SCORE_IMPORT_OPTIONS_ROWS.len()],
         sub_cursor_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_cursor_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         sub_cursor_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         sub_cursor_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
         sub_cursor_indices_groovestats: vec![0; GROOVESTATS_OPTIONS_ROWS.len()],
+        sub_cursor_indices_score_import: vec![0; SCORE_IMPORT_OPTIONS_ROWS.len()],
+        score_import_profiles: Vec::new(),
+        score_import_profile_choices: vec!["No eligible profiles".to_string()],
+        score_import_profile_ids: vec![None],
+        score_import_pack_choices: vec![SCORE_IMPORT_ALL_PACKS.to_string()],
+        score_import_pack_filters: vec![None],
         global_offset_ms: {
             let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
             ms.clamp(GLOBAL_OFFSET_MIN_MS, GLOBAL_OFFSET_MAX_MS)
@@ -1474,15 +1867,16 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
-        "Enable GrooveStats",
+        GS_ROW_ENABLE,
         usize::from(cfg.enable_groovestats),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
-        "Auto Populate GS Scores",
+        GS_ROW_AUTO_POPULATE,
         usize::from(cfg.auto_populate_gs_scores),
     );
+    refresh_score_import_options(&mut state);
     sync_submenu_cursor_indices(&mut state);
     state
 }
@@ -1494,6 +1888,7 @@ fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::Sound => &state.sub_choice_indices_sound,
         SubmenuKind::SelectMusic => &state.sub_choice_indices_select_music,
         SubmenuKind::GrooveStats => &state.sub_choice_indices_groovestats,
+        SubmenuKind::ScoreImport => &state.sub_choice_indices_score_import,
     }
 }
 
@@ -1504,6 +1899,7 @@ const fn submenu_choice_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::Sound => &mut state.sub_choice_indices_sound,
         SubmenuKind::SelectMusic => &mut state.sub_choice_indices_select_music,
         SubmenuKind::GrooveStats => &mut state.sub_choice_indices_groovestats,
+        SubmenuKind::ScoreImport => &mut state.sub_choice_indices_score_import,
     }
 }
 
@@ -1514,6 +1910,7 @@ fn submenu_cursor_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::Sound => &state.sub_cursor_indices_sound,
         SubmenuKind::SelectMusic => &state.sub_cursor_indices_select_music,
         SubmenuKind::GrooveStats => &state.sub_cursor_indices_groovestats,
+        SubmenuKind::ScoreImport => &state.sub_cursor_indices_score_import,
     }
 }
 
@@ -1524,6 +1921,7 @@ const fn submenu_cursor_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::Sound => &mut state.sub_cursor_indices_sound,
         SubmenuKind::SelectMusic => &mut state.sub_cursor_indices_select_music,
         SubmenuKind::GrooveStats => &mut state.sub_cursor_indices_groovestats,
+        SubmenuKind::ScoreImport => &mut state.sub_cursor_indices_score_import,
     }
 }
 
@@ -1533,6 +1931,7 @@ fn sync_submenu_cursor_indices(state: &mut State) {
     state.sub_cursor_indices_sound = state.sub_choice_indices_sound.clone();
     state.sub_cursor_indices_select_music = state.sub_choice_indices_select_music.clone();
     state.sub_cursor_indices_groovestats = state.sub_choice_indices_groovestats.clone();
+    state.sub_cursor_indices_score_import = state.sub_choice_indices_score_import.clone();
 }
 
 pub fn sync_video_renderer(state: &mut State, renderer: BackendType) {
@@ -1613,18 +2012,22 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
-fn start_reload_songs_and_courses(state: &mut State) {
-    if state.reload_ui.is_some() {
-        return;
-    }
-
-    // Clear navigation holds so the menu can't "run away" after reload finishes.
+fn clear_navigation_holds(state: &mut State) {
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.nav_key_last_scrolled_at = None;
     state.nav_lr_held_direction = None;
     state.nav_lr_held_since = None;
     state.nav_lr_last_adjusted_at = None;
+}
+
+fn start_reload_songs_and_courses(state: &mut State) {
+    if state.reload_ui.is_some() {
+        return;
+    }
+
+    // Clear navigation holds so the menu can't "run away" after reload finishes.
+    clear_navigation_holds(state);
 
     let (tx, rx) = std::sync::mpsc::channel::<ReloadMsg>();
     state.reload_ui = Some(ReloadUiState::new(rx));
@@ -1667,6 +2070,68 @@ fn start_reload_songs_and_courses(state: &mut State) {
     });
 }
 
+fn begin_score_import(state: &mut State, selection: ScoreImportSelection) {
+    if state.score_import_ui.is_some() {
+        return;
+    }
+    clear_navigation_holds(state);
+    let mut profile_cfg = profile::Profile::default();
+    profile_cfg.display_name = selection.profile.display_name.clone();
+    profile_cfg.groovestats_api_key = selection.profile.gs_api_key.clone();
+    profile_cfg.groovestats_username = selection.profile.gs_username.clone();
+    profile_cfg.arrowcloud_api_key = selection.profile.ac_api_key.clone();
+
+    let endpoint = selection.endpoint;
+    let profile_id = selection.profile.id.clone();
+    let profile_name = if selection.profile.display_name.is_empty() {
+        selection.profile.id.clone()
+    } else {
+        selection.profile.display_name.clone()
+    };
+    let pack_group = selection.pack_group.clone();
+    let pack_label = selection.pack_label.clone();
+
+    log::warn!(
+        "{} score import starting for '{}' (pack: {}). Hard-limited to 3 requests/sec. For many charts this can take more than one hour.",
+        endpoint.display_name(),
+        profile_name,
+        pack_label
+    );
+
+    let cancel_requested = Arc::new(AtomicBool::new(false));
+    let cancel_for_thread = Arc::clone(&cancel_requested);
+    let (tx, rx) = std::sync::mpsc::channel::<ScoreImportMsg>();
+    state.score_import_ui = Some(ScoreImportUiState::new(
+        endpoint,
+        profile_name.clone(),
+        pack_label,
+        cancel_requested,
+        rx,
+    ));
+
+    std::thread::spawn(move || {
+        let result = scores::import_scores_for_profile(
+            endpoint,
+            profile_id,
+            profile_cfg,
+            pack_group,
+            |progress| {
+                let _ = tx.send(ScoreImportMsg::Progress(progress));
+            },
+            || cancel_for_thread.load(Ordering::Relaxed),
+        );
+        let done_msg = result.map_err(|e| e.to_string());
+        let _ = tx.send(ScoreImportMsg::Done(done_msg));
+    });
+}
+
+fn begin_score_import_from_confirm(state: &mut State) {
+    let Some(confirm) = state.score_import_confirm.take() else {
+        return;
+    };
+    begin_score_import(state, confirm.selection);
+}
+
 fn poll_reload_ui(reload: &mut ReloadUiState) {
     while let Ok(msg) = reload.rx.try_recv() {
         match msg {
@@ -1692,6 +2157,50 @@ fn poll_reload_ui(reload: &mut ReloadUiState) {
     }
 }
 
+fn poll_score_import_ui(score_import: &mut ScoreImportUiState) {
+    while let Ok(msg) = score_import.rx.try_recv() {
+        match msg {
+            ScoreImportMsg::Progress(progress) => {
+                score_import.total_charts = progress.total_charts;
+                score_import.processed_charts = progress.processed_charts;
+                score_import.imported_scores = progress.imported_scores;
+                score_import.missing_scores = progress.missing_scores;
+                score_import.failed_requests = progress.failed_requests;
+                score_import.detail_line = progress.detail;
+            }
+            ScoreImportMsg::Done(result) => {
+                score_import.done = true;
+                score_import.done_since = Some(Instant::now());
+                score_import.done_message = match result {
+                    Ok(summary) => {
+                        if summary.canceled {
+                            format!(
+                                "Canceled: requested={}, imported={}, missing={}, failed={} (elapsed {:.1}s)",
+                                summary.requested_charts,
+                                summary.imported_scores,
+                                summary.missing_scores,
+                                summary.failed_requests,
+                                summary.elapsed_seconds
+                            )
+                        } else {
+                            format!(
+                                "Complete: requested={}, imported={}, missing={}, failed={}, rate={} req/s (elapsed {:.1}s)",
+                                summary.requested_charts,
+                                summary.imported_scores,
+                                summary.missing_scores,
+                                summary.failed_requests,
+                                summary.rate_limit_per_second,
+                                summary.elapsed_seconds
+                            )
+                        }
+                    }
+                    Err(e) => format!("Import failed: {e}"),
+                };
+            }
+        }
+    }
+}
+
 pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ScreenAction> {
     if state.reload_ui.is_some() {
         let done = {
@@ -1701,6 +2210,18 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         };
         if done {
             state.reload_ui = None;
+            refresh_score_import_pack_options(state);
+        }
+        return None;
+    }
+    if let Some(score_import) = state.score_import_ui.as_mut() {
+        poll_score_import_ui(score_import);
+        if score_import.done
+            && score_import.done_since.is_some_and(|at| {
+                at.elapsed().as_secs_f32() >= SCORE_IMPORT_DONE_OVERLAY_SECONDS
+            })
+        {
+            state.score_import_ui = None;
         }
         return None;
     }
@@ -2173,13 +2694,18 @@ fn apply_submenu_choice_delta(
         }
     } else if matches!(kind, SubmenuKind::GrooveStats) {
         let row = &rows[row_index];
-        if row.label == "Enable GrooveStats" {
+        if row.label == GS_ROW_ENABLE {
             let enabled = new_index == 1;
             config::update_enable_groovestats(enabled);
             // Re-run connectivity logic so toggling this option applies immediately.
             crate::core::network::init();
-        } else if row.label == "Auto Populate GS Scores" {
+        } else if row.label == GS_ROW_AUTO_POPULATE {
             config::update_auto_populate_gs_scores(new_index == 1);
+        }
+    } else if matches!(kind, SubmenuKind::ScoreImport) {
+        let row = &rows[row_index];
+        if row.label == SCORE_IMPORT_ROW_ENDPOINT {
+            refresh_score_import_profile_options(state);
         }
     }
     action
@@ -2191,6 +2717,53 @@ pub fn handle_input(
     ev: &InputEvent,
 ) -> ScreenAction {
     if state.reload_ui.is_some() {
+        return ScreenAction::None;
+    }
+    if let Some(score_import) = state.score_import_ui.as_ref() {
+        if ev.pressed && matches!(ev.action, VirtualAction::p1_back) {
+            score_import.cancel_requested.store(true, Ordering::Relaxed);
+            clear_navigation_holds(state);
+            state.score_import_ui = None;
+            audio::play_sfx("assets/sounds/change.ogg");
+            log::warn!("Score import cancel requested by user.");
+        }
+        return ScreenAction::None;
+    }
+    if let Some(confirm) = state.score_import_confirm.as_mut() {
+        if !ev.pressed {
+            return ScreenAction::None;
+        }
+        match ev.action {
+            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+                if confirm.active_choice > 0 {
+                    confirm.active_choice -= 1;
+                    audio::play_sfx("assets/sounds/change.ogg");
+                }
+            }
+            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+                if confirm.active_choice < 1 {
+                    confirm.active_choice += 1;
+                    audio::play_sfx("assets/sounds/change.ogg");
+                }
+            }
+            VirtualAction::p1_start | VirtualAction::p1_select => {
+                let should_start = confirm.active_choice == 0;
+                audio::play_sfx("assets/sounds/start.ogg");
+                if should_start {
+                    clear_navigation_holds(state);
+                    begin_score_import_from_confirm(state);
+                } else {
+                    clear_navigation_holds(state);
+                    state.score_import_confirm = None;
+                }
+            }
+            VirtualAction::p1_back => {
+                clear_navigation_holds(state);
+                state.score_import_confirm = None;
+                audio::play_sfx("assets/sounds/change.ogg");
+            }
+            _ => {}
+        }
         return ScreenAction::None;
     }
     // Ignore new navigation while a local submenu fade is in progress.
@@ -2326,6 +2899,13 @@ pub fn handle_input(
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }
+                        "Score Import" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            refresh_score_import_options(state);
+                            state.pending_submenu_kind = Some(SubmenuKind::ScoreImport);
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                            state.submenu_fade_t = 0.0;
+                        }
                         // Navigate to the new mappings screen.
                         "Configure Keyboard/Pad Mappings" => {
                             audio::play_sfx("assets/sounds/start.ogg");
@@ -2362,6 +2942,28 @@ pub fn handle_input(
                         audio::play_sfx("assets/sounds/start.ogg");
                         state.submenu_transition = SubmenuTransition::FadeOutToMain;
                         state.submenu_fade_t = 0.0;
+                    } else if matches!(kind, SubmenuKind::ScoreImport) {
+                        let rows = submenu_rows(kind);
+                        if let Some(row) = rows.get(state.sub_selected)
+                            && row.label == SCORE_IMPORT_ROW_START
+                        {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            if let Some(selection) = selected_score_import_selection(state) {
+                                if selection.pack_group.is_none() {
+                                    clear_navigation_holds(state);
+                                    state.score_import_confirm = Some(ScoreImportConfirmState {
+                                        selection,
+                                        active_choice: 1,
+                                    });
+                                } else {
+                                    begin_score_import(state, selection);
+                                }
+                            } else {
+                                log::warn!(
+                                    "Score import start requested, but no eligible profile is selected."
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -2748,6 +3350,55 @@ pub fn get_actors(
             align(0.5, 0.5):
             xy(screen_width() * 0.5, screen_height() * 0.5):
             zoom(1.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            font("miso"):
+            settext(text):
+            horizalign(center):
+            z(301)
+        ));
+        for actor in &mut ui_actors {
+            apply_alpha_to_actor(actor, alpha_multiplier);
+        }
+        actors.extend(ui_actors);
+        return actors;
+    }
+    if let Some(score_import) = &state.score_import_ui {
+        let header = if score_import.done {
+            "Score import complete"
+        } else {
+            "Importing scores..."
+        };
+        let total = score_import.total_charts.max(score_import.processed_charts);
+        let progress_line = format!(
+            "Endpoint: {}   Profile: {}\nPack: {}\nProgress: {}/{} (found={}, missing={}, failed={})",
+            score_import.endpoint.display_name(),
+            score_import.profile_name,
+            score_import.pack_label,
+            score_import.processed_charts,
+            total,
+            score_import.imported_scores,
+            score_import.missing_scores,
+            score_import.failed_requests
+        );
+        let detail_line = if score_import.done {
+            score_import.done_message.as_str()
+        } else {
+            score_import.detail_line.as_str()
+        };
+        let text = format!("{header}\n{progress_line}\n{detail_line}");
+
+        let mut ui_actors: Vec<Actor> = Vec::with_capacity(2);
+        ui_actors.push(act!(quad:
+            align(0.0, 0.0):
+            xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 0.7):
+            z(300)
+        ));
+        ui_actors.push(act!(text:
+            align(0.5, 0.5):
+            xy(screen_width() * 0.5, screen_height() * 0.5):
+            zoom(0.95):
             diffuse(1.0, 1.0, 1.0, 1.0):
             font("miso"):
             settext(text):
@@ -3433,6 +4084,72 @@ pub fn get_actors(
                 horizalign(left)
             ));
         }
+    }
+    if let Some(confirm) = &state.score_import_confirm {
+        let w = screen_width();
+        let h = screen_height();
+        let cx = w * 0.5;
+        let cy = h * 0.5;
+        let answer_y = cy + 118.0;
+        let yes_x = cx - 100.0;
+        let no_x = cx + 100.0;
+        let cursor_x = [yes_x, no_x][confirm.active_choice.min(1) as usize];
+        let cursor_color = color::simply_love_rgba(state.active_color_index);
+        let prompt_text = format!(
+            "Import ALL packs for {} / {}?\nRate limit is hard-capped at 3 requests per second.\nFor many charts this can take more than one hour.\nSpamming APIs can be problematic.\n\nStart now?",
+            confirm.selection.endpoint.display_name(),
+            if confirm.selection.profile.display_name.is_empty() {
+                confirm.selection.profile.id.as_str()
+            } else {
+                confirm.selection.profile.display_name.as_str()
+            }
+        );
+
+        ui_actors.push(act!(quad:
+            align(0.0, 0.0):
+            xy(0.0, 0.0):
+            zoomto(w, h):
+            diffuse(0.0, 0.0, 0.0, 0.9):
+            z(700)
+        ));
+        ui_actors.push(act!(quad:
+            align(0.5, 0.5):
+            xy(cursor_x, answer_y):
+            setsize(145.0, 40.0):
+            diffuse(cursor_color[0], cursor_color[1], cursor_color[2], 1.0):
+            z(701)
+        ));
+        ui_actors.push(act!(text:
+            align(0.5, 0.5):
+            xy(cx, cy - 65.0):
+            font("miso"):
+            zoom(0.95):
+            maxwidth(w - 90.0):
+            settext(prompt_text):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(702):
+            horizalign(center)
+        ));
+        ui_actors.push(act!(text:
+            align(0.5, 0.5):
+            xy(yes_x, answer_y):
+            font("wendy"):
+            zoom(0.72):
+            settext("YES"):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(702):
+            horizalign(center)
+        ));
+        ui_actors.push(act!(text:
+            align(0.5, 0.5):
+            xy(no_x, answer_y):
+            font("wendy"):
+            zoom(0.72):
+            settext("NO"):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(702):
+            horizalign(center)
+        ));
     }
 
     let combined_alpha = alpha_multiplier * state.content_alpha;
