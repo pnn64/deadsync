@@ -43,7 +43,7 @@ const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
 const MUSIC_WHEEL_SWITCH_SECONDS: f32 = 0.10;
 const MUSIC_WHEEL_SETTLE_MIN_SPEED: f32 = 0.2;
-const MUSIC_WHEEL_HOLD_SPIN_SPEED: f32 = 15.0;
+const MUSIC_WHEEL_HOLD_SPIN_SPEED_DEFAULT: f32 = 15.0;
 const MUSIC_WHEEL_STOP_SPINDOWN_THRESHOLD: f32 = 0.25;
 const BANNER_NATIVE_WIDTH: f32 = 418.0;
 const BANNER_NATIVE_HEIGHT: f32 = 164.0;
@@ -1164,6 +1164,16 @@ fn music_wheel_settle_offset(state: &mut State, dt: f32) {
 }
 
 #[inline(always)]
+fn music_wheel_hold_spin_speed() -> f32 {
+    let configured = crate::config::get().music_wheel_switch_speed;
+    if configured == 0 {
+        MUSIC_WHEEL_HOLD_SPIN_SPEED_DEFAULT
+    } else {
+        configured.max(1) as f32
+    }
+}
+
+#[inline(always)]
 fn music_wheel_change(state: &mut State, dist: isize) {
     if dist == 0 {
         return;
@@ -1194,7 +1204,8 @@ fn music_wheel_update_hold_scroll(state: &mut State, dt: f32, dir: NavDirection)
         NavDirection::Left => -1.0,
         NavDirection::Right => 1.0,
     };
-    state.wheel_offset_from_selection -= MUSIC_WHEEL_HOLD_SPIN_SPEED * moving * dt;
+    let hold_spin_speed = music_wheel_hold_spin_speed();
+    state.wheel_offset_from_selection -= hold_spin_speed * moving * dt;
     state.wheel_offset_from_selection = state.wheel_offset_from_selection.clamp(-1.0, 1.0);
 
     let off = state.wheel_offset_from_selection;

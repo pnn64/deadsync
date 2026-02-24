@@ -159,28 +159,6 @@ pub const ITEMS: &[Item] = &[
         ],
     },
     Item {
-        name: "Configure Keyboard/Pad Mappings",
-        help: &["Map keyboard keys, panels, menu buttons, etc. to game functions."],
-    },
-    Item {
-        name: "Test Input",
-        help: &[
-            "Test your dance pad/controller and menu buttons.\n\nIf one of your buttons is not mapped to a game function, it will appear here as \"not mapped\".",
-        ],
-    },
-    Item {
-        name: "Input Options",
-        help: &[
-            "Adjust input options such as joystick automapping, dedicated menu buttons, and input debounce.",
-            "AutoMap",
-            "OnlyDedicatedMenu",
-            "OptionsNav",
-            "Debounce",
-            "Three Button Navigation",
-            "AxisFix",
-        ],
-    },
-    Item {
         name: "Graphics Options",
         help: &[
             "Change screen aspect ratio, resolution, graphics quality, and timing visuals.",
@@ -192,7 +170,28 @@ pub const ITEMS: &[Item] = &[
             "FullscreenType",
             "Wait for VSync",
             "Show Stats",
-            "Timing Offsets",
+            "Visual Delay",
+        ],
+    },
+    Item {
+        name: "Input Options",
+        help: &[
+            "Configure control mappings and input diagnostics.",
+            "Configure Keyboard/Pad Mappings",
+            "Test Input",
+            "Input Options",
+        ],
+    },
+    Item {
+        name: "Gameplay Options",
+        help: &["Adjust gameplay presentation settings.", "BG Brightness"],
+    },
+    Item {
+        name: "Select Music Options",
+        help: &[
+            "Adjust behavior and display for the Select Music screen.",
+            "Music Wheel Scroll Speed",
+            "Breakdown Style",
         ],
     },
     Item {
@@ -202,6 +201,7 @@ pub const ITEMS: &[Item] = &[
             "Sound Volume",
             "Audio Sample Rate",
             "Mine Sounds",
+            "Global Offset",
             "Rate Mod Preserves Pitch",
         ],
     },
@@ -232,14 +232,6 @@ pub const ITEMS: &[Item] = &[
         name: "Manage Local Profiles",
         help: &[
             "Create, edit, and manage player profiles that are stored on this computer.\n\nYou'll need a keyboard to use this screen.",
-        ],
-    },
-    Item {
-        name: "Simply Love Options",
-        help: &[
-            "Adjust settings that only apply to this Simply Love theme.",
-            "Select Music Options",
-            "Breakdown Style",
         ],
     },
     Item {
@@ -280,6 +272,8 @@ pub enum NavDirection {
 pub enum SubmenuKind {
     System,
     Graphics,
+    Input,
+    Gameplay,
     Sound,
     SelectMusic,
     GrooveStats,
@@ -350,6 +344,7 @@ struct ScoreImportSelection {
     profile: ScoreImportProfileConfig,
     pack_group: Option<String>,
     pack_label: String,
+    only_missing_gs_scores: bool,
 }
 
 #[derive(Debug)]
@@ -419,12 +414,22 @@ pub struct SubRow<'a> {
 
 const GS_ROW_ENABLE: &str = "Enable GrooveStats";
 const GS_ROW_AUTO_POPULATE: &str = "Auto Populate GS Scores";
+const INPUT_ROW_CONFIGURE_MAPPINGS: &str = "Configure Keyboard/Pad Mappings";
+const INPUT_ROW_TEST: &str = "Test Input";
+const INPUT_ROW_OPTIONS: &str = "Input Options";
+const SELECT_MUSIC_ROW_WHEEL_SPEED: &str = "Music Wheel Scroll Speed";
+const SELECT_MUSIC_ROW_BREAKDOWN_STYLE: &str = "Breakdown Style";
 const SCORE_IMPORT_ROW_ENDPOINT: &str = "API Endpoint";
 const SCORE_IMPORT_ROW_PROFILE: &str = "Profile";
 const SCORE_IMPORT_ROW_PACK: &str = "Pack";
+const SCORE_IMPORT_ROW_ONLY_MISSING: &str = "Only Missing GS Scores";
 const SCORE_IMPORT_ROW_START: &str = "Start";
 const SCORE_IMPORT_ALL_PACKS: &str = "All";
 const SCORE_IMPORT_DONE_OVERLAY_SECONDS: f32 = 1.5;
+const SCORE_IMPORT_ROW_ENDPOINT_INDEX: usize = 0;
+const SCORE_IMPORT_ROW_PROFILE_INDEX: usize = 1;
+const SCORE_IMPORT_ROW_PACK_INDEX: usize = 2;
+const SCORE_IMPORT_ROW_ONLY_MISSING_INDEX: usize = 3;
 
 fn discover_system_noteskin_choices() -> Vec<String> {
     let mut names = noteskin_parser::discover_itg_skins("dance");
@@ -530,6 +535,8 @@ const FULLSCREEN_TYPE_ROW_INDEX: usize = 5;
 const BG_BRIGHTNESS_CHOICES: [&str; 11] = [
     "0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%",
 ];
+const MUSIC_WHEEL_SCROLL_SPEED_CHOICES: [&str; 4] = ["Slow", "Normal", "Fast", "Really Fast"];
+const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 4] = [5, 10, 15, 25];
 
 const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
     (1920, 1080),
@@ -595,16 +602,6 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        label: "BG Brightness",
-        choices: &BG_BRIGHTNESS_CHOICES,
-        inline: false,
-    },
-    SubRow {
-        label: "Global Offset (ms)",
-        choices: &["0 ms"],
-        inline: false,
-    },
-    SubRow {
         label: "Visual Delay (ms)",
         choices: &["0 ms"],
         inline: false,
@@ -645,16 +642,64 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
         help: &["Choose performance overlay mode: Off, FPS only, or FPS with stutter list."],
     },
     Item {
-        name: "BG Brightness",
-        help: &["Adjust the background brightness during gameplay."],
-    },
-    Item {
-        name: "Global Offset (ms)",
-        help: &["Apply a global audio timing offset in 1 ms steps."],
-    },
-    Item {
         name: "Visual Delay (ms)",
         help: &["Apply a visual timing offset in 1 ms steps."],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
+
+pub const INPUT_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: INPUT_ROW_CONFIGURE_MAPPINGS,
+        choices: &["Open"],
+        inline: false,
+    },
+    SubRow {
+        label: INPUT_ROW_TEST,
+        choices: &["Open"],
+        inline: false,
+    },
+    SubRow {
+        label: INPUT_ROW_OPTIONS,
+        choices: &["Pending"],
+        inline: false,
+    },
+];
+
+pub const INPUT_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: INPUT_ROW_CONFIGURE_MAPPINGS,
+        help: &["Map keyboard keys, panels, menu buttons, etc. to game functions."],
+    },
+    Item {
+        name: INPUT_ROW_TEST,
+        help: &[
+            "Test your dance pad/controller and menu buttons.\n\nIf one of your buttons is not mapped to a game function, it will appear here as \"not mapped\".",
+        ],
+    },
+    Item {
+        name: INPUT_ROW_OPTIONS,
+        help: &["Placeholder row for future input settings; no action is wired yet."],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
+
+pub const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[SubRow {
+    label: "BG Brightness",
+    choices: &BG_BRIGHTNESS_CHOICES,
+    inline: false,
+}];
+
+pub const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: "BG Brightness",
+        help: &["Adjust the background brightness during gameplay."],
     },
     Item {
         name: "Exit",
@@ -679,6 +724,11 @@ pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: "Global Offset (ms)",
+        choices: &["0 ms"],
+        inline: false,
+    },
+    SubRow {
         label: "RateMod Preserves Pitch",
         choices: &["Off", "On"],
         inline: true,
@@ -699,6 +749,10 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
         help: &["Play a sound when mines are hit."],
     },
     Item {
+        name: "Global Offset (ms)",
+        help: &["Apply a global audio timing offset in 1 ms steps."],
+    },
+    Item {
         name: "RateMod Preserves Pitch",
         help: &["Keep pitch constant when rate mods are active."],
     },
@@ -708,15 +762,29 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[SubRow {
-    label: "Breakdown Style",
-    choices: &["SL", "SN"],
-    inline: true,
-}];
+pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: SELECT_MUSIC_ROW_WHEEL_SPEED,
+        choices: &MUSIC_WHEEL_SCROLL_SPEED_CHOICES,
+        inline: true,
+    },
+    SubRow {
+        label: SELECT_MUSIC_ROW_BREAKDOWN_STYLE,
+        choices: &["SL", "SN"],
+        inline: true,
+    },
+];
 
 pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     Item {
-        name: "Breakdown Style",
+        name: SELECT_MUSIC_ROW_WHEEL_SPEED,
+        help: &[
+            "Set Select Music wheel hold-scroll speed.",
+            "Parity mapping: Slow=5, Normal=10, Fast=15, Really Fast=25.",
+        ],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_BREAKDOWN_STYLE,
         help: &[
             "Choose which breakdown format to show in Select Music.",
             "SL uses Simply Love stream breakdown formatting.",
@@ -757,6 +825,11 @@ pub const SCORE_IMPORT_OPTIONS_ROWS: &[SubRow] = &[
         label: SCORE_IMPORT_ROW_PACK,
         choices: &[SCORE_IMPORT_ALL_PACKS],
         inline: false,
+    },
+    SubRow {
+        label: SCORE_IMPORT_ROW_ONLY_MISSING,
+        choices: &["No", "Yes"],
+        inline: true,
     },
     SubRow {
         label: SCORE_IMPORT_ROW_START,
@@ -804,6 +877,13 @@ pub const SCORE_IMPORT_OPTIONS_ITEMS: &[Item] = &[
         ],
     },
     Item {
+        name: SCORE_IMPORT_ROW_ONLY_MISSING,
+        help: &[
+            "When Yes, import only charts with no cached GS score yet.",
+            "When No, request every selected chart hash.",
+        ],
+    },
+    Item {
         name: SCORE_IMPORT_ROW_START,
         help: &[
             "Bulk-imports this profile's scores for the selected endpoint and pack filter.",
@@ -821,6 +901,8 @@ const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
     match kind {
         SubmenuKind::System => SYSTEM_OPTIONS_ROWS,
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ROWS,
+        SubmenuKind::Input => INPUT_OPTIONS_ROWS,
+        SubmenuKind::Gameplay => GAMEPLAY_OPTIONS_ROWS,
         SubmenuKind::Sound => SOUND_OPTIONS_ROWS,
         SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ROWS,
         SubmenuKind::GrooveStats => GROOVESTATS_OPTIONS_ROWS,
@@ -832,6 +914,8 @@ const fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
     match kind {
         SubmenuKind::System => SYSTEM_OPTIONS_ITEMS,
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ITEMS,
+        SubmenuKind::Input => INPUT_OPTIONS_ITEMS,
+        SubmenuKind::Gameplay => GAMEPLAY_OPTIONS_ITEMS,
         SubmenuKind::Sound => SOUND_OPTIONS_ITEMS,
         SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ITEMS,
         SubmenuKind::GrooveStats => GROOVESTATS_OPTIONS_ITEMS,
@@ -843,6 +927,8 @@ const fn submenu_title(kind: SubmenuKind) -> &'static str {
     match kind {
         SubmenuKind::System => "SYSTEM OPTIONS",
         SubmenuKind::Graphics => "GRAPHICS OPTIONS",
+        SubmenuKind::Input => "INPUT OPTIONS",
+        SubmenuKind::Gameplay => "GAMEPLAY OPTIONS",
         SubmenuKind::Sound => "SOUND OPTIONS",
         SubmenuKind::SelectMusic => "SELECT MUSIC OPTIONS",
         SubmenuKind::GrooveStats => "GROOVESTATS OPTIONS",
@@ -1180,7 +1266,7 @@ const fn score_import_endpoint_from_choice_index(idx: usize) -> scores::ScoreImp
 fn score_import_selected_endpoint(state: &State) -> scores::ScoreImportEndpoint {
     let idx = state
         .sub_choice_indices_score_import
-        .get(0)
+        .get(SCORE_IMPORT_ROW_ENDPOINT_INDEX)
         .copied()
         .unwrap_or(0);
     score_import_endpoint_from_choice_index(idx)
@@ -1305,10 +1391,16 @@ fn refresh_score_import_profile_options(state: &mut State) {
     }
 
     let max_idx = state.score_import_profile_choices.len().saturating_sub(1);
-    if let Some(slot) = state.sub_choice_indices_score_import.get_mut(1) {
+    if let Some(slot) = state
+        .sub_choice_indices_score_import
+        .get_mut(SCORE_IMPORT_ROW_PROFILE_INDEX)
+    {
         *slot = (*slot).min(max_idx);
     }
-    if let Some(slot) = state.sub_cursor_indices_score_import.get_mut(1) {
+    if let Some(slot) = state
+        .sub_cursor_indices_score_import
+        .get_mut(SCORE_IMPORT_ROW_PROFILE_INDEX)
+    {
         *slot = (*slot).min(max_idx);
     }
 }
@@ -1318,10 +1410,16 @@ fn refresh_score_import_pack_options(state: &mut State) {
     state.score_import_pack_choices = choices;
     state.score_import_pack_filters = filters;
     let max_idx = state.score_import_pack_choices.len().saturating_sub(1);
-    if let Some(slot) = state.sub_choice_indices_score_import.get_mut(2) {
+    if let Some(slot) = state
+        .sub_choice_indices_score_import
+        .get_mut(SCORE_IMPORT_ROW_PACK_INDEX)
+    {
         *slot = (*slot).min(max_idx);
     }
-    if let Some(slot) = state.sub_cursor_indices_score_import.get_mut(2) {
+    if let Some(slot) = state
+        .sub_cursor_indices_score_import
+        .get_mut(SCORE_IMPORT_ROW_PACK_INDEX)
+    {
         *slot = (*slot).min(max_idx);
     }
 }
@@ -1335,7 +1433,7 @@ fn refresh_score_import_options(state: &mut State) {
 fn selected_score_import_pack_group(state: &State) -> Option<String> {
     let pack_idx = state
         .sub_choice_indices_score_import
-        .get(2)
+        .get(SCORE_IMPORT_ROW_PACK_INDEX)
         .copied()
         .unwrap_or(0)
         .min(state.score_import_pack_filters.len().saturating_sub(1));
@@ -1348,7 +1446,7 @@ fn selected_score_import_pack_group(state: &State) -> Option<String> {
 fn selected_score_import_profile(state: &State) -> Option<ScoreImportProfileConfig> {
     let profile_idx = state
         .sub_choice_indices_score_import
-        .get(1)
+        .get(SCORE_IMPORT_ROW_PROFILE_INDEX)
         .copied()
         .unwrap_or(0)
         .min(state.score_import_profile_ids.len().saturating_sub(1));
@@ -1363,6 +1461,16 @@ fn selected_score_import_profile(state: &State) -> Option<ScoreImportProfileConf
         .cloned()
 }
 
+#[inline(always)]
+fn score_import_only_missing_gs_scores(state: &State) -> bool {
+    state
+        .sub_choice_indices_score_import
+        .get(SCORE_IMPORT_ROW_ONLY_MISSING_INDEX)
+        .copied()
+        .unwrap_or(0)
+        == 1
+}
+
 fn selected_score_import_selection(state: &State) -> Option<ScoreImportSelection> {
     let endpoint = score_import_selected_endpoint(state);
     let profile_cfg = selected_score_import_profile(state)?;
@@ -1374,11 +1482,13 @@ fn selected_score_import_selection(state: &State) -> Option<ScoreImportSelection
         .as_ref()
         .cloned()
         .unwrap_or_else(|| SCORE_IMPORT_ALL_PACKS.to_string());
+    let only_missing_gs_scores = score_import_only_missing_gs_scores(state);
     Some(ScoreImportSelection {
         endpoint,
         profile: profile_cfg,
         pack_group,
         pack_label,
+        only_missing_gs_scores,
     })
 }
 
@@ -1623,6 +1733,26 @@ fn bg_brightness_from_choice(idx: usize) -> f32 {
     idx.min(10) as f32 / 10.0
 }
 
+fn music_wheel_scroll_speed_choice_index(speed: u8) -> usize {
+    let mut best_idx = 0usize;
+    let mut best_diff = u8::MAX;
+    for (idx, value) in MUSIC_WHEEL_SCROLL_SPEED_VALUES.iter().enumerate() {
+        let diff = speed.abs_diff(*value);
+        if diff < best_diff {
+            best_diff = diff;
+            best_idx = idx;
+        }
+    }
+    best_idx
+}
+
+fn music_wheel_scroll_speed_from_choice(idx: usize) -> u8 {
+    MUSIC_WHEEL_SCROLL_SPEED_VALUES
+        .get(idx)
+        .copied()
+        .unwrap_or(15)
+}
+
 const fn breakdown_style_choice_index(style: BreakdownStyle) -> usize {
     match style {
         BreakdownStyle::Sl => 0,
@@ -1662,6 +1792,8 @@ pub struct State {
     sub_inline_x: f32,
     sub_choice_indices_system: Vec<usize>,
     sub_choice_indices_graphics: Vec<usize>,
+    sub_choice_indices_input: Vec<usize>,
+    sub_choice_indices_gameplay: Vec<usize>,
     sub_choice_indices_sound: Vec<usize>,
     sub_choice_indices_select_music: Vec<usize>,
     sub_choice_indices_groovestats: Vec<usize>,
@@ -1669,6 +1801,8 @@ pub struct State {
     system_noteskin_choices: Vec<String>,
     sub_cursor_indices_system: Vec<usize>,
     sub_cursor_indices_graphics: Vec<usize>,
+    sub_cursor_indices_input: Vec<usize>,
+    sub_cursor_indices_gameplay: Vec<usize>,
     sub_cursor_indices_sound: Vec<usize>,
     sub_cursor_indices_select_music: Vec<usize>,
     sub_cursor_indices_groovestats: Vec<usize>,
@@ -1738,6 +1872,8 @@ pub fn init() -> State {
         sub_inline_x: f32::NAN,
         sub_choice_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_choice_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
+        sub_choice_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
+        sub_choice_indices_gameplay: vec![0; GAMEPLAY_OPTIONS_ROWS.len()],
         sub_choice_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         sub_choice_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
         sub_choice_indices_groovestats: vec![0; GROOVESTATS_OPTIONS_ROWS.len()],
@@ -1745,6 +1881,8 @@ pub fn init() -> State {
         system_noteskin_choices,
         sub_cursor_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_cursor_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
+        sub_cursor_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
+        sub_cursor_indices_gameplay: vec![0; GAMEPLAY_OPTIONS_ROWS.len()],
         sub_cursor_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         sub_cursor_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
         sub_cursor_indices_groovestats: vec![0; GROOVESTATS_OPTIONS_ROWS.len()],
@@ -1833,8 +1971,8 @@ pub fn init() -> State {
         cfg.show_stats_mode.min(2) as usize,
     );
     set_choice_by_label(
-        &mut state.sub_choice_indices_graphics,
-        GRAPHICS_OPTIONS_ROWS,
+        &mut state.sub_choice_indices_gameplay,
+        GAMEPLAY_OPTIONS_ROWS,
         "BG Brightness",
         bg_brightness_choice_index(cfg.bg_brightness),
     );
@@ -1866,7 +2004,13 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        "Breakdown Style",
+        SELECT_MUSIC_ROW_WHEEL_SPEED,
+        music_wheel_scroll_speed_choice_index(cfg.music_wheel_switch_speed),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_BREAKDOWN_STYLE,
         breakdown_style_choice_index(cfg.select_music_breakdown_style),
     );
     set_choice_by_label(
@@ -1890,6 +2034,8 @@ fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {
     match kind {
         SubmenuKind::System => &state.sub_choice_indices_system,
         SubmenuKind::Graphics => &state.sub_choice_indices_graphics,
+        SubmenuKind::Input => &state.sub_choice_indices_input,
+        SubmenuKind::Gameplay => &state.sub_choice_indices_gameplay,
         SubmenuKind::Sound => &state.sub_choice_indices_sound,
         SubmenuKind::SelectMusic => &state.sub_choice_indices_select_music,
         SubmenuKind::GrooveStats => &state.sub_choice_indices_groovestats,
@@ -1901,6 +2047,8 @@ const fn submenu_choice_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
     match kind {
         SubmenuKind::System => &mut state.sub_choice_indices_system,
         SubmenuKind::Graphics => &mut state.sub_choice_indices_graphics,
+        SubmenuKind::Input => &mut state.sub_choice_indices_input,
+        SubmenuKind::Gameplay => &mut state.sub_choice_indices_gameplay,
         SubmenuKind::Sound => &mut state.sub_choice_indices_sound,
         SubmenuKind::SelectMusic => &mut state.sub_choice_indices_select_music,
         SubmenuKind::GrooveStats => &mut state.sub_choice_indices_groovestats,
@@ -1912,6 +2060,8 @@ fn submenu_cursor_indices(state: &State, kind: SubmenuKind) -> &[usize] {
     match kind {
         SubmenuKind::System => &state.sub_cursor_indices_system,
         SubmenuKind::Graphics => &state.sub_cursor_indices_graphics,
+        SubmenuKind::Input => &state.sub_cursor_indices_input,
+        SubmenuKind::Gameplay => &state.sub_cursor_indices_gameplay,
         SubmenuKind::Sound => &state.sub_cursor_indices_sound,
         SubmenuKind::SelectMusic => &state.sub_cursor_indices_select_music,
         SubmenuKind::GrooveStats => &state.sub_cursor_indices_groovestats,
@@ -1923,6 +2073,8 @@ const fn submenu_cursor_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
     match kind {
         SubmenuKind::System => &mut state.sub_cursor_indices_system,
         SubmenuKind::Graphics => &mut state.sub_cursor_indices_graphics,
+        SubmenuKind::Input => &mut state.sub_cursor_indices_input,
+        SubmenuKind::Gameplay => &mut state.sub_cursor_indices_gameplay,
         SubmenuKind::Sound => &mut state.sub_cursor_indices_sound,
         SubmenuKind::SelectMusic => &mut state.sub_cursor_indices_select_music,
         SubmenuKind::GrooveStats => &mut state.sub_cursor_indices_groovestats,
@@ -1933,6 +2085,8 @@ const fn submenu_cursor_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
 fn sync_submenu_cursor_indices(state: &mut State) {
     state.sub_cursor_indices_system = state.sub_choice_indices_system.clone();
     state.sub_cursor_indices_graphics = state.sub_choice_indices_graphics.clone();
+    state.sub_cursor_indices_input = state.sub_choice_indices_input.clone();
+    state.sub_cursor_indices_gameplay = state.sub_choice_indices_gameplay.clone();
     state.sub_cursor_indices_sound = state.sub_choice_indices_sound.clone();
     state.sub_cursor_indices_select_music = state.sub_choice_indices_select_music.clone();
     state.sub_cursor_indices_groovestats = state.sub_choice_indices_groovestats.clone();
@@ -2095,12 +2249,14 @@ fn begin_score_import(state: &mut State, selection: ScoreImportSelection) {
     };
     let pack_group = selection.pack_group.clone();
     let pack_label = selection.pack_label.clone();
+    let only_missing_gs_scores = selection.only_missing_gs_scores;
 
     log::warn!(
-        "{} score import starting for '{}' (pack: {}). Hard-limited to 3 requests/sec. For many charts this can take more than one hour.",
+        "{} score import starting for '{}' (pack: {}, only_missing_gs={}). Hard-limited to 3 requests/sec. For many charts this can take more than one hour.",
         endpoint.display_name(),
         profile_name,
-        pack_label
+        pack_label,
+        if only_missing_gs_scores { "yes" } else { "no" }
     );
 
     let cancel_requested = Arc::new(AtomicBool::new(false));
@@ -2120,6 +2276,7 @@ fn begin_score_import(state: &mut State, selection: ScoreImportSelection) {
             profile_id,
             profile_cfg,
             pack_group,
+            only_missing_gs_scores,
             |progress| {
                 let _ = tx.send(ScoreImportMsg::Progress(progress));
             },
@@ -2585,35 +2742,30 @@ fn apply_submenu_choice_delta(
         return None;
     }
 
-    if let Some(row) = rows.get(row_index)
-        && matches!(kind, SubmenuKind::Graphics)
-    {
-        match row.label {
-            "Global Offset (ms)" => {
-                if adjust_ms_value(
-                    &mut state.global_offset_ms,
-                    delta,
-                    GLOBAL_OFFSET_MIN_MS,
-                    GLOBAL_OFFSET_MAX_MS,
-                ) {
-                    config::update_global_offset(state.global_offset_ms as f32 / 1000.0);
-                    audio::play_sfx("assets/sounds/change_value.ogg");
-                }
-                return None;
+    if let Some(row) = rows.get(row_index) {
+        if matches!(kind, SubmenuKind::Sound) && row.label == "Global Offset (ms)" {
+            if adjust_ms_value(
+                &mut state.global_offset_ms,
+                delta,
+                GLOBAL_OFFSET_MIN_MS,
+                GLOBAL_OFFSET_MAX_MS,
+            ) {
+                config::update_global_offset(state.global_offset_ms as f32 / 1000.0);
+                audio::play_sfx("assets/sounds/change_value.ogg");
             }
-            "Visual Delay (ms)" => {
-                if adjust_ms_value(
-                    &mut state.visual_delay_ms,
-                    delta,
-                    VISUAL_DELAY_MIN_MS,
-                    VISUAL_DELAY_MAX_MS,
-                ) {
-                    config::update_visual_delay_seconds(state.visual_delay_ms as f32 / 1000.0);
-                    audio::play_sfx("assets/sounds/change_value.ogg");
-                }
-                return None;
+            return None;
+        }
+        if matches!(kind, SubmenuKind::Graphics) && row.label == "Visual Delay (ms)" {
+            if adjust_ms_value(
+                &mut state.visual_delay_ms,
+                delta,
+                VISUAL_DELAY_MIN_MS,
+                VISUAL_DELAY_MAX_MS,
+            ) {
+                config::update_visual_delay_seconds(state.visual_delay_ms as f32 / 1000.0);
+                audio::play_sfx("assets/sounds/change_value.ogg");
             }
-            _ => {}
+            return None;
         }
     }
 
@@ -2687,6 +2839,8 @@ fn apply_submenu_choice_delta(
             let mode = new_index.min(2) as u8;
             action = Some(ScreenAction::UpdateShowOverlay(mode));
         }
+    } else if matches!(kind, SubmenuKind::Gameplay) {
+        let row = &rows[row_index];
         if row.label == "BG Brightness" {
             config::update_bg_brightness(bg_brightness_from_choice(new_index));
         }
@@ -2711,8 +2865,12 @@ fn apply_submenu_choice_delta(
         }
     } else if matches!(kind, SubmenuKind::SelectMusic) {
         let row = &rows[row_index];
-        if row.label == "Breakdown Style" {
+        if row.label == SELECT_MUSIC_ROW_BREAKDOWN_STYLE {
             config::update_select_music_breakdown_style(breakdown_style_from_choice(new_index));
+        } else if row.label == SELECT_MUSIC_ROW_WHEEL_SPEED {
+            config::update_music_wheel_switch_speed(music_wheel_scroll_speed_from_choice(
+                new_index,
+            ));
         }
     } else if matches!(kind, SubmenuKind::GrooveStats) {
         let row = &rows[row_index];
@@ -2902,6 +3060,18 @@ pub fn handle_input(
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }
+                        "Input Options" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            state.pending_submenu_kind = Some(SubmenuKind::Input);
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                            state.submenu_fade_t = 0.0;
+                        }
+                        "Gameplay Options" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            state.pending_submenu_kind = Some(SubmenuKind::Gameplay);
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                            state.submenu_fade_t = 0.0;
+                        }
                         // Enter Sound Options submenu.
                         "Sound Options" => {
                             audio::play_sfx("assets/sounds/start.ogg");
@@ -2909,7 +3079,7 @@ pub fn handle_input(
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }
-                        "Simply Love Options" => {
+                        "Select Music Options" => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::SelectMusic);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
@@ -2927,16 +3097,6 @@ pub fn handle_input(
                             state.pending_submenu_kind = Some(SubmenuKind::ScoreImport);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
-                        }
-                        // Navigate to the new mappings screen.
-                        "Configure Keyboard/Pad Mappings" => {
-                            audio::play_sfx("assets/sounds/start.ogg");
-                            return ScreenAction::Navigate(Screen::Mappings);
-                        }
-                        // Navigate to Test Input screen.
-                        "Test Input" => {
-                            audio::play_sfx("assets/sounds/start.ogg");
-                            return ScreenAction::Navigate(Screen::Input);
                         }
                         "Manage Local Profiles" => {
                             audio::play_sfx("assets/sounds/start.ogg");
@@ -2964,6 +3124,24 @@ pub fn handle_input(
                         audio::play_sfx("assets/sounds/start.ogg");
                         state.submenu_transition = SubmenuTransition::FadeOutToMain;
                         state.submenu_fade_t = 0.0;
+                    } else if matches!(kind, SubmenuKind::Input) {
+                        let rows = submenu_rows(kind);
+                        if let Some(row) = rows.get(state.sub_selected) {
+                            match row.label {
+                                INPUT_ROW_CONFIGURE_MAPPINGS => {
+                                    audio::play_sfx("assets/sounds/start.ogg");
+                                    return ScreenAction::Navigate(Screen::Mappings);
+                                }
+                                INPUT_ROW_TEST => {
+                                    audio::play_sfx("assets/sounds/start.ogg");
+                                    return ScreenAction::Navigate(Screen::Input);
+                                }
+                                INPUT_ROW_OPTIONS => {
+                                    audio::play_sfx("assets/sounds/change.ogg");
+                                }
+                                _ => {}
+                            }
+                        }
                     } else if matches!(kind, SubmenuKind::ScoreImport) {
                         let rows = submenu_rows(kind);
                         if let Some(row) = rows.get(state.sub_selected)
@@ -3195,6 +3373,9 @@ fn submenu_cursor_dest(
     list_y: f32,
     list_w: f32,
 ) -> Option<(f32, f32, f32, f32)> {
+    if matches!(kind, SubmenuKind::Input) {
+        return None;
+    }
     let rows = submenu_rows(kind);
     let total_rows = rows.len() + 1;
     if total_rows == 0 {
@@ -3596,210 +3777,302 @@ pub fn get_actors(
             let rows = submenu_rows(kind);
             let choice_indices = submenu_choice_indices(state, kind);
             let items = submenu_items(kind);
-            // Active text color for submenu rows.
-            let col_active_text = color::simply_love_rgba(state.active_color_index);
-            // Inactive option text color should be #808080 (alpha 1.0), match player options.
-            let sl_gray = color::rgba_hex("#808080");
+            if matches!(kind, SubmenuKind::Input) {
+                let col_active_text =
+                    color::simply_love_rgba(state.active_color_index + state.sub_selected as i32);
+                let total_rows = rows.len() + 1;
+                let row_h = ROW_H * s;
+                for row_idx in 0..total_rows {
+                    let (row_mid_y, row_alpha) = state
+                        .row_tweens
+                        .get(row_idx)
+                        .map(|tw| (tw.y(), tw.a()))
+                        .unwrap_or_else(|| {
+                            row_dest_for_index(total_rows, state.sub_selected, row_idx, s, list_y)
+                        });
+                    let row_alpha = row_alpha.clamp(0.0, 1.0);
+                    if row_alpha <= 0.001 {
+                        continue;
+                    }
+                    let row_y = row_mid_y - 0.5 * row_h;
+                    let is_active = row_idx == state.sub_selected;
+                    let is_exit = row_idx == total_rows - 1;
+                    let row_w = if is_exit || !is_active {
+                        list_w - sep_w
+                    } else {
+                        list_w
+                    };
+                    let bg = if is_active {
+                        if is_exit { col_brand_bg } else { col_active_bg }
+                    } else {
+                        col_inactive_bg
+                    };
 
-            let total_rows = rows.len() + 1; // + Exit row
-
-            let label_bg_w = SUB_LABEL_COL_W * s;
-            let label_text_x = SUB_LABEL_TEXT_LEFT_PAD.mul_add(s, list_x);
-            // Keep submenu header labels bounded to the left label column.
-            let label_text_max_w = (label_bg_w - SUB_LABEL_TEXT_LEFT_PAD * s - 5.0).max(0.0);
-
-            // Helper to compute the cursor center X for a given submenu row index.
-            let calc_row_center_x = |row_idx: usize| -> f32 {
-                if row_idx >= total_rows {
-                    return list_w.mul_add(0.5, list_x);
-                }
-                if row_idx >= rows.len() {
-                    // Exit row: center within the items column (row width minus label column),
-                    // matching how single-value rows like Music Rate are centered in player_options.rs.
-                    let item_col_left = list_x + label_bg_w;
-                    let item_col_w = list_w - label_bg_w;
-                    return item_col_w.mul_add(0.5, item_col_left)
-                        + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
-                }
-                let row = &rows[row_idx];
-                // Non-inline rows behave as single-value rows: keep the cursor centered
-                // on the center of the available items column (row width minus label column).
-                if !row.inline {
-                    let item_col_left = list_x + label_bg_w;
-                    let item_col_w = list_w - label_bg_w;
-                    return item_col_w.mul_add(0.5, item_col_left)
-                        + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
-                }
-                let choices = row_choices(state, kind, rows, row_idx);
-                if choices.is_empty() {
-                    return list_w.mul_add(0.5, list_x);
-                }
-                let value_zoom = 0.835_f32;
-                let choice_inner_left = SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
-                let mut widths: Vec<f32> = Vec::with_capacity(choices.len());
-                asset_manager.with_fonts(|all_fonts| {
-                    asset_manager.with_font("miso", |metrics_font| {
-                        for text in choices {
-                            let mut w = font::measure_line_width_logical(
-                                metrics_font,
-                                text.as_ref(),
-                                all_fonts,
-                            ) as f32;
-                            if !w.is_finite() || w <= 0.0 {
-                                w = 1.0;
-                            }
-                            widths.push(w * value_zoom);
-                        }
-                    });
-                });
-                if widths.is_empty() {
-                    return list_w.mul_add(0.5, list_x);
-                }
-                let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
-                let mut x = choice_inner_left;
-                for w in &widths {
-                    x_positions.push(x);
-                    x += *w + INLINE_SPACING;
-                }
-                let sel_idx = choice_indices
-                    .get(row_idx)
-                    .copied()
-                    .unwrap_or(0)
-                    .min(widths.len().saturating_sub(1));
-                widths[sel_idx].mul_add(0.5, x_positions[sel_idx])
-            };
-
-            let row_h = ROW_H * s;
-            for row_idx in 0..total_rows {
-                let (row_mid_y, row_alpha) = state
-                    .row_tweens
-                    .get(row_idx)
-                    .map(|tw| (tw.y(), tw.a()))
-                    .unwrap_or_else(|| {
-                        row_dest_for_index(total_rows, state.sub_selected, row_idx, s, list_y)
-                    });
-                let row_alpha = row_alpha.clamp(0.0, 1.0);
-                if row_alpha <= 0.001 {
-                    continue;
-                }
-                let row_y = row_mid_y - 0.5 * row_h;
-
-                let is_active = row_idx == state.sub_selected;
-                let is_exit = row_idx == total_rows - 1;
-
-                let row_w = if is_exit {
-                    list_w - sep_w
-                } else if is_active {
-                    list_w
-                } else {
-                    list_w - sep_w
-                };
-
-                let bg = if is_active {
-                    col_active_bg
-                } else {
-                    col_inactive_bg
-                };
-
-                ui_actors.push(act!(quad:
-                    align(0.0, 0.0):
-                    xy(list_x, row_y):
-                    zoomto(row_w, row_h):
-                    diffuse(bg[0], bg[1], bg[2], bg[3] * row_alpha)
-                ));
-
-                if !is_exit && row_idx < rows.len() {
-                    // Left label background column (matches player options style).
                     ui_actors.push(act!(quad:
                         align(0.0, 0.0):
                         xy(list_x, row_y):
-                        zoomto(label_bg_w, row_h):
-                        diffuse(0.0, 0.0, 0.0, 0.25 * row_alpha)
+                        zoomto(row_w, row_h):
+                        diffuse(bg[0], bg[1], bg[2], bg[3] * row_alpha)
                     ));
 
-                    let row = &rows[row_idx];
-                    let inline_row = row.inline;
-                    let label = row.label;
-                    let title_color = if is_active {
-                        let mut c = col_active_text;
-                        c[3] = 1.0;
-                        c
+                    let heart_x = HEART_LEFT_PAD.mul_add(s, list_x);
+                    let text_x_base = TEXT_LEFT_PAD.mul_add(s, list_x);
+                    if !is_exit {
+                        let mut heart_tint = if is_active {
+                            col_active_text
+                        } else {
+                            col_white
+                        };
+                        heart_tint[3] *= row_alpha;
+                        ui_actors.push(act!(sprite("heart.png"):
+                            align(0.0, 0.5):
+                            xy(heart_x, row_mid_y):
+                            zoom(HEART_ZOOM):
+                            diffuse(heart_tint[0], heart_tint[1], heart_tint[2], heart_tint[3])
+                        ));
+                    }
+
+                    let text_x = if is_exit { heart_x } else { text_x_base };
+                    let label = if row_idx < rows.len() {
+                        rows[row_idx].label
+                    } else {
+                        "Exit"
+                    };
+                    let mut text_color = if is_exit {
+                        if is_active { col_black } else { col_white }
+                    } else if is_active {
+                        col_active_text
                     } else {
                         col_white
                     };
-                    let mut title_color = title_color;
-                    title_color[3] *= row_alpha;
-
+                    text_color[3] *= row_alpha;
                     ui_actors.push(act!(text:
                         align(0.0, 0.5):
-                        xy(label_text_x, row_mid_y):
+                        xy(text_x, row_mid_y):
                         zoom(ITEM_TEXT_ZOOM):
-                        diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                        diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
                         font("miso"):
                         settext(label):
-                        maxwidth(label_text_max_w):
                         horizalign(left)
                     ));
+                }
 
-                    // Inline Off/On options in the items column (or a single centered value if inline == false).
-                    let mut choice_texts: Vec<Cow<'_, str>> =
-                        row_choices(state, kind, rows, row_idx);
-                    if !choice_texts.is_empty() {
-                        let value_zoom = 0.835_f32;
-                        if row.label == "Global Offset (ms)" {
-                            let formatted = Cow::Owned(format_ms(state.global_offset_ms));
-                            choice_texts[0] = formatted;
-                        } else if row.label == "Visual Delay (ms)" {
-                            let formatted = Cow::Owned(format_ms(state.visual_delay_ms));
-                            choice_texts[0] = formatted;
-                        }
+                let sel = state.sub_selected.min(total_rows.saturating_sub(1));
+                let item = if sel < rows.len() {
+                    &items[sel]
+                } else {
+                    &items[items.len().saturating_sub(1)]
+                };
+                selected_item = Some(item);
+            } else {
+                // Active text color for submenu rows.
+                let col_active_text = color::simply_love_rgba(state.active_color_index);
+                // Inactive option text color should be #808080 (alpha 1.0), match player options.
+                let sl_gray = color::rgba_hex("#808080");
 
-                        let mut widths: Vec<f32> = Vec::with_capacity(choice_texts.len());
-                        asset_manager.with_fonts(|all_fonts| {
-                            asset_manager.with_font("miso", |metrics_font| {
-                                for text in &choice_texts {
-                                    let mut w = font::measure_line_width_logical(
-                                        metrics_font,
-                                        text.as_ref(),
-                                        all_fonts,
-                                    ) as f32;
-                                    if !w.is_finite() || w <= 0.0 {
-                                        w = 1.0;
-                                    }
-                                    widths.push(w * value_zoom);
+                let total_rows = rows.len() + 1; // + Exit row
+
+                let label_bg_w = SUB_LABEL_COL_W * s;
+                let label_text_x = SUB_LABEL_TEXT_LEFT_PAD.mul_add(s, list_x);
+                // Keep submenu header labels bounded to the left label column.
+                let label_text_max_w = (label_bg_w - SUB_LABEL_TEXT_LEFT_PAD * s - 5.0).max(0.0);
+
+                // Helper to compute the cursor center X for a given submenu row index.
+                let calc_row_center_x = |row_idx: usize| -> f32 {
+                    if row_idx >= total_rows {
+                        return list_w.mul_add(0.5, list_x);
+                    }
+                    if row_idx >= rows.len() {
+                        // Exit row: center within the items column (row width minus label column),
+                        // matching how single-value rows like Music Rate are centered in player_options.rs.
+                        let item_col_left = list_x + label_bg_w;
+                        let item_col_w = list_w - label_bg_w;
+                        return item_col_w.mul_add(0.5, item_col_left)
+                            + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
+                    }
+                    let row = &rows[row_idx];
+                    // Non-inline rows behave as single-value rows: keep the cursor centered
+                    // on the center of the available items column (row width minus label column).
+                    if !row.inline {
+                        let item_col_left = list_x + label_bg_w;
+                        let item_col_w = list_w - label_bg_w;
+                        return item_col_w.mul_add(0.5, item_col_left)
+                            + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
+                    }
+                    let choices = row_choices(state, kind, rows, row_idx);
+                    if choices.is_empty() {
+                        return list_w.mul_add(0.5, list_x);
+                    }
+                    let value_zoom = 0.835_f32;
+                    let choice_inner_left =
+                        SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
+                    let mut widths: Vec<f32> = Vec::with_capacity(choices.len());
+                    asset_manager.with_fonts(|all_fonts| {
+                        asset_manager.with_font("miso", |metrics_font| {
+                            for text in choices {
+                                let mut w = font::measure_line_width_logical(
+                                    metrics_font,
+                                    text.as_ref(),
+                                    all_fonts,
+                                ) as f32;
+                                if !w.is_finite() || w <= 0.0 {
+                                    w = 1.0;
                                 }
-                            });
-                        });
-
-                        let selected_choice = choice_indices
-                            .get(row_idx)
-                            .copied()
-                            .unwrap_or(0)
-                            .min(choice_texts.len().saturating_sub(1));
-                        let mut selected_left_x: Option<f32> = None;
-
-                        let choice_inner_left =
-                            SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
-                        let mut x_positions: Vec<f32> = Vec::with_capacity(choice_texts.len());
-                        if inline_row {
-                            let mut x = choice_inner_left;
-                            for w in &widths {
-                                x_positions.push(x);
-                                x += *w + INLINE_SPACING;
+                                widths.push(w * value_zoom);
                             }
-                        }
+                        });
+                    });
+                    if widths.is_empty() {
+                        return list_w.mul_add(0.5, list_x);
+                    }
+                    let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
+                    let mut x = choice_inner_left;
+                    for w in &widths {
+                        x_positions.push(x);
+                        x += *w + INLINE_SPACING;
+                    }
+                    let sel_idx = choice_indices
+                        .get(row_idx)
+                        .copied()
+                        .unwrap_or(0)
+                        .min(widths.len().saturating_sub(1));
+                    widths[sel_idx].mul_add(0.5, x_positions[sel_idx])
+                };
 
-                        if inline_row {
-                            for (idx, choice) in choice_texts.iter().enumerate() {
-                                let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
-                                let is_choice_selected = idx == selected_choice;
-                                if is_choice_selected {
-                                    selected_left_x = Some(x);
+                let row_h = ROW_H * s;
+                for row_idx in 0..total_rows {
+                    let (row_mid_y, row_alpha) = state
+                        .row_tweens
+                        .get(row_idx)
+                        .map(|tw| (tw.y(), tw.a()))
+                        .unwrap_or_else(|| {
+                            row_dest_for_index(total_rows, state.sub_selected, row_idx, s, list_y)
+                        });
+                    let row_alpha = row_alpha.clamp(0.0, 1.0);
+                    if row_alpha <= 0.001 {
+                        continue;
+                    }
+                    let row_y = row_mid_y - 0.5 * row_h;
+
+                    let is_active = row_idx == state.sub_selected;
+                    let is_exit = row_idx == total_rows - 1;
+
+                    let row_w = if is_exit {
+                        list_w - sep_w
+                    } else if is_active {
+                        list_w
+                    } else {
+                        list_w - sep_w
+                    };
+
+                    let bg = if is_active {
+                        col_active_bg
+                    } else {
+                        col_inactive_bg
+                    };
+
+                    ui_actors.push(act!(quad:
+                        align(0.0, 0.0):
+                        xy(list_x, row_y):
+                        zoomto(row_w, row_h):
+                        diffuse(bg[0], bg[1], bg[2], bg[3] * row_alpha)
+                    ));
+
+                    if !is_exit && row_idx < rows.len() {
+                        // Left label background column (matches player options style).
+                        ui_actors.push(act!(quad:
+                            align(0.0, 0.0):
+                            xy(list_x, row_y):
+                            zoomto(label_bg_w, row_h):
+                            diffuse(0.0, 0.0, 0.0, 0.25 * row_alpha)
+                        ));
+
+                        let row = &rows[row_idx];
+                        let inline_row = row.inline;
+                        let label = row.label;
+                        let title_color = if is_active {
+                            let mut c = col_active_text;
+                            c[3] = 1.0;
+                            c
+                        } else {
+                            col_white
+                        };
+                        let mut title_color = title_color;
+                        title_color[3] *= row_alpha;
+
+                        ui_actors.push(act!(text:
+                            align(0.0, 0.5):
+                            xy(label_text_x, row_mid_y):
+                            zoom(ITEM_TEXT_ZOOM):
+                            diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                            font("miso"):
+                            settext(label):
+                            maxwidth(label_text_max_w):
+                            horizalign(left)
+                        ));
+
+                        // Inline Off/On options in the items column (or a single centered value if inline == false).
+                        let mut choice_texts: Vec<Cow<'_, str>> =
+                            row_choices(state, kind, rows, row_idx);
+                        if !choice_texts.is_empty() {
+                            let value_zoom = 0.835_f32;
+                            if row.label == "Global Offset (ms)" {
+                                let formatted = Cow::Owned(format_ms(state.global_offset_ms));
+                                choice_texts[0] = formatted;
+                            } else if row.label == "Visual Delay (ms)" {
+                                let formatted = Cow::Owned(format_ms(state.visual_delay_ms));
+                                choice_texts[0] = formatted;
+                            }
+
+                            let mut widths: Vec<f32> = Vec::with_capacity(choice_texts.len());
+                            asset_manager.with_fonts(|all_fonts| {
+                                asset_manager.with_font("miso", |metrics_font| {
+                                    for text in &choice_texts {
+                                        let mut w = font::measure_line_width_logical(
+                                            metrics_font,
+                                            text.as_ref(),
+                                            all_fonts,
+                                        )
+                                            as f32;
+                                        if !w.is_finite() || w <= 0.0 {
+                                            w = 1.0;
+                                        }
+                                        widths.push(w * value_zoom);
+                                    }
+                                });
+                            });
+
+                            let selected_choice = choice_indices
+                                .get(row_idx)
+                                .copied()
+                                .unwrap_or(0)
+                                .min(choice_texts.len().saturating_sub(1));
+                            let mut selected_left_x: Option<f32> = None;
+
+                            let choice_inner_left =
+                                SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
+                            let mut x_positions: Vec<f32> = Vec::with_capacity(choice_texts.len());
+                            if inline_row {
+                                let mut x = choice_inner_left;
+                                for w in &widths {
+                                    x_positions.push(x);
+                                    x += *w + INLINE_SPACING;
                                 }
+                            }
 
-                                let mut choice_color = if is_active { col_white } else { sl_gray };
-                                choice_color[3] *= row_alpha;
-                                ui_actors.push(act!(text:
+                            if inline_row {
+                                for (idx, choice) in choice_texts.iter().enumerate() {
+                                    let x =
+                                        x_positions.get(idx).copied().unwrap_or(choice_inner_left);
+                                    let is_choice_selected = idx == selected_choice;
+                                    if is_choice_selected {
+                                        selected_left_x = Some(x);
+                                    }
+
+                                    let mut choice_color =
+                                        if is_active { col_white } else { sl_gray };
+                                    choice_color[3] *= row_alpha;
+                                    ui_actors.push(act!(text:
                                     align(0.0, 0.5):
                                     xy(x, row_mid_y):
                                     zoom(value_zoom):
@@ -3808,17 +4081,17 @@ pub fn get_actors(
                                     settext(choice.as_ref()):
                                     horizalign(left)
                                 ));
-                            }
-                        } else {
-                            let mut choice_color = if is_active { col_white } else { sl_gray };
-                            choice_color[3] *= row_alpha;
-                            let choice_center_x = calc_row_center_x(row_idx);
-                            let choice_text = choice_texts
-                                .get(selected_choice)
-                                .map_or("??", std::convert::AsRef::as_ref);
-                            let draw_w = widths.get(selected_choice).copied().unwrap_or(40.0);
-                            selected_left_x = Some(choice_center_x - draw_w * 0.5);
-                            ui_actors.push(act!(text:
+                                }
+                            } else {
+                                let mut choice_color = if is_active { col_white } else { sl_gray };
+                                choice_color[3] *= row_alpha;
+                                let choice_center_x = calc_row_center_x(row_idx);
+                                let choice_text = choice_texts
+                                    .get(selected_choice)
+                                    .map_or("??", std::convert::AsRef::as_ref);
+                                let draw_w = widths.get(selected_choice).copied().unwrap_or(40.0);
+                                selected_left_x = Some(choice_center_x - draw_w * 0.5);
+                                ui_actors.push(act!(text:
                                 align(0.5, 0.5):
                                 xy(choice_center_x, row_mid_y):
                                 zoom(value_zoom):
@@ -3827,13 +4100,13 @@ pub fn get_actors(
                                 settext(choice_text):
                                 horizalign(center)
                             ));
-                        }
+                            }
 
-                        // Underline the selected option when this row is active or inactive,
-                        // matching the inline underline behavior from player_options.rs.
-                        if let Some(sel_left_x) = selected_left_x {
-                            let draw_w = widths.get(selected_choice).copied().unwrap_or(40.0);
-                            asset_manager.with_fonts(|_all_fonts| {
+                            // Underline the selected option when this row is active or inactive,
+                            // matching the inline underline behavior from player_options.rs.
+                            if let Some(sel_left_x) = selected_left_x {
+                                let draw_w = widths.get(selected_choice).copied().unwrap_or(40.0);
+                                asset_manager.with_fonts(|_all_fonts| {
                                 asset_manager.with_font("miso", |metrics_font| {
                                     let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
                                     let line_thickness = widescale(2.0, 2.5).round().max(1.0);
@@ -3852,61 +4125,62 @@ pub fn get_actors(
                                     ));
                                 });
                             });
-                        }
+                            }
 
-                        // Encircling cursor ring around the active option when this row is active.
-                        // During submenu fades, hide the ring to avoid exposing its construction.
-                        if is_active
-                            && !is_fading_submenu
-                            && let Some((center_x, center_y, ring_w, ring_h)) = cursor_now()
-                        {
-                            let border_w = widescale(2.0, 2.5);
-                            let left = center_x - ring_w * 0.5;
-                            let right = center_x + ring_w * 0.5;
-                            let top = center_y - ring_h * 0.5;
-                            let bottom = center_y + ring_h * 0.5;
-                            let mut ring_color = color::decorative_rgba(state.active_color_index);
-                            ring_color[3] *= row_alpha;
-                            ui_actors.push(act!(quad:
+                            // Encircling cursor ring around the active option when this row is active.
+                            // During submenu fades, hide the ring to avoid exposing its construction.
+                            if is_active
+                                && !is_fading_submenu
+                                && let Some((center_x, center_y, ring_w, ring_h)) = cursor_now()
+                            {
+                                let border_w = widescale(2.0, 2.5);
+                                let left = center_x - ring_w * 0.5;
+                                let right = center_x + ring_w * 0.5;
+                                let top = center_y - ring_h * 0.5;
+                                let bottom = center_y + ring_h * 0.5;
+                                let mut ring_color =
+                                    color::decorative_rgba(state.active_color_index);
+                                ring_color[3] *= row_alpha;
+                                ui_actors.push(act!(quad:
                                 align(0.5, 0.5):
                                 xy(center_x, top + border_w * 0.5):
                                 zoomto(ring_w, border_w):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)
                             ));
-                            ui_actors.push(act!(quad:
+                                ui_actors.push(act!(quad:
                                 align(0.5, 0.5):
                                 xy(center_x, bottom - border_w * 0.5):
                                 zoomto(ring_w, border_w):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)
                             ));
-                            ui_actors.push(act!(quad:
+                                ui_actors.push(act!(quad:
                                 align(0.5, 0.5):
                                 xy(left + border_w * 0.5, center_y):
                                 zoomto(border_w, ring_h):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)
                             ));
-                            ui_actors.push(act!(quad:
+                                ui_actors.push(act!(quad:
                                 align(0.5, 0.5):
                                 xy(right - border_w * 0.5, center_y):
                                 zoomto(border_w, ring_h):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)
                             ));
+                            }
                         }
-                    }
-                } else {
-                    // Exit row: centered "Exit" text in the items column.
-                    let label = "Exit";
-                    let value_zoom = 0.835_f32;
-                    let mut choice_color = if is_active { col_white } else { sl_gray };
-                    choice_color[3] *= row_alpha;
-                    let center_x = calc_row_center_x(row_idx);
-                    let center_y = row_mid_y;
+                    } else {
+                        // Exit row: centered "Exit" text in the items column.
+                        let label = "Exit";
+                        let value_zoom = 0.835_f32;
+                        let mut choice_color = if is_active { col_white } else { sl_gray };
+                        choice_color[3] *= row_alpha;
+                        let center_x = calc_row_center_x(row_idx);
+                        let center_y = row_mid_y;
 
-                    ui_actors.push(act!(text:
+                        ui_actors.push(act!(text:
                         align(0.5, 0.5):
                         xy(center_x, center_y):
                         zoom(value_zoom):
@@ -3916,61 +4190,62 @@ pub fn get_actors(
                         horizalign(center)
                     ));
 
-                    // Draw the selection cursor ring for the Exit row when active.
-                    // During submenu fades, hide the ring to avoid exposing its construction.
-                    if is_active
-                        && !is_fading_submenu
-                        && let Some((ring_x, ring_y, ring_w, ring_h)) = cursor_now()
-                    {
-                        let border_w = widescale(2.0, 2.5);
-                        let left = ring_x - ring_w * 0.5;
-                        let right = ring_x + ring_w * 0.5;
-                        let top = ring_y - ring_h * 0.5;
-                        let bottom = ring_y + ring_h * 0.5;
-                        let mut ring_color = color::decorative_rgba(state.active_color_index);
-                        ring_color[3] *= row_alpha;
+                        // Draw the selection cursor ring for the Exit row when active.
+                        // During submenu fades, hide the ring to avoid exposing its construction.
+                        if is_active
+                            && !is_fading_submenu
+                            && let Some((ring_x, ring_y, ring_w, ring_h)) = cursor_now()
+                        {
+                            let border_w = widescale(2.0, 2.5);
+                            let left = ring_x - ring_w * 0.5;
+                            let right = ring_x + ring_w * 0.5;
+                            let top = ring_y - ring_h * 0.5;
+                            let bottom = ring_y + ring_h * 0.5;
+                            let mut ring_color = color::decorative_rgba(state.active_color_index);
+                            ring_color[3] *= row_alpha;
 
-                        ui_actors.push(act!(quad:
-                            align(0.5, 0.5):
-                            xy((left + right) * 0.5, top + border_w * 0.5):
-                            zoomto(ring_w, border_w):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(101)
-                        ));
-                        ui_actors.push(act!(quad:
-                            align(0.5, 0.5):
-                            xy((left + right) * 0.5, bottom - border_w * 0.5):
-                            zoomto(ring_w, border_w):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(101)
-                        ));
-                        ui_actors.push(act!(quad:
-                            align(0.5, 0.5):
-                            xy(left + border_w * 0.5, (top + bottom) * 0.5):
-                            zoomto(border_w, ring_h):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(101)
-                        ));
-                        ui_actors.push(act!(quad:
-                            align(0.5, 0.5):
-                            xy(right - border_w * 0.5, (top + bottom) * 0.5):
-                            zoomto(border_w, ring_h):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(101)
-                        ));
+                            ui_actors.push(act!(quad:
+                                align(0.5, 0.5):
+                                xy((left + right) * 0.5, top + border_w * 0.5):
+                                zoomto(ring_w, border_w):
+                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                z(101)
+                            ));
+                            ui_actors.push(act!(quad:
+                                align(0.5, 0.5):
+                                xy((left + right) * 0.5, bottom - border_w * 0.5):
+                                zoomto(ring_w, border_w):
+                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                z(101)
+                            ));
+                            ui_actors.push(act!(quad:
+                                align(0.5, 0.5):
+                                xy(left + border_w * 0.5, (top + bottom) * 0.5):
+                                zoomto(border_w, ring_h):
+                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                z(101)
+                            ));
+                            ui_actors.push(act!(quad:
+                                align(0.5, 0.5):
+                                xy(right - border_w * 0.5, (top + bottom) * 0.5):
+                                zoomto(border_w, ring_h):
+                                diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+                                z(101)
+                            ));
+                        }
                     }
                 }
-            }
 
-            // Description items for the submenu
-            let total_rows = rows.len() + 1;
-            let sel = state.sub_selected.min(total_rows.saturating_sub(1));
-            let item = if sel < rows.len() {
-                &items[sel]
-            } else {
-                &items[items.len().saturating_sub(1)]
-            };
-            selected_item = Some(item);
+                // Description items for the submenu
+                let total_rows = rows.len() + 1;
+                let sel = state.sub_selected.min(total_rows.saturating_sub(1));
+                let item = if sel < rows.len() {
+                    &items[sel]
+                } else {
+                    &items[items.len().saturating_sub(1)]
+                };
+                selected_item = Some(item);
+            }
         }
     }
 
@@ -4118,12 +4393,17 @@ pub fn get_actors(
         let cursor_x = [yes_x, no_x][confirm.active_choice.min(1) as usize];
         let cursor_color = color::simply_love_rgba(state.active_color_index);
         let prompt_text = format!(
-            "Import ALL packs for {} / {}?\nRate limit is hard-capped at 3 requests per second.\nFor many charts this can take more than one hour.\nSpamming APIs can be problematic.\n\nStart now?",
+            "Import ALL packs for {} / {}?\nOnly missing GS scores: {}.\nRate limit is hard-capped at 3 requests per second.\nFor many charts this can take more than one hour.\nSpamming APIs can be problematic.\n\nStart now?",
             confirm.selection.endpoint.display_name(),
             if confirm.selection.profile.display_name.is_empty() {
                 confirm.selection.profile.id.as_str()
             } else {
                 confirm.selection.profile.display_name.as_str()
+            },
+            if confirm.selection.only_missing_gs_scores {
+                "Yes"
+            } else {
+                "No"
             }
         );
 

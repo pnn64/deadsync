@@ -296,6 +296,8 @@ pub struct Config {
     pub master_volume: u8,
     pub menu_music: bool,
     pub music_volume: u8,
+    // ITGmania PrefsManager "MusicWheelSwitchSpeed" (default 15).
+    pub music_wheel_switch_speed: u8,
     pub sfx_volume: u8,
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
@@ -347,6 +349,7 @@ impl Default for Config {
             master_volume: 90,
             menu_music: true,
             music_volume: 100,
+            music_wheel_switch_speed: 15,
             sfx_volume: 100,
             audio_sample_rate_hz: None,
             auto_populate_gs_scores: false,
@@ -495,6 +498,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         if default.mine_hit_sound { "1" } else { "0" }
     ));
     content.push_str(&format!("MusicVolume={}\n", default.music_volume));
+    content.push_str(&format!(
+        "MusicWheelSwitchSpeed={}\n",
+        default.music_wheel_switch_speed.max(1)
+    ));
     content.push_str(&format!(
         "RateModPreservesPitch={}\n",
         if default.rate_mod_preserves_pitch {
@@ -793,6 +800,10 @@ pub fn load() {
                     .get("Options", "MusicVolume")
                     .and_then(|v| v.parse().ok())
                     .map_or(default.music_volume, |v: u8| v.clamp(0, 100));
+                cfg.music_wheel_switch_speed = conf
+                    .get("Options", "MusicWheelSwitchSpeed")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.music_wheel_switch_speed, |v| v.max(1));
                 cfg.sfx_volume = conf
                     .get("Options", "SFXVolume")
                     .and_then(|v| v.parse().ok())
@@ -964,6 +975,7 @@ pub fn load() {
                     "MenuMusic",
                     "MineHitSound",
                     "MusicVolume",
+                    "MusicWheelSwitchSpeed",
                     "SongParsingThreads",
                     "RateModPreservesPitch",
                     "SelectMusicBreakdown",
@@ -1709,6 +1721,10 @@ fn save_without_keymaps() {
     ));
     content.push_str(&format!("MusicVolume={}\n", cfg.music_volume));
     content.push_str(&format!(
+        "MusicWheelSwitchSpeed={}\n",
+        cfg.music_wheel_switch_speed.max(1)
+    ));
+    content.push_str(&format!(
         "RateModPreservesPitch={}\n",
         if cfg.rate_mod_preserves_pitch {
             "1"
@@ -1986,6 +2002,18 @@ pub fn update_mine_hit_sound(enabled: bool) {
             return;
         }
         cfg.mine_hit_sound = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_music_wheel_switch_speed(speed: u8) {
+    let speed = speed.max(1);
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.music_wheel_switch_speed == speed {
+            return;
+        }
+        cfg.music_wheel_switch_speed = speed;
     }
     save_without_keymaps();
 }

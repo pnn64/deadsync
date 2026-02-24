@@ -111,7 +111,7 @@ const DEFAULT_PREVIEW_LENGTH: f64 = 12.0;
 const MUSIC_WHEEL_SWITCH_SECONDS: f32 = 0.10;
 const MUSIC_WHEEL_SETTLE_MIN_SPEED: f32 = 0.2;
 // ITGmania PrefsManager default: MusicWheelSwitchSpeed=15.
-const MUSIC_WHEEL_HOLD_SPIN_SPEED: f32 = 15.0;
+const MUSIC_WHEEL_HOLD_SPIN_SPEED_DEFAULT: f32 = 15.0;
 // ITGmania WheelBase::MoveSpecific(): if |offset| < 0.25 then one more move for spin-down.
 const MUSIC_WHEEL_STOP_SPINDOWN_THRESHOLD: f32 = 0.25;
 
@@ -148,6 +148,16 @@ thread_local! {
     static TOTAL_LABEL_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
     static STR_REF_CACHE: RefCell<TextCache<(usize, usize)>> = RefCell::new(HashMap::with_capacity(4096));
     static SCORE_PERCENT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(2048));
+}
+
+#[inline(always)]
+fn music_wheel_hold_spin_speed() -> f32 {
+    let configured = crate::config::get().music_wheel_switch_speed;
+    if configured == 0 {
+        MUSIC_WHEEL_HOLD_SPIN_SPEED_DEFAULT
+    } else {
+        configured.max(1) as f32
+    }
 }
 
 #[inline(always)]
@@ -2011,7 +2021,8 @@ fn music_wheel_update_hold_scroll(state: &mut State, dt: f32, dir: NavDirection)
         NavDirection::Right => 1.0,
     };
 
-    state.wheel_offset_from_selection -= MUSIC_WHEEL_HOLD_SPIN_SPEED * moving * dt;
+    let hold_spin_speed = music_wheel_hold_spin_speed();
+    state.wheel_offset_from_selection -= hold_spin_speed * moving * dt;
     state.wheel_offset_from_selection = state.wheel_offset_from_selection.clamp(-1.0, 1.0);
 
     let off = state.wheel_offset_from_selection;

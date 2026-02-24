@@ -9,7 +9,6 @@ use crate::screens::select_music::MusicWheelEntry;
 use crate::ui::actors::Actor;
 use crate::ui::color;
 use std::sync::Arc;
-use std::sync::mpsc;
 
 const WIDTH: f32 = 210.0;
 const HEIGHT: f32 = 160.0;
@@ -112,19 +111,6 @@ struct SongSearchFilter {
     bpm_tier: Option<i32>,
 }
 
-#[derive(Debug)]
-struct LeaderboardFetchRequest {
-    chart_hash: String,
-    api_key: String,
-    show_ex_score: bool,
-}
-
-#[derive(Debug)]
-struct LeaderboardFetchResult {
-    p1: Option<Result<scores::PlayerLeaderboardData, String>>,
-    p2: Option<Result<scores::PlayerLeaderboardData, String>>,
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct LeaderboardSideState {
     joined: bool,
@@ -134,6 +120,7 @@ pub struct LeaderboardSideState {
     show_icons: bool,
     error_text: Option<String>,
     machine_pane: Option<scores::LeaderboardPane>,
+    chart_hash: Option<String>,
 }
 
 #[derive(Debug)]
@@ -141,7 +128,6 @@ pub struct LeaderboardOverlayStateData {
     elapsed: f32,
     p1: LeaderboardSideState,
     p2: LeaderboardSideState,
-    rx: Option<mpsc::Receiver<LeaderboardFetchResult>>,
 }
 
 #[derive(Debug)]
@@ -928,37 +914,81 @@ fn gs_error_text(error: &str) -> String {
     }
 }
 
-fn apply_leaderboard_side_fetch_result(
+fn apply_leaderboard_side_snapshot(
     side: &mut LeaderboardSideState,
-    fetched: Result<scores::PlayerLeaderboardData, String>,
+    snapshot: scores::CachedPlayerLeaderboardData,
 ) {
-    side.loading = false;
-    match fetched {
-        Ok(data) => {
-            side.error_text = None;
-            side.panes = data.panes;
-            if let Some(machine) = side.machine_pane.clone() {
-                side.panes.push(machine);
-            }
-            if side.panes.is_empty()
-                && let Some(machine) = side.machine_pane.clone()
-            {
-                side.panes.push(machine);
-            }
-            side.pane_index = 0;
-            side.show_icons = side.panes.len() > 1;
-        }
-        Err(error) => {
-            side.error_text = Some(gs_error_text(&error));
-            if side.panes.is_empty()
-                && let Some(machine) = side.machine_pane.clone()
-            {
-                side.panes.push(machine);
-            }
-            side.pane_index = 0;
-            side.show_icons = false;
-        }
+    let current_pane = side
+        .panes
+        .get(side.pane_index)
+        .map(|pane| (pane.name.clone(), pane.is_ex, pane.disabled));
+
+    if snapshot.loading {
+        side.loading = true;
+        side.error_text = None;
+        side.show_icons = false;
+        return;
     }
+
+    side.loading = false;
+    if let Some(error) = snapshot.error {
+        side.error_text = Some(gs_error_text(&error));
+        if side.panes.is_empty()
+            && let Some(machine) = side.machine_pane.clone()
+        {
+            side.panes.push(machine);
+        }
+        side.pane_index = side.pane_index.min(side.panes.len().saturating_sub(1));
+        side.show_icons = false;
+        return;
+    }
+
+    let mut panes = snapshot.data.map_or_else(Vec::new, |data| data.panes);
+    if let Some(machine) = side.machine_pane.clone() {
+        panes.push(machine);
+    }
+    if panes.is_empty()
+        && let Some(machine) = side.machine_pane.clone()
+    {
+        panes.push(machine);
+    }
+
+    side.error_text = None;
+    if let Some((name, is_ex, disabled)) = current_pane {
+        side.pane_index = panes
+            .iter()
+            .position(|pane| pane.name == name && pane.is_ex == is_ex && pane.disabled == disabled)
+            .unwrap_or(side.pane_index.min(panes.len().saturating_sub(1)));
+    } else {
+        side.pane_index = 0;
+    }
+    side.show_icons = panes.len() > 1;
+    side.panes = panes;
+}
+
+fn refresh_leaderboard_side_from_cache(
+    side: &mut LeaderboardSideState,
+    player: profile::PlayerSide,
+) {
+    let Some(chart_hash) = side.chart_hash.as_deref() else {
+        return;
+    };
+    let Some(snapshot) = scores::get_or_fetch_player_leaderboards_for_side(
+        chart_hash,
+        player,
+        GS_LEADERBOARD_NUM_ENTRIES,
+    ) else {
+        side.loading = false;
+        side.error_text = None;
+        if side.panes.is_empty()
+            && let Some(machine) = side.machine_pane.clone()
+        {
+            side.panes.push(machine);
+        }
+        side.show_icons = false;
+        return;
+    };
+    apply_leaderboard_side_snapshot(side, snapshot);
 }
 
 pub fn show_leaderboard_overlay(
@@ -992,16 +1022,11 @@ pub fn show_leaderboard_overlay(
         ConnectionStatus::Connected(services) if !services.leaderboard
     );
 
-    let mut req_p1: Option<LeaderboardFetchRequest> = None;
     if p1_joined {
         let profile = profile::get_for_side(profile::PlayerSide::P1);
         if service && !profile.groovestats_api_key.is_empty() && chart_hash_p1.is_some() {
-            req_p1 = Some(LeaderboardFetchRequest {
-                chart_hash: chart_hash_p1.unwrap_or_default(),
-                api_key: profile.groovestats_api_key,
-                show_ex_score: profile.show_ex_score,
-            });
-            p1.loading = true;
+            p1.chart_hash = chart_hash_p1;
+            refresh_leaderboard_side_from_cache(&mut p1, profile::PlayerSide::P1);
         } else if let Some(machine) = p1.machine_pane.clone() {
             p1.panes.push(machine);
             if service_disabled {
@@ -1011,16 +1036,11 @@ pub fn show_leaderboard_overlay(
         }
     }
 
-    let mut req_p2: Option<LeaderboardFetchRequest> = None;
     if p2_joined {
         let profile = profile::get_for_side(profile::PlayerSide::P2);
         if service && !profile.groovestats_api_key.is_empty() && chart_hash_p2.is_some() {
-            req_p2 = Some(LeaderboardFetchRequest {
-                chart_hash: chart_hash_p2.unwrap_or_default(),
-                api_key: profile.groovestats_api_key,
-                show_ex_score: profile.show_ex_score,
-            });
-            p2.loading = true;
+            p2.chart_hash = chart_hash_p2;
+            refresh_leaderboard_side_from_cache(&mut p2, profile::PlayerSide::P2);
         } else if let Some(machine) = p2.machine_pane.clone() {
             p2.panes.push(machine);
             if service_disabled {
@@ -1030,42 +1050,11 @@ pub fn show_leaderboard_overlay(
         }
     }
 
-    let mut rx = None;
-    if req_p1.is_some() || req_p2.is_some() {
-        let (tx, thread_rx) = mpsc::channel::<LeaderboardFetchResult>();
-        std::thread::spawn(move || {
-            let p1_res = req_p1.map(|r| {
-                scores::fetch_player_leaderboards(
-                    &r.chart_hash,
-                    &r.api_key,
-                    r.show_ex_score,
-                    GS_LEADERBOARD_NUM_ENTRIES,
-                )
-                .map_err(|e| e.to_string())
-            });
-            let p2_res = req_p2.map(|r| {
-                scores::fetch_player_leaderboards(
-                    &r.chart_hash,
-                    &r.api_key,
-                    r.show_ex_score,
-                    GS_LEADERBOARD_NUM_ENTRIES,
-                )
-                .map_err(|e| e.to_string())
-            });
-            let _ = tx.send(LeaderboardFetchResult {
-                p1: p1_res,
-                p2: p2_res,
-            });
-        });
-        rx = Some(thread_rx);
-    }
-
     Some(LeaderboardOverlayState::Visible(
         LeaderboardOverlayStateData {
             elapsed: 0.0,
             p1,
             p2,
-            rx,
         },
     ))
 }
@@ -1080,20 +1069,12 @@ pub fn update_leaderboard_overlay(state: &mut LeaderboardOverlayState, dt: f32) 
         return;
     };
     overlay.elapsed += dt.max(0.0);
-    let Some(rx) = &overlay.rx else {
-        return;
-    };
-    let Ok(result) = rx.try_recv() else {
-        return;
-    };
-
-    if let Some(p1_result) = result.p1 {
-        apply_leaderboard_side_fetch_result(&mut overlay.p1, p1_result);
+    if overlay.p1.joined && overlay.p1.chart_hash.is_some() {
+        refresh_leaderboard_side_from_cache(&mut overlay.p1, profile::PlayerSide::P1);
     }
-    if let Some(p2_result) = result.p2 {
-        apply_leaderboard_side_fetch_result(&mut overlay.p2, p2_result);
+    if overlay.p2.joined && overlay.p2.chart_hash.is_some() {
+        refresh_leaderboard_side_from_cache(&mut overlay.p2, profile::PlayerSide::P2);
     }
-    overlay.rx = None;
 }
 
 #[inline(always)]

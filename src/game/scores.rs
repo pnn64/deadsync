@@ -188,6 +188,19 @@ pub fn get_cached_gs_score_for_side(
         .and_then(|m| m.get(chart_hash).copied())
 }
 
+fn cached_gs_chart_hashes_for_profile(profile_id: &str) -> HashSet<String> {
+    if profile_id.trim().is_empty() {
+        return HashSet::new();
+    }
+    ensure_gs_score_cache_loaded_for_profile(profile_id);
+    GS_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(profile_id)
+        .map_or_else(HashSet::new, |scores| scores.keys().cloned().collect())
+}
+
 fn set_cached_gs_score_for_profile(profile_id: &str, chart_hash: String, score: CachedScore) {
     info!("Caching GrooveStats score {score:?} for chart hash {chart_hash}");
     ensure_gs_score_cache_loaded_for_profile(profile_id);
@@ -1619,18 +1632,27 @@ struct PlayerLeaderboardCacheKey {
 
 #[derive(Debug, Clone)]
 enum PlayerLeaderboardCacheValue {
-    Loading,
     Ready(PlayerLeaderboardData),
     Error(String),
 }
 
+#[derive(Debug, Clone)]
+struct PlayerLeaderboardCacheEntry {
+    value: PlayerLeaderboardCacheValue,
+    refreshed_at: Instant,
+}
+
 #[derive(Default)]
 struct PlayerLeaderboardCacheState {
-    by_key: HashMap<PlayerLeaderboardCacheKey, PlayerLeaderboardCacheValue>,
+    by_key: HashMap<PlayerLeaderboardCacheKey, PlayerLeaderboardCacheEntry>,
+    in_flight: HashSet<PlayerLeaderboardCacheKey>,
 }
 
 static PLAYER_LEADERBOARD_CACHE: std::sync::LazyLock<Mutex<PlayerLeaderboardCacheState>> =
     std::sync::LazyLock::new(|| Mutex::new(PlayerLeaderboardCacheState::default()));
+
+const PLAYER_LEADERBOARD_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
+const PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -1874,24 +1896,18 @@ fn fetch_player_leaderboards_internal(
     })
 }
 
-pub fn fetch_player_leaderboards(
-    chart_hash: &str,
-    api_key: &str,
-    show_ex_score: bool,
-    max_entries: usize,
-) -> Result<PlayerLeaderboardData, Box<dyn Error + Send + Sync>> {
-    fetch_player_leaderboards_internal(chart_hash, api_key, show_ex_score, max_entries)
-        .map(|fetched| fetched.data)
+#[inline(always)]
+const fn loading_player_leaderboard_snapshot() -> CachedPlayerLeaderboardData {
+    CachedPlayerLeaderboardData {
+        loading: true,
+        data: None,
+        error: None,
+    }
 }
 
 #[inline(always)]
-fn cache_snapshot_from_value(value: &PlayerLeaderboardCacheValue) -> CachedPlayerLeaderboardData {
-    match value {
-        PlayerLeaderboardCacheValue::Loading => CachedPlayerLeaderboardData {
-            loading: true,
-            data: None,
-            error: None,
-        },
+fn cache_snapshot_from_entry(entry: &PlayerLeaderboardCacheEntry) -> CachedPlayerLeaderboardData {
+    match &entry.value {
         PlayerLeaderboardCacheValue::Ready(data) => CachedPlayerLeaderboardData {
             loading: false,
             data: Some(data.clone()),
@@ -1902,6 +1918,15 @@ fn cache_snapshot_from_value(value: &PlayerLeaderboardCacheValue) -> CachedPlaye
             data: None,
             error: Some(error.clone()),
         },
+    }
+}
+
+#[inline(always)]
+fn should_refresh_player_leaderboard_entry(entry: &PlayerLeaderboardCacheEntry) -> bool {
+    let age = entry.refreshed_at.elapsed();
+    match entry.value {
+        PlayerLeaderboardCacheValue::Ready(_) => age >= PLAYER_LEADERBOARD_REFRESH_INTERVAL,
+        PlayerLeaderboardCacheValue::Error(_) => age >= PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL,
     }
 }
 
@@ -1936,85 +1961,111 @@ pub fn get_or_fetch_player_leaderboards_for_side(
     let should_auto_populate =
         auto_populate && auto_profile_id.is_some() && !auto_username.is_empty();
 
-    match network::get_status() {
-        network::ConnectionStatus::Pending => {
-            return Some(CachedPlayerLeaderboardData {
-                loading: true,
-                data: None,
-                error: None,
-            });
-        }
-        network::ConnectionStatus::Connected(services) if !services.get_scores => {
-            return Some(CachedPlayerLeaderboardData {
-                loading: false,
-                data: None,
-                error: Some("Disabled".to_string()),
-            });
-        }
-        network::ConnectionStatus::Error(error) => {
-            return Some(CachedPlayerLeaderboardData {
-                loading: false,
-                data: None,
-                error: Some(error),
-            });
-        }
-        _ => {}
-    }
-
     let key = PlayerLeaderboardCacheKey {
         chart_hash: chart_hash.to_string(),
         api_key: side_profile.groovestats_api_key.clone(),
         show_ex_score: side_profile.show_ex_score,
         max_entries,
     };
+    let cached_snapshot = {
+        let cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+        cache.by_key.get(&key).map(cache_snapshot_from_entry)
+    };
+
+    match network::get_status() {
+        network::ConnectionStatus::Pending => {
+            return Some(cached_snapshot.unwrap_or_else(loading_player_leaderboard_snapshot));
+        }
+        network::ConnectionStatus::Connected(services) if !services.get_scores => {
+            return Some(cached_snapshot.unwrap_or(CachedPlayerLeaderboardData {
+                loading: false,
+                data: None,
+                error: Some("Disabled".to_string()),
+            }));
+        }
+        network::ConnectionStatus::Error(error) => {
+            return Some(cached_snapshot.unwrap_or(CachedPlayerLeaderboardData {
+                loading: false,
+                data: None,
+                error: Some(error),
+            }));
+        }
+        _ => {}
+    }
 
     let mut should_spawn = false;
     let snapshot = {
         let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
-        if let Some(value) = cache.by_key.get(&key) {
-            cache_snapshot_from_value(value)
+        let snapshot = if let Some(entry) = cache.by_key.get(&key) {
+            cache_snapshot_from_entry(entry)
         } else {
-            cache
+            loading_player_leaderboard_snapshot()
+        };
+
+        if !cache.in_flight.contains(&key)
+            && cache
                 .by_key
-                .insert(key.clone(), PlayerLeaderboardCacheValue::Loading);
+                .get(&key)
+                .is_none_or(should_refresh_player_leaderboard_entry)
+        {
+            cache.in_flight.insert(key.clone());
             should_spawn = true;
-            CachedPlayerLeaderboardData {
-                loading: true,
-                data: None,
-                error: None,
-            }
         }
+        snapshot
     };
 
     if should_spawn {
         std::thread::spawn(move || {
-            let result = fetch_player_leaderboards_internal(
+            let fetched = fetch_player_leaderboards_internal(
                 &key.chart_hash,
                 &key.api_key,
                 key.show_ex_score,
                 key.max_entries,
-            )
-            .map(|fetched| {
-                if should_auto_populate && let Some(profile_id) = auto_profile_id.as_deref() {
-                    cache_gs_score_from_leaderboard(
-                        profile_id,
-                        auto_username.as_str(),
-                        key.chart_hash.as_str(),
-                        fetched.gs_entries.as_slice(),
+            );
+            let refresh_finished_at = Instant::now();
+            let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+            cache.in_flight.remove(&key);
+
+            match fetched {
+                Ok(fetched) => {
+                    if should_auto_populate && let Some(profile_id) = auto_profile_id.as_deref() {
+                        cache_gs_score_from_leaderboard(
+                            profile_id,
+                            auto_username.as_str(),
+                            key.chart_hash.as_str(),
+                            fetched.gs_entries.as_slice(),
+                        );
+                    }
+                    cache.by_key.insert(
+                        key,
+                        PlayerLeaderboardCacheEntry {
+                            value: PlayerLeaderboardCacheValue::Ready(fetched.data),
+                            refreshed_at: refresh_finished_at,
+                        },
                     );
                 }
-                PlayerLeaderboardCacheValue::Ready(fetched.data)
-            })
-            .unwrap_or_else(|e| PlayerLeaderboardCacheValue::Error(e.to_string()));
-
-            let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
-            cache.by_key.insert(key, result);
+                Err(error) => {
+                    if let Some(entry) = cache.by_key.get_mut(&key)
+                        && matches!(entry.value, PlayerLeaderboardCacheValue::Ready(_))
+                    {
+                        // Keep stale data visible on refresh failures, but back off retries.
+                        entry.refreshed_at = refresh_finished_at;
+                    } else {
+                        cache.by_key.insert(
+                            key,
+                            PlayerLeaderboardCacheEntry {
+                                value: PlayerLeaderboardCacheValue::Error(error.to_string()),
+                                refreshed_at: refresh_finished_at,
+                            },
+                        );
+                    }
+                }
+            }
         });
     }
 
     Some(snapshot)
 }
-
 #[derive(Debug)]
 struct MachineLeaderboardPlay {
     initials: String,
@@ -2762,11 +2813,20 @@ fn fetch_player_score_from_api(
     fetch_player_score_from_endpoint(endpoint, profile, chart_hash)
 }
 
-fn collect_chart_hashes_for_import(pack_group_filter: Option<&str>) -> Vec<String> {
+fn collect_chart_hashes_for_import(
+    pack_group_filter: Option<&str>,
+    profile_id: &str,
+    only_missing_gs_scores: bool,
+) -> Vec<String> {
     let filter_norm = pack_group_filter
         .map(str::trim)
         .filter(|v| !v.is_empty())
         .map(str::to_ascii_lowercase);
+    let existing_scores = if only_missing_gs_scores {
+        cached_gs_chart_hashes_for_profile(profile_id)
+    } else {
+        HashSet::new()
+    };
 
     let mut chart_hashes = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
@@ -2789,6 +2849,9 @@ fn collect_chart_hashes_for_import(pack_group_filter: Option<&str>) -> Vec<Strin
             for chart in &song.charts {
                 let chart_hash = chart.short_hash.trim();
                 if chart_hash.is_empty() {
+                    continue;
+                }
+                if only_missing_gs_scores && existing_scores.contains(chart_hash) {
                     continue;
                 }
                 if seen.insert(chart_hash.to_string()) {
@@ -2816,6 +2879,7 @@ pub fn import_scores_for_profile<F>(
     profile_id: String,
     profile: Profile,
     pack_group: Option<String>,
+    only_missing_gs_scores: bool,
     on_progress: F,
     should_cancel: impl Fn() -> bool,
 ) -> Result<ScoreBulkImportSummary, Box<dyn Error + Send + Sync>>
@@ -2840,8 +2904,14 @@ where
     }
 
     let username = profile.groovestats_username.trim().to_string();
-    let chart_hashes = collect_chart_hashes_for_import(pack_group.as_deref());
+    let chart_hashes =
+        collect_chart_hashes_for_import(pack_group.as_deref(), &profile_id, only_missing_gs_scores);
     let requested_charts = chart_hashes.len();
+    let filter_note = if only_missing_gs_scores {
+        " (missing GS only)"
+    } else {
+        ""
+    };
     on_progress(ScoreImportProgress {
         processed_charts: 0,
         total_charts: requested_charts,
@@ -2849,8 +2919,9 @@ where
         missing_scores: 0,
         failed_requests: 0,
         detail: format!(
-            "Queued {requested_charts} chart hashes for {} import.",
-            endpoint.display_name()
+            "Queued {requested_charts} chart hashes for {} import{}.",
+            endpoint.display_name(),
+            filter_note
         ),
     });
     if requested_charts == 0 {
