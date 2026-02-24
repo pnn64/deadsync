@@ -916,12 +916,13 @@ fn push_rows(
 pub fn gameplay_scorebox_actors(
     side: profile::PlayerSide,
     chart_hash: Option<&str>,
+    show_scorebox: bool,
     center_x: f32,
     center_y: f32,
     zoom: f32,
     elapsed_seconds: f32,
 ) -> Vec<Actor> {
-    if !profile::get_for_side(side).display_scorebox || !scores::is_gs_active_for_side(side) {
+    if !show_scorebox || !scores::is_gs_active_for_side(side) {
         return Vec::new();
     }
     let Some(hash) = chart_hash else {

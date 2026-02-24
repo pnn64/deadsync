@@ -291,6 +291,7 @@ pub struct Config {
     pub zmod_rating_box_text: bool,
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
+    pub show_select_music_scorebox: bool,
     pub global_offset_seconds: f32,
     pub visual_delay_seconds: f32,
     pub master_volume: u8,
@@ -344,6 +345,7 @@ impl Default for Config {
             zmod_rating_box_text: false,
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
+            show_select_music_scorebox: true,
             global_offset_seconds: -0.008,
             visual_delay_seconds: 0.0,
             master_volume: 90,
@@ -517,6 +519,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "SelectMusicPatternInfo={}\n",
         default.select_music_pattern_info_mode.as_str()
+    ));
+    content.push_str(&format!(
+        "SelectMusicScorebox={}\n",
+        if default.show_select_music_scorebox {
+            "1"
+        } else {
+            "0"
+        }
     ));
     content.push_str(&format!(
         "ShowStats={}\n",
@@ -831,6 +841,10 @@ pub fn load() {
                     .get("Options", "SelectMusicPatternInfo")
                     .and_then(|v| SelectMusicPatternInfoMode::from_str(&v).ok())
                     .unwrap_or(default.select_music_pattern_info_mode);
+                cfg.show_select_music_scorebox = conf
+                    .get("Options", "SelectMusicScorebox")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_select_music_scorebox, |v| v != 0);
                 cfg.fastload = conf
                     .get("Options", "FastLoad")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -980,6 +994,7 @@ pub fn load() {
                     "RateModPreservesPitch",
                     "SelectMusicBreakdown",
                     "SelectMusicPatternInfo",
+                    "SelectMusicScorebox",
                     "ShowStats",
                     "ShowStatsMode",
                     "SmoothHistogram",
@@ -1741,6 +1756,14 @@ fn save_without_keymaps() {
         cfg.select_music_pattern_info_mode.as_str()
     ));
     content.push_str(&format!(
+        "SelectMusicScorebox={}\n",
+        if cfg.show_select_music_scorebox {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "ShowStats={}\n",
         if cfg.show_stats_mode != 0 { "1" } else { "0" }
     ));
@@ -2036,6 +2059,17 @@ pub fn update_select_music_breakdown_style(style: BreakdownStyle) {
             return;
         }
         cfg.select_music_breakdown_style = style;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_select_music_scorebox(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.show_select_music_scorebox == enabled {
+            return;
+        }
+        cfg.show_select_music_scorebox = enabled;
     }
     save_without_keymaps();
 }

@@ -419,6 +419,7 @@ const INPUT_ROW_TEST: &str = "Test Input";
 const INPUT_ROW_OPTIONS: &str = "Input Options";
 const SELECT_MUSIC_ROW_WHEEL_SPEED: &str = "Music Wheel Scroll Speed";
 const SELECT_MUSIC_ROW_BREAKDOWN_STYLE: &str = "Breakdown Style";
+const SELECT_MUSIC_ROW_GS_SCOREBOX: &str = "GS Scorebox";
 const SCORE_IMPORT_ROW_ENDPOINT: &str = "API Endpoint";
 const SCORE_IMPORT_ROW_PROFILE: &str = "Profile";
 const SCORE_IMPORT_ROW_PACK: &str = "Pack";
@@ -773,6 +774,11 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         choices: &["SL", "SN"],
         inline: true,
     },
+    SubRow {
+        label: SELECT_MUSIC_ROW_GS_SCOREBOX,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
 ];
 
 pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
@@ -790,6 +796,10 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
             "SL uses Simply Love stream breakdown formatting.",
             "SN uses Stamina Nation stream breakdown formatting.",
         ],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_GS_SCOREBOX,
+        help: &["Show or hide the GrooveStats scorebox on Select Music."],
     },
     Item {
         name: "Exit",
@@ -2014,6 +2024,12 @@ pub fn init() -> State {
         breakdown_style_choice_index(cfg.select_music_breakdown_style),
     );
     set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_GS_SCOREBOX,
+        usize::from(cfg.show_select_music_scorebox),
+    );
+    set_choice_by_label(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
         GS_ROW_ENABLE,
@@ -2871,6 +2887,8 @@ fn apply_submenu_choice_delta(
             config::update_music_wheel_switch_speed(music_wheel_scroll_speed_from_choice(
                 new_index,
             ));
+        } else if row.label == SELECT_MUSIC_ROW_GS_SCOREBOX {
+            config::update_show_select_music_scorebox(new_index == 1);
         }
     } else if matches!(kind, SubmenuKind::GrooveStats) {
         let row = &rows[row_index];

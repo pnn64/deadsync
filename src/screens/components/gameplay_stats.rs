@@ -779,6 +779,7 @@ pub fn build_double_step_stats(
         actors.extend(gs_scorebox::gameplay_scorebox_actors(
             side,
             chart_hash,
+            profile::get_for_side(side).display_scorebox,
             frame_cx,
             frame_cy,
             frame_zoom,
@@ -1547,6 +1548,7 @@ fn build_scorebox_pane(
     gs_scorebox::gameplay_scorebox_actors(
         player_side,
         chart_hash,
+        profile::get_for_side(player_side).display_scorebox,
         frame_cx,
         frame_cy,
         banner_data_zoom,

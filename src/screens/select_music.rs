@@ -5052,6 +5052,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 actors.extend(gs_scorebox::gameplay_scorebox_actors(
                     side,
                     chart_hash,
+                    cfg.show_select_music_scorebox,
                     center_x,
                     center_y,
                     scorebox_zoom,
