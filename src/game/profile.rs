@@ -236,6 +236,11 @@ fn groovestats_ini_path(id: &str) -> PathBuf {
 }
 
 #[inline(always)]
+fn arrowcloud_ini_path(id: &str) -> PathBuf {
+    local_profile_dir(id).join("arrowcloud.ini")
+}
+
+#[inline(always)]
 fn profile_avatar_path(id: &str) -> PathBuf {
     local_profile_dir(id).join("profile.png")
 }
@@ -1022,6 +1027,7 @@ pub struct Profile {
     pub groovestats_api_key: String,
     pub groovestats_is_pad_player: bool,
     pub groovestats_username: String,
+    pub arrowcloud_api_key: String,
     pub background_filter: BackgroundFilter,
     pub hold_judgment_graphic: HoldJudgmentGraphic,
     pub judgment_graphic: JudgmentGraphic,
@@ -1133,6 +1139,7 @@ impl Default for Profile {
             groovestats_api_key: String::new(),
             groovestats_is_pad_player: false,
             groovestats_username: String::new(),
+            arrowcloud_api_key: String::new(),
             background_filter: BackgroundFilter::default(),
             hold_judgment_graphic: HoldJudgmentGraphic::default(),
             judgment_graphic: JudgmentGraphic::default(),
@@ -1323,6 +1330,7 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
     let dir = local_profile_dir(id);
     let profile_ini = profile_ini_path(id);
     let groovestats_ini = groovestats_ini_path(id);
+    let arrowcloud_ini = arrowcloud_ini_path(id);
 
     info!(
         "Profile files not found, creating defaults in '{}'.",
@@ -1621,6 +1629,17 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         content.push('\n');
 
         fs::write(groovestats_ini, content)?;
+    }
+
+    // Create arrowcloud.ini
+    if !arrowcloud_ini.exists() {
+        let mut content = String::new();
+
+        content.push_str("[ArrowCloud]\n");
+        content.push_str("ApiKey = \n");
+        content.push('\n');
+
+        fs::write(arrowcloud_ini, content)?;
     }
 
     Ok(())
@@ -1986,6 +2005,31 @@ fn save_groovestats_ini_for_side(side: PlayerSide) {
     }
 }
 
+fn save_arrowcloud_ini_for_side(side: PlayerSide) {
+    let profile_id = {
+        let session = SESSION.lock().unwrap();
+        match &session.active_profiles[side_ix(side)] {
+            ActiveProfile::Local { id } => Some(id.clone()),
+            ActiveProfile::Guest => None,
+        }
+    };
+    let Some(profile_id) = profile_id else {
+        return;
+    };
+
+    let profile = PROFILES.lock().unwrap()[side_ix(side)].clone();
+    let mut content = String::new();
+
+    content.push_str("[ArrowCloud]\n");
+    content.push_str(&format!("ApiKey={}\n", profile.arrowcloud_api_key));
+    content.push('\n');
+
+    let path = arrowcloud_ini_path(&profile_id);
+    if let Err(e) = fs::write(&path, content) {
+        warn!("Failed to save {}: {}", path.display(), e);
+    }
+}
+
 fn load_for_side(side: PlayerSide) {
     let profile_id = {
         let session = SESSION.lock().unwrap();
@@ -2003,7 +2047,8 @@ fn load_for_side(side: PlayerSide) {
 
     let profile_ini = profile_ini_path(&profile_id);
     let groovestats_ini = groovestats_ini_path(&profile_id);
-    if (!profile_ini.exists() || !groovestats_ini.exists())
+    let arrowcloud_ini = arrowcloud_ini_path(&profile_id);
+    if (!profile_ini.exists() || !groovestats_ini.exists() || !arrowcloud_ini.exists())
         && let Err(e) = ensure_local_profile_files(&profile_id)
     {
         warn!("Failed to create default profile files: {e}");
@@ -2444,6 +2489,19 @@ fn load_for_side(side: PlayerSide) {
             );
         }
 
+        // Load arrowcloud.ini
+        let mut ac_conf = SimpleIni::new();
+        if ac_conf.load(&arrowcloud_ini).is_ok() {
+            profile.arrowcloud_api_key = ac_conf
+                .get("ArrowCloud", "ApiKey")
+                .unwrap_or(default_profile.arrowcloud_api_key.clone());
+        } else {
+            warn!(
+                "Failed to load '{}', using default ArrowCloud info.",
+                arrowcloud_ini.display()
+            );
+        }
+
         let avatar_path = profile_avatar_path(&profile_id);
         profile.avatar_path = if avatar_path.exists() {
             Some(avatar_path)
@@ -2456,6 +2514,7 @@ fn load_for_side(side: PlayerSide) {
     save_profile_ini_for_side(side);
     save_profile_stats_for_side(side);
     save_groovestats_ini_for_side(side);
+    save_arrowcloud_ini_for_side(side);
     info!("Profile configuration files updated with default values for any missing fields.");
 }
 
@@ -2697,6 +2756,12 @@ pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error
     gs.push_str("Username=\n");
     gs.push('\n');
     fs::write(groovestats_ini_path(&id), gs)?;
+
+    let mut ac = String::new();
+    ac.push_str("[ArrowCloud]\n");
+    ac.push_str("ApiKey=\n");
+    ac.push('\n');
+    fs::write(arrowcloud_ini_path(&id), ac)?;
 
     Ok(id)
 }
