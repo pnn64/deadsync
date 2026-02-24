@@ -1111,11 +1111,16 @@ fn cached_remaining_time_text(seconds_total: f32) -> Arc<str> {
     };
     let key = seconds_total.min(u32::MAX as u64) as u32;
     cached_text(&REMAINING_TIME_CACHE, key, || {
-        let t = format_session_time(seconds_total as f32);
-        let mut out = String::with_capacity(t.len() + 1);
-        out.push('-');
-        out.push_str(t.as_ref());
-        out
+        if seconds_total >= 3600 {
+            format!(
+                "{}:{:02}:{:02}",
+                seconds_total / 3600,
+                (seconds_total % 3600) / 60,
+                seconds_total % 60
+            )
+        } else {
+            format!("{}:{:02}", seconds_total / 60, seconds_total % 60)
+        }
     })
 }
 
@@ -2285,27 +2290,53 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             };
                             let remaining = (total_display - death_display).max(0.0);
                             let remaining_str = cached_remaining_time_text(remaining);
+                            // SL/zmod/Arrow Cloud Graphs.lua:
+                            // width = text_width * 0.65, addx = max(width * 0.8, 10), parent zoom=1.25.
+                            let fail_box_scale = 1.25_f32;
+                            let (inner_w, outer_w, inner_h, outer_h, addx) = asset_manager
+                                .with_fonts(|all_fonts| {
+                                    asset_manager.with_font("miso", |miso_font| {
+                                        let text_w = font::measure_line_width_logical(
+                                            miso_font,
+                                            &remaining_str,
+                                            all_fonts,
+                                        ) as f32;
+                                        let base_w = (text_w * 0.65).max(1.0);
+                                        let base_addx = (base_w * 0.8).max(10.0);
+                                        (
+                                            base_w * fail_box_scale,
+                                            (base_w + 1.0) * fail_box_scale,
+                                            10.0 * fail_box_scale,
+                                            11.0 * fail_box_scale,
+                                            base_addx * fail_box_scale,
+                                        )
+                                    })
+                                })
+                                .unwrap_or((30.0, 31.25, 12.5, 13.75, 12.5));
 
-                            let flag_w = 40.0;
-                            let flag_h = 14.0;
+                            // SL/zmod/Arrow Cloud place this at GraphHeight-10 (inside the graph),
+                            // not below the panel.
+                            let box_center_y = graph_height - 10.0;
+                            let box_center_x = x + addx;
+
                             life_children.push(act!(quad:
-                                align(1.0, 1.0): xy(x, graph_height):
-                                setsize(flag_w, flag_h):
+                                align(0.5, 0.5): xy(box_center_x, box_center_y):
+                                setsize(outer_w, outer_h):
                                 diffuse(1.0, 0.0, 0.0, 1.0):
-                                z(5)
+                                z(6)
                             ));
                             life_children.push(act!(quad:
-                                align(1.0, 1.0): xy(x - 1.0, graph_height - 1.0):
-                                setsize(flag_w - 2.0, flag_h - 2.0):
-                                diffuse(0.0, 0.0, 0.0, 0.8):
-                                z(6)
+                                align(0.5, 0.5): xy(box_center_x, box_center_y):
+                                setsize(inner_w, inner_h):
+                                diffuse(0.0, 0.0, 0.0, 1.0):
+                                z(7)
                             ));
                             life_children.push(act!(text:
                                 font("miso"): settext(remaining_str):
-                                align(1.0, 1.0): xy(x - 4.0, graph_height - 1.5):
-                                zoom(0.5):
-                                diffuse(1.0, 0.3, 0.3, 1.0):
-                                z(7)
+                                align(0.5, 0.5): xy(box_center_x, box_center_y):
+                                zoom(0.625):
+                                diffuse(1.0, 0.0, 0.0, 1.0):
+                                z(8)
                             ));
                         }
 
