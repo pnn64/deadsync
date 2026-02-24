@@ -2584,7 +2584,7 @@ fn row_toggles_with_start(row_name: &str) -> bool {
 
 #[inline(always)]
 fn row_selects_on_focus_move(row_name: &str) -> bool {
-    row_name == "Stepchart" || row_name == "What comes next?"
+    row_name == "Stepchart"
 }
 
 fn inline_choice_centers(choices: &[String], asset_manager: &AssetManager) -> Vec<f32> {
