@@ -2398,8 +2398,13 @@ fn load_itg_sprite_noteskin(
     let column_xs = if style.num_cols == 0 {
         Vec::new()
     } else {
+        const ITG_DANCE_COL_SPACING: i32 = 64;
+        const ITG_DANCE_COL_HALF_SPACING: i32 = ITG_DANCE_COL_SPACING / 2;
         (0..style.num_cols)
-            .map(|i| (i as i32 * 68) - ((style.num_cols - 1) as i32 * 34))
+            .map(|i| {
+                (i as i32 * ITG_DANCE_COL_SPACING)
+                    - ((style.num_cols - 1) as i32 * ITG_DANCE_COL_HALF_SPACING)
+            })
             .collect()
     };
     Ok(Noteskin {
