@@ -74,9 +74,18 @@ pub fn in_transition(state: Option<&State>) -> (Vec<Actor>, f32) {
         .map(|gs| gs.stage_intro_text.clone())
         .unwrap_or_else(|| Arc::from("EVENT"));
     let intro_color = state.map_or(color::decorative_rgba(0), |gs| gs.player_color);
-    let active_color_index = state.map_or(0, |gs| gs.active_color_index);
-    let heart_color_1 = color::decorative_rgba(active_color_index - 2);
-    let heart_color_2 = color::decorative_rgba(active_color_index - 1);
+    let mut mirrored_splode = act!(sprite("gameplayin_splode.png"):
+        align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
+        diffuse(intro_color[0], intro_color[1], intro_color[2], 0.8):
+        rotationz(-10.0): zoom(0.0):
+        z(1101):
+        sleep(0.4):
+        decelerate(0.6): rotationz(0.0): zoom(1.3): alpha(0.0)
+    );
+    if let Actor::Sprite { flip_x, .. } = &mut mirrored_splode {
+        // Simply Love uses rotationy(180) here; in deadsync 2D parity this is horizontal mirroring.
+        *flip_x = true;
+    }
 
     let actors = vec![
         act!(quad:
@@ -96,14 +105,7 @@ pub fn in_transition(state: Option<&State>) -> (Vec<Actor>, f32) {
             sleep(0.4):
             linear(0.6): rotationz(0.0): zoom(1.1): alpha(0.0)
         ),
-        act!(sprite("gameplayin_splode.png"):
-            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
-            diffuse(intro_color[0], intro_color[1], intro_color[2], 0.8):
-            rotationy(180.0): rotationz(-10.0): zoom(0.0):
-            z(1101):
-            sleep(0.4):
-            decelerate(0.6): rotationz(0.0): zoom(1.3): alpha(0.0)
-        ),
+        mirrored_splode,
         act!(sprite("gameplayin_minisplode.png"):
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             diffuse(intro_color[0], intro_color[1], intro_color[2], 1.0):
@@ -111,60 +113,6 @@ pub fn in_transition(state: Option<&State>) -> (Vec<Actor>, f32) {
             z(1101):
             sleep(0.4):
             decelerate(0.8): rotationz(0.0): zoom(0.9): alpha(0.0)
-        ),
-        act!(sprite("titlemenu_flycenter.png"):
-            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
-            zoom(0.0):
-            diffuse(heart_color_1[0], heart_color_1[1], heart_color_1[2], 0.0):
-            z(1101):
-            sleep(0.38):
-            linear(0.9): addx(-165.0): addy(-70.0): zoom(0.75): alpha(0.5):
-            linear(0.0): visible(false)
-        ),
-        act!(sprite("titlemenu_flycenter.png"):
-            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
-            zoom(0.0):
-            diffuse(heart_color_2[0], heart_color_2[1], heart_color_2[2], 0.0):
-            z(1101):
-            sleep(0.38):
-            linear(0.9): addx(165.0): addy(-70.0): zoom(0.75): alpha(0.5):
-            linear(0.0): visible(false)
-        ),
-        act!(sprite("titlemenu_flytop.png"):
-            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
-            zoom(0.0):
-            diffuse(heart_color_2[0], heart_color_2[1], heart_color_2[2], 0.0):
-            z(1101):
-            sleep(0.38):
-            linear(0.9): addx(-95.0): addy(-145.0): zoom(0.65): alpha(0.45):
-            linear(0.0): visible(false)
-        ),
-        act!(sprite("titlemenu_flytop.png"):
-            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
-            zoom(0.0):
-            diffuse(heart_color_1[0], heart_color_1[1], heart_color_1[2], 0.0):
-            z(1101):
-            sleep(0.38):
-            linear(0.9): addx(95.0): addy(-145.0): zoom(0.65): alpha(0.45):
-            linear(0.0): visible(false)
-        ),
-        act!(sprite("titlemenu_flybottom.png"):
-            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
-            zoom(0.0):
-            diffuse(heart_color_1[0], heart_color_1[1], heart_color_1[2], 0.0):
-            z(1101):
-            sleep(0.38):
-            linear(0.9): addx(-120.0): addy(95.0): zoom(0.55): alpha(0.3):
-            linear(0.0): visible(false)
-        ),
-        act!(sprite("titlemenu_flybottom.png"):
-            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
-            zoom(0.0):
-            diffuse(heart_color_2[0], heart_color_2[1], heart_color_2[2], 0.0):
-            z(1101):
-            sleep(0.38):
-            linear(0.9): addx(120.0): addy(95.0): zoom(0.55): alpha(0.3):
-            linear(0.0): visible(false)
         ),
         act!(text:
             font("wendy"): settext(text):
