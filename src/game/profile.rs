@@ -1,5 +1,5 @@
 pub use super::scroll::ScrollSpeedSetting;
-use crate::config::SimpleIni;
+use crate::config::{self, SimpleIni};
 use bincode::{Decode, Encode};
 use chrono::Local;
 use log::{info, warn};
@@ -1317,10 +1317,39 @@ fn session_side_is_guest(side: PlayerSide) -> bool {
     )
 }
 
+#[inline(always)]
+fn machine_default_noteskin_value() -> NoteSkin {
+    NoteSkin::new(&config::machine_default_noteskin())
+}
+
+pub fn machine_default_noteskin() -> NoteSkin {
+    machine_default_noteskin_value()
+}
+
+pub fn update_machine_default_noteskin(setting: NoteSkin) {
+    if config::machine_default_noteskin().eq_ignore_ascii_case(setting.as_str()) {
+        return;
+    }
+    config::update_machine_default_noteskin(setting.as_str());
+    {
+        let session = SESSION.lock().unwrap();
+        let mut profiles = PROFILES.lock().unwrap();
+        for side in [PlayerSide::P1, PlayerSide::P2] {
+            if matches!(
+                &session.active_profiles[side_ix(side)],
+                ActiveProfile::Guest
+            ) {
+                profiles[side_ix(side)].noteskin = setting.clone();
+            }
+        }
+    }
+}
+
 fn make_guest_profile() -> Profile {
     let mut guest = Profile::default();
     guest.display_name = "[ GUEST ]".to_string();
     guest.scroll_speed = GUEST_SCROLL_SPEED;
+    guest.noteskin = machine_default_noteskin_value();
     guest.avatar_path = None;
     guest.avatar_texture_key = None;
     guest
@@ -1340,7 +1369,8 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
 
     // Create profile.ini
     if !profile_ini.exists() {
-        let default_profile = Profile::default();
+        let mut default_profile = Profile::default();
+        default_profile.noteskin = machine_default_noteskin_value();
         let mut content = String::new();
 
         content.push_str("[PlayerOptions]\n");
@@ -2058,7 +2088,8 @@ fn load_for_side(side: PlayerSide) {
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
-        let default_profile = Profile::default();
+        let mut default_profile = Profile::default();
+        default_profile.noteskin = machine_default_noteskin_value();
 
         // Load profile.ini
         let mut profile_conf = SimpleIni::new();
@@ -2465,9 +2496,8 @@ fn load_for_side(side: PlayerSide) {
             );
         }
 
-        profile.current_combo =
-            load_profile_stats_current_combo(&profile_stats_path(&profile_id))
-                .unwrap_or(default_profile.current_combo);
+        profile.current_combo = load_profile_stats_current_combo(&profile_stats_path(&profile_id))
+            .unwrap_or(default_profile.current_combo);
 
         // Load groovestats.ini
         let mut gs_conf = SimpleIni::new();
@@ -2729,12 +2759,14 @@ pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error
     let dir = local_profile_dir(&id);
     fs::create_dir_all(&dir)?;
 
-    let default_profile = Profile::default();
+    let mut default_profile = Profile::default();
+    default_profile.noteskin = machine_default_noteskin_value();
     let initials = initials_from_name(name);
     let mut content = String::new();
     content.push_str("[PlayerOptions]\n");
     content.push_str(&format!("ScrollSpeed={}\n", default_profile.scroll_speed));
     content.push_str(&format!("Scroll={}\n", default_profile.scroll_option));
+    content.push_str(&format!("NoteSkin={}\n", default_profile.noteskin));
     content.push('\n');
     content.push_str("[userprofile]\n");
     content.push_str(&format!("DisplayName={name}\n"));

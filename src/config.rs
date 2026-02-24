@@ -10,6 +10,7 @@ use std::sync::Mutex;
 use winit::keyboard::KeyCode;
 
 const CONFIG_PATH: &str = "deadsync.ini";
+const DEFAULT_MACHINE_NOTESKIN: &str = "cel";
 
 // --- Minimal INI reader ---
 #[derive(Debug, Default)]
@@ -157,6 +158,84 @@ impl FromStr for SelectMusicPatternInfoMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GameFlag {
+    Dance,
+}
+
+impl GameFlag {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Dance => "dance",
+        }
+    }
+}
+
+impl FromStr for GameFlag {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "dance" => Ok(Self::Dance),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemeFlag {
+    SimplyLove,
+}
+
+impl ThemeFlag {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SimplyLove => "Simply Love",
+        }
+    }
+}
+
+impl FromStr for ThemeFlag {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "simplylove" => Ok(Self::SimplyLove),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LanguageFlag {
+    English,
+}
+
+impl LanguageFlag {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::English => "English",
+        }
+    }
+}
+
+impl FromStr for LanguageFlag {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "english" => Ok(Self::English),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisplayMode {
     Windowed,
     Fullscreen(FullscreenType),
@@ -168,6 +247,9 @@ pub struct Config {
     pub windowed: bool,
     pub fullscreen_type: FullscreenType,
     pub display_monitor: usize,
+    pub game_flag: GameFlag,
+    pub theme_flag: ThemeFlag,
+    pub language_flag: LanguageFlag,
     /// 0=Off, 1=FPS, 2=FPS+Stutter.
     pub show_stats_mode: u8,
     pub translated_titles: bool,
@@ -235,6 +317,9 @@ impl Default for Config {
             windowed: true,
             fullscreen_type: FullscreenType::Exclusive,
             display_monitor: 0,
+            game_flag: GameFlag::Dance,
+            theme_flag: ThemeFlag::SimplyLove,
+            language_flag: LanguageFlag::English,
             show_stats_mode: 0,
             translated_titles: false,
             mine_hit_sound: true,
@@ -291,6 +376,8 @@ static CONFIG: std::sync::LazyLock<Mutex<Config>> =
     std::sync::LazyLock::new(|| Mutex::new(Config::default()));
 static SOUND_DEVICE: std::sync::LazyLock<Mutex<Option<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(None));
+static MACHINE_DEFAULT_NOTESKIN: std::sync::LazyLock<Mutex<String>> =
+    std::sync::LazyLock::new(|| Mutex::new(DEFAULT_MACHINE_NOTESKIN.to_string()));
 
 // --- File I/O ---
 
@@ -303,6 +390,15 @@ const fn normalize_banner_cache_color_depth(bits: u8) -> u8 {
     } else {
         32
     }
+}
+
+#[inline(always)]
+fn normalize_machine_default_noteskin(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return DEFAULT_MACHINE_NOTESKIN.to_string();
+    }
+    trimmed.to_ascii_lowercase()
 }
 
 fn create_default_config_file() -> Result<(), std::io::Error> {
@@ -347,6 +443,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         "CacheSongs={}\n",
         if default.cachesongs { "1" } else { "0" }
     ));
+    content.push_str(&format!("DefaultNoteSkin={DEFAULT_MACHINE_NOTESKIN}\n"));
     content.push_str(&format!("DisplayHeight={}\n", default.display_height));
     content.push_str(&format!("DisplayWidth={}\n", default.display_width));
     content.push_str(&format!("DisplayMonitor={}\n", default.display_monitor));
@@ -370,6 +467,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         "FullscreenType={}\n",
         default.fullscreen_type.as_str()
     ));
+    content.push_str(&format!("Game={}\n", default.game_flag.as_str()));
     content.push_str(&format!(
         "GamepadBackend={}\n",
         default.windows_gamepad_backend
@@ -382,6 +480,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         "GlobalOffsetSeconds={}\n",
         default.global_offset_seconds
     ));
+    content.push_str(&format!("Language={}\n", default.language_flag.as_str()));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
         default.visual_delay_seconds
@@ -437,6 +536,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         default.software_renderer_threads
     ));
     content.push_str("SoundDevice=Auto\n");
+    content.push_str(&format!("Theme={}\n", default.theme_flag.as_str()));
     content.push_str(&format!("SFXVolume={}\n", default.sfx_volume));
     content.push_str(&format!(
         "TranslatedTitles={}\n",
@@ -536,6 +636,13 @@ pub fn load() {
                     });
                 *SOUND_DEVICE.lock().unwrap() = sound_device;
             }
+            {
+                let noteskin = conf
+                    .get("Options", "DefaultNoteSkin")
+                    .map(|v| normalize_machine_default_noteskin(&v))
+                    .unwrap_or_else(|| DEFAULT_MACHINE_NOTESKIN.to_string());
+                *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = noteskin;
+            }
 
             // This block populates the global CONFIG struct from the file,
             // using default values for any missing keys.
@@ -555,6 +662,10 @@ pub fn load() {
                     .get("Options", "FullscreenType")
                     .and_then(|v| FullscreenType::from_str(&v).ok())
                     .unwrap_or(default.fullscreen_type);
+                cfg.game_flag = conf
+                    .get("Options", "Game")
+                    .and_then(|v| GameFlag::from_str(&v).ok())
+                    .unwrap_or(default.game_flag);
                 cfg.display_monitor = conf
                     .get("Options", "DisplayMonitor")
                     .and_then(|v| v.parse::<usize>().ok())
@@ -662,6 +773,10 @@ pub fn load() {
                     .get("Options", "GlobalOffsetSeconds")
                     .and_then(|v| v.parse().ok())
                     .unwrap_or(default.global_offset_seconds);
+                cfg.language_flag = conf
+                    .get("Options", "Language")
+                    .and_then(|v| LanguageFlag::from_str(&v).ok())
+                    .unwrap_or(default.language_flag);
                 cfg.visual_delay_seconds = conf
                     .get("Options", "VisualDelaySeconds")
                     .and_then(|v| v.parse().ok())
@@ -728,6 +843,10 @@ pub fn load() {
                     .get("Options", "SmoothHistogram")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.smooth_histogram, |v| v != 0);
+                cfg.theme_flag = conf
+                    .get("Options", "Theme")
+                    .and_then(|v| ThemeFlag::from_str(&v).ok())
+                    .unwrap_or(default.theme_flag);
                 cfg.software_renderer_threads = conf
                     .get("Options", "SoftwareRendererThreads")
                     .map(|v| v.trim().to_string())
@@ -828,6 +947,7 @@ pub fn load() {
                     "BannerCachePow2",
                     "BannerCacheScaleDivisor",
                     "CacheSongs",
+                    "DefaultNoteSkin",
                     "DisplayHeight",
                     "DisplayWidth",
                     "FastLoad",
@@ -835,9 +955,11 @@ pub fn load() {
                     "EnableBoogieStats",
                     "EnableGrooveStats",
                     "FullscreenType",
+                    "Game",
                     "GamepadBackend",
                     "GfxDebug",
                     "GlobalOffsetSeconds",
+                    "Language",
                     "MasterVolume",
                     "MenuMusic",
                     "MineHitSound",
@@ -852,6 +974,7 @@ pub fn load() {
                     "SFXVolume",
                     "SoftwareRendererThreads",
                     "SoundDevice",
+                    "Theme",
                     "TranslatedTitles",
                     "VideoRenderer",
                     "VisualDelaySeconds",
@@ -888,6 +1011,7 @@ pub fn load() {
         Err(e) => {
             warn!("Failed to load '{CONFIG_PATH}': {e}. Using default values.");
             *SOUND_DEVICE.lock().unwrap() = None;
+            *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = DEFAULT_MACHINE_NOTESKIN.to_string();
         }
     }
 }
@@ -1489,6 +1613,7 @@ fn save_without_keymaps() {
     let cfg = *CONFIG.lock().unwrap();
     let keymap = crate::core::input::get_keymap();
     let sound_device = SOUND_DEVICE.lock().unwrap().clone();
+    let machine_default_noteskin = MACHINE_DEFAULT_NOTESKIN.lock().unwrap().clone();
 
     let mut content = String::new();
 
@@ -1535,6 +1660,7 @@ fn save_without_keymaps() {
         "CacheSongs={}\n",
         if cfg.cachesongs { "1" } else { "0" }
     ));
+    content.push_str(&format!("DefaultNoteSkin={machine_default_noteskin}\n"));
     content.push_str(&format!("DisplayHeight={}\n", cfg.display_height));
     content.push_str(&format!("DisplayWidth={}\n", cfg.display_width));
     content.push_str(&format!(
@@ -1557,6 +1683,7 @@ fn save_without_keymaps() {
         "FullscreenType={}\n",
         cfg.fullscreen_type.as_str()
     ));
+    content.push_str(&format!("Game={}\n", cfg.game_flag.as_str()));
     content.push_str(&format!("GamepadBackend={}\n", cfg.windows_gamepad_backend));
     content.push_str(&format!(
         "GfxDebug={}\n",
@@ -1566,6 +1693,7 @@ fn save_without_keymaps() {
         "GlobalOffsetSeconds={}\n",
         cfg.global_offset_seconds
     ));
+    content.push_str(&format!("Language={}\n", cfg.language_flag.as_str()));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
         cfg.visual_delay_seconds
@@ -1618,6 +1746,7 @@ fn save_without_keymaps() {
         "SoundDevice={}\n",
         sound_device.as_deref().unwrap_or("Auto")
     ));
+    content.push_str(&format!("Theme={}\n", cfg.theme_flag.as_str()));
     content.push_str(&format!("SFXVolume={}\n", cfg.sfx_volume));
     content.push_str(&format!(
         "TranslatedTitles={}\n",
@@ -1681,6 +1810,10 @@ pub fn get() -> Config {
 
 pub fn sound_device() -> Option<String> {
     SOUND_DEVICE.lock().unwrap().clone()
+}
+
+pub fn machine_default_noteskin() -> String {
+    MACHINE_DEFAULT_NOTESKIN.lock().unwrap().clone()
 }
 
 pub fn update_display_mode(mode: DisplayMode) {
@@ -1897,6 +2030,51 @@ pub fn update_auto_populate_gs_scores(enabled: bool) {
             return;
         }
         cfg.auto_populate_gs_scores = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_game_flag(flag: GameFlag) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.game_flag == flag {
+            return;
+        }
+        cfg.game_flag = flag;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_theme_flag(flag: ThemeFlag) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.theme_flag == flag {
+            return;
+        }
+        cfg.theme_flag = flag;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_language_flag(flag: LanguageFlag) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.language_flag == flag {
+            return;
+        }
+        cfg.language_flag = flag;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_machine_default_noteskin(noteskin: &str) {
+    let normalized = normalize_machine_default_noteskin(noteskin);
+    {
+        let mut current = MACHINE_DEFAULT_NOTESKIN.lock().unwrap();
+        if *current == normalized {
+            return;
+        }
+        *current = normalized;
     }
     save_without_keymaps();
 }

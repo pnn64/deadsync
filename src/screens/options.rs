@@ -7,7 +7,7 @@ use crate::core::space::{screen_height, screen_width, widescale};
 use crate::config::{self, BreakdownStyle, DisplayMode, FullscreenType, SimpleIni};
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
-use crate::game::parsing::simfile as song_loading;
+use crate::game::parsing::{noteskin as noteskin_parser, simfile as song_loading};
 use crate::game::{profile, scores};
 use crate::screens::{Screen, ScreenAction};
 use std::borrow::Cow;
@@ -155,7 +155,6 @@ pub const ITEMS: &[Item] = &[
             "Game",
             "Theme",
             "Language",
-            "Announcer",
             "Default NoteSkin",
         ],
     },
@@ -217,23 +216,6 @@ pub const ITEMS: &[Item] = &[
         ],
     },
     Item {
-        name: "Arcade Options",
-        help: &[
-            "Change options typically associated with arcade games.",
-            "Event",
-            "Coin",
-            "Coins Per Credit",
-            "Maximum Credits",
-            "Reset Coins At Startup",
-            "Premium",
-            "...",
-        ],
-    },
-    Item {
-        name: "View Bookkeeping Data",
-        help: &["Check credits history"],
-    },
-    Item {
         name: "Advanced Options",
         help: &[
             "Adjust advanced settings for difficulty scaling, default fail type, song deletion, and more.",
@@ -244,31 +226,6 @@ pub const ITEMS: &[Item] = &[
             "EasterEggs",
             "AllowExtraStage",
             "...",
-        ],
-    },
-    Item {
-        name: "MenuTimer Options",
-        help: &[
-            "Turn the MenuTimer On or Off and set the MenuTimer values for various screens.",
-            "MenuTimer",
-            "GrooveStats Login",
-            "Select Music",
-            "Select Music Casual Mode",
-            "Player Options",
-            "Evaluation",
-            "...",
-        ],
-    },
-    Item {
-        name: "USB Profile Options",
-        help: &[
-            "Adjust settings related to USB Profiles, including loading custom songs from USB sticks.",
-            "USB Profiles",
-            "CustomSongs",
-            "Max Songs per USB",
-            "Song Load Timeout",
-            "Song Duration Limit",
-            "Song File Size Limit",
         ],
     },
     Item {
@@ -469,54 +426,57 @@ const SCORE_IMPORT_ROW_START: &str = "Start";
 const SCORE_IMPORT_ALL_PACKS: &str = "All";
 const SCORE_IMPORT_DONE_OVERLAY_SECONDS: f32 = 1.5;
 
+fn discover_system_noteskin_choices() -> Vec<String> {
+    let mut names = noteskin_parser::discover_itg_skins("dance");
+    if names.is_empty() {
+        names.push(profile::NoteSkin::DEFAULT_NAME.to_string());
+    }
+    names
+}
+
 pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: "Game",
-        choices: &["dance", "pump"],
-        inline: true,
+        choices: &["dance"],
+        inline: false,
     },
     SubRow {
         label: "Theme",
         choices: &["Simply Love"],
-        inline: true,
+        inline: false,
     },
     SubRow {
         label: "Language",
-        choices: &["English", "Japanese"],
-        inline: false, // single centered value (no inline tween)
-    },
-    SubRow {
-        label: "Announcer",
-        choices: &["None", "ITG"],
-        inline: true,
+        choices: &["English"],
+        inline: false,
     },
     SubRow {
         label: "Default NoteSkin",
-        choices: &["default", "cel"],
-        inline: true,
+        choices: &[profile::NoteSkin::DEFAULT_NAME],
+        inline: false,
     },
 ];
 
 pub const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: "Game",
-        help: &["Select the default game type used by the engine."],
+        help: &["Stored in deadsync.ini for compatibility; no runtime game-switch behavior yet."],
     },
     Item {
         name: "Theme",
-        help: &["Choose which theme is active."],
+        help: &[
+            "Stored in deadsync.ini for compatibility; theme switching is not implemented yet.",
+        ],
     },
     Item {
         name: "Language",
-        help: &["Select the active language for menus and prompts."],
-    },
-    Item {
-        name: "Announcer",
-        help: &["Enable or change the gameplay announcer."],
+        help: &[
+            "Stored in deadsync.ini for compatibility; runtime language switching is not implemented yet.",
+        ],
     },
     Item {
         name: "Default NoteSkin",
-        help: &["Choose the default noteskin used in gameplay."],
+        help: &["Choose the machine-wide default noteskin used by guests and new profiles."],
     },
     Item {
         name: "Exit",
@@ -1429,6 +1389,17 @@ fn row_choices<'a>(
     row_idx: usize,
 ) -> Vec<Cow<'a, str>> {
     if let Some(row) = rows.get(row_idx)
+        && matches!(kind, SubmenuKind::System)
+        && row.label == "Default NoteSkin"
+    {
+        return state
+            .system_noteskin_choices
+            .iter()
+            .cloned()
+            .map(Cow::Owned)
+            .collect();
+    }
+    if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::Graphics)
     {
         if row.label == "Display Mode" {
@@ -1695,6 +1666,7 @@ pub struct State {
     sub_choice_indices_select_music: Vec<usize>,
     sub_choice_indices_groovestats: Vec<usize>,
     sub_choice_indices_score_import: Vec<usize>,
+    system_noteskin_choices: Vec<String>,
     sub_cursor_indices_system: Vec<usize>,
     sub_cursor_indices_graphics: Vec<usize>,
     sub_cursor_indices_sound: Vec<usize>,
@@ -1735,6 +1707,12 @@ pub struct State {
 
 pub fn init() -> State {
     let cfg = config::get();
+    let system_noteskin_choices = discover_system_noteskin_choices();
+    let machine_noteskin = profile::machine_default_noteskin();
+    let machine_noteskin_idx = system_noteskin_choices
+        .iter()
+        .position(|name| name.eq_ignore_ascii_case(machine_noteskin.as_str()))
+        .unwrap_or(0);
     let mut state = State {
         selected: 0,
         prev_selected: 0,
@@ -1764,6 +1742,7 @@ pub fn init() -> State {
         sub_choice_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
         sub_choice_indices_groovestats: vec![0; GROOVESTATS_OPTIONS_ROWS.len()],
         sub_choice_indices_score_import: vec![0; SCORE_IMPORT_OPTIONS_ROWS.len()],
+        system_noteskin_choices,
         sub_cursor_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_cursor_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         sub_cursor_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
@@ -1814,6 +1793,32 @@ pub fn init() -> State {
         1,
     );
     sync_display_resolution(&mut state, cfg.display_width, cfg.display_height);
+
+    set_choice_by_label(
+        &mut state.sub_choice_indices_system,
+        SYSTEM_OPTIONS_ROWS,
+        "Game",
+        0,
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_system,
+        SYSTEM_OPTIONS_ROWS,
+        "Theme",
+        0,
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_system,
+        SYSTEM_OPTIONS_ROWS,
+        "Language",
+        0,
+    );
+    if let Some(noteskin_row_idx) = SYSTEM_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.label == "Default NoteSkin")
+        && let Some(slot) = state.sub_choice_indices_system.get_mut(noteskin_row_idx)
+    {
+        *slot = machine_noteskin_idx;
+    }
 
     set_choice_by_label(
         &mut state.sub_choice_indices_graphics,
@@ -2217,9 +2222,9 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     if let Some(score_import) = state.score_import_ui.as_mut() {
         poll_score_import_ui(score_import);
         if score_import.done
-            && score_import.done_since.is_some_and(|at| {
-                at.elapsed().as_secs_f32() >= SCORE_IMPORT_DONE_OVERLAY_SECONDS
-            })
+            && score_import
+                .done_since
+                .is_some_and(|at| at.elapsed().as_secs_f32() >= SCORE_IMPORT_DONE_OVERLAY_SECONDS)
         {
             state.score_import_ui = None;
         }
@@ -2634,6 +2639,10 @@ fn apply_submenu_choice_delta(
     if new_index == choice_index {
         return None;
     }
+    let selected_choice = choices
+        .get(new_index)
+        .map(|choice| choice.as_ref().to_string());
+    drop(choices);
 
     submenu_choice_indices_mut(state, kind)[row_index] = new_index;
     submenu_cursor_indices_mut(state, kind)[row_index] = new_index;
@@ -2645,7 +2654,20 @@ fn apply_submenu_choice_delta(
     }
     audio::play_sfx("assets/sounds/change_value.ogg");
 
-    if matches!(kind, SubmenuKind::Graphics) {
+    if matches!(kind, SubmenuKind::System) {
+        let row = &rows[row_index];
+        match row.label {
+            "Game" => config::update_game_flag(config::GameFlag::Dance),
+            "Theme" => config::update_theme_flag(config::ThemeFlag::SimplyLove),
+            "Language" => config::update_language_flag(config::LanguageFlag::English),
+            "Default NoteSkin" => {
+                if let Some(skin_name) = selected_choice.as_deref() {
+                    profile::update_machine_default_noteskin(profile::NoteSkin::new(skin_name));
+                }
+            }
+            _ => {}
+        }
+    } else if matches!(kind, SubmenuKind::Graphics) {
         let row = &rows[row_index];
         if row.label == "Display Aspect Ratio" {
             let (cur_w, cur_h) = selected_resolution(state);

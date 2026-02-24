@@ -4531,14 +4531,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
                 out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
             }
-            let score_mode_label = gs_view
-                .loading_text
-                .as_deref()
-                .unwrap_or(if gs_view.mode_text.eq_ignore_ascii_case("EX") {
+            let score_mode_label = gs_view.loading_text.as_deref().unwrap_or(
+                if gs_view.mode_text.eq_ignore_ascii_case("EX") {
                     "EX Score"
                 } else {
                     "ITG Score"
-                });
+                },
+            );
             out.push(act!(text: font("miso"): settext(score_mode_label): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
             if gs_view.show_rivals {
                 for i in 0..3 {

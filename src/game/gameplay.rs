@@ -3508,7 +3508,13 @@ pub fn display_itg_score_percent(state: &State, player_idx: usize) -> f64 {
         .mines_hit_for_score
         .saturating_add(carry.mines_hit_for_score);
     let possible = display_totals_for_player(state, player_idx).possible_grade_points;
-    judgment::calculate_itg_score_percent_from_counts(&scoring_counts, holds, rolls, mines, possible)
+    judgment::calculate_itg_score_percent_from_counts(
+        &scoring_counts,
+        holds,
+        rolls,
+        mines,
+        possible,
+    )
 }
 
 #[inline(always)]
@@ -5333,7 +5339,9 @@ fn apply_global_offset_delta(state: &mut State, delta: f32) -> bool {
         timing.set_global_offset_seconds(new_offset)
     });
     for timing in &mut state.timing_players {
-        mutate_timing_arc(timing, |timing| timing.set_global_offset_seconds(new_offset));
+        mutate_timing_arc(timing, |timing| {
+            timing.set_global_offset_seconds(new_offset)
+        });
     }
     refresh_timing_after_offset_change(state);
     state.global_offset_seconds = new_offset;

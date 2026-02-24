@@ -1054,7 +1054,9 @@ pub fn draw(
 pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
     let (width, height) = state.window_size;
     if width == 0 || height == 0 {
-        return Err(std::io::Error::other("Cannot capture screenshot at zero-sized viewport").into());
+        return Err(
+            std::io::Error::other("Cannot capture screenshot at zero-sized viewport").into(),
+        );
     }
 
     let byte_len = width as usize * height as usize * 4;

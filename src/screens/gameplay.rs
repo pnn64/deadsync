@@ -242,7 +242,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if state.autosync_mode != crate::game::gameplay::AutosyncMode::Off {
             let (old_offset, new_offset) =
                 if state.autosync_mode == crate::game::gameplay::AutosyncMode::Machine {
-                    (state.initial_global_offset_seconds, state.global_offset_seconds)
+                    (
+                        state.initial_global_offset_seconds,
+                        state.global_offset_seconds,
+                    )
                 } else {
                     (state.initial_song_offset_seconds, state.song_offset_seconds)
                 };
@@ -831,8 +834,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 player_life_color(player_idx)
             }
         };
-        let show_standard_life_percent =
-            screen_width() / screen_height().max(1.0) >= (16.0 / 9.0);
+        let show_standard_life_percent = screen_width() / screen_height().max(1.0) >= (16.0 / 9.0);
 
         let players: &[(usize, profile::PlayerSide)] = match play_style {
             profile::PlayStyle::Versus => {
@@ -984,7 +986,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         break;
                     }
 
-                    let mut surround_color = if state.player_profiles[player_idx].responsive_colors {
+                    let mut surround_color = if state.player_profiles[player_idx].responsive_colors
+                    {
                         let mut c = responsive_life_color(life_for_render);
                         c[3] = 0.2;
                         c

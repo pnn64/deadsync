@@ -325,12 +325,7 @@ fn enumerate_existing(ctx: &mut Ctx) {
 }
 
 #[inline(always)]
-fn emit_button_diff<F>(
-    emit_pad: &mut F,
-    dev: &Dev,
-    timestamp: Instant,
-    now: &[u16],
-)
+fn emit_button_diff<F>(emit_pad: &mut F, dev: &Dev, timestamp: Instant, now: &[u16])
 where
     F: FnMut(PadEvent),
 {
@@ -394,12 +389,7 @@ where
     }
 }
 
-fn process_hid_report<F>(
-    emit_pad: &mut F,
-    dev: &mut Dev,
-    timestamp: Instant,
-    report: &mut [u8],
-)
+fn process_hid_report<F>(emit_pad: &mut F, dev: &mut Dev, timestamp: Instant, report: &mut [u8])
 where
     F: FnMut(PadEvent),
 {

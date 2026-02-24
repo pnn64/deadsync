@@ -840,18 +840,18 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
         match play_style {
             profile::PlayStyle::Versus => {
-                active_pane[0] = score_info[0]
-                    .as_ref()
-                    .map_or(EvalPane::Standard, |si| eval_pane_default_for(si.show_fa_plus_pane));
-                active_pane[1] = score_info[1]
-                    .as_ref()
-                    .map_or(EvalPane::Standard, |si| eval_pane_default_for(si.show_fa_plus_pane));
+                active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
+                    eval_pane_default_for(si.show_fa_plus_pane)
+                });
+                active_pane[1] = score_info[1].as_ref().map_or(EvalPane::Standard, |si| {
+                    eval_pane_default_for(si.show_fa_plus_pane)
+                });
             }
             profile::PlayStyle::Single | profile::PlayStyle::Double => {
                 let joined = profile::get_session_player_side();
-                let primary = score_info[0]
-                    .as_ref()
-                    .map_or(EvalPane::Standard, |si| eval_pane_default_for(si.show_fa_plus_pane));
+                let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
+                    eval_pane_default_for(si.show_fa_plus_pane)
+                });
                 let secondary = EvalPane::Timing;
                 active_pane = match joined {
                     profile::PlayerSide::P1 => [primary, secondary],
@@ -896,18 +896,18 @@ pub fn init_from_score_info(
     let play_style = profile::get_session_play_style();
     match play_style {
         profile::PlayStyle::Versus => {
-            active_pane[0] = score_info[0]
-                .as_ref()
-                .map_or(EvalPane::Standard, |si| eval_pane_default_for(si.show_fa_plus_pane));
-            active_pane[1] = score_info[1]
-                .as_ref()
-                .map_or(EvalPane::Standard, |si| eval_pane_default_for(si.show_fa_plus_pane));
+            active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
+                eval_pane_default_for(si.show_fa_plus_pane)
+            });
+            active_pane[1] = score_info[1].as_ref().map_or(EvalPane::Standard, |si| {
+                eval_pane_default_for(si.show_fa_plus_pane)
+            });
         }
         profile::PlayStyle::Single | profile::PlayStyle::Double => {
             let joined = profile::get_session_player_side();
-            let primary = score_info[0]
-                .as_ref()
-                .map_or(EvalPane::Standard, |si| eval_pane_default_for(si.show_fa_plus_pane));
+            let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
+                eval_pane_default_for(si.show_fa_plus_pane)
+            });
             let secondary = EvalPane::Timing;
             active_pane = match joined {
                 profile::PlayerSide::P1 => [primary, secondary],
@@ -2300,7 +2300,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                             miso_font,
                                             &remaining_str,
                                             all_fonts,
-                                        ) as f32;
+                                        )
+                                            as f32;
                                         let base_w = (text_w * 0.65).max(1.0);
                                         let base_addx = (base_w * 0.8).max(10.0);
                                         (

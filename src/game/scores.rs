@@ -2962,7 +2962,8 @@ pub fn fetch_and_store_grade(
     profile: Profile,
     chart_hash: String,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    if profile.groovestats_api_key.trim().is_empty() || profile.groovestats_username.trim().is_empty()
+    if profile.groovestats_api_key.trim().is_empty()
+        || profile.groovestats_username.trim().is_empty()
     {
         return Err("GrooveStats API key or username is not set in profile.ini.".into());
     }

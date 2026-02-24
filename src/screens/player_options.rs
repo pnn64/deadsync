@@ -1014,7 +1014,9 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             name: "Density Graph Background".to_string(),
             choices: vec!["Solid".to_string(), "Transparent".to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Choose solid or transparent gameplay density graph background.".to_string()],
+            help: vec![
+                "Choose solid or transparent gameplay density graph background.".to_string(),
+            ],
             choice_difficulty_indices: None,
         },
         Row {
@@ -3411,10 +3413,7 @@ fn change_choice_for_player(
         let enabled = row.selected_choice_index[player_idx] == 0;
         state.player_profiles[player_idx].carry_combo_between_songs = enabled;
         if should_persist {
-            crate::game::profile::update_carry_combo_between_songs_for_side(
-                persist_side,
-                enabled,
-            );
+            crate::game::profile::update_carry_combo_between_songs_for_side(persist_side, enabled);
         }
     } else if row_name == "Hold Judgment" {
         let setting = match row.selected_choice_index[player_idx] {

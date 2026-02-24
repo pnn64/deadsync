@@ -1769,7 +1769,8 @@ pub fn build(
                 let tail_y = match scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
                         let pps_chart = cmod_pps_opt.expect("cmod pps computed");
-                        let note_end_time = state.hold_end_time_cache[note_index].unwrap_or(note_time);
+                        let note_end_time =
+                            state.hold_end_time_cache[note_index].unwrap_or(note_time);
                         let time_diff_real = (note_end_time - current_time) / rate;
                         receptor_y_lane + dir * time_diff_real * pps_chart
                     }
@@ -1786,12 +1787,12 @@ pub fn build(
                                     * beatmod_multiplier)
                     }
                 };
-                let head_anchor_y = if dir < 0.0 && ns.note_display_metrics.flip_head_and_tail_when_reverse
-                {
-                    tail_y
-                } else {
-                    head_y
-                };
+                let head_anchor_y =
+                    if dir < 0.0 && ns.note_display_metrics.flip_head_and_tail_when_reverse {
+                        tail_y
+                    } else {
+                        head_y
+                    };
                 (head_anchor_y - receptor_y_lane) * dir <= 0.0
             };
 

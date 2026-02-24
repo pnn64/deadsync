@@ -330,12 +330,7 @@ where
     changed
 }
 
-fn pump_gamepad<F>(
-    emit_pad: &mut F,
-    id: PadId,
-    uuid: [u8; 16],
-    st: &mut GamepadState,
-) -> bool
+fn pump_gamepad<F>(emit_pad: &mut F, id: PadId, uuid: [u8; 16], st: &mut GamepadState) -> bool
 where
     F: FnMut(PadEvent),
 {

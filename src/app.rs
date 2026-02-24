@@ -1,5 +1,5 @@
-use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::act;
+use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::config::{self, DisplayMode};
 use crate::core::display;
 use crate::core::gfx::{self as renderer, BackendType, create_backend};
@@ -824,10 +824,9 @@ fn save_screenshot_image(image: &image::RgbaImage) -> Result<PathBuf, Box<dyn Er
         path = dir.join(format!("deadsync-{stamp}-{suffix:02}.png"));
         suffix = suffix.saturating_add(1);
         if suffix > 9_999 {
-            return Err(std::io::Error::other(
-                "Failed to allocate unique screenshot filename",
-            )
-            .into());
+            return Err(
+                std::io::Error::other("Failed to allocate unique screenshot filename").into(),
+            );
         }
     }
 
@@ -972,7 +971,10 @@ fn format_offset_tag_value(value: f32) -> String {
     format!("{v:.3}")
 }
 
-fn rewrite_simfile_offset_tags(simfile_bytes: &[u8], delta: f32) -> Result<(Vec<u8>, usize), String> {
+fn rewrite_simfile_offset_tags(
+    simfile_bytes: &[u8],
+    delta: f32,
+) -> Result<(Vec<u8>, usize), String> {
     const TAG: &[u8] = b"#OFFSET:";
     let len = simfile_bytes.len();
     let mut out: Vec<u8> = Vec::with_capacity(len.saturating_add(64));
@@ -1004,7 +1006,8 @@ fn rewrite_simfile_offset_tags(simfile_bytes: &[u8], delta: f32) -> Result<(Vec<
             let Some(trim_start) = raw.iter().position(|b| !b.is_ascii_whitespace()) else {
                 return Err("Malformed #OFFSET tag: empty value".to_string());
             };
-            let Some(trim_end_inclusive) = raw.iter().rposition(|b| !b.is_ascii_whitespace()) else {
+            let Some(trim_end_inclusive) = raw.iter().rposition(|b| !b.is_ascii_whitespace())
+            else {
                 return Err("Malformed #OFFSET tag: empty value".to_string());
             };
             let trim_end = trim_end_inclusive + 1;
@@ -1169,9 +1172,7 @@ impl ScreensState {
                 mappings::update(&mut self.mappings_state, delta_time);
                 None
             }
-            CurrentScreen::Input => {
-                input_screen::update(&mut self.input_state, delta_time)
-            }
+            CurrentScreen::Input => input_screen::update(&mut self.input_state, delta_time),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &mut self.player_options_state {
                     player_options::update(pos, delta_time, asset_manager);
@@ -2615,10 +2616,11 @@ impl App {
                                 warn!("Failed to create screenshot preview texture: {e}");
                                 self.state.shell.screenshot_preview = None;
                             } else {
-                                self.state.shell.screenshot_preview = Some(ScreenshotPreviewState {
-                                    started_at: now,
-                                    target: Self::screenshot_preview_target(request_side),
-                                });
+                                self.state.shell.screenshot_preview =
+                                    Some(ScreenshotPreviewState {
+                                        started_at: now,
+                                        target: Self::screenshot_preview_target(request_side),
+                                    });
                             }
                         }
 
@@ -2722,7 +2724,8 @@ impl App {
             )
         };
 
-        let blink_phase = elapsed * (std::f32::consts::TAU / SCREENSHOT_PREVIEW_GLOW_PERIOD_SECONDS);
+        let blink_phase =
+            elapsed * (std::f32::consts::TAU / SCREENSHOT_PREVIEW_GLOW_PERIOD_SECONDS);
         let glow_alpha = blink_phase.sin().mul_add(0.5, 0.5) * SCREENSHOT_PREVIEW_GLOW_ALPHA;
         Some((x, y, scale.max(0.0), glow_alpha.clamp(0.0, 1.0)))
     }
@@ -3615,9 +3618,10 @@ impl App {
                     if self.prepare_player_options_for_gameplay_restart() {
                         let restart_count =
                             self.state.session.gameplay_restart_count.saturating_add(1);
-                        if let Err(e) = self
-                            .handle_action(ScreenAction::Navigate(CurrentScreen::Gameplay), event_loop)
-                        {
+                        if let Err(e) = self.handle_action(
+                            ScreenAction::Navigate(CurrentScreen::Gameplay),
+                            event_loop,
+                        ) {
                             log::error!("Failed to restart Gameplay with Ctrl+R: {e}");
                         } else {
                             self.state.session.gameplay_restart_count = restart_count;
@@ -5108,9 +5112,9 @@ impl ApplicationHandler<UserEvent> for App {
                         }
                     }
                     TransitionState::Idle => {
-                        let gameplay_prompt_active =
-                            self.state.screens.current_screen == CurrentScreen::Gameplay
-                                && self.state.gameplay_offset_save_prompt.is_some();
+                        let gameplay_prompt_active = self.state.screens.current_screen
+                            == CurrentScreen::Gameplay
+                            && self.state.gameplay_offset_save_prompt.is_some();
                         if !gameplay_prompt_active {
                             if let Some(action) = self.state.screens.step_idle(
                                 delta_time,

@@ -1250,46 +1250,46 @@ pub fn draw(
             );
             None
         } else {
-        let width = state.config.width.max(1);
-        let height = state.config.height.max(1);
-        let bytes_per_row = 4 * width;
-        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-        let padded_bytes_per_row = bytes_per_row.div_ceil(align) * align;
-        let readback_size = padded_bytes_per_row as u64 * height as u64;
-        let readback_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("wgpu screenshot readback"),
-            size: readback_size,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-        encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture: &frame.texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &readback_buffer,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(padded_bytes_per_row),
-                    rows_per_image: Some(height),
+            let width = state.config.width.max(1);
+            let height = state.config.height.max(1);
+            let bytes_per_row = 4 * width;
+            let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+            let padded_bytes_per_row = bytes_per_row.div_ceil(align) * align;
+            let readback_size = padded_bytes_per_row as u64 * height as u64;
+            let readback_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("wgpu screenshot readback"),
+                size: readback_size,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            encoder.copy_texture_to_buffer(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &frame.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
                 },
-            },
-            wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-        );
-        Some((
-            readback_buffer,
-            width as usize,
-            height as usize,
-            padded_bytes_per_row as usize,
-            state.config.format,
-        ))
+                wgpu::TexelCopyBufferInfo {
+                    buffer: &readback_buffer,
+                    layout: wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(padded_bytes_per_row),
+                        rows_per_image: Some(height),
+                    },
+                },
+                wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+            );
+            Some((
+                readback_buffer,
+                width as usize,
+                height as usize,
+                padded_bytes_per_row as usize,
+                state.config.format,
+            ))
         }
     } else {
         None
