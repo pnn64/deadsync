@@ -1535,7 +1535,7 @@ pub fn save_local_summary_score_for_side(
         lamp_index,
         lamp_judge_count,
         ex_score_percent: summary.ex_score_percent.clamp(0.0, 100.0),
-        hard_ex_score_percent: summary.ex_score_percent.clamp(0.0, 100.0),
+        hard_ex_score_percent: summary.hard_ex_score_percent.clamp(0.0, 100.0),
         judgment_counts: counts,
         holds_held: 0,
         holds_total: 0,

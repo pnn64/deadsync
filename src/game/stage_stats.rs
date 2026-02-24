@@ -21,9 +21,12 @@ pub struct PlayerStageSummary {
     pub grade: scores::Grade,
     pub score_percent: f64,
     pub ex_score_percent: f64,
+    pub hard_ex_score_percent: f64,
     /// Total hit tapnotes this stage (counts jumps/hands as >1).
     pub notes_hit: u32,
     pub window_counts: WindowCounts,
+    pub window_counts_10ms: WindowCounts,
     pub show_w0: bool,
     pub show_ex_score: bool,
+    pub show_hard_ex_score: bool,
 }

@@ -577,6 +577,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         let idx = side_ix(side);
         let mut weighted_score = 0.0_f64;
         let mut weighted_ex = 0.0_f64;
+        let mut weighted_hard_ex = 0.0_f64;
         let mut weight_sum = 0.0_f64;
         let mut notes_hit: u32 = 0;
         let mut meter_sum = 0u32;
@@ -584,7 +585,9 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         let mut any_failed = false;
         let mut show_w0 = false;
         let mut show_ex = false;
+        let mut show_hard_ex = false;
         let mut counts = crate::game::timing::WindowCounts::default();
+        let mut counts_10ms = crate::game::timing::WindowCounts::default();
         let mut first_player: Option<&stage_stats::PlayerStageSummary> = None;
         for stage in &course.stage_summaries {
             let Some(player) = stage.players[idx].as_ref() else {
@@ -596,6 +599,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             let weight = player.notes_hit.max(1) as f64;
             weighted_score += player.score_percent * weight;
             weighted_ex += player.ex_score_percent * weight;
+            weighted_hard_ex += player.hard_ex_score_percent * weight;
             weight_sum += weight;
             notes_hit = notes_hit.saturating_add(player.notes_hit);
             meter_sum = meter_sum.saturating_add(player.chart.meter);
@@ -603,7 +607,9 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             any_failed |= player.grade == scores::Grade::Failed;
             show_w0 |= player.show_w0;
             show_ex |= player.show_ex_score;
+            show_hard_ex |= player.show_hard_ex_score;
             counts = merge_window_counts(counts, player.window_counts);
+            counts_10ms = merge_window_counts(counts_10ms, player.window_counts_10ms);
         }
         let Some(first_player) = first_player else {
             continue;
@@ -615,6 +621,11 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         };
         let ex_score_percent = if weight_sum > 0.0 {
             (weighted_ex / weight_sum).clamp(0.0, 100.0)
+        } else {
+            0.0
+        };
+        let hard_ex_score_percent = if weight_sum > 0.0 {
+            (weighted_hard_ex / weight_sum).clamp(0.0, 100.0)
         } else {
             0.0
         };
@@ -643,10 +654,13 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             grade,
             score_percent,
             ex_score_percent,
+            hard_ex_score_percent,
             notes_hit,
             window_counts: counts,
+            window_counts_10ms: counts_10ms,
             show_w0,
             show_ex_score: show_ex,
+            show_hard_ex_score: show_hard_ex,
         });
     }
 
@@ -762,14 +776,14 @@ fn score_info_from_stage(
         life_history: Vec::new(),
         fail_time: (player.grade == scores::Grade::Failed).then_some(stage.duration_seconds),
         window_counts: player.window_counts,
-        window_counts_10ms: player.window_counts,
+        window_counts_10ms: player.window_counts_10ms,
         ex_score_percent: player.ex_score_percent,
-        hard_ex_score_percent: player.ex_score_percent,
+        hard_ex_score_percent: player.hard_ex_score_percent,
         column_judgments: Vec::new(),
         noteskin: None,
         show_fa_plus_window: player.show_w0,
         show_ex_score: player.show_ex_score,
-        show_hard_ex_score: false,
+        show_hard_ex_score: player.show_hard_ex_score,
         show_fa_plus_pane: player.show_w0,
         machine_records,
         machine_record_highlight_rank,
@@ -887,10 +901,13 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
         grade: si.grade,
         score_percent: si.score_percent,
         ex_score_percent: si.ex_score_percent,
+        hard_ex_score_percent: si.hard_ex_score_percent,
         notes_hit: notes_hit(si),
         window_counts: si.window_counts,
+        window_counts_10ms: si.window_counts_10ms,
         show_w0: (si.show_fa_plus_window && si.show_fa_plus_pane) || si.show_ex_score,
         show_ex_score: si.show_ex_score,
+        show_hard_ex_score: si.show_hard_ex_score,
     };
 
     match play_style {
