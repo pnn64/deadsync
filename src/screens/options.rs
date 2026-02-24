@@ -181,6 +181,19 @@ pub const ITEMS: &[Item] = &[
         ],
     },
     Item {
+        name: "Sound Options",
+        help: &[
+            "Adjust audio output settings and feedback sounds.",
+            "Master Volume",
+            "SFX Volume",
+            "Music Volume",
+            "Audio Sample Rate",
+            "Mine Sounds",
+            "Global Offset",
+            "Rate Mod Preserves Pitch",
+        ],
+    },
+    Item {
         name: "Input Options",
         help: &[
             "Configure control mappings and input diagnostics.",
@@ -203,19 +216,6 @@ pub const ITEMS: &[Item] = &[
             "Adjust behavior and display for the Select Music screen.",
             "Music Wheel Scroll Speed",
             "Breakdown Style",
-        ],
-    },
-    Item {
-        name: "Sound Options",
-        help: &[
-            "Adjust audio output settings and feedback sounds.",
-            "Master Volume",
-            "SFX Volume",
-            "Music Volume",
-            "Audio Sample Rate",
-            "Mine Sounds",
-            "Global Offset",
-            "Rate Mod Preserves Pitch",
         ],
     },
     Item {

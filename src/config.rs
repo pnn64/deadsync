@@ -358,7 +358,7 @@ impl Default for Config {
             sfx_volume: 100,
             audio_sample_rate_hz: None,
             auto_populate_gs_scores: false,
-            rate_mod_preserves_pitch: false,
+            rate_mod_preserves_pitch: true,
             enable_arrowcloud: false,
             enable_boogiestats: false,
             enable_groovestats: false,
