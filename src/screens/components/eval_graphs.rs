@@ -126,6 +126,17 @@ fn color_for_scatter(
 }
 
 #[inline(always)]
+fn miss_color_for_scatter(sp: &ScatterPoint, scale: ScatterPlotScale) -> [f32; 4] {
+    match scale {
+        ScatterPlotScale::Itg | ScatterPlotScale::Ex | ScatterPlotScale::HardEx => {
+            [1.0, 0.0, 0.0, 1.0]
+        }
+        ScatterPlotScale::Arrow => color_for_arrow(sp.direction_code),
+        ScatterPlotScale::Foot => color_for_foot(sp.is_stream, sp.is_left_foot),
+    }
+}
+
+#[inline(always)]
 fn push_quad(out: &mut Vec<MeshVertex>, x: f32, y: f32, w: f32, h: f32, color: [f32; 4]) {
     let x1 = x + w;
     let y1 = y + h;
@@ -186,12 +197,12 @@ pub fn build_scatter_mesh(
                 push_quad(&mut out, x, y, 1.5, 1.5, c);
             }
             None => {
-                let base = color_for_scatter(sp, worst, timing_windows_ms, scale);
+                let base = miss_color_for_scatter(sp, scale);
                 let miss_alpha = if matches!(
                     scale,
                     ScatterPlotScale::Itg | ScatterPlotScale::Ex | ScatterPlotScale::HardEx
                 ) {
-                    0.47
+                    0.3
                 } else {
                     0.333
                 };
