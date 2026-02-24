@@ -1698,6 +1698,16 @@ pub fn build(
             }
         };
         let logical_slot_size = |slot: &SpriteSlot| -> [f32; 2] { slot.logical_size() };
+        let scaled_note_slot_size = |slot: &SpriteSlot, note_scale: f32| -> [f32; 2] {
+            if let Some(model) = slot.model.as_ref() {
+                let model_size = model.size();
+                if model_size[0] > f32::EPSILON && model_size[1] > f32::EPSILON {
+                    return [model_size[0] * note_scale, model_size[1] * note_scale];
+                }
+            }
+            let logical = logical_slot_size(slot);
+            [logical[0] * note_scale, logical[1] * note_scale]
+        };
         let scale_explosion = |logical_size: [f32; 2]| -> [f32; 2] {
             [logical_size[0] * field_zoom, logical_size[1] * field_zoom]
         };
@@ -2961,7 +2971,7 @@ pub fn build(
                             1.0
                         }
                     };
-                    let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
+                    let base_size = scaled_note_slot_size(head_slot, note_scale);
                     let local_offset = [draw.pos[0] * note_scale, draw.pos[1] * note_scale];
                     let local_offset_rot_sin_cos = head_slot.base_rot_sin_cos();
                     let model_center = if head_slot.model.is_some() {
@@ -3061,8 +3071,7 @@ pub fn build(
                             note_slot.uv_for_frame_at(frame, uv_elapsed),
                             ns.part_uv_translation(hold_head_part, note.beat, false),
                         );
-                        let slot_size = logical_slot_size(note_slot);
-                        let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
+                        let base_size = scaled_note_slot_size(note_slot, note_scale);
                         let offset_scale = note_scale;
                         let local_offset = [draw.pos[0] * offset_scale, draw.pos[1] * offset_scale];
                         let local_offset_rot_sin_cos = note_slot.base_rot_sin_cos();
@@ -3440,7 +3449,7 @@ pub fn build(
                                 1.0
                             }
                         };
-                        let note_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
+                        let note_size = scaled_note_slot_size(head_slot, note_scale);
                         let center = [playfield_center_x + col_x_offset, y_pos];
                         let draw = head_slot.model_draw_at(elapsed, current_beat);
                         if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
@@ -3499,8 +3508,7 @@ pub fn build(
                             note_slot.uv_for_frame_at(note_frame, uv_elapsed),
                             ns.part_uv_translation(tap_note_part, note.beat, false),
                         );
-                        let slot_size = logical_slot_size(note_slot);
-                        let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
+                        let base_size = scaled_note_slot_size(note_slot, note_scale);
                         let offset_scale = note_scale;
                         let local_offset = [draw.pos[0] * offset_scale, draw.pos[1] * offset_scale];
                         let local_offset_rot_sin_cos = note_slot.base_rot_sin_cos();
