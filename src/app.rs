@@ -5179,7 +5179,6 @@ impl ApplicationHandler<UserEvent> for App {
                 self.update_stutter_samples(delta_time, total_elapsed);
 
                 let mut finished_fading_out_to: Option<CurrentScreen> = None;
-
                 match &mut self.state.shell.transition {
                     TransitionState::FadingOut {
                         elapsed,
@@ -5429,6 +5428,7 @@ impl ApplicationHandler<UserEvent> for App {
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        config::flush_pending_saves();
         if let Some(backend) = &mut self.backend {
             self.asset_manager.destroy_dynamic_assets(backend);
             backend.dispose_textures(&mut self.asset_manager.textures);

@@ -6,7 +6,9 @@ use log::{info, warn};
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::Mutex;
+use std::sync::{Mutex, mpsc};
+use std::thread;
+use std::time::Duration;
 use winit::keyboard::KeyCode;
 
 const CONFIG_PATH: &str = "deadsync.ini";
@@ -465,6 +467,82 @@ static SOUND_DEVICE: std::sync::LazyLock<Mutex<Option<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(None));
 static MACHINE_DEFAULT_NOTESKIN: std::sync::LazyLock<Mutex<String>> =
     std::sync::LazyLock::new(|| Mutex::new(DEFAULT_MACHINE_NOTESKIN.to_string()));
+static SAVE_TX: std::sync::LazyLock<Option<mpsc::Sender<SaveReq>>> =
+    std::sync::LazyLock::new(start_save_worker);
+
+enum SaveReq {
+    Write(String),
+    Flush(mpsc::Sender<()>),
+}
+
+fn start_save_worker() -> Option<mpsc::Sender<SaveReq>> {
+    let (tx, rx) = mpsc::channel::<SaveReq>();
+    let spawn = thread::Builder::new()
+        .name("deadsync-config-save".to_string())
+        .spawn(move || save_worker_loop(rx));
+    match spawn {
+        Ok(_) => Some(tx),
+        Err(e) => {
+            warn!("Failed to start config save worker thread: {e}. Falling back to sync writes.");
+            None
+        }
+    }
+}
+
+#[inline(always)]
+fn queue_save_write(content: String) {
+    if let Some(tx) = SAVE_TX.as_ref() {
+        if let Err(err) = tx.send(SaveReq::Write(content))
+            && let SaveReq::Write(content) = err.0
+        {
+            write_config_file(&content);
+        }
+        return;
+    }
+    write_config_file(&content);
+}
+
+fn save_worker_loop(rx: mpsc::Receiver<SaveReq>) {
+    let mut pending_write: Option<String> = None;
+    let mut flush_acks: Vec<mpsc::Sender<()>> = Vec::with_capacity(2);
+    while let Ok(msg) = rx.recv() {
+        match msg {
+            SaveReq::Write(content) => pending_write = Some(content),
+            SaveReq::Flush(ack) => flush_acks.push(ack),
+        }
+        while let Ok(msg) = rx.try_recv() {
+            match msg {
+                SaveReq::Write(content) => pending_write = Some(content),
+                SaveReq::Flush(ack) => flush_acks.push(ack),
+            }
+        }
+        if let Some(content) = pending_write.take() {
+            write_config_file(&content);
+        }
+        for ack in flush_acks.drain(..) {
+            let _ = ack.send(());
+        }
+    }
+    if let Some(content) = pending_write.take() {
+        write_config_file(&content);
+    }
+}
+
+#[inline(always)]
+fn write_config_file(content: &str) {
+    if let Err(e) = std::fs::write(CONFIG_PATH, content) {
+        warn!("Failed to save config file: {e}");
+    }
+}
+
+pub fn flush_pending_saves() {
+    if let Some(tx) = SAVE_TX.as_ref() {
+        let (ack_tx, ack_rx) = mpsc::channel::<()>();
+        if tx.send(SaveReq::Flush(ack_tx)).is_ok() {
+            let _ = ack_rx.recv_timeout(Duration::from_secs(5));
+        }
+    }
+}
 
 // --- File I/O ---
 
@@ -2502,9 +2580,7 @@ fn save_without_keymaps() {
     ));
     content.push('\n');
 
-    if let Err(e) = std::fs::write(CONFIG_PATH, content) {
-        warn!("Failed to save config file: {e}");
-    }
+    queue_save_write(content);
 }
 
 pub fn get() -> Config {
