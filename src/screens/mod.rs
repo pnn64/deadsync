@@ -1,4 +1,5 @@
 pub mod components;
+pub mod credits;
 pub mod evaluation;
 pub mod evaluation_summary;
 pub mod gameover;
@@ -59,6 +60,7 @@ pub enum Screen {
     Menu,
     Gameplay,
     Options,
+    Credits,
     ManageLocalProfiles,
     Init,
     Initials,

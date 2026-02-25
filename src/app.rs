@@ -8,10 +8,10 @@ use crate::core::space::{self as space, Metrics};
 use crate::game::parsing::{noteskin, simfile as song_loading};
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::{
-    Screen as CurrentScreen, ScreenAction, evaluation, evaluation_summary, gameover, gameplay,
-    init, initials, input as input_screen, manage_local_profiles, mappings, menu, options,
-    player_options, profile_load, sandbox, select_color, select_course, select_mode, select_music,
-    select_profile, select_style,
+    Screen as CurrentScreen, ScreenAction, credits, evaluation, evaluation_summary, gameover,
+    gameplay, init, initials, input as input_screen, manage_local_profiles, mappings, menu,
+    options, player_options, profile_load, sandbox, select_color, select_course, select_mode,
+    select_music, select_profile, select_style,
 };
 use crate::ui::color;
 use chrono::Local;
@@ -282,6 +282,7 @@ pub struct ScreensState {
     menu_state: menu::State,
     gameplay_state: Option<gameplay::State>,
     options_state: options::State,
+    credits_state: credits::State,
     manage_local_profiles_state: manage_local_profiles::State,
     mappings_state: mappings::State,
     input_state: input_screen::State,
@@ -1176,6 +1177,8 @@ impl ScreensState {
         let mut options_state = options::init();
         options_state.active_color_index = color_index;
 
+        let credits_state = credits::init();
+
         let mut manage_local_profiles_state = manage_local_profiles::init();
         manage_local_profiles_state.active_color_index = color_index;
 
@@ -1205,6 +1208,7 @@ impl ScreensState {
             menu_state,
             gameplay_state: None,
             options_state,
+            credits_state,
             manage_local_profiles_state,
             mappings_state,
             input_state,
@@ -1240,6 +1244,10 @@ impl ScreensState {
             CurrentScreen::Init => Some(init::update(&mut self.init_state, delta_time)),
             CurrentScreen::Options => {
                 options::update(&mut self.options_state, delta_time, asset_manager)
+            }
+            CurrentScreen::Credits => {
+                credits::update(&mut self.credits_state, delta_time);
+                None
             }
             CurrentScreen::ManageLocalProfiles => {
                 manage_local_profiles::update(&mut self.manage_local_profiles_state, delta_time)
@@ -2398,6 +2406,9 @@ impl App {
                 &self.asset_manager,
                 &ev,
             ),
+            CurrentScreen::Credits => {
+                crate::screens::credits::handle_input(&mut self.state.screens.credits_state, &ev)
+            }
             CurrentScreen::ManageLocalProfiles => {
                 crate::screens::manage_local_profiles::handle_input(
                     &mut self.state.screens.manage_local_profiles_state,
@@ -3044,6 +3055,7 @@ impl App {
                 &self.asset_manager,
                 screen_alpha_multiplier,
             ),
+            CurrentScreen::Credits => credits::get_actors(&self.state.screens.credits_state),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::get_actors(
                 &self.state.screens.manage_local_profiles_state,
                 &self.asset_manager,
@@ -3176,6 +3188,7 @@ impl App {
             }
             CurrentScreen::Gameplay => gameplay::out_transition(),
             CurrentScreen::Options => options::out_transition(),
+            CurrentScreen::Credits => credits::out_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::out_transition(),
             CurrentScreen::Mappings => mappings::out_transition(),
             CurrentScreen::PlayerOptions => player_options::out_transition(),
@@ -3203,6 +3216,7 @@ impl App {
                 gameplay::in_transition(self.state.screens.gameplay_state.as_ref())
             }
             CurrentScreen::Options => options::in_transition(),
+            CurrentScreen::Credits => credits::in_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::in_transition(),
             CurrentScreen::Mappings => mappings::in_transition(),
             CurrentScreen::PlayerOptions => player_options::in_transition(),
@@ -4047,6 +4061,8 @@ impl App {
             let current_color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.options_state = options::init();
             self.state.screens.options_state.active_color_index = current_color_index;
+        } else if target == CurrentScreen::Credits {
+            self.state.screens.credits_state = credits::init();
         } else if target == CurrentScreen::ManageLocalProfiles {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.manage_local_profiles_state = manage_local_profiles::init();

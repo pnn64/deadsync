@@ -4363,6 +4363,10 @@ pub fn handle_input(
                             audio::play_sfx("assets/sounds/start.ogg");
                             start_reload_songs_and_courses(state);
                         }
+                        "Credits" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            return ScreenAction::Navigate(Screen::Credits);
+                        }
                         // Exit from Options back to Menu.
                         "Exit" => {
                             audio::play_sfx("assets/sounds/start.ogg");
