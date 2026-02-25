@@ -54,6 +54,8 @@ const GRAPH_BARELY_ANIM_SEG_SECONDS: f32 = 0.2;
 const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
 const MACHINE_RECORD_ROWS: usize = 10;
 const GS_RECORD_ROWS: usize = 10;
+// Keep QR hidden until score submit/upload exists end-to-end.
+const ENABLE_GS_QR_PANE: bool = false;
 const TEXT_CACHE_LIMIT: usize = 8192;
 const BANNER_FALLBACK_KEYS: [&str; 12] = [
     "banner1.png",
@@ -333,7 +335,7 @@ fn eval_pane_next(
     has_gs: bool,
 ) -> EvalPane {
     // Order (per user parity request):
-    // ITG -> EX -> H.EX -> Arrow breakdown -> Machine -> QR -> GS -> Timing -> Timing EX -> Timing H.EX -> ITG
+    // ITG -> EX -> H.EX -> Arrow breakdown -> Machine -> (QR) -> GS -> Timing -> Timing EX -> Timing H.EX -> ITG
     match (pane, has_hard_ex, has_online_panes, has_gs) {
         (EvalPane::Standard, _, _, _) => EvalPane::FaPlus,
         (EvalPane::FaPlus, true, _, _) => EvalPane::HardEx,
@@ -341,11 +343,16 @@ fn eval_pane_next(
         (EvalPane::HardEx, true, _, _) => EvalPane::Column,
         (EvalPane::HardEx, false, _, _) => EvalPane::Standard,
         (EvalPane::Column, _, _, _) => EvalPane::MachineRecords,
-        (EvalPane::MachineRecords, _, true, _) => EvalPane::QrCode,
-        (EvalPane::MachineRecords, _, false, _) => EvalPane::Timing,
+        (EvalPane::MachineRecords, _, true, true) => {
+            if ENABLE_GS_QR_PANE {
+                EvalPane::QrCode
+            } else {
+                EvalPane::GrooveStats
+            }
+        }
+        (EvalPane::MachineRecords, _, _, _) => EvalPane::Timing,
         (EvalPane::QrCode, _, true, true) => EvalPane::GrooveStats,
-        (EvalPane::QrCode, _, true, false) => EvalPane::Timing,
-        (EvalPane::QrCode, _, false, _) => EvalPane::Timing,
+        (EvalPane::QrCode, _, _, _) => EvalPane::Timing,
         (EvalPane::GrooveStats, _, _, _) => EvalPane::Timing,
         (EvalPane::Timing, _, _, _) => EvalPane::TimingEx,
         (EvalPane::TimingEx, true, _, _) => EvalPane::TimingHardEx,
@@ -366,10 +373,22 @@ fn eval_pane_prev(
         (EvalPane::Standard, false, _, _) => EvalPane::TimingEx,
         (EvalPane::TimingHardEx, _, _, _) => EvalPane::TimingEx,
         (EvalPane::TimingEx, _, _, _) => EvalPane::Timing,
-        (EvalPane::Timing, _, true, true) => EvalPane::GrooveStats,
-        (EvalPane::Timing, _, true, false) => EvalPane::QrCode,
+        (EvalPane::Timing, _, true, true) => {
+            if ENABLE_GS_QR_PANE {
+                EvalPane::QrCode
+            } else {
+                EvalPane::GrooveStats
+            }
+        }
         (EvalPane::Timing, _, false, _) => EvalPane::MachineRecords,
-        (EvalPane::GrooveStats, _, true, _) => EvalPane::QrCode,
+        (EvalPane::Timing, _, true, false) => EvalPane::MachineRecords,
+        (EvalPane::GrooveStats, _, true, _) => {
+            if ENABLE_GS_QR_PANE {
+                EvalPane::QrCode
+            } else {
+                EvalPane::MachineRecords
+            }
+        }
         (EvalPane::GrooveStats, _, false, _) => EvalPane::MachineRecords,
         (EvalPane::QrCode, _, _, _) => EvalPane::MachineRecords,
         (EvalPane::MachineRecords, _, _, _) => EvalPane::Column,
@@ -1916,7 +1935,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;
             };
-            let pane = state.active_pane[controller_idx];
+            let pane = if ENABLE_GS_QR_PANE {
+                state.active_pane[controller_idx]
+            } else if state.active_pane[controller_idx] == EvalPane::QrCode {
+                EvalPane::MachineRecords
+            } else {
+                state.active_pane[controller_idx]
+            };
             let gs_side = if play_style == profile::PlayStyle::Versus {
                 controller
             } else {
