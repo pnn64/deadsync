@@ -1839,7 +1839,7 @@ fn parse_and_process_song_file(
                 notes: c.minimized_note_data,
                 parsed_notes,
                 row_to_beat: c.row_to_beat,
-                timing_segments: TimingSegments::from(&c.timing_segments),
+                timing_segments: TimingSegments::from(c.timing_segments.as_ref()),
                 timing: TimingData::default(),
                 short_hash: c.short_hash,
                 stats: c.stats,
