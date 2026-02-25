@@ -7,6 +7,8 @@ use crate::core::space::{screen_height, screen_width, widescale};
 use crate::config::{self, BreakdownStyle, DisplayMode, FullscreenType, SimpleIni};
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
+#[cfg(target_os = "windows")]
+use crate::core::input::WindowsPadBackend;
 use crate::game::parsing::{noteskin as noteskin_parser, simfile as song_loading};
 use crate::game::{profile, scores};
 use crate::screens::{Screen, ScreenAction};
@@ -286,6 +288,7 @@ pub enum SubmenuKind {
     System,
     Graphics,
     Input,
+    InputBackend,
     Gameplay,
     Sound,
     SelectMusic,
@@ -430,6 +433,19 @@ const GS_ROW_AUTO_POPULATE: &str = "Auto Populate GS Scores";
 const INPUT_ROW_CONFIGURE_MAPPINGS: &str = "Configure Keyboard/Pad Mappings";
 const INPUT_ROW_TEST: &str = "Test Input";
 const INPUT_ROW_OPTIONS: &str = "Input Options";
+const INPUT_ROW_BACKEND: &str = "Gamepad Backend";
+#[cfg(target_os = "windows")]
+const INPUT_BACKEND_CHOICES: &[&str] = &["W32 Raw Input", "WGI"];
+#[cfg(target_os = "macos")]
+const INPUT_BACKEND_CHOICES: &[&str] = &["macOS IOHID"];
+#[cfg(all(unix, not(target_os = "macos")))]
+const INPUT_BACKEND_CHOICES: &[&str] = &["Linux evdev"];
+#[cfg(not(any(target_os = "windows", unix)))]
+const INPUT_BACKEND_CHOICES: &[&str] = &["Platform Default"];
+#[cfg(target_os = "windows")]
+const INPUT_BACKEND_INLINE: bool = true;
+#[cfg(not(target_os = "windows"))]
+const INPUT_BACKEND_INLINE: bool = false;
 const SELECT_MUSIC_ROW_WHEEL_SPEED: &str = "Music Wheel Scroll Speed";
 const SELECT_MUSIC_ROW_BREAKDOWN_STYLE: &str = "Breakdown Style";
 const SELECT_MUSIC_ROW_GS_SCOREBOX: &str = "GS Scorebox";
@@ -679,7 +695,7 @@ pub const INPUT_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         label: INPUT_ROW_OPTIONS,
-        choices: &["Pending"],
+        choices: &["Open"],
         inline: false,
     },
 ];
@@ -697,7 +713,30 @@ pub const INPUT_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         name: INPUT_ROW_OPTIONS,
-        help: &["Placeholder row for future input settings; no action is wired yet."],
+        help: &[
+            "Open additional input settings.",
+            "Gamepad Backend",
+        ],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
+
+pub const INPUT_BACKEND_OPTIONS_ROWS: &[SubRow] = &[SubRow {
+    label: INPUT_ROW_BACKEND,
+    choices: INPUT_BACKEND_CHOICES,
+    inline: INPUT_BACKEND_INLINE,
+}];
+
+pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: INPUT_ROW_BACKEND,
+        help: &[
+            "Choose gamepad input backend. On Windows this switches between WGI and W32 Raw Input.",
+            "Changing backend requires a restart.",
+        ],
     },
     Item {
         name: "Exit",
@@ -955,6 +994,7 @@ const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
         SubmenuKind::System => SYSTEM_OPTIONS_ROWS,
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ROWS,
         SubmenuKind::Input => INPUT_OPTIONS_ROWS,
+        SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ROWS,
         SubmenuKind::Gameplay => GAMEPLAY_OPTIONS_ROWS,
         SubmenuKind::Sound => SOUND_OPTIONS_ROWS,
         SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ROWS,
@@ -968,6 +1008,7 @@ const fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
         SubmenuKind::System => SYSTEM_OPTIONS_ITEMS,
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ITEMS,
         SubmenuKind::Input => INPUT_OPTIONS_ITEMS,
+        SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ITEMS,
         SubmenuKind::Gameplay => GAMEPLAY_OPTIONS_ITEMS,
         SubmenuKind::Sound => SOUND_OPTIONS_ITEMS,
         SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ITEMS,
@@ -981,6 +1022,7 @@ const fn submenu_title(kind: SubmenuKind) -> &'static str {
         SubmenuKind::System => "SYSTEM OPTIONS",
         SubmenuKind::Graphics => "GRAPHICS OPTIONS",
         SubmenuKind::Input => "INPUT OPTIONS",
+        SubmenuKind::InputBackend => "INPUT OPTIONS",
         SubmenuKind::Gameplay => "GAMEPLAY OPTIONS",
         SubmenuKind::Sound => "SOUND OPTIONS",
         SubmenuKind::SelectMusic => "SELECT MUSIC OPTIONS",
@@ -1009,6 +1051,22 @@ fn selected_video_renderer(state: &State) -> BackendType {
         .copied()
         .unwrap_or(0);
     renderer_choice_index_to_backend(choice_idx)
+}
+
+#[cfg(target_os = "windows")]
+const fn windows_backend_choice_index(backend: WindowsPadBackend) -> usize {
+    match backend {
+        WindowsPadBackend::RawInput => 0,
+        WindowsPadBackend::Auto | WindowsPadBackend::Wgi => 1,
+    }
+}
+
+#[cfg(target_os = "windows")]
+const fn windows_backend_from_choice(idx: usize) -> WindowsPadBackend {
+    match idx {
+        0 => WindowsPadBackend::RawInput,
+        _ => WindowsPadBackend::Wgi,
+    }
 }
 
 const fn fullscreen_type_to_choice_index(fullscreen_type: FullscreenType) -> usize {
@@ -1834,6 +1892,8 @@ pub struct State {
     view: OptionsView,
     submenu_transition: SubmenuTransition,
     pending_submenu_kind: Option<SubmenuKind>,
+    pending_submenu_parent_kind: Option<SubmenuKind>,
+    submenu_parent_kind: Option<SubmenuKind>,
     submenu_fade_t: f32,
     content_alpha: f32,
     reload_ui: Option<ReloadUiState>,
@@ -1846,6 +1906,7 @@ pub struct State {
     sub_choice_indices_system: Vec<usize>,
     sub_choice_indices_graphics: Vec<usize>,
     sub_choice_indices_input: Vec<usize>,
+    sub_choice_indices_input_backend: Vec<usize>,
     sub_choice_indices_gameplay: Vec<usize>,
     sub_choice_indices_sound: Vec<usize>,
     sub_choice_indices_select_music: Vec<usize>,
@@ -1855,6 +1916,7 @@ pub struct State {
     sub_cursor_indices_system: Vec<usize>,
     sub_cursor_indices_graphics: Vec<usize>,
     sub_cursor_indices_input: Vec<usize>,
+    sub_cursor_indices_input_backend: Vec<usize>,
     sub_cursor_indices_gameplay: Vec<usize>,
     sub_cursor_indices_sound: Vec<usize>,
     sub_cursor_indices_select_music: Vec<usize>,
@@ -1917,6 +1979,8 @@ pub fn init() -> State {
         nav_lr_last_adjusted_at: None,
         submenu_transition: SubmenuTransition::None,
         pending_submenu_kind: None,
+        pending_submenu_parent_kind: None,
+        submenu_parent_kind: None,
         submenu_fade_t: 0.0,
         content_alpha: 1.0,
         reload_ui: None,
@@ -1929,6 +1993,7 @@ pub fn init() -> State {
         sub_choice_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_choice_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         sub_choice_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
+        sub_choice_indices_input_backend: vec![0; INPUT_BACKEND_OPTIONS_ROWS.len()],
         sub_choice_indices_gameplay: vec![0; GAMEPLAY_OPTIONS_ROWS.len()],
         sub_choice_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         sub_choice_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
@@ -1938,6 +2003,7 @@ pub fn init() -> State {
         sub_cursor_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_cursor_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         sub_cursor_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
+        sub_cursor_indices_input_backend: vec![0; INPUT_BACKEND_OPTIONS_ROWS.len()],
         sub_cursor_indices_gameplay: vec![0; GAMEPLAY_OPTIONS_ROWS.len()],
         sub_cursor_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         sub_cursor_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
@@ -2029,6 +2095,13 @@ pub fn init() -> State {
         "Show Stats",
         cfg.show_stats_mode.min(2) as usize,
     );
+    #[cfg(target_os = "windows")]
+    set_choice_by_label(
+        &mut state.sub_choice_indices_input_backend,
+        INPUT_BACKEND_OPTIONS_ROWS,
+        INPUT_ROW_BACKEND,
+        windows_backend_choice_index(cfg.windows_gamepad_backend),
+    );
     set_choice_by_label(
         &mut state.sub_choice_indices_gameplay,
         GAMEPLAY_OPTIONS_ROWS,
@@ -2118,6 +2191,7 @@ fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::System => &state.sub_choice_indices_system,
         SubmenuKind::Graphics => &state.sub_choice_indices_graphics,
         SubmenuKind::Input => &state.sub_choice_indices_input,
+        SubmenuKind::InputBackend => &state.sub_choice_indices_input_backend,
         SubmenuKind::Gameplay => &state.sub_choice_indices_gameplay,
         SubmenuKind::Sound => &state.sub_choice_indices_sound,
         SubmenuKind::SelectMusic => &state.sub_choice_indices_select_music,
@@ -2131,6 +2205,7 @@ const fn submenu_choice_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::System => &mut state.sub_choice_indices_system,
         SubmenuKind::Graphics => &mut state.sub_choice_indices_graphics,
         SubmenuKind::Input => &mut state.sub_choice_indices_input,
+        SubmenuKind::InputBackend => &mut state.sub_choice_indices_input_backend,
         SubmenuKind::Gameplay => &mut state.sub_choice_indices_gameplay,
         SubmenuKind::Sound => &mut state.sub_choice_indices_sound,
         SubmenuKind::SelectMusic => &mut state.sub_choice_indices_select_music,
@@ -2144,6 +2219,7 @@ fn submenu_cursor_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::System => &state.sub_cursor_indices_system,
         SubmenuKind::Graphics => &state.sub_cursor_indices_graphics,
         SubmenuKind::Input => &state.sub_cursor_indices_input,
+        SubmenuKind::InputBackend => &state.sub_cursor_indices_input_backend,
         SubmenuKind::Gameplay => &state.sub_cursor_indices_gameplay,
         SubmenuKind::Sound => &state.sub_cursor_indices_sound,
         SubmenuKind::SelectMusic => &state.sub_cursor_indices_select_music,
@@ -2157,6 +2233,7 @@ const fn submenu_cursor_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::System => &mut state.sub_cursor_indices_system,
         SubmenuKind::Graphics => &mut state.sub_cursor_indices_graphics,
         SubmenuKind::Input => &mut state.sub_cursor_indices_input,
+        SubmenuKind::InputBackend => &mut state.sub_cursor_indices_input_backend,
         SubmenuKind::Gameplay => &mut state.sub_cursor_indices_gameplay,
         SubmenuKind::Sound => &mut state.sub_cursor_indices_sound,
         SubmenuKind::SelectMusic => &mut state.sub_cursor_indices_select_music,
@@ -2169,6 +2246,7 @@ fn sync_submenu_cursor_indices(state: &mut State) {
     state.sub_cursor_indices_system = state.sub_choice_indices_system.clone();
     state.sub_cursor_indices_graphics = state.sub_choice_indices_graphics.clone();
     state.sub_cursor_indices_input = state.sub_choice_indices_input.clone();
+    state.sub_cursor_indices_input_backend = state.sub_choice_indices_input_backend.clone();
     state.sub_cursor_indices_gameplay = state.sub_choice_indices_gameplay.clone();
     state.sub_cursor_indices_sound = state.sub_choice_indices_sound.clone();
     state.sub_cursor_indices_select_music = state.sub_choice_indices_select_music.clone();
@@ -2490,6 +2568,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 let target_kind = state.pending_submenu_kind.unwrap_or(SubmenuKind::System);
                 state.view = OptionsView::Submenu(target_kind);
                 state.pending_submenu_kind = None;
+                state.submenu_parent_kind = state.pending_submenu_parent_kind.take();
                 state.sub_selected = 0;
                 state.sub_prev_selected = 0;
                 state.sub_inline_x = f32::NAN;
@@ -2547,6 +2626,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 // Return to the main options list and fade it in.
                 state.view = OptionsView::Main;
                 state.pending_submenu_kind = None;
+                state.pending_submenu_parent_kind = None;
+                state.submenu_parent_kind = None;
                 state.cursor_initialized = false;
                 state.cursor_t = 1.0;
                 state.row_tweens.clear();
@@ -2963,6 +3044,14 @@ fn apply_submenu_choice_delta(
             let mode = new_index.min(2) as u8;
             action = Some(ScreenAction::UpdateShowOverlay(mode));
         }
+    } else if matches!(kind, SubmenuKind::InputBackend) {
+        let row = &rows[row_index];
+        if row.label == INPUT_ROW_BACKEND {
+            #[cfg(target_os = "windows")]
+            {
+                config::update_windows_gamepad_backend(windows_backend_from_choice(new_index));
+            }
+        }
     } else if matches!(kind, SubmenuKind::Gameplay) {
         let row = &rows[row_index];
         if row.label == "BG Brightness" {
@@ -3092,8 +3181,14 @@ pub fn handle_input(
             match state.view {
                 OptionsView::Main => return ScreenAction::Navigate(Screen::Menu),
                 OptionsView::Submenu(_) => {
-                    // Fade back to the main Options list.
-                    state.submenu_transition = SubmenuTransition::FadeOutToMain;
+                    if let Some(parent_kind) = state.submenu_parent_kind {
+                        state.pending_submenu_kind = Some(parent_kind);
+                        state.pending_submenu_parent_kind = None;
+                        state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                    } else {
+                        // Fade back to the main Options list.
+                        state.submenu_transition = SubmenuTransition::FadeOutToMain;
+                    }
                     state.submenu_fade_t = 0.0;
                 }
             }
@@ -3179,6 +3274,7 @@ pub fn handle_input(
                     }
                     let sel = state.selected.min(total - 1);
                     let item = &ITEMS[sel];
+                    state.pending_submenu_parent_kind = None;
 
                     // Route based on the selected row label.
                     match item.name {
@@ -3258,7 +3354,13 @@ pub fn handle_input(
                     // Exit row in the submenu: back to the main Options list.
                     if state.sub_selected == total - 1 {
                         audio::play_sfx("assets/sounds/start.ogg");
-                        state.submenu_transition = SubmenuTransition::FadeOutToMain;
+                        if let Some(parent_kind) = state.submenu_parent_kind {
+                            state.pending_submenu_kind = Some(parent_kind);
+                            state.pending_submenu_parent_kind = None;
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                        } else {
+                            state.submenu_transition = SubmenuTransition::FadeOutToMain;
+                        }
                         state.submenu_fade_t = 0.0;
                     } else if matches!(kind, SubmenuKind::Input) {
                         let rows = submenu_rows(kind);
@@ -3273,7 +3375,11 @@ pub fn handle_input(
                                     return ScreenAction::Navigate(Screen::Input);
                                 }
                                 INPUT_ROW_OPTIONS => {
-                                    audio::play_sfx("assets/sounds/change.ogg");
+                                    audio::play_sfx("assets/sounds/start.ogg");
+                                    state.pending_submenu_kind = Some(SubmenuKind::InputBackend);
+                                    state.pending_submenu_parent_kind = Some(SubmenuKind::Input);
+                                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                                    state.submenu_fade_t = 0.0;
                                 }
                                 _ => {}
                             }
@@ -3997,6 +4103,36 @@ pub fn get_actors(
                         settext(label):
                         horizalign(left)
                     ));
+
+                    if row_idx < rows.len() {
+                        let row = &rows[row_idx];
+                        if row.label == INPUT_ROW_BACKEND {
+                            let choices = row_choices(state, kind, rows, row_idx);
+                            if !choices.is_empty() {
+                                let choice_idx = choice_indices
+                                    .get(row_idx)
+                                    .copied()
+                                    .unwrap_or(0)
+                                    .min(choices.len().saturating_sub(1));
+                                let mut value_color = if is_active {
+                                    col_active_text
+                                } else {
+                                    col_white
+                                };
+                                value_color[3] *= row_alpha;
+                                let value_x = list_w.mul_add(1.0, list_x - TEXT_LEFT_PAD * s);
+                                ui_actors.push(act!(text:
+                                    align(1.0, 0.5):
+                                    xy(value_x, row_mid_y):
+                                    zoom(ITEM_TEXT_ZOOM):
+                                    diffuse(value_color[0], value_color[1], value_color[2], value_color[3]):
+                                    font("miso"):
+                                    settext(choices[choice_idx].as_ref()):
+                                    horizalign(right)
+                                ));
+                            }
+                        }
+                    }
                 }
 
                 let sel = state.sub_selected.min(total_rows.saturating_sub(1));

@@ -2013,6 +2013,18 @@ pub fn update_show_stats_mode(mode: u8) {
     save_without_keymaps();
 }
 
+#[cfg(target_os = "windows")]
+pub fn update_windows_gamepad_backend(backend: WindowsPadBackend) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.windows_gamepad_backend == backend {
+            return;
+        }
+        cfg.windows_gamepad_backend = backend;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_bg_brightness(brightness: f32) {
     let clamped = brightness.clamp(0.0, 1.0);
     {
