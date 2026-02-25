@@ -305,6 +305,8 @@ pub struct Config {
     pub machine_show_gameover: bool,
     /// zmod parity: gameplay/eval difficulty meter also displays text labels.
     pub zmod_rating_box_text: bool,
+    /// Show one decimal place for live gameplay BPM when BPM is non-integer.
+    pub show_bpm_decimal: bool,
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub show_select_music_scorebox: bool,
@@ -367,6 +369,7 @@ impl Default for Config {
             machine_show_name_entry: true,
             machine_show_gameover: true,
             zmod_rating_box_text: false,
+            show_bpm_decimal: false,
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             show_select_music_scorebox: true,
@@ -711,6 +714,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "ShowBpmDecimal={}\n",
+        if default.show_bpm_decimal { "1" } else { "0" }
     ));
     content.push('\n');
 
@@ -1195,6 +1202,27 @@ pub fn load() {
                         }
                     })
                     .unwrap_or(default.zmod_rating_box_text);
+                cfg.show_bpm_decimal = conf
+                    .get("Theme", "ShowBpmDecimal")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.show_bpm_decimal);
 
                 info!("Configuration loaded from '{CONFIG_PATH}'.");
             } // Lock on CONFIG is released here.
@@ -1291,6 +1319,9 @@ pub fn load() {
                     miss = true;
                 }
                 if !miss && !has("Theme", "ZmodRatingBoxText") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "ShowBpmDecimal") {
                     miss = true;
                 }
                 miss
@@ -2167,6 +2198,10 @@ fn save_without_keymaps() {
         "ZmodRatingBoxText={}\n",
         if cfg.zmod_rating_box_text { "1" } else { "0" }
     ));
+    content.push_str(&format!(
+        "ShowBpmDecimal={}\n",
+        if cfg.show_bpm_decimal { "1" } else { "0" }
+    ));
     content.push('\n');
 
     if let Err(e) = std::fs::write(CONFIG_PATH, content) {
@@ -2481,6 +2516,28 @@ pub fn update_show_select_music_scorebox(enabled: bool) {
             return;
         }
         cfg.show_select_music_scorebox = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_zmod_rating_box_text(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.zmod_rating_box_text == enabled {
+            return;
+        }
+        cfg.zmod_rating_box_text = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_bpm_decimal(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.show_bpm_decimal == enabled {
+            return;
+        }
+        cfg.show_bpm_decimal = enabled;
     }
     save_without_keymaps();
 }

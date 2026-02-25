@@ -26,6 +26,7 @@ use crate::game::gameplay::{
 thread_local! {
     static SCORE_2DP_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
     static RATE_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(128));
+    static BPM_TEXT_CACHE: RefCell<TextCache<(u64, bool)>> = RefCell::new(HashMap::with_capacity(512));
 }
 
 #[inline(always)]
@@ -65,6 +66,29 @@ fn cached_rate_text(rate: f32) -> Arc<str> {
     }
     cached_text(&RATE_TEXT_CACHE, rate.to_bits(), || {
         format!("{rate:.2}x rate")
+    })
+}
+
+#[inline(always)]
+fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
+    if !bpm.is_finite() {
+        return Arc::<str>::from("0");
+    }
+    if !show_decimal {
+        let rounded = bpm.round().max(0.0);
+        let key = (rounded.to_bits(), false);
+        return cached_text(&BPM_TEXT_CACHE, key, || format!("{rounded:.0}"));
+    }
+    let rounded_tenth = (bpm * 10.0).round() / 10.0;
+    let rounded_tenth = rounded_tenth.max(0.0);
+    let key = (rounded_tenth.to_bits(), true);
+    cached_text(&BPM_TEXT_CACHE, key, || {
+        let nearest_int = rounded_tenth.round();
+        if (rounded_tenth - nearest_int).abs() <= 0.001 {
+            format!("{nearest_int:.0}")
+        } else {
+            format!("{rounded_tenth:.1}")
+        }
     })
 }
 
@@ -702,18 +726,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Current BPM Display (1:1 with Simply Love)
     {
         let base_bpm = state.timing.get_bpm_for_beat(state.current_beat);
-        let display_bpm = if base_bpm.is_finite() {
-            (base_bpm
-                * if state.music_rate.is_finite() {
-                    state.music_rate
-                } else {
-                    1.0
-                })
-            .round() as i32
+        let rate = if state.music_rate.is_finite() {
+            state.music_rate as f64
         } else {
-            0
+            1.0
         };
-        let bpm_text = display_bpm.to_string();
+        let display_bpm = if base_bpm.is_finite() {
+            f64::from(base_bpm) * rate
+        } else {
+            0.0
+        };
+        let bpm_text = cached_bpm_text(display_bpm, cfg.show_bpm_decimal);
         // Final world-space positions derived from analyzing the SM Lua transforms.
         // The parent frame is bottom-aligned to y=52, and its children are positioned
         // relative to that y-coordinate, with a zoom of 1.33 applied to the whole group.

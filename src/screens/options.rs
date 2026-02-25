@@ -223,8 +223,10 @@ pub const ITEMS: &[Item] = &[
         name: "Gameplay Options",
         help: &[
             "Adjust gameplay presentation settings.",
-            "BG Brightness",
-            "Centered P1 Notefield",
+            GAMEPLAY_ROW_BG_BRIGHTNESS,
+            GAMEPLAY_ROW_CENTERED_P1,
+            GAMEPLAY_ROW_ZMOD_RATING_BOX,
+            GAMEPLAY_ROW_BPM_DECIMAL,
         ],
     },
     Item {
@@ -474,6 +476,10 @@ const MACHINE_ROW_NAME_ENTRY: &str = "Name Entry";
 const MACHINE_ROW_GAMEOVER: &str = "Gameover Screen";
 const MACHINE_ROW_MENU_MUSIC: &str = "Menu Music";
 const MACHINE_ROW_KEYBOARD_FEATURES: &str = "Keyboard Features";
+const GAMEPLAY_ROW_BG_BRIGHTNESS: &str = "BG Brightness";
+const GAMEPLAY_ROW_CENTERED_P1: &str = "Centered P1 Notefield";
+const GAMEPLAY_ROW_ZMOD_RATING_BOX: &str = "Zmod Rating Box";
+const GAMEPLAY_ROW_BPM_DECIMAL: &str = "Show Decimal in BPM";
 const SCORE_IMPORT_ROW_ENDPOINT: &str = "API Endpoint";
 const SCORE_IMPORT_ROW_PROFILE: &str = "Profile";
 const SCORE_IMPORT_ROW_PACK: &str = "Pack";
@@ -890,25 +896,43 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
 
 pub const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: "BG Brightness",
+        label: GAMEPLAY_ROW_BG_BRIGHTNESS,
         choices: &BG_BRIGHTNESS_CHOICES,
         inline: false,
     },
     SubRow {
-        label: "Centered P1 Notefield",
+        label: GAMEPLAY_ROW_CENTERED_P1,
         choices: &CENTERED_P1_NOTEFIELD_CHOICES,
+        inline: true,
+    },
+    SubRow {
+        label: GAMEPLAY_ROW_ZMOD_RATING_BOX,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: GAMEPLAY_ROW_BPM_DECIMAL,
+        choices: &["Off", "On"],
         inline: true,
     },
 ];
 
 pub const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
     Item {
-        name: "BG Brightness",
+        name: GAMEPLAY_ROW_BG_BRIGHTNESS,
         help: &["Adjust the background brightness during gameplay."],
     },
     Item {
-        name: "Centered P1 Notefield",
+        name: GAMEPLAY_ROW_CENTERED_P1,
         help: &["Center the active single-player notefield during gameplay."],
+    },
+    Item {
+        name: GAMEPLAY_ROW_ZMOD_RATING_BOX,
+        help: &["Show the zmod-style difficulty text label with the rating box in gameplay/eval."],
+    },
+    Item {
+        name: GAMEPLAY_ROW_BPM_DECIMAL,
+        help: &["Show one decimal place for live gameplay BPM when BPM is non-integer."],
     },
     Item {
         name: "Exit",
@@ -2427,14 +2451,26 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_gameplay,
         GAMEPLAY_OPTIONS_ROWS,
-        "BG Brightness",
+        GAMEPLAY_ROW_BG_BRIGHTNESS,
         bg_brightness_choice_index(cfg.bg_brightness),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_gameplay,
         GAMEPLAY_OPTIONS_ROWS,
-        "Centered P1 Notefield",
+        GAMEPLAY_ROW_CENTERED_P1,
         usize::from(cfg.center_1player_notefield),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_gameplay,
+        GAMEPLAY_OPTIONS_ROWS,
+        GAMEPLAY_ROW_ZMOD_RATING_BOX,
+        usize::from(cfg.zmod_rating_box_text),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_gameplay,
+        GAMEPLAY_OPTIONS_ROWS,
+        GAMEPLAY_ROW_BPM_DECIMAL,
+        usize::from(cfg.show_bpm_decimal),
     );
 
     set_choice_by_label(
@@ -3409,10 +3445,14 @@ fn apply_submenu_choice_delta(
         }
     } else if matches!(kind, SubmenuKind::Gameplay) {
         let row = &rows[row_index];
-        if row.label == "BG Brightness" {
+        if row.label == GAMEPLAY_ROW_BG_BRIGHTNESS {
             config::update_bg_brightness(bg_brightness_from_choice(new_index));
-        } else if row.label == "Centered P1 Notefield" {
+        } else if row.label == GAMEPLAY_ROW_CENTERED_P1 {
             config::update_center_1player_notefield(new_index == 1);
+        } else if row.label == GAMEPLAY_ROW_ZMOD_RATING_BOX {
+            config::update_zmod_rating_box_text(new_index == 1);
+        } else if row.label == GAMEPLAY_ROW_BPM_DECIMAL {
+            config::update_show_bpm_decimal(new_index == 1);
         }
     } else if matches!(kind, SubmenuKind::Sound) {
         let row = &rows[row_index];
