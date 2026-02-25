@@ -178,6 +178,7 @@ struct CourseMeta {
     max_bpm: Option<f64>,
     total_length_seconds: i32,
     has_random_entries: bool,
+    has_most_played_entries: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -777,6 +778,7 @@ fn build_init_data() -> InitData {
         let mut max_bpm = None;
         let mut used_song_keys = HashSet::new();
         let mut has_random_entries = false;
+        let mut has_most_played_entries = false;
         let random_seed = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0_u64, |d| d.as_nanos() as u64);
@@ -788,6 +790,15 @@ fn build_init_data() -> InitData {
                     | rssp::course::CourseSong::RandomWithinGroup { .. }
             ) {
                 has_random_entries = true;
+            }
+            if matches!(
+                &entry.song,
+                rssp::course::CourseSong::SortPick {
+                    sort: rssp::course::SongSort::MostPlays,
+                    ..
+                }
+            ) {
+                has_most_played_entries = true;
             }
 
             let resolved = resolve_entry_song(
@@ -970,6 +981,7 @@ fn build_init_data() -> InitData {
             max_bpm: meta_max_bpm,
             total_length_seconds: meta_total_length_seconds,
             has_random_entries,
+            has_most_played_entries,
         });
 
         grouped.entry(group_name).or_default().push(meta.clone());
@@ -1001,10 +1013,57 @@ fn build_init_data() -> InitData {
 }
 
 fn rebuild_displayed_entries(state: &mut State) {
-    state.entries = state.all_entries.clone();
-    if state.entries.is_empty() {
-        state.wheel_offset_from_selection = 0.0;
+    let selected_path = match state.entries.get(state.selected_index) {
+        Some(MusicWheelEntry::Song(song)) => Some(song.simfile_path.clone()),
+        _ => None,
+    };
+    let cfg = crate::config::get();
+    state.entries.clear();
+    state.entries.reserve(state.all_entries.len());
+    for entry in &state.all_entries {
+        let include = match entry {
+            MusicWheelEntry::Song(song) => state.course_meta_by_path.get(&song.simfile_path).is_none_or(
+                |meta| {
+                    (cfg.show_random_courses || !meta.has_random_entries)
+                        && (cfg.show_most_played_courses || !meta.has_most_played_entries)
+                },
+            ),
+            _ => true,
+        };
+        if include {
+            state.entries.push(entry.clone());
+        }
     }
+    if state.entries.is_empty() {
+        state.selected_index = 0;
+        state.prev_selected_index = 0;
+        state.wheel_offset_from_selection = 0.0;
+        state.time_since_selection_change = 0.0;
+        state.last_requested_banner_path = None;
+        state.banner_high_quality_requested = false;
+        state.last_rating_nav_dir_p1 = None;
+        state.last_rating_nav_time_p1 = None;
+        state.last_rating_nav_dir_p2 = None;
+        state.last_rating_nav_time_p2 = None;
+        return;
+    }
+    if let Some(path) = selected_path
+        && let Some(index) = state.entries.iter().position(
+            |entry| matches!(entry, MusicWheelEntry::Song(song) if song.simfile_path == path),
+        )
+    {
+        state.selected_index = index;
+    }
+    state.selected_index = state.selected_index.min(state.entries.len().saturating_sub(1));
+    state.prev_selected_index = state.selected_index;
+    state.wheel_offset_from_selection = 0.0;
+    state.time_since_selection_change = 0.0;
+    state.last_requested_banner_path = None;
+    state.banner_high_quality_requested = false;
+    state.last_rating_nav_dir_p1 = None;
+    state.last_rating_nav_time_p1 = None;
+    state.last_rating_nav_dir_p2 = None;
+    state.last_rating_nav_time_p2 = None;
 }
 
 fn selected_course_meta(state: &State) -> Option<Arc<CourseMeta>> {
@@ -1590,6 +1649,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 #[inline(always)]
 pub fn trigger_immediate_refresh(state: &mut State) {
+    rebuild_displayed_entries(state);
     state.time_since_selection_change = BANNER_UPDATE_DELAY_SECONDS;
     state.last_requested_banner_path = None;
     state.banner_high_quality_requested = false;

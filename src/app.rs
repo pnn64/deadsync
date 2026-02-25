@@ -26,6 +26,7 @@ use winit::{
 
 use log::{error, info, warn};
 use std::cmp;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::{
     error::Error,
@@ -307,6 +308,7 @@ pub struct SessionState {
     preferred_difficulty_index: usize,
     session_start_time: Option<Instant>,
     played_stages: Vec<stage_stats::StageSummary>,
+    course_individual_stage_indices: Vec<usize>,
     combo_carry: [u32; crate::game::gameplay::MAX_PLAYERS],
     gameplay_restart_count: u32,
     course_run: Option<CourseRunState>,
@@ -440,6 +442,7 @@ impl SessionState {
             preferred_difficulty_index,
             session_start_time: None,
             played_stages: Vec::new(),
+            course_individual_stage_indices: Vec::new(),
             combo_carry,
             gameplay_restart_count: 0,
             course_run: None,
@@ -2110,6 +2113,7 @@ impl App {
         &mut self,
         eval_state: &evaluation::State,
     ) -> Option<stage_stats::StageSummary> {
+        let in_course_run = self.state.session.course_run.is_some();
         let stage_summary = stage_summary_from_eval(eval_state);
         if let Some(stage) = stage_summary.as_ref() {
             for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
@@ -2118,17 +2122,45 @@ impl App {
                 }
             }
             self.state.session.played_stages.push(stage.clone());
+            if in_course_run {
+                self.state
+                    .session
+                    .course_individual_stage_indices
+                    .push(self.state.session.played_stages.len().saturating_sub(1));
+            }
         }
         if let Some(course_run) = self.state.session.course_run.as_mut() {
             if let Some(stage) = stage_summary.as_ref() {
                 course_run.stage_summaries.push(stage.clone());
             }
-            let mut stage_page = eval_state.clone();
-            stage_page.return_to_course = true;
-            stage_page.auto_advance_seconds = None;
-            course_run.stage_eval_pages.push(stage_page);
+            if config::get().show_course_individual_scores {
+                let mut stage_page = eval_state.clone();
+                stage_page.return_to_course = true;
+                stage_page.auto_advance_seconds = None;
+                course_run.stage_eval_pages.push(stage_page);
+            }
         }
         stage_summary
+    }
+
+    fn post_select_display_stages(&self) -> Cow<'_, [stage_stats::StageSummary]> {
+        let stages = &self.state.session.played_stages;
+        let hidden = &self.state.session.course_individual_stage_indices;
+        if config::get().show_course_individual_scores || hidden.is_empty() || stages.is_empty() {
+            return Cow::Borrowed(stages.as_slice());
+        }
+        let mut filtered = Vec::with_capacity(stages.len().saturating_sub(hidden.len()));
+        let mut hidden_idx = 0usize;
+        for (idx, stage) in stages.iter().enumerate() {
+            while hidden_idx < hidden.len() && hidden[hidden_idx] < idx {
+                hidden_idx = hidden_idx.saturating_add(1);
+            }
+            if hidden_idx < hidden.len() && hidden[hidden_idx] == idx {
+                continue;
+            }
+            filtered.push(stage.clone());
+        }
+        Cow::Owned(filtered)
     }
 
     fn step_course_eval_page(&mut self, delta: i32) {
@@ -2441,11 +2473,14 @@ impl App {
                 &mut self.state.screens.evaluation_state,
                 &ev,
             ),
-            CurrentScreen::EvaluationSummary => crate::screens::evaluation_summary::handle_input(
-                &mut self.state.screens.evaluation_summary_state,
-                self.state.session.played_stages.len(),
-                &ev,
-            ),
+            CurrentScreen::EvaluationSummary => {
+                let num_stages = self.post_select_display_stages().len();
+                crate::screens::evaluation_summary::handle_input(
+                    &mut self.state.screens.evaluation_summary_state,
+                    num_stages,
+                    &ev,
+                )
+            }
             CurrentScreen::Initials => {
                 crate::screens::initials::handle_input(&mut self.state.screens.initials_state, &ev)
             }
@@ -3107,16 +3142,18 @@ impl App {
             CurrentScreen::Evaluation => {
                 evaluation::get_actors(&self.state.screens.evaluation_state, &self.asset_manager)
             }
-            CurrentScreen::EvaluationSummary => evaluation_summary::get_actors(
-                &self.state.screens.evaluation_summary_state,
-                &self.state.session.played_stages,
-                &self.asset_manager,
-            ),
-            CurrentScreen::Initials => initials::get_actors(
-                &self.state.screens.initials_state,
-                &self.state.session.played_stages,
-                &self.asset_manager,
-            ),
+            CurrentScreen::EvaluationSummary => {
+                let stages = self.post_select_display_stages();
+                evaluation_summary::get_actors(
+                    &self.state.screens.evaluation_summary_state,
+                    &stages,
+                    &self.asset_manager,
+                )
+            }
+            CurrentScreen::Initials => {
+                let stages = self.post_select_display_stages();
+                initials::get_actors(&self.state.screens.initials_state, &stages, &self.asset_manager)
+            }
             CurrentScreen::GameOver => gameover::get_actors(
                 &self.state.screens.gameover_state,
                 &self.state.session.played_stages,
@@ -4073,6 +4110,7 @@ impl App {
         if target == CurrentScreen::Menu {
             self.state.session.session_start_time = None;
             self.state.session.played_stages.clear();
+            self.state.session.course_individual_stage_indices.clear();
             self.state.session.combo_carry = combo_carry_from_profiles();
             self.clear_course_runtime();
             self.state.session.last_course_wheel_path = None;
@@ -4586,8 +4624,9 @@ impl App {
                 .evaluation_summary_state
                 .active_color_index = color_idx;
 
+            let display_stages = self.post_select_display_stages().into_owned();
             if let Some(backend) = self.backend.as_mut() {
-                for stage in &self.state.session.played_stages {
+                for stage in display_stages.iter() {
                     if let Some(path) = stage.song.banner_path.as_ref() {
                         self.asset_manager.ensure_texture_from_path(backend, path);
                     }
@@ -4614,13 +4653,14 @@ impl App {
             };
             self.state.screens.initials_state = initials::init();
             self.state.screens.initials_state.active_color_index = color_idx;
+            let display_stages = self.post_select_display_stages().into_owned();
             initials::set_highscore_lists(
                 &mut self.state.screens.initials_state,
-                &self.state.session.played_stages,
+                &display_stages,
             );
 
             if let Some(backend) = self.backend.as_mut() {
-                for stage in &self.state.session.played_stages {
+                for stage in display_stages.iter() {
                     if let Some(path) = stage.song.banner_path.as_ref() {
                         self.asset_manager.ensure_texture_from_path(backend, path);
                     }
@@ -4655,6 +4695,7 @@ impl App {
             if self.state.session.session_start_time.is_none() {
                 self.state.session.session_start_time = Some(Instant::now());
                 self.state.session.played_stages.clear();
+                self.state.session.course_individual_stage_indices.clear();
                 info!("Session timer started.");
             }
 
@@ -4914,6 +4955,7 @@ impl App {
             if self.state.session.session_start_time.is_none() {
                 self.state.session.session_start_time = Some(Instant::now());
                 self.state.session.played_stages.clear();
+                self.state.session.course_individual_stage_indices.clear();
                 info!("Session timer started.");
             }
 

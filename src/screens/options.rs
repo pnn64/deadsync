@@ -266,7 +266,13 @@ pub const ITEMS: &[Item] = &[
     },
     Item {
         name: "Course Options",
-        help: &["Adjust options related to course selection and course play behavior."],
+        help: &[
+            "Adjust options related to course selection and course play behavior.",
+            COURSE_ROW_SHOW_RANDOM,
+            COURSE_ROW_SHOW_MOST_PLAYED,
+            COURSE_ROW_SHOW_INDIVIDUAL_SCORES,
+            COURSE_ROW_AUTOSUBMIT_INDIVIDUAL_SCORES,
+        ],
     },
     Item {
         name: "Manage Local Profiles",
@@ -275,25 +281,12 @@ pub const ITEMS: &[Item] = &[
         ],
     },
     Item {
-        name: "GrooveStats Options",
+        name: "Online Scoring Options",
         help: &[
-            "Manage GrooveStats settings.",
-            "Enable GrooveStats",
-            "Auto Populate GS Scores",
-        ],
-    },
-    Item {
-        name: "Arrow Cloud Options",
-        help: &["Configure Arrow Cloud integration and related display behavior."],
-    },
-    Item {
-        name: "Score Import",
-        help: &[
-            "Import online score data for a selected endpoint/profile and pack scope.",
-            "API Endpoint",
-            "Profile",
-            "Pack",
-            "Start",
+            "Configure online score services and import tools.",
+            ONLINE_SCORING_ROW_GS_BS,
+            ONLINE_SCORING_ROW_ARROWCLOUD,
+            ONLINE_SCORING_ROW_SCORE_IMPORT,
         ],
     },
     Item {
@@ -322,13 +315,21 @@ pub enum SubmenuKind {
     Graphics,
     Input,
     InputBackend,
+    OnlineScoring,
     Machine,
     Advanced,
+    Course,
     Gameplay,
     Sound,
     SelectMusic,
     GrooveStats,
+    ArrowCloud,
     ScoreImport,
+}
+
+#[inline(always)]
+const fn is_launcher_submenu(kind: SubmenuKind) -> bool {
+    matches!(kind, SubmenuKind::Input | SubmenuKind::OnlineScoring)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -464,6 +465,7 @@ pub struct SubRow<'a> {
 }
 
 const GS_ROW_ENABLE: &str = "Enable GrooveStats";
+const GS_ROW_ENABLE_BOOGIE: &str = "Enable BoogieStats";
 const GS_ROW_AUTO_POPULATE: &str = "Auto Populate GS Scores";
 const INPUT_ROW_CONFIGURE_MAPPINGS: &str = "Configure Keyboard/Pad Mappings";
 const INPUT_ROW_TEST: &str = "Test Input";
@@ -512,6 +514,15 @@ const ADVANCED_ROW_BANNER_SCALE_DIVISOR: &str = "Banner Cache Scale Divisor";
 const ADVANCED_ROW_SONG_PARSING_THREADS: &str = "Song Parsing Threads";
 const ADVANCED_ROW_CACHE_SONGS: &str = "Cache Songs";
 const ADVANCED_ROW_FAST_LOAD: &str = "Fast Load";
+const COURSE_ROW_SHOW_RANDOM: &str = "Show Random Courses";
+const COURSE_ROW_SHOW_MOST_PLAYED: &str = "Show Most Played";
+const COURSE_ROW_SHOW_INDIVIDUAL_SCORES: &str = "Show Individual Scores for Course";
+const COURSE_ROW_AUTOSUBMIT_INDIVIDUAL_SCORES: &str =
+    "Autosubmit Scores in Courses Individually";
+const ONLINE_SCORING_ROW_GS_BS: &str = "GrooveStats / BoogieStats Options";
+const ONLINE_SCORING_ROW_ARROWCLOUD: &str = "ArrowCloud Options";
+const ONLINE_SCORING_ROW_SCORE_IMPORT: &str = "Score Import";
+const ARROWCLOUD_ROW_ENABLE: &str = "Enable ArrowCloud";
 const GAMEPLAY_ROW_BG_BRIGHTNESS: &str = "BG Brightness";
 const GAMEPLAY_ROW_CENTERED_P1: &str = "Centered P1 Notefield";
 const GAMEPLAY_ROW_ZMOD_RATING_BOX: &str = "Zmod Rating Box";
@@ -955,6 +966,52 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
+pub const COURSE_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: COURSE_ROW_SHOW_RANDOM,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
+        label: COURSE_ROW_SHOW_MOST_PLAYED,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
+        label: COURSE_ROW_SHOW_INDIVIDUAL_SCORES,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
+        label: COURSE_ROW_AUTOSUBMIT_INDIVIDUAL_SCORES,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+];
+
+pub const COURSE_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: COURSE_ROW_SHOW_RANDOM,
+        help: &["Show or hide courses that contain random stage entries (e.g. RANDOM/group/*)."],
+    },
+    Item {
+        name: COURSE_ROW_SHOW_MOST_PLAYED,
+        help: &["Show or hide courses that contain MostPlayed/BEST sort-pick entries."],
+    },
+    Item {
+        name: COURSE_ROW_SHOW_INDIVIDUAL_SCORES,
+        help: &["When No, course per-song score pages are hidden in Evaluation and end flow."],
+    },
+    Item {
+        name: COURSE_ROW_AUTOSUBMIT_INDIVIDUAL_SCORES,
+        help: &["Enable per-song course autosubmit behavior (stored for parity wiring)."],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
+
 pub const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: GAMEPLAY_ROW_BG_BRIGHTNESS,
@@ -1345,9 +1402,38 @@ pub const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: GS_ROW_ENABLE_BOOGIE,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
         label: GS_ROW_AUTO_POPULATE,
         choices: &["No", "Yes"],
         inline: true,
+    },
+];
+
+pub const ARROWCLOUD_OPTIONS_ROWS: &[SubRow] = &[SubRow {
+    label: ARROWCLOUD_ROW_ENABLE,
+    choices: &["No", "Yes"],
+    inline: true,
+}];
+
+pub const ONLINE_SCORING_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: ONLINE_SCORING_ROW_GS_BS,
+        choices: &[],
+        inline: false,
+    },
+    SubRow {
+        label: ONLINE_SCORING_ROW_ARROWCLOUD,
+        choices: &[],
+        inline: false,
+    },
+    SubRow {
+        label: ONLINE_SCORING_ROW_SCORE_IMPORT,
+        choices: &[],
+        inline: false,
     },
 ];
 
@@ -1385,8 +1471,45 @@ pub const GROOVESTATS_OPTIONS_ITEMS: &[Item] = &[
         help: &["Enable connection to GrooveStats services."],
     },
     Item {
+        name: GS_ROW_ENABLE_BOOGIE,
+        help: &[
+            "Switch GrooveStats service URLs to BoogieStats endpoints.",
+            "Requires Enable GrooveStats to be On.",
+        ],
+    },
+    Item {
         name: GS_ROW_AUTO_POPULATE,
         help: &["Import GS grade/lamp/score when scorebox leaderboard requests complete."],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
+
+pub const ARROWCLOUD_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: ARROWCLOUD_ROW_ENABLE,
+        help: &["Enable connection to ArrowCloud services."],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the previous menu."],
+    },
+];
+
+pub const ONLINE_SCORING_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: ONLINE_SCORING_ROW_GS_BS,
+        help: &["Open GrooveStats / BoogieStats settings."],
+    },
+    Item {
+        name: ONLINE_SCORING_ROW_ARROWCLOUD,
+        help: &["Open ArrowCloud settings."],
+    },
+    Item {
+        name: ONLINE_SCORING_ROW_SCORE_IMPORT,
+        help: &["Open score import tools and endpoint/profile selection."],
     },
     Item {
         name: "Exit",
@@ -1444,12 +1567,15 @@ const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ROWS,
         SubmenuKind::Input => INPUT_OPTIONS_ROWS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ROWS,
+        SubmenuKind::OnlineScoring => ONLINE_SCORING_OPTIONS_ROWS,
         SubmenuKind::Machine => MACHINE_OPTIONS_ROWS,
         SubmenuKind::Advanced => ADVANCED_OPTIONS_ROWS,
+        SubmenuKind::Course => COURSE_OPTIONS_ROWS,
         SubmenuKind::Gameplay => GAMEPLAY_OPTIONS_ROWS,
         SubmenuKind::Sound => SOUND_OPTIONS_ROWS,
         SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ROWS,
         SubmenuKind::GrooveStats => GROOVESTATS_OPTIONS_ROWS,
+        SubmenuKind::ArrowCloud => ARROWCLOUD_OPTIONS_ROWS,
         SubmenuKind::ScoreImport => SCORE_IMPORT_OPTIONS_ROWS,
     }
 }
@@ -1460,12 +1586,15 @@ const fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ITEMS,
         SubmenuKind::Input => INPUT_OPTIONS_ITEMS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ITEMS,
+        SubmenuKind::OnlineScoring => ONLINE_SCORING_OPTIONS_ITEMS,
         SubmenuKind::Machine => MACHINE_OPTIONS_ITEMS,
         SubmenuKind::Advanced => ADVANCED_OPTIONS_ITEMS,
+        SubmenuKind::Course => COURSE_OPTIONS_ITEMS,
         SubmenuKind::Gameplay => GAMEPLAY_OPTIONS_ITEMS,
         SubmenuKind::Sound => SOUND_OPTIONS_ITEMS,
         SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ITEMS,
         SubmenuKind::GrooveStats => GROOVESTATS_OPTIONS_ITEMS,
+        SubmenuKind::ArrowCloud => ARROWCLOUD_OPTIONS_ITEMS,
         SubmenuKind::ScoreImport => SCORE_IMPORT_OPTIONS_ITEMS,
     }
 }
@@ -1476,12 +1605,15 @@ const fn submenu_title(kind: SubmenuKind) -> &'static str {
         SubmenuKind::Graphics => "GRAPHICS OPTIONS",
         SubmenuKind::Input => "INPUT OPTIONS",
         SubmenuKind::InputBackend => "INPUT OPTIONS",
+        SubmenuKind::OnlineScoring => "ONLINE SCORING OPTIONS",
         SubmenuKind::Machine => "MACHINE OPTIONS",
         SubmenuKind::Advanced => "ADVANCED OPTIONS",
+        SubmenuKind::Course => "COURSE OPTIONS",
         SubmenuKind::Gameplay => "GAMEPLAY OPTIONS",
         SubmenuKind::Sound => "SOUND OPTIONS",
         SubmenuKind::SelectMusic => "SELECT MUSIC OPTIONS",
         SubmenuKind::GrooveStats => "GROOVESTATS OPTIONS",
+        SubmenuKind::ArrowCloud => "ARROWCLOUD OPTIONS",
         SubmenuKind::ScoreImport => "SCORE IMPORT",
     }
 }
@@ -2603,24 +2735,30 @@ pub struct State {
     sub_choice_indices_graphics: Vec<usize>,
     sub_choice_indices_input: Vec<usize>,
     sub_choice_indices_input_backend: Vec<usize>,
+    sub_choice_indices_online_scoring: Vec<usize>,
     sub_choice_indices_machine: Vec<usize>,
     sub_choice_indices_advanced: Vec<usize>,
+    sub_choice_indices_course: Vec<usize>,
     sub_choice_indices_gameplay: Vec<usize>,
     sub_choice_indices_sound: Vec<usize>,
     sub_choice_indices_select_music: Vec<usize>,
     sub_choice_indices_groovestats: Vec<usize>,
+    sub_choice_indices_arrowcloud: Vec<usize>,
     sub_choice_indices_score_import: Vec<usize>,
     system_noteskin_choices: Vec<String>,
     sub_cursor_indices_system: Vec<usize>,
     sub_cursor_indices_graphics: Vec<usize>,
     sub_cursor_indices_input: Vec<usize>,
     sub_cursor_indices_input_backend: Vec<usize>,
+    sub_cursor_indices_online_scoring: Vec<usize>,
     sub_cursor_indices_machine: Vec<usize>,
     sub_cursor_indices_advanced: Vec<usize>,
+    sub_cursor_indices_course: Vec<usize>,
     sub_cursor_indices_gameplay: Vec<usize>,
     sub_cursor_indices_sound: Vec<usize>,
     sub_cursor_indices_select_music: Vec<usize>,
     sub_cursor_indices_groovestats: Vec<usize>,
+    sub_cursor_indices_arrowcloud: Vec<usize>,
     sub_cursor_indices_score_import: Vec<usize>,
     score_import_profiles: Vec<ScoreImportProfileConfig>,
     score_import_profile_choices: Vec<String>,
@@ -2701,24 +2839,30 @@ pub fn init() -> State {
         sub_choice_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         sub_choice_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
         sub_choice_indices_input_backend: vec![0; INPUT_BACKEND_OPTIONS_ROWS.len()],
+        sub_choice_indices_online_scoring: vec![0; ONLINE_SCORING_OPTIONS_ROWS.len()],
         sub_choice_indices_machine: vec![0; MACHINE_OPTIONS_ROWS.len()],
         sub_choice_indices_advanced: vec![0; ADVANCED_OPTIONS_ROWS.len()],
+        sub_choice_indices_course: vec![0; COURSE_OPTIONS_ROWS.len()],
         sub_choice_indices_gameplay: vec![0; GAMEPLAY_OPTIONS_ROWS.len()],
         sub_choice_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         sub_choice_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
         sub_choice_indices_groovestats: vec![0; GROOVESTATS_OPTIONS_ROWS.len()],
+        sub_choice_indices_arrowcloud: vec![0; ARROWCLOUD_OPTIONS_ROWS.len()],
         sub_choice_indices_score_import: vec![0; SCORE_IMPORT_OPTIONS_ROWS.len()],
         system_noteskin_choices,
         sub_cursor_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_cursor_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         sub_cursor_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
         sub_cursor_indices_input_backend: vec![0; INPUT_BACKEND_OPTIONS_ROWS.len()],
+        sub_cursor_indices_online_scoring: vec![0; ONLINE_SCORING_OPTIONS_ROWS.len()],
         sub_cursor_indices_machine: vec![0; MACHINE_OPTIONS_ROWS.len()],
         sub_cursor_indices_advanced: vec![0; ADVANCED_OPTIONS_ROWS.len()],
+        sub_cursor_indices_course: vec![0; COURSE_OPTIONS_ROWS.len()],
         sub_cursor_indices_gameplay: vec![0; GAMEPLAY_OPTIONS_ROWS.len()],
         sub_cursor_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         sub_cursor_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
         sub_cursor_indices_groovestats: vec![0; GROOVESTATS_OPTIONS_ROWS.len()],
+        sub_cursor_indices_arrowcloud: vec![0; ARROWCLOUD_OPTIONS_ROWS.len()],
         sub_cursor_indices_score_import: vec![0; SCORE_IMPORT_OPTIONS_ROWS.len()],
         score_import_profiles: Vec::new(),
         score_import_profile_choices: vec!["No eligible profiles".to_string()],
@@ -2942,6 +3086,30 @@ pub fn init() -> State {
         usize::from(cfg.fastload),
     );
     set_choice_by_label(
+        &mut state.sub_choice_indices_course,
+        COURSE_OPTIONS_ROWS,
+        COURSE_ROW_SHOW_RANDOM,
+        usize::from(cfg.show_random_courses),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_course,
+        COURSE_OPTIONS_ROWS,
+        COURSE_ROW_SHOW_MOST_PLAYED,
+        usize::from(cfg.show_most_played_courses),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_course,
+        COURSE_OPTIONS_ROWS,
+        COURSE_ROW_SHOW_INDIVIDUAL_SCORES,
+        usize::from(cfg.show_course_individual_scores),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_course,
+        COURSE_OPTIONS_ROWS,
+        COURSE_ROW_AUTOSUBMIT_INDIVIDUAL_SCORES,
+        usize::from(cfg.autosubmit_course_scores_individually),
+    );
+    set_choice_by_label(
         &mut state.sub_choice_indices_gameplay,
         GAMEPLAY_OPTIONS_ROWS,
         GAMEPLAY_ROW_BG_BRIGHTNESS,
@@ -3089,8 +3257,20 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
+        GS_ROW_ENABLE_BOOGIE,
+        usize::from(cfg.enable_boogiestats),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_groovestats,
+        GROOVESTATS_OPTIONS_ROWS,
         GS_ROW_AUTO_POPULATE,
         usize::from(cfg.auto_populate_gs_scores),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_arrowcloud,
+        ARROWCLOUD_OPTIONS_ROWS,
+        ARROWCLOUD_ROW_ENABLE,
+        usize::from(cfg.enable_arrowcloud),
     );
     refresh_score_import_options(&mut state);
     sync_submenu_cursor_indices(&mut state);
@@ -3103,12 +3283,15 @@ fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::Graphics => &state.sub_choice_indices_graphics,
         SubmenuKind::Input => &state.sub_choice_indices_input,
         SubmenuKind::InputBackend => &state.sub_choice_indices_input_backend,
+        SubmenuKind::OnlineScoring => &state.sub_choice_indices_online_scoring,
         SubmenuKind::Machine => &state.sub_choice_indices_machine,
         SubmenuKind::Advanced => &state.sub_choice_indices_advanced,
+        SubmenuKind::Course => &state.sub_choice_indices_course,
         SubmenuKind::Gameplay => &state.sub_choice_indices_gameplay,
         SubmenuKind::Sound => &state.sub_choice_indices_sound,
         SubmenuKind::SelectMusic => &state.sub_choice_indices_select_music,
         SubmenuKind::GrooveStats => &state.sub_choice_indices_groovestats,
+        SubmenuKind::ArrowCloud => &state.sub_choice_indices_arrowcloud,
         SubmenuKind::ScoreImport => &state.sub_choice_indices_score_import,
     }
 }
@@ -3119,12 +3302,15 @@ const fn submenu_choice_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::Graphics => &mut state.sub_choice_indices_graphics,
         SubmenuKind::Input => &mut state.sub_choice_indices_input,
         SubmenuKind::InputBackend => &mut state.sub_choice_indices_input_backend,
+        SubmenuKind::OnlineScoring => &mut state.sub_choice_indices_online_scoring,
         SubmenuKind::Machine => &mut state.sub_choice_indices_machine,
         SubmenuKind::Advanced => &mut state.sub_choice_indices_advanced,
+        SubmenuKind::Course => &mut state.sub_choice_indices_course,
         SubmenuKind::Gameplay => &mut state.sub_choice_indices_gameplay,
         SubmenuKind::Sound => &mut state.sub_choice_indices_sound,
         SubmenuKind::SelectMusic => &mut state.sub_choice_indices_select_music,
         SubmenuKind::GrooveStats => &mut state.sub_choice_indices_groovestats,
+        SubmenuKind::ArrowCloud => &mut state.sub_choice_indices_arrowcloud,
         SubmenuKind::ScoreImport => &mut state.sub_choice_indices_score_import,
     }
 }
@@ -3135,12 +3321,15 @@ fn submenu_cursor_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::Graphics => &state.sub_cursor_indices_graphics,
         SubmenuKind::Input => &state.sub_cursor_indices_input,
         SubmenuKind::InputBackend => &state.sub_cursor_indices_input_backend,
+        SubmenuKind::OnlineScoring => &state.sub_cursor_indices_online_scoring,
         SubmenuKind::Machine => &state.sub_cursor_indices_machine,
         SubmenuKind::Advanced => &state.sub_cursor_indices_advanced,
+        SubmenuKind::Course => &state.sub_cursor_indices_course,
         SubmenuKind::Gameplay => &state.sub_cursor_indices_gameplay,
         SubmenuKind::Sound => &state.sub_cursor_indices_sound,
         SubmenuKind::SelectMusic => &state.sub_cursor_indices_select_music,
         SubmenuKind::GrooveStats => &state.sub_cursor_indices_groovestats,
+        SubmenuKind::ArrowCloud => &state.sub_cursor_indices_arrowcloud,
         SubmenuKind::ScoreImport => &state.sub_cursor_indices_score_import,
     }
 }
@@ -3151,12 +3340,15 @@ const fn submenu_cursor_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::Graphics => &mut state.sub_cursor_indices_graphics,
         SubmenuKind::Input => &mut state.sub_cursor_indices_input,
         SubmenuKind::InputBackend => &mut state.sub_cursor_indices_input_backend,
+        SubmenuKind::OnlineScoring => &mut state.sub_cursor_indices_online_scoring,
         SubmenuKind::Machine => &mut state.sub_cursor_indices_machine,
         SubmenuKind::Advanced => &mut state.sub_cursor_indices_advanced,
+        SubmenuKind::Course => &mut state.sub_cursor_indices_course,
         SubmenuKind::Gameplay => &mut state.sub_cursor_indices_gameplay,
         SubmenuKind::Sound => &mut state.sub_cursor_indices_sound,
         SubmenuKind::SelectMusic => &mut state.sub_cursor_indices_select_music,
         SubmenuKind::GrooveStats => &mut state.sub_cursor_indices_groovestats,
+        SubmenuKind::ArrowCloud => &mut state.sub_cursor_indices_arrowcloud,
         SubmenuKind::ScoreImport => &mut state.sub_cursor_indices_score_import,
     }
 }
@@ -3166,12 +3358,15 @@ fn sync_submenu_cursor_indices(state: &mut State) {
     state.sub_cursor_indices_graphics = state.sub_choice_indices_graphics.clone();
     state.sub_cursor_indices_input = state.sub_choice_indices_input.clone();
     state.sub_cursor_indices_input_backend = state.sub_choice_indices_input_backend.clone();
+    state.sub_cursor_indices_online_scoring = state.sub_choice_indices_online_scoring.clone();
     state.sub_cursor_indices_machine = state.sub_choice_indices_machine.clone();
     state.sub_cursor_indices_advanced = state.sub_choice_indices_advanced.clone();
+    state.sub_cursor_indices_course = state.sub_choice_indices_course.clone();
     state.sub_cursor_indices_gameplay = state.sub_choice_indices_gameplay.clone();
     state.sub_cursor_indices_sound = state.sub_choice_indices_sound.clone();
     state.sub_cursor_indices_select_music = state.sub_choice_indices_select_music.clone();
     state.sub_cursor_indices_groovestats = state.sub_choice_indices_groovestats.clone();
+    state.sub_cursor_indices_arrowcloud = state.sub_choice_indices_arrowcloud.clone();
     state.sub_cursor_indices_score_import = state.sub_choice_indices_score_import.clone();
 }
 
@@ -4041,6 +4236,20 @@ fn apply_submenu_choice_delta(
         } else if row.label == ADVANCED_ROW_FAST_LOAD {
             config::update_fastload(new_index == 1);
         }
+    } else if matches!(kind, SubmenuKind::Course) {
+        let row = &rows[row_index];
+        let enabled = new_index == 1;
+        match row.label {
+            COURSE_ROW_SHOW_RANDOM => config::update_show_random_courses(enabled),
+            COURSE_ROW_SHOW_MOST_PLAYED => config::update_show_most_played_courses(enabled),
+            COURSE_ROW_SHOW_INDIVIDUAL_SCORES => {
+                config::update_show_course_individual_scores(enabled)
+            }
+            COURSE_ROW_AUTOSUBMIT_INDIVIDUAL_SCORES => {
+                config::update_autosubmit_course_scores_individually(enabled)
+            }
+            _ => {}
+        }
     } else if matches!(kind, SubmenuKind::Gameplay) {
         let row = &rows[row_index];
         if row.label == GAMEPLAY_ROW_BG_BRIGHTNESS {
@@ -4117,8 +4326,17 @@ fn apply_submenu_choice_delta(
             config::update_enable_groovestats(enabled);
             // Re-run connectivity logic so toggling this option applies immediately.
             crate::core::network::init();
+        } else if row.label == GS_ROW_ENABLE_BOOGIE {
+            config::update_enable_boogiestats(new_index == 1);
+            crate::core::network::init();
         } else if row.label == GS_ROW_AUTO_POPULATE {
             config::update_auto_populate_gs_scores(new_index == 1);
+        }
+    } else if matches!(kind, SubmenuKind::ArrowCloud) {
+        let row = &rows[row_index];
+        if row.label == ARROWCLOUD_ROW_ENABLE {
+            config::update_enable_arrowcloud(new_index == 1);
+            crate::core::network::init();
         }
     } else if matches!(kind, SubmenuKind::ScoreImport) {
         let row = &rows[row_index];
@@ -4323,6 +4541,12 @@ pub fn handle_input(
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }
+                        "Course Options" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            state.pending_submenu_kind = Some(SubmenuKind::Course);
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                            state.submenu_fade_t = 0.0;
+                        }
                         "Gameplay Options" => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::Gameplay);
@@ -4342,16 +4566,9 @@ pub fn handle_input(
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }
-                        "GrooveStats Options" => {
+                        "Online Scoring Options" => {
                             audio::play_sfx("assets/sounds/start.ogg");
-                            state.pending_submenu_kind = Some(SubmenuKind::GrooveStats);
-                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
-                            state.submenu_fade_t = 0.0;
-                        }
-                        "Score Import" => {
-                            audio::play_sfx("assets/sounds/start.ogg");
-                            refresh_score_import_options(state);
-                            state.pending_submenu_kind = Some(SubmenuKind::ScoreImport);
+                            state.pending_submenu_kind = Some(SubmenuKind::OnlineScoring);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }
@@ -4413,6 +4630,43 @@ pub fn handle_input(
                                     audio::play_sfx("assets/sounds/start.ogg");
                                     state.pending_submenu_kind = Some(SubmenuKind::InputBackend);
                                     state.pending_submenu_parent_kind = Some(SubmenuKind::Input);
+                                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                                    state.submenu_fade_t = 0.0;
+                                }
+                                _ => {}
+                            }
+                        }
+                    } else if matches!(kind, SubmenuKind::OnlineScoring) {
+                        let rows = submenu_rows(kind);
+                        let Some(row_idx) =
+                            submenu_visible_row_to_actual(state, kind, selected_row)
+                        else {
+                            return ScreenAction::None;
+                        };
+                        if let Some(row) = rows.get(row_idx) {
+                            match row.label {
+                                ONLINE_SCORING_ROW_GS_BS => {
+                                    audio::play_sfx("assets/sounds/start.ogg");
+                                    state.pending_submenu_kind = Some(SubmenuKind::GrooveStats);
+                                    state.pending_submenu_parent_kind =
+                                        Some(SubmenuKind::OnlineScoring);
+                                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                                    state.submenu_fade_t = 0.0;
+                                }
+                                ONLINE_SCORING_ROW_ARROWCLOUD => {
+                                    audio::play_sfx("assets/sounds/start.ogg");
+                                    state.pending_submenu_kind = Some(SubmenuKind::ArrowCloud);
+                                    state.pending_submenu_parent_kind =
+                                        Some(SubmenuKind::OnlineScoring);
+                                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                                    state.submenu_fade_t = 0.0;
+                                }
+                                ONLINE_SCORING_ROW_SCORE_IMPORT => {
+                                    audio::play_sfx("assets/sounds/start.ogg");
+                                    refresh_score_import_options(state);
+                                    state.pending_submenu_kind = Some(SubmenuKind::ScoreImport);
+                                    state.pending_submenu_parent_kind =
+                                        Some(SubmenuKind::OnlineScoring);
                                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                                     state.submenu_fade_t = 0.0;
                                 }
@@ -4923,7 +5177,7 @@ fn submenu_cursor_dest(
     list_y: f32,
     list_w: f32,
 ) -> Option<(f32, f32, f32, f32)> {
-    if matches!(kind, SubmenuKind::Input) {
+    if is_launcher_submenu(kind) {
         return None;
     }
     let rows = submenu_rows(kind);
@@ -5338,7 +5592,7 @@ pub fn get_actors(
             let choice_indices = submenu_choice_indices(state, kind);
             let items = submenu_items(kind);
             let visible_rows = submenu_visible_row_indices(state, kind, rows);
-            if matches!(kind, SubmenuKind::Input) {
+            if is_launcher_submenu(kind) {
                 let col_active_text =
                     color::simply_love_rgba(state.active_color_index + state.sub_selected as i32);
                 let total_rows = rows.len() + 1;

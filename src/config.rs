@@ -346,6 +346,10 @@ pub struct Config {
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub show_select_music_scorebox: bool,
+    pub show_random_courses: bool,
+    pub show_most_played_courses: bool,
+    pub show_course_individual_scores: bool,
+    pub autosubmit_course_scores_individually: bool,
     pub global_offset_seconds: f32,
     pub visual_delay_seconds: f32,
     pub master_volume: u8,
@@ -417,6 +421,10 @@ impl Default for Config {
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             show_select_music_scorebox: true,
+            show_random_courses: true,
+            show_most_played_courses: true,
+            show_course_individual_scores: true,
+            autosubmit_course_scores_individually: true,
             global_offset_seconds: -0.008,
             visual_delay_seconds: 0.0,
             master_volume: 90,
@@ -526,6 +534,34 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "CourseAutosubmitScoresIndividually={}\n",
+        if default.autosubmit_course_scores_individually {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "CourseShowIndividualScores={}\n",
+        if default.show_course_individual_scores {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "CourseShowMostPlayed={}\n",
+        if default.show_most_played_courses {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "CourseShowRandom={}\n",
+        if default.show_random_courses { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "DefaultFailType={}\n",
@@ -952,6 +988,22 @@ pub fn load() {
                         _ => None,
                     })
                     .unwrap_or(default.center_1player_notefield);
+                cfg.autosubmit_course_scores_individually = conf
+                    .get("Options", "CourseAutosubmitScoresIndividually")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.autosubmit_course_scores_individually, |v| v != 0);
+                cfg.show_course_individual_scores = conf
+                    .get("Options", "CourseShowIndividualScores")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_course_individual_scores, |v| v != 0);
+                cfg.show_most_played_courses = conf
+                    .get("Options", "CourseShowMostPlayed")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_most_played_courses, |v| v != 0);
+                cfg.show_random_courses = conf
+                    .get("Options", "CourseShowRandom")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_random_courses, |v| v != 0);
                 cfg.default_fail_type = conf
                     .get("Options", "DefaultFailType")
                     .and_then(|v| DefaultFailType::from_str(&v).ok())
@@ -1382,6 +1434,10 @@ pub fn load() {
                     "BannerCacheScaleDivisor",
                     "CacheSongs",
                     "Center1Player",
+                    "CourseAutosubmitScoresIndividually",
+                    "CourseShowIndividualScores",
+                    "CourseShowMostPlayed",
+                    "CourseShowRandom",
                     "DefaultFailType",
                     "DefaultNoteSkin",
                     "DisplayHeight",
@@ -2136,6 +2192,34 @@ fn save_without_keymaps() {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "CourseAutosubmitScoresIndividually={}\n",
+        if cfg.autosubmit_course_scores_individually {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "CourseShowIndividualScores={}\n",
+        if cfg.show_course_individual_scores {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "CourseShowMostPlayed={}\n",
+        if cfg.show_most_played_courses {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "CourseShowRandom={}\n",
+        if cfg.show_random_courses { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "DefaultFailType={}\n",
@@ -2925,6 +3009,50 @@ pub fn update_show_select_music_scorebox(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_show_random_courses(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.show_random_courses == enabled {
+            return;
+        }
+        cfg.show_random_courses = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_most_played_courses(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.show_most_played_courses == enabled {
+            return;
+        }
+        cfg.show_most_played_courses = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_course_individual_scores(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.show_course_individual_scores == enabled {
+            return;
+        }
+        cfg.show_course_individual_scores = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_autosubmit_course_scores_individually(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.autosubmit_course_scores_individually == enabled {
+            return;
+        }
+        cfg.autosubmit_course_scores_individually = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_zmod_rating_box_text(enabled: bool) {
     {
         let mut cfg = CONFIG.lock().unwrap();
@@ -3053,6 +3181,28 @@ pub fn update_enable_groovestats(enabled: bool) {
             return;
         }
         cfg.enable_groovestats = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_enable_boogiestats(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.enable_boogiestats == enabled {
+            return;
+        }
+        cfg.enable_boogiestats = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_enable_arrowcloud(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.enable_arrowcloud == enabled {
+            return;
+        }
+        cfg.enable_arrowcloud = enabled;
     }
     save_without_keymaps();
 }
