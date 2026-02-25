@@ -2200,6 +2200,7 @@ pub struct State {
     cursor_t: f32,
     // Shared row tween state for the active view (main list or submenu list).
     row_tweens: Vec<RowTween>,
+    graphics_prev_visible_rows: Vec<usize>,
 }
 
 pub fn init() -> State {
@@ -2296,6 +2297,7 @@ pub fn init() -> State {
         cursor_to_h: 0.0,
         cursor_t: 1.0,
         row_tweens: Vec::new(),
+        graphics_prev_visible_rows: Vec::new(),
     };
 
     sync_video_renderer(&mut state, cfg.video_renderer);
@@ -2901,6 +2903,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 state.cursor_initialized = false;
                 state.cursor_t = 1.0;
                 state.row_tweens.clear();
+                state.graphics_prev_visible_rows.clear();
                 state.nav_key_held_direction = None;
                 state.nav_key_held_since = None;
                 state.nav_key_last_scrolled_at = None;
@@ -2956,6 +2959,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 state.cursor_initialized = false;
                 state.cursor_t = 1.0;
                 state.row_tweens.clear();
+                state.graphics_prev_visible_rows.clear();
                 state.nav_key_held_direction = None;
                 state.nav_key_held_since = None;
                 state.nav_key_last_scrolled_at = None;
@@ -3109,17 +3113,23 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 dt,
             );
             state.cursor_initialized = false;
+            state.graphics_prev_visible_rows.clear();
         }
         OptionsView::Submenu(kind) => {
-            let total_rows = submenu_total_rows(state, kind);
-            update_row_tweens(
-                &mut state.row_tweens,
-                total_rows,
-                state.sub_selected,
-                s,
-                list_y,
-                dt,
-            );
+            if matches!(kind, SubmenuKind::Graphics) {
+                update_graphics_row_tweens(state, s, list_y, dt);
+            } else {
+                let total_rows = submenu_total_rows(state, kind);
+                update_row_tweens(
+                    &mut state.row_tweens,
+                    total_rows,
+                    state.sub_selected,
+                    s,
+                    list_y,
+                    dt,
+                );
+                state.graphics_prev_visible_rows.clear();
+            }
             let list_w = LIST_W * s;
             if let Some((to_x, to_y, to_w, to_h)) =
                 submenu_cursor_dest(state, asset_manager, kind, s, list_x, list_y, list_w)
@@ -3912,6 +3922,95 @@ fn update_row_tweens(
             }
         }
     }
+}
+
+fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
+    let rows = submenu_rows(SubmenuKind::Graphics);
+    let visible_rows = submenu_visible_row_indices(state, SubmenuKind::Graphics, rows);
+    let total_rows = visible_rows.len() + 1;
+    if total_rows == 0 {
+        state.row_tweens.clear();
+        state.graphics_prev_visible_rows.clear();
+        return;
+    }
+
+    let selected = state.sub_selected.min(total_rows.saturating_sub(1));
+    let visibility_changed = state.graphics_prev_visible_rows != visible_rows;
+    if state.row_tweens.is_empty() {
+        state.row_tweens = init_row_tweens(total_rows, selected, s, list_y);
+    } else if state.row_tweens.len() != total_rows || visibility_changed {
+        let old_tweens = std::mem::take(&mut state.row_tweens);
+        let old_visible_rows = state.graphics_prev_visible_rows.clone();
+        let old_total_rows = old_visible_rows.len() + 1;
+
+        let parent_from = old_visible_rows
+            .iter()
+            .position(|&idx| idx == VIDEO_RENDERER_ROW_INDEX)
+            .and_then(|old_idx| old_tweens.get(old_idx))
+            .map(|tw| (tw.y(), tw.a()))
+            .unwrap_or_else(|| {
+                row_dest_for_index(total_rows, selected, VIDEO_RENDERER_ROW_INDEX, s, list_y)
+            });
+        let old_exit_from = old_tweens
+            .get(old_total_rows.saturating_sub(1))
+            .map(|tw| (tw.y(), tw.a()));
+
+        let mut mapped: Vec<RowTween> = Vec::with_capacity(total_rows);
+        for (new_idx, actual_idx) in visible_rows.iter().copied().enumerate() {
+            let (to_y, to_a) = row_dest_for_index(total_rows, selected, new_idx, s, list_y);
+            let (from_y, from_a) = old_visible_rows
+                .iter()
+                .position(|&old_actual| old_actual == actual_idx)
+                .and_then(|old_idx| old_tweens.get(old_idx).map(|tw| (tw.y(), tw.a())))
+                .or_else(|| {
+                    if actual_idx == SOFTWARE_THREADS_ROW_INDEX {
+                        Some((parent_from.0, 0.0))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or((to_y, to_a));
+            let t = if (to_y - from_y).abs() <= 0.01 && (to_a - from_a).abs() <= 0.001 {
+                1.0
+            } else {
+                0.0
+            };
+            mapped.push(RowTween {
+                from_y,
+                to_y,
+                from_a,
+                to_a,
+                t,
+            });
+        }
+
+        let exit_idx = total_rows.saturating_sub(1);
+        let (to_y, to_a) = row_dest_for_index(total_rows, selected, exit_idx, s, list_y);
+        let (from_y, from_a) = old_exit_from.unwrap_or((to_y, to_a));
+        let t = if (to_y - from_y).abs() <= 0.01 && (to_a - from_a).abs() <= 0.001 {
+            1.0
+        } else {
+            0.0
+        };
+        mapped.push(RowTween {
+            from_y,
+            to_y,
+            from_a,
+            to_a,
+            t,
+        });
+        state.row_tweens = mapped;
+    }
+
+    state.graphics_prev_visible_rows = visible_rows;
+    update_row_tweens(
+        &mut state.row_tweens,
+        total_rows,
+        selected,
+        s,
+        list_y,
+        dt,
+    );
 }
 
 #[inline(always)]
