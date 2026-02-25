@@ -5,7 +5,8 @@ use crate::core::gfx::BackendType;
 use crate::core::space::{screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::config::{
-    self, BreakdownStyle, DisplayMode, FullscreenType, SelectMusicPatternInfoMode, SimpleIni,
+    self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType,
+    SelectMusicPatternInfoMode, SimpleIni,
 };
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
@@ -251,14 +252,16 @@ pub const ITEMS: &[Item] = &[
     Item {
         name: "Advanced Options",
         help: &[
-            "Adjust advanced settings for difficulty scaling, default fail type, song deletion, and more.",
-            "DefaultFailType",
-            "TimingWindowScale",
-            "LifeDifficulty",
-            "HiddenSongs",
-            "EasterEggs",
-            "AllowExtraStage",
-            "...",
+            "Adjust machine-level fail and cache/parsing behavior.",
+            "Default Fail Type",
+            "Banner Cache",
+            "Banner Cache Color Depth",
+            "Banner Cache Min Dimension",
+            "Banner Cache Pow2",
+            "Banner Cache Scale Divisor",
+            "Song Parsing Threads",
+            "Cache Songs",
+            "Fast Load",
         ],
     },
     Item {
@@ -294,10 +297,6 @@ pub const ITEMS: &[Item] = &[
         ],
     },
     Item {
-        name: "Cache / Parsing Options",
-        help: &["Adjust song cache and parsing settings."],
-    },
-    Item {
         name: "Reload Songs/Courses",
         help: &["Reload all songs and courses from disk without restarting."],
     },
@@ -324,6 +323,7 @@ pub enum SubmenuKind {
     Input,
     InputBackend,
     Machine,
+    Advanced,
     Gameplay,
     Sound,
     SelectMusic,
@@ -503,6 +503,15 @@ const MACHINE_ROW_NAME_ENTRY: &str = "Name Entry";
 const MACHINE_ROW_GAMEOVER: &str = "Gameover Screen";
 const MACHINE_ROW_MENU_MUSIC: &str = "Menu Music";
 const MACHINE_ROW_KEYBOARD_FEATURES: &str = "Keyboard Features";
+const ADVANCED_ROW_DEFAULT_FAIL_TYPE: &str = "Default Fail Type";
+const ADVANCED_ROW_BANNER_CACHE: &str = "Banner Cache";
+const ADVANCED_ROW_BANNER_COLOR_DEPTH: &str = "Banner Cache Color Depth";
+const ADVANCED_ROW_BANNER_MIN_DIMENSION: &str = "Banner Cache Min Dimension";
+const ADVANCED_ROW_BANNER_POW2: &str = "Banner Cache Pow2";
+const ADVANCED_ROW_BANNER_SCALE_DIVISOR: &str = "Banner Cache Scale Divisor";
+const ADVANCED_ROW_SONG_PARSING_THREADS: &str = "Song Parsing Threads";
+const ADVANCED_ROW_CACHE_SONGS: &str = "Cache Songs";
+const ADVANCED_ROW_FAST_LOAD: &str = "Fast Load";
 const GAMEPLAY_ROW_BG_BRIGHTNESS: &str = "BG Brightness";
 const GAMEPLAY_ROW_CENTERED_P1: &str = "Centered P1 Notefield";
 const GAMEPLAY_ROW_ZMOD_RATING_BOX: &str = "Zmod Rating Box";
@@ -627,11 +636,24 @@ const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 1;
 const SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX: usize = 2;
 const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 9;
 const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 10;
+const ADVANCED_BANNER_CACHE_ROW_INDEX: usize = 1;
+const ADVANCED_BANNER_COLOR_DEPTH_ROW_INDEX: usize = 2;
+const ADVANCED_BANNER_MIN_DIMENSION_ROW_INDEX: usize = 3;
+const ADVANCED_BANNER_POW2_ROW_INDEX: usize = 4;
+const ADVANCED_BANNER_SCALE_DIVISOR_ROW_INDEX: usize = 5;
+const ADVANCED_SONG_PARSING_THREADS_ROW_INDEX: usize = 6;
 
 const BG_BRIGHTNESS_CHOICES: [&str; 11] = [
     "0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%",
 ];
 const CENTERED_P1_NOTEFIELD_CHOICES: [&str; 2] = ["Off", "On"];
+const ADVANCED_BANNER_COLOR_DEPTH_CHOICES: [&str; 3] = ["8", "16", "32"];
+const ADVANCED_BANNER_MIN_DIMENSION_CHOICES: [&str; 6] = ["16", "32", "64", "128", "256", "512"];
+const ADVANCED_BANNER_SCALE_DIVISOR_CHOICES: [&str; 8] =
+    ["1", "2", "3", "4", "5", "6", "7", "8"];
+const ADVANCED_BANNER_COLOR_DEPTH_VALUES: [u8; 3] = [8, 16, 32];
+const ADVANCED_BANNER_MIN_DIMENSION_VALUES: [u16; 6] = [16, 32, 64, 128, 256, 512];
+const ADVANCED_BANNER_SCALE_DIVISOR_VALUES: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 const MUSIC_WHEEL_SCROLL_SPEED_CHOICES: [&str; 7] = [
     "Slow",
     "Normal",
@@ -1195,6 +1217,127 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
+pub const ADVANCED_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: ADVANCED_ROW_DEFAULT_FAIL_TYPE,
+        choices: &["Immediate", "ImmediateContinue"],
+        inline: true,
+    },
+    SubRow {
+        label: ADVANCED_ROW_BANNER_CACHE,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: ADVANCED_ROW_BANNER_COLOR_DEPTH,
+        choices: &ADVANCED_BANNER_COLOR_DEPTH_CHOICES,
+        inline: true,
+    },
+    SubRow {
+        label: ADVANCED_ROW_BANNER_MIN_DIMENSION,
+        choices: &ADVANCED_BANNER_MIN_DIMENSION_CHOICES,
+        inline: true,
+    },
+    SubRow {
+        label: ADVANCED_ROW_BANNER_POW2,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: ADVANCED_ROW_BANNER_SCALE_DIVISOR,
+        choices: &ADVANCED_BANNER_SCALE_DIVISOR_CHOICES,
+        inline: true,
+    },
+    SubRow {
+        label: ADVANCED_ROW_SONG_PARSING_THREADS,
+        choices: &["Auto"],
+        inline: false,
+    },
+    SubRow {
+        label: ADVANCED_ROW_CACHE_SONGS,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: ADVANCED_ROW_FAST_LOAD,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+];
+
+pub const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: ADVANCED_ROW_DEFAULT_FAIL_TYPE,
+        help: &[
+            "Choose the machine fail behavior used when gameplay life reaches zero.",
+            "Immediate: cuts to Evaluation as soon as all joined players fail.",
+            "ImmediateContinue: keep playing to song end after failing.",
+            "Default: ImmediateContinue (recommended).",
+        ],
+    },
+    Item {
+        name: ADVANCED_ROW_BANNER_CACHE,
+        help: &[
+            "Enable or disable the wheel banner cache on disk.",
+            "Default: On (BannerCache=1).",
+            "When Off, banner cache sub-options are hidden.",
+        ],
+    },
+    Item {
+        name: ADVANCED_ROW_BANNER_COLOR_DEPTH,
+        help: &[
+            "Set cached banner color depth in bits (8/16/32).",
+            "Default: 16 (BannerCacheColorDepth=16).",
+        ],
+    },
+    Item {
+        name: ADVANCED_ROW_BANNER_MIN_DIMENSION,
+        help: &[
+            "Set the minimum cached banner dimension in pixels.",
+            "Default: 32 (BannerCacheMinDimension=32).",
+        ],
+    },
+    Item {
+        name: ADVANCED_ROW_BANNER_POW2,
+        help: &[
+            "Round cached banner dimensions to power-of-two sizes.",
+            "Default: On (BannerCachePow2=1).",
+        ],
+    },
+    Item {
+        name: ADVANCED_ROW_BANNER_SCALE_DIVISOR,
+        help: &[
+            "Set banner downscale divisor used by cache generation.",
+            "Default: 2 (BannerCacheScaleDivisor=2).",
+        ],
+    },
+    Item {
+        name: ADVANCED_ROW_SONG_PARSING_THREADS,
+        help: &[
+            "Set worker threads for simfile parsing at startup.",
+            "Default: Auto (SongParsingThreads=0).",
+        ],
+    },
+    Item {
+        name: ADVANCED_ROW_CACHE_SONGS,
+        help: &[
+            "Enable or disable writing/using cached song metadata.",
+            "Default: On (CacheSongs=1).",
+        ],
+    },
+    Item {
+        name: ADVANCED_ROW_FAST_LOAD,
+        help: &[
+            "Enable startup shortcuts that reduce blocking load work.",
+            "Default: On (FastLoad=1).",
+        ],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
+
 pub const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: GS_ROW_ENABLE,
@@ -1302,6 +1445,7 @@ const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
         SubmenuKind::Input => INPUT_OPTIONS_ROWS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ROWS,
         SubmenuKind::Machine => MACHINE_OPTIONS_ROWS,
+        SubmenuKind::Advanced => ADVANCED_OPTIONS_ROWS,
         SubmenuKind::Gameplay => GAMEPLAY_OPTIONS_ROWS,
         SubmenuKind::Sound => SOUND_OPTIONS_ROWS,
         SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ROWS,
@@ -1317,6 +1461,7 @@ const fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
         SubmenuKind::Input => INPUT_OPTIONS_ITEMS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ITEMS,
         SubmenuKind::Machine => MACHINE_OPTIONS_ITEMS,
+        SubmenuKind::Advanced => ADVANCED_OPTIONS_ITEMS,
         SubmenuKind::Gameplay => GAMEPLAY_OPTIONS_ITEMS,
         SubmenuKind::Sound => SOUND_OPTIONS_ITEMS,
         SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ITEMS,
@@ -1332,6 +1477,7 @@ const fn submenu_title(kind: SubmenuKind) -> &'static str {
         SubmenuKind::Input => "INPUT OPTIONS",
         SubmenuKind::InputBackend => "INPUT OPTIONS",
         SubmenuKind::Machine => "MACHINE OPTIONS",
+        SubmenuKind::Advanced => "ADVANCED OPTIONS",
         SubmenuKind::Gameplay => "GAMEPLAY OPTIONS",
         SubmenuKind::Sound => "SOUND OPTIONS",
         SubmenuKind::SelectMusic => "SELECT MUSIC OPTIONS",
@@ -1418,6 +1564,32 @@ fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow<
                 .enumerate()
                 .filter_map(|(idx, row)| {
                     if row.label == GRAPHICS_ROW_SOFTWARE_THREADS && !show_sw {
+                        None
+                    } else {
+                        Some(idx)
+                    }
+                })
+                .collect()
+        }
+        SubmenuKind::Advanced => {
+            let show_banner_cache_rows = state
+                .sub_choice_indices_advanced
+                .get(ADVANCED_BANNER_CACHE_ROW_INDEX)
+                .copied()
+                .unwrap_or(1)
+                == 1;
+            rows.iter()
+                .enumerate()
+                .filter_map(|(idx, _)| {
+                    if !show_banner_cache_rows
+                        && matches!(
+                            idx,
+                            ADVANCED_BANNER_COLOR_DEPTH_ROW_INDEX
+                                | ADVANCED_BANNER_MIN_DIMENSION_ROW_INDEX
+                                | ADVANCED_BANNER_POW2_ROW_INDEX
+                                | ADVANCED_BANNER_SCALE_DIVISOR_ROW_INDEX
+                        )
+                    {
                         None
                     } else {
                         Some(idx)
@@ -2084,6 +2256,17 @@ fn row_choices<'a>(
         }
     }
     if let Some(row) = rows.get(row_idx)
+        && matches!(kind, SubmenuKind::Advanced)
+        && row.label == ADVANCED_ROW_SONG_PARSING_THREADS
+    {
+        return state
+            .software_thread_labels
+            .iter()
+            .cloned()
+            .map(Cow::Owned)
+            .collect();
+    }
+    if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::ScoreImport)
     {
         if row.label == SCORE_IMPORT_ROW_PROFILE {
@@ -2309,6 +2492,64 @@ const fn breakdown_style_from_choice(idx: usize) -> BreakdownStyle {
     }
 }
 
+const fn default_fail_type_choice_index(fail_type: DefaultFailType) -> usize {
+    match fail_type {
+        DefaultFailType::Immediate => 0,
+        DefaultFailType::ImmediateContinue => 1,
+    }
+}
+
+const fn default_fail_type_from_choice(idx: usize) -> DefaultFailType {
+    match idx {
+        0 => DefaultFailType::Immediate,
+        _ => DefaultFailType::ImmediateContinue,
+    }
+}
+
+fn banner_color_depth_choice_index(depth: u8) -> usize {
+    ADVANCED_BANNER_COLOR_DEPTH_VALUES
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, value)| value.abs_diff(depth))
+        .map_or(1, |(idx, _)| idx)
+}
+
+fn banner_color_depth_from_choice(idx: usize) -> u8 {
+    ADVANCED_BANNER_COLOR_DEPTH_VALUES
+        .get(idx)
+        .copied()
+        .unwrap_or(16)
+}
+
+fn banner_min_dimension_choice_index(min_dimension: u16) -> usize {
+    ADVANCED_BANNER_MIN_DIMENSION_VALUES
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, value)| value.abs_diff(min_dimension))
+        .map_or(1, |(idx, _)| idx)
+}
+
+fn banner_min_dimension_from_choice(idx: usize) -> u16 {
+    ADVANCED_BANNER_MIN_DIMENSION_VALUES
+        .get(idx)
+        .copied()
+        .unwrap_or(32)
+}
+
+fn banner_scale_divisor_choice_index(scale_divisor: u8) -> usize {
+    ADVANCED_BANNER_SCALE_DIVISOR_VALUES
+        .iter()
+        .position(|value| *value == scale_divisor)
+        .unwrap_or(1)
+}
+
+fn banner_scale_divisor_from_choice(idx: usize) -> u8 {
+    ADVANCED_BANNER_SCALE_DIVISOR_VALUES
+        .get(idx)
+        .copied()
+        .unwrap_or(2)
+}
+
 const fn translated_titles_choice_index(translated_titles: bool) -> usize {
     if translated_titles { 0 } else { 1 }
 }
@@ -2363,6 +2604,7 @@ pub struct State {
     sub_choice_indices_input: Vec<usize>,
     sub_choice_indices_input_backend: Vec<usize>,
     sub_choice_indices_machine: Vec<usize>,
+    sub_choice_indices_advanced: Vec<usize>,
     sub_choice_indices_gameplay: Vec<usize>,
     sub_choice_indices_sound: Vec<usize>,
     sub_choice_indices_select_music: Vec<usize>,
@@ -2374,6 +2616,7 @@ pub struct State {
     sub_cursor_indices_input: Vec<usize>,
     sub_cursor_indices_input_backend: Vec<usize>,
     sub_cursor_indices_machine: Vec<usize>,
+    sub_cursor_indices_advanced: Vec<usize>,
     sub_cursor_indices_gameplay: Vec<usize>,
     sub_cursor_indices_sound: Vec<usize>,
     sub_cursor_indices_select_music: Vec<usize>,
@@ -2415,6 +2658,7 @@ pub struct State {
     // Shared row tween state for the active view (main list or submenu list).
     row_tweens: Vec<RowTween>,
     graphics_prev_visible_rows: Vec<usize>,
+    advanced_prev_visible_rows: Vec<usize>,
     select_music_prev_visible_rows: Vec<usize>,
 }
 
@@ -2458,6 +2702,7 @@ pub fn init() -> State {
         sub_choice_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
         sub_choice_indices_input_backend: vec![0; INPUT_BACKEND_OPTIONS_ROWS.len()],
         sub_choice_indices_machine: vec![0; MACHINE_OPTIONS_ROWS.len()],
+        sub_choice_indices_advanced: vec![0; ADVANCED_OPTIONS_ROWS.len()],
         sub_choice_indices_gameplay: vec![0; GAMEPLAY_OPTIONS_ROWS.len()],
         sub_choice_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         sub_choice_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
@@ -2469,6 +2714,7 @@ pub fn init() -> State {
         sub_cursor_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
         sub_cursor_indices_input_backend: vec![0; INPUT_BACKEND_OPTIONS_ROWS.len()],
         sub_cursor_indices_machine: vec![0; MACHINE_OPTIONS_ROWS.len()],
+        sub_cursor_indices_advanced: vec![0; ADVANCED_OPTIONS_ROWS.len()],
         sub_cursor_indices_gameplay: vec![0; GAMEPLAY_OPTIONS_ROWS.len()],
         sub_cursor_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         sub_cursor_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
@@ -2513,6 +2759,7 @@ pub fn init() -> State {
         cursor_t: 1.0,
         row_tweens: Vec::new(),
         graphics_prev_visible_rows: Vec::new(),
+        advanced_prev_visible_rows: Vec::new(),
         select_music_prev_visible_rows: Vec::new(),
     };
 
@@ -2639,6 +2886,60 @@ pub fn init() -> State {
         MACHINE_OPTIONS_ROWS,
         MACHINE_ROW_KEYBOARD_FEATURES,
         usize::from(cfg.keyboard_features),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_advanced,
+        ADVANCED_OPTIONS_ROWS,
+        ADVANCED_ROW_DEFAULT_FAIL_TYPE,
+        default_fail_type_choice_index(cfg.default_fail_type),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_advanced,
+        ADVANCED_OPTIONS_ROWS,
+        ADVANCED_ROW_BANNER_CACHE,
+        usize::from(cfg.banner_cache),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_advanced,
+        ADVANCED_OPTIONS_ROWS,
+        ADVANCED_ROW_BANNER_COLOR_DEPTH,
+        banner_color_depth_choice_index(cfg.banner_cache_color_depth),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_advanced,
+        ADVANCED_OPTIONS_ROWS,
+        ADVANCED_ROW_BANNER_MIN_DIMENSION,
+        banner_min_dimension_choice_index(cfg.banner_cache_min_dimension),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_advanced,
+        ADVANCED_OPTIONS_ROWS,
+        ADVANCED_ROW_BANNER_POW2,
+        usize::from(cfg.banner_cache_pow2),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_advanced,
+        ADVANCED_OPTIONS_ROWS,
+        ADVANCED_ROW_BANNER_SCALE_DIVISOR,
+        banner_scale_divisor_choice_index(cfg.banner_cache_scale_divisor),
+    );
+    if let Some(slot) = state
+        .sub_choice_indices_advanced
+        .get_mut(ADVANCED_SONG_PARSING_THREADS_ROW_INDEX)
+    {
+        *slot = software_thread_choice_index(&state.software_thread_choices, cfg.song_parsing_threads);
+    }
+    set_choice_by_label(
+        &mut state.sub_choice_indices_advanced,
+        ADVANCED_OPTIONS_ROWS,
+        ADVANCED_ROW_CACHE_SONGS,
+        usize::from(cfg.cachesongs),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_advanced,
+        ADVANCED_OPTIONS_ROWS,
+        ADVANCED_ROW_FAST_LOAD,
+        usize::from(cfg.fastload),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_gameplay,
@@ -2803,6 +3104,7 @@ fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::Input => &state.sub_choice_indices_input,
         SubmenuKind::InputBackend => &state.sub_choice_indices_input_backend,
         SubmenuKind::Machine => &state.sub_choice_indices_machine,
+        SubmenuKind::Advanced => &state.sub_choice_indices_advanced,
         SubmenuKind::Gameplay => &state.sub_choice_indices_gameplay,
         SubmenuKind::Sound => &state.sub_choice_indices_sound,
         SubmenuKind::SelectMusic => &state.sub_choice_indices_select_music,
@@ -2818,6 +3120,7 @@ const fn submenu_choice_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::Input => &mut state.sub_choice_indices_input,
         SubmenuKind::InputBackend => &mut state.sub_choice_indices_input_backend,
         SubmenuKind::Machine => &mut state.sub_choice_indices_machine,
+        SubmenuKind::Advanced => &mut state.sub_choice_indices_advanced,
         SubmenuKind::Gameplay => &mut state.sub_choice_indices_gameplay,
         SubmenuKind::Sound => &mut state.sub_choice_indices_sound,
         SubmenuKind::SelectMusic => &mut state.sub_choice_indices_select_music,
@@ -2833,6 +3136,7 @@ fn submenu_cursor_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::Input => &state.sub_cursor_indices_input,
         SubmenuKind::InputBackend => &state.sub_cursor_indices_input_backend,
         SubmenuKind::Machine => &state.sub_cursor_indices_machine,
+        SubmenuKind::Advanced => &state.sub_cursor_indices_advanced,
         SubmenuKind::Gameplay => &state.sub_cursor_indices_gameplay,
         SubmenuKind::Sound => &state.sub_cursor_indices_sound,
         SubmenuKind::SelectMusic => &state.sub_cursor_indices_select_music,
@@ -2848,6 +3152,7 @@ const fn submenu_cursor_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::Input => &mut state.sub_cursor_indices_input,
         SubmenuKind::InputBackend => &mut state.sub_cursor_indices_input_backend,
         SubmenuKind::Machine => &mut state.sub_cursor_indices_machine,
+        SubmenuKind::Advanced => &mut state.sub_cursor_indices_advanced,
         SubmenuKind::Gameplay => &mut state.sub_cursor_indices_gameplay,
         SubmenuKind::Sound => &mut state.sub_cursor_indices_sound,
         SubmenuKind::SelectMusic => &mut state.sub_cursor_indices_select_music,
@@ -2862,6 +3167,7 @@ fn sync_submenu_cursor_indices(state: &mut State) {
     state.sub_cursor_indices_input = state.sub_choice_indices_input.clone();
     state.sub_cursor_indices_input_backend = state.sub_choice_indices_input_backend.clone();
     state.sub_cursor_indices_machine = state.sub_choice_indices_machine.clone();
+    state.sub_cursor_indices_advanced = state.sub_choice_indices_advanced.clone();
     state.sub_cursor_indices_gameplay = state.sub_choice_indices_gameplay.clone();
     state.sub_cursor_indices_sound = state.sub_choice_indices_sound.clone();
     state.sub_cursor_indices_select_music = state.sub_choice_indices_select_music.clone();
@@ -3192,6 +3498,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 state.cursor_t = 1.0;
                 state.row_tweens.clear();
                 state.graphics_prev_visible_rows.clear();
+                state.advanced_prev_visible_rows.clear();
                 state.select_music_prev_visible_rows.clear();
                 state.nav_key_held_direction = None;
                 state.nav_key_held_since = None;
@@ -3249,6 +3556,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 state.cursor_t = 1.0;
                 state.row_tweens.clear();
                 state.graphics_prev_visible_rows.clear();
+                state.advanced_prev_visible_rows.clear();
                 state.select_music_prev_visible_rows.clear();
                 state.nav_key_held_direction = None;
                 state.nav_key_held_since = None;
@@ -3404,15 +3712,22 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             );
             state.cursor_initialized = false;
             state.graphics_prev_visible_rows.clear();
+            state.advanced_prev_visible_rows.clear();
             state.select_music_prev_visible_rows.clear();
         }
         OptionsView::Submenu(kind) => {
             if matches!(kind, SubmenuKind::Graphics) {
                 update_graphics_row_tweens(state, s, list_y, dt);
+                state.advanced_prev_visible_rows.clear();
+                state.select_music_prev_visible_rows.clear();
+            } else if matches!(kind, SubmenuKind::Advanced) {
+                update_advanced_row_tweens(state, s, list_y, dt);
+                state.graphics_prev_visible_rows.clear();
                 state.select_music_prev_visible_rows.clear();
             } else if matches!(kind, SubmenuKind::SelectMusic) {
                 update_select_music_row_tweens(state, s, list_y, dt);
                 state.graphics_prev_visible_rows.clear();
+                state.advanced_prev_visible_rows.clear();
             } else {
                 let total_rows = submenu_total_rows(state, kind);
                 update_row_tweens(
@@ -3424,6 +3739,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     dt,
                 );
                 state.graphics_prev_visible_rows.clear();
+                state.advanced_prev_visible_rows.clear();
                 state.select_music_prev_visible_rows.clear();
             }
             let list_w = LIST_W * s;
@@ -3703,6 +4019,28 @@ fn apply_submenu_choice_delta(
             MACHINE_ROW_KEYBOARD_FEATURES => config::update_keyboard_features(enabled),
             _ => {}
         }
+    } else if matches!(kind, SubmenuKind::Advanced) {
+        let row = &rows[row_index];
+        if row.label == ADVANCED_ROW_DEFAULT_FAIL_TYPE {
+            config::update_default_fail_type(default_fail_type_from_choice(new_index));
+        } else if row.label == ADVANCED_ROW_BANNER_CACHE {
+            config::update_banner_cache(new_index == 1);
+        } else if row.label == ADVANCED_ROW_BANNER_COLOR_DEPTH {
+            config::update_banner_cache_color_depth(banner_color_depth_from_choice(new_index));
+        } else if row.label == ADVANCED_ROW_BANNER_MIN_DIMENSION {
+            config::update_banner_cache_min_dimension(banner_min_dimension_from_choice(new_index));
+        } else if row.label == ADVANCED_ROW_BANNER_POW2 {
+            config::update_banner_cache_pow2(new_index == 1);
+        } else if row.label == ADVANCED_ROW_BANNER_SCALE_DIVISOR {
+            config::update_banner_cache_scale_divisor(banner_scale_divisor_from_choice(new_index));
+        } else if row.label == ADVANCED_ROW_SONG_PARSING_THREADS {
+            let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
+            config::update_song_parsing_threads(threads);
+        } else if row.label == ADVANCED_ROW_CACHE_SONGS {
+            config::update_cache_songs(new_index == 1);
+        } else if row.label == ADVANCED_ROW_FAST_LOAD {
+            config::update_fastload(new_index == 1);
+        }
     } else if matches!(kind, SubmenuKind::Gameplay) {
         let row = &rows[row_index];
         if row.label == GAMEPLAY_ROW_BG_BRIGHTNESS {
@@ -3976,6 +4314,12 @@ pub fn handle_input(
                         "Machine Options" => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::Machine);
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                            state.submenu_fade_t = 0.0;
+                        }
+                        "Advanced Options" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            state.pending_submenu_kind = Some(SubmenuKind::Advanced);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }
@@ -4323,6 +4667,97 @@ fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
     }
 
     state.graphics_prev_visible_rows = visible_rows;
+    update_row_tweens(
+        &mut state.row_tweens,
+        total_rows,
+        selected,
+        s,
+        list_y,
+        dt,
+    );
+}
+
+const fn advanced_parent_row(actual_idx: usize) -> Option<usize> {
+    match actual_idx {
+        ADVANCED_BANNER_COLOR_DEPTH_ROW_INDEX
+        | ADVANCED_BANNER_MIN_DIMENSION_ROW_INDEX
+        | ADVANCED_BANNER_POW2_ROW_INDEX
+        | ADVANCED_BANNER_SCALE_DIVISOR_ROW_INDEX => Some(ADVANCED_BANNER_CACHE_ROW_INDEX),
+        _ => None,
+    }
+}
+
+fn update_advanced_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
+    let rows = submenu_rows(SubmenuKind::Advanced);
+    let visible_rows = submenu_visible_row_indices(state, SubmenuKind::Advanced, rows);
+    let total_rows = visible_rows.len() + 1;
+    if total_rows == 0 {
+        state.row_tweens.clear();
+        state.advanced_prev_visible_rows.clear();
+        return;
+    }
+
+    let selected = state.sub_selected.min(total_rows.saturating_sub(1));
+    let visibility_changed = state.advanced_prev_visible_rows != visible_rows;
+    if state.row_tweens.is_empty() {
+        state.row_tweens = init_row_tweens(total_rows, selected, s, list_y);
+    } else if state.row_tweens.len() != total_rows || visibility_changed {
+        let old_tweens = std::mem::take(&mut state.row_tweens);
+        let old_visible_rows = state.advanced_prev_visible_rows.clone();
+        let old_total_rows = old_visible_rows.len() + 1;
+        let old_exit_from = old_tweens
+            .get(old_total_rows.saturating_sub(1))
+            .map(|tw| (tw.y(), tw.a()));
+
+        let mut mapped: Vec<RowTween> = Vec::with_capacity(total_rows);
+        for (new_idx, actual_idx) in visible_rows.iter().copied().enumerate() {
+            let (to_y, to_a) = row_dest_for_index(total_rows, selected, new_idx, s, list_y);
+            let parent_from = advanced_parent_row(actual_idx).and_then(|parent_actual_idx| {
+                old_visible_rows
+                    .iter()
+                    .position(|&idx| idx == parent_actual_idx)
+                    .and_then(|old_idx| old_tweens.get(old_idx))
+                    .map(|tw| (tw.y(), 0.0))
+            });
+            let (from_y, from_a) = old_visible_rows
+                .iter()
+                .position(|&old_actual| old_actual == actual_idx)
+                .and_then(|old_idx| old_tweens.get(old_idx).map(|tw| (tw.y(), tw.a())))
+                .or(parent_from)
+                .unwrap_or((to_y, to_a));
+            let t = if (to_y - from_y).abs() <= 0.01 && (to_a - from_a).abs() <= 0.001 {
+                1.0
+            } else {
+                0.0
+            };
+            mapped.push(RowTween {
+                from_y,
+                to_y,
+                from_a,
+                to_a,
+                t,
+            });
+        }
+
+        let exit_idx = total_rows.saturating_sub(1);
+        let (to_y, to_a) = row_dest_for_index(total_rows, selected, exit_idx, s, list_y);
+        let (from_y, from_a) = old_exit_from.unwrap_or((to_y, to_a));
+        let t = if (to_y - from_y).abs() <= 0.01 && (to_a - from_a).abs() <= 0.001 {
+            1.0
+        } else {
+            0.0
+        };
+        mapped.push(RowTween {
+            from_y,
+            to_y,
+            from_a,
+            to_a,
+            t,
+        });
+        state.row_tweens = mapped;
+    }
+
+    state.advanced_prev_visible_rows = visible_rows;
     update_row_tweens(
         &mut state.row_tweens,
         total_rows,

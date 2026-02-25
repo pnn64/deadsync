@@ -1728,6 +1728,19 @@ fn is_state_dead(state: &State, player: usize) -> bool {
 }
 
 #[inline(always)]
+fn all_joined_players_failed(state: &State) -> bool {
+    if state.num_players == 0 {
+        return false;
+    }
+    for player in 0..state.num_players {
+        if !is_state_dead(state, player) {
+            return false;
+        }
+    }
+    true
+}
+
+#[inline(always)]
 pub fn assist_clap_is_enabled(state: &State) -> bool {
     state.assist_clap_enabled
 }
@@ -6513,6 +6526,17 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
 
     update_density_graph(state, music_time_sec);
     update_danger_fx(state);
+
+    if matches!(
+        crate::config::get().default_fail_type,
+        crate::config::DefaultFailType::Immediate
+    ) && all_joined_players_failed(state)
+    {
+        info!("All joined players failed. Transitioning to evaluation.");
+        state.song_completed_naturally = false;
+        audio::stop_music();
+        return ScreenAction::Navigate(Screen::Evaluation);
+    }
 
     state.log_timer += delta_time;
     if state.log_timer >= 1.0 {

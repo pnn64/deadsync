@@ -128,6 +128,33 @@ impl FromStr for BreakdownStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DefaultFailType {
+    Immediate,
+    ImmediateContinue,
+}
+
+impl DefaultFailType {
+    const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Immediate => "Immediate",
+            Self::ImmediateContinue => "ImmediateContinue",
+        }
+    }
+}
+
+impl FromStr for DefaultFailType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "immediate" => Ok(Self::Immediate),
+            "immediatecontinue" | "immediate_continue" => Ok(Self::ImmediateContinue),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectMusicPatternInfoMode {
     Tech,
     Stamina,
@@ -314,6 +341,8 @@ pub struct Config {
     pub zmod_rating_box_text: bool,
     /// Show one decimal place for live gameplay BPM when BPM is non-integer.
     pub show_bpm_decimal: bool,
+    /// Machine default fail behavior (ITGmania DefaultFailType).
+    pub default_fail_type: DefaultFailType,
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub show_select_music_scorebox: bool,
@@ -384,6 +413,7 @@ impl Default for Config {
             machine_show_gameover: true,
             zmod_rating_box_text: false,
             show_bpm_decimal: false,
+            default_fail_type: DefaultFailType::ImmediateContinue,
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             show_select_music_scorebox: true,
@@ -496,6 +526,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "DefaultFailType={}\n",
+        default.default_fail_type.as_str()
     ));
     content.push_str(&format!("DefaultNoteSkin={DEFAULT_MACHINE_NOTESKIN}\n"));
     content.push_str(&format!("DisplayHeight={}\n", default.display_height));
@@ -918,6 +952,10 @@ pub fn load() {
                         _ => None,
                     })
                     .unwrap_or(default.center_1player_notefield);
+                cfg.default_fail_type = conf
+                    .get("Options", "DefaultFailType")
+                    .and_then(|v| DefaultFailType::from_str(&v).ok())
+                    .unwrap_or(default.default_fail_type);
                 cfg.banner_cache = conf
                     .get("Options", "BannerCache")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1344,6 +1382,7 @@ pub fn load() {
                     "BannerCacheScaleDivisor",
                     "CacheSongs",
                     "Center1Player",
+                    "DefaultFailType",
                     "DefaultNoteSkin",
                     "DisplayHeight",
                     "DisplayWidth",
@@ -2098,6 +2137,10 @@ fn save_without_keymaps() {
             "0"
         }
     ));
+    content.push_str(&format!(
+        "DefaultFailType={}\n",
+        cfg.default_fail_type.as_str()
+    ));
     content.push_str(&format!("DefaultNoteSkin={machine_default_noteskin}\n"));
     content.push_str(&format!("DisplayHeight={}\n", cfg.display_height));
     content.push_str(&format!("DisplayWidth={}\n", cfg.display_width));
@@ -2556,6 +2599,97 @@ pub fn update_center_1player_notefield(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_banner_cache(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.banner_cache == enabled {
+            return;
+        }
+        cfg.banner_cache = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_banner_cache_color_depth(bits: u8) {
+    let bits = normalize_banner_cache_color_depth(bits);
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.banner_cache_color_depth == bits {
+            return;
+        }
+        cfg.banner_cache_color_depth = bits;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_banner_cache_min_dimension(px: u16) {
+    let px = px.clamp(1, 2048);
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.banner_cache_min_dimension == px {
+            return;
+        }
+        cfg.banner_cache_min_dimension = px;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_banner_cache_pow2(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.banner_cache_pow2 == enabled {
+            return;
+        }
+        cfg.banner_cache_pow2 = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_banner_cache_scale_divisor(divisor: u8) {
+    let divisor = divisor.clamp(1, 8);
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.banner_cache_scale_divisor == divisor {
+            return;
+        }
+        cfg.banner_cache_scale_divisor = divisor;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_song_parsing_threads(threads: u8) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.song_parsing_threads == threads {
+            return;
+        }
+        cfg.song_parsing_threads = threads;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_cache_songs(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.cachesongs == enabled {
+            return;
+        }
+        cfg.cachesongs = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_fastload(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.fastload == enabled {
+            return;
+        }
+        cfg.fastload = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_master_volume(volume: u8) {
     let vol = volume.clamp(0, 100);
     {
@@ -2809,6 +2943,17 @@ pub fn update_show_bpm_decimal(enabled: bool) {
             return;
         }
         cfg.show_bpm_decimal = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_default_fail_type(fail_type: DefaultFailType) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.default_fail_type == fail_type {
+            return;
+        }
+        cfg.default_fail_type = fail_type;
     }
     save_without_keymaps();
 }
