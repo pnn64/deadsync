@@ -205,6 +205,20 @@ pub const ITEMS: &[Item] = &[
         ],
     },
     Item {
+        name: "Machine Options",
+        help: &[
+            "Choose which startup and post-session screens are shown.",
+            "Select Profile",
+            "Select Color",
+            "Select Style",
+            "Select Play Mode",
+            "Eval Summary",
+            "Name Entry",
+            "Gameover Screen",
+            "Keyboard Features",
+        ],
+    },
+    Item {
         name: "Gameplay Options",
         help: &[
             "Adjust gameplay presentation settings.",
@@ -289,6 +303,7 @@ pub enum SubmenuKind {
     Graphics,
     Input,
     InputBackend,
+    Machine,
     Gameplay,
     Sound,
     SelectMusic,
@@ -449,6 +464,14 @@ const INPUT_BACKEND_INLINE: bool = false;
 const SELECT_MUSIC_ROW_WHEEL_SPEED: &str = "Music Wheel Scroll Speed";
 const SELECT_MUSIC_ROW_BREAKDOWN_STYLE: &str = "Breakdown Style";
 const SELECT_MUSIC_ROW_GS_SCOREBOX: &str = "GS Scorebox";
+const MACHINE_ROW_SELECT_PROFILE: &str = "Select Profile";
+const MACHINE_ROW_SELECT_COLOR: &str = "Select Color";
+const MACHINE_ROW_SELECT_STYLE: &str = "Select Style";
+const MACHINE_ROW_SELECT_PLAY_MODE: &str = "Select Play Mode";
+const MACHINE_ROW_EVAL_SUMMARY: &str = "Eval Summary";
+const MACHINE_ROW_NAME_ENTRY: &str = "Name Entry";
+const MACHINE_ROW_GAMEOVER: &str = "Gameover Screen";
+const MACHINE_ROW_KEYBOARD_FEATURES: &str = "Keyboard Features";
 const SCORE_IMPORT_ROW_ENDPOINT: &str = "API Endpoint";
 const SCORE_IMPORT_ROW_PROFILE: &str = "Profile";
 const SCORE_IMPORT_ROW_PACK: &str = "Pack";
@@ -744,6 +767,88 @@ pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
+pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: MACHINE_ROW_SELECT_PROFILE,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: MACHINE_ROW_SELECT_COLOR,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: MACHINE_ROW_SELECT_STYLE,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: MACHINE_ROW_SELECT_PLAY_MODE,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: MACHINE_ROW_EVAL_SUMMARY,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: MACHINE_ROW_NAME_ENTRY,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: MACHINE_ROW_GAMEOVER,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: MACHINE_ROW_KEYBOARD_FEATURES,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+];
+
+pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: MACHINE_ROW_SELECT_PROFILE,
+        help: &["Show or skip Select Profile during startup."],
+    },
+    Item {
+        name: MACHINE_ROW_SELECT_COLOR,
+        help: &["Show or skip Select Color during startup."],
+    },
+    Item {
+        name: MACHINE_ROW_SELECT_STYLE,
+        help: &["Show or skip Select Style during startup."],
+    },
+    Item {
+        name: MACHINE_ROW_SELECT_PLAY_MODE,
+        help: &["Show or skip Select Play Mode during startup."],
+    },
+    Item {
+        name: MACHINE_ROW_EVAL_SUMMARY,
+        help: &["Show or skip the Evaluation Summary flow after leaving song/course select."],
+    },
+    Item {
+        name: MACHINE_ROW_NAME_ENTRY,
+        help: &["Show or skip Name Entry after Evaluation Summary."],
+    },
+    Item {
+        name: MACHINE_ROW_GAMEOVER,
+        help: &["Show or skip the Gameover screen after Name Entry."],
+    },
+    Item {
+        name: MACHINE_ROW_KEYBOARD_FEATURES,
+        help: &["Enable keyboard-only shortcuts like Ctrl+R restart in gameplay."],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
+
 pub const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: "BG Brightness",
@@ -995,6 +1100,7 @@ const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ROWS,
         SubmenuKind::Input => INPUT_OPTIONS_ROWS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ROWS,
+        SubmenuKind::Machine => MACHINE_OPTIONS_ROWS,
         SubmenuKind::Gameplay => GAMEPLAY_OPTIONS_ROWS,
         SubmenuKind::Sound => SOUND_OPTIONS_ROWS,
         SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ROWS,
@@ -1009,6 +1115,7 @@ const fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ITEMS,
         SubmenuKind::Input => INPUT_OPTIONS_ITEMS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ITEMS,
+        SubmenuKind::Machine => MACHINE_OPTIONS_ITEMS,
         SubmenuKind::Gameplay => GAMEPLAY_OPTIONS_ITEMS,
         SubmenuKind::Sound => SOUND_OPTIONS_ITEMS,
         SubmenuKind::SelectMusic => SELECT_MUSIC_OPTIONS_ITEMS,
@@ -1023,6 +1130,7 @@ const fn submenu_title(kind: SubmenuKind) -> &'static str {
         SubmenuKind::Graphics => "GRAPHICS OPTIONS",
         SubmenuKind::Input => "INPUT OPTIONS",
         SubmenuKind::InputBackend => "INPUT OPTIONS",
+        SubmenuKind::Machine => "MACHINE OPTIONS",
         SubmenuKind::Gameplay => "GAMEPLAY OPTIONS",
         SubmenuKind::Sound => "SOUND OPTIONS",
         SubmenuKind::SelectMusic => "SELECT MUSIC OPTIONS",
@@ -1907,6 +2015,7 @@ pub struct State {
     sub_choice_indices_graphics: Vec<usize>,
     sub_choice_indices_input: Vec<usize>,
     sub_choice_indices_input_backend: Vec<usize>,
+    sub_choice_indices_machine: Vec<usize>,
     sub_choice_indices_gameplay: Vec<usize>,
     sub_choice_indices_sound: Vec<usize>,
     sub_choice_indices_select_music: Vec<usize>,
@@ -1917,6 +2026,7 @@ pub struct State {
     sub_cursor_indices_graphics: Vec<usize>,
     sub_cursor_indices_input: Vec<usize>,
     sub_cursor_indices_input_backend: Vec<usize>,
+    sub_cursor_indices_machine: Vec<usize>,
     sub_cursor_indices_gameplay: Vec<usize>,
     sub_cursor_indices_sound: Vec<usize>,
     sub_cursor_indices_select_music: Vec<usize>,
@@ -1994,6 +2104,7 @@ pub fn init() -> State {
         sub_choice_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         sub_choice_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
         sub_choice_indices_input_backend: vec![0; INPUT_BACKEND_OPTIONS_ROWS.len()],
+        sub_choice_indices_machine: vec![0; MACHINE_OPTIONS_ROWS.len()],
         sub_choice_indices_gameplay: vec![0; GAMEPLAY_OPTIONS_ROWS.len()],
         sub_choice_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         sub_choice_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
@@ -2004,6 +2115,7 @@ pub fn init() -> State {
         sub_cursor_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         sub_cursor_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
         sub_cursor_indices_input_backend: vec![0; INPUT_BACKEND_OPTIONS_ROWS.len()],
+        sub_cursor_indices_machine: vec![0; MACHINE_OPTIONS_ROWS.len()],
         sub_cursor_indices_gameplay: vec![0; GAMEPLAY_OPTIONS_ROWS.len()],
         sub_cursor_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
         sub_cursor_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
@@ -2103,6 +2215,54 @@ pub fn init() -> State {
         windows_backend_choice_index(cfg.windows_gamepad_backend),
     );
     set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_SELECT_PROFILE,
+        usize::from(cfg.machine_show_select_profile),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_SELECT_COLOR,
+        usize::from(cfg.machine_show_select_color),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_SELECT_STYLE,
+        usize::from(cfg.machine_show_select_style),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_SELECT_PLAY_MODE,
+        usize::from(cfg.machine_show_select_play_mode),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_EVAL_SUMMARY,
+        usize::from(cfg.machine_show_eval_summary),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_NAME_ENTRY,
+        usize::from(cfg.machine_show_name_entry),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_GAMEOVER,
+        usize::from(cfg.machine_show_gameover),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_KEYBOARD_FEATURES,
+        usize::from(cfg.keyboard_features),
+    );
+    set_choice_by_label(
         &mut state.sub_choice_indices_gameplay,
         GAMEPLAY_OPTIONS_ROWS,
         "BG Brightness",
@@ -2192,6 +2352,7 @@ fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::Graphics => &state.sub_choice_indices_graphics,
         SubmenuKind::Input => &state.sub_choice_indices_input,
         SubmenuKind::InputBackend => &state.sub_choice_indices_input_backend,
+        SubmenuKind::Machine => &state.sub_choice_indices_machine,
         SubmenuKind::Gameplay => &state.sub_choice_indices_gameplay,
         SubmenuKind::Sound => &state.sub_choice_indices_sound,
         SubmenuKind::SelectMusic => &state.sub_choice_indices_select_music,
@@ -2206,6 +2367,7 @@ const fn submenu_choice_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::Graphics => &mut state.sub_choice_indices_graphics,
         SubmenuKind::Input => &mut state.sub_choice_indices_input,
         SubmenuKind::InputBackend => &mut state.sub_choice_indices_input_backend,
+        SubmenuKind::Machine => &mut state.sub_choice_indices_machine,
         SubmenuKind::Gameplay => &mut state.sub_choice_indices_gameplay,
         SubmenuKind::Sound => &mut state.sub_choice_indices_sound,
         SubmenuKind::SelectMusic => &mut state.sub_choice_indices_select_music,
@@ -2220,6 +2382,7 @@ fn submenu_cursor_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::Graphics => &state.sub_cursor_indices_graphics,
         SubmenuKind::Input => &state.sub_cursor_indices_input,
         SubmenuKind::InputBackend => &state.sub_cursor_indices_input_backend,
+        SubmenuKind::Machine => &state.sub_cursor_indices_machine,
         SubmenuKind::Gameplay => &state.sub_cursor_indices_gameplay,
         SubmenuKind::Sound => &state.sub_cursor_indices_sound,
         SubmenuKind::SelectMusic => &state.sub_cursor_indices_select_music,
@@ -2234,6 +2397,7 @@ const fn submenu_cursor_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::Graphics => &mut state.sub_cursor_indices_graphics,
         SubmenuKind::Input => &mut state.sub_cursor_indices_input,
         SubmenuKind::InputBackend => &mut state.sub_cursor_indices_input_backend,
+        SubmenuKind::Machine => &mut state.sub_cursor_indices_machine,
         SubmenuKind::Gameplay => &mut state.sub_cursor_indices_gameplay,
         SubmenuKind::Sound => &mut state.sub_cursor_indices_sound,
         SubmenuKind::SelectMusic => &mut state.sub_cursor_indices_select_music,
@@ -2247,6 +2411,7 @@ fn sync_submenu_cursor_indices(state: &mut State) {
     state.sub_cursor_indices_graphics = state.sub_choice_indices_graphics.clone();
     state.sub_cursor_indices_input = state.sub_choice_indices_input.clone();
     state.sub_cursor_indices_input_backend = state.sub_choice_indices_input_backend.clone();
+    state.sub_cursor_indices_machine = state.sub_choice_indices_machine.clone();
     state.sub_cursor_indices_gameplay = state.sub_choice_indices_gameplay.clone();
     state.sub_cursor_indices_sound = state.sub_choice_indices_sound.clone();
     state.sub_cursor_indices_select_music = state.sub_choice_indices_select_music.clone();
@@ -3052,6 +3217,20 @@ fn apply_submenu_choice_delta(
                 config::update_windows_gamepad_backend(windows_backend_from_choice(new_index));
             }
         }
+    } else if matches!(kind, SubmenuKind::Machine) {
+        let row = &rows[row_index];
+        let enabled = new_index == 1;
+        match row.label {
+            MACHINE_ROW_SELECT_PROFILE => config::update_machine_show_select_profile(enabled),
+            MACHINE_ROW_SELECT_COLOR => config::update_machine_show_select_color(enabled),
+            MACHINE_ROW_SELECT_STYLE => config::update_machine_show_select_style(enabled),
+            MACHINE_ROW_SELECT_PLAY_MODE => config::update_machine_show_select_play_mode(enabled),
+            MACHINE_ROW_EVAL_SUMMARY => config::update_machine_show_eval_summary(enabled),
+            MACHINE_ROW_NAME_ENTRY => config::update_machine_show_name_entry(enabled),
+            MACHINE_ROW_GAMEOVER => config::update_machine_show_gameover(enabled),
+            MACHINE_ROW_KEYBOARD_FEATURES => config::update_keyboard_features(enabled),
+            _ => {}
+        }
     } else if matches!(kind, SubmenuKind::Gameplay) {
         let row = &rows[row_index];
         if row.label == "BG Brightness" {
@@ -3295,6 +3474,12 @@ pub fn handle_input(
                         "Input Options" => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::Input);
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                            state.submenu_fade_t = 0.0;
+                        }
+                        "Machine Options" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            state.pending_submenu_kind = Some(SubmenuKind::Machine);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }

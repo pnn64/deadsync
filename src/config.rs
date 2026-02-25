@@ -289,6 +289,20 @@ pub struct Config {
     pub show_select_music_gameplay_timer: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart.
     pub keyboard_features: bool,
+    /// Startup flow: show Select Profile before continuing.
+    pub machine_show_select_profile: bool,
+    /// Startup flow: show Select Color before continuing.
+    pub machine_show_select_color: bool,
+    /// Startup flow: show Select Style before continuing.
+    pub machine_show_select_style: bool,
+    /// Startup flow: show Select Play Mode before continuing.
+    pub machine_show_select_play_mode: bool,
+    /// Post-session flow from Select Music/Course: show Evaluation Summary.
+    pub machine_show_eval_summary: bool,
+    /// Post-session flow from Select Music/Course: show Name Entry.
+    pub machine_show_name_entry: bool,
+    /// Post-session flow from Select Music/Course: show GameOver.
+    pub machine_show_gameover: bool,
     /// zmod parity: gameplay/eval difficulty meter also displays text labels.
     pub zmod_rating_box_text: bool,
     pub select_music_breakdown_style: BreakdownStyle,
@@ -344,7 +358,14 @@ impl Default for Config {
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             show_select_music_gameplay_timer: true,
-            keyboard_features: false,
+            keyboard_features: true,
+            machine_show_select_profile: true,
+            machine_show_select_color: true,
+            machine_show_select_style: true,
+            machine_show_select_play_mode: true,
+            machine_show_eval_summary: true,
+            machine_show_name_entry: true,
+            machine_show_gameover: true,
             zmod_rating_box_text: false,
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
@@ -617,6 +638,62 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "KeyboardFeatures={}\n",
         if default.keyboard_features { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "MachineShowEvalSummary={}\n",
+        if default.machine_show_eval_summary {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "MachineShowGameOver={}\n",
+        if default.machine_show_gameover {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "MachineShowNameEntry={}\n",
+        if default.machine_show_name_entry {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "MachineShowSelectColor={}\n",
+        if default.machine_show_select_color {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "MachineShowSelectPlayMode={}\n",
+        if default.machine_show_select_play_mode {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "MachineShowSelectProfile={}\n",
+        if default.machine_show_select_profile {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "MachineShowSelectStyle={}\n",
+        if default.machine_show_select_style {
+            "1"
+        } else {
+            "0"
+        }
     ));
     content.push_str(&format!(
         "ShowSelectMusicGameplayTimer={}\n",
@@ -950,6 +1027,153 @@ pub fn load() {
                         }
                     })
                     .unwrap_or(default.keyboard_features);
+                cfg.machine_show_eval_summary = conf
+                    .get("Theme", "MachineShowEvalSummary")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.machine_show_eval_summary);
+                cfg.machine_show_name_entry = conf
+                    .get("Theme", "MachineShowNameEntry")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.machine_show_name_entry);
+                cfg.machine_show_gameover = conf
+                    .get("Theme", "MachineShowGameOver")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.machine_show_gameover);
+                cfg.machine_show_select_profile = conf
+                    .get("Theme", "MachineShowSelectProfile")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.machine_show_select_profile);
+                cfg.machine_show_select_color = conf
+                    .get("Theme", "MachineShowSelectColor")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.machine_show_select_color);
+                cfg.machine_show_select_style = conf
+                    .get("Theme", "MachineShowSelectStyle")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.machine_show_select_style);
+                cfg.machine_show_select_play_mode = conf
+                    .get("Theme", "MachineShowSelectPlayMode")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.machine_show_select_play_mode);
                 cfg.zmod_rating_box_text = conf
                     .get("Theme", "ZmodRatingBoxText")
                     .map(|v| v.trim().to_string())
@@ -1043,6 +1267,27 @@ pub fn load() {
                     miss = true;
                 }
                 if !miss && !has("Theme", "KeyboardFeatures") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "MachineShowEvalSummary") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "MachineShowGameOver") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "MachineShowNameEntry") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "MachineShowSelectColor") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "MachineShowSelectPlayMode") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "MachineShowSelectProfile") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "MachineShowSelectStyle") {
                     miss = true;
                 }
                 if !miss && !has("Theme", "ZmodRatingBoxText") {
@@ -1854,6 +2099,62 @@ fn save_without_keymaps() {
         if cfg.keyboard_features { "1" } else { "0" }
     ));
     content.push_str(&format!(
+        "MachineShowEvalSummary={}\n",
+        if cfg.machine_show_eval_summary {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "MachineShowGameOver={}\n",
+        if cfg.machine_show_gameover {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "MachineShowNameEntry={}\n",
+        if cfg.machine_show_name_entry {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "MachineShowSelectColor={}\n",
+        if cfg.machine_show_select_color {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "MachineShowSelectPlayMode={}\n",
+        if cfg.machine_show_select_play_mode {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "MachineShowSelectProfile={}\n",
+        if cfg.machine_show_select_profile {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "MachineShowSelectStyle={}\n",
+        if cfg.machine_show_select_style {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "ShowSelectMusicGameplayTimer={}\n",
         if cfg.show_select_music_gameplay_timer {
             "1"
@@ -2147,6 +2448,94 @@ pub fn update_show_select_music_scorebox(enabled: bool) {
             return;
         }
         cfg.show_select_music_scorebox = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_keyboard_features(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.keyboard_features == enabled {
+            return;
+        }
+        cfg.keyboard_features = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_machine_show_select_profile(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.machine_show_select_profile == enabled {
+            return;
+        }
+        cfg.machine_show_select_profile = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_machine_show_select_color(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.machine_show_select_color == enabled {
+            return;
+        }
+        cfg.machine_show_select_color = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_machine_show_select_style(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.machine_show_select_style == enabled {
+            return;
+        }
+        cfg.machine_show_select_style = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_machine_show_select_play_mode(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.machine_show_select_play_mode == enabled {
+            return;
+        }
+        cfg.machine_show_select_play_mode = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_machine_show_eval_summary(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.machine_show_eval_summary == enabled {
+            return;
+        }
+        cfg.machine_show_eval_summary = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_machine_show_name_entry(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.machine_show_name_entry == enabled {
+            return;
+        }
+        cfg.machine_show_name_entry = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_machine_show_gameover(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.machine_show_gameover == enabled {
+            return;
+        }
+        cfg.machine_show_gameover = enabled;
     }
     save_without_keymaps();
 }

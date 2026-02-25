@@ -466,6 +466,82 @@ fn combo_carry_from_profiles() -> [u32; crate::game::gameplay::MAX_PLAYERS] {
     ]
 }
 
+#[inline(always)]
+const fn machine_startup_screen_enabled(cfg: &config::Config, screen: CurrentScreen) -> bool {
+    match screen {
+        CurrentScreen::SelectProfile => cfg.machine_show_select_profile,
+        CurrentScreen::SelectColor => cfg.machine_show_select_color,
+        CurrentScreen::SelectStyle => cfg.machine_show_select_style,
+        CurrentScreen::SelectPlayMode => cfg.machine_show_select_play_mode,
+        _ => true,
+    }
+}
+
+fn machine_resolve_startup_target(cfg: &config::Config, target: CurrentScreen) -> CurrentScreen {
+    let order = [
+        CurrentScreen::SelectProfile,
+        CurrentScreen::SelectColor,
+        CurrentScreen::SelectStyle,
+        CurrentScreen::SelectPlayMode,
+    ];
+    let Some(start_idx) = order.iter().position(|screen| *screen == target) else {
+        return target;
+    };
+    for screen in order.iter().skip(start_idx) {
+        if machine_startup_screen_enabled(cfg, *screen) {
+            return *screen;
+        }
+    }
+    CurrentScreen::ProfileLoad
+}
+
+#[inline(always)]
+fn machine_first_post_select_target(cfg: &config::Config) -> CurrentScreen {
+    if cfg.machine_show_eval_summary {
+        CurrentScreen::EvaluationSummary
+    } else if cfg.machine_show_name_entry {
+        CurrentScreen::Initials
+    } else if cfg.machine_show_gameover {
+        CurrentScreen::GameOver
+    } else {
+        CurrentScreen::Menu
+    }
+}
+
+#[inline(always)]
+fn machine_resolve_post_select_target(cfg: &config::Config, target: CurrentScreen) -> CurrentScreen {
+    match target {
+        CurrentScreen::EvaluationSummary => {
+            if cfg.machine_show_eval_summary {
+                CurrentScreen::EvaluationSummary
+            } else if cfg.machine_show_name_entry {
+                CurrentScreen::Initials
+            } else if cfg.machine_show_gameover {
+                CurrentScreen::GameOver
+            } else {
+                CurrentScreen::Menu
+            }
+        }
+        CurrentScreen::Initials => {
+            if cfg.machine_show_name_entry {
+                CurrentScreen::Initials
+            } else if cfg.machine_show_gameover {
+                CurrentScreen::GameOver
+            } else {
+                CurrentScreen::Menu
+            }
+        }
+        CurrentScreen::GameOver => {
+            if cfg.machine_show_gameover {
+                CurrentScreen::GameOver
+            } else {
+                CurrentScreen::Menu
+            }
+        }
+        other => other,
+    }
+}
+
 fn course_stage_runtime_from_plan(
     plan: &select_course::CourseStagePlan,
     chart_type: &str,
@@ -1788,14 +1864,59 @@ impl App {
     fn handle_navigation_action_inner(&mut self, target: CurrentScreen, allow_offset_prompt: bool) {
         let from = self.state.screens.current_screen;
         let mut target = target;
+        let cfg = config::get();
 
-        // Simply Love parity: when exiting a song/course wheel after at least one stage
-        // in Event Mode, go to ScreenEvaluationSummary instead of straight back to TitleMenu.
+        // After at least one stage, leaving song/course select routes through the
+        // machine-configured post-session flow before returning to title.
         if (from == CurrentScreen::SelectMusic || from == CurrentScreen::SelectCourse)
             && target == CurrentScreen::Menu
             && !self.state.session.played_stages.is_empty()
         {
-            target = CurrentScreen::EvaluationSummary;
+            target = machine_first_post_select_target(&cfg);
+        }
+
+        let startup_flow = matches!(
+            from,
+            CurrentScreen::Menu
+                | CurrentScreen::SelectProfile
+                | CurrentScreen::SelectColor
+                | CurrentScreen::SelectStyle
+                | CurrentScreen::SelectPlayMode
+        ) && matches!(
+            target,
+            CurrentScreen::SelectProfile
+                | CurrentScreen::SelectColor
+                | CurrentScreen::SelectStyle
+                | CurrentScreen::SelectPlayMode
+                | CurrentScreen::ProfileLoad
+        );
+        if startup_flow {
+            target = machine_resolve_startup_target(&cfg, target);
+        }
+        target = machine_resolve_post_select_target(&cfg, target);
+
+        // If Select Profile is disabled and gameplay was started from Menu,
+        // initialize joined/session-side defaults from the Start button used on Menu.
+        if startup_flow
+            && from == CurrentScreen::Menu
+            && target != CurrentScreen::SelectProfile
+            && !cfg.machine_show_select_profile
+            && matches!(
+                target,
+                CurrentScreen::SelectColor
+                    | CurrentScreen::SelectStyle
+                    | CurrentScreen::SelectPlayMode
+                    | CurrentScreen::ProfileLoad
+            )
+        {
+            let p2_started = self.state.screens.menu_state.started_by_p2;
+            profile::set_session_player_side(if p2_started {
+                profile::PlayerSide::P2
+            } else {
+                profile::PlayerSide::P1
+            });
+            profile::set_session_joined(!p2_started, p2_started);
+            profile::set_fast_profile_switch_from_select_music(false);
         }
 
         if allow_offset_prompt && self.maybe_begin_gameplay_offset_prompt(from, target, false) {
@@ -3973,10 +4094,17 @@ impl App {
             self.state.screens.select_play_mode_state.active_color_index = current_color_index;
             select_mode::on_enter(&mut self.state.screens.select_play_mode_state);
         } else if target == CurrentScreen::ProfileLoad {
-            let current_color_index = if prev == CurrentScreen::SelectPlayMode {
-                self.state.screens.select_play_mode_state.active_color_index
-            } else {
-                self.state.screens.select_style_state.active_color_index
+            let current_color_index = match prev {
+                CurrentScreen::SelectPlayMode => {
+                    self.state.screens.select_play_mode_state.active_color_index
+                }
+                CurrentScreen::SelectStyle => self.state.screens.select_style_state.active_color_index,
+                CurrentScreen::SelectColor => self.state.screens.select_color_state.active_color_index,
+                CurrentScreen::SelectProfile => {
+                    self.state.screens.select_profile_state.active_color_index
+                }
+                CurrentScreen::Menu => self.state.screens.menu_state.active_color_index,
+                _ => self.state.screens.profile_load_state.active_color_index,
             };
             self.state.screens.profile_load_state = profile_load::init();
             self.state.screens.profile_load_state.active_color_index = current_color_index;
