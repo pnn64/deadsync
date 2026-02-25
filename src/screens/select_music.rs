@@ -517,6 +517,12 @@ fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cu
     ))
 }
 
+#[inline(always)]
+fn fallback_banner_key(active_color_index: i32) -> String {
+    let banner_num = active_color_index.rem_euclid(12) + 1;
+    format!("banner{banner_num}.png")
+}
+
 // Optimized formatter
 fn fmt_music_rate(rate: f32) -> Arc<str> {
     let rate = if rate.is_finite() { rate } else { 1.0 };
@@ -2044,7 +2050,7 @@ fn clear_preview(state: &mut State) {
 }
 
 #[inline(always)]
-fn sync_preview_song(state: &mut State, selected_song: Option<&Arc<SongData>>) {
+fn sync_preview_song(state: &mut State, selected_song: Option<&Arc<SongData>>, loop_preview: bool) {
     let music_path = selected_song.and_then(|s| s.music_path.clone());
     if state.currently_playing_preview_path == music_path {
         return;
@@ -2058,7 +2064,7 @@ fn sync_preview_song(state: &mut State, selected_song: Option<&Arc<SongData>>) {
             audio::play_music(
                 path,
                 cut,
-                true,
+                loop_preview,
                 crate::game::profile::get_session_music_rate(),
             );
         } else {
@@ -3263,7 +3269,10 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
             let song = song.clone();
             audio::play_sfx("assets/sounds/start.ogg");
             // ITGmania parity: force sample preview to start on selection finalize.
-            sync_preview_song(state, Some(&song));
+            let cfg = config::get();
+            if cfg.show_select_music_previews {
+                sync_preview_song(state, Some(&song), cfg.select_music_preview_loop);
+            }
             state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
             ScreenAction::None
         }
@@ -3705,6 +3714,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         return ScreenAction::None;
     }
 
+    let cfg = config::get();
+
     // --- Immediate Updates ---
     let (selected_song, selected_pack) = match state.entries.get(state.selected_index) {
         Some(MusicWheelEntry::Song(s)) => (Some(s.clone()), None),
@@ -3714,15 +3725,23 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         None => (None, None),
     };
 
-    let new_banner = selected_song
-        .as_ref()
-        .and_then(|s| s.banner_path.clone())
-        .or_else(|| {
-            selected_pack
-                .as_ref()
-                .and_then(|(_, p)| p.as_ref().cloned())
-        });
-    let new_cdtitle = selected_song.as_ref().and_then(|s| s.cdtitle_path.clone());
+    let new_banner = if cfg.show_select_music_banners {
+        selected_song
+            .as_ref()
+            .and_then(|s| s.banner_path.clone())
+            .or_else(|| {
+                selected_pack
+                    .as_ref()
+                    .and_then(|(_, p)| p.as_ref().cloned())
+            })
+    } else {
+        None
+    };
+    let new_cdtitle = if cfg.show_select_music_cdtitles {
+        selected_song.as_ref().and_then(|s| s.cdtitle_path.clone())
+    } else {
+        None
+    };
 
     if state.last_requested_banner_path != new_banner {
         state.last_requested_banner_path = new_banner.clone();
@@ -3747,13 +3766,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
 
     // --- Delayed Updates ---
-    if state.time_since_selection_change >= PREVIEW_DELAY_SECONDS {
-        sync_preview_song(state, selected_song.as_ref());
+    if cfg.show_select_music_previews && state.time_since_selection_change >= PREVIEW_DELAY_SECONDS {
+        sync_preview_song(state, selected_song.as_ref(), cfg.select_music_preview_loop);
     } else if state.currently_playing_preview_path.is_some() {
-        state.currently_playing_preview_path = None;
-        state.currently_playing_preview_start_sec = None;
-        state.currently_playing_preview_length_sec = None;
-        audio::stop_music();
+        clear_preview(state);
     }
 
     if allow_gs_fetch_for_selection(state) {
@@ -4058,6 +4074,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         None
     };
     let allow_gs_fetch = allow_gs_fetch_for_selection(state);
+    let cfg = config::get();
 
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
@@ -4113,7 +4130,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     actors.push(select_shared::build_session_timer(format_session_time(
         state.session_elapsed,
     )));
-    if crate::config::get().show_select_music_gameplay_timer {
+    if cfg.show_select_music_gameplay_timer {
         actors.push(select_shared::build_gameplay_timer(format_session_time(
             state.gameplay_elapsed,
         )));
@@ -4145,8 +4162,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         (0.75, screen_center_x() - 166.0, 96.0)
     };
-    actors.push(act!(sprite(state.current_banner_key.clone()): align(0.5, 0.5): xy(banner_cx, banner_cy): setsize(BANNER_NATIVE_WIDTH, BANNER_NATIVE_HEIGHT): zoom(banner_zoom): z(51)));
-    if let Some(cdtitle_key) = state.current_cdtitle_key.as_ref()
+    let banner_key = if cfg.show_select_music_banners {
+        state.current_banner_key.clone()
+    } else {
+        fallback_banner_key(state.active_color_index)
+    };
+    actors.push(act!(sprite(banner_key): align(0.5, 0.5): xy(banner_cx, banner_cy): setsize(BANNER_NATIVE_WIDTH, BANNER_NATIVE_HEIGHT): zoom(banner_zoom): z(51)));
+    if cfg.show_select_music_cdtitles
+        && let Some(cdtitle_key) = state.current_cdtitle_key.as_ref()
         && asset_manager.textures.contains_key(cdtitle_key)
         && let Some(tex) = crate::assets::texture_dims(cdtitle_key)
     {
@@ -4357,7 +4380,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Density Graph
     let panel_w = if is_wide() { 286.0 } else { 276.0 };
     let chart_info_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
-    let cfg = config::get();
     let breakdown_style = cfg.select_music_breakdown_style;
     let pattern_info_mode = cfg.select_music_pattern_info_mode;
     let build_breakdown_panel = |graph_cy: f32,
@@ -4450,30 +4472,32 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     };
 
-    if is_versus {
-        actors.push(build_breakdown_panel(
-            screen_center_y() + 23.0,
-            false,
-            &state.current_graph_key,
-            state.current_graph_mesh.clone(),
-            disp_chart_p1,
-        ));
-        actors.push(build_breakdown_panel(
-            screen_center_y() + 111.0,
-            true,
-            &state.current_graph_key_p2,
-            state.current_graph_mesh_p2.clone(),
-            disp_chart_p2,
-        ));
-    } else {
-        let graph_cy = screen_center_y() + if is_p2_single { 111.0 } else { 23.0 };
-        actors.push(build_breakdown_panel(
-            graph_cy,
-            is_p2_single,
-            &state.current_graph_key,
-            state.current_graph_mesh.clone(),
-            disp_chart_p1,
-        ));
+    if cfg.show_select_music_breakdown {
+        if is_versus {
+            actors.push(build_breakdown_panel(
+                screen_center_y() + 23.0,
+                false,
+                &state.current_graph_key,
+                state.current_graph_mesh.clone(),
+                disp_chart_p1,
+            ));
+            actors.push(build_breakdown_panel(
+                screen_center_y() + 111.0,
+                true,
+                &state.current_graph_key_p2,
+                state.current_graph_mesh_p2.clone(),
+                disp_chart_p2,
+            ));
+        } else {
+            let graph_cy = screen_center_y() + if is_p2_single { 111.0 } else { 23.0 };
+            actors.push(build_breakdown_panel(
+                graph_cy,
+                is_p2_single,
+                &state.current_graph_key,
+                state.current_graph_mesh.clone(),
+                disp_chart_p1,
+            ));
+        }
     }
 
     // Pane Display
@@ -4496,9 +4520,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                       meter: &str,
                       chart: Option<&ChartData>| {
         let gs_active = scores::is_gs_active_for_side(side);
+        let show_rivals = gs_active && cfg.show_select_music_scorebox;
         let show_ex_score = profile::get_for_side(side).show_ex_score;
 
-        let chart_hash = if allow_gs_fetch && gs_active {
+        let chart_hash = if allow_gs_fetch && show_rivals {
             chart.map(|c| c.short_hash.as_str())
         } else {
             None
@@ -4514,10 +4539,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 holds,
                 rolls,
             },
-            meter: (!gs_active).then_some(meter),
+            meter: (!show_rivals).then_some(meter),
         });
 
-        if gs_active {
+        if show_rivals {
             let placeholder = (
                 "----".to_string(),
                 gs_scorebox::unknown_score_percent_text(),
@@ -5020,6 +5045,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         song_text_color: None,
         song_text_color_overrides: None,
         song_has_edit_ptrs: Some(&state.song_has_edit_ptrs),
+        show_music_wheel_grades: cfg.show_music_wheel_grades,
+        show_music_wheel_lamps: cfg.show_music_wheel_lamps,
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());
 

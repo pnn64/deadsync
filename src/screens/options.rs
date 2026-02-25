@@ -4,7 +4,9 @@ use crate::core::display::{self, MonitorSpec};
 use crate::core::gfx::BackendType;
 use crate::core::space::{screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
-use crate::config::{self, BreakdownStyle, DisplayMode, FullscreenType, SimpleIni};
+use crate::config::{
+    self, BreakdownStyle, DisplayMode, FullscreenType, SelectMusicPatternInfoMode, SimpleIni,
+};
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
 #[cfg(target_os = "windows")]
@@ -233,18 +235,17 @@ pub const ITEMS: &[Item] = &[
         name: "Select Music Options",
         help: &[
             "Adjust behavior and display for the Select Music screen.",
-            "Music Wheel Scroll Speed",
-            "Breakdown Style",
-        ],
-    },
-    Item {
-        name: "Visual Options",
-        help: &[
-            "Change the way lyrics, backgrounds, etc. are displayed during gameplay; adjust overscan.",
-            "Appearance Options",
-            "Set Background Fit",
-            "Overscan Adjustment",
-            "CRT Test Patterns",
+            "Show Banners",
+            "Show Breakdown",
+            "Show Native Language",
+            "Music Wheel Speed",
+            "Show CDTitles",
+            "Show Music Wheel Grades",
+            "Show Music Wheel Lamps",
+            "Show Pattern Info",
+            "Music Previews",
+            "Show Gameplay Timer",
+            "Show Rivals",
         ],
     },
     Item {
@@ -261,6 +262,10 @@ pub const ITEMS: &[Item] = &[
         ],
     },
     Item {
+        name: "Course Options",
+        help: &["Adjust options related to course selection and course play behavior."],
+    },
+    Item {
         name: "Manage Local Profiles",
         help: &[
             "Create, edit, and manage player profiles that are stored on this computer.\n\nYou'll need a keyboard to use this screen.",
@@ -275,6 +280,10 @@ pub const ITEMS: &[Item] = &[
         ],
     },
     Item {
+        name: "Arrow Cloud Options",
+        help: &["Configure Arrow Cloud integration and related display behavior."],
+    },
+    Item {
         name: "Score Import",
         help: &[
             "Import online score data for a selected endpoint/profile and pack scope.",
@@ -285,8 +294,16 @@ pub const ITEMS: &[Item] = &[
         ],
     },
     Item {
+        name: "Cache / Parsing Options",
+        help: &["Adjust song cache and parsing settings."],
+    },
+    Item {
         name: "Reload Songs/Courses",
         help: &["Reload all songs and courses from disk without restarting."],
+    },
+    Item {
+        name: "Credits",
+        help: &["View deadsync and project credits."],
     },
     Item {
         name: "Exit",
@@ -464,9 +481,19 @@ const INPUT_BACKEND_CHOICES: &[&str] = &["Platform Default"];
 const INPUT_BACKEND_INLINE: bool = true;
 #[cfg(not(target_os = "windows"))]
 const INPUT_BACKEND_INLINE: bool = false;
-const SELECT_MUSIC_ROW_WHEEL_SPEED: &str = "Music Wheel Scroll Speed";
+const SELECT_MUSIC_ROW_SHOW_BANNERS: &str = "Show Banners";
+const SELECT_MUSIC_ROW_SHOW_BREAKDOWN: &str = "Show Breakdown";
 const SELECT_MUSIC_ROW_BREAKDOWN_STYLE: &str = "Breakdown Style";
-const SELECT_MUSIC_ROW_GS_SCOREBOX: &str = "GS Scorebox";
+const SELECT_MUSIC_ROW_NATIVE_LANGUAGE: &str = "Show Native Language";
+const SELECT_MUSIC_ROW_WHEEL_SPEED: &str = "Music Wheel Speed";
+const SELECT_MUSIC_ROW_CDTITLES: &str = "Show CDTitles";
+const SELECT_MUSIC_ROW_WHEEL_GRADES: &str = "Show Music Wheel Grades";
+const SELECT_MUSIC_ROW_WHEEL_LAMPS: &str = "Show Music Wheel Lamps";
+const SELECT_MUSIC_ROW_PATTERN_INFO: &str = "Show Pattern Info";
+const SELECT_MUSIC_ROW_PREVIEWS: &str = "Music Previews";
+const SELECT_MUSIC_ROW_PREVIEW_LOOP: &str = "Loop Music";
+const SELECT_MUSIC_ROW_GAMEPLAY_TIMER: &str = "Show Gameplay Timer";
+const SELECT_MUSIC_ROW_SHOW_RIVALS: &str = "Show Rivals";
 const MACHINE_ROW_SELECT_PROFILE: &str = "Select Profile";
 const MACHINE_ROW_SELECT_COLOR: &str = "Select Color";
 const MACHINE_ROW_SELECT_STYLE: &str = "Select Style";
@@ -596,13 +623,25 @@ const FULLSCREEN_TYPE_ROW_INDEX: usize = 6;
 const GRAPHICS_ROW_VIDEO_RENDERER: &str = "Video Renderer";
 const GRAPHICS_ROW_SOFTWARE_THREADS: &str = "Software Renderer Threads";
 const GRAPHICS_ROW_VALIDATION_LAYERS: &str = "Validation Layers";
+const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 1;
+const SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX: usize = 2;
+const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 9;
+const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 10;
 
 const BG_BRIGHTNESS_CHOICES: [&str; 11] = [
     "0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%",
 ];
 const CENTERED_P1_NOTEFIELD_CHOICES: [&str; 2] = ["Off", "On"];
-const MUSIC_WHEEL_SCROLL_SPEED_CHOICES: [&str; 4] = ["Slow", "Normal", "Fast", "Really Fast"];
-const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 4] = [5, 10, 15, 25];
+const MUSIC_WHEEL_SCROLL_SPEED_CHOICES: [&str; 7] = [
+    "Slow",
+    "Normal",
+    "Fast",
+    "Faster",
+    "Ridiculous",
+    "Ludicrous",
+    "Plaid",
+];
+const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] = [5, 10, 15, 25, 30, 45, 100];
 
 const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
     (1920, 1080),
@@ -1015,8 +1054,13 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
 
 pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: SELECT_MUSIC_ROW_WHEEL_SPEED,
-        choices: &MUSIC_WHEEL_SCROLL_SPEED_CHOICES,
+        label: SELECT_MUSIC_ROW_SHOW_BANNERS,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
+        label: SELECT_MUSIC_ROW_SHOW_BREAKDOWN,
+        choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
@@ -1025,7 +1069,52 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_GS_SCOREBOX,
+        label: SELECT_MUSIC_ROW_NATIVE_LANGUAGE,
+        choices: &["Translit", "Native"],
+        inline: true,
+    },
+    SubRow {
+        label: SELECT_MUSIC_ROW_WHEEL_SPEED,
+        choices: &MUSIC_WHEEL_SCROLL_SPEED_CHOICES,
+        inline: true,
+    },
+    SubRow {
+        label: SELECT_MUSIC_ROW_CDTITLES,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
+        label: SELECT_MUSIC_ROW_WHEEL_GRADES,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
+        label: SELECT_MUSIC_ROW_WHEEL_LAMPS,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
+        label: SELECT_MUSIC_ROW_PATTERN_INFO,
+        choices: &["Auto", "Tech", "Stamina"],
+        inline: true,
+    },
+    SubRow {
+        label: SELECT_MUSIC_ROW_PREVIEWS,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
+        label: SELECT_MUSIC_ROW_PREVIEW_LOOP,
+        choices: &["Play Once", "Loop"],
+        inline: true,
+    },
+    SubRow {
+        label: SELECT_MUSIC_ROW_GAMEPLAY_TIMER,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
+        label: SELECT_MUSIC_ROW_SHOW_RIVALS,
         choices: &["No", "Yes"],
         inline: true,
     },
@@ -1033,11 +1122,12 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
 
 pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     Item {
-        name: SELECT_MUSIC_ROW_WHEEL_SPEED,
-        help: &[
-            "Set Select Music wheel hold-scroll speed.",
-            "Parity mapping: Slow=5, Normal=10, Fast=15, Really Fast=25.",
-        ],
+        name: SELECT_MUSIC_ROW_SHOW_BANNERS,
+        help: &["Show song/pack banners or force color fallback banners."],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_SHOW_BREAKDOWN,
+        help: &["Show or hide the stream breakdown panel in Select Music."],
     },
     Item {
         name: SELECT_MUSIC_ROW_BREAKDOWN_STYLE,
@@ -1048,8 +1138,56 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         ],
     },
     Item {
-        name: SELECT_MUSIC_ROW_GS_SCOREBOX,
-        help: &["Show or hide the GrooveStats scorebox on Select Music."],
+        name: SELECT_MUSIC_ROW_NATIVE_LANGUAGE,
+        help: &[
+            "Choose how wheel titles are displayed.",
+            "Translit uses transliterated tags when available; Native uses original tags.",
+        ],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_WHEEL_SPEED,
+        help: &[
+            "Set Select Music wheel hold-scroll speed.",
+            "Parity mapping: Slow=5, Normal=10, Fast=15, Faster=25, Ridiculous=30, Ludicrous=45, Plaid=100.",
+        ],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_CDTITLES,
+        help: &["Show or hide CDTitle sprites on Select Music."],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_WHEEL_GRADES,
+        help: &["Show or hide grade sprites on wheel rows."],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_WHEEL_LAMPS,
+        help: &["Show or hide lamp indicators on wheel rows."],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_PATTERN_INFO,
+        help: &[
+            "Choose whether the lower chart info panel favors Tech, Stamina, or Auto detection.",
+            "Recommended: Tech.",
+        ],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_PREVIEWS,
+        help: &["Enable or disable Select Music audio previews."],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_PREVIEW_LOOP,
+        help: &["Choose whether previews loop or play once."],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_GAMEPLAY_TIMER,
+        help: &["Show the gameplay session timer on Select Music."],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_SHOW_RIVALS,
+        help: &[
+            "Show rivals in pane/scorebox areas when available.",
+            "When off, selected difficulty remains visible in the pane.",
+        ],
     },
     Item {
         name: "Exit",
@@ -1273,20 +1411,48 @@ fn graphics_show_software_threads(state: &State) -> bool {
 }
 
 fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow<'_>]) -> Vec<usize> {
-    if !matches!(kind, SubmenuKind::Graphics) {
-        return (0..rows.len()).collect();
+    match kind {
+        SubmenuKind::Graphics => {
+            let show_sw = graphics_show_software_threads(state);
+            rows.iter()
+                .enumerate()
+                .filter_map(|(idx, row)| {
+                    if row.label == GRAPHICS_ROW_SOFTWARE_THREADS && !show_sw {
+                        None
+                    } else {
+                        Some(idx)
+                    }
+                })
+                .collect()
+        }
+        SubmenuKind::SelectMusic => {
+            let show_breakdown = state
+                .sub_choice_indices_select_music
+                .get(SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX)
+                .copied()
+                .unwrap_or(1)
+                == 1;
+            let show_previews = state
+                .sub_choice_indices_select_music
+                .get(SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX)
+                .copied()
+                .unwrap_or(1)
+                == 1;
+            rows.iter()
+                .enumerate()
+                .filter_map(|(idx, _)| {
+                    if idx == SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX && !show_breakdown {
+                        None
+                    } else if idx == SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX && !show_previews {
+                        None
+                    } else {
+                        Some(idx)
+                    }
+                })
+                .collect()
+        }
+        _ => (0..rows.len()).collect(),
     }
-    let show_sw = graphics_show_software_threads(state);
-    rows.iter()
-        .enumerate()
-        .filter_map(|(idx, row)| {
-            if row.label == GRAPHICS_ROW_SOFTWARE_THREADS && !show_sw {
-                None
-            } else {
-                Some(idx)
-            }
-        })
-        .collect()
 }
 
 fn submenu_total_rows(state: &State, kind: SubmenuKind) -> usize {
@@ -2143,6 +2309,30 @@ const fn breakdown_style_from_choice(idx: usize) -> BreakdownStyle {
     }
 }
 
+const fn translated_titles_choice_index(translated_titles: bool) -> usize {
+    if translated_titles { 0 } else { 1 }
+}
+
+const fn translated_titles_from_choice(idx: usize) -> bool {
+    idx == 0
+}
+
+const fn select_music_pattern_info_choice_index(mode: SelectMusicPatternInfoMode) -> usize {
+    match mode {
+        SelectMusicPatternInfoMode::Auto => 0,
+        SelectMusicPatternInfoMode::Tech => 1,
+        SelectMusicPatternInfoMode::Stamina => 2,
+    }
+}
+
+const fn select_music_pattern_info_from_choice(idx: usize) -> SelectMusicPatternInfoMode {
+    match idx {
+        1 => SelectMusicPatternInfoMode::Tech,
+        2 => SelectMusicPatternInfoMode::Stamina,
+        _ => SelectMusicPatternInfoMode::Auto,
+    }
+}
+
 pub struct State {
     pub selected: usize,
     prev_selected: usize,
@@ -2225,6 +2415,7 @@ pub struct State {
     // Shared row tween state for the active view (main list or submenu list).
     row_tweens: Vec<RowTween>,
     graphics_prev_visible_rows: Vec<usize>,
+    select_music_prev_visible_rows: Vec<usize>,
 }
 
 pub fn init() -> State {
@@ -2322,6 +2513,7 @@ pub fn init() -> State {
         cursor_t: 1.0,
         row_tweens: Vec::new(),
         graphics_prev_visible_rows: Vec::new(),
+        select_music_prev_visible_rows: Vec::new(),
     };
 
     sync_video_renderer(&mut state, cfg.video_renderer);
@@ -2512,8 +2704,14 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_WHEEL_SPEED,
-        music_wheel_scroll_speed_choice_index(cfg.music_wheel_switch_speed),
+        SELECT_MUSIC_ROW_SHOW_BANNERS,
+        usize::from(cfg.show_select_music_banners),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_SHOW_BREAKDOWN,
+        usize::from(cfg.show_select_music_breakdown),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
@@ -2524,7 +2722,61 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_GS_SCOREBOX,
+        SELECT_MUSIC_ROW_NATIVE_LANGUAGE,
+        translated_titles_choice_index(cfg.translated_titles),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_WHEEL_SPEED,
+        music_wheel_scroll_speed_choice_index(cfg.music_wheel_switch_speed),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_CDTITLES,
+        usize::from(cfg.show_select_music_cdtitles),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_WHEEL_GRADES,
+        usize::from(cfg.show_music_wheel_grades),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_WHEEL_LAMPS,
+        usize::from(cfg.show_music_wheel_lamps),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_PATTERN_INFO,
+        select_music_pattern_info_choice_index(cfg.select_music_pattern_info_mode),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_PREVIEWS,
+        usize::from(cfg.show_select_music_previews),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_PREVIEW_LOOP,
+        usize::from(cfg.select_music_preview_loop),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_GAMEPLAY_TIMER,
+        usize::from(cfg.show_select_music_gameplay_timer),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_SHOW_RIVALS,
         usize::from(cfg.show_select_music_scorebox),
     );
     set_choice_by_label(
@@ -2940,6 +3192,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 state.cursor_t = 1.0;
                 state.row_tweens.clear();
                 state.graphics_prev_visible_rows.clear();
+                state.select_music_prev_visible_rows.clear();
                 state.nav_key_held_direction = None;
                 state.nav_key_held_since = None;
                 state.nav_key_last_scrolled_at = None;
@@ -2996,6 +3249,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 state.cursor_t = 1.0;
                 state.row_tweens.clear();
                 state.graphics_prev_visible_rows.clear();
+                state.select_music_prev_visible_rows.clear();
                 state.nav_key_held_direction = None;
                 state.nav_key_held_since = None;
                 state.nav_key_last_scrolled_at = None;
@@ -3150,10 +3404,15 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             );
             state.cursor_initialized = false;
             state.graphics_prev_visible_rows.clear();
+            state.select_music_prev_visible_rows.clear();
         }
         OptionsView::Submenu(kind) => {
             if matches!(kind, SubmenuKind::Graphics) {
                 update_graphics_row_tweens(state, s, list_y, dt);
+                state.select_music_prev_visible_rows.clear();
+            } else if matches!(kind, SubmenuKind::SelectMusic) {
+                update_select_music_row_tweens(state, s, list_y, dt);
+                state.graphics_prev_visible_rows.clear();
             } else {
                 let total_rows = submenu_total_rows(state, kind);
                 update_row_tweens(
@@ -3165,6 +3424,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     dt,
                 );
                 state.graphics_prev_visible_rows.clear();
+                state.select_music_prev_visible_rows.clear();
             }
             let list_w = LIST_W * s;
             if let Some((to_x, to_y, to_w, to_h)) =
@@ -3483,13 +3743,33 @@ fn apply_submenu_choice_delta(
         }
     } else if matches!(kind, SubmenuKind::SelectMusic) {
         let row = &rows[row_index];
-        if row.label == SELECT_MUSIC_ROW_BREAKDOWN_STYLE {
+        if row.label == SELECT_MUSIC_ROW_SHOW_BANNERS {
+            config::update_show_select_music_banners(new_index == 1);
+        } else if row.label == SELECT_MUSIC_ROW_SHOW_BREAKDOWN {
+            config::update_show_select_music_breakdown(new_index == 1);
+        } else if row.label == SELECT_MUSIC_ROW_BREAKDOWN_STYLE {
             config::update_select_music_breakdown_style(breakdown_style_from_choice(new_index));
+        } else if row.label == SELECT_MUSIC_ROW_NATIVE_LANGUAGE {
+            config::update_translated_titles(translated_titles_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_WHEEL_SPEED {
-            config::update_music_wheel_switch_speed(music_wheel_scroll_speed_from_choice(
+            config::update_music_wheel_switch_speed(music_wheel_scroll_speed_from_choice(new_index));
+        } else if row.label == SELECT_MUSIC_ROW_CDTITLES {
+            config::update_show_select_music_cdtitles(new_index == 1);
+        } else if row.label == SELECT_MUSIC_ROW_WHEEL_GRADES {
+            config::update_show_music_wheel_grades(new_index == 1);
+        } else if row.label == SELECT_MUSIC_ROW_WHEEL_LAMPS {
+            config::update_show_music_wheel_lamps(new_index == 1);
+        } else if row.label == SELECT_MUSIC_ROW_PATTERN_INFO {
+            config::update_select_music_pattern_info_mode(select_music_pattern_info_from_choice(
                 new_index,
             ));
-        } else if row.label == SELECT_MUSIC_ROW_GS_SCOREBOX {
+        } else if row.label == SELECT_MUSIC_ROW_PREVIEWS {
+            config::update_show_select_music_previews(new_index == 1);
+        } else if row.label == SELECT_MUSIC_ROW_PREVIEW_LOOP {
+            config::update_select_music_preview_loop(new_index == 1);
+        } else if row.label == SELECT_MUSIC_ROW_GAMEPLAY_TIMER {
+            config::update_show_select_music_gameplay_timer(new_index == 1);
+        } else if row.label == SELECT_MUSIC_ROW_SHOW_RIVALS {
             config::update_show_select_music_scorebox(new_index == 1);
         }
     } else if matches!(kind, SubmenuKind::GrooveStats) {
@@ -4043,6 +4323,95 @@ fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
     }
 
     state.graphics_prev_visible_rows = visible_rows;
+    update_row_tweens(
+        &mut state.row_tweens,
+        total_rows,
+        selected,
+        s,
+        list_y,
+        dt,
+    );
+}
+
+const fn select_music_parent_row(actual_idx: usize) -> Option<usize> {
+    match actual_idx {
+        SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX => Some(SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX),
+        SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX => Some(SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX),
+        _ => None,
+    }
+}
+
+fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
+    let rows = submenu_rows(SubmenuKind::SelectMusic);
+    let visible_rows = submenu_visible_row_indices(state, SubmenuKind::SelectMusic, rows);
+    let total_rows = visible_rows.len() + 1;
+    if total_rows == 0 {
+        state.row_tweens.clear();
+        state.select_music_prev_visible_rows.clear();
+        return;
+    }
+
+    let selected = state.sub_selected.min(total_rows.saturating_sub(1));
+    let visibility_changed = state.select_music_prev_visible_rows != visible_rows;
+    if state.row_tweens.is_empty() {
+        state.row_tweens = init_row_tweens(total_rows, selected, s, list_y);
+    } else if state.row_tweens.len() != total_rows || visibility_changed {
+        let old_tweens = std::mem::take(&mut state.row_tweens);
+        let old_visible_rows = state.select_music_prev_visible_rows.clone();
+        let old_total_rows = old_visible_rows.len() + 1;
+        let old_exit_from = old_tweens
+            .get(old_total_rows.saturating_sub(1))
+            .map(|tw| (tw.y(), tw.a()));
+
+        let mut mapped: Vec<RowTween> = Vec::with_capacity(total_rows);
+        for (new_idx, actual_idx) in visible_rows.iter().copied().enumerate() {
+            let (to_y, to_a) = row_dest_for_index(total_rows, selected, new_idx, s, list_y);
+            let parent_from = select_music_parent_row(actual_idx).and_then(|parent_actual_idx| {
+                old_visible_rows
+                    .iter()
+                    .position(|&idx| idx == parent_actual_idx)
+                    .and_then(|old_idx| old_tweens.get(old_idx))
+                    .map(|tw| (tw.y(), 0.0))
+            });
+            let (from_y, from_a) = old_visible_rows
+                .iter()
+                .position(|&old_actual| old_actual == actual_idx)
+                .and_then(|old_idx| old_tweens.get(old_idx).map(|tw| (tw.y(), tw.a())))
+                .or(parent_from)
+                .unwrap_or((to_y, to_a));
+            let t = if (to_y - from_y).abs() <= 0.01 && (to_a - from_a).abs() <= 0.001 {
+                1.0
+            } else {
+                0.0
+            };
+            mapped.push(RowTween {
+                from_y,
+                to_y,
+                from_a,
+                to_a,
+                t,
+            });
+        }
+
+        let exit_idx = total_rows.saturating_sub(1);
+        let (to_y, to_a) = row_dest_for_index(total_rows, selected, exit_idx, s, list_y);
+        let (from_y, from_a) = old_exit_from.unwrap_or((to_y, to_a));
+        let t = if (to_y - from_y).abs() <= 0.01 && (to_a - from_a).abs() <= 0.001 {
+            1.0
+        } else {
+            0.0
+        };
+        mapped.push(RowTween {
+            from_y,
+            to_y,
+            from_a,
+            to_a,
+            t,
+        });
+        state.row_tweens = mapped;
+    }
+
+    state.select_music_prev_visible_rows = visible_rows;
     update_row_tweens(
         &mut state.row_tweens,
         total_rows,

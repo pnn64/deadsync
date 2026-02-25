@@ -287,6 +287,13 @@ pub struct Config {
     pub song_parsing_threads: u8,
     pub simply_love_color: i32,
     pub show_select_music_gameplay_timer: bool,
+    pub show_select_music_banners: bool,
+    pub show_select_music_breakdown: bool,
+    pub show_select_music_cdtitles: bool,
+    pub show_music_wheel_grades: bool,
+    pub show_music_wheel_lamps: bool,
+    pub show_select_music_previews: bool,
+    pub select_music_preview_loop: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart.
     pub keyboard_features: bool,
     /// Startup flow: show Select Profile before continuing.
@@ -360,6 +367,13 @@ impl Default for Config {
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             show_select_music_gameplay_timer: true,
+            show_select_music_banners: true,
+            show_select_music_breakdown: true,
+            show_select_music_cdtitles: true,
+            show_music_wheel_grades: true,
+            show_music_wheel_lamps: true,
+            show_select_music_previews: true,
+            select_music_preview_loop: true,
             keyboard_features: true,
             machine_show_select_profile: true,
             machine_show_select_color: true,
@@ -550,6 +564,62 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "SelectMusicBreakdown={}\n",
         default.select_music_breakdown_style.as_str()
+    ));
+    content.push_str(&format!(
+        "SelectMusicShowBanners={}\n",
+        if default.show_select_music_banners {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicShowBreakdown={}\n",
+        if default.show_select_music_breakdown {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicShowCDTitles={}\n",
+        if default.show_select_music_cdtitles {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicWheelGrades={}\n",
+        if default.show_music_wheel_grades {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicWheelLamps={}\n",
+        if default.show_music_wheel_lamps {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicPreviews={}\n",
+        if default.show_select_music_previews {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicPreviewLoop={}\n",
+        if default.select_music_preview_loop {
+            "1"
+        } else {
+            "0"
+        }
     ));
     content.push_str(&format!(
         "SelectMusicPatternInfo={}\n",
@@ -942,6 +1012,34 @@ pub fn load() {
                     .get("Options", "SelectMusicBreakdown")
                     .and_then(|v| BreakdownStyle::from_str(&v).ok())
                     .unwrap_or(default.select_music_breakdown_style);
+                cfg.show_select_music_banners = conf
+                    .get("Options", "SelectMusicShowBanners")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_select_music_banners, |v| v != 0);
+                cfg.show_select_music_breakdown = conf
+                    .get("Options", "SelectMusicShowBreakdown")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_select_music_breakdown, |v| v != 0);
+                cfg.show_select_music_cdtitles = conf
+                    .get("Options", "SelectMusicShowCDTitles")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_select_music_cdtitles, |v| v != 0);
+                cfg.show_music_wheel_grades = conf
+                    .get("Options", "SelectMusicWheelGrades")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_music_wheel_grades, |v| v != 0);
+                cfg.show_music_wheel_lamps = conf
+                    .get("Options", "SelectMusicWheelLamps")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_music_wheel_lamps, |v| v != 0);
+                cfg.show_select_music_previews = conf
+                    .get("Options", "SelectMusicPreviews")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_select_music_previews, |v| v != 0);
+                cfg.select_music_preview_loop = conf
+                    .get("Options", "SelectMusicPreviewLoop")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.select_music_preview_loop, |v| v != 0);
                 cfg.select_music_pattern_info_mode = conf
                     .get("Options", "SelectMusicPatternInfo")
                     .and_then(|v| SelectMusicPatternInfoMode::from_str(&v).ok())
@@ -1267,6 +1365,13 @@ pub fn load() {
                     "SongParsingThreads",
                     "RateModPreservesPitch",
                     "SelectMusicBreakdown",
+                    "SelectMusicShowBanners",
+                    "SelectMusicShowBreakdown",
+                    "SelectMusicShowCDTitles",
+                    "SelectMusicWheelGrades",
+                    "SelectMusicWheelLamps",
+                    "SelectMusicPreviews",
+                    "SelectMusicPreviewLoop",
                     "SelectMusicPatternInfo",
                     "SelectMusicScorebox",
                     "ShowStats",
@@ -2058,6 +2163,62 @@ fn save_without_keymaps() {
         cfg.select_music_breakdown_style.as_str()
     ));
     content.push_str(&format!(
+        "SelectMusicShowBanners={}\n",
+        if cfg.show_select_music_banners {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicShowBreakdown={}\n",
+        if cfg.show_select_music_breakdown {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicShowCDTitles={}\n",
+        if cfg.show_select_music_cdtitles {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicWheelGrades={}\n",
+        if cfg.show_music_wheel_grades {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicWheelLamps={}\n",
+        if cfg.show_music_wheel_lamps {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicPreviews={}\n",
+        if cfg.show_select_music_previews {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicPreviewLoop={}\n",
+        if cfg.select_music_preview_loop {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "SelectMusicPatternInfo={}\n",
         cfg.select_music_pattern_info_mode.as_str()
     ));
@@ -2487,6 +2648,17 @@ pub fn update_music_wheel_switch_speed(speed: u8) {
     save_without_keymaps();
 }
 
+pub fn update_translated_titles(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.translated_titles == enabled {
+            return;
+        }
+        cfg.translated_titles = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_rate_mod_preserves_pitch(enabled: bool) {
     {
         let mut cfg = CONFIG.lock().unwrap();
@@ -2505,6 +2677,105 @@ pub fn update_select_music_breakdown_style(style: BreakdownStyle) {
             return;
         }
         cfg.select_music_breakdown_style = style;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_select_music_breakdown(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.show_select_music_breakdown == enabled {
+            return;
+        }
+        cfg.show_select_music_breakdown = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_select_music_banners(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.show_select_music_banners == enabled {
+            return;
+        }
+        cfg.show_select_music_banners = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_select_music_cdtitles(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.show_select_music_cdtitles == enabled {
+            return;
+        }
+        cfg.show_select_music_cdtitles = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_music_wheel_grades(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.show_music_wheel_grades == enabled {
+            return;
+        }
+        cfg.show_music_wheel_grades = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_music_wheel_lamps(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.show_music_wheel_lamps == enabled {
+            return;
+        }
+        cfg.show_music_wheel_lamps = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_select_music_previews(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.show_select_music_previews == enabled {
+            return;
+        }
+        cfg.show_select_music_previews = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_preview_loop(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.select_music_preview_loop == enabled {
+            return;
+        }
+        cfg.select_music_preview_loop = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_pattern_info_mode(mode: SelectMusicPatternInfoMode) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.select_music_pattern_info_mode == mode {
+            return;
+        }
+        cfg.select_music_pattern_info_mode = mode;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_select_music_gameplay_timer(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.show_select_music_gameplay_timer == enabled {
+            return;
+        }
+        cfg.show_select_music_gameplay_timer = enabled;
     }
     save_without_keymaps();
 }
