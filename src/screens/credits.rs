@@ -17,6 +17,11 @@ const ITEM_PADDING_START: f32 = 4.0;
 const ITEM_PADDING_END: f32 = 15.0;
 const SECONDS_PER_ITEM: f32 = 0.5;
 const BASE_Y_FROM_BOTTOM: f32 = 64.0;
+const CINEMATIC_ANIM_SECONDS: f32 = 1.8;
+const CINEMATIC_BAR_MAX_H: f32 = 54.0;
+const CINEMATIC_BAR_MAX_ALPHA: f32 = 1.0;
+const CINEMATIC_TINT_RGBA: [f32; 4] = [0.06, 0.1, 0.13, 1.0];
+const CINEMATIC_TINT_MAX_ALPHA: f32 = 0.2;
 
 const SECTION_COLOR: [f32; 4] = [0.533, 0.867, 1.0, 1.0];
 const SECTION_ACCENT: [f32; 4] = [0.267, 0.4, 0.533, 1.0];
@@ -66,9 +71,50 @@ const fn spacer() -> CreditLine {
 }
 
 const CREDITS: &[CreditLine] = &[
-    section("deadsync Team"),
-    name("Clean-room ITGmania + Simply Love parity project"),
-    name("Built in Rust from scratch"),
+    section("DeadSync Team"),
+    name("Patrik Nilsson (PerfectTaste)"),
+    name("Lead Developer & Project Maintainer"),
+    spacer(),
+    spacer(),
+    section("DeadSync Contributors"),
+    name("Mason Boeman (maboesanman)"),
+    name("DolphinChips"),
+    name("rehtlaw"),
+    spacer(),
+    spacer(),
+    section("rssp Contributors"),
+    name("Celeste Clark (celex3)"),
+    spacer(),
+    spacer(),
+    section("Acknowledgements"),
+    name("DeadSync would not exist without years of work"),
+    name("from the StepMania and ITG communities."),
+    spacer(),
+    subsection("StepMania"),
+    name("StepMania and its contributors for creating"),
+    name("the original engine that made all this possible,"),
+    name("including the original StepMania Team"),
+    name("and the StepMania 5 developers."),
+    spacer(),
+    subsection("ITGmania"),
+    name("ITGmania and its developers for shaping"),
+    name("the modern ITG experience on dedicated machines."),
+    spacer(),
+    subsection("Simply Love"),
+    name("Simply Love, its maintainers, and forks"),
+    name("such as zmod, whose work defines much"),
+    name("of the current ITG player experience."),
+    name("Thanks to zmod (Zarzob and Zankoku)."),
+    spacer(),
+    subsection("Community Projects"),
+    name("Stamina Nation"),
+    name("ITC (International Timing Collective)"),
+    name("Wafles for Arrow Cloud"),
+    name("Rafal Florczak (florczakraf) for BoogieStats"),
+    name("and its contributors"),
+    spacer(),
+    name("And everyone who has written themes, noteskins,"),
+    name("tools, and simfiles for the community over the years."),
     spacer(),
     spacer(),
     section("ITGmania Team"),
@@ -76,17 +122,6 @@ const CREDITS: &[CreditLine] = &[
     name("teejusb"),
     spacer(),
     spacer(),
-    section("spinal shark collective"),
-    name("AJ Kelly (freem)"),
-    name("Jonathan Payne (Midiman)"),
-    name("Colby Klein (shakesoda)"),
-    spacer(),
-    spacer(),
-    section("sm-ssc Team"),
-    name("Jason Felds (wolfman2000)"),
-    name("Thai Pangsakulyanont (theDtTvB)"),
-    name("Alberto Ramos (Daisuke Master)"),
-    name("Jack Walstrom (FSX)"),
     spacer(),
     spacer(),
     section("StepMania Team"),
@@ -97,20 +132,6 @@ const CREDITS: &[CreditLine] = &[
     spacer(),
     spacer(),
     section("Other Contributors"),
-    subsection("ITGmania"),
-    name("Club Fantastic"),
-    name("DinsFire64"),
-    name("EvocaitArt"),
-    name("jenx"),
-    name("LightningXCE"),
-    subsection("StepMania"),
-    name("kyzentun"),
-    name("nixtrix"),
-    name("Sakurana-Kobato"),
-    name("Wallacoloo"),
-    name("and more"),
-    spacer(),
-    spacer(),
     section("Special Thanks"),
     name("Pack creators"),
     name("Chart authors"),
@@ -120,7 +141,7 @@ const CREDITS: &[CreditLine] = &[
     spacer(),
     spacer(),
     section("Copyright"),
-    name("ITGmania is released under the MIT license."),
+    name("DeadSync is released under the GPL-3.0 license."),
     name("All game content remains property of its owners."),
 ];
 
@@ -129,6 +150,7 @@ const TOTAL_SCROLL_ITEMS: f32 = CREDITS.len() as f32 + ITEM_PADDING_START + ITEM
 pub struct State {
     pub active_color_index: i32,
     bg: heart_bg::State,
+    enter_elapsed: f32,
     scroll_items: f32,
 }
 
@@ -136,6 +158,7 @@ pub fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: heart_bg::State::new(),
+        enter_elapsed: 0.0,
         scroll_items: 0.0,
     }
 }
@@ -144,6 +167,7 @@ pub fn update(state: &mut State, dt: f32) {
     if dt <= 0.0 {
         return;
     }
+    state.enter_elapsed += dt;
     let scroll_speed = 1.0 / SECONDS_PER_ITEM;
     state.scroll_items = (state.scroll_items + dt * scroll_speed) % TOTAL_SCROLL_ITEMS;
 }
@@ -165,6 +189,12 @@ const fn line_colors(kind: CreditLineKind) -> ([f32; 4], [f32; 4]) {
     }
 }
 
+#[inline(always)]
+fn ease_out_cubic(t: f32) -> f32 {
+    let u = 1.0 - t.clamp(0.0, 1.0);
+    1.0 - u * u * u
+}
+
 pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
     if !ev.pressed {
         return ScreenAction::None;
@@ -174,7 +204,7 @@ pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_start
         | VirtualAction::p2_start
         | VirtualAction::p1_back
-        | VirtualAction::p2_back => ScreenAction::Navigate(Screen::Options),
+        | VirtualAction::p2_back => ScreenAction::NavigateNoFade(Screen::Options),
         _ => ScreenAction::None,
     }
 }
@@ -189,6 +219,23 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
     }));
+
+    let cinematic_t = ease_out_cubic((state.enter_elapsed / CINEMATIC_ANIM_SECONDS).clamp(0.0, 1.0));
+    let tint_alpha = CINEMATIC_TINT_MAX_ALPHA * cinematic_t;
+    if tint_alpha > 0.0 {
+        actors.push(act!(quad:
+            align(0.0, 0.0):
+            xy(0.0, 0.0):
+            zoomto(screen_w, screen_h):
+            diffuse(
+                CINEMATIC_TINT_RGBA[0],
+                CINEMATIC_TINT_RGBA[1],
+                CINEMATIC_TINT_RGBA[2],
+                CINEMATIC_TINT_RGBA[3] * tint_alpha
+            ):
+            z(5)
+        ));
+    }
 
     let scroll_px = state.scroll_items * LINE_HEIGHT;
     let total_scroll_px = TOTAL_SCROLL_ITEMS * LINE_HEIGHT;
@@ -225,28 +272,30 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         }
     }
 
-    // Slight matte masks mimic the fallback screen framing.
-    let matte_h = 42.0;
-    actors.push(act!(quad:
-        align(0.0, 0.0):
-        xy(0.0, 0.0):
-        zoomto(screen_w, matte_h):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        z(30)
-    ));
-    actors.push(act!(quad:
-        align(0.0, 1.0):
-        xy(0.0, screen_h):
-        zoomto(screen_w, matte_h):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        z(30)
-    ));
+    // Cinematic letterbox bars easing in from the edges.
+    let matte_h = CINEMATIC_BAR_MAX_H * cinematic_t;
+    if matte_h > 0.0 {
+        actors.push(act!(quad:
+            align(0.0, 0.0):
+            xy(0.0, 0.0):
+            zoomto(screen_w, matte_h):
+            diffuse(0.0, 0.0, 0.0, CINEMATIC_BAR_MAX_ALPHA):
+            z(30)
+        ));
+        actors.push(act!(quad:
+            align(0.0, 1.0):
+            xy(0.0, screen_h):
+            zoomto(screen_w, matte_h):
+            diffuse(0.0, 0.0, 0.0, CINEMATIC_BAR_MAX_ALPHA):
+            z(30)
+        ));
+    }
 
     actors.push(act!(text:
         font("miso"):
-        settext("Press Start or Back to return"):
-        align(0.5, 1.0):
-        xy(screen_center_x(), screen_h - 12.0):
+        settext("Press &START; and &BACK; to return"):
+        align(0.5, 0.5):
+        xy(screen_center_x(), screen_h - CINEMATIC_BAR_MAX_H * 0.5):
         zoom(0.7):
         horizalign(center):
         diffuse(1.0, 1.0, 1.0, 0.8):

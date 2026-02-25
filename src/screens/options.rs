@@ -4365,7 +4365,7 @@ pub fn handle_input(
                         }
                         "Credits" => {
                             audio::play_sfx("assets/sounds/start.ogg");
-                            return ScreenAction::Navigate(Screen::Credits);
+                            return ScreenAction::NavigateNoFade(Screen::Credits);
                         }
                         // Exit from Options back to Menu.
                         "Exit" => {

@@ -3859,11 +3859,20 @@ impl App {
             self.update_options_monitor_specs(event_loop);
         }
 
-        let (_, in_duration) = self.get_in_transition_for_screen(target);
-        self.state.shell.transition = TransitionState::FadingIn {
-            elapsed: 0.0,
-            duration: in_duration,
-        };
+        let instant_options_credits_swap = matches!(
+            (prev, target),
+            (CurrentScreen::Options, CurrentScreen::Credits)
+                | (CurrentScreen::Credits, CurrentScreen::Options)
+        );
+        if instant_options_credits_swap {
+            self.state.shell.transition = TransitionState::Idle;
+        } else {
+            let (_, in_duration) = self.get_in_transition_for_screen(target);
+            self.state.shell.transition = TransitionState::FadingIn {
+                elapsed: 0.0,
+                duration: in_duration,
+            };
+        }
         crate::ui::runtime::clear_all();
         let _ = self.run_commands(commands, event_loop);
     }
