@@ -2254,6 +2254,17 @@ pub fn update_video_renderer(renderer: BackendType) {
     save_without_keymaps();
 }
 
+pub fn update_gfx_debug(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.gfx_debug == enabled {
+            return;
+        }
+        cfg.gfx_debug = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_simply_love_color(index: i32) {
     {
         let mut cfg = CONFIG.lock().unwrap();
@@ -2380,6 +2391,17 @@ pub fn update_menu_music(enabled: bool) {
             return;
         }
         cfg.menu_music = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_software_renderer_threads(threads: u8) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.software_renderer_threads == threads {
+            return;
+        }
+        cfg.software_renderer_threads = threads;
     }
     save_without_keymaps();
 }

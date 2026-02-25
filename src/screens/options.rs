@@ -581,11 +581,15 @@ const VIDEO_RENDERER_LABELS: &[&str] = &[
 ];
 
 const VIDEO_RENDERER_ROW_INDEX: usize = 0;
-const DISPLAY_MODE_ROW_INDEX: usize = 1;
-const DISPLAY_ASPECT_RATIO_ROW_INDEX: usize = 2;
-const DISPLAY_RESOLUTION_ROW_INDEX: usize = 3;
-const REFRESH_RATE_ROW_INDEX: usize = 4;
-const FULLSCREEN_TYPE_ROW_INDEX: usize = 5;
+const SOFTWARE_THREADS_ROW_INDEX: usize = 1;
+const DISPLAY_MODE_ROW_INDEX: usize = 2;
+const DISPLAY_ASPECT_RATIO_ROW_INDEX: usize = 3;
+const DISPLAY_RESOLUTION_ROW_INDEX: usize = 4;
+const REFRESH_RATE_ROW_INDEX: usize = 5;
+const FULLSCREEN_TYPE_ROW_INDEX: usize = 6;
+const GRAPHICS_ROW_VIDEO_RENDERER: &str = "Video Renderer";
+const GRAPHICS_ROW_SOFTWARE_THREADS: &str = "Software Renderer Threads";
+const GRAPHICS_ROW_VALIDATION_LAYERS: &str = "Validation Layers";
 
 const BG_BRIGHTNESS_CHOICES: [&str; 11] = [
     "0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%",
@@ -616,8 +620,13 @@ fn build_display_mode_choices(monitor_specs: &[MonitorSpec]) -> Vec<String> {
 
 pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: "Video Renderer",
+        label: GRAPHICS_ROW_VIDEO_RENDERER,
         choices: VIDEO_RENDERER_LABELS,
+        inline: false,
+    },
+    SubRow {
+        label: GRAPHICS_ROW_SOFTWARE_THREADS,
+        choices: &["Auto"],
         inline: false,
     },
     SubRow {
@@ -658,6 +667,11 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: GRAPHICS_ROW_VALIDATION_LAYERS,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
         label: "Visual Delay (ms)",
         choices: &["0 ms"],
         inline: false,
@@ -666,8 +680,15 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
 
 pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
     Item {
-        name: "Video Renderer",
+        name: GRAPHICS_ROW_VIDEO_RENDERER,
         help: &["Select the rendering backend."],
+    },
+    Item {
+        name: GRAPHICS_ROW_SOFTWARE_THREADS,
+        help: &[
+            "Shown only when Video Renderer is Software.",
+            "Set how many CPU threads software rendering can use.",
+        ],
     },
     Item {
         name: "Display Mode",
@@ -696,6 +717,13 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: "Show Stats",
         help: &["Choose performance overlay mode: Off, FPS only, or FPS with stutter list."],
+    },
+    Item {
+        name: GRAPHICS_ROW_VALIDATION_LAYERS,
+        help: &[
+            "Enable Vulkan/D3D/OpenGL validation layers for graphics debugging.",
+            "Recommended: Off (FPS will drop by half but useful for debugging).",
+        ],
     },
     Item {
         name: "Visual Delay (ms)",
@@ -1170,6 +1198,86 @@ fn selected_video_renderer(state: &State) -> BackendType {
         .copied()
         .unwrap_or(0);
     renderer_choice_index_to_backend(choice_idx)
+}
+
+fn build_software_thread_choices() -> Vec<u8> {
+    let max_threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(8)
+        .clamp(2, 32);
+    let mut out = Vec::with_capacity(max_threads + 1);
+    out.push(0); // Auto
+    for n in 1..=max_threads {
+        out.push(n as u8);
+    }
+    out
+}
+
+fn software_thread_choice_labels(values: &[u8]) -> Vec<String> {
+    values
+        .iter()
+        .map(|v| {
+            if *v == 0 {
+                "Auto".to_string()
+            } else {
+                v.to_string()
+            }
+        })
+        .collect()
+}
+
+fn software_thread_choice_index(values: &[u8], thread_count: u8) -> usize {
+    values
+        .iter()
+        .position(|&v| v == thread_count)
+        .unwrap_or_else(|| {
+            values
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, v)| v.abs_diff(thread_count))
+                .map_or(0, |(idx, _)| idx)
+        })
+}
+
+fn software_thread_from_choice(values: &[u8], idx: usize) -> u8 {
+    values.get(idx).copied().unwrap_or(0)
+}
+
+#[inline(always)]
+fn graphics_show_software_threads(state: &State) -> bool {
+    selected_video_renderer(state) == BackendType::Software
+}
+
+fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow<'_>]) -> Vec<usize> {
+    if !matches!(kind, SubmenuKind::Graphics) {
+        return (0..rows.len()).collect();
+    }
+    let show_sw = graphics_show_software_threads(state);
+    rows.iter()
+        .enumerate()
+        .filter_map(|(idx, row)| {
+            if row.label == GRAPHICS_ROW_SOFTWARE_THREADS && !show_sw {
+                None
+            } else {
+                Some(idx)
+            }
+        })
+        .collect()
+}
+
+fn submenu_total_rows(state: &State, kind: SubmenuKind) -> usize {
+    let rows = submenu_rows(kind);
+    submenu_visible_row_indices(state, kind, rows).len() + 1
+}
+
+fn submenu_visible_row_to_actual(
+    state: &State,
+    kind: SubmenuKind,
+    visible_row_idx: usize,
+) -> Option<usize> {
+    let rows = submenu_rows(kind);
+    let visible_rows = submenu_visible_row_indices(state, kind, rows);
+    visible_rows.get(visible_row_idx).copied()
 }
 
 #[cfg(target_os = "windows")]
@@ -1742,6 +1850,14 @@ fn row_choices<'a>(
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::Graphics)
     {
+        if row.label == GRAPHICS_ROW_SOFTWARE_THREADS {
+            return state
+                .software_thread_labels
+                .iter()
+                .cloned()
+                .map(Cow::Owned)
+                .collect();
+        }
         if row.label == "Display Mode" {
             return state
                 .display_mode_choices
@@ -1848,8 +1964,11 @@ fn sync_submenu_inline_x_from_row(
     state: &mut State,
     asset_manager: &AssetManager,
     kind: SubmenuKind,
-    row_idx: usize,
+    visible_row_idx: usize,
 ) {
+    let Some(row_idx) = submenu_visible_row_to_actual(state, kind, visible_row_idx) else {
+        return;
+    };
     let centers = submenu_inline_choice_centers(state, asset_manager, kind, row_idx);
     if centers.is_empty() {
         return;
@@ -1866,8 +1985,11 @@ fn apply_submenu_inline_x_to_row(
     state: &mut State,
     asset_manager: &AssetManager,
     kind: SubmenuKind,
-    row_idx: usize,
+    visible_row_idx: usize,
 ) {
+    let Some(row_idx) = submenu_visible_row_to_actual(state, kind, visible_row_idx) else {
+        return;
+    };
     let centers = submenu_inline_choice_centers(state, asset_manager, kind, row_idx);
     if centers.is_empty() {
         return;
@@ -1891,7 +2013,7 @@ fn move_submenu_selection_vertical(
     kind: SubmenuKind,
     dir: NavDirection,
 ) {
-    let total = submenu_rows(kind).len() + 1;
+    let total = submenu_total_rows(state, kind);
     if total == 0 {
         return;
     }
@@ -2059,6 +2181,8 @@ pub struct State {
     display_width_at_load: u32,
     display_height_at_load: u32,
     display_mode_choices: Vec<String>,
+    software_thread_choices: Vec<u8>,
+    software_thread_labels: Vec<String>,
     resolution_choices: Vec<(u32, u32)>,
     refresh_rate_choices: Vec<u32>, // New: stored in millihertz
     // Hardware info
@@ -2081,6 +2205,8 @@ pub struct State {
 pub fn init() -> State {
     let cfg = config::get();
     let system_noteskin_choices = discover_system_noteskin_choices();
+    let software_thread_choices = build_software_thread_choices();
+    let software_thread_labels = software_thread_choice_labels(&software_thread_choices);
     let machine_noteskin = profile::machine_default_noteskin();
     let machine_noteskin_idx = system_noteskin_choices
         .iter()
@@ -2154,6 +2280,8 @@ pub fn init() -> State {
         display_width_at_load: cfg.display_width,
         display_height_at_load: cfg.display_height,
         display_mode_choices: build_display_mode_choices(&[]),
+        software_thread_choices,
+        software_thread_labels,
         resolution_choices: Vec::new(),
         refresh_rate_choices: Vec::new(),
         monitor_specs: Vec::new(),
@@ -2218,6 +2346,21 @@ pub fn init() -> State {
         "Show Stats",
         cfg.show_stats_mode.min(2) as usize,
     );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_graphics,
+        GRAPHICS_OPTIONS_ROWS,
+        GRAPHICS_ROW_VALIDATION_LAYERS,
+        usize::from(cfg.gfx_debug),
+    );
+    if let Some(slot) = state
+        .sub_choice_indices_graphics
+        .get_mut(SOFTWARE_THREADS_ROW_INDEX)
+    {
+        *slot = software_thread_choice_index(
+            &state.software_thread_choices,
+            cfg.software_renderer_threads,
+        );
+    }
     #[cfg(target_os = "windows")]
     set_choice_by_label(
         &mut state.sub_choice_indices_input_backend,
@@ -2968,7 +3111,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             state.cursor_initialized = false;
         }
         OptionsView::Submenu(kind) => {
-            let total_rows = submenu_rows(kind).len() + 1;
+            let total_rows = submenu_total_rows(state, kind);
             update_row_tweens(
                 &mut state.row_tweens,
                 total_rows,
@@ -3078,15 +3221,13 @@ fn apply_submenu_choice_delta(
         _ => return None,
     };
     let rows = submenu_rows(kind);
-    let rows_len = rows.len();
-    if rows_len == 0 {
+    if rows.is_empty() {
         return None;
     }
-    let row_index = state.sub_selected;
-    if row_index >= rows_len {
+    let Some(row_index) = submenu_visible_row_to_actual(state, kind, state.sub_selected) else {
         // Exit row – no choices to change.
         return None;
-    }
+    };
 
     if let Some(row) = rows.get(row_index) {
         if matches!(kind, SubmenuKind::Sound) {
@@ -3225,6 +3366,13 @@ fn apply_submenu_choice_delta(
         if row.label == "Show Stats" {
             let mode = new_index.min(2) as u8;
             action = Some(ScreenAction::UpdateShowOverlay(mode));
+        }
+        if row.label == GRAPHICS_ROW_VALIDATION_LAYERS {
+            config::update_gfx_debug(new_index == 1);
+        }
+        if row.label == GRAPHICS_ROW_SOFTWARE_THREADS {
+            let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
+            config::update_software_renderer_threads(threads);
         }
     } else if matches!(kind, SubmenuKind::InputBackend) {
         let row = &rows[row_index];
@@ -3550,12 +3698,13 @@ pub fn handle_input(
                     }
                 }
                 OptionsView::Submenu(kind) => {
-                    let total = submenu_rows(kind).len() + 1;
+                    let total = submenu_total_rows(state, kind);
                     if total == 0 {
                         return ScreenAction::None;
                     }
+                    let selected_row = state.sub_selected.min(total.saturating_sub(1));
                     // Exit row in the submenu: back to the main Options list.
-                    if state.sub_selected == total - 1 {
+                    if selected_row == total - 1 {
                         audio::play_sfx("assets/sounds/start.ogg");
                         if let Some(parent_kind) = state.submenu_parent_kind {
                             state.pending_submenu_kind = Some(parent_kind);
@@ -3567,7 +3716,12 @@ pub fn handle_input(
                         state.submenu_fade_t = 0.0;
                     } else if matches!(kind, SubmenuKind::Input) {
                         let rows = submenu_rows(kind);
-                        if let Some(row) = rows.get(state.sub_selected) {
+                        let Some(row_idx) =
+                            submenu_visible_row_to_actual(state, kind, selected_row)
+                        else {
+                            return ScreenAction::None;
+                        };
+                        if let Some(row) = rows.get(row_idx) {
                             match row.label {
                                 INPUT_ROW_CONFIGURE_MAPPINGS => {
                                     audio::play_sfx("assets/sounds/start.ogg");
@@ -3589,7 +3743,11 @@ pub fn handle_input(
                         }
                     } else if matches!(kind, SubmenuKind::ScoreImport) {
                         let rows = submenu_rows(kind);
-                        if let Some(row) = rows.get(state.sub_selected)
+                        let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row)
+                        else {
+                            return ScreenAction::None;
+                        };
+                        if let Some(row) = rows.get(row_idx)
                             && row.label == SCORE_IMPORT_ROW_START
                         {
                             audio::play_sfx("assets/sounds/start.ogg");
@@ -3822,12 +3980,13 @@ fn submenu_cursor_dest(
         return None;
     }
     let rows = submenu_rows(kind);
-    let total_rows = rows.len() + 1;
+    let total_rows = submenu_total_rows(state, kind);
     if total_rows == 0 {
         return None;
     }
-    let row_idx = state.sub_selected.min(total_rows - 1);
-    let row_mid_y = row_mid_y_for_cursor(state, row_idx, total_rows, state.sub_selected, s, list_y);
+    let selected_row = state.sub_selected.min(total_rows - 1);
+    let row_mid_y =
+        row_mid_y_for_cursor(state, selected_row, total_rows, selected_row, s, list_y);
     let value_zoom = 0.835_f32;
     let label_bg_w = SUB_LABEL_COL_W * s;
     let item_col_left = list_x + label_bg_w;
@@ -3835,11 +3994,14 @@ fn submenu_cursor_dest(
     let single_center_x =
         item_col_w.mul_add(0.5, item_col_left) + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
 
-    if row_idx >= rows.len() {
+    if selected_row == total_rows - 1 {
         let (draw_w, text_h) = measure_text_box(asset_manager, "Exit", value_zoom);
         let (ring_w, ring_h) = ring_size_for_text(draw_w, text_h);
         return Some((single_center_x, row_mid_y, ring_w, ring_h));
     }
+    let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
+        return None;
+    };
 
     let row = &rows[row_idx];
     let mut choice_texts = row_choices(state, kind, rows, row_idx);
@@ -4228,6 +4390,7 @@ pub fn get_actors(
             let rows = submenu_rows(kind);
             let choice_indices = submenu_choice_indices(state, kind);
             let items = submenu_items(kind);
+            let visible_rows = submenu_visible_row_indices(state, kind, rows);
             if matches!(kind, SubmenuKind::Input) {
                 let col_active_text =
                     color::simply_love_rgba(state.active_color_index + state.sub_selected as i32);
@@ -4351,7 +4514,7 @@ pub fn get_actors(
                 // Inactive option text color should be #808080 (alpha 1.0), match player options.
                 let sl_gray = color::rgba_hex("#808080");
 
-                let total_rows = rows.len() + 1; // + Exit row
+                let total_rows = visible_rows.len() + 1; // + Exit row
 
                 let label_bg_w = SUB_LABEL_COL_W * s;
                 let label_text_x = SUB_LABEL_TEXT_LEFT_PAD.mul_add(s, list_x);
@@ -4363,7 +4526,7 @@ pub fn get_actors(
                     if row_idx >= total_rows {
                         return list_w.mul_add(0.5, list_x);
                     }
-                    if row_idx >= rows.len() {
+                    if row_idx == total_rows - 1 {
                         // Exit row: center within the items column (row width minus label column),
                         // matching how single-value rows like Music Rate are centered in player_options.rs.
                         let item_col_left = list_x + label_bg_w;
@@ -4371,7 +4534,10 @@ pub fn get_actors(
                         return item_col_w.mul_add(0.5, item_col_left)
                             + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
                     }
-                    let row = &rows[row_idx];
+                    let Some(actual_row_idx) = visible_rows.get(row_idx).copied() else {
+                        return list_w.mul_add(0.5, list_x);
+                    };
+                    let row = &rows[actual_row_idx];
                     // Non-inline rows behave as single-value rows: keep the cursor centered
                     // on the center of the available items column (row width minus label column).
                     if !row.inline {
@@ -4380,7 +4546,7 @@ pub fn get_actors(
                         return item_col_w.mul_add(0.5, item_col_left)
                             + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
                     }
-                    let choices = row_choices(state, kind, rows, row_idx);
+                    let choices = row_choices(state, kind, rows, actual_row_idx);
                     if choices.is_empty() {
                         return list_w.mul_add(0.5, list_x);
                     }
@@ -4413,7 +4579,7 @@ pub fn get_actors(
                         x += *w + INLINE_SPACING;
                     }
                     let sel_idx = choice_indices
-                        .get(row_idx)
+                        .get(actual_row_idx)
                         .copied()
                         .unwrap_or(0)
                         .min(widths.len().saturating_sub(1));
@@ -4459,7 +4625,10 @@ pub fn get_actors(
                         diffuse(bg[0], bg[1], bg[2], bg[3] * row_alpha)
                     ));
 
-                    if !is_exit && row_idx < rows.len() {
+                    if !is_exit {
+                        let Some(actual_row_idx) = visible_rows.get(row_idx).copied() else {
+                            continue;
+                        };
                         // Left label background column (matches player options style).
                         ui_actors.push(act!(quad:
                             align(0.0, 0.0):
@@ -4468,7 +4637,7 @@ pub fn get_actors(
                             diffuse(0.0, 0.0, 0.0, 0.25 * row_alpha)
                         ));
 
-                        let row = &rows[row_idx];
+                        let row = &rows[actual_row_idx];
                         let inline_row = row.inline;
                         let label = row.label;
                         let title_color = if is_active {
@@ -4494,7 +4663,7 @@ pub fn get_actors(
 
                         // Inline Off/On options in the items column (or a single centered value if inline == false).
                         let mut choice_texts: Vec<Cow<'_, str>> =
-                            row_choices(state, kind, rows, row_idx);
+                            row_choices(state, kind, rows, actual_row_idx);
                         if !choice_texts.is_empty() {
                             let value_zoom = 0.835_f32;
                             if row.label == "Global Offset (ms)" {
@@ -4533,7 +4702,7 @@ pub fn get_actors(
                             });
 
                             let selected_choice = choice_indices
-                                .get(row_idx)
+                                .get(actual_row_idx)
                                 .copied()
                                 .unwrap_or(0)
                                 .min(choice_texts.len().saturating_sub(1));
@@ -4727,10 +4896,11 @@ pub fn get_actors(
                 }
 
                 // Description items for the submenu
-                let total_rows = rows.len() + 1;
+                let total_rows = visible_rows.len() + 1;
                 let sel = state.sub_selected.min(total_rows.saturating_sub(1));
-                let item = if sel < rows.len() {
-                    &items[sel]
+                let item = if sel < visible_rows.len() {
+                    let actual_row_idx = visible_rows[sel];
+                    &items[actual_row_idx]
                 } else {
                     &items[items.len().saturating_sub(1)]
                 };
