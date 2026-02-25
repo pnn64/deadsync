@@ -51,6 +51,7 @@ pub enum ScreenAction {
         display_mode: Option<DisplayMode>,
         monitor: Option<usize>,
         resolution: Option<(u32, u32)>,
+        max_fps: Option<u16>,
     },
     UpdateShowOverlay(u8),
 }

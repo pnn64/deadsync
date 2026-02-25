@@ -19,7 +19,7 @@ use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     monitor::MonitorHandle,
     window::Window,
 };
@@ -33,7 +33,7 @@ use std::{
     ffi::OsString,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use crate::ui::actors::Actor;
@@ -254,6 +254,8 @@ pub struct ShellState {
     last_frame_time: Instant,
     start_time: Instant,
     vsync_enabled: bool,
+    frame_interval: Option<Duration>,
+    next_redraw_at: Instant,
     display_mode: DisplayMode,
     display_monitor: usize,
     metrics: Metrics,
@@ -275,6 +277,15 @@ pub struct ShellState {
     screenshot_request_side: Option<profile::PlayerSide>,
     screenshot_flash_started_at: Option<Instant>,
     screenshot_preview: Option<ScreenshotPreviewState>,
+}
+
+#[inline(always)]
+fn frame_interval_for_max_fps(max_fps: u16) -> Option<Duration> {
+    if max_fps == 0 {
+        None
+    } else {
+        Some(Duration::from_secs_f64(1.0 / f64::from(max_fps)))
+    }
 }
 
 /// Active screen data bundle.
@@ -330,12 +341,16 @@ pub struct AppState {
 impl ShellState {
     fn new(cfg: &config::Config, overlay_mode: u8) -> Self {
         let metrics = space::metrics_for_window(cfg.display_width, cfg.display_height);
+        let now = Instant::now();
+        let frame_interval = frame_interval_for_max_fps(cfg.max_fps);
         Self {
             frame_count: 0,
-            last_title_update: Instant::now(),
-            last_frame_time: Instant::now(),
-            start_time: Instant::now(),
+            last_title_update: now,
+            last_frame_time: now,
+            start_time: now,
             vsync_enabled: cfg.vsync,
+            frame_interval,
+            next_redraw_at: now,
             display_mode: cfg.display_mode(),
             metrics,
             last_fps: 0.0,
@@ -358,6 +373,12 @@ impl ShellState {
             screenshot_flash_started_at: None,
             screenshot_preview: None,
         }
+    }
+
+    #[inline(always)]
+    fn set_max_fps(&mut self, max_fps: u16) {
+        self.frame_interval = frame_interval_for_max_fps(max_fps);
+        self.next_redraw_at = Instant::now();
     }
 
     #[inline(always)]
@@ -1577,9 +1598,16 @@ impl App {
                 display_mode,
                 resolution,
                 monitor,
+                max_fps,
             } => {
                 // Ensure options menu reflects current hardware state before processing changes
                 self.update_options_monitor_specs(event_loop);
+
+                if let Some(max_fps) = max_fps {
+                    self.state.shell.set_max_fps(max_fps);
+                    config::update_max_fps(max_fps);
+                    options::sync_max_fps(&mut self.state.screens.options_state, max_fps);
+                }
 
                 let mut pending_resolution = None;
                 if let Some((w, h)) = resolution {
@@ -3430,6 +3458,7 @@ impl App {
         self.state.shell.start_time = now;
         self.state.shell.last_frame_time = now;
         self.state.shell.last_title_update = now;
+        self.state.shell.next_redraw_at = now;
         self.state.shell.frame_count = 0;
         self.state.shell.current_frame_vpf = 0;
 
@@ -3486,8 +3515,10 @@ impl App {
 
         self.backend_type = target;
         self.state.shell.frame_count = 0;
-        self.state.shell.last_title_update = Instant::now();
-        self.state.shell.last_frame_time = Instant::now();
+        let now = Instant::now();
+        self.state.shell.last_title_update = now;
+        self.state.shell.last_frame_time = now;
+        self.state.shell.next_redraw_at = now;
 
         match self.init_graphics(event_loop) {
             Ok(()) => {
@@ -5380,10 +5411,21 @@ impl ApplicationHandler<UserEvent> for App {
         }
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if let Some(window) = &self.window {
-            window.request_redraw();
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let Some(window) = &self.window else {
+            return;
+        };
+        if let Some(interval) = self.state.shell.frame_interval {
+            let now = Instant::now();
+            if now >= self.state.shell.next_redraw_at {
+                window.request_redraw();
+                self.state.shell.next_redraw_at = now.checked_add(interval).unwrap_or(now);
+            }
+            event_loop.set_control_flow(ControlFlow::WaitUntil(self.state.shell.next_redraw_at));
+            return;
         }
+        event_loop.set_control_flow(ControlFlow::Poll);
+        window.request_redraw();
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {

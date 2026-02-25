@@ -181,6 +181,7 @@ pub const ITEMS: &[Item] = &[
             "RefreshRate",
             "FullscreenType",
             "Wait for VSync",
+            "Max FPS",
             "Show Stats",
             "Visual Delay",
         ],
@@ -281,7 +282,7 @@ pub const ITEMS: &[Item] = &[
         ],
     },
     Item {
-        name: "Online Scoring Options",
+        name: "Online Score Services",
         help: &[
             "Configure online score services and import tools.",
             ONLINE_SCORING_ROW_GS_BS,
@@ -640,8 +641,10 @@ const DISPLAY_ASPECT_RATIO_ROW_INDEX: usize = 3;
 const DISPLAY_RESOLUTION_ROW_INDEX: usize = 4;
 const REFRESH_RATE_ROW_INDEX: usize = 5;
 const FULLSCREEN_TYPE_ROW_INDEX: usize = 6;
+const MAX_FPS_ROW_INDEX: usize = 8;
 const GRAPHICS_ROW_VIDEO_RENDERER: &str = "Video Renderer";
 const GRAPHICS_ROW_SOFTWARE_THREADS: &str = "Software Renderer Threads";
+const GRAPHICS_ROW_MAX_FPS: &str = "Max FPS";
 const GRAPHICS_ROW_VALIDATION_LAYERS: &str = "Validation Layers";
 const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 1;
 const SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX: usize = 2;
@@ -657,6 +660,9 @@ const ADVANCED_SONG_PARSING_THREADS_ROW_INDEX: usize = 6;
 const BG_BRIGHTNESS_CHOICES: [&str; 11] = [
     "0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%",
 ];
+const MAX_FPS_MIN: u16 = 5;
+const MAX_FPS_MAX: u16 = 1000;
+const MAX_FPS_STEP: u16 = 5;
 const CENTERED_P1_NOTEFIELD_CHOICES: [&str; 2] = ["Off", "On"];
 const ADVANCED_BANNER_COLOR_DEPTH_CHOICES: [&str; 3] = ["8", "16", "32"];
 const ADVANCED_BANNER_MIN_DIMENSION_CHOICES: [&str; 6] = ["16", "32", "64", "128", "256", "512"];
@@ -740,6 +746,11 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: GRAPHICS_ROW_MAX_FPS,
+        choices: &["Off"], // Replaced dynamically
+        inline: false,
+    },
+    SubRow {
         label: "Show Stats",
         choices: &["Off", "FPS", "FPS+Stutter"],
         inline: true,
@@ -791,6 +802,13 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: "Wait for VSync",
         help: &["Enable vertical sync."],
+    },
+    Item {
+        name: GRAPHICS_ROW_MAX_FPS,
+        help: &[
+            "Cap redraw rate in the app loop (backend-agnostic).",
+            "Off leaves redraw uncapped.",
+        ],
     },
     Item {
         name: "Show Stats",
@@ -1605,7 +1623,7 @@ const fn submenu_title(kind: SubmenuKind) -> &'static str {
         SubmenuKind::Graphics => "GRAPHICS OPTIONS",
         SubmenuKind::Input => "INPUT OPTIONS",
         SubmenuKind::InputBackend => "INPUT OPTIONS",
-        SubmenuKind::OnlineScoring => "ONLINE SCORING OPTIONS",
+        SubmenuKind::OnlineScoring => "ONLINE SCORE SERVICES",
         SubmenuKind::Machine => "MACHINE OPTIONS",
         SubmenuKind::Advanced => "ADVANCED OPTIONS",
         SubmenuKind::Course => "COURSE OPTIONS",
@@ -1681,6 +1699,59 @@ fn software_thread_choice_index(values: &[u8], thread_count: u8) -> usize {
 
 fn software_thread_from_choice(values: &[u8], idx: usize) -> u8 {
     values.get(idx).copied().unwrap_or(0)
+}
+
+fn build_max_fps_choices() -> Vec<u16> {
+    let mut out = Vec::with_capacity(1 + (usize::from(MAX_FPS_MAX) / usize::from(MAX_FPS_STEP)));
+    out.push(0); // Off
+    let mut fps = MAX_FPS_MIN;
+    while fps <= MAX_FPS_MAX {
+        out.push(fps);
+        fps = fps.saturating_add(MAX_FPS_STEP);
+    }
+    out
+}
+
+fn max_fps_choice_labels(values: &[u16]) -> Vec<String> {
+    values
+        .iter()
+        .map(|v| {
+            if *v == 0 {
+                "Off".to_string()
+            } else {
+                v.to_string()
+            }
+        })
+        .collect()
+}
+
+fn max_fps_choice_index(values: &[u16], max_fps: u16) -> usize {
+    values
+        .iter()
+        .position(|&v| v == max_fps)
+        .unwrap_or_else(|| {
+            values
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, v)| v.abs_diff(max_fps))
+                .map_or(0, |(idx, _)| idx)
+        })
+}
+
+fn max_fps_from_choice(values: &[u16], idx: usize) -> u16 {
+    values.get(idx).copied().unwrap_or(0)
+}
+
+#[inline(always)]
+fn set_max_fps_choice_index(state: &mut State, idx: usize) {
+    let max_idx = state.max_fps_choices.len().saturating_sub(1);
+    let clamped = idx.min(max_idx);
+    if let Some(slot) = state.sub_choice_indices_graphics.get_mut(MAX_FPS_ROW_INDEX) {
+        *slot = clamped;
+    }
+    if let Some(slot) = state.sub_cursor_indices_graphics.get_mut(MAX_FPS_ROW_INDEX) {
+        *slot = clamped;
+    }
 }
 
 #[inline(always)]
@@ -1838,6 +1909,15 @@ fn selected_display_monitor(state: &State) -> usize {
     } else {
         display_choice.min(windowed_idx.saturating_sub(1))
     }
+}
+
+fn selected_max_fps(state: &State) -> u16 {
+    let idx = state
+        .sub_choice_indices_graphics
+        .get(MAX_FPS_ROW_INDEX)
+        .copied()
+        .unwrap_or(0);
+    max_fps_from_choice(&state.max_fps_choices, idx)
 }
 
 fn ensure_display_mode_choices(state: &mut State) {
@@ -2352,6 +2432,14 @@ fn row_choices<'a>(
                 .map(Cow::Owned)
                 .collect();
         }
+        if row.label == GRAPHICS_ROW_MAX_FPS {
+            return state
+                .max_fps_labels
+                .iter()
+                .cloned()
+                .map(Cow::Owned)
+                .collect();
+        }
         if row.label == "Display Mode" {
             return state
                 .display_mode_choices
@@ -2775,9 +2863,12 @@ pub struct State {
     display_monitor_at_load: usize,
     display_width_at_load: u32,
     display_height_at_load: u32,
+    max_fps_at_load: u16,
     display_mode_choices: Vec<String>,
     software_thread_choices: Vec<u8>,
     software_thread_labels: Vec<String>,
+    max_fps_choices: Vec<u16>,
+    max_fps_labels: Vec<String>,
     resolution_choices: Vec<(u32, u32)>,
     refresh_rate_choices: Vec<u32>, // New: stored in millihertz
     // Hardware info
@@ -2805,6 +2896,8 @@ pub fn init() -> State {
     let system_noteskin_choices = discover_system_noteskin_choices();
     let software_thread_choices = build_software_thread_choices();
     let software_thread_labels = software_thread_choice_labels(&software_thread_choices);
+    let max_fps_choices = build_max_fps_choices();
+    let max_fps_labels = max_fps_choice_labels(&max_fps_choices);
     let machine_noteskin = profile::machine_default_noteskin();
     let machine_noteskin_idx = system_noteskin_choices
         .iter()
@@ -2885,9 +2978,12 @@ pub fn init() -> State {
         display_monitor_at_load: cfg.display_monitor,
         display_width_at_load: cfg.display_width,
         display_height_at_load: cfg.display_height,
+        max_fps_at_load: cfg.max_fps,
         display_mode_choices: build_display_mode_choices(&[]),
         software_thread_choices,
         software_thread_labels,
+        max_fps_choices,
+        max_fps_labels,
         resolution_choices: Vec::new(),
         refresh_rate_choices: Vec::new(),
         monitor_specs: Vec::new(),
@@ -2949,6 +3045,8 @@ pub fn init() -> State {
         "Wait for VSync",
         usize::from(cfg.vsync),
     );
+    let max_fps_idx = max_fps_choice_index(&state.max_fps_choices, cfg.max_fps);
+    set_max_fps_choice_index(&mut state, max_fps_idx);
     set_choice_by_label(
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
@@ -3421,6 +3519,13 @@ pub fn sync_show_stats_mode(state: &mut State, mode: u8) {
     sync_submenu_cursor_indices(state);
 }
 
+pub fn sync_max_fps(state: &mut State, max_fps: u16) {
+    state.max_fps_at_load = max_fps;
+    let max_fps_idx = max_fps_choice_index(&state.max_fps_choices, max_fps);
+    set_max_fps_choice_index(state, max_fps_idx);
+    sync_submenu_cursor_indices(state);
+}
+
 pub fn in_transition() -> (Vec<Actor>, f32) {
     let actor = act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
@@ -3723,16 +3828,23 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         SubmenuTransition::FadeOutToMain => {
             let leaving_graphics =
                 matches!(state.view, OptionsView::Submenu(SubmenuKind::Graphics));
-            let (desired_renderer, desired_display_mode, desired_resolution, desired_monitor) =
+            let (
+                desired_renderer,
+                desired_display_mode,
+                desired_resolution,
+                desired_monitor,
+                desired_max_fps,
+            ) =
                 if leaving_graphics {
                     (
                         Some(selected_video_renderer(state)),
                         Some(selected_display_mode(state)),
                         Some(selected_resolution(state)),
                         Some(selected_display_monitor(state)),
+                        Some(selected_max_fps(state)),
                     )
                 } else {
-                    (None, None, None, None)
+                    (None, None, None, None, None)
                 };
             let step = if SUBMENU_FADE_DURATION > 0.0 {
                 dt / SUBMENU_FADE_DURATION
@@ -3767,6 +3879,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 let mut display_mode_change: Option<DisplayMode> = None;
                 let mut resolution_change: Option<(u32, u32)> = None;
                 let mut monitor_change: Option<usize> = None;
+                let mut max_fps_change: Option<u16> = None;
 
                 if let Some(renderer) = desired_renderer
                     && renderer != state.video_renderer_at_load
@@ -3788,17 +3901,24 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 {
                     resolution_change = Some((w, h));
                 }
+                if let Some(max_fps) = desired_max_fps
+                    && max_fps != state.max_fps_at_load
+                {
+                    max_fps_change = Some(max_fps);
+                }
 
                 if renderer_change.is_some()
                     || display_mode_change.is_some()
                     || monitor_change.is_some()
                     || resolution_change.is_some()
+                    || max_fps_change.is_some()
                 {
                     pending_action = Some(ScreenAction::ChangeGraphics {
                         renderer: renderer_change,
                         display_mode: display_mode_change,
                         monitor: monitor_change,
                         resolution: resolution_change,
+                        max_fps: max_fps_change,
                     });
                 }
             }
@@ -4566,7 +4686,7 @@ pub fn handle_input(
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }
-                        "Online Scoring Options" => {
+                        "Online Score Services" => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::OnlineScoring);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;

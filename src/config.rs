@@ -271,6 +271,8 @@ pub enum DisplayMode {
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub vsync: bool,
+    /// 0 = uncapped. N > 0 = cap redraw scheduling to N FPS.
+    pub max_fps: u16,
     pub windowed: bool,
     pub fullscreen_type: FullscreenType,
     pub display_monitor: usize,
@@ -375,6 +377,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             vsync: false,
+            max_fps: 0,
             windowed: true,
             fullscreen_type: FullscreenType::Exclusive,
             display_monitor: 0,
@@ -605,6 +608,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         default.global_offset_seconds
     ));
     content.push_str(&format!("Language={}\n", default.language_flag.as_str()));
+    content.push_str(&format!("MaxFps={}\n", default.max_fps));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
         default.visual_delay_seconds
@@ -906,6 +910,10 @@ pub fn load() {
                     .get("Options", "Vsync")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.vsync, |v| v != 0);
+                cfg.max_fps = conf
+                    .get("Options", "MaxFps")
+                    .and_then(|v| v.parse::<u16>().ok())
+                    .unwrap_or(default.max_fps);
                 cfg.windowed = conf
                     .get("Options", "Windowed")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1452,6 +1460,7 @@ pub fn load() {
                     "GfxDebug",
                     "GlobalOffsetSeconds",
                     "Language",
+                    "MaxFps",
                     "MasterVolume",
                     "MenuMusic",
                     "MineHitSound",
@@ -2259,6 +2268,7 @@ fn save_without_keymaps() {
         cfg.global_offset_seconds
     ));
     content.push_str(&format!("Language={}\n", cfg.language_flag.as_str()));
+    content.push_str(&format!("MaxFps={}\n", cfg.max_fps));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
         cfg.visual_delay_seconds
@@ -2632,6 +2642,17 @@ pub fn update_vsync(enabled: bool) {
             return;
         }
         cfg.vsync = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_max_fps(max_fps: u16) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.max_fps == max_fps {
+            return;
+        }
+        cfg.max_fps = max_fps;
     }
     save_without_keymaps();
 }
