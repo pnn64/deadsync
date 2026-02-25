@@ -1,8 +1,10 @@
 use crate::act;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{screen_center_x, screen_height, screen_width};
+use crate::screens::components::heart_bg;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
+use crate::ui::color;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -125,11 +127,17 @@ const CREDITS: &[CreditLine] = &[
 const TOTAL_SCROLL_ITEMS: f32 = CREDITS.len() as f32 + ITEM_PADDING_START + ITEM_PADDING_END;
 
 pub struct State {
+    pub active_color_index: i32,
+    bg: heart_bg::State,
     scroll_items: f32,
 }
 
 pub fn init() -> State {
-    State { scroll_items: 0.0 }
+    State {
+        active_color_index: color::DEFAULT_COLOR_INDEX,
+        bg: heart_bg::State::new(),
+        scroll_items: 0.0,
+    }
 }
 
 pub fn update(state: &mut State, dt: f32) {
@@ -176,13 +184,11 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
     let screen_w = screen_width();
     let screen_h = screen_height();
 
-    actors.push(act!(quad:
-        align(0.0, 0.0):
-        xy(0.0, 0.0):
-        zoomto(screen_w, screen_h):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        z(0)
-    ));
+    actors.extend(state.bg.build(heart_bg::Params {
+        active_color_index: state.active_color_index,
+        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+        alpha_mul: 1.0,
+    }));
 
     let scroll_px = state.scroll_items * LINE_HEIGHT;
     let total_scroll_px = TOTAL_SCROLL_ITEMS * LINE_HEIGHT;

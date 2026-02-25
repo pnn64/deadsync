@@ -1177,7 +1177,8 @@ impl ScreensState {
         let mut options_state = options::init();
         options_state.active_color_index = color_index;
 
-        let credits_state = credits::init();
+        let mut credits_state = credits::init();
+        credits_state.active_color_index = color_index;
 
         let mut manage_local_profiles_state = manage_local_profiles::init();
         manage_local_profiles_state.active_color_index = color_index;
@@ -3890,6 +3891,8 @@ impl App {
             );
         let target_course_music = target == CurrentScreen::SelectCourse;
         let prev_course_music = prev == CurrentScreen::SelectCourse;
+        let target_credits_music = target == CurrentScreen::Credits;
+        let prev_credits_music = prev == CurrentScreen::Credits;
         let keep_preview = (prev == CurrentScreen::SelectMusic
             && target == CurrentScreen::PlayerOptions)
             || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic);
@@ -3910,14 +3913,24 @@ impl App {
                     volume: 1.0,
                 });
             }
-        } else if (prev_menu_music || prev_course_music) && target != CurrentScreen::Gameplay {
+        } else if target_credits_music {
+            if !prev_credits_music {
+                commands.push(Command::PlayMusic {
+                    path: PathBuf::from("assets/music/credits.ogg"),
+                    looped: true,
+                    volume: 1.0,
+                });
+            }
+        } else if (prev_menu_music || prev_course_music || prev_credits_music)
+            && target != CurrentScreen::Gameplay
+        {
             commands.push(Command::StopMusic);
         } else if target != CurrentScreen::Gameplay && !keep_preview {
             commands.push(Command::StopMusic);
         }
 
         if prev == CurrentScreen::Gameplay && target != CurrentScreen::Gameplay {
-            if !target_menu_music && !target_course_music {
+            if !target_menu_music && !target_course_music && !target_credits_music {
                 commands.push(Command::StopMusic);
             }
             if let Some(backend) = self.backend.as_mut() {
@@ -4030,6 +4043,7 @@ impl App {
             self.state.screens.select_music_state.active_color_index = idx;
             self.state.screens.select_course_state.active_color_index = idx;
             self.state.screens.options_state.active_color_index = idx;
+            self.state.screens.credits_state.active_color_index = idx;
             self.state
                 .screens
                 .manage_local_profiles_state
@@ -4063,6 +4077,8 @@ impl App {
             self.state.screens.options_state.active_color_index = current_color_index;
         } else if target == CurrentScreen::Credits {
             self.state.screens.credits_state = credits::init();
+            self.state.screens.credits_state.active_color_index =
+                self.state.screens.options_state.active_color_index;
         } else if target == CurrentScreen::ManageLocalProfiles {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.manage_local_profiles_state = manage_local_profiles::init();
@@ -5206,6 +5222,7 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.state.screens.profile_load_state.active_color_index = idx;
                                 self.state.screens.select_music_state.active_color_index = idx;
                                 self.state.screens.select_course_state.active_color_index = idx;
+                                self.state.screens.credits_state.active_color_index = idx;
                                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                                     gs.active_color_index = idx;
                                     gs.player_color = color::simply_love_rgba(idx);
