@@ -2373,6 +2373,17 @@ pub fn update_music_volume(volume: u8) {
     save_without_keymaps();
 }
 
+pub fn update_menu_music(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.menu_music == enabled {
+            return;
+        }
+        cfg.menu_music = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_sfx_volume(volume: u8) {
     let vol = volume.clamp(0, 100);
     {

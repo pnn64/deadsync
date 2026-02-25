@@ -215,6 +215,7 @@ pub const ITEMS: &[Item] = &[
             "Eval Summary",
             "Name Entry",
             "Gameover Screen",
+            "Menu Music",
             "Keyboard Features",
         ],
     },
@@ -471,6 +472,7 @@ const MACHINE_ROW_SELECT_PLAY_MODE: &str = "Select Play Mode";
 const MACHINE_ROW_EVAL_SUMMARY: &str = "Eval Summary";
 const MACHINE_ROW_NAME_ENTRY: &str = "Name Entry";
 const MACHINE_ROW_GAMEOVER: &str = "Gameover Screen";
+const MACHINE_ROW_MENU_MUSIC: &str = "Menu Music";
 const MACHINE_ROW_KEYBOARD_FEATURES: &str = "Keyboard Features";
 const SCORE_IMPORT_ROW_ENDPOINT: &str = "API Endpoint";
 const SCORE_IMPORT_ROW_PROFILE: &str = "Profile";
@@ -804,6 +806,11 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: MACHINE_ROW_MENU_MUSIC,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
         label: MACHINE_ROW_KEYBOARD_FEATURES,
         choices: &["Off", "On"],
         inline: true,
@@ -838,6 +845,10 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: MACHINE_ROW_GAMEOVER,
         help: &["Show or skip the Gameover screen after Name Entry."],
+    },
+    Item {
+        name: MACHINE_ROW_MENU_MUSIC,
+        help: &["Play or mute the looping menu song on Select Color/Style/Play Mode."],
     },
     Item {
         name: MACHINE_ROW_KEYBOARD_FEATURES,
@@ -2259,6 +2270,12 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_MENU_MUSIC,
+        usize::from(cfg.menu_music),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
         MACHINE_ROW_KEYBOARD_FEATURES,
         usize::from(cfg.keyboard_features),
     );
@@ -3228,6 +3245,7 @@ fn apply_submenu_choice_delta(
             MACHINE_ROW_EVAL_SUMMARY => config::update_machine_show_eval_summary(enabled),
             MACHINE_ROW_NAME_ENTRY => config::update_machine_show_name_entry(enabled),
             MACHINE_ROW_GAMEOVER => config::update_machine_show_gameover(enabled),
+            MACHINE_ROW_MENU_MUSIC => config::update_menu_music(enabled),
             MACHINE_ROW_KEYBOARD_FEATURES => config::update_keyboard_features(enabled),
             _ => {}
         }
