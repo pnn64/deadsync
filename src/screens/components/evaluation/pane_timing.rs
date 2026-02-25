@@ -187,13 +187,20 @@ pub fn build_timing_pane(
     let bottom_bar_center_y = pane_height - (bottombar_height / 2.0_f32);
     let timing_windows: [f32; 5] = crate::game::timing::effective_windows_ms(); // ms, with +1.5ms
     let (judgment_bands, band_count) = timing_bands_ms(scale, timing_windows);
-    let worst_window = timing_windows[timing_windows.len() - 1];
+    let legend_span_ms = score_info.histogram.worst_window_ms.max(1.0);
 
     for (i, band) in judgment_bands.iter().take(band_count).enumerate() {
-        let mid_point_ms = f32::midpoint(band.start_ms, band.end_ms);
+        if band.start_ms >= legend_span_ms {
+            continue;
+        }
+        let clamped_end_ms = band.end_ms.min(legend_span_ms);
+        if clamped_end_ms <= band.start_ms {
+            continue;
+        }
+        let mid_point_ms = f32::midpoint(band.start_ms, clamped_end_ms);
 
         // Scale position from ms to pane coordinates
-        let x_offset = (mid_point_ms / worst_window) * (pane_width / 2.0_f32);
+        let x_offset = (mid_point_ms / legend_span_ms) * (pane_width / 2.0_f32);
 
         if i == 0 {
             // "Fan" is centered
