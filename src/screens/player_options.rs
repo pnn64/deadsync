@@ -367,6 +367,29 @@ pub struct State {
     // bit0 = Move Left, bit1 = Move Up, bit2 = Vertical Lookahead,
     // bit3 = Broken Run Total, bit4 = Run Timer.
     pub measure_counter_options_active_mask: [u8; PLAYER_SLOTS],
+    // For Insert row: bitmask of enabled chart insert transforms.
+    // bit0 = Wide, bit1 = Big, bit2 = Quick, bit3 = BMRize,
+    // bit4 = Skippy, bit5 = Echo, bit6 = Stomp.
+    pub insert_active_mask: [u8; PLAYER_SLOTS],
+    // For Remove row: bitmask of enabled chart removal transforms.
+    // bit0 = Little, bit1 = No Mines, bit2 = No Holds, bit3 = No Jumps,
+    // bit4 = No Hands, bit5 = No Quads, bit6 = No Lifts, bit7 = No Fakes.
+    pub remove_active_mask: [u8; PLAYER_SLOTS],
+    // For Holds row: bitmask of enabled hold transforms.
+    // bit0 = Planted, bit1 = Floored, bit2 = Twister,
+    // bit3 = No Rolls, bit4 = Holds To Rolls.
+    pub holds_active_mask: [u8; PLAYER_SLOTS],
+    // For Accel Effects row: bitmask of enabled acceleration transforms.
+    // bit0 = Boost, bit1 = Brake, bit2 = Wave, bit3 = Expand, bit4 = Boomerang.
+    pub accel_effects_active_mask: [u8; PLAYER_SLOTS],
+    // For Visual Effects row: bitmask of enabled visual transforms.
+    // bit0 = Drunk, bit1 = Dizzy, bit2 = Confusion, bit3 = Big,
+    // bit4 = Flip, bit5 = Invert, bit6 = Tornado, bit7 = Tipsy,
+    // bit8 = Bumpy, bit9 = Beat.
+    pub visual_effects_active_mask: [u16; PLAYER_SLOTS],
+    // For Appearance Effects row: bitmask of enabled appearance transforms.
+    // bit0 = Hidden, bit1 = Sudden, bit2 = Stealth, bit3 = Blink, bit4 = R.Vanish.
+    pub appearance_effects_active_mask: [u8; PLAYER_SLOTS],
     pub active_color_index: i32,
     pub speed_mod: [SpeedMod; PLAYER_SLOTS],
     pub music_rate: f32,
@@ -460,9 +483,9 @@ fn display_bpm_pair_for_options(song: &SongData, music_rate: f32) -> Option<(f32
     } else {
         1.0
     };
-    let (mut lo, mut hi) = song.display_bpm_range().map_or((120.0_f32, 120.0_f32), |(a, b)| {
-        (a as f32, b as f32)
-    });
+    let (mut lo, mut hi) = song
+        .display_bpm_range()
+        .map_or((120.0_f32, 120.0_f32), |(a, b)| (a as f32, b as f32));
     if !lo.is_finite() || !hi.is_finite() || lo <= 0.0 || hi <= 0.0 {
         lo = 120.0;
         hi = 120.0;
@@ -471,7 +494,11 @@ fn display_bpm_pair_for_options(song: &SongData, music_rate: f32) -> Option<(f32
 }
 
 #[inline(always)]
-fn speed_mod_bpm_pair(song: &SongData, speed_mod: &SpeedMod, music_rate: f32) -> Option<(f32, f32)> {
+fn speed_mod_bpm_pair(
+    song: &SongData,
+    speed_mod: &SpeedMod,
+    music_rate: f32,
+) -> Option<(f32, f32)> {
     let (mut lo, mut hi) = display_bpm_pair_for_options(song, music_rate)?;
     match speed_mod.mod_type.as_str() {
         "X" => {
@@ -522,9 +549,8 @@ fn perspective_speed_mult(perspective: crate::game::profile::Perspective) -> f32
 
 #[inline(always)]
 fn speed_mod_helper_scroll_text(song: &SongData, speed_mod: &SpeedMod, music_rate: f32) -> String {
-    speed_mod_bpm_pair(song, speed_mod, music_rate).map_or_else(String::new, |(lo, hi)| {
-        format_speed_bpm_pair(lo, hi)
-    })
+    speed_mod_bpm_pair(song, speed_mod, music_rate)
+        .map_or_else(String::new, |(lo, hi)| format_speed_bpm_pair(lo, hi))
 }
 
 #[inline(always)]
@@ -549,7 +575,8 @@ fn measure_wendy_text_width(asset_manager: &AssetManager, text: &str) -> f32 {
     let mut out_w = 1.0_f32;
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font("wendy", |metrics_font| {
-            let w = crate::ui::font::measure_line_width_logical(metrics_font, text, all_fonts) as f32;
+            let w =
+                crate::ui::font::measure_line_width_logical(metrics_font, text, all_fonts) as f32;
             if w.is_finite() && w > 0.0 {
                 out_w = w;
             }
@@ -1422,6 +1449,7 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
                 "Brake".to_string(),
                 "Wave".to_string(),
                 "Expand".to_string(),
+                "Boomerang".to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Time-based acceleration and deceleration effects.".to_string()],
@@ -1433,9 +1461,13 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
                 "Drunk".to_string(),
                 "Dizzy".to_string(),
                 "Confusion".to_string(),
+                "Big".to_string(),
                 "Flip".to_string(),
                 "Invert".to_string(),
                 "Tornado".to_string(),
+                "Tipsy".to_string(),
+                "Bumpy".to_string(),
+                "Beat".to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Wild motion applied to the note field.".to_string()],
@@ -1456,7 +1488,11 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
         },
         Row {
             name: "Attacks".to_string(),
-            choices: vec!["Off".to_string(), "On".to_string(), "Random".to_string()],
+            choices: vec![
+                "On".to_string(),
+                "Random Attacks".to_string(),
+                "Off".to_string(),
+            ],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Toggle charts that include attack modifiers.".to_string()],
             choice_difficulty_indices: None,
@@ -1535,9 +1571,32 @@ fn apply_profile_defaults(
     rows: &mut [Row],
     profile: &crate::game::profile::Profile,
     player_idx: usize,
-) -> (u8, u8, u8, u8, u8, u8, u8, u8, u8, u8) {
+) -> (
+    u8,
+    u8,
+    u8,
+    u8,
+    u8,
+    u8,
+    u16,
+    u8,
+    u8,
+    u8,
+    u8,
+    u8,
+    u8,
+    u8,
+    u8,
+    u8,
+) {
     let mut scroll_active_mask: u8 = 0;
     let mut hide_active_mask: u8 = 0;
+    let mut insert_active_mask: u8 = 0;
+    let mut remove_active_mask: u8 = 0;
+    let mut holds_active_mask: u8 = 0;
+    let mut accel_effects_active_mask: u8 = 0;
+    let mut visual_effects_active_mask: u16 = 0;
+    let mut appearance_effects_active_mask: u8 = 0;
     let mut fa_plus_active_mask: u8 = 0;
     let mut early_dw_active_mask: u8 = 0;
     let mut gameplay_extras_active_mask: u8 = 0;
@@ -2098,9 +2157,127 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Insert") {
+        insert_active_mask =
+            crate::game::profile::normalize_insert_mask(profile.insert_active_mask);
+        if insert_active_mask != 0 {
+            let first_idx = (0..row.choices.len())
+                .find(|i| {
+                    let bit = 1u8 << (*i as u8);
+                    (insert_active_mask & bit) != 0
+                })
+                .unwrap_or(0);
+            row.selected_choice_index[player_idx] = first_idx;
+        } else {
+            row.selected_choice_index[player_idx] = 0;
+        }
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Remove") {
+        remove_active_mask =
+            crate::game::profile::normalize_remove_mask(profile.remove_active_mask);
+        if remove_active_mask != 0 {
+            let first_idx = (0..row.choices.len())
+                .find(|i| {
+                    let bit = 1u8 << (*i as u8);
+                    (remove_active_mask & bit) != 0
+                })
+                .unwrap_or(0);
+            row.selected_choice_index[player_idx] = first_idx;
+        } else {
+            row.selected_choice_index[player_idx] = 0;
+        }
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Holds") {
+        holds_active_mask = crate::game::profile::normalize_holds_mask(profile.holds_active_mask);
+        if holds_active_mask != 0 {
+            let first_idx = (0..row.choices.len())
+                .find(|i| {
+                    let bit = 1u8 << (*i as u8);
+                    (holds_active_mask & bit) != 0
+                })
+                .unwrap_or(0);
+            row.selected_choice_index[player_idx] = first_idx;
+        } else {
+            row.selected_choice_index[player_idx] = 0;
+        }
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Accel Effects") {
+        accel_effects_active_mask =
+            crate::game::profile::normalize_accel_effects_mask(profile.accel_effects_active_mask);
+        if accel_effects_active_mask != 0 {
+            let first_idx = (0..row.choices.len())
+                .find(|i| {
+                    let bit = 1u8 << (*i as u8);
+                    (accel_effects_active_mask & bit) != 0
+                })
+                .unwrap_or(0);
+            row.selected_choice_index[player_idx] = first_idx;
+        } else {
+            row.selected_choice_index[player_idx] = 0;
+        }
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Visual Effects") {
+        visual_effects_active_mask =
+            crate::game::profile::normalize_visual_effects_mask(profile.visual_effects_active_mask);
+        if visual_effects_active_mask != 0 {
+            let first_idx = (0..row.choices.len())
+                .find(|i| {
+                    let bit = 1u16 << (*i as u16);
+                    (visual_effects_active_mask & bit) != 0
+                })
+                .unwrap_or(0);
+            row.selected_choice_index[player_idx] = first_idx;
+        } else {
+            row.selected_choice_index[player_idx] = 0;
+        }
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Appearance Effects") {
+        appearance_effects_active_mask = crate::game::profile::normalize_appearance_effects_mask(
+            profile.appearance_effects_active_mask,
+        );
+        if appearance_effects_active_mask != 0 {
+            let first_idx = (0..row.choices.len())
+                .find(|i| {
+                    let bit = 1u8 << (*i as u8);
+                    (appearance_effects_active_mask & bit) != 0
+                })
+                .unwrap_or(0);
+            row.selected_choice_index[player_idx] = first_idx;
+        } else {
+            row.selected_choice_index[player_idx] = 0;
+        }
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Attacks") {
+        row.selected_choice_index[player_idx] = match profile.attack_mode {
+            crate::game::profile::AttackMode::On => 0,
+            crate::game::profile::AttackMode::Random => 1,
+            crate::game::profile::AttackMode::Off => 2,
+        };
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Characters") {
+        row.selected_choice_index[player_idx] = match profile.character_mode {
+            crate::game::profile::CharacterMode::None => 0,
+            crate::game::profile::CharacterMode::Random => 1,
+            crate::game::profile::CharacterMode::SelectPerSong => 2,
+        };
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Hide Light Type") {
+        row.selected_choice_index[player_idx] = match profile.hide_light_type {
+            crate::game::profile::HideLightType::NoHideLights => 0,
+            crate::game::profile::HideLightType::HideAllLights => 1,
+            crate::game::profile::HideLightType::HideMarqueeLights => 2,
+            crate::game::profile::HideLightType::HideBassLights => 3,
+        };
+    }
     (
         scroll_active_mask,
         hide_active_mask,
+        insert_active_mask,
+        remove_active_mask,
+        holds_active_mask,
+        accel_effects_active_mask,
+        visual_effects_active_mask,
+        appearance_effects_active_mask,
         fa_plus_active_mask,
         early_dw_active_mask,
         gameplay_extras_active_mask,
@@ -2181,6 +2358,12 @@ pub fn init(
     let (
         scroll_active_mask_p1,
         hide_active_mask_p1,
+        insert_active_mask_p1,
+        remove_active_mask_p1,
+        holds_active_mask_p1,
+        accel_effects_active_mask_p1,
+        visual_effects_active_mask_p1,
+        appearance_effects_active_mask_p1,
         fa_plus_active_mask_p1,
         early_dw_active_mask_p1,
         gameplay_extras_active_mask_p1,
@@ -2193,6 +2376,12 @@ pub fn init(
     let (
         scroll_active_mask_p2,
         hide_active_mask_p2,
+        insert_active_mask_p2,
+        remove_active_mask_p2,
+        holds_active_mask_p2,
+        accel_effects_active_mask_p2,
+        visual_effects_active_mask_p2,
+        appearance_effects_active_mask_p2,
         fa_plus_active_mask_p2,
         early_dw_active_mask_p2,
         gameplay_extras_active_mask_p2,
@@ -2237,6 +2426,15 @@ pub fn init(
         prev_selected_row: [0; PLAYER_SLOTS],
         scroll_active_mask: [scroll_active_mask_p1, scroll_active_mask_p2],
         hide_active_mask: [hide_active_mask_p1, hide_active_mask_p2],
+        insert_active_mask: [insert_active_mask_p1, insert_active_mask_p2],
+        remove_active_mask: [remove_active_mask_p1, remove_active_mask_p2],
+        holds_active_mask: [holds_active_mask_p1, holds_active_mask_p2],
+        accel_effects_active_mask: [accel_effects_active_mask_p1, accel_effects_active_mask_p2],
+        visual_effects_active_mask: [visual_effects_active_mask_p1, visual_effects_active_mask_p2],
+        appearance_effects_active_mask: [
+            appearance_effects_active_mask_p1,
+            appearance_effects_active_mask_p2,
+        ],
         fa_plus_active_mask: [fa_plus_active_mask_p1, fa_plus_active_mask_p2],
         early_dw_active_mask: [early_dw_active_mask_p1, early_dw_active_mask_p2],
         gameplay_extras_active_mask: [
@@ -2679,6 +2877,12 @@ fn row_supports_inline_nav(row: &Row) -> bool {
 fn row_toggles_with_start(row_name: &str) -> bool {
     row_name == "Scroll"
         || row_name == "Hide"
+        || row_name == "Insert"
+        || row_name == "Remove"
+        || row_name == "Holds"
+        || row_name == "Accel Effects"
+        || row_name == "Visual Effects"
+        || row_name == "Appearance Effects"
         || row_name == "Life Bar Options"
         || row_name == "Gameplay Extras"
         || row_name == "Gameplay Extras (More)"
@@ -3198,6 +3402,45 @@ fn change_choice_for_player(
         state.player_profiles[player_idx].turn_option = setting;
         if should_persist {
             crate::game::profile::update_turn_option_for_side(persist_side, setting);
+        }
+    } else if row_name == "Accel Effects"
+        || row_name == "Visual Effects"
+        || row_name == "Appearance Effects"
+    {
+        // Multi-select rows toggled with Start; Left/Right only moves cursor.
+    } else if row_name == "Attacks" {
+        let setting = match row.selected_choice_index[player_idx] {
+            0 => crate::game::profile::AttackMode::On,
+            1 => crate::game::profile::AttackMode::Random,
+            2 => crate::game::profile::AttackMode::Off,
+            _ => crate::game::profile::AttackMode::On,
+        };
+        state.player_profiles[player_idx].attack_mode = setting;
+        if should_persist {
+            crate::game::profile::update_attack_mode_for_side(persist_side, setting);
+        }
+    } else if row_name == "Characters" {
+        let setting = match row.selected_choice_index[player_idx] {
+            0 => crate::game::profile::CharacterMode::None,
+            1 => crate::game::profile::CharacterMode::Random,
+            2 => crate::game::profile::CharacterMode::SelectPerSong,
+            _ => crate::game::profile::CharacterMode::None,
+        };
+        state.player_profiles[player_idx].character_mode = setting;
+        if should_persist {
+            crate::game::profile::update_character_mode_for_side(persist_side, setting);
+        }
+    } else if row_name == "Hide Light Type" {
+        let setting = match row.selected_choice_index[player_idx] {
+            0 => crate::game::profile::HideLightType::NoHideLights,
+            1 => crate::game::profile::HideLightType::HideAllLights,
+            2 => crate::game::profile::HideLightType::HideMarqueeLights,
+            3 => crate::game::profile::HideLightType::HideBassLights,
+            _ => crate::game::profile::HideLightType::NoHideLights,
+        };
+        state.player_profiles[player_idx].hide_light_type = setting;
+        if should_persist {
+            crate::game::profile::update_hide_light_type_for_side(persist_side, setting);
         }
     } else if row_name == "Rescore Early Hits" {
         let enabled = row.selected_choice_index[player_idx] == 0;
@@ -4037,6 +4280,284 @@ fn toggle_hide_row(state: &mut State, player_idx: usize) {
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
+fn toggle_insert_row(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.selected_row[idx];
+    if let Some(row) = state.rows.get(row_index) {
+        if row.name != "Insert" {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let bit = if choice_index < 7 {
+        1u8 << (choice_index as u8)
+    } else {
+        0
+    };
+    if bit == 0 {
+        return;
+    }
+
+    if (state.insert_active_mask[idx] & bit) != 0 {
+        state.insert_active_mask[idx] &= !bit;
+    } else {
+        state.insert_active_mask[idx] |= bit;
+    }
+    state.insert_active_mask[idx] =
+        crate::game::profile::normalize_insert_mask(state.insert_active_mask[idx]);
+    let mask = state.insert_active_mask[idx];
+    state.player_profiles[idx].insert_active_mask = mask;
+
+    let play_style = crate::game::profile::get_session_play_style();
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || idx == session_persisted_player_idx();
+    if should_persist {
+        let side = if idx == P1 {
+            crate::game::profile::PlayerSide::P1
+        } else {
+            crate::game::profile::PlayerSide::P2
+        };
+        crate::game::profile::update_insert_mask_for_side(side, mask);
+    }
+
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
+fn toggle_remove_row(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.selected_row[idx];
+    if let Some(row) = state.rows.get(row_index) {
+        if row.name != "Remove" {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let bit = if choice_index < 8 {
+        1u8 << (choice_index as u8)
+    } else {
+        0
+    };
+    if bit == 0 {
+        return;
+    }
+
+    if (state.remove_active_mask[idx] & bit) != 0 {
+        state.remove_active_mask[idx] &= !bit;
+    } else {
+        state.remove_active_mask[idx] |= bit;
+    }
+    state.remove_active_mask[idx] =
+        crate::game::profile::normalize_remove_mask(state.remove_active_mask[idx]);
+    let mask = state.remove_active_mask[idx];
+    state.player_profiles[idx].remove_active_mask = mask;
+
+    let play_style = crate::game::profile::get_session_play_style();
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || idx == session_persisted_player_idx();
+    if should_persist {
+        let side = if idx == P1 {
+            crate::game::profile::PlayerSide::P1
+        } else {
+            crate::game::profile::PlayerSide::P2
+        };
+        crate::game::profile::update_remove_mask_for_side(side, mask);
+    }
+
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
+fn toggle_holds_row(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.selected_row[idx];
+    if let Some(row) = state.rows.get(row_index) {
+        if row.name != "Holds" {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let bit = if choice_index < 5 {
+        1u8 << (choice_index as u8)
+    } else {
+        0
+    };
+    if bit == 0 {
+        return;
+    }
+
+    if (state.holds_active_mask[idx] & bit) != 0 {
+        state.holds_active_mask[idx] &= !bit;
+    } else {
+        state.holds_active_mask[idx] |= bit;
+    }
+    state.holds_active_mask[idx] =
+        crate::game::profile::normalize_holds_mask(state.holds_active_mask[idx]);
+    let mask = state.holds_active_mask[idx];
+    state.player_profiles[idx].holds_active_mask = mask;
+
+    let play_style = crate::game::profile::get_session_play_style();
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || idx == session_persisted_player_idx();
+    if should_persist {
+        let side = if idx == P1 {
+            crate::game::profile::PlayerSide::P1
+        } else {
+            crate::game::profile::PlayerSide::P2
+        };
+        crate::game::profile::update_holds_mask_for_side(side, mask);
+    }
+
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
+fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.selected_row[idx];
+    if let Some(row) = state.rows.get(row_index) {
+        if row.name != "Accel Effects" {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let bit = if choice_index < 5 {
+        1u8 << (choice_index as u8)
+    } else {
+        0
+    };
+    if bit == 0 {
+        return;
+    }
+
+    if (state.accel_effects_active_mask[idx] & bit) != 0 {
+        state.accel_effects_active_mask[idx] &= !bit;
+    } else {
+        state.accel_effects_active_mask[idx] |= bit;
+    }
+    state.accel_effects_active_mask[idx] =
+        crate::game::profile::normalize_accel_effects_mask(state.accel_effects_active_mask[idx]);
+    let mask = state.accel_effects_active_mask[idx];
+    state.player_profiles[idx].accel_effects_active_mask = mask;
+
+    let play_style = crate::game::profile::get_session_play_style();
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || idx == session_persisted_player_idx();
+    if should_persist {
+        let side = if idx == P1 {
+            crate::game::profile::PlayerSide::P1
+        } else {
+            crate::game::profile::PlayerSide::P2
+        };
+        crate::game::profile::update_accel_effects_mask_for_side(side, mask);
+    }
+
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
+fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.selected_row[idx];
+    if let Some(row) = state.rows.get(row_index) {
+        if row.name != "Visual Effects" {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let bit = if choice_index < 10 {
+        1u16 << (choice_index as u16)
+    } else {
+        0
+    };
+    if bit == 0 {
+        return;
+    }
+
+    if (state.visual_effects_active_mask[idx] & bit) != 0 {
+        state.visual_effects_active_mask[idx] &= !bit;
+    } else {
+        state.visual_effects_active_mask[idx] |= bit;
+    }
+    state.visual_effects_active_mask[idx] =
+        crate::game::profile::normalize_visual_effects_mask(state.visual_effects_active_mask[idx]);
+    let mask = state.visual_effects_active_mask[idx];
+    state.player_profiles[idx].visual_effects_active_mask = mask;
+
+    let play_style = crate::game::profile::get_session_play_style();
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || idx == session_persisted_player_idx();
+    if should_persist {
+        let side = if idx == P1 {
+            crate::game::profile::PlayerSide::P1
+        } else {
+            crate::game::profile::PlayerSide::P2
+        };
+        crate::game::profile::update_visual_effects_mask_for_side(side, mask);
+    }
+
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
+fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.selected_row[idx];
+    if let Some(row) = state.rows.get(row_index) {
+        if row.name != "Appearance Effects" {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let bit = if choice_index < 5 {
+        1u8 << (choice_index as u8)
+    } else {
+        0
+    };
+    if bit == 0 {
+        return;
+    }
+
+    if (state.appearance_effects_active_mask[idx] & bit) != 0 {
+        state.appearance_effects_active_mask[idx] &= !bit;
+    } else {
+        state.appearance_effects_active_mask[idx] |= bit;
+    }
+    state.appearance_effects_active_mask[idx] =
+        crate::game::profile::normalize_appearance_effects_mask(
+            state.appearance_effects_active_mask[idx],
+        );
+    let mask = state.appearance_effects_active_mask[idx];
+    state.player_profiles[idx].appearance_effects_active_mask = mask;
+
+    let play_style = crate::game::profile::get_session_play_style();
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || idx == session_persisted_player_idx();
+    if should_persist {
+        let side = if idx == P1 {
+            crate::game::profile::PlayerSide::P1
+        } else {
+            crate::game::profile::PlayerSide::P2
+        };
+        crate::game::profile::update_appearance_effects_mask_for_side(side, mask);
+    }
+
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
 fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
@@ -4462,6 +4983,12 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
     let (
         scroll_active_mask_p1,
         hide_active_mask_p1,
+        insert_active_mask_p1,
+        remove_active_mask_p1,
+        holds_active_mask_p1,
+        accel_effects_active_mask_p1,
+        visual_effects_active_mask_p1,
+        appearance_effects_active_mask_p1,
         fa_plus_active_mask_p1,
         early_dw_active_mask_p1,
         gameplay_extras_active_mask_p1,
@@ -4474,6 +5001,12 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
     let (
         scroll_active_mask_p2,
         hide_active_mask_p2,
+        insert_active_mask_p2,
+        remove_active_mask_p2,
+        holds_active_mask_p2,
+        accel_effects_active_mask_p2,
+        visual_effects_active_mask_p2,
+        appearance_effects_active_mask_p2,
         fa_plus_active_mask_p2,
         early_dw_active_mask_p2,
         gameplay_extras_active_mask_p2,
@@ -4486,6 +5019,16 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
     state.rows = rows;
     state.scroll_active_mask = [scroll_active_mask_p1, scroll_active_mask_p2];
     state.hide_active_mask = [hide_active_mask_p1, hide_active_mask_p2];
+    state.insert_active_mask = [insert_active_mask_p1, insert_active_mask_p2];
+    state.remove_active_mask = [remove_active_mask_p1, remove_active_mask_p2];
+    state.holds_active_mask = [holds_active_mask_p1, holds_active_mask_p2];
+    state.accel_effects_active_mask = [accel_effects_active_mask_p1, accel_effects_active_mask_p2];
+    state.visual_effects_active_mask =
+        [visual_effects_active_mask_p1, visual_effects_active_mask_p2];
+    state.appearance_effects_active_mask = [
+        appearance_effects_active_mask_p1,
+        appearance_effects_active_mask_p2,
+    ];
     state.fa_plus_active_mask = [fa_plus_active_mask_p1, fa_plus_active_mask_p2];
     state.early_dw_active_mask = [early_dw_active_mask_p1, early_dw_active_mask_p2];
     state.gameplay_extras_active_mask = [
@@ -4617,6 +5160,30 @@ fn handle_start_event(
     }
     if row_name == "Hide" {
         toggle_hide_row(state, player_idx);
+        return None;
+    }
+    if row_name == "Insert" {
+        toggle_insert_row(state, player_idx);
+        return None;
+    }
+    if row_name == "Remove" {
+        toggle_remove_row(state, player_idx);
+        return None;
+    }
+    if row_name == "Holds" {
+        toggle_holds_row(state, player_idx);
+        return None;
+    }
+    if row_name == "Accel Effects" {
+        toggle_accel_effects_row(state, player_idx);
+        return None;
+    }
+    if row_name == "Visual Effects" {
+        toggle_visual_effects_row(state, player_idx);
+        return None;
+    }
+    if row_name == "Appearance Effects" {
+        toggle_appearance_effects_row(state, player_idx);
         return None;
     }
     if row_name == "Life Bar Options" {
@@ -4910,7 +5477,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
             let speed_mod = &state.speed_mod[player_idx];
             let speed_color = color::simply_love_rgba(player_color_index(player_idx));
-            let main_scroll = speed_mod_helper_scroll_text(&state.song, speed_mod, state.music_rate);
+            let main_scroll =
+                speed_mod_helper_scroll_text(&state.song, speed_mod, state.music_rate);
             let speed_prefix = speed_mod.mod_type.as_str();
             let speed_text = format!("{speed_prefix}{main_scroll}");
             // zmod uses GetWidth() from the main helper actor (unzoomed width), then +w*0.4.
@@ -5234,6 +5802,246 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         continue;
                     }
                     let mask = state.hide_active_mask[player_idx];
+                    if mask == 0 {
+                        continue;
+                    }
+                    let underline_y = underline_y_for(player_idx);
+                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
+                    line_color[3] *= a;
+                    for idx in 0..row.choices.len() {
+                        let bit = 1u8 << (idx as u8);
+                        if (mask & bit) == 0 {
+                            continue;
+                        }
+                        if let Some(sel_x) = x_positions.get(idx).copied() {
+                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                            let underline_w = draw_w.ceil();
+                            actors.push(act!(quad:
+                                align(0.0, 0.5):
+                                xy(sel_x, underline_y):
+                                zoomto(underline_w, line_thickness):
+                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                z(101)
+                            ));
+                        }
+                    }
+                }
+            } else if row.name == "Insert" {
+                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                let offset = widescale(3.0, 4.0);
+                let underline_base_y = current_row_y + text_h * 0.5 + offset;
+                let underline_y_for = |player_idx: usize| {
+                    if active[P1] && active[P2] {
+                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
+                    } else {
+                        underline_base_y
+                    }
+                };
+                for player_idx in 0..PLAYER_SLOTS {
+                    if !active[player_idx] {
+                        continue;
+                    }
+                    let mask = state.insert_active_mask[player_idx];
+                    if mask == 0 {
+                        continue;
+                    }
+                    let underline_y = underline_y_for(player_idx);
+                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
+                    line_color[3] *= a;
+                    for idx in 0..row.choices.len() {
+                        let bit = 1u8 << (idx as u8);
+                        if (mask & bit) == 0 {
+                            continue;
+                        }
+                        if let Some(sel_x) = x_positions.get(idx).copied() {
+                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                            let underline_w = draw_w.ceil();
+                            actors.push(act!(quad:
+                                align(0.0, 0.5):
+                                xy(sel_x, underline_y):
+                                zoomto(underline_w, line_thickness):
+                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                z(101)
+                            ));
+                        }
+                    }
+                }
+            } else if row.name == "Remove" {
+                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                let offset = widescale(3.0, 4.0);
+                let underline_base_y = current_row_y + text_h * 0.5 + offset;
+                let underline_y_for = |player_idx: usize| {
+                    if active[P1] && active[P2] {
+                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
+                    } else {
+                        underline_base_y
+                    }
+                };
+                for player_idx in 0..PLAYER_SLOTS {
+                    if !active[player_idx] {
+                        continue;
+                    }
+                    let mask = state.remove_active_mask[player_idx];
+                    if mask == 0 {
+                        continue;
+                    }
+                    let underline_y = underline_y_for(player_idx);
+                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
+                    line_color[3] *= a;
+                    for idx in 0..row.choices.len() {
+                        let bit = 1u8 << (idx as u8);
+                        if (mask & bit) == 0 {
+                            continue;
+                        }
+                        if let Some(sel_x) = x_positions.get(idx).copied() {
+                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                            let underline_w = draw_w.ceil();
+                            actors.push(act!(quad:
+                                align(0.0, 0.5):
+                                xy(sel_x, underline_y):
+                                zoomto(underline_w, line_thickness):
+                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                z(101)
+                            ));
+                        }
+                    }
+                }
+            } else if row.name == "Holds" {
+                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                let offset = widescale(3.0, 4.0);
+                let underline_base_y = current_row_y + text_h * 0.5 + offset;
+                let underline_y_for = |player_idx: usize| {
+                    if active[P1] && active[P2] {
+                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
+                    } else {
+                        underline_base_y
+                    }
+                };
+                for player_idx in 0..PLAYER_SLOTS {
+                    if !active[player_idx] {
+                        continue;
+                    }
+                    let mask = state.holds_active_mask[player_idx];
+                    if mask == 0 {
+                        continue;
+                    }
+                    let underline_y = underline_y_for(player_idx);
+                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
+                    line_color[3] *= a;
+                    for idx in 0..row.choices.len() {
+                        let bit = 1u8 << (idx as u8);
+                        if (mask & bit) == 0 {
+                            continue;
+                        }
+                        if let Some(sel_x) = x_positions.get(idx).copied() {
+                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                            let underline_w = draw_w.ceil();
+                            actors.push(act!(quad:
+                                align(0.0, 0.5):
+                                xy(sel_x, underline_y):
+                                zoomto(underline_w, line_thickness):
+                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                z(101)
+                            ));
+                        }
+                    }
+                }
+            } else if row.name == "Accel Effects" {
+                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                let offset = widescale(3.0, 4.0);
+                let underline_base_y = current_row_y + text_h * 0.5 + offset;
+                let underline_y_for = |player_idx: usize| {
+                    if active[P1] && active[P2] {
+                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
+                    } else {
+                        underline_base_y
+                    }
+                };
+                for player_idx in 0..PLAYER_SLOTS {
+                    if !active[player_idx] {
+                        continue;
+                    }
+                    let mask = state.accel_effects_active_mask[player_idx];
+                    if mask == 0 {
+                        continue;
+                    }
+                    let underline_y = underline_y_for(player_idx);
+                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
+                    line_color[3] *= a;
+                    for idx in 0..row.choices.len() {
+                        let bit = 1u8 << (idx as u8);
+                        if (mask & bit) == 0 {
+                            continue;
+                        }
+                        if let Some(sel_x) = x_positions.get(idx).copied() {
+                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                            let underline_w = draw_w.ceil();
+                            actors.push(act!(quad:
+                                align(0.0, 0.5):
+                                xy(sel_x, underline_y):
+                                zoomto(underline_w, line_thickness):
+                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                z(101)
+                            ));
+                        }
+                    }
+                }
+            } else if row.name == "Visual Effects" {
+                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                let offset = widescale(3.0, 4.0);
+                let underline_base_y = current_row_y + text_h * 0.5 + offset;
+                let underline_y_for = |player_idx: usize| {
+                    if active[P1] && active[P2] {
+                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
+                    } else {
+                        underline_base_y
+                    }
+                };
+                for player_idx in 0..PLAYER_SLOTS {
+                    if !active[player_idx] {
+                        continue;
+                    }
+                    let mask = state.visual_effects_active_mask[player_idx];
+                    if mask == 0 {
+                        continue;
+                    }
+                    let underline_y = underline_y_for(player_idx);
+                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
+                    line_color[3] *= a;
+                    for idx in 0..row.choices.len() {
+                        let bit = 1u16 << (idx as u16);
+                        if (mask & bit) == 0 {
+                            continue;
+                        }
+                        if let Some(sel_x) = x_positions.get(idx).copied() {
+                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                            let underline_w = draw_w.ceil();
+                            actors.push(act!(quad:
+                                align(0.0, 0.5):
+                                xy(sel_x, underline_y):
+                                zoomto(underline_w, line_thickness):
+                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                z(101)
+                            ));
+                        }
+                    }
+                }
+            } else if row.name == "Appearance Effects" {
+                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                let offset = widescale(3.0, 4.0);
+                let underline_base_y = current_row_y + text_h * 0.5 + offset;
+                let underline_y_for = |player_idx: usize| {
+                    if active[P1] && active[P2] {
+                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
+                    } else {
+                        underline_base_y
+                    }
+                };
+                for player_idx in 0..PLAYER_SLOTS {
+                    if !active[player_idx] {
+                        continue;
+                    }
+                    let mask = state.appearance_effects_active_mask[player_idx];
                     if mask == 0 {
                         continue;
                     }

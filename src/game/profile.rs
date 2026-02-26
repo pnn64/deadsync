@@ -114,6 +114,120 @@ impl core::fmt::Display for TurnOption {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AttackMode {
+    #[default]
+    Off,
+    On,
+    Random,
+}
+
+impl FromStr for AttackMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "off" | "noattacks" | "noattack" => Ok(Self::Off),
+            "on" | "normal" => Ok(Self::On),
+            "random" | "randomattacks" => Ok(Self::Random),
+            other => Err(format!("'{other}' is not a valid AttackMode setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for AttackMode {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Off => write!(f, "Off"),
+            Self::On => write!(f, "On"),
+            Self::Random => write!(f, "Random"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CharacterMode {
+    #[default]
+    None,
+    Random,
+    SelectPerSong,
+}
+
+impl FromStr for CharacterMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "none" => Ok(Self::None),
+            "random" => Ok(Self::Random),
+            "selectpersong" => Ok(Self::SelectPerSong),
+            other => Err(format!("'{other}' is not a valid CharacterMode setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for CharacterMode {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::Random => write!(f, "Random"),
+            Self::SelectPerSong => write!(f, "SelectPerSong"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HideLightType {
+    #[default]
+    NoHideLights,
+    HideAllLights,
+    HideMarqueeLights,
+    HideBassLights,
+}
+
+impl FromStr for HideLightType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "nohidelights" => Ok(Self::NoHideLights),
+            "hidealllights" => Ok(Self::HideAllLights),
+            "hidemarqueelights" => Ok(Self::HideMarqueeLights),
+            "hidebasslights" => Ok(Self::HideBassLights),
+            other => Err(format!("'{other}' is not a valid HideLightType setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for HideLightType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::NoHideLights => write!(f, "NoHideLights"),
+            Self::HideAllLights => write!(f, "HideAllLights"),
+            Self::HideMarqueeLights => write!(f, "HideMarqueeLights"),
+            Self::HideBassLights => write!(f, "HideBassLights"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScrollOption(u8);
 
@@ -213,6 +327,43 @@ impl core::fmt::Display for ScrollOption {
         write_flag("Cross", self.contains(Self::Cross), f)?;
         write_flag("Centered", self.contains(Self::Centered), f)
     }
+}
+
+pub const INSERT_ACTIVE_BITS: u8 = (1 << 7) - 1;
+pub const REMOVE_ACTIVE_BITS: u8 = u8::MAX;
+pub const HOLDS_ACTIVE_BITS: u8 = (1 << 5) - 1;
+pub const ACCEL_EFFECTS_ACTIVE_BITS: u8 = (1 << 5) - 1;
+pub const VISUAL_EFFECTS_ACTIVE_BITS: u16 = (1 << 10) - 1;
+pub const APPEARANCE_EFFECTS_ACTIVE_BITS: u8 = (1 << 5) - 1;
+
+#[inline(always)]
+pub const fn normalize_insert_mask(mask: u8) -> u8 {
+    mask & INSERT_ACTIVE_BITS
+}
+
+#[inline(always)]
+pub const fn normalize_remove_mask(mask: u8) -> u8 {
+    mask & REMOVE_ACTIVE_BITS
+}
+
+#[inline(always)]
+pub const fn normalize_holds_mask(mask: u8) -> u8 {
+    mask & HOLDS_ACTIVE_BITS
+}
+
+#[inline(always)]
+pub const fn normalize_accel_effects_mask(mask: u8) -> u8 {
+    mask & ACCEL_EFFECTS_ACTIVE_BITS
+}
+
+#[inline(always)]
+pub const fn normalize_visual_effects_mask(mask: u16) -> u16 {
+    mask & VISUAL_EFFECTS_ACTIVE_BITS
+}
+
+#[inline(always)]
+pub const fn normalize_appearance_effects_mask(mask: u8) -> u8 {
+    mask & APPEARANCE_EFFECTS_ACTIVE_BITS
 }
 
 // --- Profile Data ---
@@ -1043,6 +1194,17 @@ pub struct Profile {
     pub scroll_option: ScrollOption,
     pub reverse_scroll: bool,
     pub turn_option: TurnOption,
+    // zmod uncommon modifiers (ScreenPlayerOptions3).
+    // Bit order mirrors row choice order in metrics.ini.
+    pub insert_active_mask: u8,
+    pub remove_active_mask: u8,
+    pub holds_active_mask: u8,
+    pub accel_effects_active_mask: u8,
+    pub visual_effects_active_mask: u16,
+    pub appearance_effects_active_mask: u8,
+    pub attack_mode: AttackMode,
+    pub character_mode: CharacterMode,
+    pub hide_light_type: HideLightType,
     // Allow early Decent/WayOff hits to be rescored to better judgments.
     pub rescore_early_hits: bool,
     // Visual behavior for early Decent/Way Off hits (Simply Love semantics).
@@ -1155,6 +1317,15 @@ impl Default for Profile {
             scroll_option: ScrollOption::default(),
             reverse_scroll: false,
             turn_option: TurnOption::default(),
+            insert_active_mask: 0,
+            remove_active_mask: 0,
+            holds_active_mask: 0,
+            accel_effects_active_mask: 0,
+            visual_effects_active_mask: 0,
+            appearance_effects_active_mask: 0,
+            attack_mode: AttackMode::default(),
+            character_mode: CharacterMode::default(),
+            hide_light_type: HideLightType::default(),
             rescore_early_hits: true,
             hide_early_dw_judgments: false,
             hide_early_dw_flash: false,
@@ -1381,6 +1552,39 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         content.push_str(&format!("ScrollSpeed = {}\n", default_profile.scroll_speed));
         content.push_str(&format!("Scroll = {}\n", default_profile.scroll_option));
         content.push_str(&format!("Turn = {}\n", default_profile.turn_option));
+        content.push_str(&format!(
+            "InsertMask = {}\n",
+            default_profile.insert_active_mask
+        ));
+        content.push_str(&format!(
+            "RemoveMask = {}\n",
+            default_profile.remove_active_mask
+        ));
+        content.push_str(&format!(
+            "HoldsMask = {}\n",
+            default_profile.holds_active_mask
+        ));
+        content.push_str(&format!(
+            "AccelEffectsMask = {}\n",
+            default_profile.accel_effects_active_mask
+        ));
+        content.push_str(&format!(
+            "VisualEffectsMask = {}\n",
+            default_profile.visual_effects_active_mask
+        ));
+        content.push_str(&format!(
+            "AppearanceEffectsMask = {}\n",
+            default_profile.appearance_effects_active_mask
+        ));
+        content.push_str(&format!("AttackMode = {}\n", default_profile.attack_mode));
+        content.push_str(&format!(
+            "CharacterMode = {}\n",
+            default_profile.character_mode
+        ));
+        content.push_str(&format!(
+            "HideLightType = {}\n",
+            default_profile.hide_light_type
+        ));
         content.push_str(&format!(
             "RescoreEarlyHits = {}\n",
             i32::from(default_profile.rescore_early_hits)
@@ -1695,6 +1899,24 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!("ScrollSpeed={}\n", profile.scroll_speed));
     content.push_str(&format!("Scroll={}\n", profile.scroll_option));
     content.push_str(&format!("Turn={}\n", profile.turn_option));
+    content.push_str(&format!("InsertMask={}\n", profile.insert_active_mask));
+    content.push_str(&format!("RemoveMask={}\n", profile.remove_active_mask));
+    content.push_str(&format!("HoldsMask={}\n", profile.holds_active_mask));
+    content.push_str(&format!(
+        "AccelEffectsMask={}\n",
+        profile.accel_effects_active_mask
+    ));
+    content.push_str(&format!(
+        "VisualEffectsMask={}\n",
+        profile.visual_effects_active_mask
+    ));
+    content.push_str(&format!(
+        "AppearanceEffectsMask={}\n",
+        profile.appearance_effects_active_mask
+    ));
+    content.push_str(&format!("AttackMode={}\n", profile.attack_mode));
+    content.push_str(&format!("CharacterMode={}\n", profile.character_mode));
+    content.push_str(&format!("HideLightType={}\n", profile.hide_light_type));
     content.push_str(&format!(
         "RescoreEarlyHits={}\n",
         i32::from(profile.rescore_early_hits)
@@ -2345,6 +2567,50 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "Turn")
                 .and_then(|s| TurnOption::from_str(&s).ok())
                 .unwrap_or(default_profile.turn_option);
+            profile.insert_active_mask = profile_conf
+                .get("PlayerOptions", "InsertMask")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map(normalize_insert_mask)
+                .unwrap_or(default_profile.insert_active_mask);
+            profile.remove_active_mask = profile_conf
+                .get("PlayerOptions", "RemoveMask")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map(normalize_remove_mask)
+                .unwrap_or(default_profile.remove_active_mask);
+            profile.holds_active_mask = profile_conf
+                .get("PlayerOptions", "HoldsMask")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map(normalize_holds_mask)
+                .unwrap_or(default_profile.holds_active_mask);
+            profile.accel_effects_active_mask = profile_conf
+                .get("PlayerOptions", "AccelEffectsMask")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map(normalize_accel_effects_mask)
+                .unwrap_or(default_profile.accel_effects_active_mask);
+            profile.visual_effects_active_mask = profile_conf
+                .get("PlayerOptions", "VisualEffectsMask")
+                .and_then(|s| s.parse::<u16>().ok())
+                .map(normalize_visual_effects_mask)
+                .unwrap_or(default_profile.visual_effects_active_mask);
+            profile.appearance_effects_active_mask = profile_conf
+                .get("PlayerOptions", "AppearanceEffectsMask")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map(normalize_appearance_effects_mask)
+                .unwrap_or(default_profile.appearance_effects_active_mask);
+            profile.attack_mode = profile_conf
+                .get("PlayerOptions", "AttackMode")
+                .or_else(|| profile_conf.get("PlayerOptions", "Attacks"))
+                .and_then(|s| AttackMode::from_str(&s).ok())
+                .unwrap_or(default_profile.attack_mode);
+            profile.character_mode = profile_conf
+                .get("PlayerOptions", "CharacterMode")
+                .or_else(|| profile_conf.get("PlayerOptions", "Characters"))
+                .and_then(|s| CharacterMode::from_str(&s).ok())
+                .unwrap_or(default_profile.character_mode);
+            profile.hide_light_type = profile_conf
+                .get("PlayerOptions", "HideLightType")
+                .and_then(|s| HideLightType::from_str(&s).ok())
+                .unwrap_or(default_profile.hide_light_type);
             profile.rescore_early_hits = profile_conf
                 .get("PlayerOptions", "RescoreEarlyHits")
                 .and_then(|s| s.parse::<u8>().ok())
@@ -2766,6 +3032,39 @@ pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error
     content.push_str("[PlayerOptions]\n");
     content.push_str(&format!("ScrollSpeed={}\n", default_profile.scroll_speed));
     content.push_str(&format!("Scroll={}\n", default_profile.scroll_option));
+    content.push_str(&format!(
+        "InsertMask={}\n",
+        default_profile.insert_active_mask
+    ));
+    content.push_str(&format!(
+        "RemoveMask={}\n",
+        default_profile.remove_active_mask
+    ));
+    content.push_str(&format!(
+        "HoldsMask={}\n",
+        default_profile.holds_active_mask
+    ));
+    content.push_str(&format!(
+        "AccelEffectsMask={}\n",
+        default_profile.accel_effects_active_mask
+    ));
+    content.push_str(&format!(
+        "VisualEffectsMask={}\n",
+        default_profile.visual_effects_active_mask
+    ));
+    content.push_str(&format!(
+        "AppearanceEffectsMask={}\n",
+        default_profile.appearance_effects_active_mask
+    ));
+    content.push_str(&format!("AttackMode={}\n", default_profile.attack_mode));
+    content.push_str(&format!(
+        "CharacterMode={}\n",
+        default_profile.character_mode
+    ));
+    content.push_str(&format!(
+        "HideLightType={}\n",
+        default_profile.hide_light_type
+    ));
     content.push_str(&format!("NoteSkin={}\n", default_profile.noteskin));
     content.push('\n');
     content.push_str("[userprofile]\n");
@@ -3244,6 +3543,147 @@ pub fn update_turn_option_for_side(side: PlayerSide, setting: TurnOption) {
             return;
         }
         profile.turn_option = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_insert_mask_for_side(side: PlayerSide, mask: u8) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    let mask = normalize_insert_mask(mask);
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.insert_active_mask == mask {
+            return;
+        }
+        profile.insert_active_mask = mask;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_remove_mask_for_side(side: PlayerSide, mask: u8) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    let mask = normalize_remove_mask(mask);
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.remove_active_mask == mask {
+            return;
+        }
+        profile.remove_active_mask = mask;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_holds_mask_for_side(side: PlayerSide, mask: u8) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    let mask = normalize_holds_mask(mask);
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.holds_active_mask == mask {
+            return;
+        }
+        profile.holds_active_mask = mask;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_accel_effects_mask_for_side(side: PlayerSide, mask: u8) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    let mask = normalize_accel_effects_mask(mask);
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.accel_effects_active_mask == mask {
+            return;
+        }
+        profile.accel_effects_active_mask = mask;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_visual_effects_mask_for_side(side: PlayerSide, mask: u16) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    let mask = normalize_visual_effects_mask(mask);
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.visual_effects_active_mask == mask {
+            return;
+        }
+        profile.visual_effects_active_mask = mask;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_appearance_effects_mask_for_side(side: PlayerSide, mask: u8) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    let mask = normalize_appearance_effects_mask(mask);
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.appearance_effects_active_mask == mask {
+            return;
+        }
+        profile.appearance_effects_active_mask = mask;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_attack_mode_for_side(side: PlayerSide, setting: AttackMode) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.attack_mode == setting {
+            return;
+        }
+        profile.attack_mode = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_character_mode_for_side(side: PlayerSide, setting: CharacterMode) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.character_mode == setting {
+            return;
+        }
+        profile.character_mode = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_hide_light_type_for_side(side: PlayerSide, setting: HideLightType) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.hide_light_type == setting {
+            return;
+        }
+        profile.hide_light_type = setting;
     }
     save_profile_ini_for_side(side);
 }
