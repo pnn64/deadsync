@@ -454,6 +454,111 @@ fn reference_bpm_for_song(song: &SongData) -> f32 {
 }
 
 #[inline(always)]
+fn display_bpm_pair_for_options(song: &SongData, music_rate: f32) -> Option<(f32, f32)> {
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
+    let (mut lo, mut hi) = song.display_bpm_range().map_or((120.0_f32, 120.0_f32), |(a, b)| {
+        (a as f32, b as f32)
+    });
+    if !lo.is_finite() || !hi.is_finite() || lo <= 0.0 || hi <= 0.0 {
+        lo = 120.0;
+        hi = 120.0;
+    }
+    Some((lo * rate, hi * rate))
+}
+
+#[inline(always)]
+fn speed_mod_bpm_pair(song: &SongData, speed_mod: &SpeedMod, music_rate: f32) -> Option<(f32, f32)> {
+    let (mut lo, mut hi) = display_bpm_pair_for_options(song, music_rate)?;
+    match speed_mod.mod_type.as_str() {
+        "X" => {
+            lo *= speed_mod.value;
+            hi *= speed_mod.value;
+        }
+        "M" => {
+            if hi.abs() <= f32::EPSILON {
+                return None;
+            }
+            lo *= speed_mod.value / hi;
+            hi = speed_mod.value;
+        }
+        "C" => {
+            lo = speed_mod.value;
+            hi = speed_mod.value;
+        }
+        _ => {}
+    }
+    if lo.is_finite() && hi.is_finite() {
+        Some((lo, hi))
+    } else {
+        None
+    }
+}
+
+#[inline(always)]
+fn format_speed_bpm_pair(lo: f32, hi: f32) -> String {
+    let lo_i = lo.round() as i32;
+    let hi_i = hi.round() as i32;
+    if lo_i == hi_i {
+        lo_i.to_string()
+    } else {
+        format!("{lo_i}-{hi_i}")
+    }
+}
+
+#[inline(always)]
+fn perspective_speed_mult(perspective: crate::game::profile::Perspective) -> f32 {
+    match perspective {
+        crate::game::profile::Perspective::Overhead => 1.0,
+        crate::game::profile::Perspective::Hallway => 0.75,
+        crate::game::profile::Perspective::Distant => 33.0 / 39.0,
+        crate::game::profile::Perspective::Incoming => 33.0 / 43.0,
+        crate::game::profile::Perspective::Space => 0.825,
+    }
+}
+
+#[inline(always)]
+fn speed_mod_helper_scroll_text(song: &SongData, speed_mod: &SpeedMod, music_rate: f32) -> String {
+    speed_mod_bpm_pair(song, speed_mod, music_rate).map_or_else(String::new, |(lo, hi)| {
+        format_speed_bpm_pair(lo, hi)
+    })
+}
+
+#[inline(always)]
+fn speed_mod_helper_scaled_text(
+    song: &SongData,
+    speed_mod: &SpeedMod,
+    music_rate: f32,
+    profile: &crate::game::profile::Profile,
+) -> String {
+    let Some((mut lo, mut hi)) = speed_mod_bpm_pair(song, speed_mod, music_rate) else {
+        return String::new();
+    };
+    let mini = profile.mini_percent.clamp(-100, 150) as f32;
+    let scale = ((200.0 - mini) / 200.0) * perspective_speed_mult(profile.perspective);
+    lo *= scale;
+    hi *= scale;
+    format_speed_bpm_pair(lo, hi)
+}
+
+#[inline(always)]
+fn measure_wendy_text_width(asset_manager: &AssetManager, text: &str) -> f32 {
+    let mut out_w = 1.0_f32;
+    asset_manager.with_fonts(|all_fonts| {
+        asset_manager.with_font("wendy", |metrics_font| {
+            let w = crate::ui::font::measure_line_width_logical(metrics_font, text, all_fonts) as f32;
+            if w.is_finite() && w > 0.0 {
+                out_w = w;
+            }
+        });
+    });
+    out_w
+}
+
+#[inline(always)]
 fn round_to_step(x: f32, step: f32) -> f32 {
     if !x.is_finite() || !step.is_finite() || step <= 0.0 {
         return x;
@@ -4766,20 +4871,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         left_avatar,
         right_avatar,
     }));
-    // Speed Mod Helper Display (from overlay.lua)
-    // Shows the effective scroll speed (e.g., "X390" for 3.25x on 120 BPM)
+    // zmod ScreenPlayerOptions overlay/default.lua speed helper parity.
     let speed_mod_y = 48.0;
-    let speed_mod_x = screen_center_x() + widescale(-77.0, -100.0);
+    let speed_mod_zoom = 0.5_f32;
+    let speed_mod_scaled_y = 52.0_f32;
+    let speed_mod_scaled_zoom = 0.3_f32;
+    let speed_mod_x_p1 = screen_center_x() + widescale(-77.0, -100.0);
+    let speed_mod_x_p2 = screen_center_x() + widescale(140.0, 154.0);
+    let speed_mod_x = speed_mod_x_p1;
     // All previews (judgment, hold, noteskin, combo) share this center line.
     // Tweak these to dial in parity with Simply Love.
     const PREVIEW_CENTER_OFFSET_NORMAL: f32 = 80.75; // 4:3
     const PREVIEW_CENTER_OFFSET_WIDE: f32 = 98.75; // 16:9
     let preview_center_x =
-        speed_mod_x + widescale(PREVIEW_CENTER_OFFSET_NORMAL, PREVIEW_CENTER_OFFSET_WIDE);
-
-    // Calculate effective BPM for display. For X-mod parity with gameplay, use reference BPM.
-    let reference_bpm = reference_bpm_for_song(&state.song);
-    let effective_song_bpm = f64::from(reference_bpm) * f64::from(state.music_rate);
+        speed_mod_x_p1 + widescale(PREVIEW_CENTER_OFFSET_NORMAL, PREVIEW_CENTER_OFFSET_WIDE);
 
     let player_color_index = |player_idx: usize| {
         if player_idx == P2 {
@@ -4790,12 +4895,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
     let speed_x_for = |player_idx: usize| {
         if player_idx == P2 {
-            screen_center_x().mul_add(2.0, -speed_mod_x)
+            speed_mod_x_p2
         } else {
-            speed_mod_x
+            speed_mod_x_p1
         }
     };
-    let preview_dx = preview_center_x - speed_mod_x;
+    let preview_dx = preview_center_x - speed_mod_x_p1;
     let preview_x_for = |player_idx: usize| speed_x_for(player_idx) + preview_dx;
 
     if state.current_pane == OptionsPane::Main {
@@ -4805,24 +4910,34 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
             let speed_mod = &state.speed_mod[player_idx];
             let speed_color = color::simply_love_rgba(player_color_index(player_idx));
-            let speed_text = match speed_mod.mod_type.as_str() {
-                "X" => {
-                    // For X-mod, show the effective BPM accounting for music rate
-                    // (e.g., "X390" for 3.25x on 120 BPM at 1.0x rate)
-                    let effective_bpm =
-                        (speed_mod.value * effective_song_bpm as f32).round() as i32;
-                    format!("X{effective_bpm}")
-                }
-                "C" => format!("C{}", speed_mod.value as i32),
-                "M" => format!("M{}", speed_mod.value as i32),
-                _ => format!("{:.2}x", speed_mod.value),
-            };
+            let main_scroll = speed_mod_helper_scroll_text(&state.song, speed_mod, state.music_rate);
+            let speed_prefix = speed_mod.mod_type.as_str();
+            let speed_text = format!("{speed_prefix}{main_scroll}");
+            // zmod uses GetWidth() from the main helper actor (unzoomed width), then +w*0.4.
+            let main_draw_w = measure_wendy_text_width(asset_manager, &speed_text);
+            let speed_x = speed_x_for(player_idx);
 
             actors.push(act!(text: font("wendy"): settext(speed_text):
-                align(0.5, 0.5): xy(speed_x_for(player_idx), speed_mod_y): zoom(0.5):
+                align(0.5, 0.5): xy(speed_x, speed_mod_y): zoom(speed_mod_zoom):
                 diffuse(speed_color[0], speed_color[1], speed_color[2], pane_alpha):
                 z(121)
             ));
+
+            let scaled_scroll = speed_mod_helper_scaled_text(
+                &state.song,
+                speed_mod,
+                state.music_rate,
+                &state.player_profiles[player_idx],
+            );
+            if scaled_scroll != main_scroll {
+                let scaled_text = format!("{speed_prefix}{scaled_scroll}");
+                let scaled_x = speed_x + main_draw_w * 0.4;
+                actors.push(act!(text: font("wendy"): settext(scaled_text):
+                    align(0.5, 0.5): xy(scaled_x, speed_mod_scaled_y): zoom(speed_mod_scaled_zoom):
+                    diffuse(speed_color[0], speed_color[1], speed_color[2], 0.8 * pane_alpha):
+                    z(121)
+                ));
+            }
         }
     }
     /* ---------- SHARED GEOMETRY (rows aligned to help box) ---------- */
