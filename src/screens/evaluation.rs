@@ -489,6 +489,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         // Persist one score file per play (per local profile), including fails and replay lane
         // input, unless gameplay was disqualified (e.g., autoplay used).
         scores::save_local_scores_from_gameplay(&gs);
+        scores::dump_arrowcloud_payloads_from_gameplay(&gs);
+        scores::submit_arrowcloud_payloads_from_gameplay(&gs);
 
         let cols_per_player = gs.cols_per_player;
         for player_idx in 0..gs.num_players.min(MAX_PLAYERS) {

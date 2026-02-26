@@ -8,7 +8,7 @@ use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
 use chrono::{Local, TimeZone};
 use log::{info, warn};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -1503,6 +1503,622 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             &mut entry,
         );
     }
+}
+
+const ARROWCLOUD_BODY_VERSION: &str = "1.3";
+const ARROWCLOUD_ENGINE_NAME: &str = "DeadSync";
+const ARROWCLOUD_ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
+const ARROWCLOUD_SUBMIT_BASE_URL: &str = "https://api.arrowcloud.dance";
+const ARROWCLOUD_LIFEBAR_POINTS: usize = 100;
+const ARROWCLOUD_ACCEL_NAMES: [&str; 5] = ["Boost", "Brake", "Wave", "Expand", "Boomerang"];
+const ARROWCLOUD_EFFECT_NAMES: [&str; 10] = [
+    "Drunk",
+    "Dizzy",
+    "Confusion",
+    "Big",
+    "Flip",
+    "Invert",
+    "Tornado",
+    "Tipsy",
+    "Bumpy",
+    "Beat",
+];
+const ARROWCLOUD_APPEARANCE_NAMES: [&str; 5] =
+    ["Hidden", "Sudden", "Stealth", "Blink", "R.Vanish"];
+
+#[derive(Debug, Serialize)]
+struct ArrowCloudSpeed {
+    value: f64,
+    #[serde(rename = "type")]
+    speed_type: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct ArrowCloudModifiers {
+    #[serde(rename = "visualDelay")]
+    visual_delay: i32,
+    acceleration: Vec<String>,
+    appearance: Vec<String>,
+    effect: Vec<String>,
+    mini: i32,
+    turn: String,
+    #[serde(rename = "disabledWindows")]
+    disabled_windows: String,
+    speed: ArrowCloudSpeed,
+    perspective: String,
+    noteskin: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scroll: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ArrowCloudRadar {
+    #[serde(rename = "Holds")]
+    holds: [u32; 2],
+    #[serde(rename = "Mines")]
+    mines: [u32; 2],
+    #[serde(rename = "Rolls")]
+    rolls: [u32; 2],
+}
+
+#[derive(Debug, Serialize)]
+struct ArrowCloudLifePoint {
+    x: f64,
+    y: f64,
+}
+
+#[derive(Debug, Serialize)]
+struct ArrowCloudNpsPoint {
+    x: f64,
+    y: f64,
+    measure: u32,
+    nps: f64,
+}
+
+#[derive(Debug, Serialize)]
+struct ArrowCloudNpsInfo {
+    #[serde(rename = "peakNPS")]
+    peak_nps: f64,
+    points: Vec<ArrowCloudNpsPoint>,
+}
+
+#[derive(Debug, Serialize)]
+struct ArrowCloudPayload {
+    #[serde(rename = "songName")]
+    song_name: String,
+    artist: String,
+    pack: String,
+    length: String,
+    hash: String,
+    #[serde(rename = "timingData")]
+    timing_data: Vec<[f64; 2]>,
+    difficulty: u32,
+    stepartist: String,
+    radar: ArrowCloudRadar,
+    #[serde(rename = "npsInfo")]
+    nps_info: ArrowCloudNpsInfo,
+    #[serde(rename = "lifebarInfo")]
+    lifebar_info: Vec<ArrowCloudLifePoint>,
+    modifiers: ArrowCloudModifiers,
+    #[serde(rename = "musicRate")]
+    music_rate: f64,
+    #[serde(rename = "usedAutoplay")]
+    used_autoplay: bool,
+    passed: bool,
+    #[serde(rename = "bodyVersion")]
+    body_version: &'static str,
+    #[serde(rename = "_arrowCloudBodyVersion")]
+    arrow_cloud_body_version: &'static str,
+    #[serde(rename = "_engineName")]
+    engine_name: &'static str,
+    #[serde(rename = "_engineVersion")]
+    engine_version: &'static str,
+}
+
+#[derive(Debug)]
+struct ArrowCloudSubmitJob {
+    side: profile::PlayerSide,
+    api_key: String,
+    payload: ArrowCloudPayload,
+}
+
+#[inline(always)]
+fn gameplay_side_for_player(gs: &gameplay::State, player_idx: usize) -> profile::PlayerSide {
+    if gs.num_players >= 2 {
+        if player_idx == 0 {
+            profile::PlayerSide::P1
+        } else {
+            profile::PlayerSide::P2
+        }
+    } else {
+        profile::get_session_player_side()
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_format_length(seconds: f32) -> String {
+    if !seconds.is_finite() || seconds <= 0.0 {
+        return "0:00".to_string();
+    }
+    let total = seconds.floor() as i64;
+    if total >= 3600 {
+        format!(
+            "{}:{:02}:{:02}",
+            total / 3600,
+            (total % 3600) / 60,
+            total % 60
+        )
+    } else {
+        format!("{}:{:02}", total / 60, total % 60)
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_mask_labels_u8(mask: u8, names: &[&str]) -> Vec<String> {
+    let mut out = Vec::new();
+    for (i, name) in names.iter().enumerate() {
+        if (mask & (1u8 << i)) != 0 {
+            out.push((*name).to_string());
+        }
+    }
+    out
+}
+
+#[inline(always)]
+fn arrowcloud_mask_labels_u16(mask: u16, names: &[&str]) -> Vec<String> {
+    let mut out = Vec::new();
+    for (i, name) in names.iter().enumerate() {
+        if (mask & (1u16 << i)) != 0 {
+            out.push((*name).to_string());
+        }
+    }
+    out
+}
+
+#[inline(always)]
+fn arrowcloud_turn_label(turn: profile::TurnOption) -> &'static str {
+    match turn {
+        profile::TurnOption::None => "None",
+        profile::TurnOption::Mirror => "Mirror",
+        profile::TurnOption::Left => "Left",
+        profile::TurnOption::Right => "Right",
+        profile::TurnOption::LRMirror => "LR-Mirror",
+        profile::TurnOption::UDMirror => "UD-Mirror",
+        profile::TurnOption::Shuffle | profile::TurnOption::Blender | profile::TurnOption::Random => {
+            "Shuffle"
+        }
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_scroll_label(scroll: profile::ScrollOption) -> Option<String> {
+    if scroll.contains(profile::ScrollOption::Reverse) {
+        Some("Reverse".to_string())
+    } else if scroll.contains(profile::ScrollOption::Split) {
+        Some("Split".to_string())
+    } else if scroll.contains(profile::ScrollOption::Alternate) {
+        Some("Alternate".to_string())
+    } else if scroll.contains(profile::ScrollOption::Cross) {
+        Some("Cross".to_string())
+    } else if scroll.contains(profile::ScrollOption::Centered) {
+        Some("Centered".to_string())
+    } else {
+        None
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_speed_payload(speed: crate::game::scroll::ScrollSpeedSetting) -> ArrowCloudSpeed {
+    match speed {
+        crate::game::scroll::ScrollSpeedSetting::CMod(v) => ArrowCloudSpeed {
+            value: v as f64,
+            speed_type: "C",
+        },
+        crate::game::scroll::ScrollSpeedSetting::MMod(v) => ArrowCloudSpeed {
+            value: v as f64,
+            speed_type: "M",
+        },
+        crate::game::scroll::ScrollSpeedSetting::XMod(v) => ArrowCloudSpeed {
+            value: ((v as f64) * 100.0).round() / 100.0,
+            speed_type: "X",
+        },
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_modifiers(profile: &Profile) -> ArrowCloudModifiers {
+    ArrowCloudModifiers {
+        visual_delay: profile.visual_delay_ms,
+        acceleration: arrowcloud_mask_labels_u8(
+            profile::normalize_accel_effects_mask(profile.accel_effects_active_mask),
+            &ARROWCLOUD_ACCEL_NAMES,
+        ),
+        appearance: arrowcloud_mask_labels_u8(
+            profile::normalize_appearance_effects_mask(profile.appearance_effects_active_mask),
+            &ARROWCLOUD_APPEARANCE_NAMES,
+        ),
+        effect: arrowcloud_mask_labels_u16(
+            profile::normalize_visual_effects_mask(profile.visual_effects_active_mask),
+            &ARROWCLOUD_EFFECT_NAMES,
+        ),
+        mini: profile.mini_percent.clamp(-100, 150),
+        turn: arrowcloud_turn_label(profile.turn_option).to_string(),
+        disabled_windows: "None".to_string(),
+        speed: arrowcloud_speed_payload(profile.scroll_speed),
+        perspective: profile.perspective.to_string(),
+        noteskin: profile.noteskin.as_str().to_string(),
+        scroll: arrowcloud_scroll_label(profile.scroll_option),
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_life_lerp_at(life_history: &[(f32, f32)], sample_time: f32) -> f32 {
+    let Some(&(_, first_life)) = life_history.first() else {
+        return 0.0;
+    };
+    if life_history.len() == 1 {
+        return first_life.clamp(0.0, 1.0);
+    }
+
+    let later_ix = life_history.partition_point(|&(t, _)| t <= sample_time);
+    let earlier_ix = later_ix.saturating_sub(1).min(life_history.len() - 1);
+    let (earlier_t, earlier_life) = life_history[earlier_ix];
+    if later_ix >= life_history.len() {
+        return earlier_life.clamp(0.0, 1.0);
+    }
+
+    let (later_t, later_life) = life_history[later_ix];
+    let dt = later_t - earlier_t;
+    if dt.abs() <= f32::EPSILON {
+        return earlier_life.clamp(0.0, 1.0);
+    }
+    let alpha = ((sample_time - earlier_t) / dt).clamp(0.0, 1.0);
+    (earlier_life + (later_life - earlier_life) * alpha).clamp(0.0, 1.0)
+}
+
+#[inline(always)]
+fn arrowcloud_lifebar_points(gs: &gameplay::State, player_idx: usize) -> Vec<ArrowCloudLifePoint> {
+    let life_history = gs.players[player_idx].life_history.as_slice();
+    if life_history.is_empty() {
+        return Vec::new();
+    }
+    let (start, end) = gs.note_ranges[player_idx];
+    let note_times = &gs.note_time_cache[start..end];
+    let first_second = gs.density_graph_first_second.min(0.0);
+    let last_second = gs.density_graph_last_second.max(first_second);
+    let chart_start_second = note_times
+        .iter()
+        .copied()
+        .find(|t| t.is_finite())
+        .unwrap_or(first_second);
+    let duration = (last_second - first_second).max(0.0);
+    let step = duration / ARROWCLOUD_LIFEBAR_POINTS as f32;
+
+    let mut out = Vec::with_capacity(ARROWCLOUD_LIFEBAR_POINTS);
+    for i in 0..ARROWCLOUD_LIFEBAR_POINTS {
+        let x = chart_start_second + (i as f32 * step);
+        out.push(ArrowCloudLifePoint {
+            x: x as f64,
+            y: arrowcloud_life_lerp_at(life_history, x) as f64,
+        });
+    }
+    out
+}
+
+#[inline(always)]
+fn arrowcloud_timing_data(gs: &gameplay::State, player_idx: usize) -> Vec<[f64; 2]> {
+    let (start, end) = gs.note_ranges[player_idx];
+    let notes = &gs.notes[start..end];
+    let note_times = &gs.note_time_cache[start..end];
+    let col_offset = player_idx.saturating_mul(gs.cols_per_player);
+    let scatter = crate::game::timing::build_scatter_points(
+        notes,
+        note_times,
+        col_offset,
+        gs.cols_per_player,
+        &gs.mini_indicator_stream_segments[player_idx],
+    );
+
+    let mut out = Vec::with_capacity(scatter.len());
+    for point in scatter {
+        let Some(offset_ms) = point.offset_ms else {
+            continue;
+        };
+        if !point.time_sec.is_finite() || !offset_ms.is_finite() {
+            continue;
+        }
+        out.push([point.time_sec as f64, (offset_ms / 1000.0) as f64]);
+    }
+    out
+}
+
+#[inline(always)]
+fn arrowcloud_nps_info(gs: &gameplay::State, player_idx: usize) -> ArrowCloudNpsInfo {
+    let chart = gs.charts[player_idx].as_ref();
+    let first_second = gs.density_graph_first_second.min(0.0);
+    let last_second = gs.density_graph_last_second.max(first_second);
+    let peak_nps = if chart.max_nps.is_finite() && chart.max_nps > 0.0 {
+        chart.max_nps
+    } else {
+        0.0
+    };
+
+    let mut points = Vec::with_capacity(chart.measure_nps_vec.len());
+    let mut started = false;
+    for (measure, nps) in chart.measure_nps_vec.iter().copied().enumerate() {
+        if !nps.is_finite() {
+            continue;
+        }
+        if nps > 0.0 {
+            started = true;
+        }
+        if !started {
+            continue;
+        }
+        let t = chart.timing.get_time_for_beat((measure as f32) * 4.0);
+        let x = if last_second > first_second {
+            ((t - first_second) / (last_second - first_second)).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let y = if peak_nps > 0.0 {
+            (nps / peak_nps).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        points.push(ArrowCloudNpsPoint {
+            x: x as f64,
+            y: y as f64,
+            measure: measure as u32,
+            nps,
+        });
+    }
+
+    ArrowCloudNpsInfo { peak_nps, points }
+}
+
+#[inline(always)]
+fn arrowcloud_payload_for_player(gs: &gameplay::State, player_idx: usize) -> Option<ArrowCloudPayload> {
+    if player_idx >= gs.num_players {
+        return None;
+    }
+    let chart = gs.charts[player_idx].as_ref();
+    let profile = &gs.player_profiles[player_idx];
+    let player = &gs.players[player_idx];
+    let pack = gs.pack_group.trim().to_string();
+    let song_name = gs.song.display_full_title(true);
+    let music_rate = if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
+        gs.music_rate as f64
+    } else {
+        1.0
+    };
+    let passed = !player.is_failing && gs.song_completed_naturally;
+
+    Some(ArrowCloudPayload {
+        song_name,
+        artist: gs.song.artist.clone(),
+        pack,
+        length: arrowcloud_format_length(gs.song.music_length_seconds),
+        hash: chart.short_hash.clone(),
+        timing_data: arrowcloud_timing_data(gs, player_idx),
+        difficulty: chart.meter,
+        stepartist: chart.step_artist.clone(),
+        radar: ArrowCloudRadar {
+            holds: [player.holds_held, gs.holds_total[player_idx]],
+            mines: [player.mines_avoided, gs.mines_total[player_idx]],
+            rolls: [player.rolls_held, gs.rolls_total[player_idx]],
+        },
+        nps_info: arrowcloud_nps_info(gs, player_idx),
+        lifebar_info: arrowcloud_lifebar_points(gs, player_idx),
+        modifiers: arrowcloud_modifiers(profile),
+        music_rate,
+        used_autoplay: gs.autoplay_used,
+        passed,
+        body_version: ARROWCLOUD_BODY_VERSION,
+        arrow_cloud_body_version: ARROWCLOUD_BODY_VERSION,
+        engine_name: ARROWCLOUD_ENGINE_NAME,
+        engine_version: ARROWCLOUD_ENGINE_VERSION,
+    })
+}
+
+#[inline(always)]
+fn arrowcloud_safe_hash(hash: &str) -> String {
+    let mut out = String::with_capacity(hash.len());
+    for ch in hash.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+        }
+    }
+    if out.is_empty() {
+        out.push_str("unknownhash");
+    }
+    out
+}
+
+fn write_arrowcloud_payload_dump(
+    side: profile::PlayerSide,
+    chart_hash: &str,
+    payload: &ArrowCloudPayload,
+) -> Result<PathBuf, String> {
+    let side_tag = match side {
+        profile::PlayerSide::P1 => "p1",
+        profile::PlayerSide::P2 => "p2",
+    };
+    let timestamp = Local::now().format("%Y%m%d-%H%M%S-%3f");
+    let safe_hash = arrowcloud_safe_hash(chart_hash);
+    let base_dir = PathBuf::from("save").join("arrowcloud");
+    let payload_dir = base_dir.join("payloads");
+    let payload_path = payload_dir.join(format!("{timestamp}-{side_tag}-{safe_hash}.json"));
+    let latest_path = base_dir.join(format!("latest-{side_tag}.json"));
+
+    fs::create_dir_all(&payload_dir).map_err(|e| {
+        format!(
+            "failed to create ArrowCloud payload dir '{}': {e}",
+            payload_dir.display()
+        )
+    })?;
+    let bytes = serde_json::to_vec_pretty(payload)
+        .map_err(|e| format!("failed to serialize ArrowCloud payload JSON: {e}"))?;
+    fs::write(&payload_path, &bytes).map_err(|e| {
+        format!(
+            "failed to write ArrowCloud payload dump '{}': {e}",
+            payload_path.display()
+        )
+    })?;
+    if let Err(e) = fs::write(&latest_path, &bytes) {
+        warn!(
+            "Failed to update ArrowCloud latest payload '{}' : {e}",
+            latest_path.display()
+        );
+    }
+
+    Ok(payload_path)
+}
+
+#[inline(always)]
+fn arrowcloud_submit_url(chart_hash: &str) -> Option<String> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "{}/v1/chart/{hash}/play",
+        ARROWCLOUD_SUBMIT_BASE_URL.trim_end_matches('/')
+    ))
+}
+
+#[inline(always)]
+fn arrowcloud_log_snippet(text: &str) -> String {
+    const MAX_LOG_CHARS: usize = 256;
+    if text.is_empty() {
+        return String::new();
+    }
+    let mut out = String::with_capacity(text.len().min(MAX_LOG_CHARS));
+    for ch in text.chars().take(MAX_LOG_CHARS) {
+        out.push(ch);
+    }
+    out
+}
+
+fn submit_arrowcloud_payload(
+    side: profile::PlayerSide,
+    api_key: &str,
+    payload: &ArrowCloudPayload,
+) -> Result<(), String> {
+    let api_key = api_key.trim();
+    if api_key.is_empty() {
+        return Err("missing ArrowCloud API key".to_string());
+    }
+    let Some(url) = arrowcloud_submit_url(payload.hash.as_str()) else {
+        return Err("missing chart hash".to_string());
+    };
+
+    let bearer = format!("Bearer {api_key}");
+    let agent = network::get_agent();
+    let response = agent
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .header("Authorization", &bearer)
+        .send_json(payload)
+        .map_err(|e| format!("network error: {e}"))?;
+    let status = response.status();
+    let status_code = status.as_u16();
+    let body = response.into_body().read_to_string().unwrap_or_default();
+    if status.is_success() {
+        let snippet = arrowcloud_log_snippet(body.as_str());
+        if !snippet.is_empty() {
+            info!(
+                "ArrowCloud submit success for {:?} ({}) status={} body='{}'",
+                side, payload.hash, status_code, snippet.as_str()
+            );
+        } else {
+            info!(
+                "ArrowCloud submit success for {:?} ({}) status={}",
+                side, payload.hash, status_code
+            );
+        }
+        return Ok(());
+    }
+
+    let snippet = arrowcloud_log_snippet(body.as_str());
+    if snippet.is_empty() {
+        Err(format!("HTTP {status_code}"))
+    } else {
+        Err(format!("HTTP {status_code}: {}", snippet.as_str()))
+    }
+}
+
+pub fn dump_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
+    if !crate::config::get().enable_arrowcloud || gs.num_players == 0 {
+        return;
+    }
+
+    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+        let Some(payload) = arrowcloud_payload_for_player(gs, player_idx) else {
+            continue;
+        };
+        let side = gameplay_side_for_player(gs, player_idx);
+        match write_arrowcloud_payload_dump(side, payload.hash.as_str(), &payload) {
+            Ok(path) => info!(
+                "Saved ArrowCloud payload dump for {:?} ({}) to '{}'",
+                side,
+                payload.hash,
+                path.display()
+            ),
+            Err(e) => warn!(
+                "Failed to save ArrowCloud payload dump for {:?} ({}) : {}",
+                side, payload.hash, e
+            ),
+        }
+    }
+}
+
+pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
+    if !crate::config::get().enable_arrowcloud || gs.num_players == 0 {
+        return;
+    }
+    if gs.autoplay_used {
+        info!("Skipping ArrowCloud submit: autoplay/replay was used.");
+        return;
+    }
+    if gs.course_display_totals.is_some() {
+        info!("Skipping ArrowCloud submit: course payload submission is not wired yet.");
+        return;
+    }
+    if let network::ArrowCloudConnectionStatus::Error(msg) = network::get_arrowcloud_status() {
+        warn!("Skipping ArrowCloud submit due to connection status error: {msg}");
+        return;
+    }
+
+    let mut jobs = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
+    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+        let api_key = gs.player_profiles[player_idx].arrowcloud_api_key.trim();
+        if api_key.is_empty() {
+            continue;
+        }
+        let Some(payload) = arrowcloud_payload_for_player(gs, player_idx) else {
+            continue;
+        };
+        jobs.push(ArrowCloudSubmitJob {
+            side: gameplay_side_for_player(gs, player_idx),
+            api_key: api_key.to_string(),
+            payload,
+        });
+    }
+    if jobs.is_empty() {
+        return;
+    }
+
+    std::thread::spawn(move || {
+        for job in jobs {
+            if let Err(e) = submit_arrowcloud_payload(job.side, &job.api_key, &job.payload) {
+                warn!(
+                    "ArrowCloud submit failed for {:?} ({}) : {}",
+                    job.side, job.payload.hash, e
+                );
+            }
+        }
+    });
 }
 
 pub fn save_local_summary_score_for_side(
