@@ -397,3 +397,315 @@ pub fn calculate_hard_ex_score_from_notes(
     let ratio = (total_points / total_possible).max(0.0);
     ((ratio * 10000.0).floor()) / 100.0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
+
+    const BLUE_FANTASTIC: u32 = 713;
+    const WHITE_FANTASTIC: u32 = 204;
+    const EXCELLENT: u32 = 307;
+    const GREAT: u32 = 115;
+    const DECENT: u32 = 8;
+    const WAY_OFF: u32 = 4;
+    const MISS: u32 = 13;
+    const HOLDS_HELD: u32 = 60;
+    const HOLDS_TOTAL: u32 = 76;
+    const ROLLS_HELD: u32 = 3;
+    const ROLLS_TOTAL: u32 = 4;
+    const MINES_HIT: u32 = 9;
+
+    #[inline(always)]
+    fn make_tap(row_index: usize, grade: JudgeGrade, time_error_ms: f32) -> Note {
+        Note {
+            beat: row_index as f32,
+            quantization_idx: 0,
+            column: 0,
+            note_type: NoteType::Tap,
+            row_index,
+            result: Some(Judgment {
+                time_error_ms,
+                grade,
+                window: None,
+                miss_because_held: false,
+            }),
+            early_result: None,
+            hold: None,
+            mine_result: None,
+            is_fake: false,
+            can_be_judged: true,
+        }
+    }
+
+    #[inline(always)]
+    fn make_hold(row_index: usize, held: bool) -> Note {
+        Note {
+            beat: row_index as f32,
+            quantization_idx: 0,
+            column: 0,
+            note_type: NoteType::Hold,
+            row_index,
+            result: None,
+            early_result: None,
+            hold: Some(HoldData {
+                end_row_index: row_index.saturating_add(1),
+                end_beat: row_index.saturating_add(1) as f32,
+                result: Some(if held {
+                    HoldResult::Held
+                } else {
+                    HoldResult::LetGo
+                }),
+                life: if held { 1.0 } else { 0.0 },
+                let_go_started_at: None,
+                let_go_starting_life: 1.0,
+                last_held_row_index: row_index,
+                last_held_beat: row_index as f32,
+            }),
+            mine_result: None,
+            is_fake: false,
+            can_be_judged: true,
+        }
+    }
+
+    #[inline(always)]
+    fn make_mine(row_index: usize) -> Note {
+        Note {
+            beat: row_index as f32,
+            quantization_idx: 0,
+            column: 0,
+            note_type: NoteType::Mine,
+            row_index,
+            result: None,
+            early_result: None,
+            hold: None,
+            mine_result: Some(MineResult::Hit),
+            is_fake: false,
+            can_be_judged: true,
+        }
+    }
+
+    #[inline(always)]
+    fn push_taps(
+        notes: &mut Vec<Note>,
+        row_index: &mut usize,
+        count: u32,
+        grade: JudgeGrade,
+        time_error_ms: f32,
+    ) {
+        for _ in 0..count {
+            notes.push(make_tap(*row_index, grade, time_error_ms));
+            *row_index = row_index.saturating_add(1);
+        }
+    }
+
+    #[test]
+    fn itg_percent_matches_known_reference_counts() {
+        let scoring_counts: JudgeCounts = [
+            BLUE_FANTASTIC.saturating_add(WHITE_FANTASTIC),
+            EXCELLENT,
+            GREAT,
+            DECENT,
+            WAY_OFF,
+            MISS,
+        ];
+        let total_steps = BLUE_FANTASTIC
+            .saturating_add(WHITE_FANTASTIC)
+            .saturating_add(EXCELLENT)
+            .saturating_add(GREAT)
+            .saturating_add(DECENT)
+            .saturating_add(WAY_OFF)
+            .saturating_add(MISS);
+        let possible_grade_points = i32::try_from(
+            total_steps
+                .saturating_add(HOLDS_TOTAL)
+                .saturating_add(ROLLS_TOTAL),
+        )
+        .unwrap_or(i32::MAX)
+        .saturating_mul(HOLD_SCORE_HELD);
+
+        let percent = calculate_itg_score_percent_from_counts(
+            &scoring_counts,
+            HOLDS_HELD,
+            ROLLS_HELD,
+            MINES_HIT,
+            possible_grade_points,
+        );
+        let total_points = calculate_itg_grade_points_from_counts(
+            &scoring_counts,
+            HOLDS_HELD,
+            ROLLS_HELD,
+            MINES_HIT,
+        );
+        let plain_floor_percent =
+            ((f64::from(total_points) / f64::from(possible_grade_points)) * 10000.0).floor()
+                / 100.0;
+        assert!((plain_floor_percent - 84.81).abs() <= 1e-9);
+
+        // MakePercentScore-style epsilon (+0.000001 before truncation) pushes
+        // this boundary case to 84.82 instead of 84.81.
+        assert!((percent - 0.8482).abs() <= 1e-9);
+        assert!((percent * 100.0 - 84.82).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn ex_percent_matches_known_reference_counts() {
+        let total_steps = BLUE_FANTASTIC
+            .saturating_add(WHITE_FANTASTIC)
+            .saturating_add(EXCELLENT)
+            .saturating_add(GREAT)
+            .saturating_add(DECENT)
+            .saturating_add(WAY_OFF)
+            .saturating_add(MISS);
+
+        let mut notes: Vec<Note> =
+            Vec::with_capacity((total_steps + HOLDS_TOTAL + MINES_HIT) as usize);
+        let mut row_index = 0usize;
+
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            BLUE_FANTASTIC,
+            JudgeGrade::Fantastic,
+            0.0,
+        );
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            WHITE_FANTASTIC,
+            JudgeGrade::Fantastic,
+            FA_PLUS_W0_MS + 0.001,
+        );
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            EXCELLENT,
+            JudgeGrade::Excellent,
+            0.0,
+        );
+        push_taps(&mut notes, &mut row_index, GREAT, JudgeGrade::Great, 0.0);
+        push_taps(&mut notes, &mut row_index, DECENT, JudgeGrade::Decent, 0.0);
+        push_taps(&mut notes, &mut row_index, WAY_OFF, JudgeGrade::WayOff, 0.0);
+        push_taps(&mut notes, &mut row_index, MISS, JudgeGrade::Miss, 0.0);
+
+        for i in 0..HOLDS_TOTAL {
+            notes.push(make_hold(
+                row_index.saturating_add(i as usize),
+                i < HOLDS_HELD,
+            ));
+        }
+        row_index = row_index.saturating_add(HOLDS_TOTAL as usize);
+        for i in 0..MINES_HIT {
+            notes.push(make_mine(row_index.saturating_add(i as usize)));
+        }
+
+        let note_times = vec![0.0_f32; notes.len()];
+        let hold_end_times = vec![None; notes.len()];
+        let ex = calculate_ex_score_from_notes(
+            &notes,
+            &note_times,
+            &hold_end_times,
+            total_steps,
+            HOLDS_TOTAL,
+            ROLLS_TOTAL,
+            MINES_HIT,
+            None,
+            false,
+        );
+
+        assert!((ex - 80.08).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn ex_percent_matches_second_known_reference_counts() {
+        const BLUE_FANTASTIC_2: u32 = 54;
+        const WHITE_FANTASTIC_2: u32 = 204;
+        const EXCELLENT_2: u32 = 561;
+        const GREAT_2: u32 = 117;
+        const DECENT_2: u32 = 15;
+        const WAY_OFF_2: u32 = 4;
+        const MISS_2: u32 = 13;
+        const HOLDS_HELD_2: u32 = 73;
+        const HOLDS_TOTAL_2: u32 = 76;
+        const ROLLS_TOTAL_2: u32 = 4;
+        const MINES_HIT_2: u32 = 27;
+
+        let total_steps = BLUE_FANTASTIC_2
+            .saturating_add(WHITE_FANTASTIC_2)
+            .saturating_add(EXCELLENT_2)
+            .saturating_add(GREAT_2)
+            .saturating_add(DECENT_2)
+            .saturating_add(WAY_OFF_2)
+            .saturating_add(MISS_2);
+
+        let mut notes: Vec<Note> =
+            Vec::with_capacity((total_steps + HOLDS_TOTAL_2 + MINES_HIT_2) as usize);
+        let mut row_index = 0usize;
+
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            BLUE_FANTASTIC_2,
+            JudgeGrade::Fantastic,
+            0.0,
+        );
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            WHITE_FANTASTIC_2,
+            JudgeGrade::Fantastic,
+            FA_PLUS_W0_MS + 0.001,
+        );
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            EXCELLENT_2,
+            JudgeGrade::Excellent,
+            0.0,
+        );
+        push_taps(&mut notes, &mut row_index, GREAT_2, JudgeGrade::Great, 0.0);
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            DECENT_2,
+            JudgeGrade::Decent,
+            0.0,
+        );
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            WAY_OFF_2,
+            JudgeGrade::WayOff,
+            0.0,
+        );
+        push_taps(&mut notes, &mut row_index, MISS_2, JudgeGrade::Miss, 0.0);
+
+        for i in 0..HOLDS_TOTAL_2 {
+            notes.push(make_hold(
+                row_index.saturating_add(i as usize),
+                i < HOLDS_HELD_2,
+            ));
+        }
+        row_index = row_index.saturating_add(HOLDS_TOTAL_2 as usize);
+        for i in 0..MINES_HIT_2 {
+            notes.push(make_mine(row_index.saturating_add(i as usize)));
+        }
+
+        let note_times = vec![0.0_f32; notes.len()];
+        let hold_end_times = vec![None; notes.len()];
+        let ex = calculate_ex_score_from_notes(
+            &notes,
+            &note_times,
+            &hold_end_times,
+            total_steps,
+            HOLDS_TOTAL_2,
+            ROLLS_TOTAL_2,
+            MINES_HIT_2,
+            None,
+            false,
+        );
+
+        assert!((ex - 60.14).abs() <= 1e-9);
+    }
+}
