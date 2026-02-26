@@ -1993,6 +1993,9 @@ impl App {
     }
 
     fn update_combo_carry_from_gameplay(&mut self, gs: &gameplay::State) {
+        if gs.autoplay_used {
+            return;
+        }
         let play_style = profile::get_session_play_style();
         let player_side = profile::get_session_player_side();
         match play_style {

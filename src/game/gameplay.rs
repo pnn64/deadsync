@@ -4831,7 +4831,7 @@ pub fn init(
 
     let mut players = std::array::from_fn(|_| init_player_runtime());
     for p in 0..num_players {
-        if player_profiles[p].carry_combo_between_songs {
+        if player_profiles[p].carry_combo_between_songs && !replay_mode {
             players[p].combo = combo_carry[p];
         }
         let life = players[p].life;
