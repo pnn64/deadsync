@@ -1401,7 +1401,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
 
-    // NoMines handling is not wired yet, so treat mines as enabled.
+    // Parameter retained for parity with Simply Love helpers; currently unused.
     let mines_disabled = false;
 
     for player_idx in 0..gs.num_players {
@@ -1445,7 +1445,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             notes,
             note_times,
             hold_end_times,
-            gs.charts[player_idx].stats.total_steps,
+            gs.total_steps[player_idx],
             gs.holds_total[player_idx],
             gs.rolls_total[player_idx],
             gs.mines_total[player_idx],
@@ -1456,7 +1456,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             notes,
             note_times,
             hold_end_times,
-            gs.charts[player_idx].stats.total_steps,
+            gs.total_steps[player_idx],
             gs.holds_total[player_idx],
             gs.rolls_total[player_idx],
             gs.mines_total[player_idx],

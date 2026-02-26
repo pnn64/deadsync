@@ -50,6 +50,7 @@ pub struct ChartData {
     pub simple_breakdown: String,
     pub total_measures: usize,
     pub measure_nps_vec: Vec<f64>,
+    pub chart_attacks: Option<String>,
     pub chart_bpms: Option<String>,
     pub chart_stops: Option<String>,
     pub chart_delays: Option<String>,

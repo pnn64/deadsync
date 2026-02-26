@@ -152,43 +152,6 @@ impl core::fmt::Display for AttackMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum CharacterMode {
-    #[default]
-    None,
-    Random,
-    SelectPerSong,
-}
-
-impl FromStr for CharacterMode {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
-            "none" => Ok(Self::None),
-            "random" => Ok(Self::Random),
-            "selectpersong" => Ok(Self::SelectPerSong),
-            other => Err(format!("'{other}' is not a valid CharacterMode setting")),
-        }
-    }
-}
-
-impl core::fmt::Display for CharacterMode {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::None => write!(f, "None"),
-            Self::Random => write!(f, "Random"),
-            Self::SelectPerSong => write!(f, "SelectPerSong"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HideLightType {
     #[default]
     NoHideLights,
@@ -1203,7 +1166,6 @@ pub struct Profile {
     pub visual_effects_active_mask: u16,
     pub appearance_effects_active_mask: u8,
     pub attack_mode: AttackMode,
-    pub character_mode: CharacterMode,
     pub hide_light_type: HideLightType,
     // Allow early Decent/WayOff hits to be rescored to better judgments.
     pub rescore_early_hits: bool,
@@ -1324,7 +1286,6 @@ impl Default for Profile {
             visual_effects_active_mask: 0,
             appearance_effects_active_mask: 0,
             attack_mode: AttackMode::default(),
-            character_mode: CharacterMode::default(),
             hide_light_type: HideLightType::default(),
             rescore_early_hits: true,
             hide_early_dw_judgments: false,
@@ -1577,10 +1538,6 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             default_profile.appearance_effects_active_mask
         ));
         content.push_str(&format!("AttackMode = {}\n", default_profile.attack_mode));
-        content.push_str(&format!(
-            "CharacterMode = {}\n",
-            default_profile.character_mode
-        ));
         content.push_str(&format!(
             "HideLightType = {}\n",
             default_profile.hide_light_type
@@ -1915,7 +1872,6 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         profile.appearance_effects_active_mask
     ));
     content.push_str(&format!("AttackMode={}\n", profile.attack_mode));
-    content.push_str(&format!("CharacterMode={}\n", profile.character_mode));
     content.push_str(&format!("HideLightType={}\n", profile.hide_light_type));
     content.push_str(&format!(
         "RescoreEarlyHits={}\n",
@@ -2602,11 +2558,6 @@ fn load_for_side(side: PlayerSide) {
                 .or_else(|| profile_conf.get("PlayerOptions", "Attacks"))
                 .and_then(|s| AttackMode::from_str(&s).ok())
                 .unwrap_or(default_profile.attack_mode);
-            profile.character_mode = profile_conf
-                .get("PlayerOptions", "CharacterMode")
-                .or_else(|| profile_conf.get("PlayerOptions", "Characters"))
-                .and_then(|s| CharacterMode::from_str(&s).ok())
-                .unwrap_or(default_profile.character_mode);
             profile.hide_light_type = profile_conf
                 .get("PlayerOptions", "HideLightType")
                 .and_then(|s| HideLightType::from_str(&s).ok())
@@ -3057,10 +3008,6 @@ pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error
         default_profile.appearance_effects_active_mask
     ));
     content.push_str(&format!("AttackMode={}\n", default_profile.attack_mode));
-    content.push_str(&format!(
-        "CharacterMode={}\n",
-        default_profile.character_mode
-    ));
     content.push_str(&format!(
         "HideLightType={}\n",
         default_profile.hide_light_type
@@ -3654,21 +3601,6 @@ pub fn update_attack_mode_for_side(side: PlayerSide, setting: AttackMode) {
             return;
         }
         profile.attack_mode = setting;
-    }
-    save_profile_ini_for_side(side);
-}
-
-pub fn update_character_mode_for_side(side: PlayerSide, setting: CharacterMode) {
-    if session_side_is_guest(side) {
-        return;
-    }
-    {
-        let mut profiles = PROFILES.lock().unwrap();
-        let profile = &mut profiles[side_ix(side)];
-        if profile.character_mode == setting {
-            return;
-        }
-        profile.character_mode = setting;
     }
     save_profile_ini_for_side(side);
 }

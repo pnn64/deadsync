@@ -593,13 +593,13 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let window_counts = timing_stats::compute_window_counts(notes);
             let window_counts_10ms = timing_stats::compute_window_counts_10ms_blue(notes);
 
-            // NoMines handling is not wired yet, so treat mines as enabled.
+            // Parameter retained for parity with Simply Love helpers; currently unused.
             let mines_disabled = false;
             let ex_score_percent = judgment::calculate_ex_score_from_notes(
                 notes,
                 note_times,
                 hold_end_times,
-                gs.charts[player_idx].stats.total_steps,
+                gs.total_steps[player_idx],
                 gs.holds_total[player_idx],
                 gs.rolls_total[player_idx],
                 gs.mines_total[player_idx],
@@ -610,7 +610,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 notes,
                 note_times,
                 hold_end_times,
-                gs.charts[player_idx].stats.total_steps,
+                gs.total_steps[player_idx],
                 gs.holds_total[player_idx],
                 gs.rolls_total[player_idx],
                 gs.mines_total[player_idx],

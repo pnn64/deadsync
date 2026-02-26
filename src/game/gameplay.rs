@@ -10,7 +10,9 @@ use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{self, Noteskin, Style};
 use crate::game::scores;
 use crate::game::song::SongData;
-use crate::game::timing::{BeatInfoCache, TimingData, TimingProfile, classify_offset_s};
+use crate::game::timing::{
+    BeatInfoCache, ROWS_PER_BEAT, TimingData, TimingProfile, classify_offset_s,
+};
 use crate::game::{
     life::{
         LIFE_DECENT, LIFE_EXCELLENT, LIFE_FANTASTIC, LIFE_GREAT, LIFE_HELD, LIFE_HIT_MINE,
@@ -41,6 +43,46 @@ pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
 pub const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
 pub const MAX_COLS: usize = 8;
 pub const MAX_PLAYERS: usize = 2;
+const INSERT_MASK_BIT_WIDE: u8 = 1u8 << 0;
+const INSERT_MASK_BIT_BIG: u8 = 1u8 << 1;
+const INSERT_MASK_BIT_QUICK: u8 = 1u8 << 2;
+const INSERT_MASK_BIT_BMRIZE: u8 = 1u8 << 3;
+const INSERT_MASK_BIT_SKIPPY: u8 = 1u8 << 4;
+const INSERT_MASK_BIT_ECHO: u8 = 1u8 << 5;
+const INSERT_MASK_BIT_STOMP: u8 = 1u8 << 6;
+const REMOVE_MASK_BIT_LITTLE: u8 = 1u8 << 0;
+const REMOVE_MASK_BIT_NO_MINES: u8 = 1u8 << 1;
+const REMOVE_MASK_BIT_NO_HOLDS: u8 = 1u8 << 2;
+const REMOVE_MASK_BIT_NO_JUMPS: u8 = 1u8 << 3;
+const REMOVE_MASK_BIT_NO_HANDS: u8 = 1u8 << 4;
+const REMOVE_MASK_BIT_NO_QUADS: u8 = 1u8 << 5;
+const REMOVE_MASK_BIT_NO_LIFTS: u8 = 1u8 << 6;
+const REMOVE_MASK_BIT_NO_FAKES: u8 = 1u8 << 7;
+const HOLDS_MASK_BIT_PLANTED: u8 = 1u8 << 0;
+const HOLDS_MASK_BIT_FLOORED: u8 = 1u8 << 1;
+const HOLDS_MASK_BIT_TWISTER: u8 = 1u8 << 2;
+const HOLDS_MASK_BIT_NO_ROLLS: u8 = 1u8 << 3;
+const HOLDS_MASK_BIT_HOLDS_TO_ROLLS: u8 = 1u8 << 4;
+const ACCEL_MASK_BIT_BOOST: u8 = 1u8 << 0;
+const ACCEL_MASK_BIT_BRAKE: u8 = 1u8 << 1;
+const ACCEL_MASK_BIT_WAVE: u8 = 1u8 << 2;
+const ACCEL_MASK_BIT_EXPAND: u8 = 1u8 << 3;
+const ACCEL_MASK_BIT_BOOMERANG: u8 = 1u8 << 4;
+const VISUAL_MASK_BIT_DRUNK: u16 = 1u16 << 0;
+const VISUAL_MASK_BIT_DIZZY: u16 = 1u16 << 1;
+const VISUAL_MASK_BIT_CONFUSION: u16 = 1u16 << 2;
+const VISUAL_MASK_BIT_BIG: u16 = 1u16 << 3;
+const VISUAL_MASK_BIT_FLIP: u16 = 1u16 << 4;
+const VISUAL_MASK_BIT_INVERT: u16 = 1u16 << 5;
+const VISUAL_MASK_BIT_TORNADO: u16 = 1u16 << 6;
+const VISUAL_MASK_BIT_TIPSY: u16 = 1u16 << 7;
+const VISUAL_MASK_BIT_BUMPY: u16 = 1u16 << 8;
+const VISUAL_MASK_BIT_BEAT: u16 = 1u16 << 9;
+const APPEARANCE_MASK_BIT_HIDDEN: u8 = 1u8 << 0;
+const APPEARANCE_MASK_BIT_SUDDEN: u8 = 1u8 << 1;
+const APPEARANCE_MASK_BIT_STEALTH: u8 = 1u8 << 2;
+const APPEARANCE_MASK_BIT_BLINK: u8 = 1u8 << 3;
+const APPEARANCE_MASK_BIT_RANDOM_VANISH: u8 = 1u8 << 4;
 
 // These mirror ScreenGameplay's MinSecondsToStep/MinSecondsToMusic metrics in ITGmania.
 // Simply Love scales them by MusicRate, so we apply that in init().
@@ -99,12 +141,75 @@ const AUTOPLAY_OFFSET_EPSILON_SECONDS: f32 = 0.000_001;
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 pub const AUTOSYNC_OFFSET_SAMPLE_COUNT: usize = 24;
 const AUTOSYNC_STDDEV_MAX_SECONDS: f32 = 0.03;
+const RANDOM_ATTACK_RUN_TIME_SECONDS: f32 = 6.0;
+const RANDOM_ATTACK_OVERLAP_SECONDS: f32 = 0.5;
+const RANDOM_ATTACK_START_SECONDS_INIT: f32 = -1.0;
+const RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS: f32 = 1.0;
+// Mirrors ITGmania Data/RandomAttacks.txt categories for mods deadsync currently supports.
+const RANDOM_ATTACK_MOD_POOL: [&str; 21] = [
+    "0.5x",
+    "1x",
+    "1.5x",
+    "2x",
+    "boost",
+    "brake",
+    "wave",
+    "expand",
+    "drunk",
+    "dizzy",
+    "confusion",
+    "65% mini",
+    "20% flip",
+    "30% invert",
+    "30% tornado",
+    "tipsy",
+    "beat",
+    "bumpy",
+    "50% hidden",
+    "50% sudden",
+    "30% blink",
+];
+
+#[inline(always)]
+fn effective_mini_value_with_visual_mask(
+    profile: &profile::Profile,
+    visual_mask: u16,
+    attack_mini_percent: f32,
+) -> f32 {
+    let attack_delta = if attack_mini_percent.is_finite() {
+        attack_mini_percent
+    } else {
+        0.0
+    };
+    let mut mini = (profile.mini_percent as f32 + attack_delta).clamp(-100.0, 150.0);
+    if (visual_mask & VISUAL_MASK_BIT_BIG) != 0 {
+        // ITG _fallback/ArrowCloud map Effect Big to mod,-100% mini.
+        mini -= 100.0;
+    }
+    mini / 100.0
+}
+
+#[inline(always)]
+fn effective_mini_value(profile: &profile::Profile) -> f32 {
+    let visual_mask = profile::normalize_visual_effects_mask(profile.visual_effects_active_mask);
+    effective_mini_value_with_visual_mask(profile, visual_mask, 0.0)
+}
+
+#[inline(always)]
+fn player_draw_scale_with_visual_mask(
+    profile: &profile::Profile,
+    visual_mask: u16,
+    attack_mini_percent: f32,
+) -> f32 {
+    let tilt = profile.perspective.tilt_skew().0.abs();
+    let mini = effective_mini_value_with_visual_mask(profile, visual_mask, attack_mini_percent);
+    (1.0 + 0.5 * tilt) * (1.0 + mini.abs())
+}
 
 #[inline(always)]
 fn player_draw_scale(profile: &profile::Profile) -> f32 {
-    let tilt = profile.perspective.tilt_skew().0.abs();
-    let mini = (profile.mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
-    (1.0 + 0.5 * tilt) * (1.0 + mini.abs())
+    let visual_mask = profile::normalize_visual_effects_mask(profile.visual_effects_active_mask);
+    player_draw_scale_with_visual_mask(profile, visual_mask, 0.0)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -516,7 +621,7 @@ fn apply_super_shuffle_taps(
     let mut rng = TurnRng::new(seed);
     let mut hold_end_row: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
 
-    for row in rows {
+    for &row in &rows {
         let Some(mut grid) = map.remove(&row) else {
             continue;
         };
@@ -584,7 +689,7 @@ fn apply_hyper_shuffle(
     let mut rng = TurnRng::new(seed);
     let mut hold_end_row: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
 
-    for row in rows {
+    for &row in &rows {
         let Some(grid) = map.remove(&row) else {
             continue;
         };
@@ -704,6 +809,1509 @@ fn apply_turn_options(
             }
         }
     }
+}
+
+#[inline(always)]
+fn note_counts_for_simultaneous_limit(note: &Note) -> bool {
+    match note.note_type {
+        NoteType::Tap => !note.is_fake,
+        NoteType::Hold | NoteType::Roll => true,
+        NoteType::Mine | NoteType::Fake => false,
+    }
+}
+
+fn enforce_max_simultaneous_notes(
+    notes: &mut Vec<Note>,
+    max_simultaneous: usize,
+    col_offset: usize,
+    cols: usize,
+) {
+    if notes.is_empty() || cols == 0 || cols > MAX_COLS {
+        return;
+    }
+
+    let mut row_to_indices: HashMap<usize, Vec<usize>> = HashMap::new();
+    row_to_indices.reserve(notes.len());
+    for (idx, note) in notes.iter().enumerate() {
+        row_to_indices.entry(note.row_index).or_default().push(idx);
+    }
+
+    let mut rows: Vec<usize> = row_to_indices.keys().copied().collect();
+    rows.sort_unstable();
+
+    let mut remove_idx = vec![false; notes.len()];
+    let mut active_hold_ends: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
+    let mut row_candidates = Vec::<(usize, usize)>::with_capacity(MAX_COLS);
+
+    for &row in &rows {
+        for held in active_hold_ends.iter_mut().take(cols) {
+            if held.is_some_and(|end| end < row) {
+                *held = None;
+            }
+        }
+
+        let active_holds = active_hold_ends
+            .iter()
+            .take(cols)
+            .filter(|end| end.is_some())
+            .count();
+
+        row_candidates.clear();
+        if let Some(indices) = row_to_indices.get(&row) {
+            for &idx in indices {
+                let note = &notes[idx];
+                if note.column < col_offset {
+                    continue;
+                }
+                let local_col = note.column - col_offset;
+                if local_col >= cols || !note_counts_for_simultaneous_limit(note) {
+                    continue;
+                }
+                row_candidates.push((local_col, idx));
+            }
+        }
+
+        if row_candidates.is_empty() {
+            continue;
+        }
+
+        row_candidates.sort_unstable_by_key(|(local_col, _)| *local_col);
+        let mut tracks_to_remove = active_holds
+            .saturating_add(row_candidates.len())
+            .saturating_sub(max_simultaneous);
+
+        if tracks_to_remove > 0 {
+            for &(_, idx) in &row_candidates {
+                if tracks_to_remove == 0 {
+                    break;
+                }
+                remove_idx[idx] = true;
+                tracks_to_remove -= 1;
+            }
+        }
+
+        for &(local_col, idx) in &row_candidates {
+            if remove_idx[idx] || !matches!(notes[idx].note_type, NoteType::Hold | NoteType::Roll) {
+                continue;
+            }
+            let end_row = notes[idx]
+                .hold
+                .as_ref()
+                .map(|hold| hold.end_row_index)
+                .unwrap_or(row);
+            if active_hold_ends[local_col].is_none_or(|current| current < end_row) {
+                active_hold_ends[local_col] = Some(end_row);
+            }
+        }
+    }
+
+    if remove_idx.iter().all(|remove| !*remove) {
+        return;
+    }
+
+    let mut i = 0usize;
+    notes.retain(|_| {
+        let keep = !remove_idx[i];
+        i += 1;
+        keep
+    });
+}
+
+#[inline(always)]
+fn local_player_col(column: usize, col_offset: usize, cols: usize) -> Option<usize> {
+    if column < col_offset {
+        return None;
+    }
+    let local = column - col_offset;
+    if local < cols { Some(local) } else { None }
+}
+
+fn sort_player_notes(notes: &mut [Note]) {
+    notes.sort_unstable_by_key(|note| (note.row_index, note.column));
+}
+
+fn player_rows(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize> {
+    let mut rows = Vec::with_capacity(notes.len());
+    for note in notes {
+        if local_player_col(note.column, col_offset, cols).is_some() {
+            rows.push(note.row_index);
+        }
+    }
+    rows.sort_unstable();
+    rows.dedup();
+    rows
+}
+
+fn count_nonempty_tracks_at_row(
+    notes: &[Note],
+    row: usize,
+    col_offset: usize,
+    cols: usize,
+) -> usize {
+    let mut seen = [false; MAX_COLS];
+    for note in notes {
+        if note.row_index != row {
+            continue;
+        }
+        if let Some(local) = local_player_col(note.column, col_offset, cols) {
+            seen[local] = true;
+        }
+    }
+    seen[..cols].iter().filter(|&&on| on).count()
+}
+
+fn count_tap_or_hold_tracks_at_row(
+    notes: &[Note],
+    row: usize,
+    col_offset: usize,
+    cols: usize,
+) -> usize {
+    let mut seen = [false; MAX_COLS];
+    for note in notes {
+        if note.row_index != row {
+            continue;
+        }
+        if !matches!(
+            note.note_type,
+            NoteType::Tap | NoteType::Hold | NoteType::Roll
+        ) {
+            continue;
+        }
+        if let Some(local) = local_player_col(note.column, col_offset, cols) {
+            seen[local] = true;
+        }
+    }
+    seen[..cols].iter().filter(|&&on| on).count()
+}
+
+fn count_tap_tracks_at_row(notes: &[Note], row: usize, col_offset: usize, cols: usize) -> usize {
+    let mut seen = [false; MAX_COLS];
+    for note in notes {
+        if note.row_index != row || note.note_type != NoteType::Tap || note.is_fake {
+            continue;
+        }
+        if let Some(local) = local_player_col(note.column, col_offset, cols) {
+            seen[local] = true;
+        }
+    }
+    seen[..cols].iter().filter(|&&on| on).count()
+}
+
+fn first_nonempty_track_at_row(
+    notes: &[Note],
+    row: usize,
+    col_offset: usize,
+    cols: usize,
+) -> Option<usize> {
+    let mut first: Option<usize> = None;
+    for note in notes {
+        if note.row_index != row {
+            continue;
+        }
+        let Some(local) = local_player_col(note.column, col_offset, cols) else {
+            continue;
+        };
+        first = Some(match first {
+            Some(curr) => curr.min(local),
+            None => local,
+        });
+    }
+    first
+}
+
+fn first_tap_track_at_row(
+    notes: &[Note],
+    row: usize,
+    col_offset: usize,
+    cols: usize,
+) -> Option<usize> {
+    let mut first: Option<usize> = None;
+    for note in notes {
+        if note.row_index != row || note.note_type != NoteType::Tap || note.is_fake {
+            continue;
+        }
+        let Some(local) = local_player_col(note.column, col_offset, cols) else {
+            continue;
+        };
+        first = Some(match first {
+            Some(curr) => curr.min(local),
+            None => local,
+        });
+    }
+    first
+}
+
+fn cell_has_any_note(notes: &[Note], row: usize, column: usize) -> bool {
+    notes
+        .iter()
+        .any(|note| note.row_index == row && note.column == column)
+}
+
+fn cell_has_nonfake_note(notes: &[Note], row: usize, column: usize) -> bool {
+    notes
+        .iter()
+        .any(|note| note.row_index == row && note.column == column && !note.is_fake)
+}
+
+fn remove_cell_notes(notes: &mut Vec<Note>, row: usize, column: usize) {
+    notes.retain(|note| !(note.row_index == row && note.column == column));
+}
+
+fn is_hold_body_at_row(notes: &[Note], row: usize, column: usize) -> bool {
+    let mut latest: Option<&Note> = None;
+    for note in notes {
+        if note.column != column || note.row_index > row {
+            continue;
+        }
+        if latest.is_none_or(|curr| note.row_index >= curr.row_index) {
+            latest = Some(note);
+        }
+    }
+    let Some(note) = latest else {
+        return false;
+    };
+    if !matches!(note.note_type, NoteType::Hold | NoteType::Roll) || note.row_index >= row {
+        return false;
+    }
+    note.hold
+        .as_ref()
+        .is_some_and(|hold| hold.end_row_index >= row)
+}
+
+fn count_held_tracks_at_row(notes: &[Note], row: usize, col_offset: usize, cols: usize) -> usize {
+    (0..cols)
+        .filter(|local| is_hold_body_at_row(notes, row, col_offset + *local))
+        .count()
+}
+
+fn set_added_tap_note(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    row: usize,
+    column: usize,
+) -> bool {
+    let Some(beat) = timing_player.get_beat_for_row(row) else {
+        return false;
+    };
+    remove_cell_notes(notes, row, column);
+    let quantization_idx = quantization_index_from_beat(beat);
+    notes.push(Note {
+        beat,
+        quantization_idx,
+        column,
+        note_type: NoteType::Tap,
+        row_index: row,
+        result: None,
+        early_result: None,
+        hold: None,
+        mine_result: None,
+        is_fake: false,
+        can_be_judged: timing_player.is_judgable_at_beat(beat),
+    });
+    true
+}
+
+fn apply_insert_intelligent_taps(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    window_size_rows: usize,
+    insert_offset_rows: usize,
+    window_stride_rows: usize,
+    skippy_mode: bool,
+) {
+    if cols == 0 || cols > MAX_COLS || insert_offset_rows > window_size_rows {
+        return;
+    }
+    let rows = player_rows(notes, col_offset, cols);
+    let require_begin = !skippy_mode;
+    let require_end = true;
+    for &row in &rows {
+        if row % window_stride_rows != 0 {
+            continue;
+        }
+        let row_earlier = row;
+        let row_later = row_earlier.saturating_add(window_size_rows);
+        let row_to_add = row_earlier.saturating_add(insert_offset_rows);
+
+        if require_begin
+            && (count_nonempty_tracks_at_row(notes, row_earlier, col_offset, cols) != 1
+                || count_tap_or_hold_tracks_at_row(notes, row_earlier, col_offset, cols) != 1)
+        {
+            continue;
+        }
+        if require_end
+            && (count_nonempty_tracks_at_row(notes, row_later, col_offset, cols) != 1
+                || count_tap_or_hold_tracks_at_row(notes, row_later, col_offset, cols) != 1)
+        {
+            continue;
+        }
+
+        let mut note_in_middle = false;
+        for local in 0..cols {
+            if is_hold_body_at_row(notes, row_earlier.saturating_add(1), col_offset + local) {
+                note_in_middle = true;
+                break;
+            }
+        }
+        if !note_in_middle {
+            for note in notes.iter() {
+                if local_player_col(note.column, col_offset, cols).is_none() {
+                    continue;
+                }
+                if note.row_index >= row_earlier.saturating_add(1)
+                    && note.row_index <= row_later.saturating_sub(1)
+                {
+                    note_in_middle = true;
+                    break;
+                }
+            }
+        }
+        if note_in_middle {
+            continue;
+        }
+
+        let earlier_track = first_nonempty_track_at_row(notes, row_earlier, col_offset, cols);
+        let later_track = first_nonempty_track_at_row(notes, row_later, col_offset, cols);
+        let Some(later_track) = later_track else {
+            continue;
+        };
+        let track_to_add =
+            if skippy_mode && earlier_track.is_some() && earlier_track != Some(later_track) {
+                earlier_track.unwrap_or(0)
+            } else if let Some(earlier_track) = earlier_track {
+                if earlier_track.abs_diff(later_track) >= 2 {
+                    earlier_track.min(later_track).saturating_add(1)
+                } else if earlier_track.min(later_track) >= 1 {
+                    earlier_track.min(later_track) - 1
+                } else if earlier_track.max(later_track).saturating_add(1) < cols {
+                    earlier_track.max(later_track).saturating_add(1)
+                } else {
+                    0
+                }
+            } else {
+                0
+            };
+
+        let _ = set_added_tap_note(
+            notes,
+            timing_player,
+            row_to_add,
+            col_offset.saturating_add(track_to_add),
+        );
+    }
+}
+
+fn apply_wide_insert(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+) {
+    if cols == 0 || cols > MAX_COLS {
+        return;
+    }
+    let rows = player_rows(notes, col_offset, cols);
+    let rows_per_beat = ROWS_PER_BEAT.max(1) as usize;
+    let half_beat = rows_per_beat / 2;
+    let even_beat_stride = rows_per_beat.saturating_mul(2);
+    for row in rows {
+        if row % even_beat_stride != 0 {
+            continue;
+        }
+        if count_held_tracks_at_row(notes, row, col_offset, cols) > 0 {
+            continue;
+        }
+        if count_tap_tracks_at_row(notes, row, col_offset, cols) != 1 {
+            continue;
+        }
+        let mut has_space = true;
+        for note in notes.iter() {
+            if local_player_col(note.column, col_offset, cols).is_none() {
+                continue;
+            }
+            if note.row_index >= row.saturating_sub(half_beat).saturating_add(1)
+                && note.row_index <= row.saturating_add(half_beat)
+                && note.row_index != row
+            {
+                has_space = false;
+                break;
+            }
+        }
+        if !has_space {
+            continue;
+        }
+        let Some(orig_track) = first_tap_track_at_row(notes, row, col_offset, cols) else {
+            continue;
+        };
+        let beat_i = ((row as f32) / (rows_per_beat as f32)).round() as i32;
+        let mut add_track = (orig_track as i32) + (beat_i % 5) - 2;
+        add_track = add_track.clamp(0, cols.saturating_sub(1) as i32);
+        if add_track as usize == orig_track {
+            add_track = (add_track + 1).clamp(0, cols.saturating_sub(1) as i32);
+        }
+        if add_track as usize == orig_track {
+            add_track = (add_track - 1).clamp(0, cols.saturating_sub(1) as i32);
+        }
+        let mut add_track = add_track as usize;
+        if cell_has_nonfake_note(notes, row, col_offset.saturating_add(add_track)) {
+            add_track = (add_track + 1) % cols;
+        }
+        let _ = set_added_tap_note(
+            notes,
+            timing_player,
+            row,
+            col_offset.saturating_add(add_track),
+        );
+    }
+}
+
+#[inline(always)]
+fn stomp_mirror_track(local_track: usize, cols: usize) -> usize {
+    match cols {
+        4 => [3, 2, 1, 0][local_track],
+        8 => [1, 0, 3, 2, 5, 4, 7, 6][local_track],
+        _ => cols.saturating_sub(1).saturating_sub(local_track),
+    }
+}
+
+fn apply_stomp_insert(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+) {
+    if cols == 0 || cols > MAX_COLS {
+        return;
+    }
+    let rows = player_rows(notes, col_offset, cols);
+    let half_beat = (ROWS_PER_BEAT.max(1) as usize) / 2;
+    for row in rows {
+        if count_tap_tracks_at_row(notes, row, col_offset, cols) != 1 {
+            continue;
+        }
+        let mut tap_in_middle = false;
+        let row_begin = row.saturating_sub(half_beat);
+        let row_end = row.saturating_add(half_beat);
+        for note in notes.iter() {
+            if local_player_col(note.column, col_offset, cols).is_none()
+                || note.note_type != NoteType::Tap
+                || note.is_fake
+                || note.row_index == row
+            {
+                continue;
+            }
+            if note.row_index > row_begin && note.row_index < row_end {
+                tap_in_middle = true;
+                break;
+            }
+        }
+        if tap_in_middle || count_held_tracks_at_row(notes, row, col_offset, cols) >= 1 {
+            continue;
+        }
+        let Some(track) = first_tap_track_at_row(notes, row, col_offset, cols) else {
+            continue;
+        };
+        let add_track = stomp_mirror_track(track, cols);
+        let _ = set_added_tap_note(
+            notes,
+            timing_player,
+            row,
+            col_offset.saturating_add(add_track),
+        );
+    }
+}
+
+fn apply_echo_insert(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+) {
+    if cols == 0 || cols > MAX_COLS {
+        return;
+    }
+    let rows_per_interval = (ROWS_PER_BEAT.max(1) as usize) / 2;
+    if rows_per_interval == 0 {
+        return;
+    }
+    let max_row = player_rows(notes, col_offset, cols)
+        .into_iter()
+        .max()
+        .unwrap_or(0);
+    let end_row = max_row.saturating_add(1);
+    let mut echo_track: Option<usize> = None;
+    let mut row = 0usize;
+    while row <= end_row {
+        if count_nonempty_tracks_at_row(notes, row, col_offset, cols) == 0 {
+            row = row.saturating_add(rows_per_interval);
+            continue;
+        }
+        if let Some(track) = first_tap_track_at_row(notes, row, col_offset, cols) {
+            echo_track = Some(track);
+        }
+        let Some(track) = echo_track else {
+            row = row.saturating_add(rows_per_interval);
+            continue;
+        };
+        let row_window_end = row.saturating_add(rows_per_interval.saturating_mul(2));
+        let mut note_in_middle = false;
+        for note in notes.iter() {
+            if local_player_col(note.column, col_offset, cols).is_none() {
+                continue;
+            }
+            if note.row_index > row && note.row_index < row_window_end {
+                note_in_middle = true;
+                break;
+            }
+        }
+        if note_in_middle {
+            row = row.saturating_add(rows_per_interval);
+            continue;
+        }
+
+        let row_echo = row.saturating_add(rows_per_interval);
+        if count_held_tracks_at_row(notes, row_echo, col_offset, cols) >= 2
+            || is_hold_body_at_row(notes, row_echo, col_offset + track)
+        {
+            row = row.saturating_add(rows_per_interval);
+            continue;
+        }
+        let _ = set_added_tap_note(notes, timing_player, row_echo, col_offset + track);
+        row = row.saturating_add(rows_per_interval);
+    }
+}
+
+fn find_tap_index(notes: &[Note], row: usize, column: usize) -> Option<usize> {
+    notes.iter().position(|note| {
+        note.row_index == row
+            && note.column == column
+            && note.note_type == NoteType::Tap
+            && !note.is_fake
+    })
+}
+
+fn convert_taps_to_holds(
+    notes: &mut [Note],
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    simultaneous_holds: usize,
+) {
+    if cols == 0 || cols > MAX_COLS {
+        return;
+    }
+    let rows = player_rows(notes, col_offset, cols);
+    let rows_per_beat = ROWS_PER_BEAT.max(1) as usize;
+
+    for &row in &rows {
+        let mut added_this_row = 0usize;
+        for local in 0..cols {
+            if added_this_row > simultaneous_holds {
+                break;
+            }
+            let col = col_offset + local;
+            let Some(head_idx) = find_tap_index(notes, row, col) else {
+                continue;
+            };
+            let mut taps_left = simultaneous_holds as isize;
+            let mut end_row = row.saturating_add(1);
+            let mut add_hold = true;
+
+            for &next_row in rows.iter().filter(|&&r| r > row) {
+                end_row = next_row;
+                if cell_has_any_note(notes, next_row, col) {
+                    add_hold = false;
+                    break;
+                }
+
+                let mut tracks_down = 0usize;
+                for check_local in 0..cols {
+                    let check_col = col_offset + check_local;
+                    if is_hold_body_at_row(notes, next_row, check_col)
+                        || cell_has_any_note(notes, next_row, check_col)
+                    {
+                        tracks_down = tracks_down.saturating_add(1);
+                    }
+                }
+
+                taps_left -= tracks_down as isize;
+                if taps_left == 0 {
+                    break;
+                }
+                if taps_left < 0 {
+                    add_hold = false;
+                    break;
+                }
+            }
+
+            if !add_hold {
+                continue;
+            }
+            if end_row == row.saturating_add(1) {
+                end_row = row.saturating_add(rows_per_beat);
+            }
+
+            let Some(end_beat) = timing_player.get_beat_for_row(end_row) else {
+                continue;
+            };
+            let head_beat = notes[head_idx].beat;
+            notes[head_idx].note_type = NoteType::Hold;
+            notes[head_idx].hold = Some(HoldData {
+                end_row_index: end_row,
+                end_beat,
+                result: None,
+                life: INITIAL_HOLD_LIFE,
+                let_go_started_at: None,
+                let_go_starting_life: 0.0,
+                last_held_row_index: row,
+                last_held_beat: head_beat,
+            });
+            added_this_row = added_this_row.saturating_add(1);
+        }
+    }
+}
+
+fn apply_uncommon_masks_with_masks(
+    notes: &mut Vec<Note>,
+    insert_mask: u8,
+    remove_mask: u8,
+    holds_mask: u8,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    player: usize,
+) {
+    if (remove_mask & REMOVE_MASK_BIT_LITTLE) != 0 {
+        let rows_per_beat = ROWS_PER_BEAT.max(1) as usize;
+        notes.retain(|note| note.row_index % rows_per_beat == 0);
+    }
+
+    if (holds_mask & HOLDS_MASK_BIT_NO_ROLLS) != 0 {
+        for note in notes.iter_mut() {
+            if note.note_type == NoteType::Roll {
+                note.note_type = NoteType::Hold;
+            }
+        }
+    }
+
+    if (remove_mask & REMOVE_MASK_BIT_NO_HOLDS) != 0 {
+        for note in notes.iter_mut() {
+            if note.note_type == NoteType::Hold {
+                note.note_type = NoteType::Tap;
+                note.hold = None;
+            }
+        }
+    }
+
+    if (remove_mask & REMOVE_MASK_BIT_NO_MINES) != 0 {
+        notes.retain(|note| !matches!(note.note_type, NoteType::Mine));
+    }
+
+    if (remove_mask & REMOVE_MASK_BIT_NO_JUMPS) != 0 {
+        enforce_max_simultaneous_notes(notes, 1, col_offset, cols);
+    }
+
+    if (remove_mask & REMOVE_MASK_BIT_NO_FAKES) != 0 {
+        notes.retain(|note| note.can_be_judged && !note.is_fake);
+    }
+
+    if (remove_mask & REMOVE_MASK_BIT_NO_HANDS) != 0 {
+        enforce_max_simultaneous_notes(notes, 2, col_offset, cols);
+    }
+
+    if (remove_mask & REMOVE_MASK_BIT_NO_QUADS) != 0 {
+        enforce_max_simultaneous_notes(notes, 3, col_offset, cols);
+    }
+
+    if (insert_mask & INSERT_MASK_BIT_BIG) != 0 {
+        apply_insert_intelligent_taps(
+            notes,
+            timing_player,
+            col_offset,
+            cols,
+            ROWS_PER_BEAT.max(1) as usize,
+            (ROWS_PER_BEAT.max(1) / 2) as usize,
+            ROWS_PER_BEAT.max(1) as usize,
+            false,
+        );
+    }
+    if (insert_mask & INSERT_MASK_BIT_QUICK) != 0 {
+        apply_insert_intelligent_taps(
+            notes,
+            timing_player,
+            col_offset,
+            cols,
+            (ROWS_PER_BEAT.max(1) / 2) as usize,
+            (ROWS_PER_BEAT.max(1) / 4) as usize,
+            ROWS_PER_BEAT.max(1) as usize,
+            false,
+        );
+    }
+    if (insert_mask & INSERT_MASK_BIT_BMRIZE) != 0 {
+        apply_insert_intelligent_taps(
+            notes,
+            timing_player,
+            col_offset,
+            cols,
+            ROWS_PER_BEAT.max(1) as usize,
+            (ROWS_PER_BEAT.max(1) / 2) as usize,
+            ROWS_PER_BEAT.max(1) as usize,
+            false,
+        );
+        apply_insert_intelligent_taps(
+            notes,
+            timing_player,
+            col_offset,
+            cols,
+            (ROWS_PER_BEAT.max(1) / 2) as usize,
+            (ROWS_PER_BEAT.max(1) / 4) as usize,
+            ROWS_PER_BEAT.max(1) as usize,
+            false,
+        );
+    }
+    if (insert_mask & INSERT_MASK_BIT_SKIPPY) != 0 {
+        apply_insert_intelligent_taps(
+            notes,
+            timing_player,
+            col_offset,
+            cols,
+            ROWS_PER_BEAT.max(1) as usize,
+            ((ROWS_PER_BEAT.max(1) * 3) / 4) as usize,
+            ROWS_PER_BEAT.max(1) as usize,
+            true,
+        );
+    }
+    if (insert_mask & INSERT_MASK_BIT_ECHO) != 0 {
+        apply_echo_insert(notes, timing_player, col_offset, cols);
+    }
+    if (insert_mask & INSERT_MASK_BIT_WIDE) != 0 {
+        apply_wide_insert(notes, timing_player, col_offset, cols);
+    }
+    if (insert_mask & INSERT_MASK_BIT_STOMP) != 0 {
+        apply_stomp_insert(notes, timing_player, col_offset, cols);
+    }
+
+    if (holds_mask & HOLDS_MASK_BIT_PLANTED) != 0 {
+        convert_taps_to_holds(notes, timing_player, col_offset, cols, 1);
+    }
+    if (holds_mask & HOLDS_MASK_BIT_FLOORED) != 0 {
+        convert_taps_to_holds(notes, timing_player, col_offset, cols, 2);
+    }
+    if (holds_mask & HOLDS_MASK_BIT_TWISTER) != 0 {
+        convert_taps_to_holds(notes, timing_player, col_offset, cols, 3);
+    }
+
+    if (holds_mask & HOLDS_MASK_BIT_HOLDS_TO_ROLLS) != 0 {
+        for note in notes.iter_mut() {
+            if note.note_type == NoteType::Hold {
+                note.note_type = NoteType::Roll;
+            }
+        }
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_LIFTS) != 0 {
+        debug!(
+            "Player {} selected NoLifts, but deadsync note parsing does not currently produce lift notes.",
+            player + 1,
+        );
+    }
+
+    sort_player_notes(notes);
+}
+
+fn apply_uncommon_masks_for_player(
+    notes: &mut Vec<Note>,
+    player_profile: &profile::Profile,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    player: usize,
+) {
+    apply_uncommon_masks_with_masks(
+        notes,
+        profile::normalize_insert_mask(player_profile.insert_active_mask),
+        profile::normalize_remove_mask(player_profile.remove_active_mask),
+        profile::normalize_holds_mask(player_profile.holds_active_mask),
+        timing_player,
+        col_offset,
+        cols,
+        player,
+    );
+}
+
+fn apply_uncommon_chart_transforms(
+    notes: &mut Vec<Note>,
+    note_ranges: &mut [(usize, usize); MAX_PLAYERS],
+    cols_per_player: usize,
+    num_players: usize,
+    player_profiles: &[profile::Profile; MAX_PLAYERS],
+    timing_players: &[Arc<TimingData>; MAX_PLAYERS],
+) {
+    if num_players == 0 {
+        return;
+    }
+
+    let mut transformed = Vec::with_capacity(notes.len());
+    let mut transformed_ranges = [(0usize, 0usize); MAX_PLAYERS];
+
+    for player in 0..num_players {
+        let (start, end) = note_ranges[player];
+        let slice_end = end.min(notes.len());
+        let slice_start = start.min(slice_end);
+        let mut player_notes = notes[slice_start..slice_end].to_vec();
+        apply_uncommon_masks_for_player(
+            &mut player_notes,
+            &player_profiles[player],
+            timing_players[player].as_ref(),
+            player.saturating_mul(cols_per_player),
+            cols_per_player,
+            player,
+        );
+
+        let out_start = transformed.len();
+        transformed.extend(player_notes);
+        transformed_ranges[player] = (out_start, transformed.len());
+    }
+
+    if num_players == 1 {
+        transformed_ranges[1] = transformed_ranges[0];
+    }
+
+    *notes = transformed;
+    *note_ranges = transformed_ranges;
+}
+
+#[derive(Clone, Debug)]
+struct ChartAttackWindow {
+    start_second: f32,
+    len_seconds: f32,
+    mods: String,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct AttackMaskWindow {
+    start_second: f32,
+    end_second: f32,
+    accel_mask: u8,
+    visual_mask: u16,
+    appearance_mask: u8,
+    speed_multiplier: f32,
+    mini_percent_delta: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ParsedAttackMods {
+    insert_mask: u8,
+    remove_mask: u8,
+    holds_mask: u8,
+    turn_option: profile::TurnOption,
+    accel_mask: u8,
+    visual_mask: u16,
+    appearance_mask: u8,
+    speed_multiplier: f32,
+    mini_percent_delta: f32,
+}
+
+impl Default for ParsedAttackMods {
+    fn default() -> Self {
+        Self {
+            insert_mask: 0,
+            remove_mask: 0,
+            holds_mask: 0,
+            turn_option: profile::TurnOption::None,
+            accel_mask: 0,
+            visual_mask: 0,
+            appearance_mask: 0,
+            speed_multiplier: 1.0,
+            mini_percent_delta: 0.0,
+        }
+    }
+}
+
+impl ParsedAttackMods {
+    #[inline(always)]
+    fn has_chart_effect(self) -> bool {
+        self.insert_mask != 0
+            || self.remove_mask != 0
+            || self.holds_mask != 0
+            || self.turn_option != profile::TurnOption::None
+    }
+
+    #[inline(always)]
+    fn has_runtime_mask_effect(self) -> bool {
+        self.accel_mask != 0
+            || self.visual_mask != 0
+            || self.appearance_mask != 0
+            || (self.speed_multiplier - 1.0).abs() > f32::EPSILON
+            || self.mini_percent_delta.abs() > f32::EPSILON
+    }
+}
+
+fn parse_chart_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Vec::new();
+    }
+
+    let upper = raw.to_ascii_uppercase();
+    let mut starts = Vec::with_capacity(8);
+    let mut scan = 0usize;
+    while let Some(pos) = upper[scan..].find("TIME=") {
+        let idx = scan + pos;
+        starts.push(idx);
+        scan = idx.saturating_add(5);
+        if scan >= raw.len() {
+            break;
+        }
+    }
+    if starts.is_empty() {
+        return Vec::new();
+    }
+
+    let mut out = Vec::with_capacity(starts.len());
+    for (i, start) in starts.iter().copied().enumerate() {
+        let end = starts.get(i + 1).copied().unwrap_or(raw.len());
+        let chunk = &raw[start..end];
+        let mut time = None;
+        let mut len = None;
+        let mut end_time = None;
+        let mut mods = None;
+
+        for part in chunk.split(':') {
+            let part = part.trim();
+            let Some((k, v)) = part.split_once('=') else {
+                continue;
+            };
+            let key = k.trim().to_ascii_uppercase();
+            let value = v.trim().trim_end_matches(',').trim();
+            if value.is_empty() {
+                continue;
+            }
+            match key.as_str() {
+                "TIME" => time = value.parse::<f32>().ok(),
+                "LEN" => len = value.parse::<f32>().ok(),
+                "END" => end_time = value.parse::<f32>().ok(),
+                "MODS" => mods = Some(value.to_string()),
+                _ => {}
+            }
+        }
+
+        let (Some(start_second), Some(mods)) = (time, mods) else {
+            continue;
+        };
+        if !start_second.is_finite() || mods.is_empty() {
+            continue;
+        }
+        let mut len_seconds = len.unwrap_or(0.0);
+        if let Some(end_second) = end_time
+            && end_second.is_finite()
+        {
+            len_seconds = end_second - start_second;
+        }
+        if !len_seconds.is_finite() || len_seconds < 0.0 {
+            len_seconds = 0.0;
+        }
+        out.push(ChartAttackWindow {
+            start_second,
+            len_seconds,
+            mods,
+        });
+    }
+
+    out
+}
+
+fn attack_token_key(token: &str) -> String {
+    let mut key = String::with_capacity(token.len());
+    for ch in token.chars() {
+        if ch.is_ascii_alphanumeric() {
+            key.push(ch.to_ascii_lowercase());
+        }
+    }
+    while key.as_bytes().first().is_some_and(|c| c.is_ascii_digit()) {
+        key.remove(0);
+    }
+    key
+}
+
+#[inline(always)]
+fn parse_attack_speed_multiplier(token: &str) -> Option<f32> {
+    let trimmed = token.trim();
+    let value = trimmed
+        .strip_suffix('x')
+        .or_else(|| trimmed.strip_suffix('X'))?;
+    value
+        .trim()
+        .parse::<f32>()
+        .ok()
+        .filter(|v| v.is_finite() && *v > 0.0)
+}
+
+#[inline(always)]
+fn parse_attack_percent_prefix(token: &str) -> (Option<f32>, &str) {
+    let Some(idx) = token.find('%') else {
+        return (None, token);
+    };
+    let value = token[..idx].trim().parse::<f32>().ok();
+    (value, token[idx + 1..].trim())
+}
+
+fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
+    let mut out = ParsedAttackMods::default();
+    for token in mods.split(',') {
+        let token = token.trim();
+        if token.is_empty() {
+            continue;
+        }
+        if let Some(multiplier) = parse_attack_speed_multiplier(token) {
+            out.speed_multiplier *= multiplier;
+            continue;
+        }
+        let (percent_value, token_key) = parse_attack_percent_prefix(token);
+        let key = attack_token_key(token_key);
+        if key.is_empty() {
+            continue;
+        }
+        match key.as_str() {
+            "wide" => out.insert_mask |= INSERT_MASK_BIT_WIDE,
+            "big" => out.insert_mask |= INSERT_MASK_BIT_BIG,
+            "quick" => out.insert_mask |= INSERT_MASK_BIT_QUICK,
+            "bmrize" => out.insert_mask |= INSERT_MASK_BIT_BMRIZE,
+            "skippy" => out.insert_mask |= INSERT_MASK_BIT_SKIPPY,
+            "echo" => out.insert_mask |= INSERT_MASK_BIT_ECHO,
+            "stomp" => out.insert_mask |= INSERT_MASK_BIT_STOMP,
+            "little" => out.remove_mask |= REMOVE_MASK_BIT_LITTLE,
+            "nomines" => out.remove_mask |= REMOVE_MASK_BIT_NO_MINES,
+            "noholds" => out.remove_mask |= REMOVE_MASK_BIT_NO_HOLDS,
+            "nojumps" => out.remove_mask |= REMOVE_MASK_BIT_NO_JUMPS,
+            "nohands" => out.remove_mask |= REMOVE_MASK_BIT_NO_HANDS,
+            "noquads" => out.remove_mask |= REMOVE_MASK_BIT_NO_QUADS,
+            "nolifts" => out.remove_mask |= REMOVE_MASK_BIT_NO_LIFTS,
+            "nofakes" => out.remove_mask |= REMOVE_MASK_BIT_NO_FAKES,
+            "planted" => out.holds_mask |= HOLDS_MASK_BIT_PLANTED,
+            "floored" => out.holds_mask |= HOLDS_MASK_BIT_FLOORED,
+            "twister" => out.holds_mask |= HOLDS_MASK_BIT_TWISTER,
+            "norolls" => out.holds_mask |= HOLDS_MASK_BIT_NO_ROLLS,
+            "holdrolls" | "holdstorolls" => out.holds_mask |= HOLDS_MASK_BIT_HOLDS_TO_ROLLS,
+            "mirror" => out.turn_option = profile::TurnOption::Mirror,
+            "left" => out.turn_option = profile::TurnOption::Left,
+            "right" => out.turn_option = profile::TurnOption::Right,
+            "lrmirror" => out.turn_option = profile::TurnOption::LRMirror,
+            "udmirror" => out.turn_option = profile::TurnOption::UDMirror,
+            "shuffle" => out.turn_option = profile::TurnOption::Shuffle,
+            "supershuffle" | "blender" => out.turn_option = profile::TurnOption::Blender,
+            "hypershuffle" => out.turn_option = profile::TurnOption::Random,
+            "boost" => out.accel_mask |= ACCEL_MASK_BIT_BOOST,
+            "brake" => out.accel_mask |= ACCEL_MASK_BIT_BRAKE,
+            "wave" => out.accel_mask |= ACCEL_MASK_BIT_WAVE,
+            "expand" => out.accel_mask |= ACCEL_MASK_BIT_EXPAND,
+            "boomerang" => out.accel_mask |= ACCEL_MASK_BIT_BOOMERANG,
+            "drunk" => out.visual_mask |= VISUAL_MASK_BIT_DRUNK,
+            "dizzy" => out.visual_mask |= VISUAL_MASK_BIT_DIZZY,
+            "confusion" => out.visual_mask |= VISUAL_MASK_BIT_CONFUSION,
+            "flip" => out.visual_mask |= VISUAL_MASK_BIT_FLIP,
+            "invert" => out.visual_mask |= VISUAL_MASK_BIT_INVERT,
+            "tornado" => out.visual_mask |= VISUAL_MASK_BIT_TORNADO,
+            "tipsy" => out.visual_mask |= VISUAL_MASK_BIT_TIPSY,
+            "bumpy" => out.visual_mask |= VISUAL_MASK_BIT_BUMPY,
+            "beat" => out.visual_mask |= VISUAL_MASK_BIT_BEAT,
+            "mini" => {
+                let delta = percent_value.unwrap_or(100.0);
+                if delta.is_finite() {
+                    out.mini_percent_delta += delta;
+                }
+            }
+            "hidden" => out.appearance_mask |= APPEARANCE_MASK_BIT_HIDDEN,
+            "sudden" => out.appearance_mask |= APPEARANCE_MASK_BIT_SUDDEN,
+            "stealth" => out.appearance_mask |= APPEARANCE_MASK_BIT_STEALTH,
+            "blink" => out.appearance_mask |= APPEARANCE_MASK_BIT_BLINK,
+            "rvanish" | "randomvanish" | "reversevanish" => {
+                out.appearance_mask |= APPEARANCE_MASK_BIT_RANDOM_VANISH
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+#[inline(always)]
+fn random_attack_seed(base_seed: u64, player: usize, attacks_len: usize) -> u64 {
+    base_seed
+        ^ (0xC2B2_AE3D_27D4_EB4F_u64.wrapping_mul(player as u64 + 1))
+        ^ (attacks_len as u64).wrapping_mul(0x9E37_79B9_u64)
+}
+
+fn build_random_attack_windows(
+    song_length_seconds: f32,
+    player: usize,
+    base_seed: u64,
+) -> Vec<ChartAttackWindow> {
+    if !song_length_seconds.is_finite() || song_length_seconds <= 0.0 {
+        return Vec::new();
+    }
+    let period = (RANDOM_ATTACK_RUN_TIME_SECONDS - RANDOM_ATTACK_OVERLAP_SECONDS).max(0.0);
+    if period <= f32::EPSILON || RANDOM_ATTACK_MOD_POOL.is_empty() {
+        return Vec::new();
+    }
+    let first_start =
+        (period + RANDOM_ATTACK_START_SECONDS_INIT).max(RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS);
+    if first_start >= song_length_seconds {
+        return Vec::new();
+    }
+
+    let max_windows = ((song_length_seconds - first_start) / period)
+        .floor()
+        .max(0.0) as usize
+        + 1;
+    let mut out = Vec::with_capacity(max_windows);
+    let mut rng = TurnRng::new(random_attack_seed(base_seed, player, max_windows));
+    let mut start = first_start;
+    while start < song_length_seconds {
+        let mod_idx = rng.gen_range(RANDOM_ATTACK_MOD_POOL.len());
+        out.push(ChartAttackWindow {
+            start_second: start,
+            len_seconds: RANDOM_ATTACK_RUN_TIME_SECONDS,
+            mods: RANDOM_ATTACK_MOD_POOL[mod_idx].to_string(),
+        });
+        start += period;
+    }
+    out
+}
+
+fn build_attack_windows_for_player(
+    chart_attacks: Option<&str>,
+    attack_mode: profile::AttackMode,
+    player: usize,
+    base_seed: u64,
+    song_length_seconds: f32,
+) -> Vec<ChartAttackWindow> {
+    match attack_mode {
+        profile::AttackMode::Off => Vec::new(),
+        profile::AttackMode::On => chart_attacks
+            .map(parse_chart_attack_windows)
+            .unwrap_or_default(),
+        profile::AttackMode::Random => {
+            build_random_attack_windows(song_length_seconds, player, base_seed)
+        }
+    }
+}
+
+fn select_attack_mods(
+    attacks: &[ChartAttackWindow],
+    _attack_mode: profile::AttackMode,
+    _player: usize,
+    _base_seed: u64,
+) -> Vec<ParsedAttackMods> {
+    if attacks.is_empty() {
+        return Vec::new();
+    }
+    attacks
+        .iter()
+        .map(|attack| parse_attack_mods(&attack.mods))
+        .collect()
+}
+
+fn build_attack_mask_windows_for_player(
+    chart_attacks: Option<&str>,
+    attack_mode: profile::AttackMode,
+    player: usize,
+    base_seed: u64,
+    song_length_seconds: f32,
+) -> Vec<AttackMaskWindow> {
+    let attacks = build_attack_windows_for_player(
+        chart_attacks,
+        attack_mode,
+        player,
+        base_seed,
+        song_length_seconds,
+    );
+    if attacks.is_empty() {
+        return Vec::new();
+    }
+    let selected_mods = select_attack_mods(&attacks, attack_mode, player, base_seed);
+    if selected_mods.is_empty() {
+        return Vec::new();
+    }
+    let mut windows = Vec::with_capacity(attacks.len());
+    for (attack, mods) in attacks.iter().zip(selected_mods.iter().copied()) {
+        if !mods.has_runtime_mask_effect() {
+            continue;
+        }
+        let start_second = attack.start_second;
+        let end_second = start_second + attack.len_seconds.max(0.0);
+        if !start_second.is_finite() || !end_second.is_finite() || end_second <= start_second {
+            continue;
+        }
+        windows.push(AttackMaskWindow {
+            start_second,
+            end_second,
+            accel_mask: mods.accel_mask,
+            visual_mask: mods.visual_mask,
+            appearance_mask: mods.appearance_mask,
+            speed_multiplier: mods.speed_multiplier,
+            mini_percent_delta: mods.mini_percent_delta,
+        });
+    }
+    windows
+}
+
+#[inline(always)]
+fn beat_to_note_row_index(beat: f32) -> usize {
+    let rows_per_beat = ROWS_PER_BEAT.max(1) as f32;
+    (beat.max(0.0) * rows_per_beat).round() as usize
+}
+
+fn apply_attack_turn_mod(
+    notes: &mut [Note],
+    col_offset: usize,
+    cols: usize,
+    turn_option: profile::TurnOption,
+    seed: u64,
+    player: usize,
+) {
+    if notes.is_empty() || turn_option == profile::TurnOption::None {
+        return;
+    }
+    let note_range = (0usize, notes.len());
+    match turn_option {
+        profile::TurnOption::None => {}
+        profile::TurnOption::Blender => {
+            apply_turn_permutation(
+                notes,
+                note_range,
+                col_offset,
+                cols,
+                profile::TurnOption::Shuffle,
+                seed,
+            );
+            apply_super_shuffle_taps(
+                notes,
+                note_range,
+                col_offset,
+                cols,
+                seed ^ (0xD00D_F00D_u64.wrapping_mul(player as u64 + 1)),
+            );
+        }
+        profile::TurnOption::Random => {
+            apply_hyper_shuffle(
+                notes,
+                note_range,
+                col_offset,
+                cols,
+                seed ^ (0xA5A5_5A5A_u64.wrapping_mul(player as u64 + 1)),
+            );
+        }
+        other => {
+            apply_turn_permutation(notes, note_range, col_offset, cols, other, seed);
+        }
+    }
+}
+
+fn apply_chart_attack_window(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    player: usize,
+    start_row: usize,
+    end_row: usize,
+    mods: ParsedAttackMods,
+    turn_seed: u64,
+) {
+    if notes.is_empty() || end_row < start_row || !mods.has_chart_effect() {
+        return;
+    }
+    let mut in_range = Vec::with_capacity(notes.len());
+    let mut out_range = Vec::with_capacity(notes.len());
+    for note in notes.drain(..) {
+        if note.row_index >= start_row && note.row_index <= end_row {
+            in_range.push(note);
+        } else {
+            out_range.push(note);
+        }
+    }
+    if in_range.is_empty() {
+        *notes = out_range;
+        return;
+    }
+
+    apply_uncommon_masks_with_masks(
+        &mut in_range,
+        mods.insert_mask,
+        mods.remove_mask,
+        mods.holds_mask,
+        timing_player,
+        col_offset,
+        cols,
+        player,
+    );
+    apply_attack_turn_mod(
+        &mut in_range,
+        col_offset,
+        cols,
+        mods.turn_option,
+        turn_seed,
+        player,
+    );
+
+    out_range.extend(in_range);
+    *notes = out_range;
+    sort_player_notes(notes);
+}
+
+fn apply_chart_attacks_for_player(
+    notes: &mut Vec<Note>,
+    chart_attacks: Option<&str>,
+    attack_mode: profile::AttackMode,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    player: usize,
+    base_seed: u64,
+    song_length_seconds: f32,
+) {
+    let attacks = build_attack_windows_for_player(
+        chart_attacks,
+        attack_mode,
+        player,
+        base_seed,
+        song_length_seconds,
+    );
+    if attacks.is_empty() {
+        return;
+    }
+    let selected_mods = select_attack_mods(&attacks, attack_mode, player, base_seed);
+    if selected_mods.is_empty() {
+        if attack_mode == profile::AttackMode::Random {
+            debug!(
+                "Player {} selected RandomAttacks, but no random attack windows were generated.",
+                player + 1,
+            );
+        }
+        return;
+    }
+    for (i, (attack, mods)) in attacks
+        .iter()
+        .zip(selected_mods.iter().copied())
+        .enumerate()
+    {
+        if !mods.has_chart_effect() {
+            continue;
+        }
+        let start_beat = timing_player.get_beat_for_time(attack.start_second);
+        let end_beat = timing_player.get_beat_for_time(attack.start_second + attack.len_seconds);
+        let start_row = beat_to_note_row_index(start_beat);
+        let end_row = beat_to_note_row_index(end_beat);
+        if end_row < start_row {
+            continue;
+        }
+        let turn_seed = base_seed
+            ^ (0x9E37_79B9_u64.wrapping_mul(player as u64 + 1))
+            ^ ((i as u64).wrapping_mul(0xA5A5_5A5A_u64));
+        apply_chart_attack_window(
+            notes,
+            timing_player,
+            col_offset,
+            cols,
+            player,
+            start_row,
+            end_row,
+            mods,
+            turn_seed,
+        );
+    }
+}
+
+fn apply_chart_attacks_transforms(
+    notes: &mut Vec<Note>,
+    note_ranges: &mut [(usize, usize); MAX_PLAYERS],
+    charts: &[Arc<ChartData>; MAX_PLAYERS],
+    cols_per_player: usize,
+    num_players: usize,
+    player_profiles: &[profile::Profile; MAX_PLAYERS],
+    timing_players: &[Arc<TimingData>; MAX_PLAYERS],
+    base_seed: u64,
+    song_length_seconds: f32,
+) {
+    if num_players == 0 {
+        return;
+    }
+    let mut transformed = Vec::with_capacity(notes.len());
+    let mut transformed_ranges = [(0usize, 0usize); MAX_PLAYERS];
+
+    for player in 0..num_players {
+        let (start, end) = note_ranges[player];
+        let slice_end = end.min(notes.len());
+        let slice_start = start.min(slice_end);
+        let mut player_notes = notes[slice_start..slice_end].to_vec();
+        apply_chart_attacks_for_player(
+            &mut player_notes,
+            charts[player].chart_attacks.as_deref(),
+            player_profiles[player].attack_mode,
+            timing_players[player].as_ref(),
+            player.saturating_mul(cols_per_player),
+            cols_per_player,
+            player,
+            base_seed,
+            song_length_seconds,
+        );
+        let out_start = transformed.len();
+        transformed.extend(player_notes);
+        transformed_ranges[player] = (out_start, transformed.len());
+    }
+
+    if num_players == 1 {
+        transformed_ranges[1] = transformed_ranges[0];
+    }
+
+    *notes = transformed;
+    *note_ranges = transformed_ranges;
+}
+
+#[inline(always)]
+fn count_total_steps_for_range(notes: &[Note], note_range: (usize, usize)) -> u32 {
+    let (start, end) = note_range;
+    if start >= end {
+        return 0;
+    }
+    let mut rows = Vec::<usize>::with_capacity(end - start);
+    for note in &notes[start..end] {
+        if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+            rows.push(note.row_index);
+        }
+    }
+    rows.sort_unstable();
+    rows.dedup();
+    rows.len() as u32
+}
+
+#[inline(always)]
+fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> (u32, u32, u32, u32) {
+    let (start, end) = note_range;
+    if start >= end {
+        return (0, 0, 0, 0);
+    }
+    let mut holds = 0u32;
+    let mut rolls = 0u32;
+    let mut mines = 0u32;
+    for note in &notes[start..end] {
+        if !note.can_be_judged {
+            continue;
+        }
+        match note.note_type {
+            NoteType::Hold => holds = holds.saturating_add(1),
+            NoteType::Roll => rolls = rolls.saturating_add(1),
+            NoteType::Mine => mines = mines.saturating_add(1),
+            NoteType::Tap | NoteType::Fake => {}
+        }
+    }
+    (
+        count_total_steps_for_range(notes, note_range),
+        holds,
+        rolls,
+        mines,
+    )
 }
 
 fn compute_end_times(
@@ -1640,6 +3248,12 @@ pub struct State {
     pub live_window_counts_display_blue: [crate::game::timing::WindowCounts; MAX_PLAYERS],
 
     pub player_profiles: [profile::Profile; MAX_PLAYERS],
+    attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
+    active_attack_accel_mask: [u8; MAX_PLAYERS],
+    active_attack_visual_mask: [u16; MAX_PLAYERS],
+    active_attack_appearance_mask: [u8; MAX_PLAYERS],
+    active_attack_speed_multiplier: [f32; MAX_PLAYERS],
+    active_attack_mini_percent_delta: [f32; MAX_PLAYERS],
     pub noteskin: [Option<Noteskin>; MAX_PLAYERS],
     pub active_color_index: i32,
     pub player_color: [f32; 4],
@@ -1664,6 +3278,7 @@ pub struct State {
     pub holds_total: [u32; MAX_PLAYERS],
     pub rolls_total: [u32; MAX_PLAYERS],
     pub mines_total: [u32; MAX_PLAYERS],
+    pub total_steps: [u32; MAX_PLAYERS],
 
     pub total_elapsed_in_screen: f32,
 
@@ -1715,6 +3330,115 @@ pub struct State {
     pub replay_edges: Vec<RecordedLaneEdge>,
 
     log_timer: f32,
+}
+
+fn refresh_active_attack_masks(state: &mut State) {
+    for player in 0..state.num_players {
+        let now = state.current_music_time_visible[player];
+        let mut accel_mask: u8 = 0;
+        let mut visual_mask: u16 = 0;
+        let mut appearance_mask: u8 = 0;
+        let mut speed_multiplier = 1.0_f32;
+        let mut mini_percent_delta = 0.0_f32;
+        for window in &state.attack_mask_windows[player] {
+            if now >= window.start_second && now < window.end_second {
+                accel_mask |= window.accel_mask;
+                visual_mask |= window.visual_mask;
+                appearance_mask |= window.appearance_mask;
+                if window.speed_multiplier.is_finite() && window.speed_multiplier > 0.0 {
+                    speed_multiplier *= window.speed_multiplier;
+                }
+                if window.mini_percent_delta.is_finite() {
+                    mini_percent_delta += window.mini_percent_delta;
+                }
+            }
+        }
+        state.active_attack_accel_mask[player] = accel_mask;
+        state.active_attack_visual_mask[player] = visual_mask;
+        state.active_attack_appearance_mask[player] = appearance_mask;
+        state.active_attack_speed_multiplier[player] = speed_multiplier.max(0.01);
+        state.active_attack_mini_percent_delta[player] = mini_percent_delta.clamp(-100.0, 150.0);
+    }
+}
+
+#[inline(always)]
+pub fn effective_accel_mask_for_player(state: &State, player_idx: usize) -> u8 {
+    if player_idx >= state.num_players {
+        return 0;
+    }
+    profile::normalize_accel_effects_mask(
+        state.player_profiles[player_idx].accel_effects_active_mask
+            | state.active_attack_accel_mask[player_idx],
+    )
+}
+
+#[inline(always)]
+pub fn effective_visual_mask_for_player(state: &State, player_idx: usize) -> u16 {
+    if player_idx >= state.num_players {
+        return 0;
+    }
+    profile::normalize_visual_effects_mask(
+        state.player_profiles[player_idx].visual_effects_active_mask
+            | state.active_attack_visual_mask[player_idx],
+    )
+}
+
+#[inline(always)]
+pub fn effective_appearance_mask_for_player(state: &State, player_idx: usize) -> u8 {
+    if player_idx >= state.num_players {
+        return 0;
+    }
+    profile::normalize_appearance_effects_mask(
+        state.player_profiles[player_idx].appearance_effects_active_mask
+            | state.active_attack_appearance_mask[player_idx],
+    )
+}
+
+#[inline(always)]
+pub fn effective_attack_speed_multiplier_for_player(state: &State, player_idx: usize) -> f32 {
+    if player_idx >= state.num_players {
+        return 1.0;
+    }
+    let speed = state.active_attack_speed_multiplier[player_idx];
+    if speed.is_finite() && speed > 0.0 {
+        speed
+    } else {
+        1.0
+    }
+}
+
+#[inline(always)]
+pub fn effective_attack_mini_percent_delta_for_player(state: &State, player_idx: usize) -> f32 {
+    if player_idx >= state.num_players {
+        return 0.0;
+    }
+    let mini = state.active_attack_mini_percent_delta[player_idx];
+    if mini.is_finite() { mini } else { 0.0 }
+}
+
+#[inline(always)]
+fn with_attack_speed_multiplier(speed: ScrollSpeedSetting, multiplier: f32) -> ScrollSpeedSetting {
+    let mult = if multiplier.is_finite() && multiplier > 0.0 {
+        multiplier
+    } else {
+        1.0
+    };
+    match speed {
+        ScrollSpeedSetting::CMod(v) => ScrollSpeedSetting::CMod((v * mult).max(1.0)),
+        ScrollSpeedSetting::XMod(v) => ScrollSpeedSetting::XMod((v * mult).max(0.05)),
+        ScrollSpeedSetting::MMod(v) => ScrollSpeedSetting::MMod((v * mult).max(1.0)),
+    }
+}
+
+#[inline(always)]
+pub fn effective_scroll_speed_for_player(state: &State, player_idx: usize) -> ScrollSpeedSetting {
+    if player_idx >= state.num_players {
+        return ScrollSpeedSetting::default();
+    }
+    with_attack_speed_multiplier(
+        state.scroll_speed[player_idx],
+        effective_attack_speed_multiplier_for_player(state, player_idx),
+    )
 }
 
 #[inline(always)]
@@ -2414,7 +4138,7 @@ pub fn init(
         if player >= num_players {
             return 1.0;
         }
-        let mini_value = (player_profiles[player].mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
+        let mini_value = effective_mini_value(&player_profiles[player]);
         let mut z = 1.0 - mini_value * 0.5;
         if z.abs() < 0.01 {
             z = 0.01;
@@ -2590,7 +4314,20 @@ pub fn init(
         note_ranges[player] = (start, end);
     }
 
+    apply_uncommon_chart_transforms(
+        &mut notes,
+        &mut note_ranges,
+        cols_per_player,
+        num_players,
+        &player_profiles,
+        &timing_players,
+    );
+
     let song_seed = turn_seed_for_song(&song);
+    let mut attack_song_length_seconds = song.music_length_seconds.max(song.precise_last_second());
+    if !attack_song_length_seconds.is_finite() || attack_song_length_seconds <= 0.0 {
+        attack_song_length_seconds = song.total_length_seconds.max(0) as f32;
+    }
     apply_turn_options(
         &mut notes,
         note_ranges,
@@ -2599,6 +4336,29 @@ pub fn init(
         &player_profiles,
         song_seed,
     );
+    apply_chart_attacks_transforms(
+        &mut notes,
+        &mut note_ranges,
+        &charts,
+        cols_per_player,
+        num_players,
+        &player_profiles,
+        &timing_players,
+        song_seed,
+        attack_song_length_seconds,
+    );
+
+    let mut total_steps = [0u32; MAX_PLAYERS];
+    holds_total = [0; MAX_PLAYERS];
+    rolls_total = [0; MAX_PLAYERS];
+    mines_total = [0; MAX_PLAYERS];
+    for player in 0..num_players {
+        let (steps, holds, rolls, mines) = recompute_player_totals(&notes, note_ranges[player]);
+        total_steps[player] = steps;
+        holds_total[player] = holds;
+        rolls_total[player] = rolls;
+        mines_total[player] = mines;
+    }
 
     let note_player_for_col = |col: usize| -> usize {
         if num_players <= 1 || cols_per_player == 0 {
@@ -2647,6 +4407,7 @@ pub fn init(
         holds_total[1] = holds_total[0];
         rolls_total[1] = rolls_total[0];
         mines_total[1] = mines_total[0];
+        total_steps[1] = total_steps[0];
         note_ranges[1] = note_ranges[0];
     }
 
@@ -2816,6 +4577,18 @@ pub fn init(
     });
     let current_beat_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         timing_players[player].get_beat_for_time(current_music_time_visible[player])
+    });
+    let attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            return Vec::new();
+        }
+        build_attack_mask_windows_for_player(
+            charts[player].chart_attacks.as_deref(),
+            player_profiles[player].attack_mode,
+            player,
+            song_seed,
+            attack_song_length_seconds,
+        )
     });
     let reverse_scroll: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
@@ -3067,7 +4840,7 @@ pub fn init(
     let assist_clap_rows = build_assist_clap_rows(&notes, note_ranges[0]);
     let song_offset_seconds = song.offset;
 
-    State {
+    let mut state = State {
         song,
         song_full_title,
         stage_intro_text,
@@ -3139,6 +4912,12 @@ pub fn init(
         live_window_counts_display_blue: [crate::game::timing::WindowCounts::default();
             MAX_PLAYERS],
         player_profiles,
+        attack_mask_windows,
+        active_attack_accel_mask: [0; MAX_PLAYERS],
+        active_attack_visual_mask: [0; MAX_PLAYERS],
+        active_attack_appearance_mask: [0; MAX_PLAYERS],
+        active_attack_speed_multiplier: [1.0; MAX_PLAYERS],
+        active_attack_mini_percent_delta: [0.0; MAX_PLAYERS],
         noteskin,
         active_color_index,
         player_color: color::decorative_rgba(player_color_index),
@@ -3162,6 +4941,7 @@ pub fn init(
         holds_total,
         rolls_total,
         mines_total,
+        total_steps,
         total_elapsed_in_screen: 0.0,
         sync_overlay_message: None,
         replay_status_text,
@@ -3208,7 +4988,9 @@ pub fn init(
         replay_cursor: 0,
         replay_edges: Vec::with_capacity(4096),
         log_timer: 0.0,
-    }
+    };
+    refresh_active_attack_masks(&mut state);
+    state
 }
 
 pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MAX_PLAYERS] {
@@ -3484,7 +5266,7 @@ fn display_totals_for_player(state: &State, player_idx: usize) -> CourseDisplayT
     }
     CourseDisplayTotals {
         possible_grade_points: state.possible_grade_points[player_idx],
-        total_steps: state.charts[player_idx].stats.total_steps,
+        total_steps: state.total_steps[player_idx],
         holds_total: state.holds_total[player_idx],
         rolls_total: state.rolls_total[player_idx],
         mines_total: state.mines_total[player_idx],
@@ -5885,7 +7667,8 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
         let (note_start, note_end) = player_note_range(state, player);
         let mut cursor = state.note_spawn_cursor[player].max(note_start);
         let spawn_time = music_time_sec.max(state.current_music_time_visible[player]);
-        match state.scroll_speed[player] {
+        let scroll_speed = effective_scroll_speed_for_player(state, player);
+        match scroll_speed {
             ScrollSpeedSetting::CMod(_) => {
                 let lookahead_time = spawn_time + state.scroll_travel_time[player];
                 let lookahead_beat = timing.get_beat_for_time(lookahead_time);
@@ -5905,8 +7688,8 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
                 let spawn_beat = timing.get_beat_for_time(spawn_time);
                 let current_displayed_beat = timing.get_displayed_beat(spawn_beat);
                 let speed_multiplier = timing.get_speed_multiplier(spawn_beat, spawn_time);
-                let player_multiplier = state.scroll_speed[player]
-                    .beat_multiplier(state.scroll_reference_bpm, state.music_rate);
+                let player_multiplier =
+                    scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
                 let final_multiplier = player_multiplier * speed_multiplier;
                 if final_multiplier > 0.0 {
                     let pixels_per_beat = ScrollSpeedSetting::ARROW_SPACING
@@ -6175,25 +7958,32 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         state.timing_players[player]
             .get_speed_multiplier(player_cull_beat[player], player_cull_time[player])
     });
+    let effective_scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            ScrollSpeedSetting::default()
+        } else {
+            effective_scroll_speed_for_player(state, player)
+        }
+    });
 
     let beatmod_multiplier: [f32; MAX_PLAYERS] =
-        std::array::from_fn(|player| match state.scroll_speed[player] {
+        std::array::from_fn(|player| match effective_scroll_speed[player] {
             ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                state.scroll_speed[player]
+                effective_scroll_speed[player]
                     .beat_multiplier(state.scroll_reference_bpm, state.music_rate)
                     * player_speed_multiplier[player]
             }
             ScrollSpeedSetting::CMod(_) => 0.0,
         });
     let cmod_pps_zoomed: [f32; MAX_PLAYERS] =
-        std::array::from_fn(|player| match state.scroll_speed[player] {
+        std::array::from_fn(|player| match effective_scroll_speed[player] {
             ScrollSpeedSetting::CMod(c_bpm) => {
                 (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING * state.field_zoom[player]
             }
             _ => 0.0,
         });
     let cmod_pps_raw: [f32; MAX_PLAYERS] =
-        std::array::from_fn(|player| match state.scroll_speed[player] {
+        std::array::from_fn(|player| match effective_scroll_speed[player] {
             ScrollSpeedSetting::CMod(c_bpm) => (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING,
             _ => 0.0,
         });
@@ -6236,7 +8026,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         };
         let cull_time = player_cull_time[player];
         let curr_disp_beat = player_curr_disp_beat[player];
-        let scroll_speed = state.scroll_speed[player];
+        let scroll_speed = effective_scroll_speed[player];
         let beatmult = beatmod_multiplier[player];
         let cmod_zoomed = cmod_pps_zoomed[player];
         let cmod_raw = cmod_pps_raw[player];
@@ -6441,10 +8231,12 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         state.current_beat_visible[player] =
             state.timing_players[player].get_beat_for_time(visible_time);
     }
+    refresh_active_attack_masks(state);
 
     let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);
     for player in 0..state.num_players {
-        let mut dynamic_speed = state.scroll_speed[player].pixels_per_second(
+        let effective_speed = effective_scroll_speed_for_player(state, player);
+        let mut dynamic_speed = effective_speed.pixels_per_second(
             current_bpm,
             state.scroll_reference_bpm,
             state.music_rate,
@@ -6460,7 +8252,13 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     }
 
     for player in 0..state.num_players {
-        let draw_scale = player_draw_scale(&state.player_profiles[player]);
+        let visual_mask = effective_visual_mask_for_player(state, player);
+        let attack_mini_delta = effective_attack_mini_percent_delta_for_player(state, player);
+        let draw_scale = player_draw_scale_with_visual_mask(
+            &state.player_profiles[player],
+            visual_mask,
+            attack_mini_delta,
+        );
         state.draw_distance_before_targets[player] =
             screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale;
         state.draw_distance_after_targets[player] = if state.player_profiles[player]
@@ -6475,7 +8273,8 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
 
     for player in 0..state.num_players {
         let dynamic_speed = state.scroll_pixels_per_second[player];
-        let mut travel_time = state.scroll_speed[player].travel_time_seconds(
+        let effective_speed = effective_scroll_speed_for_player(state, player);
+        let mut travel_time = effective_speed.travel_time_seconds(
             state.draw_distance_before_targets[player],
             current_bpm,
             state.scroll_reference_bpm,

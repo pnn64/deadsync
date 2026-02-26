@@ -1397,7 +1397,7 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
 }
 
 fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
-    let mut rows = vec![
+    let rows = vec![
         Row {
             name: "Insert".to_string(),
             choices: vec![
@@ -1498,17 +1498,6 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Characters".to_string(),
-            choices: vec![
-                "None".to_string(),
-                "Random".to_string(),
-                "Select Per Song".to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Dancing characters and how they are chosen.".to_string()],
-            choice_difficulty_indices: None,
-        },
-        Row {
             name: "Hide Light Type".to_string(),
             choices: vec![
                 "NoHideLights".to_string(),
@@ -1538,9 +1527,6 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             choice_difficulty_indices: None,
         },
     ];
-    // Match zmod behavior: Characters row is omitted unless a character roster exists.
-    // Deadsync does not implement character roster selection yet.
-    rows.retain(|r| r.name != "Characters");
     rows
 }
 
@@ -2258,13 +2244,6 @@ fn apply_profile_defaults(
             crate::game::profile::AttackMode::Off => 2,
         };
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Characters") {
-        row.selected_choice_index[player_idx] = match profile.character_mode {
-            crate::game::profile::CharacterMode::None => 0,
-            crate::game::profile::CharacterMode::Random => 1,
-            crate::game::profile::CharacterMode::SelectPerSong => 2,
-        };
-    }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Hide Light Type") {
         row.selected_choice_index[player_idx] = match profile.hide_light_type {
             crate::game::profile::HideLightType::NoHideLights => 0,
@@ -2868,7 +2847,6 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "Effect"
         || row_name == "Appearance"
         || row_name == "Attacks"
-        || row_name == "Characters"
         || row_name == "Hide Light Type"
 }
 
@@ -3419,17 +3397,6 @@ fn change_choice_for_player(
         state.player_profiles[player_idx].attack_mode = setting;
         if should_persist {
             crate::game::profile::update_attack_mode_for_side(persist_side, setting);
-        }
-    } else if row_name == "Characters" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::CharacterMode::None,
-            1 => crate::game::profile::CharacterMode::Random,
-            2 => crate::game::profile::CharacterMode::SelectPerSong,
-            _ => crate::game::profile::CharacterMode::None,
-        };
-        state.player_profiles[player_idx].character_mode = setting;
-        if should_persist {
-            crate::game::profile::update_character_mode_for_side(persist_side, setting);
         }
     } else if row_name == "Hide Light Type" {
         let setting = match row.selected_choice_index[player_idx] {
