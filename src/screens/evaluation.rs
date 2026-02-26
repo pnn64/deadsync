@@ -2382,6 +2382,50 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             actors.push(graph_frame);
         }
     }
+
+    // Auto-submit status text (SL/zmod parity with AutoSubmitScore.lua SubmitText actors):
+    // Common Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
+    {
+        for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+            if !profile::is_session_side_joined(side) {
+                continue;
+            }
+            let player_idx = if play_style == profile::PlayStyle::Versus {
+                if side == profile::PlayerSide::P1 { 0 } else { 1 }
+            } else {
+                0
+            };
+            let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
+                continue;
+            };
+            let Some(status) =
+                scores::get_arrowcloud_submit_ui_status_for_side(si.chart.short_hash.as_str(), side)
+            else {
+                continue;
+            };
+            let status_text = match status {
+                scores::ArrowCloudSubmitUiStatus::Submitting => "Submitting ...",
+                scores::ArrowCloudSubmitUiStatus::Submitted => "Submitted!",
+                scores::ArrowCloudSubmitUiStatus::SubmitFailed => "Submit Failed",
+                scores::ArrowCloudSubmitUiStatus::TimedOut => "Timed Out",
+            };
+            let x = if side == profile::PlayerSide::P1 {
+                screen_width() * 0.25
+            } else {
+                screen_width() * 0.75
+            };
+            actors.push(act!(text:
+                font("wendy"):
+                settext(status_text):
+                align(0.5, 0.5):
+                xy(x, screen_height() - 15.0):
+                zoom(0.8):
+                z(121):
+                diffuse(1.0, 1.0, 1.0, 1.0)
+            ));
+        }
+    }
+
     // --- "ITG" text and Pads (top right) ---
     {
         let itg_text_x = screen_width() - widescale(55.0, 62.0);

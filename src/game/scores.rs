@@ -16,6 +16,7 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use bincode::{Decode, Encode};
@@ -1526,6 +1527,104 @@ const ARROWCLOUD_EFFECT_NAMES: [&str; 10] = [
 const ARROWCLOUD_APPEARANCE_NAMES: [&str; 5] =
     ["Hidden", "Sudden", "Stealth", "Blink", "R.Vanish"];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrowCloudSubmitUiStatus {
+    Submitting,
+    Submitted,
+    SubmitFailed,
+    TimedOut,
+}
+
+#[derive(Debug, Clone)]
+struct ArrowCloudSubmitUiEntry {
+    chart_hash: String,
+    token: u64,
+    status: ArrowCloudSubmitUiStatus,
+}
+
+static ARROWCLOUD_SUBMIT_UI_STATUS: std::sync::LazyLock<Mutex<[Option<ArrowCloudSubmitUiEntry>; 2]>> =
+    std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
+static ARROWCLOUD_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
+
+#[inline(always)]
+const fn arrowcloud_side_ix(side: profile::PlayerSide) -> usize {
+    match side {
+        profile::PlayerSide::P1 => 0,
+        profile::PlayerSide::P2 => 1,
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_reset_submit_ui_status(side: profile::PlayerSide, chart_hash: &str) {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return;
+    }
+    let mut state = ARROWCLOUD_SUBMIT_UI_STATUS.lock().unwrap();
+    let slot = &mut state[arrowcloud_side_ix(side)];
+    if slot
+        .as_ref()
+        .is_some_and(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+    {
+        *slot = None;
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_set_submit_ui_status(
+    side: profile::PlayerSide,
+    chart_hash: &str,
+    token: u64,
+    status: ArrowCloudSubmitUiStatus,
+) {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return;
+    }
+    let mut state = ARROWCLOUD_SUBMIT_UI_STATUS.lock().unwrap();
+    state[arrowcloud_side_ix(side)] = Some(ArrowCloudSubmitUiEntry {
+        chart_hash: hash.to_string(),
+        token,
+        status,
+    });
+}
+
+#[inline(always)]
+fn arrowcloud_update_submit_ui_status_if_token(
+    side: profile::PlayerSide,
+    chart_hash: &str,
+    token: u64,
+    status: ArrowCloudSubmitUiStatus,
+) {
+    let mut state = ARROWCLOUD_SUBMIT_UI_STATUS.lock().unwrap();
+    let Some(entry) = state[arrowcloud_side_ix(side)].as_mut() else {
+        return;
+    };
+    if entry.token != token || !entry.chart_hash.eq_ignore_ascii_case(chart_hash) {
+        return;
+    }
+    entry.status = status;
+}
+
+#[inline(always)]
+fn arrowcloud_next_submit_ui_token() -> u64 {
+    ARROWCLOUD_SUBMIT_UI_TOKEN.fetch_add(1, AtomicOrdering::Relaxed)
+}
+
+pub fn get_arrowcloud_submit_ui_status_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<ArrowCloudSubmitUiStatus> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+    ARROWCLOUD_SUBMIT_UI_STATUS.lock().unwrap()[arrowcloud_side_ix(side)]
+        .as_ref()
+        .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        .map(|entry| entry.status)
+}
+
 #[derive(Debug, Serialize)]
 struct ArrowCloudSpeed {
     value: f64,
@@ -1619,7 +1718,14 @@ struct ArrowCloudPayload {
 struct ArrowCloudSubmitJob {
     side: profile::PlayerSide,
     api_key: String,
+    token: u64,
     payload: ArrowCloudPayload,
+}
+
+#[derive(Debug)]
+struct ArrowCloudSubmitError {
+    status: ArrowCloudSubmitUiStatus,
+    message: String,
 }
 
 #[inline(always)]
@@ -2004,13 +2110,19 @@ fn submit_arrowcloud_payload(
     side: profile::PlayerSide,
     api_key: &str,
     payload: &ArrowCloudPayload,
-) -> Result<(), String> {
+) -> Result<(), ArrowCloudSubmitError> {
     let api_key = api_key.trim();
     if api_key.is_empty() {
-        return Err("missing ArrowCloud API key".to_string());
+        return Err(ArrowCloudSubmitError {
+            status: ArrowCloudSubmitUiStatus::SubmitFailed,
+            message: "missing ArrowCloud API key".to_string(),
+        });
     }
     let Some(url) = arrowcloud_submit_url(payload.hash.as_str()) else {
-        return Err("missing chart hash".to_string());
+        return Err(ArrowCloudSubmitError {
+            status: ArrowCloudSubmitUiStatus::SubmitFailed,
+            message: "missing chart hash".to_string(),
+        });
     };
 
     let bearer = format!("Bearer {api_key}");
@@ -2020,7 +2132,18 @@ fn submit_arrowcloud_payload(
         .header("Content-Type", "application/json")
         .header("Authorization", &bearer)
         .send_json(payload)
-        .map_err(|e| format!("network error: {e}"))?;
+        .map_err(|e| {
+            let msg = format!("network error: {e}");
+            let lower = msg.to_ascii_lowercase();
+            ArrowCloudSubmitError {
+                status: if lower.contains("timeout") || lower.contains("timed out") {
+                    ArrowCloudSubmitUiStatus::TimedOut
+                } else {
+                    ArrowCloudSubmitUiStatus::SubmitFailed
+                },
+                message: msg,
+            }
+        })?;
     let status = response.status();
     let status_code = status.as_u16();
     let body = response.into_body().read_to_string().unwrap_or_default();
@@ -2041,10 +2164,21 @@ fn submit_arrowcloud_payload(
     }
 
     let snippet = arrowcloud_log_snippet(body.as_str());
-    if snippet.is_empty() {
-        Err(format!("HTTP {status_code}"))
+    let status_kind = if status_code == 408 || status_code == 504 {
+        ArrowCloudSubmitUiStatus::TimedOut
     } else {
-        Err(format!("HTTP {status_code}: {}", snippet.as_str()))
+        ArrowCloudSubmitUiStatus::SubmitFailed
+    };
+    if snippet.is_empty() {
+        Err(ArrowCloudSubmitError {
+            status: status_kind,
+            message: format!("HTTP {status_code}"),
+        })
+    } else {
+        Err(ArrowCloudSubmitError {
+            status: status_kind,
+            message: format!("HTTP {status_code}: {}", snippet.as_str()),
+        })
     }
 }
 
@@ -2074,15 +2208,22 @@ pub fn dump_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
 }
 
 pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
-    if !crate::config::get().enable_arrowcloud || gs.num_players == 0 {
+    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+        let side = gameplay_side_for_player(gs, player_idx);
+        let chart_hash = gs.charts[player_idx].short_hash.as_str();
+        arrowcloud_reset_submit_ui_status(side, chart_hash);
+    }
+
+    let cfg = crate::config::get();
+    if !cfg.enable_arrowcloud || gs.num_players == 0 {
         return;
     }
     if gs.autoplay_used {
         info!("Skipping ArrowCloud submit: autoplay/replay was used.");
         return;
     }
-    if gs.course_display_totals.is_some() {
-        info!("Skipping ArrowCloud submit: course payload submission is not wired yet.");
+    if gs.course_display_totals.is_some() && !cfg.autosubmit_course_scores_individually {
+        info!("Skipping ArrowCloud submit: course per-song autosubmit is disabled.");
         return;
     }
     if let network::ArrowCloudConnectionStatus::Error(msg) = network::get_arrowcloud_status() {
@@ -2099,9 +2240,17 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
         let Some(payload) = arrowcloud_payload_for_player(gs, player_idx) else {
             continue;
         };
+        let token = arrowcloud_next_submit_ui_token();
+        arrowcloud_set_submit_ui_status(
+            gameplay_side_for_player(gs, player_idx),
+            payload.hash.as_str(),
+            token,
+            ArrowCloudSubmitUiStatus::Submitting,
+        );
         jobs.push(ArrowCloudSubmitJob {
             side: gameplay_side_for_player(gs, player_idx),
             api_key: api_key.to_string(),
+            token,
             payload,
         });
     }
@@ -2111,11 +2260,25 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
 
     std::thread::spawn(move || {
         for job in jobs {
-            if let Err(e) = submit_arrowcloud_payload(job.side, &job.api_key, &job.payload) {
-                warn!(
-                    "ArrowCloud submit failed for {:?} ({}) : {}",
-                    job.side, job.payload.hash, e
-                );
+            match submit_arrowcloud_payload(job.side, &job.api_key, &job.payload) {
+                Ok(()) => arrowcloud_update_submit_ui_status_if_token(
+                    job.side,
+                    job.payload.hash.as_str(),
+                    job.token,
+                    ArrowCloudSubmitUiStatus::Submitted,
+                ),
+                Err(err) => {
+                    arrowcloud_update_submit_ui_status_if_token(
+                        job.side,
+                        job.payload.hash.as_str(),
+                        job.token,
+                        err.status,
+                    );
+                    warn!(
+                        "ArrowCloud submit failed for {:?} ({}) : {}",
+                        job.side, job.payload.hash, err.message
+                    );
+                }
             }
         }
     });
