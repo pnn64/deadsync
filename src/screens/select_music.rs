@@ -754,7 +754,6 @@ pub(crate) fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usi
     song.charts.iter().any(|c| {
         c.chart_type.eq_ignore_ascii_case(target_chart_type)
             && c.difficulty.eq_ignore_ascii_case(target_difficulty_name)
-            && !c.notes.is_empty()
     })
 }
 
@@ -765,7 +764,6 @@ pub(crate) fn edit_charts_sorted<'a>(song: &'a SongData, chart_type: &str) -> Ve
         .filter(|c| {
             c.chart_type.eq_ignore_ascii_case(chart_type)
                 && c.difficulty.eq_ignore_ascii_case("edit")
-                && !c.notes.is_empty()
         })
         .collect();
     edits.sort_by_cached_key(|c| (c.description.to_lowercase(), c.meter, c.short_hash.as_str()));
@@ -782,7 +780,6 @@ pub(crate) fn chart_for_steps_index<'a>(
         return song.charts.iter().find(|c| {
             c.chart_type.eq_ignore_ascii_case(chart_type)
                 && c.difficulty.eq_ignore_ascii_case(diff_name)
-                && !c.notes.is_empty()
         });
     }
 
@@ -800,7 +797,6 @@ fn edit_chart_indices_sorted(song: &SongData, chart_type: &str) -> Vec<usize> {
         .filter_map(|(i, c)| {
             if c.chart_type.eq_ignore_ascii_case(chart_type)
                 && c.difficulty.eq_ignore_ascii_case("edit")
-                && !c.notes.is_empty()
             {
                 Some(i)
             } else {
@@ -822,7 +818,7 @@ fn standard_chart_indices(
 ) -> [Option<usize>; NUM_STANDARD_DIFFICULTIES] {
     let mut out = [None; NUM_STANDARD_DIFFICULTIES];
     for (chart_ix, chart) in song.charts.iter().enumerate() {
-        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || chart.notes.is_empty() {
+        if !chart.chart_type.eq_ignore_ascii_case(chart_type) {
             continue;
         }
         for (diff_ix, &diff_name) in color::FILE_DIFFICULTY_NAMES.iter().enumerate() {
@@ -930,7 +926,6 @@ pub(crate) fn steps_index_for_chart_hash(
     let chart = song.charts.iter().find(|c| {
         c.chart_type.eq_ignore_ascii_case(chart_type)
             && c.short_hash == chart_hash
-            && !c.notes.is_empty()
     })?;
 
     if let Some(std_idx) = color::FILE_DIFFICULTY_NAMES
@@ -949,6 +944,40 @@ pub(crate) fn steps_index_for_chart_hash(
 
 pub(crate) fn steps_len(song: &SongData, chart_type: &str) -> usize {
     color::FILE_DIFFICULTY_NAMES.len() + edit_charts_sorted(song, chart_type).len()
+}
+
+pub(crate) fn best_steps_index(
+    song: &SongData,
+    chart_type: &str,
+    preferred_difficulty_index: usize,
+) -> Option<usize> {
+    let standard_len = color::FILE_DIFFICULTY_NAMES.len();
+    if standard_len == 0 {
+        return None;
+    }
+
+    let preferred = preferred_difficulty_index.min(standard_len - 1);
+    let mut best_standard = None;
+    let mut best_distance = usize::MAX;
+    for idx in 0..standard_len {
+        if chart_for_steps_index(song, chart_type, idx).is_none() {
+            continue;
+        }
+        let distance = idx.abs_diff(preferred);
+        if distance < best_distance {
+            best_distance = distance;
+            best_standard = Some(idx);
+        }
+    }
+    if best_standard.is_some() {
+        return best_standard;
+    }
+
+    if edit_charts_sorted(song, chart_type).is_empty() {
+        None
+    } else {
+        Some(standard_len)
+    }
 }
 
 fn rebuild_displayed_entries(state: &mut State) {
@@ -1652,7 +1681,7 @@ pub fn init() -> State {
                     continue;
                 }
                 has_target_chart_type = true;
-                if chart.difficulty.eq_ignore_ascii_case("edit") && !chart.notes.is_empty() {
+                if chart.difficulty.eq_ignore_ascii_case("edit") {
                     has_edit = true;
                     break;
                 }
@@ -1843,23 +1872,24 @@ pub fn init() -> State {
                     return state;
                 }
 
-                let preferred = state.preferred_difficulty_index;
-                let mut best_match_index = None;
-                let mut min_diff = i32::MAX;
-                for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
-                    if is_difficulty_playable(song, i) {
-                        let diff = (i as i32 - preferred as i32).abs();
-                        if diff < min_diff {
-                            min_diff = diff;
-                            best_match_index = Some(i);
-                        }
-                    }
-                }
-                if let Some(idx2) = best_match_index {
+                if let Some(idx2) =
+                    best_steps_index(song, target_chart_type, state.preferred_difficulty_index)
+                {
                     state.selected_steps_index = idx2;
                 }
-                state.p2_selected_steps_index = state.selected_steps_index;
-                state.p2_preferred_difficulty_index = state.preferred_difficulty_index;
+                if let Some(idx2) =
+                    best_steps_index(song, target_chart_type, state.p2_preferred_difficulty_index)
+                {
+                    state.p2_selected_steps_index = idx2;
+                } else {
+                    state.p2_selected_steps_index = state.selected_steps_index;
+                }
+                if state.selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
+                    state.preferred_difficulty_index = state.selected_steps_index;
+                }
+                if state.p2_selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
+                    state.p2_preferred_difficulty_index = state.p2_selected_steps_index;
+                }
             }
         }
     }
@@ -2538,6 +2568,17 @@ fn refresh_after_reload(state: &mut State) {
             && chart_for_steps_index(song, target_chart_type, old_steps_index_p1).is_some()
         {
             refreshed.selected_steps_index = old_steps_index_p1;
+        } else if !restored_p1
+            && let Some(index) = best_steps_index(
+                song,
+                target_chart_type,
+                refreshed.preferred_difficulty_index,
+            )
+        {
+            refreshed.selected_steps_index = index;
+            if index < color::FILE_DIFFICULTY_NAMES.len() {
+                refreshed.preferred_difficulty_index = index;
+            }
         }
 
         let mut restored_p2 = false;
@@ -2554,6 +2595,17 @@ fn refresh_after_reload(state: &mut State) {
             && chart_for_steps_index(song, target_chart_type, old_steps_index_p2).is_some()
         {
             refreshed.p2_selected_steps_index = old_steps_index_p2;
+        } else if !restored_p2
+            && let Some(index) = best_steps_index(
+                song,
+                target_chart_type,
+                refreshed.p2_preferred_difficulty_index,
+            )
+        {
+            refreshed.p2_selected_steps_index = index;
+            if index < color::FILE_DIFFICULTY_NAMES.len() {
+                refreshed.p2_preferred_difficulty_index = index;
+            }
         }
     }
 
@@ -3651,36 +3703,21 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         }
 
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-            let pref = state.preferred_difficulty_index;
-            let mut best = None;
-            let mut min = i32::MAX;
-            for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
-                if is_difficulty_playable(song, i) {
-                    let diff = (i as i32 - pref as i32).abs();
-                    if diff < min {
-                        min = diff;
-                        best = Some(i);
-                    }
+            let target_chart_type = profile::get_session_play_style().chart_type();
+            if let Some(idx) = best_steps_index(song, target_chart_type, state.preferred_difficulty_index)
+            {
+                state.selected_steps_index = idx;
+                if idx < color::FILE_DIFFICULTY_NAMES.len() {
+                    state.preferred_difficulty_index = idx;
                 }
             }
-            if let Some(b) = best {
-                state.selected_steps_index = b;
-            }
-
-            let pref2 = state.p2_preferred_difficulty_index;
-            let mut best2 = None;
-            let mut min2 = i32::MAX;
-            for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
-                if is_difficulty_playable(song, i) {
-                    let diff = (i as i32 - pref2 as i32).abs();
-                    if diff < min2 {
-                        min2 = diff;
-                        best2 = Some(i);
-                    }
+            if let Some(idx) =
+                best_steps_index(song, target_chart_type, state.p2_preferred_difficulty_index)
+            {
+                state.p2_selected_steps_index = idx;
+                if idx < color::FILE_DIFFICULTY_NAMES.len() {
+                    state.p2_preferred_difficulty_index = idx;
                 }
-            }
-            if let Some(b) = best2 {
-                state.p2_selected_steps_index = b;
             }
         }
     }
@@ -4966,7 +5003,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     song.charts.iter().find(|c| {
                         c.chart_type.eq_ignore_ascii_case(target_chart_type)
                             && c.difficulty.eq_ignore_ascii_case(diff)
-                            && !c.notes.is_empty()
                     })
                 };
                 v.push(chart);

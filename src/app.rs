@@ -4403,21 +4403,51 @@ impl App {
                 let play_style = profile::get_session_play_style();
                 let player_side = profile::get_session_player_side();
                 let target_chart_type = play_style.chart_type();
+                let mut resolved_steps_index = po_state.chart_steps_index;
+                let mut resolve_chart = |slot: usize| {
+                    let requested_idx = resolved_steps_index[slot];
+                    if let Some(chart_ref) = select_music::chart_for_steps_index(
+                        &song_arc,
+                        target_chart_type,
+                        requested_idx,
+                    ) {
+                        return chart_ref;
+                    }
+
+                    let preferred_idx = po_state.chart_difficulty_index[slot];
+                    if let Some(fallback_idx) =
+                        select_music::best_steps_index(&song_arc, target_chart_type, preferred_idx)
+                        && let Some(chart_ref) = select_music::chart_for_steps_index(
+                            &song_arc,
+                            target_chart_type,
+                            fallback_idx,
+                        )
+                    {
+                        warn!(
+                            "Missing stepchart index {} for '{}'; using fallback index {}",
+                            requested_idx, song_arc.title, fallback_idx
+                        );
+                        resolved_steps_index[slot] = fallback_idx;
+                        return chart_ref;
+                    }
+
+                    let chart_ref = song_arc
+                        .charts
+                        .iter()
+                        .find(|c| c.chart_type.eq_ignore_ascii_case(target_chart_type))
+                        .or_else(|| song_arc.charts.first())
+                        .expect("Selected song has no charts");
+                    warn!(
+                        "Missing indexed stepchart for '{}'; using raw chart fallback ({}/{})",
+                        song_arc.title, chart_ref.chart_type, chart_ref.difficulty
+                    );
+                    chart_ref
+                };
 
                 let (charts, last_played_chart_ref, last_played_idx) = match play_style {
                     profile::PlayStyle::Versus => {
-                        let chart_ref_p1 = select_music::chart_for_steps_index(
-                            &song_arc,
-                            target_chart_type,
-                            po_state.chart_steps_index[0],
-                        )
-                        .expect("No chart found for P1 selected stepchart");
-                        let chart_ref_p2 = select_music::chart_for_steps_index(
-                            &song_arc,
-                            target_chart_type,
-                            po_state.chart_steps_index[1],
-                        )
-                        .expect("No chart found for P2 selected stepchart");
+                        let chart_ref_p1 = resolve_chart(0);
+                        let chart_ref_p2 = resolve_chart(1);
                         (
                             [
                                 Arc::new(chart_ref_p1.clone()),
@@ -4432,12 +4462,7 @@ impl App {
                             profile::PlayerSide::P1 => 0,
                             profile::PlayerSide::P2 => 1,
                         };
-                        let chart_ref = select_music::chart_for_steps_index(
-                            &song_arc,
-                            target_chart_type,
-                            po_state.chart_steps_index[idx],
-                        )
-                        .expect("No chart found for selected stepchart");
+                        let chart_ref = resolve_chart(idx);
                         let chart = Arc::new(chart_ref.clone());
                         ([chart.clone(), chart], chart_ref, idx)
                     }
@@ -4450,7 +4475,7 @@ impl App {
                         .select_music_state
                         .preferred_difficulty_index = po_state.chart_difficulty_index[0];
                     self.state.screens.select_music_state.selected_steps_index =
-                        po_state.chart_steps_index[0];
+                        resolved_steps_index[0];
                     self.state
                         .screens
                         .select_music_state
@@ -4458,7 +4483,7 @@ impl App {
                     self.state
                         .screens
                         .select_music_state
-                        .p2_selected_steps_index = po_state.chart_steps_index[1];
+                        .p2_selected_steps_index = resolved_steps_index[1];
                 } else {
                     self.state
                         .screens
@@ -4466,7 +4491,7 @@ impl App {
                         .preferred_difficulty_index =
                         po_state.chart_difficulty_index[last_played_idx];
                     self.state.screens.select_music_state.selected_steps_index =
-                        po_state.chart_steps_index[last_played_idx];
+                        resolved_steps_index[last_played_idx];
                 }
 
                 match play_style {

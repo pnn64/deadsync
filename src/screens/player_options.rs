@@ -742,7 +742,6 @@ fn build_main_rows(
                 if let Some(chart) = song.charts.iter().find(|c| {
                     c.chart_type.eq_ignore_ascii_case(target_chart_type)
                         && c.difficulty.eq_ignore_ascii_case(file_name)
-                        && !c.notes.is_empty()
                 }) {
                     let display_name = crate::ui::color::DISPLAY_DIFFICULTY_NAMES[i];
                     stepchart_choices.push(format!("{} {}", display_name, chart.meter));

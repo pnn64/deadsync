@@ -199,7 +199,6 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             info.charts.iter().any(|c| {
                                 c.chart_type.eq_ignore_ascii_case(target_chart_type)
                                     && c.difficulty.eq_ignore_ascii_case("edit")
-                                    && !c.notes.is_empty()
                             })
                         };
                         let bg = p.song_box_color.unwrap_or_else(col_music_wheel_box);
