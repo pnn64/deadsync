@@ -799,7 +799,11 @@ impl ExplosionAnimation {
             let glow = self
                 .glow
                 .map_or([0.0, 0.0, 0.0, 0.0], |g| g.color_at(time, diffuse[3]));
-            let visible = segment.end_visible.unwrap_or(current.visible);
+            let visible = if progress >= 1.0 {
+                segment.end_visible.unwrap_or(current.visible)
+            } else {
+                current.visible
+            };
 
             return ExplosionVisualState {
                 zoom,
@@ -6030,7 +6034,7 @@ mod tests {
     }
 
     #[test]
-    fn cel_model_tap_note_uses_multiple_material_textures() {
+    fn cel_model_tap_note_uses_multiple_material_layers() {
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -6040,14 +6044,22 @@ mod tests {
             .note_layers
             .first()
             .expect("cel should expose at least one tap note layer set");
-        let textures = layers
+        let model_layers = layers
             .iter()
             .filter(|slot| slot.model.is_some())
+            .collect::<Vec<_>>();
+        assert!(
+            model_layers.len() >= 2,
+            "expected cel tap note model to expose multiple material layers; got {}",
+            model_layers.len()
+        );
+        let textures = model_layers
+            .iter()
             .map(|slot| slot.texture_key().to_string())
             .collect::<HashSet<_>>();
         assert!(
-            textures.len() >= 2,
-            "expected cel model tap note to resolve frame + color textures; got {:?}",
+            textures.contains("noteskins/dance/cel/textures/Tap Note parts (mipmaps).png"),
+            "expected cel model tap note layers to resolve Tap Note parts texture; got {:?}",
             textures
         );
     }
