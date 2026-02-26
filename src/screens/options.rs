@@ -1128,7 +1128,7 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: SOUND_ROW_OUTPUT_DEVICE,
         help: &[
-            "Select which output device deadsync uses.",
+            "Select which output device deadsync uses. Recommended: Auto.",
             "Linux includes manual ALSA presets such as plughw:0,0.",
             "This updates [Options] SoundDevice and takes effect on restart.",
         ],

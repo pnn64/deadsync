@@ -1,5 +1,5 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Sample, SampleFormat, StreamConfig};
+use cpal::{BufferSize, Sample, SampleFormat, StreamConfig, SupportedBufferSize};
 use lewton::inside_ogg::OggStreamReader;
 use log::{error, info, warn};
 use rubato::{
@@ -399,9 +399,9 @@ pub fn output_device_options() -> Vec<OutputDeviceOption> {
     };
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        let mut dedupe: HashSet<String> = HashSet::with_capacity(16);
-        let mut alsa_only = Vec::with_capacity(16);
-        let mut fallback = Vec::with_capacity(16);
+        let mut dedupe: HashSet<String> = HashSet::with_capacity(32);
+        let mut shared = Vec::with_capacity(16);
+        let mut raw_alsa = Vec::with_capacity(16);
         for (idx, dev) in devices.enumerate() {
             let desc = dev.description().ok();
             let name = desc
@@ -425,13 +425,16 @@ pub fn output_device_options() -> Vec<OutputDeviceOption> {
                 let token = endpoint.token();
                 if dedupe.insert(token.clone()) {
                     let label = format!("{idx}: {name} ({token})");
-                    alsa_only.push(OutputDeviceOption { label, token });
+                    raw_alsa.push(OutputDeviceOption { label, token });
                 }
                 continue;
             }
             let token = id_token
                 .or_else(|| driver.clone())
                 .unwrap_or_else(|| idx.to_string());
+            if !dedupe.insert(token.clone()) {
+                continue;
+            }
             let label = if let Some(d) = driver.as_deref() {
                 if d.eq_ignore_ascii_case(name.as_str()) {
                     format!("{idx}: {name}")
@@ -441,12 +444,13 @@ pub fn output_device_options() -> Vec<OutputDeviceOption> {
             } else {
                 format!("{idx}: {name}")
             };
-            fallback.push(OutputDeviceOption { label, token });
+            shared.push(OutputDeviceOption { label, token });
         }
-        if !alsa_only.is_empty() {
-            return alsa_only;
+        // Prefer shared/default plugin devices on Linux (PipeWire/Pulse/dmix/etc).
+        if !shared.is_empty() {
+            return shared;
         }
-        return fallback;
+        return raw_alsa;
     }
     #[cfg(not(all(unix, not(target_os = "macos"))))]
     {
@@ -595,6 +599,38 @@ fn select_output_host(sound_driver: Option<&str>) -> cpal::Host {
     cpal::default_host()
 }
 
+fn is_alsa_host(host: &cpal::Host) -> bool {
+    host.id().to_string().eq_ignore_ascii_case("alsa")
+        || format!("{:?}", host.id()).eq_ignore_ascii_case("alsa")
+}
+
+fn apply_low_latency_buffer_size(
+    host: &cpal::Host,
+    default_config: &cpal::SupportedStreamConfig,
+    stream_config: &mut StreamConfig,
+) {
+    if !is_alsa_host(host) {
+        return;
+    }
+    let target_frames = std::env::var("DEADSYNC_ALSA_BUFFER_FRAMES")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(256);
+    match default_config.buffer_size() {
+        SupportedBufferSize::Range { min, max } => {
+            let chosen = target_frames.clamp(*min, *max);
+            stream_config.buffer_size = BufferSize::Fixed(chosen);
+            info!(
+                "ALSA low-latency buffer request: {} frames (target {}, supported {}..{}).",
+                chosen, target_frames, min, max
+            );
+        }
+        SupportedBufferSize::Unknown => {
+            info!("ALSA buffer range unknown; keeping default buffer size.");
+        }
+    }
+}
+
 fn select_output_device(
     mut host: cpal::Host,
     sound_device: Option<&str>,
@@ -629,34 +665,6 @@ fn select_output_device(
             "SoundDevice '{token}' did not match any output device on host '{}'; using default output.",
             host.id()
         );
-    }
-
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        if let Ok(mut devices) = host.output_devices() {
-            if let Some(dev) = devices.find(|d| {
-                d.id()
-                    .ok()
-                    .map(|id| id.to_string())
-                    .as_deref()
-                    .and_then(parse_alsa_endpoint_token)
-                    .is_some_and(|ep| ep.is_plug && ep.card == 0 && ep.dev == 0)
-            }) {
-                return Ok((host, dev, "auto fallback to ALSA plughw:0,0".to_string()));
-            }
-        }
-        if let Ok(mut devices) = host.output_devices()
-            && let Some(dev) = devices.find(|d| {
-                d.id()
-                    .ok()
-                    .map(|id| id.to_string())
-                    .as_deref()
-                    .and_then(parse_alsa_endpoint_token)
-                    .is_some()
-            })
-        {
-            return Ok((host, dev, "auto fallback to first ALSA hw/plughw endpoint".to_string()));
-        }
     }
 
     host.default_output_device()
@@ -720,7 +728,19 @@ fn init_engine_and_thread() -> AudioEngine {
                             let max = cfg_range.max_sample_rate();
                             let channels = cfg_range.channels();
                             let fmt = cfg_range.sample_format();
-                            info!("    - {fmt:?}, {channels} ch, {min}..{max} Hz");
+                            match cfg_range.buffer_size() {
+                                SupportedBufferSize::Range {
+                                    min: bmin,
+                                    max: bmax,
+                                } => info!(
+                                    "    - {fmt:?}, {channels} ch, {min}..{max} Hz, buf {bmin}..{bmax} frames"
+                                ),
+                                SupportedBufferSize::Unknown => {
+                                    info!(
+                                        "    - {fmt:?}, {channels} ch, {min}..{max} Hz, buf unknown"
+                                    );
+                                }
+                            }
                         }
                     }
                     Err(e) => {
@@ -747,17 +767,19 @@ fn init_engine_and_thread() -> AudioEngine {
             stream_config.sample_rate
         );
     }
+    apply_low_latency_buffer_size(&host, &default_config, &mut stream_config);
 
     info!(
-        "Audio device: '{}' (sample_format={:?}, default={} Hz, channels={}).",
+        "Audio device: '{}' (sample_format={:?}, default={} Hz, channels={}, default_buf={:?}).",
         device_name,
         default_config.sample_format(),
         default_config.sample_rate(),
-        default_config.channels()
+        default_config.channels(),
+        default_config.buffer_size()
     );
     info!(
-        "Audio output stream config: {} Hz, {} ch (may be resampled by OS/driver).",
-        stream_config.sample_rate, stream_config.channels
+        "Audio output stream config: {} Hz, {} ch, buf={:?} (may be resampled by OS/driver).",
+        stream_config.sample_rate, stream_config.channels, stream_config.buffer_size
     );
 
     let device_sample_rate = stream_config.sample_rate;
