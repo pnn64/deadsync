@@ -1397,7 +1397,7 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
 }
 
 fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
-    vec![
+    let mut rows = vec![
         Row {
             name: "Insert".to_string(),
             choices: vec![
@@ -1417,13 +1417,13 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             name: "Remove".to_string(),
             choices: vec![
                 "Little".to_string(),
-                "No Mines".to_string(),
-                "No Holds".to_string(),
-                "No Jumps".to_string(),
-                "No Hands".to_string(),
-                "No Quads".to_string(),
-                "No Lifts".to_string(),
-                "No Fakes".to_string(),
+                "NoMines".to_string(),
+                "NoHolds".to_string(),
+                "NoJumps".to_string(),
+                "NoHands".to_string(),
+                "NoQuads".to_string(),
+                "NoLifts".to_string(),
+                "NoFakes".to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Strip specific note types out of the chart.".to_string()],
@@ -1435,15 +1435,15 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
                 "Planted".to_string(),
                 "Floored".to_string(),
                 "Twister".to_string(),
-                "No Rolls".to_string(),
-                "Holds To Rolls".to_string(),
+                "NoRolls".to_string(),
+                "HoldsToRolls".to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Twist and reshape hold notes in strange ways.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Accel Effects".to_string(),
+            name: "Accel".to_string(),
             choices: vec![
                 "Boost".to_string(),
                 "Brake".to_string(),
@@ -1456,7 +1456,7 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Visual Effects".to_string(),
+            name: "Effect".to_string(),
             choices: vec![
                 "Drunk".to_string(),
                 "Dizzy".to_string(),
@@ -1474,7 +1474,7 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Appearance Effects".to_string(),
+            name: "Appearance".to_string(),
             choices: vec![
                 "Hidden".to_string(),
                 "Sudden".to_string(),
@@ -1490,7 +1490,7 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             name: "Attacks".to_string(),
             choices: vec![
                 "On".to_string(),
-                "Random Attacks".to_string(),
+                "RandomAttacks".to_string(),
                 "Off".to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
@@ -1511,10 +1511,10 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
         Row {
             name: "Hide Light Type".to_string(),
             choices: vec![
-                "No Hide Lights".to_string(),
-                "Hide All Lights".to_string(),
-                "Hide Marquee Lights".to_string(),
-                "Hide Bass Lights".to_string(),
+                "NoHideLights".to_string(),
+                "HideAllLights".to_string(),
+                "HideMarqueeLights".to_string(),
+                "HideBassLights".to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Control how cabinet lights react during gameplay.".to_string()],
@@ -1537,7 +1537,11 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             help: vec![String::new()],
             choice_difficulty_indices: None,
         },
-    ]
+    ];
+    // Match zmod behavior: Characters row is omitted unless a character roster exists.
+    // Deadsync does not implement character roster selection yet.
+    rows.retain(|r| r.name != "Characters");
+    rows
 }
 
 fn build_rows(
@@ -2201,7 +2205,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Accel Effects") {
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Accel") {
         accel_effects_active_mask =
             crate::game::profile::normalize_accel_effects_mask(profile.accel_effects_active_mask);
         if accel_effects_active_mask != 0 {
@@ -2216,7 +2220,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Visual Effects") {
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Effect") {
         visual_effects_active_mask =
             crate::game::profile::normalize_visual_effects_mask(profile.visual_effects_active_mask);
         if visual_effects_active_mask != 0 {
@@ -2231,7 +2235,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Appearance Effects") {
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Appearance") {
         appearance_effects_active_mask = crate::game::profile::normalize_appearance_effects_mask(
             profile.appearance_effects_active_mask,
         );
@@ -2860,9 +2864,9 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "Insert"
         || row_name == "Remove"
         || row_name == "Holds"
-        || row_name == "Accel Effects"
-        || row_name == "Visual Effects"
-        || row_name == "Appearance Effects"
+        || row_name == "Accel"
+        || row_name == "Effect"
+        || row_name == "Appearance"
         || row_name == "Attacks"
         || row_name == "Characters"
         || row_name == "Hide Light Type"
@@ -2880,9 +2884,9 @@ fn row_toggles_with_start(row_name: &str) -> bool {
         || row_name == "Insert"
         || row_name == "Remove"
         || row_name == "Holds"
-        || row_name == "Accel Effects"
-        || row_name == "Visual Effects"
-        || row_name == "Appearance Effects"
+        || row_name == "Accel"
+        || row_name == "Effect"
+        || row_name == "Appearance"
         || row_name == "Life Bar Options"
         || row_name == "Gameplay Extras"
         || row_name == "Gameplay Extras (More)"
@@ -3403,10 +3407,7 @@ fn change_choice_for_player(
         if should_persist {
             crate::game::profile::update_turn_option_for_side(persist_side, setting);
         }
-    } else if row_name == "Accel Effects"
-        || row_name == "Visual Effects"
-        || row_name == "Appearance Effects"
-    {
+    } else if row_name == "Accel" || row_name == "Effect" || row_name == "Appearance" {
         // Multi-select rows toggled with Start; Left/Right only moves cursor.
     } else if row_name == "Attacks" {
         let setting = match row.selected_choice_index[player_idx] {
@@ -4422,7 +4423,7 @@ fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Accel Effects" {
+        if row.name != "Accel" {
             return;
         }
     } else {
@@ -4468,7 +4469,7 @@ fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Visual Effects" {
+        if row.name != "Effect" {
             return;
         }
     } else {
@@ -4514,7 +4515,7 @@ fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Appearance Effects" {
+        if row.name != "Appearance" {
             return;
         }
     } else {
@@ -5174,15 +5175,15 @@ fn handle_start_event(
         toggle_holds_row(state, player_idx);
         return None;
     }
-    if row_name == "Accel Effects" {
+    if row_name == "Accel" {
         toggle_accel_effects_row(state, player_idx);
         return None;
     }
-    if row_name == "Visual Effects" {
+    if row_name == "Effect" {
         toggle_visual_effects_row(state, player_idx);
         return None;
     }
-    if row_name == "Appearance Effects" {
+    if row_name == "Appearance" {
         toggle_appearance_effects_row(state, player_idx);
         return None;
     }
@@ -5946,7 +5947,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Accel Effects" {
+            } else if row.name == "Accel" {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -5986,7 +5987,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Visual Effects" {
+            } else if row.name == "Effect" {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -6026,7 +6027,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Appearance Effects" {
+            } else if row.name == "Appearance" {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;

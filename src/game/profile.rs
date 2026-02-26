@@ -116,8 +116,8 @@ impl core::fmt::Display for TurnOption {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AttackMode {
-    #[default]
     Off,
+    #[default]
     On,
     Random,
 }
