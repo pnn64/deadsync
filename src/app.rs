@@ -3378,11 +3378,7 @@ impl App {
             let fps = self.state.shell.frame_count as f32 / elapsed.as_secs_f32();
             self.state.shell.last_fps = fps;
             self.state.shell.last_vpf = self.state.shell.current_frame_vpf;
-            let screen_name = format!("{:?}", self.state.screens.current_screen);
-            window.set_title(&format!(
-                "DeadSync - {:?} | {} | {:.2} FPS",
-                self.backend_type, screen_name, fps
-            ));
+            window.set_title("DeadSync");
             self.state.shell.frame_count = 0;
             self.state.shell.last_title_update = now;
         }
@@ -3393,7 +3389,7 @@ impl App {
         self.update_options_monitor_specs(event_loop);
 
         let mut window_attributes = Window::default_attributes()
-            .with_title(format!("DeadSync - {:?}", self.backend_type))
+            .with_title("DeadSync")
             .with_resizable(true)
             .with_transparent(false)
             // Keep the window hidden until startup assets are ready so the first
