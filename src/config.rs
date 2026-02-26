@@ -463,10 +463,6 @@ impl Config {
 // Global, mutable configuration instance.
 static CONFIG: std::sync::LazyLock<Mutex<Config>> =
     std::sync::LazyLock::new(|| Mutex::new(Config::default()));
-static SOUND_DRIVER: std::sync::LazyLock<Mutex<Option<String>>> =
-    std::sync::LazyLock::new(|| Mutex::new(None));
-static SOUND_DEVICE: std::sync::LazyLock<Mutex<Option<String>>> =
-    std::sync::LazyLock::new(|| Mutex::new(None));
 static MACHINE_DEFAULT_NOTESKIN: std::sync::LazyLock<Mutex<String>> =
     std::sync::LazyLock::new(|| Mutex::new(DEFAULT_MACHINE_NOTESKIN.to_string()));
 static SAVE_TX: std::sync::LazyLock<Option<mpsc::Sender<SaveReq>>> =
@@ -566,83 +562,6 @@ fn normalize_machine_default_noteskin(raw: &str) -> String {
         return DEFAULT_MACHINE_NOTESKIN.to_string();
     }
     trimmed.to_ascii_lowercase()
-}
-
-fn split_sound_driver_prefix(raw: &str) -> (Option<String>, &str) {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return (None, trimmed);
-    }
-    let lower = trimmed.to_ascii_lowercase();
-    const DRIVERS: [&str; 6] = ["alsa", "pulse", "jack", "wasapi", "asio", "coreaudio"];
-    for driver in DRIVERS {
-        let prefix = format!("{driver}:");
-        if lower.starts_with(prefix.as_str()) {
-            let rest = trimmed.get(prefix.len()..).unwrap_or(trimmed);
-            return (Some(driver.to_string()), rest);
-        }
-    }
-    (None, trimmed)
-}
-
-fn parse_alsa_pair(rest: &str) -> Option<(u32, u32)> {
-    let mut parts = rest.split(',');
-    let card = parts.next()?.trim().parse::<u32>().ok()?;
-    let dev = parts.next()?.trim().parse::<u32>().ok()?;
-    Some((card, dev))
-}
-
-fn parse_alsa_card_dev_kv(rest: &str) -> Option<(u32, u32)> {
-    let mut card: Option<u32> = None;
-    let mut dev: Option<u32> = None;
-    for part in rest.split(',') {
-        let (key, value) = part.split_once('=')?;
-        let key = key.trim().to_ascii_lowercase();
-        let value = value.trim();
-        if key == "card" {
-            card = value.parse::<u32>().ok();
-        } else if key == "dev" {
-            dev = value.parse::<u32>().ok();
-        }
-    }
-    Some((card?, dev?))
-}
-
-fn normalize_alsa_device_token(raw: &str) -> Option<String> {
-    let trimmed = raw.trim();
-    let lower = trimmed.to_ascii_lowercase();
-    let (kind, rest) = if lower.starts_with("plughw:") {
-        ("plughw", trimmed.get(7..)?)
-    } else if lower.starts_with("hw:") {
-        ("hw", trimmed.get(3..)?)
-    } else {
-        return None;
-    };
-    let (card, dev) = parse_alsa_pair(rest).or_else(|| parse_alsa_card_dev_kv(rest))?;
-    Some(format!("{kind}:{card},{dev}"))
-}
-
-fn normalize_sound_driver(raw: Option<&str>) -> Option<String> {
-    raw.map(str::trim).and_then(|v| {
-        if v.is_empty() || v.eq_ignore_ascii_case("auto") {
-            None
-        } else {
-            Some(v.to_ascii_lowercase())
-        }
-    })
-}
-
-fn normalize_sound_device_entry(raw: Option<&str>) -> (Option<String>, Option<String>) {
-    let Some(raw) = raw else {
-        return (None, None);
-    };
-    let trimmed = raw.trim();
-    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("auto") {
-        return (None, None);
-    }
-    let (driver, device_body) = split_sound_driver_prefix(trimmed);
-    let device = normalize_alsa_device_token(device_body).unwrap_or_else(|| device_body.to_string());
-    (driver, Some(device))
 }
 
 fn create_default_config_file() -> Result<(), std::io::Error> {
@@ -892,8 +811,6 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         "SoftwareRendererThreads={}\n",
         default.software_renderer_threads
     ));
-    content.push_str("SoundDevice=Auto\n");
-    content.push_str("SoundDriver=Auto\n");
     content.push_str(&format!("Theme={}\n", default.theme_flag.as_str()));
     content.push_str(&format!("SFXVolume={}\n", default.sfx_volume));
     content.push_str(&format!(
@@ -1041,15 +958,6 @@ pub fn load() {
     let mut conf = SimpleIni::new();
     match conf.load(CONFIG_PATH) {
         Ok(()) => {
-            {
-                let raw_sound_device = conf.get("Options", "SoundDevice");
-                let (driver_from_device, sound_device) =
-                    normalize_sound_device_entry(raw_sound_device.as_deref());
-                let sound_driver = normalize_sound_driver(conf.get("Options", "SoundDriver").as_deref())
-                    .or(driver_from_device);
-                *SOUND_DRIVER.lock().unwrap() = sound_driver;
-                *SOUND_DEVICE.lock().unwrap() = sound_device;
-            }
             {
                 let noteskin = conf
                     .get("Options", "DefaultNoteSkin")
@@ -1641,8 +1549,6 @@ pub fn load() {
                     "SmoothHistogram",
                     "SFXVolume",
                     "SoftwareRendererThreads",
-                    "SoundDevice",
-                    "SoundDriver",
                     "Theme",
                     "TranslatedTitles",
                     "VideoRenderer",
@@ -1703,8 +1609,6 @@ pub fn load() {
         }
         Err(e) => {
             warn!("Failed to load '{CONFIG_PATH}': {e}. Using default values.");
-            *SOUND_DRIVER.lock().unwrap() = None;
-            *SOUND_DEVICE.lock().unwrap() = None;
             *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = DEFAULT_MACHINE_NOTESKIN.to_string();
         }
     }
@@ -2306,8 +2210,6 @@ fn save_without_keymaps() {
     // CamelCase [Keymaps] section derived from the current in-memory keymap.
     let cfg = *CONFIG.lock().unwrap();
     let keymap = crate::core::input::get_keymap();
-    let sound_driver = SOUND_DRIVER.lock().unwrap().clone();
-    let sound_device = SOUND_DEVICE.lock().unwrap().clone();
     let machine_default_noteskin = MACHINE_DEFAULT_NOTESKIN.lock().unwrap().clone();
 
     let mut content = String::new();
@@ -2542,14 +2444,6 @@ fn save_without_keymaps() {
         "SoftwareRendererThreads={}\n",
         cfg.software_renderer_threads
     ));
-    content.push_str(&format!(
-        "SoundDevice={}\n",
-        sound_device.as_deref().unwrap_or("Auto")
-    ));
-    content.push_str(&format!(
-        "SoundDriver={}\n",
-        sound_driver.as_deref().unwrap_or("Auto")
-    ));
     content.push_str(&format!("Theme={}\n", cfg.theme_flag.as_str()));
     content.push_str(&format!("SFXVolume={}\n", cfg.sfx_volume));
     content.push_str(&format!(
@@ -2664,48 +2558,6 @@ fn save_without_keymaps() {
 
 pub fn get() -> Config {
     *CONFIG.lock().unwrap()
-}
-
-pub fn sound_driver() -> Option<String> {
-    SOUND_DRIVER.lock().unwrap().clone()
-}
-
-pub fn sound_device() -> Option<String> {
-    SOUND_DEVICE.lock().unwrap().clone()
-}
-
-pub fn update_sound_device(device: Option<String>) {
-    let (driver_from_device, normalized) = normalize_sound_device_entry(device.as_deref());
-    let mut dirty = false;
-    {
-        let mut sound_device = SOUND_DEVICE.lock().unwrap();
-        if *sound_device != normalized {
-            *sound_device = normalized;
-            dirty = true;
-        }
-    }
-    if let Some(driver) = driver_from_device {
-        let mut sound_driver = SOUND_DRIVER.lock().unwrap();
-        if sound_driver.as_deref() != Some(driver.as_str()) {
-            *sound_driver = Some(driver);
-            dirty = true;
-        }
-    }
-    if dirty {
-        save_without_keymaps();
-    }
-}
-
-pub fn update_sound_driver(driver: Option<String>) {
-    let normalized = normalize_sound_driver(driver.as_deref());
-    {
-        let mut sound_driver = SOUND_DRIVER.lock().unwrap();
-        if *sound_driver == normalized {
-            return;
-        }
-        *sound_driver = normalized;
-    }
-    save_without_keymaps();
 }
 
 pub fn machine_default_noteskin() -> String {

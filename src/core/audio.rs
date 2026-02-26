@@ -1,5 +1,5 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{BufferSize, Sample, SampleFormat, StreamConfig, SupportedBufferSize};
+use cpal::{Sample, SampleFormat, StreamConfig};
 use lewton::inside_ogg::OggStreamReader;
 use log::{error, info, warn};
 use rubato::{
@@ -7,8 +7,6 @@ use rubato::{
     WindowFunction,
 };
 use std::collections::HashMap;
-#[cfg(all(unix, not(target_os = "macos")))]
-use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -323,382 +321,19 @@ fn output_device_name(device: &cpal::Device) -> String {
         .unwrap_or_else(|_| "<unknown>".to_string())
 }
 
-#[derive(Clone, Debug)]
-pub struct OutputDeviceOption {
-    pub label: String,
-    pub token: String,
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct AlsaEndpoint {
-    is_plug: bool,
-    card: u32,
-    dev: u32,
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-impl AlsaEndpoint {
-    fn token(self) -> String {
-        let kind = if self.is_plug { "plughw" } else { "hw" };
-        format!("{kind}:{},{}", self.card, self.dev)
-    }
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-fn parse_alsa_pair(rest: &str) -> Option<(u32, u32)> {
-    let mut parts = rest.split(',');
-    let card = parts.next()?.trim().parse::<u32>().ok()?;
-    let dev = parts.next()?.trim().parse::<u32>().ok()?;
-    Some((card, dev))
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-fn parse_alsa_card_dev_kv(rest: &str) -> Option<(u32, u32)> {
-    let mut card: Option<u32> = None;
-    let mut dev: Option<u32> = None;
-    for part in rest.split(',') {
-        let (key, value) = part.split_once('=')?;
-        let key = key.trim().to_ascii_lowercase();
-        let value = value.trim();
-        if key == "card" {
-            card = value.parse::<u32>().ok();
-        } else if key == "dev" {
-            dev = value.parse::<u32>().ok();
-        }
-    }
-    Some((card?, dev?))
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-fn parse_alsa_endpoint_token(token: &str) -> Option<AlsaEndpoint> {
-    let mut s = token.trim();
-    if s.is_empty() {
-        return None;
-    }
-    let lower = s.to_ascii_lowercase();
-    if lower.starts_with("alsa:") {
-        s = s.get(5..)?;
-    }
-    let lower = s.to_ascii_lowercase();
-    let (is_plug, rest) = if lower.starts_with("plughw:") {
-        (true, s.get(7..)?)
-    } else if lower.starts_with("hw:") {
-        (false, s.get(3..)?)
-    } else {
-        return None;
-    };
-    let (card, dev) = parse_alsa_pair(rest).or_else(|| parse_alsa_card_dev_kv(rest))?;
-    Some(AlsaEndpoint { is_plug, card, dev })
-}
-
-pub fn output_device_options() -> Vec<OutputDeviceOption> {
-    let host = cpal::default_host();
-    let Ok(devices) = host.output_devices() else {
-        return Vec::new();
-    };
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        let mut dedupe: HashSet<String> = HashSet::with_capacity(32);
-        let mut shared = Vec::with_capacity(16);
-        let mut raw_alsa = Vec::with_capacity(16);
-        for (idx, dev) in devices.enumerate() {
-            let desc = dev.description().ok();
-            let name = desc
-                .as_ref()
-                .map(|d| d.name().trim())
-                .filter(|v| !v.is_empty())
-                .map(ToString::to_string)
-                .unwrap_or_else(|| output_device_name(&dev));
-            let driver = desc
-                .as_ref()
-                .and_then(|d| d.driver())
-                .map(str::trim)
-                .filter(|v| !v.is_empty())
-                .map(ToString::to_string);
-            let id_token = dev
-                .id()
-                .ok()
-                .map(|id| id.to_string())
-                .filter(|v| !v.trim().is_empty());
-            if let Some(endpoint) = id_token.as_deref().and_then(parse_alsa_endpoint_token) {
-                let token = endpoint.token();
-                if dedupe.insert(token.clone()) {
-                    let label = format!("{idx}: {name} ({token})");
-                    raw_alsa.push(OutputDeviceOption { label, token });
-                }
-                continue;
-            }
-            let token = id_token
-                .or_else(|| driver.clone())
-                .unwrap_or_else(|| idx.to_string());
-            if !dedupe.insert(token.clone()) {
-                continue;
-            }
-            let label = if let Some(d) = driver.as_deref() {
-                if d.eq_ignore_ascii_case(name.as_str()) {
-                    format!("{idx}: {name}")
-                } else {
-                    format!("{idx}: {name} ({d})")
-                }
-            } else {
-                format!("{idx}: {name}")
-            };
-            shared.push(OutputDeviceOption { label, token });
-        }
-        // Prefer shared/default plugin devices on Linux (PipeWire/Pulse/dmix/etc).
-        if !shared.is_empty() {
-            return shared;
-        }
-        return raw_alsa;
-    }
-    #[cfg(not(all(unix, not(target_os = "macos"))))]
-    {
-        let mut out = Vec::new();
-        for (idx, dev) in devices.enumerate() {
-            let desc = dev.description().ok();
-            let name = desc
-                .as_ref()
-                .map(|d| d.name().trim())
-                .filter(|v| !v.is_empty())
-                .map(ToString::to_string)
-                .unwrap_or_else(|| output_device_name(&dev));
-            let driver = desc
-                .as_ref()
-                .and_then(|d| d.driver())
-                .map(str::trim)
-                .filter(|v| !v.is_empty())
-                .map(ToString::to_string);
-            let id_token = dev
-                .id()
-                .ok()
-                .map(|id| id.to_string())
-                .filter(|v| !v.trim().is_empty());
-            let token = id_token
-                .or_else(|| driver.clone())
-                .unwrap_or_else(|| idx.to_string());
-            let label = if let Some(d) = driver.as_deref() {
-                if d.eq_ignore_ascii_case(name.as_str()) {
-                    format!("{idx}: {name}")
-                } else {
-                    format!("{idx}: {name} ({d})")
-                }
-            } else {
-                format!("{idx}: {name}")
-            };
-            out.push(OutputDeviceOption { label, token });
-        }
-        out
-    }
-}
-
-fn find_output_device_by_token(host: &cpal::Host, token: &str) -> Option<(cpal::Device, String)> {
-    let token = token.trim();
-    if token.is_empty() || token.eq_ignore_ascii_case("auto") {
-        return None;
-    }
-    #[cfg(all(unix, not(target_os = "macos")))]
-    if let Some(target) = parse_alsa_endpoint_token(token) {
-        let mut fallback: Option<cpal::Device> = None;
-        let devices = host.output_devices().ok()?;
-        for dev in devices {
-            let id = dev.id().ok().map(|id| id.to_string());
-            let Some(candidate) = id.as_deref().and_then(parse_alsa_endpoint_token) else {
-                continue;
-            };
-            if candidate.card == target.card && candidate.dev == target.dev {
-                if candidate.is_plug == target.is_plug {
-                    return Some((
-                        dev,
-                        format!("ALSA token '{}' via exact card/dev match", target.token()),
-                    ));
-                }
-                if fallback.is_none() {
-                    fallback = Some(dev);
-                }
-            }
-        }
-        if let Some(dev) = fallback {
-            return Some((
-                dev,
-                format!("ALSA token '{token}' via card/dev match (kind adjusted)"),
-            ));
-        }
-    }
-    let token_lc = token.to_ascii_lowercase();
-    let wanted_index = token.parse::<usize>().ok();
-
-    for pass in 0..2 {
-        let fuzzy = pass != 0;
-        let devices = host.output_devices().ok()?;
-        for (idx, dev) in devices.enumerate() {
-            let id = dev.id().ok();
-            let id_full = id.as_ref().map(ToString::to_string);
-            let id_backend = id.as_ref().map(|id| id.1.as_str());
-            let desc = dev.description().ok();
-            let name = desc.as_ref().map(|d| d.name());
-            let driver = desc.as_ref().and_then(|d| d.driver());
-
-            if !fuzzy {
-                if wanted_index.is_some_and(|want| idx == want) {
-                    return Some((dev, format!("device index {idx}")));
-                }
-                if id_full
-                    .as_deref()
-                    .is_some_and(|v| v.eq_ignore_ascii_case(token))
-                {
-                    return Some((dev, format!("device id '{}'", id_full.unwrap_or_default())));
-                }
-                if id_backend.is_some_and(|v| v.eq_ignore_ascii_case(token)) {
-                    return Some((dev, format!("backend id '{token}'")));
-                }
-                if driver.is_some_and(|v| v.eq_ignore_ascii_case(token)) {
-                    return Some((dev, format!("driver '{token}'")));
-                }
-                if name.is_some_and(|v| v.eq_ignore_ascii_case(token)) {
-                    return Some((dev, format!("name '{token}'")));
-                }
-                continue;
-            }
-
-            if id_full
-                .as_deref()
-                .is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
-            || id_backend.is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
-            || driver.is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
-            || name.is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
-            {
-                return Some((dev, format!("substring '{token}'")));
-            }
-        }
-    }
-    None
-}
-
-fn select_output_host(sound_driver: Option<&str>) -> cpal::Host {
-    let requested = sound_driver
-        .map(str::trim)
-        .filter(|v| !v.is_empty() && !v.eq_ignore_ascii_case("auto"));
-    let Some(driver) = requested else {
-        return cpal::default_host();
-    };
-    let wanted = driver.to_ascii_lowercase();
-    for host_id in cpal::available_hosts() {
-        let dbg = format!("{host_id:?}").to_ascii_lowercase();
-        let disp = host_id.to_string().to_ascii_lowercase();
-        if dbg == wanted || disp == wanted {
-            if let Ok(host) = cpal::host_from_id(host_id) {
-                return host;
-            }
-        }
-    }
-    warn!(
-        "SoundDriver '{driver}' did not match any available host; using default host '{}'.",
-        cpal::default_host().id()
-    );
-    cpal::default_host()
-}
-
-fn is_alsa_host(host: &cpal::Host) -> bool {
-    host.id().to_string().eq_ignore_ascii_case("alsa")
-        || format!("{:?}", host.id()).eq_ignore_ascii_case("alsa")
-}
-
-fn apply_low_latency_buffer_size(
-    host: &cpal::Host,
-    default_config: &cpal::SupportedStreamConfig,
-    stream_config: &mut StreamConfig,
-) {
-    if !is_alsa_host(host) {
-        return;
-    }
-    let target_frames = std::env::var("DEADSYNC_ALSA_BUFFER_FRAMES")
-        .ok()
-        .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(256);
-    match default_config.buffer_size() {
-        SupportedBufferSize::Range { min, max } => {
-            let chosen = target_frames.clamp(*min, *max);
-            stream_config.buffer_size = BufferSize::Fixed(chosen);
-            info!(
-                "ALSA low-latency buffer request: {} frames (target {}, supported {}..{}).",
-                chosen, target_frames, min, max
-            );
-        }
-        SupportedBufferSize::Unknown => {
-            info!("ALSA buffer range unknown; keeping default buffer size.");
-        }
-    }
-}
-
-fn select_output_device(
-    mut host: cpal::Host,
-    sound_device: Option<&str>,
-) -> Result<(cpal::Host, cpal::Device, String), String> {
-    let requested = sound_device
-        .map(str::trim)
-        .filter(|v| !v.is_empty() && !v.eq_ignore_ascii_case("auto"));
-    if let Some(token) = requested {
-        if let Ok(device_id) = token.parse::<cpal::DeviceId>() {
-            if let Ok(forced_host) = cpal::host_from_id(device_id.0) {
-                host = forced_host;
-            } else {
-                warn!(
-                    "SoundDevice '{token}' requested host '{}' which is unavailable.",
-                    device_id.0
-                );
-            }
-
-            if let Some(dev) = host.device_by_id(&device_id) {
-                return Ok((host, dev, format!("device id '{device_id}'")));
-            }
-            warn!(
-                "SoundDevice '{token}' parsed as a device id, but no output device matched on host '{}'.",
-                host.id()
-            );
-        }
-
-        if let Some((dev, matched_by)) = find_output_device_by_token(&host, token) {
-            return Ok((host, dev, format!("token '{token}' via {matched_by}")));
-        }
-        warn!(
-            "SoundDevice '{token}' did not match any output device on host '{}'; using default output.",
-            host.id()
-        );
-    }
-
-    host.default_output_device()
-        .ok_or_else(|| "no audio output device".to_string())
-        .map(|dev| (host, dev, "default output device".to_string()))
-}
-
 fn init_engine_and_thread() -> AudioEngine {
     let (command_sender, command_receiver) = channel();
 
     let cfg = crate::config::get();
-    let requested_sound_driver = crate::config::sound_driver();
-    let requested_sound_device = crate::config::sound_device();
-    let host = select_output_host(requested_sound_driver.as_deref());
-    let (host, device, selected_by) =
-        select_output_device(host, requested_sound_device.as_deref())
-            .expect("no audio output device");
+    let host = cpal::default_host();
+    let device = host
+        .default_output_device()
+        .expect("no audio output device");
     let device_name = output_device_name(&device);
-    let selected_device_id = device.id().ok();
-    let default_device_id = host.default_output_device().and_then(|dev| dev.id().ok());
     let default_config = device
         .default_output_config()
         .expect("no default audio config");
     let mut stream_config: StreamConfig = default_config.clone().into();
-
-    info!(
-        "Audio SoundDriver option: {}",
-        requested_sound_driver.as_deref().unwrap_or("Auto")
-    );
-    info!(
-        "Audio SoundDevice option: {}",
-        requested_sound_device.as_deref().unwrap_or("Auto")
-    );
-    info!("Audio output device selection: {selected_by}.");
 
     // Log all available output devices and their supported configurations for debugging.
     match host.output_devices() {
@@ -706,20 +341,7 @@ fn init_engine_and_thread() -> AudioEngine {
             info!("Enumerating audio output devices for host {:?}:", host.id());
             for (idx, dev) in devices.enumerate() {
                 let name = output_device_name(&dev);
-                let is_selected = match (&selected_device_id, dev.id()) {
-                    (Some(selected_id), Ok(id)) => *selected_id == id,
-                    _ => false,
-                };
-                let is_default = match (&default_device_id, dev.id()) {
-                    (Some(default_id), Ok(id)) => *default_id == id,
-                    _ => false,
-                };
-                let tag = match (is_selected, is_default) {
-                    (true, true) => " (selected, default)",
-                    (true, false) => " (selected)",
-                    (false, true) => " (default)",
-                    (false, false) => "",
-                };
+                let tag = if name == device_name { " (default)" } else { "" };
                 info!("  Device {idx}: '{name}'{tag}");
                 match dev.supported_output_configs() {
                     Ok(configs) => {
@@ -728,19 +350,7 @@ fn init_engine_and_thread() -> AudioEngine {
                             let max = cfg_range.max_sample_rate();
                             let channels = cfg_range.channels();
                             let fmt = cfg_range.sample_format();
-                            match cfg_range.buffer_size() {
-                                SupportedBufferSize::Range {
-                                    min: bmin,
-                                    max: bmax,
-                                } => info!(
-                                    "    - {fmt:?}, {channels} ch, {min}..{max} Hz, buf {bmin}..{bmax} frames"
-                                ),
-                                SupportedBufferSize::Unknown => {
-                                    info!(
-                                        "    - {fmt:?}, {channels} ch, {min}..{max} Hz, buf unknown"
-                                    );
-                                }
-                            }
+                            info!("    - {fmt:?}, {channels} ch, {min}..{max} Hz");
                         }
                     }
                     Err(e) => {
@@ -767,19 +377,17 @@ fn init_engine_and_thread() -> AudioEngine {
             stream_config.sample_rate
         );
     }
-    apply_low_latency_buffer_size(&host, &default_config, &mut stream_config);
 
     info!(
-        "Audio device: '{}' (sample_format={:?}, default={} Hz, channels={}, default_buf={:?}).",
+        "Audio device: '{}' (sample_format={:?}, default={} Hz, channels={}).",
         device_name,
         default_config.sample_format(),
         default_config.sample_rate(),
-        default_config.channels(),
-        default_config.buffer_size()
+        default_config.channels()
     );
     info!(
-        "Audio output stream config: {} Hz, {} ch, buf={:?} (may be resampled by OS/driver).",
-        stream_config.sample_rate, stream_config.channels, stream_config.buffer_size
+        "Audio output stream config: {} Hz, {} ch (may be resampled by OS/driver).",
+        stream_config.sample_rate, stream_config.channels
     );
 
     let device_sample_rate = stream_config.sample_rate;
