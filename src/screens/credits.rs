@@ -220,7 +220,8 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
 
-    let cinematic_t = ease_out_cubic((state.enter_elapsed / CINEMATIC_ANIM_SECONDS).clamp(0.0, 1.0));
+    let cinematic_t =
+        ease_out_cubic((state.enter_elapsed / CINEMATIC_ANIM_SECONDS).clamp(0.0, 1.0));
     let tint_alpha = CINEMATIC_TINT_MAX_ALPHA * cinematic_t;
     if tint_alpha > 0.0 {
         actors.push(act!(quad:
@@ -249,7 +250,8 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
                 continue;
             }
 
-            let y = base_y + (idx as f32 + ITEM_PADDING_START) * LINE_HEIGHT - scroll_px + cycle_offset;
+            let y =
+                base_y + (idx as f32 + ITEM_PADDING_START) * LINE_HEIGHT - scroll_px + cycle_offset;
             if y < -LINE_HEIGHT || y > screen_h + LINE_HEIGHT {
                 continue;
             }

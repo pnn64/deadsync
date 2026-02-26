@@ -600,6 +600,12 @@ fn smoothstep01(t: f32) -> f32 {
 }
 
 #[inline(always)]
+fn mini_judgment_zoom(profile: &profile::Profile) -> f32 {
+    let mini = (profile.mini_percent as f32).clamp(-100.0, 150.0) / 100.0;
+    0.5_f32.powf(mini).min(1.0)
+}
+
+#[inline(always)]
 fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
     let fmt_float = |v: f32| -> String {
         let s = cached_fmt2_f32(v);
@@ -1661,6 +1667,8 @@ pub fn build(
     };
     let zmod_layout = zmod_layout_ys(profile, judgment_y, combo_y_base, reverse_scroll);
     let mc_font_name = zmod_small_combo_font(profile.combo_font);
+    // ITGmania Player::Update: min(pow(0.5, mini + tiny), 1.0); deadsync currently supports Mini.
+    let judgment_zoom_mod = mini_judgment_zoom(profile);
 
     if let Some(ns) = &state.noteskin[player_idx] {
         let timing = &state.timing_players[player_idx];
@@ -3662,11 +3670,7 @@ pub fn build(
     // Combo Milestone Explosions (100 / 1000 combo)
     if !profile.hide_combo && !profile.hide_combo_explosions && !p.combo_milestones.is_empty() {
         let combo_center_x = playfield_center_x;
-        let combo_center_y = if state.reverse_scroll[player_idx] {
-            screen_center_y() - COMBO_OFFSET_FROM_CENTER
-        } else {
-            screen_center_y() + COMBO_OFFSET_FROM_CENTER
-        } + notefield_offset_y;
+        let combo_center_y = zmod_layout.combo_y;
         let player_color = state.player_color;
         let ease_out_quad = |t: f32| -> f32 {
             let t = t.clamp(0.0, 1.0);
@@ -3679,7 +3683,7 @@ pub fn build(
                     let explosion_duration = 0.5_f32;
                     if elapsed <= explosion_duration {
                         let progress = (elapsed / explosion_duration).clamp(0.0, 1.0);
-                        let zoom = 2.0 - progress;
+                        let zoom = (2.0 - progress) * judgment_zoom_mod;
                         let alpha = (0.5 * (1.0 - progress)).max(0.0);
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let rotation = 90.0 * direction * progress;
@@ -3697,7 +3701,7 @@ pub fn build(
                     if elapsed <= COMBO_HUNDRED_MILESTONE_DURATION {
                         let progress = (elapsed / COMBO_HUNDRED_MILESTONE_DURATION).clamp(0.0, 1.0);
                         let eased = ease_out_quad(progress);
-                        let zoom = 0.25 + (2.0 - 0.25) * eased;
+                        let zoom = (0.25 + (2.0 - 0.25) * eased) * judgment_zoom_mod;
                         let alpha = (0.6 * (1.0 - eased)).max(0.0);
                         let rotation = 10.0 + (0.0 - 10.0) * eased;
                         hud_actors.push(act!(sprite("combo_100milestone_splode.png"):
@@ -3712,7 +3716,8 @@ pub fn build(
                         let mini_duration = 0.4_f32;
                         if elapsed <= mini_duration {
                             let mini_progress = (elapsed / mini_duration).clamp(0.0, 1.0);
-                            let mini_zoom = 0.25 + (1.8 - 0.25) * mini_progress;
+                            let mini_zoom =
+                                (0.25 + (1.8 - 0.25) * mini_progress) * judgment_zoom_mod;
                             let mini_alpha = (1.0 - mini_progress).max(0.0);
                             let mini_rotation = 10.0 + (0.0 - 10.0) * mini_progress;
                             hud_actors.push(act!(sprite("combo_100milestone_minisplode.png"):
@@ -3732,9 +3737,9 @@ pub fn build(
                     if elapsed <= COMBO_THOUSAND_MILESTONE_DURATION {
                         let progress =
                             (elapsed / COMBO_THOUSAND_MILESTONE_DURATION).clamp(0.0, 1.0);
-                        let zoom = 0.25 + (3.0 - 0.25) * progress;
+                        let zoom = (0.25 + (3.0 - 0.25) * progress) * judgment_zoom_mod;
                         let alpha = (0.7 * (1.0 - progress)).max(0.0);
-                        let x_offset = 100.0 * progress;
+                        let x_offset = 100.0 * progress * judgment_zoom_mod;
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let final_x = combo_center_x + x_offset * direction;
                             hud_actors.push(act!(sprite("combo_1000milestone_swoosh.png"):
@@ -3761,7 +3766,7 @@ pub fn build(
                 hud_actors.push(act!(text:
                     font(font_name): settext(p.miss_combo.to_string()):
                     align(0.5, 0.5): xy(playfield_center_x, combo_y):
-                    zoom(0.75): horizalign(center): shadowlength(1.0):
+                    zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
                     diffuse(1.0, 0.0, 0.0, 1.0):
                     z(90)
                 ));
@@ -3834,7 +3839,7 @@ pub fn build(
                 hud_actors.push(act!(text:
                     font(font_name): settext(p.combo.to_string()):
                     align(0.5, 0.5): xy(playfield_center_x, combo_y):
-                    zoom(0.75): horizalign(center): shadowlength(1.0):
+                    zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
                     diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
                     z(90)
                 ));
@@ -4523,7 +4528,7 @@ pub fn build(
                     let t = (elapsed - 0.7) / 0.2;
                     let ease_t = t.powi(2);
                     0.75 * (1.0 - ease_t)
-                };
+                } * judgment_zoom_mod;
                 let offset_sec = judgment.time_error_ms / 1000.0;
                 let use_fa_plus_window = profile.show_fa_plus_window;
                 // Map JudgeGrade + TimingWindow to a row index in the 7-row sheet:
@@ -4614,16 +4619,13 @@ pub fn build(
         if elapsed >= HOLD_JUDGMENT_TOTAL_DURATION {
             continue;
         }
-        // Hold judgments scale with Mini/Tiny in ITGmania as pow(0.5, mini+tiny), clamped to 1.0.
-        let mini_for_holds = ((profile.mini_percent as f32).clamp(-100.0, 150.0) / 100.0).max(0.0);
-        let hold_judgment_zoom_mod = 0.5_f32.powf(mini_for_holds).min(1.0);
         let zoom = if elapsed < 0.3 {
             let progress = (elapsed / 0.3).clamp(0.0, 1.0);
             (HOLD_JUDGMENT_INITIAL_ZOOM
                 + progress * (HOLD_JUDGMENT_FINAL_ZOOM - HOLD_JUDGMENT_INITIAL_ZOOM))
-                * hold_judgment_zoom_mod
+                * judgment_zoom_mod
         } else {
-            HOLD_JUDGMENT_FINAL_ZOOM * hold_judgment_zoom_mod
+            HOLD_JUDGMENT_FINAL_ZOOM * judgment_zoom_mod
         };
         let frame_index = match render_info.result {
             HoldResult::Held => 0,

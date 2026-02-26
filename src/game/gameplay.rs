@@ -2309,7 +2309,9 @@ fn step_stats_notefield_width(
     field_zoom: f32,
 ) -> Option<f32> {
     let ns = noteskin?;
-    let cols = cols_per_player.min(ns.column_xs.len()).min(ns.receptor_off.len());
+    let cols = cols_per_player
+        .min(ns.column_xs.len())
+        .min(ns.receptor_off.len());
     if cols == 0 {
         return None;
     }

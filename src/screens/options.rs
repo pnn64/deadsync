@@ -5,13 +5,13 @@ use crate::core::gfx::BackendType;
 use crate::core::space::{screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::config::{
-    self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType,
-    SelectMusicPatternInfoMode, SimpleIni,
+    self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, SelectMusicPatternInfoMode,
+    SimpleIni,
 };
 use crate::core::audio;
-use crate::core::input::{InputEvent, VirtualAction};
 #[cfg(target_os = "windows")]
 use crate::core::input::WindowsPadBackend;
+use crate::core::input::{InputEvent, VirtualAction};
 use crate::game::parsing::{noteskin as noteskin_parser, simfile as song_loading};
 use crate::game::{profile, scores};
 use crate::screens::{Screen, ScreenAction};
@@ -518,8 +518,7 @@ const ADVANCED_ROW_FAST_LOAD: &str = "Fast Load";
 const COURSE_ROW_SHOW_RANDOM: &str = "Show Random Courses";
 const COURSE_ROW_SHOW_MOST_PLAYED: &str = "Show Most Played";
 const COURSE_ROW_SHOW_INDIVIDUAL_SCORES: &str = "Show Individual Scores for Course";
-const COURSE_ROW_AUTOSUBMIT_INDIVIDUAL_SCORES: &str =
-    "Autosubmit Scores in Courses Individually";
+const COURSE_ROW_AUTOSUBMIT_INDIVIDUAL_SCORES: &str = "Autosubmit Scores in Courses Individually";
 const ONLINE_SCORING_ROW_GS_BS: &str = "GrooveStats / BoogieStats Options";
 const ONLINE_SCORING_ROW_ARROWCLOUD: &str = "ArrowCloud Options";
 const ONLINE_SCORING_ROW_SCORE_IMPORT: &str = "Score Import";
@@ -666,8 +665,7 @@ const MAX_FPS_STEP: u16 = 5;
 const CENTERED_P1_NOTEFIELD_CHOICES: [&str; 2] = ["Off", "On"];
 const ADVANCED_BANNER_COLOR_DEPTH_CHOICES: [&str; 3] = ["8", "16", "32"];
 const ADVANCED_BANNER_MIN_DIMENSION_CHOICES: [&str; 6] = ["16", "32", "64", "128", "256", "512"];
-const ADVANCED_BANNER_SCALE_DIVISOR_CHOICES: [&str; 8] =
-    ["1", "2", "3", "4", "5", "6", "7", "8"];
+const ADVANCED_BANNER_SCALE_DIVISOR_CHOICES: [&str; 8] = ["1", "2", "3", "4", "5", "6", "7", "8"];
 const ADVANCED_BANNER_COLOR_DEPTH_VALUES: [u8; 3] = [8, 16, 32];
 const ADVANCED_BANNER_MIN_DIMENSION_VALUES: [u16; 6] = [16, 32, 64, 128, 256, 512];
 const ADVANCED_BANNER_SCALE_DIVISOR_VALUES: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -862,10 +860,7 @@ pub const INPUT_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         name: INPUT_ROW_OPTIONS,
-        help: &[
-            "Open additional input settings.",
-            "Gamepad Backend",
-        ],
+        help: &["Open additional input settings.", "Gamepad Backend"],
     },
     Item {
         name: "Exit",
@@ -1759,7 +1754,11 @@ fn graphics_show_software_threads(state: &State) -> bool {
     selected_video_renderer(state) == BackendType::Software
 }
 
-fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow<'_>]) -> Vec<usize> {
+fn submenu_visible_row_indices(
+    state: &State,
+    kind: SubmenuKind,
+    rows: &[SubRow<'_>],
+) -> Vec<usize> {
     match kind {
         SubmenuKind::Graphics => {
             let show_sw = graphics_show_software_threads(state);
@@ -3169,7 +3168,8 @@ pub fn init() -> State {
         .sub_choice_indices_advanced
         .get_mut(ADVANCED_SONG_PARSING_THREADS_ROW_INDEX)
     {
-        *slot = software_thread_choice_index(&state.software_thread_choices, cfg.song_parsing_threads);
+        *slot =
+            software_thread_choice_index(&state.software_thread_choices, cfg.song_parsing_threads);
     }
     set_choice_by_label(
         &mut state.sub_choice_indices_advanced,
@@ -3834,18 +3834,17 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 desired_resolution,
                 desired_monitor,
                 desired_max_fps,
-            ) =
-                if leaving_graphics {
-                    (
-                        Some(selected_video_renderer(state)),
-                        Some(selected_display_mode(state)),
-                        Some(selected_resolution(state)),
-                        Some(selected_display_monitor(state)),
-                        Some(selected_max_fps(state)),
-                    )
-                } else {
-                    (None, None, None, None, None)
-                };
+            ) = if leaving_graphics {
+                (
+                    Some(selected_video_renderer(state)),
+                    Some(selected_display_mode(state)),
+                    Some(selected_resolution(state)),
+                    Some(selected_display_monitor(state)),
+                    Some(selected_max_fps(state)),
+                )
+            } else {
+                (None, None, None, None, None)
+            };
             let step = if SUBMENU_FADE_DURATION > 0.0 {
                 dt / SUBMENU_FADE_DURATION
             } else {
@@ -4419,7 +4418,9 @@ fn apply_submenu_choice_delta(
         } else if row.label == SELECT_MUSIC_ROW_NATIVE_LANGUAGE {
             config::update_translated_titles(translated_titles_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_WHEEL_SPEED {
-            config::update_music_wheel_switch_speed(music_wheel_scroll_speed_from_choice(new_index));
+            config::update_music_wheel_switch_speed(music_wheel_scroll_speed_from_choice(
+                new_index,
+            ));
         } else if row.label == SELECT_MUSIC_ROW_CDTITLES {
             config::update_show_select_music_cdtitles(new_index == 1);
         } else if row.label == SELECT_MUSIC_ROW_WHEEL_GRADES {
@@ -4795,7 +4796,8 @@ pub fn handle_input(
                         }
                     } else if matches!(kind, SubmenuKind::ScoreImport) {
                         let rows = submenu_rows(kind);
-                        let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row)
+                        let Some(row_idx) =
+                            submenu_visible_row_to_actual(state, kind, selected_row)
                         else {
                             return ScreenAction::None;
                         };
@@ -5045,14 +5047,7 @@ fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
     }
 
     state.graphics_prev_visible_rows = visible_rows;
-    update_row_tweens(
-        &mut state.row_tweens,
-        total_rows,
-        selected,
-        s,
-        list_y,
-        dt,
-    );
+    update_row_tweens(&mut state.row_tweens, total_rows, selected, s, list_y, dt);
 }
 
 const fn advanced_parent_row(actual_idx: usize) -> Option<usize> {
@@ -5136,14 +5131,7 @@ fn update_advanced_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
     }
 
     state.advanced_prev_visible_rows = visible_rows;
-    update_row_tweens(
-        &mut state.row_tweens,
-        total_rows,
-        selected,
-        s,
-        list_y,
-        dt,
-    );
+    update_row_tweens(&mut state.row_tweens, total_rows, selected, s, list_y, dt);
 }
 
 const fn select_music_parent_row(actual_idx: usize) -> Option<usize> {
@@ -5225,14 +5213,7 @@ fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f3
     }
 
     state.select_music_prev_visible_rows = visible_rows;
-    update_row_tweens(
-        &mut state.row_tweens,
-        total_rows,
-        selected,
-        s,
-        list_y,
-        dt,
-    );
+    update_row_tweens(&mut state.row_tweens, total_rows, selected, s, list_y, dt);
 }
 
 #[inline(always)]
@@ -5306,8 +5287,7 @@ fn submenu_cursor_dest(
         return None;
     }
     let selected_row = state.sub_selected.min(total_rows - 1);
-    let row_mid_y =
-        row_mid_y_for_cursor(state, selected_row, total_rows, selected_row, s, list_y);
+    let row_mid_y = row_mid_y_for_cursor(state, selected_row, total_rows, selected_row, s, list_y);
     let value_zoom = 0.835_f32;
     let label_bg_w = SUB_LABEL_COL_W * s;
     let item_col_left = list_x + label_bg_w;

@@ -1022,12 +1022,13 @@ fn rebuild_displayed_entries(state: &mut State) {
     state.entries.reserve(state.all_entries.len());
     for entry in &state.all_entries {
         let include = match entry {
-            MusicWheelEntry::Song(song) => state.course_meta_by_path.get(&song.simfile_path).is_none_or(
-                |meta| {
+            MusicWheelEntry::Song(song) => state
+                .course_meta_by_path
+                .get(&song.simfile_path)
+                .is_none_or(|meta| {
                     (cfg.show_random_courses || !meta.has_random_entries)
                         && (cfg.show_most_played_courses || !meta.has_most_played_entries)
-                },
-            ),
+                }),
             _ => true,
         };
         if include {
@@ -1054,7 +1055,9 @@ fn rebuild_displayed_entries(state: &mut State) {
     {
         state.selected_index = index;
     }
-    state.selected_index = state.selected_index.min(state.entries.len().saturating_sub(1));
+    state.selected_index = state
+        .selected_index
+        .min(state.entries.len().saturating_sub(1));
     state.prev_selected_index = state.selected_index;
     state.wheel_offset_from_selection = 0.0;
     state.time_since_selection_change = 0.0;

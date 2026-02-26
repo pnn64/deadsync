@@ -208,8 +208,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let player_side = profile::get_session_player_side();
     let is_p2_single =
         play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2;
-    let centered_single_notefield =
-        play_style == profile::PlayStyle::Single && state.num_players == 1 && cfg.center_1player_notefield;
+    let centered_single_notefield = play_style == profile::PlayStyle::Single
+        && state.num_players == 1
+        && cfg.center_1player_notefield;
     let player_color = if is_p2_single {
         color::decorative_rgba(state.active_color_index - 2)
     } else {

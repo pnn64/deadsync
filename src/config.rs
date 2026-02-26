@@ -642,7 +642,11 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     ));
     content.push_str(&format!(
         "CourseShowRandom={}\n",
-        if default.show_random_courses { "1" } else { "0" }
+        if default.show_random_courses {
+            "1"
+        } else {
+            "0"
+        }
     ));
     content.push_str(&format!(
         "DefaultFailType={}\n",
@@ -2411,11 +2415,7 @@ fn save_without_keymaps() {
     ));
     content.push_str(&format!(
         "SelectMusicWheelLamps={}\n",
-        if cfg.show_music_wheel_lamps {
-            "1"
-        } else {
-            "0"
-        }
+        if cfg.show_music_wheel_lamps { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "SelectMusicPreviews={}\n",
@@ -2515,11 +2515,7 @@ fn save_without_keymaps() {
     ));
     content.push_str(&format!(
         "MachineShowGameOver={}\n",
-        if cfg.machine_show_gameover {
-            "1"
-        } else {
-            "0"
-        }
+        if cfg.machine_show_gameover { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "MachineShowNameEntry={}\n",

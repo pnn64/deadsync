@@ -25,8 +25,8 @@ use winit::{
 };
 
 use log::{error, info, warn};
-use std::cmp;
 use std::borrow::Cow;
+use std::cmp;
 use std::collections::{HashMap, HashSet};
 use std::{
     error::Error,
@@ -534,7 +534,10 @@ fn machine_first_post_select_target(cfg: &config::Config) -> CurrentScreen {
 }
 
 #[inline(always)]
-fn machine_resolve_post_select_target(cfg: &config::Config, target: CurrentScreen) -> CurrentScreen {
+fn machine_resolve_post_select_target(
+    cfg: &config::Config,
+    target: CurrentScreen,
+) -> CurrentScreen {
     match target {
         CurrentScreen::EvaluationSummary => {
             if cfg.machine_show_eval_summary {
@@ -3180,7 +3183,11 @@ impl App {
             }
             CurrentScreen::Initials => {
                 let stages = self.post_select_display_stages();
-                initials::get_actors(&self.state.screens.initials_state, &stages, &self.asset_manager)
+                initials::get_actors(
+                    &self.state.screens.initials_state,
+                    &stages,
+                    &self.asset_manager,
+                )
             }
             CurrentScreen::GameOver => gameover::get_actors(
                 &self.state.screens.gameover_state,
@@ -4208,8 +4215,12 @@ impl App {
                 CurrentScreen::SelectPlayMode => {
                     self.state.screens.select_play_mode_state.active_color_index
                 }
-                CurrentScreen::SelectStyle => self.state.screens.select_style_state.active_color_index,
-                CurrentScreen::SelectColor => self.state.screens.select_color_state.active_color_index,
+                CurrentScreen::SelectStyle => {
+                    self.state.screens.select_style_state.active_color_index
+                }
+                CurrentScreen::SelectColor => {
+                    self.state.screens.select_color_state.active_color_index
+                }
                 CurrentScreen::SelectProfile => {
                     self.state.screens.select_profile_state.active_color_index
                 }
@@ -4685,10 +4696,7 @@ impl App {
             self.state.screens.initials_state = initials::init();
             self.state.screens.initials_state.active_color_index = color_idx;
             let display_stages = self.post_select_display_stages().into_owned();
-            initials::set_highscore_lists(
-                &mut self.state.screens.initials_state,
-                &display_stages,
-            );
+            initials::set_highscore_lists(&mut self.state.screens.initials_state, &display_stages);
 
             if let Some(backend) = self.backend.as_mut() {
                 for stage in display_stages.iter() {
