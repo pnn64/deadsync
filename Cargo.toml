@@ -35,7 +35,7 @@ wgpu = { version = "28.0.0", features = ["dx12", "vulkan", "gles"] }
 pollster = "0.4.0"
 
 # Audio
-cpal = "0.16.0"
+cpal = "0.17.3"
 lewton = "0.10.2"
 rubato = "0.16.2"
 memmap2 = "0.9.10"
