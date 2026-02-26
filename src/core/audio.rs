@@ -3,8 +3,7 @@ use cpal::{Sample, SampleFormat, StreamConfig};
 use lewton::inside_ogg::OggStreamReader;
 use log::{error, info, warn};
 use rubato::{
-    Async, FixedAsync, Indexing, Resampler, SincInterpolationParameters, SincInterpolationType,
-    WindowFunction,
+    Resampler, SincFixedOut, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
 use std::collections::HashMap;
 use std::fs::File;
@@ -15,118 +14,6 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
-
-mod rubato_adapter {
-    use rubato::audioadapter::{Adapter, AdapterMut};
-
-    pub struct PlanarSlice<'a, T> {
-        buf: &'a [Vec<T>],
-        channels: usize,
-        frames: usize,
-    }
-
-    impl<'a, T> PlanarSlice<'a, T> {
-        pub fn new(buf: &'a [Vec<T>], channels: usize, frames: usize) -> Self {
-            Self {
-                buf,
-                channels,
-                frames,
-            }
-        }
-    }
-
-    impl<'a, T> Adapter<'a, T> for PlanarSlice<'a, T>
-    where
-        T: Clone + 'a,
-    {
-        unsafe fn read_sample_unchecked(&self, channel: usize, frame: usize) -> T {
-            unsafe { self.buf.get_unchecked(channel).get_unchecked(frame).clone() }
-        }
-
-        fn channels(&self) -> usize {
-            self.channels
-        }
-
-        fn frames(&self) -> usize {
-            self.frames
-        }
-
-        fn copy_from_channel_to_slice(
-            &self,
-            channel: usize,
-            skip: usize,
-            slice: &mut [T],
-        ) -> usize {
-            if channel >= self.channels || skip >= self.frames {
-                return 0;
-            }
-            let frames_to_write = (self.frames - skip).min(slice.len());
-            if frames_to_write == 0 {
-                return 0;
-            }
-            slice[..frames_to_write]
-                .clone_from_slice(&self.buf[channel][skip..skip + frames_to_write]);
-            frames_to_write
-        }
-    }
-
-    pub struct InterleavedMutSlice<'a, T> {
-        buf: &'a mut [T],
-        channels: usize,
-        frames: usize,
-    }
-
-    impl<'a, T> InterleavedMutSlice<'a, T> {
-        pub fn new(buf: &'a mut [T], channels: usize, frames: usize) -> Self {
-            Self {
-                buf,
-                channels,
-                frames,
-            }
-        }
-
-        #[inline(always)]
-        fn idx(&self, channel: usize, frame: usize) -> usize {
-            frame * self.channels + channel
-        }
-    }
-
-    impl<'a, T> Adapter<'a, T> for InterleavedMutSlice<'a, T>
-    where
-        T: Clone + 'a,
-    {
-        unsafe fn read_sample_unchecked(&self, channel: usize, frame: usize) -> T {
-            let idx = self.idx(channel, frame);
-            unsafe { self.buf.get_unchecked(idx).clone() }
-        }
-
-        fn channels(&self) -> usize {
-            self.channels
-        }
-
-        fn frames(&self) -> usize {
-            self.frames
-        }
-    }
-
-    impl<'a, T> AdapterMut<'a, T> for InterleavedMutSlice<'a, T>
-    where
-        T: Clone + 'a,
-    {
-        unsafe fn write_sample_unchecked(
-            &mut self,
-            channel: usize,
-            frame: usize,
-            value: &T,
-        ) -> bool {
-            let idx = self.idx(channel, frame);
-            unsafe {
-                *self.buf.get_unchecked_mut(idx) = value.clone();
-            }
-            false
-        }
-    }
-}
 
 /* ============================== Public API ============================== */
 
@@ -314,22 +201,14 @@ pub fn get_music_stream_position_seconds() -> f32 {
 
 /* ============================ Engine internals ============================ */
 
-fn output_device_name(device: &cpal::Device) -> String {
-    device
-        .description()
-        .map(|desc| desc.name().to_string())
-        .unwrap_or_else(|_| "<unknown>".to_string())
-}
-
 fn init_engine_and_thread() -> AudioEngine {
     let (command_sender, command_receiver) = channel();
 
-    let cfg = crate::config::get();
     let host = cpal::default_host();
     let device = host
         .default_output_device()
         .expect("no audio output device");
-    let device_name = output_device_name(&device);
+    let device_name = device.name().unwrap_or_else(|_| "<unknown>".to_string());
     let default_config = device
         .default_output_config()
         .expect("no default audio config");
@@ -340,14 +219,15 @@ fn init_engine_and_thread() -> AudioEngine {
         Ok(devices) => {
             info!("Enumerating audio output devices for host {:?}:", host.id());
             for (idx, dev) in devices.enumerate() {
-                let name = output_device_name(&dev);
-                let tag = if name == device_name { " (default)" } else { "" };
+                let name = dev.name().unwrap_or_else(|_| "<unknown>".to_string());
+                let is_default = name == device_name;
+                let tag = if is_default { " (default)" } else { "" };
                 info!("  Device {idx}: '{name}'{tag}");
                 match dev.supported_output_configs() {
                     Ok(configs) => {
                         for cfg_range in configs {
-                            let min = cfg_range.min_sample_rate();
-                            let max = cfg_range.max_sample_rate();
+                            let min = cfg_range.min_sample_rate().0;
+                            let max = cfg_range.max_sample_rate().0;
                             let channels = cfg_range.channels();
                             let fmt = cfg_range.sample_format();
                             info!("    - {fmt:?}, {channels} ch, {min}..{max} Hz");
@@ -364,17 +244,18 @@ fn init_engine_and_thread() -> AudioEngine {
         }
     }
 
+    let cfg = crate::config::get();
     let requested_rate = cfg.audio_sample_rate_hz;
     if let Some(target_hz) = requested_rate {
         info!(
             "Audio sample rate override requested: {} Hz (device default {} Hz).",
-            target_hz, stream_config.sample_rate
+            target_hz, stream_config.sample_rate.0
         );
-        stream_config.sample_rate = target_hz;
+        stream_config.sample_rate = cpal::SampleRate(target_hz);
     } else {
         info!(
             "Audio sample rate override: auto (using device default {} Hz).",
-            stream_config.sample_rate
+            stream_config.sample_rate.0
         );
     }
 
@@ -382,15 +263,15 @@ fn init_engine_and_thread() -> AudioEngine {
         "Audio device: '{}' (sample_format={:?}, default={} Hz, channels={}).",
         device_name,
         default_config.sample_format(),
-        default_config.sample_rate(),
+        default_config.sample_rate().0,
         default_config.channels()
     );
     info!(
         "Audio output stream config: {} Hz, {} ch (may be resampled by OS/driver).",
-        stream_config.sample_rate, stream_config.channels
+        stream_config.sample_rate.0, stream_config.channels
     );
 
-    let device_sample_rate = stream_config.sample_rate;
+    let device_sample_rate = stream_config.sample_rate.0;
     let device_channels = stream_config.channels as usize;
 
     // Spawn the audio manager thread (owns the CPAL stream and command loop)
@@ -867,7 +748,7 @@ fn music_decoder_thread_loop(
     }
 
     'main_loop: loop {
-        // --- rubato Async (fixed output) setup ---
+        // --- rubato SincFixedOut setup ---
         const OUT_FRAMES_PER_CALL: usize = 256;
         // Adjust ratio by 1/rate to speed up (rate>1) or slow down (rate<1)
         let mut current_rate_f32 = f32::from_bits(rate_bits.load(Ordering::Relaxed));
@@ -875,20 +756,18 @@ fn music_decoder_thread_loop(
             current_rate_f32 = 1.0;
         }
         let mut ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
-        let iparams = SincInterpolationParameters {
-            sinc_len: 256,
-            f_cutoff: 0.95,
-            oversampling_factor: 128,
-            interpolation: SincInterpolationType::Linear,
-            window: WindowFunction::BlackmanHarris2,
-        };
-        let mut resampler = Async::<f32>::new_sinc(
+        let mut resampler = SincFixedOut::<f32>::new(
             ratio,
             1.0,
-            &iparams,
+            SincInterpolationParameters {
+                sinc_len: 256,
+                f_cutoff: 0.95,
+                interpolation: SincInterpolationType::Linear,
+                oversampling_factor: 128,
+                window: WindowFunction::BlackmanHarris2,
+            },
             OUT_FRAMES_PER_CALL,
             in_ch,
-            FixedAsync::Output,
         )?;
 
         // --- v1-style start & pre-roll ---
@@ -965,7 +844,6 @@ fn music_decoder_thread_loop(
         }
 
         let mut out_tmp: Vec<i16> = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
-        let mut out_f32: Vec<f32> = vec![0.0; OUT_FRAMES_PER_CALL * in_ch];
 
         // Accumulates decoded input per channel for rubato
         let mut in_planar: Vec<Vec<f32>> = vec![Vec::with_capacity(4096); in_ch];
@@ -984,21 +862,20 @@ fn music_decoder_thread_loop(
 
         // Produce blocks as long as enough input frames are buffered for the next call.
         #[inline(always)]
-        fn try_produce_blocks<F>(
-            resampler: &mut Async<f32>,
+        fn try_produce_blocks(
+            resampler: &mut SincFixedOut<f32>,
             in_planar: &mut [Vec<f32>],
             out_ch: usize,
             out_tmp: &mut Vec<i16>,
-            out_f32: &mut Vec<f32>,
             preroll_out_frames: &mut u64,
             frames_emitted_total: &mut u64,
             fade_spec: Option<(u64, u64)>,
             frames_left_out: &mut Option<u64>,
-            push_block: &mut F,
-        ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>
-        where
-            F: FnMut(&[i16]) -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
-        {
+            push_block: &mut dyn FnMut(
+                &[i16],
+            )
+                -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
+        ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
             let mut produced_any = false;
 
             loop {
@@ -1007,40 +884,32 @@ fn music_decoder_thread_loop(
                     break;
                 }
 
-                let in_ch = resampler.nbr_channels();
-                let out_frames = resampler.output_frames_next();
-                if out_f32.len() < in_ch * out_frames {
-                    out_f32.resize(in_ch * out_frames, 0.0);
+                // Build slice-of-slices without copying
+                let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
+                for ch in in_planar.iter() {
+                    input_slices.push(&ch[..need]);
                 }
 
-                let input = rubato_adapter::PlanarSlice::new(&*in_planar, in_ch, need);
-                let mut output = rubato_adapter::InterleavedMutSlice::new(
-                    &mut out_f32[..(in_ch * out_frames)],
-                    in_ch,
-                    out_frames,
-                );
-                let (in_used, out_used) =
-                    resampler.process_into_buffer(&input, &mut output, None)?;
+                let out = resampler.process(&input_slices, None)?;
 
                 // Drain consumed input
                 for ch in in_planar.iter_mut() {
-                    ch.drain(0..in_used);
+                    ch.drain(0..need);
                 }
 
-                if out_used == 0 {
+                if out.is_empty() {
                     break;
                 }
 
-                let produced_frames = out_used;
+                let produced_frames = out[0].len();
                 out_tmp.clear();
                 out_tmp.reserve(produced_frames * out_ch);
 
                 // Interleave without a needless range loop.
-                for f in 0..produced_frames {
-                    let base = f * in_ch;
+                for (f, _) in out[0].iter().enumerate() {
                     for c in 0..out_ch {
-                        let v = out_f32[base + (c % in_ch)];
-                        let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
+                        let src = out[c % out.len()][f];
+                        let s = (src * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
                         out_tmp.push(s);
                     }
                 }
@@ -1131,13 +1000,18 @@ fn music_decoder_thread_loop(
                 desired_rate = desired_rate.clamp(0.05, 8.0);
                 current_rate_f32 = desired_rate;
                 ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
-                resampler = Async::<f32>::new_sinc(
+                resampler = SincFixedOut::<f32>::new(
                     ratio,
                     1.0,
-                    &iparams,
+                    SincInterpolationParameters {
+                        sinc_len: 256,
+                        f_cutoff: 0.95,
+                        interpolation: SincInterpolationType::Linear,
+                        oversampling_factor: 128,
+                        window: WindowFunction::BlackmanHarris2,
+                    },
                     OUT_FRAMES_PER_CALL,
                     in_ch,
-                    FixedAsync::Output,
                 )?;
             }
             // Stop if cut length has been reached
@@ -1146,7 +1020,6 @@ fn music_decoder_thread_loop(
                 &mut in_planar,
                 out_ch,
                 &mut out_tmp,
-                &mut out_f32,
                 &mut preroll_out_frames,
                 &mut frames_emitted_total,
                 fade_spec,
@@ -1175,40 +1048,26 @@ fn music_decoder_thread_loop(
 
         // --- Flush remainder ---
         if !in_planar.iter().all(std::vec::Vec::is_empty) {
+            // Process the final short chunk using process_partial
+            let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
             let remain = in_planar.iter().map(std::vec::Vec::len).min().unwrap_or(0);
-            let in_ch = resampler.nbr_channels();
-            let out_frames = resampler.output_frames_next();
-            if out_f32.len() < in_ch * out_frames {
-                out_f32.resize(in_ch * out_frames, 0.0);
+            for ch in &in_planar {
+                input_slices.push(&ch[..remain]);
             }
-            let input = rubato_adapter::PlanarSlice::new(&*in_planar, in_ch, remain);
-            let mut output = rubato_adapter::InterleavedMutSlice::new(
-                &mut out_f32[..(in_ch * out_frames)],
-                in_ch,
-                out_frames,
-            );
-            let indexing = Indexing {
-                input_offset: 0,
-                output_offset: 0,
-                partial_len: Some(remain),
-                active_channels_mask: None,
-            };
-            let (_in_used, out_used) =
-                resampler.process_into_buffer(&input, &mut output, Some(&indexing))?;
+            let out = resampler.process_partial(Some(&input_slices), None)?;
             for ch in &mut in_planar {
                 ch.clear();
             }
 
-            if out_used > 0 {
-                let produced_frames = out_used;
+            if !out.is_empty() {
+                let produced_frames = out[0].len();
                 out_tmp.clear();
                 out_tmp.reserve(produced_frames * out_ch);
 
                 // Interleave without a needless range loop.
-                for f in 0..produced_frames {
-                    let base = f * in_ch;
+                for (f, _) in out[0].iter().enumerate() {
                     for c in 0..out_ch {
-                        let v = out_f32[base + (c % in_ch)];
+                        let v = out[c % out.len()][f];
                         let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
                         out_tmp.push(s);
                     }
@@ -1242,38 +1101,18 @@ fn music_decoder_thread_loop(
                 }
             }
         }
-
-        // Final tail flush from the resampler (push delayed frames out)
-        let in_ch = resampler.nbr_channels();
-        let out_frames = resampler.output_frames_next();
-        if out_f32.len() < in_ch * out_frames {
-            out_f32.resize(in_ch * out_frames, 0.0);
-        }
-        let empty_input = rubato_adapter::PlanarSlice::new(&*in_planar, in_ch, 0);
-        let mut output = rubato_adapter::InterleavedMutSlice::new(
-            &mut out_f32[..(in_ch * out_frames)],
-            in_ch,
-            out_frames,
-        );
-        let indexing = Indexing {
-            input_offset: 0,
-            output_offset: 0,
-            partial_len: Some(0),
-            active_channels_mask: None,
-        };
-        let (_in_used, out_used) =
-            resampler.process_into_buffer(&empty_input, &mut output, Some(&indexing))?;
-
-        if out_used > 0 {
-            let produced_frames = out_used;
+        // Final tail flush from the resampler
+        // Tail flush of delayed frames
+        let out_tail = resampler.process_partial::<&[f32]>(None, None)?;
+        if !out_tail.is_empty() {
+            let produced_frames = out_tail[0].len();
             out_tmp.clear();
             out_tmp.reserve(produced_frames * out_ch);
 
             // Interleave without a needless range loop.
-            for f in 0..produced_frames {
-                let base = f * in_ch;
+            for (f, _) in out_tail[0].iter().enumerate() {
                 for c in 0..out_ch {
-                    let v = out_f32[base + (c % in_ch)];
+                    let v = out_tail[c % out_tail.len()][f];
                     let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
                     out_tmp.push(s);
                 }
@@ -1338,18 +1177,11 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
     let iparams = SincInterpolationParameters {
         sinc_len: 256,
         f_cutoff: 0.95,
-        oversampling_factor: 128,
         interpolation: SincInterpolationType::Linear,
+        oversampling_factor: 128,
         window: WindowFunction::BlackmanHarris2,
     };
-    let mut resampler = Async::<f32>::new_sinc(
-        ratio,
-        1.0,
-        &iparams,
-        OUT_FRAMES_PER_CALL,
-        in_ch,
-        FixedAsync::Output,
-    )?;
+    let mut resampler = SincFixedOut::<f32>::new(ratio, 1.0, iparams, OUT_FRAMES_PER_CALL, in_ch)?;
 
     info!(
         "SFX decode: '{path}' ({in_ch} ch @ {in_hz} Hz) -> output {out_ch} ch @ {out_hz} Hz (ratio {ratio:.6})."
@@ -1357,7 +1189,6 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
 
     let mut resampled_data: Vec<i16> = Vec::new();
     let mut in_planar: Vec<Vec<f32>> = vec![Vec::with_capacity(4096); in_ch];
-    let mut out_f32: Vec<f32> = vec![0.0; OUT_FRAMES_PER_CALL * in_ch];
 
     while let Some(pkt) = ogg.read_dec_packet_itl()? {
         let frames = pkt.len() / in_ch;
@@ -1380,32 +1211,26 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
                 break;
             }
 
-            let out_frames = resampler.output_frames_next();
-            if out_f32.len() < in_ch * out_frames {
-                out_f32.resize(in_ch * out_frames, 0.0);
+            let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
+            for ch in &in_planar {
+                input_slices.push(&ch[..need]);
             }
-            let input = rubato_adapter::PlanarSlice::new(&in_planar, in_ch, need);
-            let mut output = rubato_adapter::InterleavedMutSlice::new(
-                &mut out_f32[..(in_ch * out_frames)],
-                in_ch,
-                out_frames,
-            );
-            let (in_used, out_used) = resampler.process_into_buffer(&input, &mut output, None)?;
+
+            let out = resampler.process(&input_slices, None)?;
             for ch in &mut in_planar {
-                ch.drain(0..in_used);
+                ch.drain(0..need);
             }
-            if out_used == 0 {
+            if out.is_empty() {
                 break;
             }
 
-            let produced_frames = out_used;
+            let produced_frames = out[0].len();
             resampled_data.reserve(produced_frames * out_ch);
 
             // Interleave without a needless range loop.
-            for f in 0..produced_frames {
-                let base = f * in_ch;
+            for (f, _) in out[0].iter().enumerate() {
                 for c in 0..out_ch {
-                    let v = out_f32[base + (c % in_ch)];
+                    let v = out[c % out.len()][f];
                     let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
                     resampled_data.push(s);
                 }
@@ -1416,33 +1241,20 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
     // Flush any remaining samples
     if !in_planar.iter().all(std::vec::Vec::is_empty) {
         let remain = in_planar.iter().map(std::vec::Vec::len).min().unwrap_or(0);
-        let out_frames = resampler.output_frames_next();
-        if out_f32.len() < in_ch * out_frames {
-            out_f32.resize(in_ch * out_frames, 0.0);
+        let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
+        for ch in &in_planar {
+            input_slices.push(&ch[..remain]);
         }
-        let input = rubato_adapter::PlanarSlice::new(&in_planar, in_ch, remain);
-        let mut output = rubato_adapter::InterleavedMutSlice::new(
-            &mut out_f32[..(in_ch * out_frames)],
-            in_ch,
-            out_frames,
-        );
-        let indexing = Indexing {
-            input_offset: 0,
-            output_offset: 0,
-            partial_len: Some(remain),
-            active_channels_mask: None,
-        };
-        let (_in_used, out_used) =
-            resampler.process_into_buffer(&input, &mut output, Some(&indexing))?;
-        if out_used > 0 {
-            let produced_frames = out_used;
+
+        let out = resampler.process_partial(Some(&input_slices), None)?;
+        if !out.is_empty() {
+            let produced_frames = out[0].len();
             resampled_data.reserve(produced_frames * out_ch);
 
             // Interleave without a needless range loop.
-            for f in 0..produced_frames {
-                let base = f * in_ch;
+            for (f, _) in out[0].iter().enumerate() {
                 for c in 0..out_ch {
-                    let v = out_f32[base + (c % in_ch)];
+                    let v = out[c % out.len()][f];
                     let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
                     resampled_data.push(s);
                 }
@@ -1455,33 +1267,15 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
     }
 
     // Tail flush
-    let out_frames = resampler.output_frames_next();
-    if out_f32.len() < in_ch * out_frames {
-        out_f32.resize(in_ch * out_frames, 0.0);
-    }
-    let empty_input = rubato_adapter::PlanarSlice::new(&in_planar, in_ch, 0);
-    let mut output = rubato_adapter::InterleavedMutSlice::new(
-        &mut out_f32[..(in_ch * out_frames)],
-        in_ch,
-        out_frames,
-    );
-    let indexing = Indexing {
-        input_offset: 0,
-        output_offset: 0,
-        partial_len: Some(0),
-        active_channels_mask: None,
-    };
-    let (_in_used, out_used) =
-        resampler.process_into_buffer(&empty_input, &mut output, Some(&indexing))?;
-    if out_used > 0 {
-        let produced_frames = out_used;
+    let out_tail = resampler.process_partial::<&[f32]>(None, None)?;
+    if !out_tail.is_empty() {
+        let produced_frames = out_tail[0].len();
         resampled_data.reserve(produced_frames * out_ch);
 
         // Interleave without a needless range loop.
-        for f in 0..produced_frames {
-            let base = f * in_ch;
+        for (f, _) in out_tail[0].iter().enumerate() {
             for c in 0..out_ch {
-                let v = out_f32[base + (c % in_ch)];
+                let v = out_tail[c % out_tail.len()][f];
                 let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
                 resampled_data.push(s);
             }

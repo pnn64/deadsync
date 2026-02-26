@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.1.830"
+version = "0.1.831"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -35,9 +35,9 @@ wgpu = { version = "28.0.0", features = ["dx12", "vulkan", "gles"] }
 pollster = "0.4.0"
 
 # Audio
-cpal = "0.17.3"
+cpal = "0.16.0"
 lewton = "0.10.2"
-rubato = "1.0.1"
+rubato = "0.16.2"
 memmap2 = "0.9.10"
 
 # Networking
