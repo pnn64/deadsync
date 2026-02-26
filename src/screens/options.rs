@@ -190,6 +190,7 @@ pub const ITEMS: &[Item] = &[
         name: "Sound Options",
         help: &[
             "Adjust audio output settings and feedback sounds.",
+            "Output Device",
             "Master Volume",
             "SFX Volume",
             "Music Volume",
@@ -515,6 +516,15 @@ const ADVANCED_ROW_BANNER_SCALE_DIVISOR: &str = "Banner Cache Scale Divisor";
 const ADVANCED_ROW_SONG_PARSING_THREADS: &str = "Song Parsing Threads";
 const ADVANCED_ROW_CACHE_SONGS: &str = "Cache Songs";
 const ADVANCED_ROW_FAST_LOAD: &str = "Fast Load";
+const SOUND_ROW_OUTPUT_DEVICE: &str = "Output Device";
+const SOUND_ROW_MASTER_VOLUME: &str = "Master Volume";
+const SOUND_ROW_SFX_VOLUME: &str = "SFX Volume";
+const SOUND_ROW_MUSIC_VOLUME: &str = "Music Volume";
+const SOUND_ROW_SAMPLE_RATE: &str = "Audio Sample Rate";
+const SOUND_ROW_MINE_SOUNDS: &str = "Mine Sounds";
+const SOUND_ROW_GLOBAL_OFFSET: &str = "Global Offset (ms)";
+const SOUND_ROW_RATEMOD_PITCH: &str = "RateMod Preserves Pitch";
+const SOUND_OUTPUT_DEVICE_ROW_INDEX: usize = 0;
 const COURSE_ROW_SHOW_RANDOM: &str = "Show Random Courses";
 const COURSE_ROW_SHOW_MOST_PLAYED: &str = "Show Most Played";
 const COURSE_ROW_SHOW_INDIVIDUAL_SCORES: &str = "Show Individual Scores for Course";
@@ -1073,37 +1083,42 @@ pub const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
 
 pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: "Master Volume",
+        label: SOUND_ROW_OUTPUT_DEVICE,
+        choices: &["Auto"],
+        inline: false,
+    },
+    SubRow {
+        label: SOUND_ROW_MASTER_VOLUME,
         choices: &["100%"],
         inline: false,
     },
     SubRow {
-        label: "SFX Volume",
+        label: SOUND_ROW_SFX_VOLUME,
         choices: &["100%"],
         inline: false,
     },
     SubRow {
-        label: "Music Volume",
+        label: SOUND_ROW_MUSIC_VOLUME,
         choices: &["100%"],
         inline: false,
     },
     SubRow {
-        label: "Audio Sample Rate",
+        label: SOUND_ROW_SAMPLE_RATE,
         choices: &["Auto", "44100 Hz", "48000 Hz"],
         inline: true,
     },
     SubRow {
-        label: "Mine Sounds",
+        label: SOUND_ROW_MINE_SOUNDS,
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: "Global Offset (ms)",
+        label: SOUND_ROW_GLOBAL_OFFSET,
         choices: &["0 ms"],
         inline: false,
     },
     SubRow {
-        label: "RateMod Preserves Pitch",
+        label: SOUND_ROW_RATEMOD_PITCH,
         choices: &["Off", "On"],
         inline: true,
     },
@@ -1111,31 +1126,39 @@ pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
 
 pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     Item {
-        name: "Master Volume",
+        name: SOUND_ROW_OUTPUT_DEVICE,
+        help: &[
+            "Select which output device deadsync uses.",
+            "Linux includes manual ALSA presets such as plughw:0,0.",
+            "This updates [Options] SoundDevice and takes effect on restart.",
+        ],
+    },
+    Item {
+        name: SOUND_ROW_MASTER_VOLUME,
         help: &["Set the overall volume for all audio."],
     },
     Item {
-        name: "SFX Volume",
+        name: SOUND_ROW_SFX_VOLUME,
         help: &["Set the sound-effect volume before master volume is applied."],
     },
     Item {
-        name: "Music Volume",
+        name: SOUND_ROW_MUSIC_VOLUME,
         help: &["Set the music volume before master volume is applied."],
     },
     Item {
-        name: "Audio Sample Rate",
+        name: SOUND_ROW_SAMPLE_RATE,
         help: &["Select an audio output sample rate."],
     },
     Item {
-        name: "Mine Sounds",
+        name: SOUND_ROW_MINE_SOUNDS,
         help: &["Play a sound when mines are hit."],
     },
     Item {
-        name: "Global Offset (ms)",
+        name: SOUND_ROW_GLOBAL_OFFSET,
         help: &["Apply a global audio timing offset in 1 ms steps."],
     },
     Item {
-        name: "RateMod Preserves Pitch",
+        name: SOUND_ROW_RATEMOD_PITCH,
         help: &["Keep pitch constant when rate mods are active."],
     },
     Item {
@@ -2486,6 +2509,17 @@ fn row_choices<'a>(
             .collect();
     }
     if let Some(row) = rows.get(row_idx)
+        && matches!(kind, SubmenuKind::Sound)
+        && row.label == SOUND_ROW_OUTPUT_DEVICE
+    {
+        return state
+            .sound_device_choice_labels
+            .iter()
+            .cloned()
+            .map(Cow::Owned)
+            .collect();
+    }
+    if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::ScoreImport)
     {
         if row.label == SCORE_IMPORT_ROW_PROFILE {
@@ -2628,6 +2662,89 @@ fn move_submenu_selection_vertical(
 
 const SOUND_VOLUME_LEVELS: [u8; 6] = [0, 10, 25, 50, 75, 100];
 const SAMPLE_RATE_OPTIONS: [Option<u32>; 3] = [None, Some(44100), Some(48000)];
+
+fn normalize_sound_device_token(raw: Option<&str>) -> Option<String> {
+    raw.map(str::trim).and_then(|v| {
+        if v.is_empty() || v.eq_ignore_ascii_case("auto") {
+            None
+        } else {
+            Some(v.to_string())
+        }
+    })
+}
+
+fn push_sound_device_choice(
+    labels: &mut Vec<String>,
+    tokens: &mut Vec<Option<String>>,
+    label: String,
+    token: Option<String>,
+) {
+    let normalized = normalize_sound_device_token(token.as_deref());
+    if tokens
+        .iter()
+        .any(|existing| existing.as_deref() == normalized.as_deref())
+    {
+        return;
+    }
+    labels.push(label);
+    tokens.push(normalized);
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn append_linux_manual_sound_device_choices(labels: &mut Vec<String>, tokens: &mut Vec<Option<String>>) {
+    for card in 0..8 {
+        let token = format!("plughw:{card},0");
+        let label = format!("ALSA manual ({token})");
+        push_sound_device_choice(labels, tokens, label, Some(token));
+    }
+}
+
+fn refresh_sound_device_choices(state: &mut State) {
+    let current = normalize_sound_device_token(config::sound_device().as_deref());
+    let mut labels = Vec::with_capacity(8);
+    let mut tokens = Vec::with_capacity(8);
+    push_sound_device_choice(
+        &mut labels,
+        &mut tokens,
+        "Auto".to_string(),
+        None,
+    );
+    for device in audio::output_device_options() {
+        push_sound_device_choice(
+            &mut labels,
+            &mut tokens,
+            device.label,
+            Some(device.token),
+        );
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    append_linux_manual_sound_device_choices(&mut labels, &mut tokens);
+    if let Some(token) = current.clone()
+        && !tokens.iter().any(|v| v.as_deref() == Some(token.as_str()))
+    {
+        let label = format!("Custom ({token})");
+        push_sound_device_choice(&mut labels, &mut tokens, label, Some(token));
+    }
+    state.sound_device_choice_labels = labels;
+    state.sound_device_choice_tokens = tokens;
+    let choice_idx = state
+        .sound_device_choice_tokens
+        .iter()
+        .position(|v| v.as_deref() == current.as_deref())
+        .unwrap_or(0);
+    if let Some(slot) = state
+        .sub_choice_indices_sound
+        .get_mut(SOUND_OUTPUT_DEVICE_ROW_INDEX)
+    {
+        *slot = choice_idx;
+    }
+    if let Some(slot) = state
+        .sub_cursor_indices_sound
+        .get_mut(SOUND_OUTPUT_DEVICE_ROW_INDEX)
+    {
+        *slot = choice_idx;
+    }
+}
 
 fn set_choice_by_label(choice_indices: &mut Vec<usize>, rows: &[SubRow], label: &str, idx: usize) {
     if let Some(pos) = rows.iter().position(|r| r.label == label)
@@ -2833,6 +2950,8 @@ pub struct State {
     sub_choice_indices_arrowcloud: Vec<usize>,
     sub_choice_indices_score_import: Vec<usize>,
     system_noteskin_choices: Vec<String>,
+    sound_device_choice_labels: Vec<String>,
+    sound_device_choice_tokens: Vec<Option<String>>,
     sub_cursor_indices_system: Vec<usize>,
     sub_cursor_indices_graphics: Vec<usize>,
     sub_cursor_indices_input: Vec<usize>,
@@ -2942,6 +3061,8 @@ pub fn init() -> State {
         sub_choice_indices_arrowcloud: vec![0; ARROWCLOUD_OPTIONS_ROWS.len()],
         sub_choice_indices_score_import: vec![0; SCORE_IMPORT_OPTIONS_ROWS.len()],
         system_noteskin_choices,
+        sound_device_choice_labels: vec!["Auto".to_string()],
+        sound_device_choice_tokens: vec![None],
         sub_cursor_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
         sub_cursor_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
         sub_cursor_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
@@ -3232,40 +3353,41 @@ pub fn init() -> State {
         usize::from(cfg.show_bpm_decimal),
     );
 
+    refresh_sound_device_choices(&mut state);
     set_choice_by_label(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
-        "Master Volume",
+        SOUND_ROW_MASTER_VOLUME,
         master_volume_choice_index(cfg.master_volume),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
-        "SFX Volume",
+        SOUND_ROW_SFX_VOLUME,
         master_volume_choice_index(cfg.sfx_volume),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
-        "Music Volume",
+        SOUND_ROW_MUSIC_VOLUME,
         master_volume_choice_index(cfg.music_volume),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
-        "Audio Sample Rate",
+        SOUND_ROW_SAMPLE_RATE,
         sample_rate_choice_index(cfg.audio_sample_rate_hz),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
-        "Mine Sounds",
+        SOUND_ROW_MINE_SOUNDS,
         usize::from(cfg.mine_hit_sound),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
-        "RateMod Preserves Pitch",
+        SOUND_ROW_RATEMOD_PITCH,
         usize::from(cfg.rate_mod_preserves_pitch),
     );
     set_choice_by_label(
@@ -4168,7 +4290,7 @@ fn apply_submenu_choice_delta(
     if let Some(row) = rows.get(row_index) {
         if matches!(kind, SubmenuKind::Sound) {
             match row.label {
-                "Master Volume" => {
+                SOUND_ROW_MASTER_VOLUME => {
                     if adjust_ms_value(
                         &mut state.master_volume_pct,
                         delta,
@@ -4180,7 +4302,7 @@ fn apply_submenu_choice_delta(
                     }
                     return None;
                 }
-                "SFX Volume" => {
+                SOUND_ROW_SFX_VOLUME => {
                     if adjust_ms_value(
                         &mut state.sfx_volume_pct,
                         delta,
@@ -4192,7 +4314,7 @@ fn apply_submenu_choice_delta(
                     }
                     return None;
                 }
-                "Music Volume" => {
+                SOUND_ROW_MUSIC_VOLUME => {
                     if adjust_ms_value(
                         &mut state.music_volume_pct,
                         delta,
@@ -4207,7 +4329,7 @@ fn apply_submenu_choice_delta(
                 _ => {}
             }
         }
-        if matches!(kind, SubmenuKind::Sound) && row.label == "Global Offset (ms)" {
+        if matches!(kind, SubmenuKind::Sound) && row.label == SOUND_ROW_GLOBAL_OFFSET {
             if adjust_ms_value(
                 &mut state.global_offset_ms,
                 delta,
@@ -4383,26 +4505,34 @@ fn apply_submenu_choice_delta(
     } else if matches!(kind, SubmenuKind::Sound) {
         let row = &rows[row_index];
         match row.label {
-            "Master Volume" => {
+            SOUND_ROW_OUTPUT_DEVICE => {
+                let token = state
+                    .sound_device_choice_tokens
+                    .get(new_index)
+                    .cloned()
+                    .unwrap_or(None);
+                config::update_sound_device(token);
+            }
+            SOUND_ROW_MASTER_VOLUME => {
                 let vol = master_volume_from_choice(new_index);
                 config::update_master_volume(vol);
             }
-            "SFX Volume" => {
+            SOUND_ROW_SFX_VOLUME => {
                 let vol = master_volume_from_choice(new_index);
                 config::update_sfx_volume(vol);
             }
-            "Music Volume" => {
+            SOUND_ROW_MUSIC_VOLUME => {
                 let vol = master_volume_from_choice(new_index);
                 config::update_music_volume(vol);
             }
-            "Audio Sample Rate" => {
+            SOUND_ROW_SAMPLE_RATE => {
                 let rate = sample_rate_from_choice(new_index);
                 config::update_audio_sample_rate(rate);
             }
-            "Mine Sounds" => {
+            SOUND_ROW_MINE_SOUNDS => {
                 config::update_mine_hit_sound(new_index == 1);
             }
-            "RateMod Preserves Pitch" => {
+            SOUND_ROW_RATEMOD_PITCH => {
                 config::update_rate_mod_preserves_pitch(new_index == 1);
             }
             _ => {}
@@ -4676,6 +4806,7 @@ pub fn handle_input(
                         }
                         // Enter Sound Options submenu.
                         "Sound Options" => {
+                            refresh_sound_device_choices(state);
                             audio::play_sfx("assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::Sound);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;

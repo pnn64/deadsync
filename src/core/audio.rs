@@ -321,6 +321,63 @@ fn output_device_name(device: &cpal::Device) -> String {
         .unwrap_or_else(|_| "<unknown>".to_string())
 }
 
+#[derive(Clone, Debug)]
+pub struct OutputDeviceOption {
+    pub label: String,
+    pub token: String,
+}
+
+pub fn output_device_options() -> Vec<OutputDeviceOption> {
+    let host = cpal::default_host();
+    let mut out = Vec::new();
+    let Ok(devices) = host.output_devices() else {
+        return out;
+    };
+    for (idx, dev) in devices.enumerate() {
+        let desc = dev.description().ok();
+        let name = desc
+            .as_ref()
+            .map(|d| d.name().trim())
+            .filter(|v| !v.is_empty())
+            .map(ToString::to_string)
+            .unwrap_or_else(|| output_device_name(&dev));
+        let driver = desc
+            .as_ref()
+            .and_then(|d| d.driver())
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(ToString::to_string);
+        let id_token = dev
+            .id()
+            .ok()
+            .map(|id| id.to_string())
+            .filter(|v| !v.trim().is_empty());
+        let token = id_token
+            .or_else(|| driver.clone())
+            .unwrap_or_else(|| idx.to_string());
+        let label = if let Some(d) = driver.as_deref() {
+            if d.eq_ignore_ascii_case(name.as_str()) {
+                format!("{idx}: {name}")
+            } else {
+                format!("{idx}: {name} ({d})")
+            }
+        } else {
+            format!("{idx}: {name}")
+        };
+        out.push(OutputDeviceOption { label, token });
+    }
+    out
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn parse_alsa_card_index(token: &str) -> Option<usize> {
+    let trimmed = token.trim();
+    let rest = trimmed
+        .strip_prefix("plughw:")
+        .or_else(|| trimmed.strip_prefix("hw:"))?;
+    rest.split(',').next()?.trim().parse::<usize>().ok()
+}
+
 fn find_output_device_by_token(host: &cpal::Host, token: &str) -> Option<(cpal::Device, String)> {
     let token = token.trim();
     if token.is_empty() || token.eq_ignore_ascii_case("auto") {
@@ -365,13 +422,22 @@ fn find_output_device_by_token(host: &cpal::Host, token: &str) -> Option<(cpal::
             if id_full
                 .as_deref()
                 .is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
-                || id_backend.is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
-                || driver.is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
-                || name.is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
+            || id_backend.is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
+            || driver.is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
+            || name.is_some_and(|v| v.to_ascii_lowercase().contains(&token_lc))
             {
                 return Some((dev, format!("substring '{token}'")));
             }
         }
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    if let Some(card_idx) = parse_alsa_card_index(token)
+        && let Some(dev) = host.output_devices().ok()?.nth(card_idx)
+    {
+        return Some((
+            dev,
+            format!("ALSA card fallback from token '{token}' (index {card_idx})"),
+        ));
     }
     None
 }

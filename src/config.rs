@@ -2587,6 +2587,26 @@ pub fn sound_device() -> Option<String> {
     SOUND_DEVICE.lock().unwrap().clone()
 }
 
+pub fn update_sound_device(device: Option<String>) {
+    let normalized = device
+        .map(|v| v.trim().to_string())
+        .and_then(|v| {
+            if v.is_empty() || v.eq_ignore_ascii_case("auto") {
+                None
+            } else {
+                Some(v)
+            }
+        });
+    {
+        let mut sound_device = SOUND_DEVICE.lock().unwrap();
+        if *sound_device == normalized {
+            return;
+        }
+        *sound_device = normalized;
+    }
+    save_without_keymaps();
+}
+
 pub fn machine_default_noteskin() -> String {
     MACHINE_DEFAULT_NOTESKIN.lock().unwrap().clone()
 }
