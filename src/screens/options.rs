@@ -4511,6 +4511,22 @@ fn apply_submenu_choice_delta(
                     .get(new_index)
                     .cloned()
                     .unwrap_or(None);
+                let driver = token.as_deref().and_then(|v| {
+                    #[cfg(all(unix, not(target_os = "macos")))]
+                    {
+                        if v.starts_with("plughw:") || v.starts_with("hw:") {
+                            Some("alsa".to_string())
+                        } else {
+                            None
+                        }
+                    }
+                    #[cfg(not(all(unix, not(target_os = "macos"))))]
+                    {
+                        let _ = v;
+                        None
+                    }
+                });
+                config::update_sound_driver(driver);
                 config::update_sound_device(token);
             }
             SOUND_ROW_MASTER_VOLUME => {

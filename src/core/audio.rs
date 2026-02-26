@@ -7,6 +7,8 @@ use rubato::{
     WindowFunction,
 };
 use std::collections::HashMap;
+#[cfg(all(unix, not(target_os = "macos")))]
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -327,61 +329,197 @@ pub struct OutputDeviceOption {
     pub token: String,
 }
 
-pub fn output_device_options() -> Vec<OutputDeviceOption> {
-    let host = cpal::default_host();
-    let mut out = Vec::new();
-    let Ok(devices) = host.output_devices() else {
-        return out;
-    };
-    for (idx, dev) in devices.enumerate() {
-        let desc = dev.description().ok();
-        let name = desc
-            .as_ref()
-            .map(|d| d.name().trim())
-            .filter(|v| !v.is_empty())
-            .map(ToString::to_string)
-            .unwrap_or_else(|| output_device_name(&dev));
-        let driver = desc
-            .as_ref()
-            .and_then(|d| d.driver())
-            .map(str::trim)
-            .filter(|v| !v.is_empty())
-            .map(ToString::to_string);
-        let id_token = dev
-            .id()
-            .ok()
-            .map(|id| id.to_string())
-            .filter(|v| !v.trim().is_empty());
-        let token = id_token
-            .or_else(|| driver.clone())
-            .unwrap_or_else(|| idx.to_string());
-        let label = if let Some(d) = driver.as_deref() {
-            if d.eq_ignore_ascii_case(name.as_str()) {
-                format!("{idx}: {name}")
-            } else {
-                format!("{idx}: {name} ({d})")
-            }
-        } else {
-            format!("{idx}: {name}")
-        };
-        out.push(OutputDeviceOption { label, token });
-    }
-    out
+#[cfg(all(unix, not(target_os = "macos")))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct AlsaEndpoint {
+    is_plug: bool,
+    card: u32,
+    dev: u32,
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
-fn parse_alsa_card_index(token: &str) -> Option<usize> {
-    let trimmed = token.trim();
-    let rest = trimmed
-        .strip_prefix("plughw:")
-        .or_else(|| trimmed.strip_prefix("hw:"))?;
-    rest.split(',').next()?.trim().parse::<usize>().ok()
+impl AlsaEndpoint {
+    fn token(self) -> String {
+        let kind = if self.is_plug { "plughw" } else { "hw" };
+        format!("{kind}:{},{}", self.card, self.dev)
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn parse_alsa_pair(rest: &str) -> Option<(u32, u32)> {
+    let mut parts = rest.split(',');
+    let card = parts.next()?.trim().parse::<u32>().ok()?;
+    let dev = parts.next()?.trim().parse::<u32>().ok()?;
+    Some((card, dev))
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn parse_alsa_card_dev_kv(rest: &str) -> Option<(u32, u32)> {
+    let mut card: Option<u32> = None;
+    let mut dev: Option<u32> = None;
+    for part in rest.split(',') {
+        let (key, value) = part.split_once('=')?;
+        let key = key.trim().to_ascii_lowercase();
+        let value = value.trim();
+        if key == "card" {
+            card = value.parse::<u32>().ok();
+        } else if key == "dev" {
+            dev = value.parse::<u32>().ok();
+        }
+    }
+    Some((card?, dev?))
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn parse_alsa_endpoint_token(token: &str) -> Option<AlsaEndpoint> {
+    let mut s = token.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let lower = s.to_ascii_lowercase();
+    if lower.starts_with("alsa:") {
+        s = s.get(5..)?;
+    }
+    let lower = s.to_ascii_lowercase();
+    let (is_plug, rest) = if lower.starts_with("plughw:") {
+        (true, s.get(7..)?)
+    } else if lower.starts_with("hw:") {
+        (false, s.get(3..)?)
+    } else {
+        return None;
+    };
+    let (card, dev) = parse_alsa_pair(rest).or_else(|| parse_alsa_card_dev_kv(rest))?;
+    Some(AlsaEndpoint { is_plug, card, dev })
+}
+
+pub fn output_device_options() -> Vec<OutputDeviceOption> {
+    let host = cpal::default_host();
+    let Ok(devices) = host.output_devices() else {
+        return Vec::new();
+    };
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let mut dedupe: HashSet<String> = HashSet::with_capacity(16);
+        let mut alsa_only = Vec::with_capacity(16);
+        let mut fallback = Vec::with_capacity(16);
+        for (idx, dev) in devices.enumerate() {
+            let desc = dev.description().ok();
+            let name = desc
+                .as_ref()
+                .map(|d| d.name().trim())
+                .filter(|v| !v.is_empty())
+                .map(ToString::to_string)
+                .unwrap_or_else(|| output_device_name(&dev));
+            let driver = desc
+                .as_ref()
+                .and_then(|d| d.driver())
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(ToString::to_string);
+            let id_token = dev
+                .id()
+                .ok()
+                .map(|id| id.to_string())
+                .filter(|v| !v.trim().is_empty());
+            if let Some(endpoint) = id_token.as_deref().and_then(parse_alsa_endpoint_token) {
+                let token = endpoint.token();
+                if dedupe.insert(token.clone()) {
+                    let label = format!("{idx}: {name} ({token})");
+                    alsa_only.push(OutputDeviceOption { label, token });
+                }
+                continue;
+            }
+            let token = id_token
+                .or_else(|| driver.clone())
+                .unwrap_or_else(|| idx.to_string());
+            let label = if let Some(d) = driver.as_deref() {
+                if d.eq_ignore_ascii_case(name.as_str()) {
+                    format!("{idx}: {name}")
+                } else {
+                    format!("{idx}: {name} ({d})")
+                }
+            } else {
+                format!("{idx}: {name}")
+            };
+            fallback.push(OutputDeviceOption { label, token });
+        }
+        if !alsa_only.is_empty() {
+            return alsa_only;
+        }
+        return fallback;
+    }
+    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    {
+        let mut out = Vec::new();
+        for (idx, dev) in devices.enumerate() {
+            let desc = dev.description().ok();
+            let name = desc
+                .as_ref()
+                .map(|d| d.name().trim())
+                .filter(|v| !v.is_empty())
+                .map(ToString::to_string)
+                .unwrap_or_else(|| output_device_name(&dev));
+            let driver = desc
+                .as_ref()
+                .and_then(|d| d.driver())
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(ToString::to_string);
+            let id_token = dev
+                .id()
+                .ok()
+                .map(|id| id.to_string())
+                .filter(|v| !v.trim().is_empty());
+            let token = id_token
+                .or_else(|| driver.clone())
+                .unwrap_or_else(|| idx.to_string());
+            let label = if let Some(d) = driver.as_deref() {
+                if d.eq_ignore_ascii_case(name.as_str()) {
+                    format!("{idx}: {name}")
+                } else {
+                    format!("{idx}: {name} ({d})")
+                }
+            } else {
+                format!("{idx}: {name}")
+            };
+            out.push(OutputDeviceOption { label, token });
+        }
+        out
+    }
 }
 
 fn find_output_device_by_token(host: &cpal::Host, token: &str) -> Option<(cpal::Device, String)> {
     let token = token.trim();
     if token.is_empty() || token.eq_ignore_ascii_case("auto") {
         return None;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    if let Some(target) = parse_alsa_endpoint_token(token) {
+        let mut fallback: Option<cpal::Device> = None;
+        let devices = host.output_devices().ok()?;
+        for dev in devices {
+            let id = dev.id().ok().map(|id| id.to_string());
+            let Some(candidate) = id.as_deref().and_then(parse_alsa_endpoint_token) else {
+                continue;
+            };
+            if candidate.card == target.card && candidate.dev == target.dev {
+                if candidate.is_plug == target.is_plug {
+                    return Some((
+                        dev,
+                        format!("ALSA token '{}' via exact card/dev match", target.token()),
+                    ));
+                }
+                if fallback.is_none() {
+                    fallback = Some(dev);
+                }
+            }
+        }
+        if let Some(dev) = fallback {
+            return Some((
+                dev,
+                format!("ALSA token '{token}' via card/dev match (kind adjusted)"),
+            ));
+        }
     }
     let token_lc = token.to_ascii_lowercase();
     let wanted_index = token.parse::<usize>().ok();
@@ -430,16 +568,31 @@ fn find_output_device_by_token(host: &cpal::Host, token: &str) -> Option<(cpal::
             }
         }
     }
-    #[cfg(all(unix, not(target_os = "macos")))]
-    if let Some(card_idx) = parse_alsa_card_index(token)
-        && let Some(dev) = host.output_devices().ok()?.nth(card_idx)
-    {
-        return Some((
-            dev,
-            format!("ALSA card fallback from token '{token}' (index {card_idx})"),
-        ));
-    }
     None
+}
+
+fn select_output_host(sound_driver: Option<&str>) -> cpal::Host {
+    let requested = sound_driver
+        .map(str::trim)
+        .filter(|v| !v.is_empty() && !v.eq_ignore_ascii_case("auto"));
+    let Some(driver) = requested else {
+        return cpal::default_host();
+    };
+    let wanted = driver.to_ascii_lowercase();
+    for host_id in cpal::available_hosts() {
+        let dbg = format!("{host_id:?}").to_ascii_lowercase();
+        let disp = host_id.to_string().to_ascii_lowercase();
+        if dbg == wanted || disp == wanted {
+            if let Ok(host) = cpal::host_from_id(host_id) {
+                return host;
+            }
+        }
+    }
+    warn!(
+        "SoundDriver '{driver}' did not match any available host; using default host '{}'.",
+        cpal::default_host().id()
+    );
+    cpal::default_host()
 }
 
 fn select_output_device(
@@ -478,6 +631,34 @@ fn select_output_device(
         );
     }
 
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        if let Ok(mut devices) = host.output_devices() {
+            if let Some(dev) = devices.find(|d| {
+                d.id()
+                    .ok()
+                    .map(|id| id.to_string())
+                    .as_deref()
+                    .and_then(parse_alsa_endpoint_token)
+                    .is_some_and(|ep| ep.is_plug && ep.card == 0 && ep.dev == 0)
+            }) {
+                return Ok((host, dev, "auto fallback to ALSA plughw:0,0".to_string()));
+            }
+        }
+        if let Ok(mut devices) = host.output_devices()
+            && let Some(dev) = devices.find(|d| {
+                d.id()
+                    .ok()
+                    .map(|id| id.to_string())
+                    .as_deref()
+                    .and_then(parse_alsa_endpoint_token)
+                    .is_some()
+            })
+        {
+            return Ok((host, dev, "auto fallback to first ALSA hw/plughw endpoint".to_string()));
+        }
+    }
+
     host.default_output_device()
         .ok_or_else(|| "no audio output device".to_string())
         .map(|dev| (host, dev, "default output device".to_string()))
@@ -487,9 +668,11 @@ fn init_engine_and_thread() -> AudioEngine {
     let (command_sender, command_receiver) = channel();
 
     let cfg = crate::config::get();
+    let requested_sound_driver = crate::config::sound_driver();
     let requested_sound_device = crate::config::sound_device();
+    let host = select_output_host(requested_sound_driver.as_deref());
     let (host, device, selected_by) =
-        select_output_device(cpal::default_host(), requested_sound_device.as_deref())
+        select_output_device(host, requested_sound_device.as_deref())
             .expect("no audio output device");
     let device_name = output_device_name(&device);
     let selected_device_id = device.id().ok();
@@ -499,6 +682,10 @@ fn init_engine_and_thread() -> AudioEngine {
         .expect("no default audio config");
     let mut stream_config: StreamConfig = default_config.clone().into();
 
+    info!(
+        "Audio SoundDriver option: {}",
+        requested_sound_driver.as_deref().unwrap_or("Auto")
+    );
     info!(
         "Audio SoundDevice option: {}",
         requested_sound_device.as_deref().unwrap_or("Auto")
