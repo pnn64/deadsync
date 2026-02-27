@@ -1,7 +1,9 @@
 /cache
-/courses
+/courses/*
+!/courses/instructions.txt
 /save
-/songs
+/songs/*
+!/songs/instructions.txt
 /target
 deadsync.ini
 prompt.txt
