@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900" width="100%" height="100%">
+  
+  <!-- Outer Black Outline (Restored to original single clean path) -->
+  <path fill="#000000" d="
+    M 450,5 
+    L 895,450 
+    L 695,650 
+    L 595,550 
+    L 595,895 
+    L 305,895 
+    L 305,550 
+    L 205,650 
+    L 5,450 
+    Z"/>
+    
+  <!-- White Gap Layer (Single unified path: roof removed, connects directly to the head) -->
+  <path fill="#ffffff" d="
+    M 450,68.6 
+    L 831.4,450 
+    L 695,586.4 
+    L 550,441.4 
+    L 550,850 
+    L 350,850 
+    L 350,441.4 
+    L 205,586.4 
+    L 68.6,450 
+    Z"/>
+    
+  <!-- Inner Black Border (Split into head and shaft to let the unified white bridge show through) -->
+  <path fill="#000000" d="
+    M 450,96.9 L 803.1,450 L 695,558.1 L 450,313.1 L 205,558.1 L 96.9,450 Z
+    M 450,341.4 L 530,421.4 L 530,830 L 370,830 L 370,421.4 Z"/>
+    
+  <!-- Core Purple Shape (Split into head and shaft) -->
+  <path fill="#04a7ff" d="
+    M 450,118.1 L 781.9,450 L 695,536.9 L 450,291.9 L 205,536.9 L 118.1,450 Z
+    M 450,362.6 L 515,427.6 L 515,815 L 385,815 L 385,427.6 Z"/>
+    
+</svg>
