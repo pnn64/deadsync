@@ -184,11 +184,14 @@ fn pane_color(kind: PaneKind) -> [f32; 4] {
         PaneKind::Gs | PaneKind::Ex | PaneKind::Other => SCOREBOX_GS_BLUE,
         PaneKind::HardEx => [
             SCOREBOX_GS_BLUE[0]
-                + (color::HARD_EX_SCORE_RGBA[0] - SCOREBOX_GS_BLUE[0]) * SCOREBOX_HARD_EX_BORDER_TINT,
+                + (color::HARD_EX_SCORE_RGBA[0] - SCOREBOX_GS_BLUE[0])
+                    * SCOREBOX_HARD_EX_BORDER_TINT,
             SCOREBOX_GS_BLUE[1]
-                + (color::HARD_EX_SCORE_RGBA[1] - SCOREBOX_GS_BLUE[1]) * SCOREBOX_HARD_EX_BORDER_TINT,
+                + (color::HARD_EX_SCORE_RGBA[1] - SCOREBOX_GS_BLUE[1])
+                    * SCOREBOX_HARD_EX_BORDER_TINT,
             SCOREBOX_GS_BLUE[2]
-                + (color::HARD_EX_SCORE_RGBA[2] - SCOREBOX_GS_BLUE[2]) * SCOREBOX_HARD_EX_BORDER_TINT,
+                + (color::HARD_EX_SCORE_RGBA[2] - SCOREBOX_GS_BLUE[2])
+                    * SCOREBOX_HARD_EX_BORDER_TINT,
             1.0,
         ],
         PaneKind::Rpg => SCOREBOX_RPG_YELLOW,
@@ -471,9 +474,9 @@ fn gameplay_pane_from_leaderboard(pane: &scores::LeaderboardPane) -> GameplaySco
 
         // Always include rivals when space permits.
         for rival in sorted.iter().filter(|entry| entry.is_rival) {
-            let already = out.iter().any(|e| {
-                e.rank == rival.rank && e.name.eq_ignore_ascii_case(rival.name.as_str())
-            });
+            let already = out
+                .iter()
+                .any(|e| e.rank == rival.rank && e.name.eq_ignore_ascii_case(rival.name.as_str()));
             if !already && out.len() < SCOREBOX_NUM_ENTRIES {
                 out.push(rival.clone());
             }
@@ -481,9 +484,9 @@ fn gameplay_pane_from_leaderboard(pane: &scores::LeaderboardPane) -> GameplaySco
 
         // Fill remaining slots with best ranked leftover rows.
         for entry in &sorted {
-            let already = out.iter().any(|e| {
-                e.rank == entry.rank && e.name.eq_ignore_ascii_case(entry.name.as_str())
-            });
+            let already = out
+                .iter()
+                .any(|e| e.rank == entry.rank && e.name.eq_ignore_ascii_case(entry.name.as_str()));
             if !already {
                 out.push(entry.clone());
             }

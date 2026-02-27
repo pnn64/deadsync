@@ -35,6 +35,18 @@ impl Default for Cut {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct OutputDeviceInfo {
+    pub name: String,
+    pub is_default: bool,
+    pub sample_rates_hz: Vec<u32>,
+}
+
+struct OutputDeviceProbe {
+    device: cpal::Device,
+    info: OutputDeviceInfo,
+}
+
 // Commands to the audio engine
 enum AudioCommand {
     PlaySfx(Arc<Vec<i16>>),
@@ -53,6 +65,7 @@ struct AudioEngine {
     sfx_cache: Mutex<HashMap<String, Arc<Vec<i16>>>>,
     device_sample_rate: u32,
     device_channels: usize,
+    startup_output_devices: Vec<OutputDeviceInfo>,
 }
 
 /// A handle to a streaming music track.
@@ -83,6 +96,10 @@ static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 pub fn init() -> Result<(), String> {
     std::sync::LazyLock::force(&ENGINE);
     Ok(())
+}
+
+pub fn startup_output_devices() -> Vec<OutputDeviceInfo> {
+    ENGINE.startup_output_devices.clone()
 }
 
 /// Plays a sound effect from the given path (cached after first load).
@@ -205,52 +222,46 @@ fn init_engine_and_thread() -> AudioEngine {
     let (command_sender, command_receiver) = channel();
 
     let host = cpal::default_host();
-    let device = host
+    let default_device = host
         .default_output_device()
         .expect("no audio output device");
-    let device_name = device
-        .description()
-        .map(|desc| desc.name().to_string())
-        .unwrap_or_else(|_| "<unknown>".to_string());
+    let default_device_name = cpal_device_name(&default_device);
+    let mut device_probes = enumerate_output_device_probes(&host, default_device_name.as_str());
+    if device_probes.is_empty() {
+        let fallback_rates = collect_supported_sample_rates(&default_device);
+        device_probes.push(OutputDeviceProbe {
+            device: default_device.clone(),
+            info: OutputDeviceInfo {
+                name: default_device_name.clone(),
+                is_default: true,
+                sample_rates_hz: fallback_rates,
+            },
+        });
+    }
+
+    let cfg = crate::config::get();
+    let mut device = default_device;
+    let mut device_name = default_device_name;
+    if let Some(requested_idx) = cfg.audio_output_device_index {
+        if let Some(probe) = device_probes.get(requested_idx as usize) {
+            device = probe.device.clone();
+            device_name = probe.info.name.clone();
+            info!(
+                "Audio output device override selected: index {} '{}'.",
+                requested_idx, device_name
+            );
+        } else {
+            warn!(
+                "Audio output device override index {} not found; using default device.",
+                requested_idx
+            );
+        }
+    }
+
     let default_config = device
         .default_output_config()
         .expect("no default audio config");
     let mut stream_config: StreamConfig = default_config.clone().into();
-
-    // Log all available output devices and their supported configurations for debugging.
-    match host.output_devices() {
-        Ok(devices) => {
-            debug!("Enumerating audio output devices for host {:?}:", host.id());
-            for (idx, dev) in devices.enumerate() {
-                let name = dev
-                    .description()
-                    .map(|desc| desc.name().to_string())
-                    .unwrap_or_else(|_| "<unknown>".to_string());
-                let is_default = name == device_name;
-                let tag = if is_default { " (default)" } else { "" };
-                debug!("  Device {idx}: '{name}'{tag}");
-                match dev.supported_output_configs() {
-                    Ok(configs) => {
-                        for cfg_range in configs {
-                            let min = cfg_range.min_sample_rate();
-                            let max = cfg_range.max_sample_rate();
-                            let channels = cfg_range.channels();
-                            let fmt = cfg_range.sample_format();
-                            debug!("    - {fmt:?}, {channels} ch, {min}..{max} Hz");
-                        }
-                    }
-                    Err(e) => {
-                        warn!("    ! Failed to query supported output configs: {e}");
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            warn!("Failed to enumerate audio output devices: {e}");
-        }
-    }
-
-    let cfg = crate::config::get();
     let requested_rate = cfg.audio_sample_rate_hz;
     if let Some(target_hz) = requested_rate {
         debug!(
@@ -296,7 +307,119 @@ fn init_engine_and_thread() -> AudioEngine {
         sfx_cache: Mutex::new(HashMap::new()),
         device_sample_rate,
         device_channels,
+        startup_output_devices: device_probes.into_iter().map(|probe| probe.info).collect(),
     }
+}
+
+#[inline(always)]
+fn cpal_device_name(device: &cpal::Device) -> String {
+    device
+        .description()
+        .map(|desc| desc.name().to_string())
+        .unwrap_or_else(|_| "<unknown>".to_string())
+}
+
+fn sample_rates_from_ranges(ranges: &[(u32, u32)], default_rate_hz: u32) -> Vec<u32> {
+    const COMMON_SAMPLE_RATES: [u32; 11] = [
+        11025, 16000, 22050, 32000, 44100, 48000, 88200, 96000, 176400, 192000, 384000,
+    ];
+
+    let mut rates = Vec::with_capacity(COMMON_SAMPLE_RATES.len() + 4);
+    if default_rate_hz > 0 {
+        rates.push(default_rate_hz);
+    }
+    for &hz in &COMMON_SAMPLE_RATES {
+        if ranges.iter().any(|&(min, max)| hz >= min && hz <= max) {
+            rates.push(hz);
+        }
+    }
+    for &(min, max) in ranges {
+        rates.push(min);
+        rates.push(max);
+    }
+    rates.sort_unstable();
+    rates.dedup();
+    rates
+}
+
+fn collect_supported_sample_rates(device: &cpal::Device) -> Vec<u32> {
+    let default_rate_hz = device
+        .default_output_config()
+        .map(|cfg| cfg.sample_rate())
+        .unwrap_or(0);
+    let mut ranges = Vec::new();
+    match device.supported_output_configs() {
+        Ok(configs) => {
+            for cfg_range in configs {
+                let min = cfg_range.min_sample_rate();
+                let max = cfg_range.max_sample_rate();
+                ranges.push((min.min(max), max.max(min)));
+            }
+        }
+        Err(_) => {
+            if default_rate_hz > 0 {
+                return vec![default_rate_hz];
+            }
+            return Vec::new();
+        }
+    }
+    let mut rates = sample_rates_from_ranges(&ranges, default_rate_hz);
+    if rates.is_empty() && default_rate_hz > 0 {
+        rates.push(default_rate_hz);
+    }
+    rates
+}
+
+fn enumerate_output_device_probes(
+    host: &cpal::Host,
+    default_device_name: &str,
+) -> Vec<OutputDeviceProbe> {
+    let mut probes = Vec::new();
+    match host.output_devices() {
+        Ok(devices) => {
+            debug!("Enumerating audio output devices for host {:?}:", host.id());
+            for (idx, dev) in devices.enumerate() {
+                let name = cpal_device_name(&dev);
+                let is_default = name == default_device_name;
+                let tag = if is_default { " (default)" } else { "" };
+                debug!("  Device {idx}: '{name}'{tag}");
+                let sample_rates_hz = match dev.supported_output_configs() {
+                    Ok(configs) => {
+                        let mut ranges = Vec::new();
+                        for cfg_range in configs {
+                            let min = cfg_range.min_sample_rate();
+                            let max = cfg_range.max_sample_rate();
+                            let channels = cfg_range.channels();
+                            let fmt = cfg_range.sample_format();
+                            debug!("    - {fmt:?}, {channels} ch, {min}..{max} Hz");
+                            ranges.push((min.min(max), max.max(min)));
+                        }
+                        let default_rate_hz = dev
+                            .default_output_config()
+                            .map(|cfg| cfg.sample_rate())
+                            .unwrap_or(0);
+                        sample_rates_from_ranges(&ranges, default_rate_hz)
+                    }
+                    Err(e) => {
+                        warn!("    ! Failed to query supported output configs: {e}");
+                        collect_supported_sample_rates(&dev)
+                    }
+                };
+                probes.push(OutputDeviceProbe {
+                    device: dev,
+                    info: OutputDeviceInfo {
+                        name,
+                        is_default,
+                        sample_rates_hz,
+                    },
+                });
+            }
+        }
+        Err(e) => {
+            warn!("Failed to enumerate audio output devices: {e}");
+        }
+    }
+    probes
 }
 
 /// Manager thread: builds the CPAL stream, mixes SFX, and forwards music via ring.

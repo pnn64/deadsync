@@ -2001,9 +2001,14 @@ impl App {
         target = machine_resolve_post_select_target(&cfg, target);
         if startup_flow {
             if !cfg.machine_show_select_style
-                && matches!(target, CurrentScreen::SelectPlayMode | CurrentScreen::ProfileLoad)
+                && matches!(
+                    target,
+                    CurrentScreen::SelectPlayMode | CurrentScreen::ProfileLoad
+                )
             {
-                profile::set_session_play_style(machine_preferred_style(cfg.machine_preferred_style));
+                profile::set_session_play_style(machine_preferred_style(
+                    cfg.machine_preferred_style,
+                ));
             }
             if !cfg.machine_show_select_play_mode && target == CurrentScreen::ProfileLoad {
                 profile::set_session_play_mode(machine_preferred_mode(

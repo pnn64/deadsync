@@ -190,10 +190,11 @@ pub const ITEMS: &[Item] = &[
         name: "Sound Options",
         help: &[
             "Adjust audio output settings and feedback sounds.",
+            "Sound Device",
+            "Audio Sample Rate",
             "Master Volume",
             "SFX Volume",
             "Music Volume",
-            "Audio Sample Rate",
             "Mine Sounds",
             "Global Offset",
             "Rate Mod Preserves Pitch",
@@ -456,6 +457,13 @@ struct ScoreImportConfirmState {
     active_choice: u8, // 0 = Yes, 1 = No
 }
 
+#[derive(Clone, Debug)]
+struct SoundDeviceOption {
+    label: String,
+    config_index: Option<u16>,
+    sample_rates_hz: Vec<u32>,
+}
+
 // Local fade timing when swapping between main options list and System Options submenu.
 const SUBMENU_FADE_DURATION: f32 = 0.2;
 
@@ -520,6 +528,7 @@ const ADVANCED_ROW_FAST_LOAD: &str = "Fast Load";
 const SOUND_ROW_MASTER_VOLUME: &str = "Master Volume";
 const SOUND_ROW_SFX_VOLUME: &str = "SFX Volume";
 const SOUND_ROW_MUSIC_VOLUME: &str = "Music Volume";
+const SOUND_ROW_DEVICE: &str = "Sound Device";
 const SOUND_ROW_SAMPLE_RATE: &str = "Audio Sample Rate";
 const SOUND_ROW_MINE_SOUNDS: &str = "Mine Sounds";
 const SOUND_ROW_GLOBAL_OFFSET: &str = "Global Offset (ms)";
@@ -554,6 +563,33 @@ fn discover_system_noteskin_choices() -> Vec<String> {
         names.push(profile::NoteSkin::DEFAULT_NAME.to_string());
     }
     names
+}
+
+fn build_sound_device_options() -> Vec<SoundDeviceOption> {
+    let discovered = audio::startup_output_devices();
+    let default_rates = discovered
+        .iter()
+        .find(|dev| dev.is_default)
+        .map(|dev| dev.sample_rates_hz.clone())
+        .unwrap_or_default();
+    let mut options = Vec::with_capacity(discovered.len() + 1);
+    options.push(SoundDeviceOption {
+        label: "Auto".to_string(),
+        config_index: None,
+        sample_rates_hz: default_rates,
+    });
+    for (idx, dev) in discovered.into_iter().enumerate() {
+        let mut label = dev.name.clone();
+        if dev.is_default {
+            label.push_str(" (Default)");
+        }
+        options.push(SoundDeviceOption {
+            label,
+            config_index: Some(idx as u16),
+            sample_rates_hz: dev.sample_rates_hz,
+        });
+    }
+    options
 }
 
 pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
@@ -1116,6 +1152,16 @@ pub const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
 
 pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
+        label: SOUND_ROW_DEVICE,
+        choices: &["Auto"],
+        inline: false,
+    },
+    SubRow {
+        label: SOUND_ROW_SAMPLE_RATE,
+        choices: &["Auto"],
+        inline: false,
+    },
+    SubRow {
         label: SOUND_ROW_MASTER_VOLUME,
         choices: &["100%"],
         inline: false,
@@ -1129,11 +1175,6 @@ pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
         label: SOUND_ROW_MUSIC_VOLUME,
         choices: &["100%"],
         inline: false,
-    },
-    SubRow {
-        label: SOUND_ROW_SAMPLE_RATE,
-        choices: &["Auto", "44100 Hz", "48000 Hz"],
-        inline: true,
     },
     SubRow {
         label: SOUND_ROW_MINE_SOUNDS,
@@ -1154,6 +1195,18 @@ pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
 
 pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     Item {
+        name: SOUND_ROW_DEVICE,
+        help: &[
+            "Select an output device detected by CPAL at startup.",
+            "Auto uses the host default output device.",
+            "Changing this takes effect on next launch.",
+        ],
+    },
+    Item {
+        name: SOUND_ROW_SAMPLE_RATE,
+        help: &["Select an audio output sample rate for the chosen Sound Device."],
+    },
+    Item {
         name: SOUND_ROW_MASTER_VOLUME,
         help: &["Set the overall volume for all audio."],
     },
@@ -1164,10 +1217,6 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: SOUND_ROW_MUSIC_VOLUME,
         help: &["Set the music volume before master volume is applied."],
-    },
-    Item {
-        name: SOUND_ROW_SAMPLE_RATE,
-        help: &["Select an audio output sample rate."],
     },
     Item {
         name: SOUND_ROW_MINE_SOUNDS,
@@ -2555,6 +2604,26 @@ fn row_choices<'a>(
             .collect();
     }
     if let Some(row) = rows.get(row_idx)
+        && matches!(kind, SubmenuKind::Sound)
+    {
+        if row.label == SOUND_ROW_DEVICE {
+            return state
+                .sound_device_options
+                .iter()
+                .map(|opt| Cow::Owned(opt.label.clone()))
+                .collect();
+        }
+        if row.label == SOUND_ROW_SAMPLE_RATE {
+            return sound_sample_rate_choices(state)
+                .into_iter()
+                .map(|rate| match rate {
+                    None => Cow::Borrowed("Auto"),
+                    Some(hz) => Cow::Owned(format!("{hz} Hz")),
+                })
+                .collect();
+        }
+    }
+    if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::ScoreImport)
     {
         if row.label == SCORE_IMPORT_ROW_PROFILE {
@@ -2696,7 +2765,6 @@ fn move_submenu_selection_vertical(
 }
 
 const SOUND_VOLUME_LEVELS: [u8; 6] = [0, 10, 25, 50, 75, 100];
-const SAMPLE_RATE_OPTIONS: [Option<u32>; 3] = [None, Some(44100), Some(48000)];
 
 fn set_choice_by_label(choice_indices: &mut Vec<usize>, rows: &[SubRow], label: &str, idx: usize) {
     if let Some(pos) = rows.iter().position(|r| r.label == label)
@@ -2727,15 +2795,74 @@ fn master_volume_from_choice(idx: usize) -> u8 {
         .unwrap_or_else(|| *SOUND_VOLUME_LEVELS.last().unwrap_or(&100))
 }
 
-fn sample_rate_choice_index(rate: Option<u32>) -> usize {
-    SAMPLE_RATE_OPTIONS
+fn sound_row_index(label: &str) -> Option<usize> {
+    SOUND_OPTIONS_ROWS.iter().position(|row| row.label == label)
+}
+
+fn selected_sound_device_choice(state: &State) -> usize {
+    sound_row_index(SOUND_ROW_DEVICE)
+        .and_then(|idx| state.sub_choice_indices_sound.get(idx).copied())
+        .unwrap_or(0)
+}
+
+fn sound_sample_rate_choices(state: &State) -> Vec<Option<u32>> {
+    let mut choices = Vec::new();
+    choices.push(None);
+    let device_idx =
+        selected_sound_device_choice(state).min(state.sound_device_options.len().saturating_sub(1));
+    if let Some(option) = state.sound_device_options.get(device_idx) {
+        for &hz in &option.sample_rates_hz {
+            let rate = Some(hz);
+            if !choices.contains(&rate) {
+                choices.push(rate);
+            }
+        }
+    }
+    if choices.len() == 1 {
+        choices.push(Some(44100));
+        choices.push(Some(48000));
+    }
+    choices
+}
+
+fn sound_device_choice_index(options: &[SoundDeviceOption], config_index: Option<u16>) -> usize {
+    let Some(target) = config_index else {
+        return 0;
+    };
+    options
+        .iter()
+        .position(|opt| opt.config_index == Some(target))
+        .unwrap_or(0)
+}
+
+fn sound_device_from_choice(state: &State, idx: usize) -> Option<u16> {
+    state
+        .sound_device_options
+        .get(idx)
+        .and_then(|opt| opt.config_index)
+}
+
+fn set_sound_choice_index(state: &mut State, label: &str, idx: usize) {
+    let Some(row_idx) = sound_row_index(label) else {
+        return;
+    };
+    if let Some(slot) = state.sub_choice_indices_sound.get_mut(row_idx) {
+        *slot = idx;
+    }
+    if let Some(slot) = state.sub_cursor_indices_sound.get_mut(row_idx) {
+        *slot = idx;
+    }
+}
+
+fn sample_rate_choice_index(state: &State, rate: Option<u32>) -> usize {
+    sound_sample_rate_choices(state)
         .iter()
         .position(|&r| r == rate)
         .unwrap_or(0)
 }
 
-fn sample_rate_from_choice(idx: usize) -> Option<u32> {
-    SAMPLE_RATE_OPTIONS.get(idx).copied().flatten()
+fn sample_rate_from_choice(state: &State, idx: usize) -> Option<u32> {
+    sound_sample_rate_choices(state).get(idx).copied().flatten()
 }
 
 fn bg_brightness_choice_index(brightness: f32) -> usize {
@@ -2971,6 +3098,7 @@ pub struct State {
     score_import_profile_ids: Vec<Option<String>>,
     score_import_pack_choices: Vec<String>,
     score_import_pack_filters: Vec<Option<String>>,
+    sound_device_options: Vec<SoundDeviceOption>,
     master_volume_pct: i32,
     sfx_volume_pct: i32,
     music_volume_pct: i32,
@@ -3016,6 +3144,7 @@ pub fn init() -> State {
     let software_thread_labels = software_thread_choice_labels(&software_thread_choices);
     let max_fps_choices = build_max_fps_choices();
     let max_fps_labels = max_fps_choice_labels(&max_fps_choices);
+    let sound_device_options = build_sound_device_options();
     let machine_noteskin = profile::machine_default_noteskin();
     let machine_noteskin_idx = system_noteskin_choices
         .iter()
@@ -3080,6 +3209,7 @@ pub fn init() -> State {
         score_import_profile_ids: vec![None],
         score_import_pack_choices: vec![SCORE_IMPORT_ALL_PACKS.to_string()],
         score_import_pack_filters: vec![None],
+        sound_device_options,
         master_volume_pct: i32::from(cfg.master_volume.clamp(0, 100)),
         sfx_volume_pct: i32::from(cfg.sfx_volume.clamp(0, 100)),
         music_volume_pct: i32::from(cfg.music_volume.clamp(0, 100)),
@@ -3387,12 +3517,11 @@ pub fn init() -> State {
         SOUND_ROW_MUSIC_VOLUME,
         master_volume_choice_index(cfg.music_volume),
     );
-    set_choice_by_label(
-        &mut state.sub_choice_indices_sound,
-        SOUND_OPTIONS_ROWS,
-        SOUND_ROW_SAMPLE_RATE,
-        sample_rate_choice_index(cfg.audio_sample_rate_hz),
-    );
+    let sound_device_idx =
+        sound_device_choice_index(&state.sound_device_options, cfg.audio_output_device_index);
+    set_sound_choice_index(&mut state, SOUND_ROW_DEVICE, sound_device_idx);
+    let sound_rate_idx = sample_rate_choice_index(&state, cfg.audio_sample_rate_hz);
+    set_sound_choice_index(&mut state, SOUND_ROW_SAMPLE_RATE, sound_rate_idx);
     set_choice_by_label(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
@@ -4463,17 +4592,13 @@ fn apply_submenu_choice_delta(
             MACHINE_ROW_SELECT_PROFILE => config::update_machine_show_select_profile(enabled),
             MACHINE_ROW_SELECT_COLOR => config::update_machine_show_select_color(enabled),
             MACHINE_ROW_SELECT_STYLE => config::update_machine_show_select_style(enabled),
-            MACHINE_ROW_PREFERRED_STYLE => {
-                config::update_machine_preferred_style(machine_preferred_style_from_choice(
-                    new_index,
-                ))
-            }
+            MACHINE_ROW_PREFERRED_STYLE => config::update_machine_preferred_style(
+                machine_preferred_style_from_choice(new_index),
+            ),
             MACHINE_ROW_SELECT_PLAY_MODE => config::update_machine_show_select_play_mode(enabled),
-            MACHINE_ROW_PREFERRED_MODE => {
-                config::update_machine_preferred_play_mode(machine_preferred_mode_from_choice(
-                    new_index,
-                ))
-            }
+            MACHINE_ROW_PREFERRED_MODE => config::update_machine_preferred_play_mode(
+                machine_preferred_mode_from_choice(new_index),
+            ),
             MACHINE_ROW_EVAL_SUMMARY => config::update_machine_show_eval_summary(enabled),
             MACHINE_ROW_NAME_ENTRY => config::update_machine_show_name_entry(enabled),
             MACHINE_ROW_GAMEOVER => config::update_machine_show_gameover(enabled),
@@ -4543,8 +4668,18 @@ fn apply_submenu_choice_delta(
                 let vol = master_volume_from_choice(new_index);
                 config::update_music_volume(vol);
             }
+            SOUND_ROW_DEVICE => {
+                let device = sound_device_from_choice(state, new_index);
+                config::update_audio_output_device(device);
+                let current_rate = config::get().audio_sample_rate_hz;
+                let rate_choice = sample_rate_choice_index(state, current_rate);
+                if current_rate.is_some() && rate_choice == 0 {
+                    config::update_audio_sample_rate(None);
+                }
+                set_sound_choice_index(state, SOUND_ROW_SAMPLE_RATE, rate_choice);
+            }
             SOUND_ROW_SAMPLE_RATE => {
-                let rate = sample_rate_from_choice(new_index);
+                let rate = sample_rate_from_choice(state, new_index);
                 config::update_audio_sample_rate(rate);
             }
             SOUND_ROW_MINE_SOUNDS => {

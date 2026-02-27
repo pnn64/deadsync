@@ -478,6 +478,8 @@ pub struct Config {
     // ITGmania PrefsManager "MusicWheelSwitchSpeed" (default 15).
     pub music_wheel_switch_speed: u8,
     pub sfx_volume: u8,
+    // None = auto (use host default output device); Some(N) = startup CPAL output-device index.
+    pub audio_output_device_index: Option<u16>,
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
     pub auto_populate_gs_scores: bool,
@@ -556,6 +558,7 @@ impl Default for Config {
             music_volume: 100,
             music_wheel_switch_speed: 15,
             sfx_volume: 100,
+            audio_output_device_index: None,
             audio_sample_rate_hz: None,
             auto_populate_gs_scores: false,
             rate_mod_preserves_pitch: true,
@@ -691,6 +694,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
 
     // [Options] section - keys in alphabetical order
     content.push_str("[Options]\n");
+    content.push_str("AudioOutputDevice=Auto\n");
     content.push_str("AudioSampleRateHz=Auto\n");
     content.push_str(&format!(
         "AutoPopulateGrooveStatsScores={}\n",
@@ -1289,6 +1293,17 @@ pub fn load() {
                     .get("Options", "SFXVolume")
                     .and_then(|v| v.parse().ok())
                     .map_or(default.sfx_volume, |v: u8| v.clamp(0, 100));
+                cfg.audio_output_device_index = conf
+                    .get("Options", "AudioOutputDevice")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() || v.eq_ignore_ascii_case("auto") {
+                            None
+                        } else {
+                            v.parse::<u16>().ok()
+                        }
+                    })
+                    .or(default.audio_output_device_index);
                 cfg.audio_sample_rate_hz = conf
                     .get("Options", "AudioSampleRateHz")
                     .map(|v| v.trim().to_string())
@@ -1638,6 +1653,7 @@ pub fn load() {
                 let has = |sec: &str, key: &str| conf.get(sec, key).is_some();
                 let mut miss = false;
                 let options_keys = [
+                    "AudioOutputDevice",
                     "AudioSampleRateHz",
                     "AutoPopulateGrooveStatsScores",
                     "BGBrightness",
@@ -2363,6 +2379,10 @@ fn save_without_keymaps() {
 
     // [Options] (alphabetical order)
     content.push_str("[Options]\n");
+    let audio_output_device = cfg
+        .audio_output_device_index
+        .map_or_else(|| "Auto".to_string(), |idx| idx.to_string());
+    content.push_str(&format!("AudioOutputDevice={audio_output_device}\n"));
     let audio_rate_str = match cfg.audio_sample_rate_hz {
         None => "Auto".to_string(),
         Some(hz) => hz.to_string(),
@@ -3073,6 +3093,17 @@ pub fn update_audio_sample_rate(rate: Option<u32>) {
             return;
         }
         cfg.audio_sample_rate_hz = rate;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_audio_output_device(index: Option<u16>) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.audio_output_device_index == index {
+            return;
+        }
+        cfg.audio_output_device_index = index;
     }
     save_without_keymaps();
 }
