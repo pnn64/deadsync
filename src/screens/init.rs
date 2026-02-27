@@ -8,7 +8,7 @@ use crate::screens::components::heart_bg;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use log::warn;
+use log::{info, warn};
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Instant;
@@ -198,7 +198,13 @@ fn start_loading_thread(state: &mut State) {
         );
 
         let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Finalizing));
-        crate::assets::prewarm_banner_cache(&collect_banner_cache_paths());
+        let banner_paths = collect_banner_cache_paths();
+        info!(
+            "Init loading: caching banners ({} textures)...",
+            banner_paths.len()
+        );
+        crate::assets::prewarm_banner_cache(&banner_paths);
+        info!("Init loading: banner cache prewarm complete.");
         std::thread::spawn(|| {
             if std::panic::catch_unwind(noteskin::prewarm_itg_preview_cache).is_err() {
                 warn!("noteskin prewarm thread panicked; first-use preview hitches may occur");
@@ -384,7 +390,7 @@ fn loading_phase_label(phase: LoadingPhase) -> &'static str {
     match phase {
         LoadingPhase::Songs => "Loading songs...",
         LoadingPhase::Courses => "Loading courses...",
-        LoadingPhase::Finalizing => "Finalizing cache...",
+        LoadingPhase::Finalizing => "Caching banners...",
     }
 }
 
@@ -399,19 +405,19 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>) {
     let started = loading.map(|l| l.started_at).unwrap_or_else(Instant::now);
     let elapsed = started.elapsed().as_secs_f32().max(0.0);
     let (done, total, progress) = loading_progress(loading);
-    let finished = loading.is_some_and(|l| l.done);
     let count_text = if total == 0 {
         String::new()
     } else {
         let pct = 100.0 * progress;
         format!("{done}/{total} ({pct:.1}%)")
     };
-    let speed_text = if total > 0 && done >= total && !finished {
-        "Current speed: finalizing...".to_string()
-    } else if elapsed > 0.0 && total > 0 {
+    let show_speed_row = matches!(phase, LoadingPhase::Songs | LoadingPhase::Courses) && total > 0;
+    let speed_text = if elapsed > 0.0 && show_speed_row {
         format!("Current speed: {:.1} items/s", done as f32 / elapsed)
-    } else {
+    } else if show_speed_row {
         "Current speed: 0.0 items/s".to_string()
+    } else {
+        String::new()
     };
     let fill = color::decorative_rgba(state.active_color_index);
 
@@ -516,15 +522,17 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>) {
         children: bar_children,
     });
 
-    actors.push(act!(text:
-        font("miso"):
-        settext(speed_text):
-        align(0.5, 0.5):
-        xy(screen_center_x(), bar_cy + 36.0):
-        zoom(0.9):
-        horizalign(center):
-        z(110.0)
-    ));
+    if show_speed_row {
+        actors.push(act!(text:
+            font("miso"):
+            settext(speed_text):
+            align(0.5, 0.5):
+            xy(screen_center_x(), bar_cy + 36.0):
+            zoom(0.9):
+            horizalign(center):
+            z(110.0)
+        ));
+    }
 }
 
 /* --------------------------- combined build --------------------------- */

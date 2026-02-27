@@ -2532,12 +2532,13 @@ fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_c
         let pct = 100.0 * progress;
         format!("{done}/{total} ({pct:.1}%)")
     };
-    let speed_text = if total > 0 && done >= total && !reload.done {
-        "Current speed: finalizing...".to_string()
-    } else if elapsed > 0.0 && total > 0 {
+    let show_speed_row = total > 0;
+    let speed_text = if elapsed > 0.0 && show_speed_row {
         format!("Current speed: {:.1} items/s", done as f32 / elapsed)
-    } else {
+    } else if show_speed_row {
         "Current speed: 0.0 items/s".to_string()
+    } else {
+        String::new()
     };
     let (line2, line3) = reload_detail_lines(reload);
     let fill = color::decorative_rgba(active_color_index);
@@ -2631,15 +2632,17 @@ fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_c
         children: bar_children,
     });
 
-    actors.push(act!(text:
-        font("miso"):
-        settext(speed_text):
-        align(0.5, 0.5):
-        xy(screen_center_x(), bar_cy + 36.0):
-        zoom(0.9):
-        horizalign(center):
-        z(1451)
-    ));
+    if show_speed_row {
+        actors.push(act!(text:
+            font("miso"):
+            settext(speed_text):
+            align(0.5, 0.5):
+            xy(screen_center_x(), bar_cy + 36.0):
+            zoom(0.9):
+            horizalign(center):
+            z(1451)
+        ));
+    }
 }
 
 fn refresh_after_reload(state: &mut State) {
