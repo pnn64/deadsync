@@ -164,6 +164,7 @@ fn init_row_tweens(
     rows: &[Row],
     selected_row: [usize; PLAYER_SLOTS],
     active: [bool; PLAYER_SLOTS],
+    hide_active_mask: [u8; PLAYER_SLOTS],
     error_bar_active_mask: [u8; PLAYER_SLOTS],
 ) -> Vec<RowTween> {
     let total_rows = rows.len();
@@ -172,7 +173,7 @@ fn init_row_tweens(
     }
 
     let (first_row_center_y, row_step) = row_layout_params();
-    let visibility = row_visibility(rows, active, error_bar_active_mask);
+    let visibility = row_visibility(rows, active, hide_active_mask, error_bar_active_mask);
     let visible_rows = count_visible_rows(rows, visibility);
     if visible_rows == 0 {
         let y = first_row_center_y - row_step * 0.5;
@@ -199,6 +200,7 @@ fn init_row_tweens(
     let judgment_tilt_anchor_visible_idx =
         parent_anchor_visible_index(rows, ROW_JUDGMENT_TILT, visibility);
     let error_bar_anchor_visible_idx = parent_anchor_visible_index(rows, ROW_ERROR_BAR, visibility);
+    let hide_anchor_visible_idx = parent_anchor_visible_index(rows, ROW_HIDE, visibility);
 
     let mut out: Vec<RowTween> = Vec::with_capacity(total_rows);
     let mut visible_idx = 0i32;
@@ -215,6 +217,7 @@ fn init_row_tweens(
                         Some(ROW_MEASURE_COUNTER) => measure_counter_anchor_visible_idx,
                         Some(ROW_JUDGMENT_TILT) => judgment_tilt_anchor_visible_idx,
                         Some(ROW_ERROR_BAR) => error_bar_anchor_visible_idx,
+                        Some(ROW_HIDE) => hide_anchor_visible_idx,
                         _ => None,
                     });
             if let Some(anchor_idx) = anchor {
@@ -2392,6 +2395,7 @@ pub fn init(
         &rows,
         [0; PLAYER_SLOTS],
         active,
+        [hide_active_mask_p1, hide_active_mask_p2],
         [error_bar_active_mask_p1, error_bar_active_mask_p2],
     );
     State {
@@ -2535,6 +2539,11 @@ const ROW_ERROR_BAR_OPTIONS: &str = "Error Bar Options";
 const ROW_CUSTOM_FANTASTIC_WINDOW: &str = "Custom Blue Fantastic Window";
 const ROW_CUSTOM_FANTASTIC_WINDOW_MS: &str = "Custom Blue Fantastic Window (ms)";
 const ROW_CARRY_COMBO: &str = "Carry Combo";
+const ROW_HIDE: &str = "Hide";
+const ROW_COMBO_COLORS: &str = "Combo Colors";
+const ROW_COMBO_COLOR_MODE: &str = "Combo Color Mode";
+const ROW_LIFEMETER_TYPE: &str = "LifeMeter Type";
+const ROW_LIFE_BAR_OPTIONS: &str = "Life Bar Options";
 
 #[derive(Clone, Copy, Debug)]
 struct RowVisibility {
@@ -2543,6 +2552,8 @@ struct RowVisibility {
     show_error_bar_children: bool,
     show_custom_fantastic_window_ms: bool,
     show_density_graph_background: bool,
+    show_combo_rows: bool,
+    show_lifebar_rows: bool,
 }
 
 #[inline(always)]
@@ -2561,6 +2572,13 @@ fn row_visible_with_flags(row_name: &str, visibility: RowVisibility) -> bool {
     }
     if row_name == "Density Graph Background" {
         return visibility.show_density_graph_background;
+    }
+    if row_name == ROW_COMBO_COLORS || row_name == ROW_COMBO_COLOR_MODE || row_name == ROW_CARRY_COMBO
+    {
+        return visibility.show_combo_rows;
+    }
+    if row_name == ROW_LIFEMETER_TYPE || row_name == ROW_LIFE_BAR_OPTIONS {
+        return visibility.show_lifebar_rows;
     }
     true
 }
@@ -2581,6 +2599,14 @@ fn conditional_row_parent(row_name: &str) -> Option<&'static str> {
     }
     if row_name == "Density Graph Background" {
         return Some("Data Visualizations");
+    }
+    if row_name == ROW_COMBO_COLORS
+        || row_name == ROW_COMBO_COLOR_MODE
+        || row_name == ROW_CARRY_COMBO
+        || row_name == ROW_LIFEMETER_TYPE
+        || row_name == ROW_LIFE_BAR_OPTIONS
+    {
+        return Some(ROW_HIDE);
     }
     None
 }
@@ -2679,10 +2705,41 @@ fn density_graph_background_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) 
     !any_active
 }
 
+fn combo_rows_visible(active: [bool; PLAYER_SLOTS], hide_active_mask: [u8; PLAYER_SLOTS]) -> bool {
+    let mut any_active = false;
+    for player_idx in 0..PLAYER_SLOTS {
+        if !active[player_idx] {
+            continue;
+        }
+        any_active = true;
+        let hide_combo = (hide_active_mask[player_idx] & (1u8 << 2)) != 0;
+        if !hide_combo {
+            return true;
+        }
+    }
+    !any_active
+}
+
+fn lifebar_rows_visible(active: [bool; PLAYER_SLOTS], hide_active_mask: [u8; PLAYER_SLOTS]) -> bool {
+    let mut any_active = false;
+    for player_idx in 0..PLAYER_SLOTS {
+        if !active[player_idx] {
+            continue;
+        }
+        any_active = true;
+        let hide_lifebar = (hide_active_mask[player_idx] & (1u8 << 3)) != 0;
+        if !hide_lifebar {
+            return true;
+        }
+    }
+    !any_active
+}
+
 #[inline(always)]
 fn row_visibility(
     rows: &[Row],
     active: [bool; PLAYER_SLOTS],
+    hide_active_mask: [u8; PLAYER_SLOTS],
     error_bar_active_mask: [u8; PLAYER_SLOTS],
 ) -> RowVisibility {
     RowVisibility {
@@ -2691,6 +2748,8 @@ fn row_visibility(
         show_error_bar_children: error_bar_children_visible(active, error_bar_active_mask),
         show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(rows, active),
         show_density_graph_background: density_graph_background_visible(rows, active),
+        show_combo_rows: combo_rows_visible(active, hide_active_mask),
+        show_lifebar_rows: lifebar_rows_visible(active, hide_active_mask),
     }
 }
 
@@ -2809,7 +2868,12 @@ fn sync_selected_rows_with_visibility(state: &mut State, active: [bool; PLAYER_S
         state.prev_selected_row = [0; PLAYER_SLOTS];
         return;
     }
-    let visibility = row_visibility(&state.rows, active, state.error_bar_active_mask);
+    let visibility = row_visibility(
+        &state.rows,
+        active,
+        state.hide_active_mask,
+        state.error_bar_active_mask,
+    );
     for player_idx in 0..PLAYER_SLOTS {
         let idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
         if is_row_visible(&state.rows, idx, visibility) {
@@ -3068,7 +3132,12 @@ fn move_selection_vertical(
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     sync_selected_rows_with_visibility(state, active);
-    let visibility = row_visibility(&state.rows, active, state.error_bar_active_mask);
+    let visibility = row_visibility(
+        &state.rows,
+        active,
+        state.hide_active_mask,
+        state.error_bar_active_mask,
+    );
     let current_row = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
     if !state.inline_choice_x[idx].is_finite() {
         if let Some((anchor_x, _, _, _)) = cursor_dest_for_player(state, asset_manager, idx) {
@@ -3113,6 +3182,7 @@ fn cursor_dest_for_player(
     let visibility = row_visibility(
         &state.rows,
         session_active_players(),
+        state.hide_active_mask,
         state.error_bar_active_mask,
     );
     let mut row_idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
@@ -3953,10 +4023,16 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
             &state.rows,
             state.selected_row,
             active,
+            state.hide_active_mask,
             state.error_bar_active_mask,
         );
     } else {
-        let visibility = row_visibility(&state.rows, active, state.error_bar_active_mask);
+        let visibility = row_visibility(
+            &state.rows,
+            active,
+            state.hide_active_mask,
+            state.error_bar_active_mask,
+        );
         let visible_rows = count_visible_rows(&state.rows, visibility);
         if visible_rows == 0 {
             let y = first_row_center_y - row_step * 0.5;
@@ -3992,6 +4068,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
                 parent_anchor_visible_index(&state.rows, ROW_JUDGMENT_TILT, visibility);
             let error_bar_anchor_visible_idx =
                 parent_anchor_visible_index(&state.rows, ROW_ERROR_BAR, visibility);
+            let hide_anchor_visible_idx =
+                parent_anchor_visible_index(&state.rows, ROW_HIDE, visibility);
             let mut visible_idx = 0i32;
             for i in 0..total_rows {
                 let visible = is_row_visible(&state.rows, i, visibility);
@@ -4005,6 +4083,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
                             Some(ROW_MEASURE_COUNTER) => measure_counter_anchor_visible_idx,
                             Some(ROW_JUDGMENT_TILT) => judgment_tilt_anchor_visible_idx,
                             Some(ROW_ERROR_BAR) => error_bar_anchor_visible_idx,
+                            Some(ROW_HIDE) => hide_anchor_visible_idx,
                             _ => None,
                         }
                     });
@@ -4269,6 +4348,7 @@ fn toggle_hide_row(state: &mut State, player_idx: usize) {
         );
     }
 
+    sync_selected_rows_with_visibility(state, session_active_players());
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
@@ -5079,6 +5159,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         &state.rows,
         state.selected_row,
         active,
+        state.hide_active_mask,
         state.error_bar_active_mask,
     );
 }
