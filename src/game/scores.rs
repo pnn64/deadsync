@@ -2240,6 +2240,7 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
 
     let mut jobs = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
     for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+        let side = gameplay_side_for_player(gs, player_idx);
         let api_key = gs.player_profiles[player_idx].arrowcloud_api_key.trim();
         if api_key.is_empty() {
             continue;
@@ -2247,15 +2248,22 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
         let Some(payload) = arrowcloud_payload_for_player(gs, player_idx) else {
             continue;
         };
+        if !payload.passed {
+            debug!(
+                "Skipping ArrowCloud submit for {:?} ({}) : song was not passed.",
+                side, payload.hash
+            );
+            continue;
+        }
         let token = arrowcloud_next_submit_ui_token();
         arrowcloud_set_submit_ui_status(
-            gameplay_side_for_player(gs, player_idx),
+            side,
             payload.hash.as_str(),
             token,
             ArrowCloudSubmitUiStatus::Submitting,
         );
         jobs.push(ArrowCloudSubmitJob {
-            side: gameplay_side_for_player(gs, player_idx),
+            side,
             api_key: api_key.to_string(),
             token,
             payload,

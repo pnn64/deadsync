@@ -4036,12 +4036,13 @@ fn build_reload_overlay_actors(reload: &ReloadUiState, active_color_index: i32) 
         let pct = 100.0 * progress;
         format!("{done}/{total} ({pct:.1}%)")
     };
-    let speed_text = if total > 0 && done >= total && !reload.done {
-        "Current speed: finalizing...".to_string()
-    } else if elapsed > 0.0 && total > 0 {
+    let show_speed_row = total > 0;
+    let speed_text = if elapsed > 0.0 && show_speed_row {
         format!("Current speed: {:.1} items/s", done as f32 / elapsed)
-    } else {
+    } else if show_speed_row {
         "Current speed: 0.0 items/s".to_string()
+    } else {
+        String::new()
     };
     let (line2, line3) = reload_detail_lines(reload);
     let fill = color::decorative_rgba(active_color_index);
@@ -4136,15 +4137,17 @@ fn build_reload_overlay_actors(reload: &ReloadUiState, active_color_index: i32) 
         children: bar_children,
     });
 
-    out.push(act!(text:
-        font("miso"):
-        settext(speed_text):
-        align(0.5, 0.5):
-        xy(screen_width() * 0.5, bar_cy + 36.0):
-        zoom(0.9):
-        horizalign(center):
-        z(301)
-    ));
+    if show_speed_row {
+        out.push(act!(text:
+            font("miso"):
+            settext(speed_text):
+            align(0.5, 0.5):
+            xy(screen_width() * 0.5, bar_cy + 36.0):
+            zoom(0.9):
+            horizalign(center):
+            z(301)
+        ));
+    }
     out
 }
 
@@ -5733,6 +5736,74 @@ fn row_mid_y_for_cursor(
         .unwrap_or_else(|| row_dest_for_index(total_rows, selected, row_idx, s, list_y).0)
 }
 
+#[inline(always)]
+fn wrap_miso_text(
+    asset_manager: &AssetManager,
+    raw_text: &str,
+    max_width_px: f32,
+    zoom: f32,
+) -> String {
+    asset_manager
+        .with_fonts(|all_fonts| {
+            asset_manager.with_font("miso", |miso_font| {
+                let mut out = String::new();
+                let mut is_first_output_line = true;
+
+                for segment in raw_text.split('\n') {
+                    let trimmed = segment.trim_end();
+                    if trimmed.is_empty() {
+                        if !is_first_output_line {
+                            out.push('\n');
+                        }
+                        continue;
+                    }
+
+                    let mut current_line = String::new();
+                    for word in trimmed.split_whitespace() {
+                        let candidate = if current_line.is_empty() {
+                            word.to_owned()
+                        } else {
+                            let mut tmp = current_line.clone();
+                            tmp.push(' ');
+                            tmp.push_str(word);
+                            tmp
+                        };
+
+                        let logical_w =
+                            font::measure_line_width_logical(miso_font, &candidate, all_fonts)
+                                as f32;
+                        if !current_line.is_empty() && logical_w * zoom > max_width_px {
+                            if !is_first_output_line {
+                                out.push('\n');
+                            }
+                            out.push_str(&current_line);
+                            is_first_output_line = false;
+                            current_line.clear();
+                            current_line.push_str(word);
+                        } else {
+                            current_line = candidate;
+                        }
+                    }
+
+                    if !current_line.is_empty() {
+                        if !is_first_output_line {
+                            out.push('\n');
+                        }
+                        out.push_str(&current_line);
+                        is_first_output_line = false;
+                    }
+                }
+
+                if out.is_empty() {
+                    raw_text.to_string()
+                } else {
+                    out
+                }
+            })
+        })
+        .unwrap_or_else(|| raw_text.to_string())
+}
+
 fn submenu_cursor_dest(
     state: &State,
     asset_manager: &AssetManager,
@@ -6663,72 +6734,13 @@ pub fn get_actors(
             (help[0], &help[1..])
         };
 
-        // Word-wrapping using actual font metrics so the title respects the
-        // description box's inner width and padding exactly.
-        let wrapped_title = asset_manager
-            .with_fonts(|all_fonts| {
-                asset_manager.with_font("miso", |miso_font| {
-                    let max_width_px = DESC_W.mul_add(s, -(2.0 * DESC_TITLE_SIDE_PAD_PX * s));
-                    let mut out = String::new();
-                    let mut is_first_output_line = true;
-
-                    for segment in raw_title_text.split('\n') {
-                        let trimmed = segment.trim_end();
-                        if trimmed.is_empty() {
-                            // Preserve explicit blank lines (e.g. \"\\n\\n\" in help text)
-                            // as an empty row between wrapped paragraphs.
-                            if !is_first_output_line {
-                                out.push('\n');
-                            }
-                            continue;
-                        }
-
-                        let mut current_line = String::new();
-                        for word in trimmed.split_whitespace() {
-                            let candidate = if current_line.is_empty() {
-                                word.to_owned()
-                            } else {
-                                let mut tmp = current_line.clone();
-                                tmp.push(' ');
-                                tmp.push_str(word);
-                                tmp
-                            };
-
-                            let logical_w =
-                                font::measure_line_width_logical(miso_font, &candidate, all_fonts)
-                                    as f32;
-                            let pixel_w = logical_w * DESC_TITLE_ZOOM * s;
-
-                            if !current_line.is_empty() && pixel_w > max_width_px {
-                                if !is_first_output_line {
-                                    out.push('\n');
-                                }
-                                out.push_str(&current_line);
-                                is_first_output_line = false;
-                                current_line.clear();
-                                current_line.push_str(word);
-                            } else {
-                                current_line = candidate;
-                            }
-                        }
-
-                        if !current_line.is_empty() {
-                            if !is_first_output_line {
-                                out.push('\n');
-                            }
-                            out.push_str(&current_line);
-                            is_first_output_line = false;
-                        }
-                    }
-
-                    if out.is_empty() {
-                        raw_title_text.to_string()
-                    } else {
-                        out
-                    }
-                })
-            })
-            .unwrap_or_else(|| raw_title_text.to_string());
+        let title_max_width_px = DESC_W.mul_add(s, -(2.0 * title_side_pad));
+        let wrapped_title = wrap_miso_text(
+            asset_manager,
+            raw_title_text,
+            title_max_width_px,
+            DESC_TITLE_ZOOM * s,
+        );
         let title_lines = wrapped_title.lines().count().max(1) as f32;
 
         // Draw the wrapped explanation/title text.
@@ -6744,36 +6756,46 @@ pub fn get_actors(
 
         // Optional bullet list (e.g. System Options: Game / Theme / Language / ...).
         if !bullet_lines.is_empty() {
+            let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
             let mut bullet_text = String::new();
-            let mut first = true;
+            let bullet_max_width_px =
+                DESC_W.mul_add(s, -((2.0 * bullet_side_pad) + DESC_BULLET_INDENT_PX * s));
             for line in bullet_lines {
                 let trimmed = line.trim();
                 if trimmed.is_empty() {
                     continue;
                 }
-                if !first {
+                let entry = if trimmed == "..." {
+                    "...".to_string()
+                } else {
+                    let mut v = String::with_capacity(trimmed.len() + 2);
+                    v.push('•');
+                    v.push(' ');
+                    v.push_str(trimmed);
+                    v
+                };
+                let wrapped = wrap_miso_text(
+                    asset_manager,
+                    &entry,
+                    bullet_max_width_px,
+                    DESC_BODY_ZOOM * s,
+                );
+                if !bullet_text.is_empty() {
                     bullet_text.push('\n');
                 }
-                // Ellipsis lines ("...") should not have a bullet to match Simply Love.
-                if trimmed == "..." {
-                    bullet_text.push_str("...");
-                } else {
-                    bullet_text.push('•');
-                    bullet_text.push(' ');
-                    bullet_text.push_str(line);
-                }
-                first = false;
+                bullet_text.push_str(&wrapped);
             }
-            let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
             let bullet_x = DESC_BULLET_INDENT_PX.mul_add(s, desc_x + bullet_side_pad);
-            ui_actors.push(act!(text:
-                align(0.0, 0.0):
-                xy(bullet_x, cursor_y):
-                zoom(DESC_BODY_ZOOM):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                font("miso"): settext(bullet_text):
-                horizalign(left)
-            ));
+            if !bullet_text.is_empty() {
+                ui_actors.push(act!(text:
+                    align(0.0, 0.0):
+                    xy(bullet_x, cursor_y):
+                    zoom(DESC_BODY_ZOOM):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    font("miso"): settext(bullet_text):
+                    horizalign(left)
+                ));
+            }
         }
     }
     if let Some(confirm) = &state.score_import_confirm {

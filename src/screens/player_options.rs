@@ -349,7 +349,8 @@ pub struct State {
     // bit0 = Hide Judgments, bit1 = Hide NoteField Flash.
     pub early_dw_active_mask: [u8; PLAYER_SLOTS],
     // For Gameplay Extras row: bitmask of which options are enabled.
-    // bit0 = Flash Column for Miss, bit1 = Density Graph at Top.
+    // bit0 = Flash Column for Miss, bit1 = Density Graph at Top,
+    // bit2 = Column Cues, bit3 = Display Scorebox.
     pub gameplay_extras_active_mask: [u8; PLAYER_SLOTS],
     // For Gameplay Extras (More) row: bitmask of which options are enabled.
     // bit0 = Column Cues, bit1 = Display Scorebox.
@@ -996,9 +997,13 @@ fn build_main_rows(
 }
 
 fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
-    let mut gameplay_extras_more_choices = vec!["Column Cues".to_string()];
+    let mut gameplay_extras_choices = vec![
+        "Flash Column for Miss".to_string(),
+        "Density Graph at Top".to_string(),
+        "Column Cues".to_string(),
+    ];
     if crate::game::scores::is_gs_get_scores_service_allowed() {
-        gameplay_extras_more_choices.push("Display Scorebox".to_string());
+        gameplay_extras_choices.push("Display Scorebox".to_string());
     }
 
     vec![
@@ -1081,6 +1086,15 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
+            name: "Density Graph Background".to_string(),
+            choices: vec!["Solid".to_string(), "Transparent".to_string()],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![
+                "Choose solid or transparent gameplay density graph background.".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
             name: "Target Score".to_string(),
             choices: vec![
                 "C-".to_string(),
@@ -1133,28 +1147,9 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
         },
         Row {
             name: "Gameplay Extras".to_string(),
-            choices: vec![
-                "Flash Column for Miss".to_string(),
-                "Density Graph at Top".to_string(),
-            ],
+            choices: gameplay_extras_choices,
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Extra feedback helpers shown during gameplay.".to_string()],
-            choice_difficulty_indices: None,
-        },
-        Row {
-            name: "Density Graph Background".to_string(),
-            choices: vec!["Solid".to_string(), "Transparent".to_string()],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Choose solid or transparent gameplay density graph background.".to_string(),
-            ],
-            choice_difficulty_indices: None,
-        },
-        Row {
-            name: "Gameplay Extras (More)".to_string(),
-            choices: gameplay_extras_more_choices,
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Additional visual effects, cues, and score display options.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
@@ -2017,6 +2012,14 @@ fn apply_profile_defaults(
     if profile.nps_graph_at_top {
         gameplay_extras_active_mask |= 1u8 << 1;
     }
+    if profile.column_cues {
+        gameplay_extras_active_mask |= 1u8 << 2;
+        gameplay_extras_more_active_mask |= 1u8 << 0;
+    }
+    if profile.display_scorebox {
+        gameplay_extras_active_mask |= 1u8 << 3;
+        gameplay_extras_more_active_mask |= 1u8 << 1;
+    }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Gameplay Extras") {
         if gameplay_extras_active_mask != 0 {
             let first_idx = (0..row.choices.len())
@@ -2042,12 +2045,6 @@ fn apply_profile_defaults(
     }
 
     // Initialize Gameplay Extras (More) row from profile (multi-choice toggle group).
-    if profile.column_cues {
-        gameplay_extras_more_active_mask |= 1u8 << 0;
-    }
-    if profile.display_scorebox {
-        gameplay_extras_more_active_mask |= 1u8 << 1;
-    }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Gameplay Extras (More)") {
         if gameplay_extras_more_active_mask != 0 {
             let first_idx = (0..row.choices.len())
@@ -2545,6 +2542,7 @@ struct RowVisibility {
     show_judgment_tilt_intensity: bool,
     show_error_bar_children: bool,
     show_custom_fantastic_window_ms: bool,
+    show_density_graph_background: bool,
 }
 
 #[inline(always)]
@@ -2560,6 +2558,9 @@ fn row_visible_with_flags(row_name: &str, visibility: RowVisibility) -> bool {
     }
     if row_name == ROW_CUSTOM_FANTASTIC_WINDOW_MS {
         return visibility.show_custom_fantastic_window_ms;
+    }
+    if row_name == "Density Graph Background" {
+        return visibility.show_density_graph_background;
     }
     true
 }
@@ -2577,6 +2578,9 @@ fn conditional_row_parent(row_name: &str) -> Option<&'static str> {
     }
     if row_name == ROW_CUSTOM_FANTASTIC_WINDOW_MS {
         return Some(ROW_CUSTOM_FANTASTIC_WINDOW);
+    }
+    if row_name == "Density Graph Background" {
+        return Some("Data Visualizations");
     }
     None
 }
@@ -2656,6 +2660,25 @@ fn custom_fantastic_window_ms_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]
     !any_active
 }
 
+fn density_graph_background_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = rows.iter().find(|r| r.name == "Data Visualizations") else {
+        return true;
+    };
+    let max_choice = row.choices.len().saturating_sub(1);
+    let mut any_active = false;
+    for player_idx in 0..PLAYER_SLOTS {
+        if !active[player_idx] {
+            continue;
+        }
+        any_active = true;
+        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
+        if choice_idx == 2 {
+            return true;
+        }
+    }
+    !any_active
+}
+
 #[inline(always)]
 fn row_visibility(
     rows: &[Row],
@@ -2667,6 +2690,7 @@ fn row_visibility(
         show_judgment_tilt_intensity: judgment_tilt_intensity_visible(rows, active),
         show_error_bar_children: error_bar_children_visible(active, error_bar_active_mask),
         show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(rows, active),
+        show_density_graph_background: density_graph_background_visible(rows, active),
     }
 }
 
@@ -3578,6 +3602,7 @@ fn change_choice_for_player(
         if should_persist {
             crate::game::profile::update_data_visualizations_for_side(persist_side, setting);
         }
+        visibility_changed = true;
     } else if row_name == "Target Score" {
         let setting = match row.selected_choice_index[player_idx] {
             0 => crate::game::profile::TargetScoreSetting::CMinus,
@@ -4537,7 +4562,7 @@ fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 2 {
+    let bit = if choice_index < 3 {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -4844,12 +4869,19 @@ fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 3 {
-        1u8 << (choice_index as u8)
-    } else {
-        0
-    };
+    let row = &state.rows[row_index];
+    let choice_index = row.selected_choice_index[idx];
+    let bit = row
+        .choices
+        .get(choice_index)
+        .map(|choice| match choice.as_str() {
+            "Flash Column for Miss" => 1u8 << 0,
+            "Density Graph at Top" => 1u8 << 1,
+            "Column Cues" => 1u8 << 2,
+            "Display Scorebox" => 1u8 << 3,
+            _ => 0,
+        })
+        .unwrap_or(0);
     if bit == 0 {
         return;
     }
@@ -4862,11 +4894,17 @@ fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
 
     let column_flash_on_miss = (state.gameplay_extras_active_mask[idx] & (1u8 << 0)) != 0;
     let nps_graph_at_top = (state.gameplay_extras_active_mask[idx] & (1u8 << 1)) != 0;
+    let column_cues = (state.gameplay_extras_active_mask[idx] & (1u8 << 2)) != 0;
+    let display_scorebox = (state.gameplay_extras_active_mask[idx] & (1u8 << 3)) != 0;
     let subtractive_scoring = state.player_profiles[idx].subtractive_scoring;
     let pacemaker = state.player_profiles[idx].pacemaker;
 
     state.player_profiles[idx].column_flash_on_miss = column_flash_on_miss;
     state.player_profiles[idx].nps_graph_at_top = nps_graph_at_top;
+    state.player_profiles[idx].column_cues = column_cues;
+    state.player_profiles[idx].display_scorebox = display_scorebox;
+    state.gameplay_extras_more_active_mask[idx] =
+        (column_cues as u8) | ((display_scorebox as u8) << 1);
 
     let play_style = crate::game::profile::get_session_play_style();
     let should_persist = play_style == crate::game::profile::PlayStyle::Versus
@@ -4884,6 +4922,8 @@ fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
             pacemaker,
             nps_graph_at_top,
         );
+        crate::game::profile::update_column_cues_for_side(side, column_cues);
+        crate::game::profile::update_display_scorebox_for_side(side, display_scorebox);
     }
 
     audio::play_sfx("assets/sounds/change_value.ogg");
