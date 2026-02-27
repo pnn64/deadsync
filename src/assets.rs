@@ -2,7 +2,7 @@ use crate::core::gfx::{Backend, SamplerDesc, SamplerFilter, SamplerWrap, Texture
 use crate::game::profile;
 use crate::ui::font::{self, Font, FontLoadData};
 use image::{ImageFormat, ImageReader, RgbaImage};
-use log::{info, warn};
+use log::{debug, warn};
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
@@ -628,7 +628,7 @@ pub fn prewarm_banner_cache(paths: &[PathBuf]) {
     }
 
     let worker_count = banner_prewarm_workers(deduped.len());
-    info!(
+    debug!(
         "Banner cache prewarm start: {} input, {} unique, {} duplicate, {} worker threads.",
         paths.len(),
         deduped.len(),
@@ -719,7 +719,7 @@ pub fn prewarm_banner_cache(paths: &[PathBuf]) {
     } else {
         0.0
     };
-    info!(
+    debug!(
         "Banner cache prewarm complete in {:.2}s: prepared={} (built={}, reused={}), \
          skipped={} (non-file={}, non-image={}, duplicate={}), failed={}, workers={}, \
          throughput={:.1}/s, avg_ms={{built:{:.2}, reused:{:.2}}}.",
@@ -922,7 +922,7 @@ impl AssetManager {
     }
 
     fn load_initial_textures(&mut self, backend: &mut Backend) -> Result<(), Box<dyn Error>> {
-        info!("Loading initial textures...");
+        debug!("Loading initial textures...");
 
         #[inline(always)]
         fn fallback_rgba() -> RgbaImage {
@@ -937,14 +937,14 @@ impl AssetManager {
         let white_tex = backend.create_texture(&white_img, SamplerDesc::default())?;
         self.textures.insert("__white".to_string(), white_tex);
         register_texture_dims("__white", 1, 1);
-        info!("Loaded built-in texture: __white");
+        debug!("Loaded built-in texture: __white");
 
         // Load __black texture for missing/background-off fallbacks.
         let black_img = RgbaImage::from_raw(1, 1, vec![0, 0, 0, 255]).unwrap();
         let black_tex = backend.create_texture(&black_img, SamplerDesc::default())?;
         self.textures.insert("__black".to_string(), black_tex);
         register_texture_dims("__black", 1, 1);
-        info!("Loaded built-in texture: __black");
+        debug!("Loaded built-in texture: __black");
 
         let mut textures_to_load: Vec<(String, String)> = vec![
             ("logo.png".to_string(), "logo.png".to_string()),
@@ -1018,8 +1018,8 @@ impl AssetManager {
             ("ITL.png".to_string(), "ITL.png".to_string()),
             ("crown.png".to_string(), "crown.png".to_string()),
             (
-                "SRPG9_logo_alt (doubleres).png".to_string(),
-                "SRPG9_logo_alt (doubleres).png".to_string(),
+                "srpg9_logo_alt.png".to_string(),
+                "srpg9_logo_alt.png".to_string(),
             ),
             (
                 "combo_explosion.png".to_string(),
@@ -1306,7 +1306,7 @@ impl AssetManager {
                     };
                     let texture = backend.create_texture(&rgba, sampler)?;
                     register_texture_dims(&key, rgba.width(), rgba.height());
-                    info!("Loaded texture: {key}");
+                    debug!("Loaded texture: {key}");
                     self.textures.insert(key, texture);
                 }
                 Err((key, msg)) => {
@@ -1389,17 +1389,17 @@ impl AssetManager {
 
             if name == "miso" {
                 font.fallback_font_name = Some("game");
-                info!("Font 'miso' configured to use 'game' as fallback.");
+                debug!("Font 'miso' configured to use 'game' as fallback.");
             }
 
             if name == "game" {
                 font.fallback_font_name = Some("cjk");
-                info!("Font 'game' configured to use 'cjk' as fallback.");
+                debug!("Font 'game' configured to use 'cjk' as fallback.");
             }
 
             if name == "cjk" {
                 font.fallback_font_name = Some("emoji");
-                info!("Font 'cjk' configured to use 'emoji' as fallback.");
+                debug!("Font 'cjk' configured to use 'emoji' as fallback.");
             }
 
             for tex_path in &required_textures {
@@ -1417,11 +1417,11 @@ impl AssetManager {
                     let texture = backend.create_texture(&image_data, hints.sampler_desc())?;
                     register_texture_dims(&key, image_data.width(), image_data.height());
                     self.textures.insert(key.clone(), texture);
-                    info!("Loaded font texture: {key}");
+                    debug!("Loaded font texture: {key}");
                 }
             }
             self.register_font(name, font);
-            info!("Loaded font '{name}' from '{ini_path_str}'");
+            debug!("Loaded font '{name}' from '{ini_path_str}'");
         }
         Ok(())
     }

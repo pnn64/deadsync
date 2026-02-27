@@ -7,7 +7,7 @@ use crate::game::profile::{self, Profile};
 use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
 use chrono::{Local, TimeZone};
-use log::{info, warn};
+use log::{debug, warn};
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -165,7 +165,7 @@ fn ensure_gs_score_cache_loaded_for_profile(profile_id: &str) {
     let loaded_entries = disk_cache.len();
     let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
     if load_ms >= 25.0 {
-        info!(
+        debug!(
             "Loaded GrooveStats score cache for profile {profile_id}: {loaded_entries} chart(s) in {load_ms:.2}ms."
         );
     }
@@ -204,7 +204,7 @@ fn cached_gs_chart_hashes_for_profile(profile_id: &str) -> HashSet<String> {
 }
 
 fn set_cached_gs_score_for_profile(profile_id: &str, chart_hash: String, score: CachedScore) {
-    info!("Caching GrooveStats score {score:?} for chart hash {chart_hash}");
+    debug!("Caching GrooveStats score {score:?} for chart hash {chart_hash}");
     ensure_gs_score_cache_loaded_for_profile(profile_id);
     let snapshot = {
         let mut state = GS_SCORE_CACHE.lock().unwrap();
@@ -533,7 +533,7 @@ fn ensure_local_score_cache_loaded(profile_id: &str) {
     let loaded_ex = loaded.best_ex.len();
     let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
     if load_ms >= 25.0 {
-        info!(
+        debug!(
             "Loaded local score cache for profile {profile_id}: ITG={loaded_itg}, EX={loaded_ex} in {load_ms:.2}ms."
         );
     }
@@ -602,7 +602,7 @@ fn ensure_machine_local_score_cache_loaded() {
         let total = state.best_itg.len();
         let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
         if load_ms >= 25.0 {
-            info!("Loaded machine local score cache: {total} chart(s) in {load_ms:.2}ms.");
+            debug!("Loaded machine local score cache: {total} chart(s) in {load_ms:.2}ms.");
         }
     }
 }
@@ -627,7 +627,7 @@ pub fn prewarm_select_music_score_caches() {
     ensure_machine_local_score_cache_loaded();
 
     let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
-    info!("Prewarmed SelectMusic score caches in {elapsed_ms:.2}ms.");
+    debug!("Prewarmed SelectMusic score caches in {elapsed_ms:.2}ms.");
 }
 
 fn update_machine_cache_if_loaded(chart_hash: &str, score: CachedScore, initials: &str) {
@@ -965,7 +965,7 @@ fn append_gs_score_on_disk_for_profile(
             if let Err(e) = fs::write(&path, buf) {
                 warn!("Failed to write GrooveStats score file {path:?}: {e}");
             } else {
-                info!("Stored GrooveStats score on disk for chart {chart_hash} at {path:?}");
+                debug!("Stored GrooveStats score on disk for chart {chart_hash} at {path:?}");
             }
         }
         Err(e) => {
@@ -1394,7 +1394,7 @@ fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalRepl
 
 pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
     if gs.autoplay_used {
-        info!("Skipping local score save: autoplay was used during this stage.");
+        debug!("Skipping local score save: autoplay was used during this stage.");
         return;
     }
 
@@ -2154,7 +2154,7 @@ fn submit_arrowcloud_payload(
     if status.is_success() {
         let snippet = arrowcloud_log_snippet(body.as_str());
         if !snippet.is_empty() {
-            info!(
+            debug!(
                 "ArrowCloud submit success for {:?} ({}) status={} body='{}'",
                 side,
                 payload.hash,
@@ -2162,7 +2162,7 @@ fn submit_arrowcloud_payload(
                 snippet.as_str()
             );
         } else {
-            info!(
+            debug!(
                 "ArrowCloud submit success for {:?} ({}) status={}",
                 side, payload.hash, status_code
             );
@@ -2200,7 +2200,7 @@ pub fn dump_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
         };
         let side = gameplay_side_for_player(gs, player_idx);
         match write_arrowcloud_payload_dump(side, payload.hash.as_str(), &payload) {
-            Ok(path) => info!(
+            Ok(path) => debug!(
                 "Saved ArrowCloud payload dump for {:?} ({}) to '{}'",
                 side,
                 payload.hash,
@@ -2226,11 +2226,11 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
         return;
     }
     if gs.autoplay_used {
-        info!("Skipping ArrowCloud submit: autoplay/replay was used.");
+        debug!("Skipping ArrowCloud submit: autoplay/replay was used.");
         return;
     }
     if gs.course_display_totals.is_some() && !cfg.autosubmit_course_scores_individually {
-        info!("Skipping ArrowCloud submit: course per-song autosubmit is disabled.");
+        debug!("Skipping ArrowCloud submit: course per-song autosubmit is disabled.");
         return;
     }
     if let network::ArrowCloudConnectionStatus::Error(msg) = network::get_arrowcloud_status() {
@@ -2459,6 +2459,7 @@ static PLAYER_LEADERBOARD_CACHE: std::sync::LazyLock<Mutex<PlayerLeaderboardCach
 const PLAYER_LEADERBOARD_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
 const PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
 const ARROWCLOUD_LEADERBOARDS_BASE_URL: &str = "https://api.arrowcloud.dance";
+const ARROWCLOUD_HARD_EX_MIN_PER_PAGE: usize = 16;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -2740,7 +2741,10 @@ fn fetch_arrowcloud_hard_ex_pane(
         return Ok(None);
     }
 
-    let max_entries = max_entries.max(1).to_string();
+    // ArrowCloud may return self/rival entries outside the top ranks.
+    // Pull a wider page so scorebox views can always include those rows.
+    let max_entries = max_entries.max(1).max(ARROWCLOUD_HARD_EX_MIN_PER_PAGE);
+    let max_entries = max_entries.to_string();
     let api_url = format!(
         "{}/v1/chart/{chart_hash}/leaderboards",
         ARROWCLOUD_LEADERBOARDS_BASE_URL.trim_end_matches('/')
@@ -3374,7 +3378,7 @@ fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Op
     // Use a very small epsilon so only true 100.00% (score == 10000) hits this,
     // not 99.95% (score == 9995) or similar edge cases.
     if (score_percent - 1.0).abs() <= 1e-9 {
-        info!(
+        debug!(
             "GrooveStats lamp: hash={} score={:.4}% -> Quad lamp (W1 FC, no DP check needed)",
             chart_hash,
             score_percent * 100.0
@@ -3385,7 +3389,7 @@ fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Op
     let comment = if let Some(c) = comment {
         c
     } else {
-        info!(
+        debug!(
             "GrooveStats lamp: hash={} score={:.4}% -> no lamp (no GrooveStats comment available)",
             chart_hash,
             score_percent * 100.0
@@ -3402,7 +3406,7 @@ fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Op
     let stats = if let Some(s) = find_chart_stats_for_hash(chart_hash) {
         s
     } else {
-        info!(
+        debug!(
             "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> no lamp (chart stats not found for hash)",
             chart_hash,
             score_percent * 100.0,
@@ -3415,7 +3419,7 @@ fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Op
     let rolls = stats.rolls as i32;
 
     if taps_rows <= 0 {
-        info!(
+        debug!(
             "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> no lamp (taps_rows <= 0, taps_rows={})",
             chart_hash,
             score_percent * 100.0,
@@ -3455,7 +3459,7 @@ fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Op
 
     if !dp_consistent {
         // There must have been extra DP loss (e.g., dropped holds or hit mines).
-        info!(
+        debug!(
             "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> DP mismatch: score%={:.5} vs no-hidden-errors%={:.5} (Δ={:.6}); \
 taps_rows={} holds={} rolls={} counts[w={}, e={}, g={}, d={}, wo={}, m={}] -> no lamp",
             chart_hash,
@@ -3482,7 +3486,7 @@ taps_rows={} holds={} rolls={} counts[w={}, e={}, g={}, d={}, wo={}, m={}] -> no
     if counts.g == 0 && counts.d == 0 && counts.wo == 0 && counts.m == 0 {
         // Only W1/W2 present (and W1 reconstructed) => W2 full combo (FEC).
         if counts.e > 0 || w1_total > 0 {
-            info!(
+            debug!(
                 "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> DP ok (no hidden errors). \
 taps_rows={} holds={} rolls={} counts[w={}, e={}, g={}, d={}, wo={}, m={}] -> lamp=FEC (index=2)",
                 chart_hash,
@@ -3505,7 +3509,7 @@ taps_rows={} holds={} rolls={} counts[w={}, e={}, g={}, d={}, wo={}, m={}] -> la
     if counts.d == 0 && counts.wo == 0 && counts.m == 0 {
         // At least one Great, but no Decents/WayOff/Miss => W3 full combo.
         if counts.g > 0 {
-            info!(
+            debug!(
                 "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> DP ok (no hidden errors). \
 taps_rows={} holds={} rolls={} counts[w={}, e={}, g={}, d={}, wo={}, m={}] -> lamp=W3 FC (index=3)",
                 chart_hash,
@@ -3527,7 +3531,7 @@ taps_rows={} holds={} rolls={} counts[w={}, e={}, g={}, d={}, wo={}, m={}] -> la
 
     // No WayOff/Miss and DP-consistent => at worst a W4 full combo.
     if counts.wo == 0 && counts.m == 0 {
-        info!(
+        debug!(
             "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> DP ok (no hidden errors). \
 taps_rows={} holds={} rolls={} counts[w={}, e={}, g={}, d={}, wo={}, m={}] -> lamp=W4 FC (index=4)",
             chart_hash,
@@ -3935,7 +3939,7 @@ where
     for (idx, chart_hash) in chart_hashes.iter().enumerate() {
         if should_cancel() {
             canceled = true;
-            info!(
+            debug!(
                 "{} score import canceled after {idx}/{requested_charts} charts.",
                 endpoint.display_name()
             );
@@ -3944,7 +3948,7 @@ where
         wait_for_next_import_request(last_request_started_at);
         if should_cancel() {
             canceled = true;
-            info!(
+            debug!(
                 "{} score import canceled after {idx}/{requested_charts} charts.",
                 endpoint.display_name()
             );
@@ -3994,7 +3998,7 @@ where
             detail: detail.clone(),
         });
         if done == requested_charts || done % SCORE_IMPORT_PROGRESS_LOG_EVERY == 0 || done == 1 {
-            info!(
+            debug!(
                 "{} bulk import progress for '{}': {done}/{requested_charts} charts (imported={}, missing={}, failed={})",
                 endpoint.display_name(),
                 username,
@@ -4003,7 +4007,7 @@ where
                 failed_requests
             );
         }
-        info!("{detail}");
+        debug!("{detail}");
     }
 
     Ok(ScoreBulkImportSummary {
@@ -4028,7 +4032,7 @@ pub fn fetch_and_store_grade(
         return Err("GrooveStats API key or username is not set in profile.ini.".into());
     }
 
-    info!(
+    debug!(
         "Requesting scores for '{}' on chart '{}'...",
         profile.groovestats_username, chart_hash
     );

@@ -442,11 +442,66 @@ fn gameplay_pane_from_leaderboard(pane: &scores::LeaderboardPane) -> GameplaySco
     let mode_text = pane_mode_text(kind, pane);
     let border_color = pane_color(kind);
 
+    fn scorebox_rows_for_kind(
+        entries: &[scores::LeaderboardEntry],
+        kind: PaneKind,
+    ) -> Vec<scores::LeaderboardEntry> {
+        if !matches!(kind, PaneKind::HardEx) {
+            return entries.iter().take(SCOREBOX_NUM_ENTRIES).cloned().collect();
+        }
+
+        let mut sorted = entries.to_vec();
+        sorted.sort_by_key(|entry| entry.rank);
+        let mut out: Vec<scores::LeaderboardEntry> = Vec::with_capacity(SCOREBOX_NUM_ENTRIES);
+
+        // Always include world record/top row first.
+        if let Some(top) = sorted.first().cloned() {
+            out.push(top);
+        }
+
+        // Always include self if present.
+        if let Some(self_entry) = sorted.iter().find(|entry| entry.is_self) {
+            let already = out.iter().any(|e| {
+                e.rank == self_entry.rank && e.name.eq_ignore_ascii_case(self_entry.name.as_str())
+            });
+            if !already && out.len() < SCOREBOX_NUM_ENTRIES {
+                out.push(self_entry.clone());
+            }
+        }
+
+        // Always include rivals when space permits.
+        for rival in sorted.iter().filter(|entry| entry.is_rival) {
+            let already = out.iter().any(|e| {
+                e.rank == rival.rank && e.name.eq_ignore_ascii_case(rival.name.as_str())
+            });
+            if !already && out.len() < SCOREBOX_NUM_ENTRIES {
+                out.push(rival.clone());
+            }
+        }
+
+        // Fill remaining slots with best ranked leftover rows.
+        for entry in &sorted {
+            let already = out.iter().any(|e| {
+                e.rank == entry.rank && e.name.eq_ignore_ascii_case(entry.name.as_str())
+            });
+            if !already {
+                out.push(entry.clone());
+            }
+            if out.len() >= SCOREBOX_NUM_ENTRIES {
+                break;
+            }
+        }
+
+        out.sort_by_key(|entry| entry.rank);
+        out
+    }
+
     let mut rows = Vec::with_capacity(SCOREBOX_NUM_ENTRIES);
     if pane.entries.is_empty() {
         rows.push(gameplay_status_row("No Scores"));
     } else {
-        for entry in pane.entries.iter().take(SCOREBOX_NUM_ENTRIES) {
+        let display_entries = scorebox_rows_for_kind(pane.entries.as_slice(), kind);
+        for entry in &display_entries {
             rows.push(gameplay_row_from_entry(entry, kind));
         }
     }
@@ -873,13 +928,11 @@ fn push_rpg_logo_overlay(
     );
     push_centered_logo(
         actors,
-        "SRPG9_logo_alt (doubleres).png",
+        "srpg9_logo_alt.png",
         center_x,
         center_y,
         zoom,
-        // StepMania treats `(doubleres)` textures at half logical size.
-        // Match the visual result of Lua's `zoom(0.07)` for this asset.
-        0.035,
+        0.07,
         z_base,
         alpha,
     );
