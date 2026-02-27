@@ -174,6 +174,12 @@ const DESC_BULLET_INDENT_PX: f32 = 10.0; // extra indent for bullet marker + tex
 const DESC_TITLE_ZOOM: f32 = 1.0; // title text zoom (roughly header-sized)
 const DESC_BODY_ZOOM: f32 = 1.0; // body/bullet text zoom (similar to help text)
 
+#[inline(always)]
+fn desc_wrap_extra_pad_unscaled() -> f32 {
+    // Slightly tighter wrap in 4:3 to avoid edge clipping from font metric/render mismatch.
+    widescale(6.0, 0.0)
+}
+
 pub const ITEMS: &[Item] = &[
     // Top-level ScreenOptionsService rows, ordered to match Simply Love's LineNames.
     Item {
@@ -6749,7 +6755,9 @@ pub fn get_actors(
             (help[0], &help[1..])
         };
 
-        let title_max_width_px = desc_w_unscaled().mul_add(s, -(2.0 * title_side_pad));
+        let wrap_extra_pad = desc_wrap_extra_pad_unscaled() * s;
+        let title_max_width_px =
+            desc_w_unscaled().mul_add(s, -((2.0 * title_side_pad) + wrap_extra_pad));
         let wrapped_title = wrap_miso_text(
             asset_manager,
             raw_title_text,
@@ -6773,8 +6781,10 @@ pub fn get_actors(
         if !bullet_lines.is_empty() {
             let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
             let mut bullet_text = String::new();
-            let bullet_max_width_px = desc_w_unscaled()
-                .mul_add(s, -((2.0 * bullet_side_pad) + DESC_BULLET_INDENT_PX * s));
+            let bullet_max_width_px = desc_w_unscaled().mul_add(
+                s,
+                -((2.0 * bullet_side_pad) + (DESC_BULLET_INDENT_PX * s) + wrap_extra_pad),
+            );
             for line in bullet_lines {
                 let trimmed = line.trim();
                 if trimmed.is_empty() {
