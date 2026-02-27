@@ -5,7 +5,7 @@ use crate::core::gfx::{
 use crate::core::space::ortho_for_window;
 use cgmath::{Matrix4, Vector4};
 use image::RgbaImage;
-use log::{info, warn};
+use log::{debug, info, warn};
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
 };
@@ -341,7 +341,7 @@ fn init(
 ) -> Result<State, Box<dyn Error>> {
     info!("Initializing {} (wgpu) backend...", api.name());
     if gfx_debug_enabled {
-        info!("{} (wgpu) validation/debug is enabled.", api.name());
+        debug!("{} (wgpu) validation/debug is enabled.", api.name());
     }
     let instance_flags = if gfx_debug_enabled {
         wgpu::InstanceFlags::debugging()
@@ -1505,7 +1505,7 @@ fn push_tmesh_debug_sample(state: &mut State, frame: TMeshFrameDebug) {
     }
     let frames = u64::from(accum.frames).max(1);
     let dyn_avg = accum.dynamic_upload_vertices / frames;
-    info!(
+    debug!(
         "{} (wgpu) tmesh-cache: hit={} miss={} promote={} evict={} dyn_upload_vtx/frame={} cache_entries={} cache_mb={:.2}",
         state.api.name(),
         accum.cache_hits,

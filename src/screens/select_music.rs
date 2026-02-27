@@ -21,7 +21,7 @@ use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use crate::ui::font;
-use log::info;
+use log::debug;
 use rssp::bpm::parse_bpm_map;
 use std::cell::RefCell;
 use std::cmp::Reverse;
@@ -1638,7 +1638,7 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
 
 pub fn init() -> State {
     let started = Instant::now();
-    info!("Preparing SelectMusic state...");
+    debug!("Preparing SelectMusic state...");
     let lock_started = Instant::now();
     let song_cache = get_song_cache();
     let lock_wait = lock_started.elapsed();
@@ -1862,7 +1862,7 @@ pub fn init() -> State {
                     state.p2_selected_steps_index = state.selected_steps_index;
                     state.p2_preferred_difficulty_index = state.preferred_difficulty_index;
                     state.prev_selected_index = state.selected_index;
-                    info!(
+                    debug!(
                         "SelectMusic state ready: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
                         total_songs,
                         lock_wait,
@@ -1895,7 +1895,7 @@ pub fn init() -> State {
     }
 
     state.prev_selected_index = state.selected_index;
-    info!(
+    debug!(
         "SelectMusic state ready: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
         total_songs,
         lock_wait,
@@ -3125,7 +3125,7 @@ pub fn handle_pad_dir(
                         )
                     {
                         if let Some(pack) = state.expanded_pack_name.take() {
-                            info!("Up+Down combo: Collapsing pack '{}'.", pack);
+                            debug!("Up+Down combo: Collapsing pack '{}'.", pack);
                             rebuild_displayed_entries(state);
                             if let Some(new_sel) = state.entries.iter().position(|e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &pack)) {
                                 state.selected_index = new_sel;
@@ -3275,7 +3275,7 @@ fn handle_pad_dir_p2(
                 )
             {
                 if let Some(pack) = state.expanded_pack_name.take() {
-                    info!("Up+Down combo: Collapsing pack '{}'.", pack);
+                    debug!("Up+Down combo: Collapsing pack '{}'.", pack);
                     rebuild_displayed_entries(state);
                     if let Some(new_sel) = state.entries.iter().position(
                         |e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &pack),

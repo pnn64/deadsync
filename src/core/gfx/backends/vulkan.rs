@@ -2187,7 +2187,7 @@ fn push_tmesh_debug_sample(state: &mut State, frame: TMeshFrameDebug) {
     }
     let frames = u64::from(accum.frames).max(1);
     let dyn_avg = accum.dynamic_upload_vertices / frames;
-    info!(
+    debug!(
         "Vulkan tmesh-cache: hit={} miss={} promote={} evict={} dyn_upload_vtx/frame={} cache_entries={} cache_mb={:.2}",
         accum.cache_hits,
         accum.cache_misses,
@@ -2353,7 +2353,7 @@ pub fn cleanup(state: &mut State) {
 }
 
 pub fn resize(state: &mut State, width: u32, height: u32) {
-    info!("Vulkan resize requested to {width}x{height}");
+    debug!("Vulkan resize requested to {width}x{height}");
     state.window_size = PhysicalSize::new(width, height);
     if width > 0 && height > 0 {
         state.projection = ortho_for_window(width, height);
@@ -2928,7 +2928,7 @@ unsafe extern "system" fn vulkan_debug_callback(
     } else if message_severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::WARNING) {
         warn!("Vulkan validation {message_type:?}: {msg}");
     } else if message_severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::INFO) {
-        info!("Vulkan validation {message_type:?}: {msg}");
+        debug!("Vulkan validation {message_type:?}: {msg}");
     } else {
         debug!("Vulkan validation {message_type:?}: {msg}");
     }
@@ -3003,7 +3003,7 @@ fn create_instance(
 
     let instance = unsafe { entry.create_instance(&create_info, None)? };
     if gfx_debug_enabled {
-        info!(
+        debug!(
             "Vulkan debug config: validation_layers={}, debug_messenger={}.",
             !layers_names_raw.is_empty(),
             debug_utils_enabled

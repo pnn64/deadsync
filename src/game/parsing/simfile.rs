@@ -9,7 +9,7 @@ use crate::game::{
         TimingSegments, WarpSegment,
     },
 };
-use log::{info, warn};
+use log::{debug, info, warn};
 use rssp::patterns::{PatternVariant, compute_box_counts, count_pattern};
 use rssp::{AnalysisOptions, analyze};
 use std::collections::HashMap;
@@ -1017,7 +1017,7 @@ where
             banner_path: pack.banner_path,
             songs: Vec::new(),
         };
-        info!("Scanning pack: {}", current_pack.name);
+        debug!("Scanning pack: {}", current_pack.name);
         let pack_idx = loaded_packs.len();
         loaded_packs.push(current_pack);
 
@@ -1138,7 +1138,7 @@ where
     }
 
     if runtime.is_some() {
-        info!(
+        debug!(
             "Song parsing: used {} threads for cache/parsing (SongParsingThreads={}).",
             parse_threads, config.song_parsing_threads
         );
@@ -1589,14 +1589,14 @@ fn load_song_from_cache(
     };
 
     if cached_song.rssp_version != rssp::RSSP_VERSION {
-        info!(
+        debug!(
             "Cache stale (rssp version mismatch) for: {:?}",
             path.file_name().unwrap_or_default()
         );
         return None;
     }
     if cached_song.mono_threshold != SONG_ANALYSIS_MONO_THRESHOLD {
-        info!(
+        debug!(
             "Cache stale (mono threshold mismatch) for: {:?}",
             path.file_name().unwrap_or_default()
         );
@@ -1616,14 +1616,14 @@ fn load_song_from_cache(
     };
 
     if cached_song.source_hash != content_hash {
-        info!(
+        debug!(
             "Cache stale (content hash mismatch) for: {:?}",
             path.file_name().unwrap_or_default()
         );
         return None;
     }
 
-    info!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
+    debug!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
     let mut song_data: SongData = cached_song.data.into();
     hydrate_chart_timings(&mut song_data, global_offset_seconds);
     Some(song_data)
@@ -1637,9 +1637,9 @@ fn parse_song_and_maybe_write_cache(
     global_offset_seconds: f32,
 ) -> Result<SongData, String> {
     if fastload {
-        info!("Cache miss for: {:?}", path.file_name().unwrap_or_default());
+        debug!("Cache miss for: {:?}", path.file_name().unwrap_or_default());
     } else {
-        info!(
+        debug!(
             "Parsing (fastload disabled): {:?}",
             path.file_name().unwrap_or_default()
         );
@@ -1827,7 +1827,7 @@ fn parse_and_process_song_file(
             let parsed_notes =
                 crate::game::parsing::notes::parse_chart_notes(&c.minimized_note_data, lanes);
             let stamina_counts = build_stamina_counts(&c);
-            info!(
+            debug!(
                 "  Chart '{}' [{}] loaded with {} bytes of note data.",
                 c.difficulty_str,
                 c.rating_str,

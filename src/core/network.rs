@@ -1,4 +1,4 @@
-use log::{info, warn};
+use log::{debug, warn};
 use serde::Deserialize;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -113,7 +113,7 @@ pub fn init() {
 
     if cfg.enable_groovestats {
         set_status(ConnectionStatus::Pending);
-        info!(
+        debug!(
             "Initializing {} network check...",
             groovestats_service_name()
         );
@@ -124,7 +124,7 @@ pub fn init() {
 
     if cfg.enable_arrowcloud {
         set_arrowcloud_status(ArrowCloudConnectionStatus::Pending);
-        info!("Initializing ArrowCloud network check...");
+        debug!("Initializing ArrowCloud network check...");
         thread::spawn(perform_arrowcloud_check);
     } else {
         set_arrowcloud_status(ArrowCloudConnectionStatus::Error("Disabled".into()));
@@ -133,7 +133,7 @@ pub fn init() {
 
 fn perform_check() {
     let service_name = groovestats_service_name();
-    info!("Performing {service_name} connectivity check...");
+    debug!("Performing {service_name} connectivity check...");
 
     let agent = get_agent();
     let api_url = groovestats_new_session_url();
@@ -144,7 +144,7 @@ fn perform_check() {
                 Ok(data) => {
                     if data.services_result == "OK" {
                         println!("Connected to {service_name}!"); // per your requirement
-                        info!("Successfully connected to {service_name}.");
+                        debug!("Successfully connected to {service_name}.");
                         let services = Services {
                             get_scores: data.services_allowed.player_scores,
                             leaderboard: data.services_allowed.player_leaderboards,
@@ -170,12 +170,12 @@ fn perform_check() {
 }
 
 fn perform_arrowcloud_check() {
-    info!("Performing ArrowCloud connectivity check...");
+    debug!("Performing ArrowCloud connectivity check...");
 
     let agent = get_agent();
     match agent.get(ARROWCLOUD_API_URL).call() {
         Ok(_) => {
-            info!("Successfully connected to ArrowCloud.");
+            debug!("Successfully connected to ArrowCloud.");
             set_arrowcloud_status(ArrowCloudConnectionStatus::Connected);
         }
         Err(e) => {

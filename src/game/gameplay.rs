@@ -24,7 +24,7 @@ use crate::game::{
 use crate::screens::components::density_graph::DensityHistCache;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
-use log::{debug, info};
+use log::debug;
 use rssp::streams::StreamSegment;
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
@@ -3908,7 +3908,7 @@ fn apply_life_change(p: &mut PlayerRuntime, current_music_time: f32, delta: f32)
         }
         new_life = 0.0;
         p.is_failing = true;
-        info!("Player has failed!");
+        debug!("Player has failed!");
     }
 
     if (new_life - old_life).abs() > 0.000_001_f32 {
@@ -4092,7 +4092,7 @@ pub fn init(
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
     mut combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
-    info!("Initializing Gameplay Screen...");
+    debug!("Initializing Gameplay Screen...");
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
     } else {
@@ -4221,7 +4221,7 @@ pub fn init(
     }
     let replay_mode = !replay_input.is_empty();
     if replay_mode {
-        info!(
+        debug!(
             "Gameplay replay mode enabled: {} recorded edges loaded.",
             replay_input.len(),
         );
@@ -4411,7 +4411,7 @@ pub fn init(
         note_ranges[1] = note_ranges[0];
     }
 
-    info!("Parsed {} notes from chart data.", notes.len());
+    debug!("Parsed {} notes from chart data.", notes.len());
 
     let mut row_map: HashMap<usize, Vec<usize>> = HashMap::new();
     for (i, n) in notes.iter().enumerate() {
@@ -4479,7 +4479,7 @@ pub fn init(
         start_delay = 0.0;
     }
     if let Some(music_path) = &song.music_path {
-        info!("Starting music with a preroll delay of {start_delay:.2}s");
+        debug!("Starting music with a preroll delay of {start_delay:.2}s");
         let cut = audio::Cut {
             start_sec: f64::from(-start_delay),
             length_sec: f64::INFINITY,
@@ -6447,7 +6447,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                             (stream_pos_s - expected_stream_for_note_s) * 1000.0;
                         let stream_delta_hit_ms =
                             (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
-                        info!(
+                        debug!(
                             concat!(
                                 "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
                                 "song_offset_s={:.4}, global_offset_s={:.4}, ",
@@ -6523,7 +6523,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     current_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
                 let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
                 let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
-                info!(
+                debug!(
                     concat!(
                         "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
                         "song_offset_s={:.4}, global_offset_s={:.4}, ",
@@ -6606,7 +6606,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
                 let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
 
-                info!(
+                debug!(
                     concat!(
                         "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
                         "song_offset_s={:.4}, global_offset_s={:.4}, ",
@@ -6748,7 +6748,7 @@ fn set_assist_clap_enabled(state: &mut State, enabled: bool, now_music_time: f32
     state.assist_last_crossed_row = song_row;
     state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
 
-    info!(
+    debug!(
         "Assist clap {} (F7).",
         if enabled { "enabled" } else { "disabled" }
     );
@@ -6778,11 +6778,11 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
                 .max(note_start)
                 .min(note_end);
         }
-        info!("Autoplay enabled (F8). Scores for this stage will not be saved.");
+        debug!("Autoplay enabled (F8). Scores for this stage will not be saved.");
         return;
     }
 
-    info!("Autoplay disabled (F8).");
+    debug!("Autoplay disabled (F8).");
     for col in 0..state.num_cols {
         if !state.autoplay_lane_state[col] {
             continue;
@@ -7652,7 +7652,7 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
                 state.notes[cursor].mine_result = Some(MineResult::Avoided);
                 state.players[player].mines_avoided =
                     state.players[player].mines_avoided.saturating_add(1);
-                info!("MINE AVOIDED: Row {row_index}, Col {column}, Time: {music_time_sec:.2}s");
+                debug!("MINE AVOIDED: Row {row_index}, Col {column}, Time: {music_time_sec:.2}s");
             }
             cursor += 1;
         }
@@ -7773,7 +7773,7 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                         };
                         state.players[player].mines_avoided =
                             state.players[player].mines_avoided.saturating_add(1);
-                        info!(
+                        debug!(
                             "MINE AVOIDED: Row {note_row_index}, Col {col_idx}, Time: {music_time_sec:.2}s"
                         );
                     }
@@ -7816,7 +7816,7 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                 }
             }
             state.notes[note_index].result = Some(judgment);
-            info!("MISSED (pending): Row {note_row_index}, Col {col_idx}");
+            debug!("MISSED (pending): Row {note_row_index}, Col {col_idx}");
         }
     }
 }
@@ -7870,7 +7870,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                 let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
                 let stream_delta_miss_ms = (stream_pos_s - expected_stream_for_miss_s) * 1000.0;
 
-                info!(
+                debug!(
                     concat!(
                         "TIMING MISS: row={}, col={}, beat={:.3}, ",
                         "song_offset_s={:.4}, global_offset_s={:.4}, ",
@@ -7911,7 +7911,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                         }
                     }
                 }
-                info!("MISSED (time-based): Row {row}");
+                debug!("MISSED (time-based): Row {row}");
             }
             cursor += 1;
         }
@@ -8288,7 +8288,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     }
 
     if state.current_music_time >= state.music_end_time {
-        info!("Music end time reached. Transitioning to evaluation.");
+        debug!("Music end time reached. Transitioning to evaluation.");
         state.song_completed_naturally = true;
         return ScreenAction::Navigate(Screen::Evaluation);
     }
@@ -8333,7 +8333,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         crate::config::DefaultFailType::Immediate
     ) && all_joined_players_failed(state)
     {
-        info!("All joined players failed. Transitioning to evaluation.");
+        debug!("All joined players failed. Transitioning to evaluation.");
         state.song_completed_naturally = false;
         audio::stop_music();
         return ScreenAction::Navigate(Screen::Evaluation);
@@ -8342,7 +8342,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     state.log_timer += delta_time;
     if state.log_timer >= 1.0 {
         let active_arrows: usize = state.arrows.iter().map(std::vec::Vec::len).sum();
-        log::info!(
+        log::debug!(
             "Beat: {:.2}, Time: {:.2}, Combo: {}, Misses: {}, Active Arrows: {}",
             state.current_beat,
             music_time_sec,

@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use image;
-use log::{debug, info, trace, warn};
+use log::{debug, trace, warn};
 
 use crate::assets;
 
@@ -2129,7 +2129,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
         let frame_w_i = (authored_tex_w / num_frames_wide) as i32;
         let frame_h_i = (authored_tex_h / num_frames_high) as i32;
 
-        info!(
+        debug!(
             " Page '{page_name}', Texture: '{texture_key}' -> Authored Grid: {num_frames_wide}x{num_frames_high} (frame {frame_w_i}x{frame_h_i} px)"
         );
 
@@ -2444,7 +2444,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
         );
     }
 
-    info!(
+    debug!(
         "--- FINISHED Parsing font '{}' with {} glyphs and {} textures. ---\n",
         ini_path_str,
         font.glyph_map.len(),

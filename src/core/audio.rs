@@ -1,7 +1,7 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Sample, SampleFormat, StreamConfig};
 use lewton::inside_ogg::OggStreamReader;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use rubato::{
     Resampler, SincFixedOut, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
@@ -95,7 +95,7 @@ pub fn play_sfx(path: &str) {
             match load_and_resample_sfx(path) {
                 Ok(data) => {
                     cache.insert(path.to_string(), data.clone());
-                    info!("Cached SFX: {path}");
+                    debug!("Cached SFX: {path}");
                     data
                 }
                 Err(e) => {
@@ -119,7 +119,7 @@ pub fn preload_sfx(path: &str) {
     match load_and_resample_sfx(path) {
         Ok(data) => {
             cache.insert(path.to_string(), data);
-            info!("Cached SFX: {path}");
+            debug!("Cached SFX: {path}");
         }
         Err(e) => {
             warn!("Failed to preload SFX '{path}': {e}");
@@ -220,7 +220,7 @@ fn init_engine_and_thread() -> AudioEngine {
     // Log all available output devices and their supported configurations for debugging.
     match host.output_devices() {
         Ok(devices) => {
-            info!("Enumerating audio output devices for host {:?}:", host.id());
+            debug!("Enumerating audio output devices for host {:?}:", host.id());
             for (idx, dev) in devices.enumerate() {
                 let name = dev
                     .description()
@@ -228,7 +228,7 @@ fn init_engine_and_thread() -> AudioEngine {
                     .unwrap_or_else(|_| "<unknown>".to_string());
                 let is_default = name == device_name;
                 let tag = if is_default { " (default)" } else { "" };
-                info!("  Device {idx}: '{name}'{tag}");
+                debug!("  Device {idx}: '{name}'{tag}");
                 match dev.supported_output_configs() {
                     Ok(configs) => {
                         for cfg_range in configs {
@@ -236,7 +236,7 @@ fn init_engine_and_thread() -> AudioEngine {
                             let max = cfg_range.max_sample_rate();
                             let channels = cfg_range.channels();
                             let fmt = cfg_range.sample_format();
-                            info!("    - {fmt:?}, {channels} ch, {min}..{max} Hz");
+                            debug!("    - {fmt:?}, {channels} ch, {min}..{max} Hz");
                         }
                     }
                     Err(e) => {
@@ -253,26 +253,26 @@ fn init_engine_and_thread() -> AudioEngine {
     let cfg = crate::config::get();
     let requested_rate = cfg.audio_sample_rate_hz;
     if let Some(target_hz) = requested_rate {
-        info!(
+        debug!(
             "Audio sample rate override requested: {} Hz (device default {} Hz).",
             target_hz, stream_config.sample_rate
         );
         stream_config.sample_rate = target_hz;
     } else {
-        info!(
+        debug!(
             "Audio sample rate override: auto (using device default {} Hz).",
             stream_config.sample_rate
         );
     }
 
-    info!(
+    debug!(
         "Audio device: '{}' (sample_format={:?}, default={} Hz, channels={}).",
         device_name,
         default_config.sample_format(),
         default_config.sample_rate(),
         default_config.channels()
     );
-    info!(
+    debug!(
         "Audio output stream config: {} Hz, {} ch (may be resampled by OS/driver).",
         stream_config.sample_rate, stream_config.channels
     );
@@ -721,7 +721,7 @@ fn music_decoder_thread_loop(
     let out_ch = ENGINE.device_channels;
     let out_hz = ENGINE.device_sample_rate;
 
-    info!(
+    debug!(
         "Music decode start: {:?} ({} ch @ {} Hz) -> output {} ch @ {} Hz (rate x{}).",
         path,
         in_ch,
@@ -1155,7 +1155,7 @@ fn music_decoder_thread_loop(
             .and_then(|f| OggStreamReader::new(BufReader::new(f)).ok())
         {
             Some(new_reader) => {
-                info!("Looping music: restarted {path:?}");
+                debug!("Looping music: restarted {path:?}");
                 ogg = new_reader;
             }
             None => {
@@ -1189,7 +1189,7 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
     };
     let mut resampler = SincFixedOut::<f32>::new(ratio, 1.0, iparams, OUT_FRAMES_PER_CALL, in_ch)?;
 
-    info!(
+    debug!(
         "SFX decode: '{path}' ({in_ch} ch @ {in_hz} Hz) -> output {out_ch} ch @ {out_hz} Hz (ratio {ratio:.6})."
     );
 

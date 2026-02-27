@@ -13,7 +13,7 @@ use glutin::{
     surface::{Surface, SurfaceAttributesBuilder, WindowSurface},
 };
 use image::RgbaImage;
-use log::{info, warn};
+use log::{debug, info, warn};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::{
     collections::HashMap, error::Error, ffi::CStr, hash::Hasher, mem, num::NonZeroU32, sync::Arc,
@@ -175,7 +175,7 @@ pub fn init(
 ) -> Result<State, Box<dyn Error>> {
     info!("Initializing OpenGL backend...");
     if gfx_debug_enabled {
-        info!("OpenGL debug context requested.");
+        debug!("OpenGL debug context requested.");
     }
 
     let (gl_surface, gl_context, gl) =
@@ -1263,7 +1263,7 @@ fn push_tmesh_debug_sample(state: &mut State, frame: TMeshFrameDebug) {
     }
     let frames = u64::from(accum.frames).max(1);
     let dyn_avg = accum.dynamic_upload_vertices / frames;
-    info!(
+    debug!(
         "OpenGL tmesh-cache: hit={} miss={} promote={} evict={} dyn_upload_vtx/frame={} cache_entries={} cache_mb={:.2}",
         accum.cache_hits,
         accum.cache_misses,
@@ -1337,12 +1337,12 @@ fn create_opengl_context(
 
     #[cfg(target_os = "windows")]
     let (display, vsync_logic) = {
-        info!("Using WGL for OpenGL context.");
+        debug!("Using WGL for OpenGL context.");
         let preference = DisplayApiPreference::Wgl(None);
         let display = unsafe { Display::new(display_handle, preference)? };
 
         let vsync_logic = move |display: &Display| {
-            info!("Attempting to set VSync via wglSwapIntervalEXT...");
+            debug!("Attempting to set VSync via wglSwapIntervalEXT...");
             type SwapIntervalFn = extern "system" fn(i32) -> i32;
             let proc_name = c"wglSwapIntervalEXT";
             let proc = display.get_proc_address(proc_name);
@@ -1350,7 +1350,7 @@ fn create_opengl_context(
                 let f: SwapIntervalFn = unsafe { std::mem::transmute(proc) };
                 let interval = i32::from(vsync_enabled);
                 if f(interval) != 0 {
-                    info!(
+                    debug!(
                         "Successfully set VSync to: {}",
                         if vsync_enabled { "on" } else { "off" }
                     );
@@ -1369,13 +1369,13 @@ fn create_opengl_context(
         // Select the appropriate DisplayApiPreference based on the OS
         #[cfg(target_os = "macos")]
         let preference = {
-            info!("Using CGL for OpenGL context.");
+            debug!("Using CGL for OpenGL context.");
             DisplayApiPreference::Cgl
         };
 
         #[cfg(all(unix, not(target_os = "macos")))]
         let preference = {
-            info!("Using EGL for OpenGL context.");
+            debug!("Using EGL for OpenGL context.");
             DisplayApiPreference::Egl
         };
 
@@ -1395,7 +1395,7 @@ fn create_opengl_context(
             if let Err(e) = surface.set_swap_interval(&context, interval) {
                 warn!("Failed to set swap interval (VSync): {:?}", e);
             } else {
-                info!(
+                debug!(
                     "Successfully set VSync to: {}",
                     if vsync_enabled { "on" } else { "off" }
                 );

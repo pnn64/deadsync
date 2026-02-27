@@ -1,6 +1,6 @@
 use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{Note, NoteType};
-use log::info;
+use log::debug;
 use rssp::streams::StreamSegment;
 use rssp::timing as rssp_timing;
 use std::cmp::Ordering;
@@ -482,7 +482,7 @@ impl TimingData {
         }
 
         let row_to_beat = row_to_beat.to_vec();
-        info!("TimingData processed {} note rows.", row_to_beat.len());
+        debug!("TimingData processed {} note rows.", row_to_beat.len());
         timing_with_stops.row_to_beat = Arc::new(row_to_beat);
 
         timing_with_stops

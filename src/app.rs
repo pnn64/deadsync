@@ -24,7 +24,7 @@ use winit::{
     window::{Icon, Window},
 };
 
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use std::borrow::Cow;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
@@ -2041,7 +2041,7 @@ impl App {
         }
 
         if from == CurrentScreen::Init && target == CurrentScreen::Menu {
-            info!("Instant navigation Init→Menu (out-transition handled by Init screen)");
+            debug!("Instant navigation Init→Menu (out-transition handled by Init screen)");
             self.state.screens.current_screen = target;
             self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
             crate::ui::runtime::clear_all();
@@ -2314,7 +2314,7 @@ impl App {
     }
 
     fn start_actor_fade(&mut self, from: CurrentScreen, target: CurrentScreen) {
-        info!("Starting actor-only fade out to screen: {target:?}");
+        debug!("Starting actor-only fade out to screen: {target:?}");
         let duration = if from == CurrentScreen::Menu
             && (target == CurrentScreen::SelectProfile
                 || target == CurrentScreen::SelectColor
@@ -2336,7 +2336,7 @@ impl App {
     }
 
     fn start_global_fade(&mut self, target: CurrentScreen) {
-        info!("Starting global fade out to screen: {target:?}");
+        debug!("Starting global fade out to screen: {target:?}");
         let (_, out_duration) =
             self.get_out_transition_for_screen(self.state.screens.current_screen);
         self.state.shell.transition = TransitionState::FadingOut {
@@ -2715,12 +2715,12 @@ impl App {
                 label, elapsed_ms, self.state.screens.current_screen
             );
         } else if elapsed_ms >= 16.7 {
-            info!(
+            debug!(
                 "Frame-cost command: {} took {:.2}ms on screen {:?}",
                 label, elapsed_ms, self.state.screens.current_screen
             );
         } else if always_log_timing {
-            info!(
+            debug!(
                 "Command timing: {} took {:.2}ms on screen {:?}",
                 label, elapsed_ms, self.state.screens.current_screen
             );
@@ -2820,7 +2820,7 @@ impl App {
     }
 
     fn spawn_grade_fetch(&self, hash: String) {
-        info!("Fetching online grade for chart hash: {hash}");
+        debug!("Fetching online grade for chart hash: {hash}");
         let mut spawned = 0;
         for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
             if !profile::is_session_side_joined(side) {
@@ -3942,7 +3942,7 @@ impl App {
                 == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F3)
         {
             let mode = self.state.shell.cycle_overlay_mode();
-            log::info!("Overlay {}", self.state.shell.overlay_mode.label());
+            debug!("Overlay {}", self.state.shell.overlay_mode.label());
             config::update_show_stats_mode(mode);
             options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
         }
@@ -4118,7 +4118,7 @@ impl App {
 
                         if let Some(setting) = setting {
                             commands.push(Command::UpdateScrollSpeed { side, setting });
-                            info!("Saved scroll speed ({side:?}): {setting}");
+                            debug!("Saved scroll speed ({side:?}): {setting}");
                         } else {
                             warn!(
                                 "Unsupported speed mod '{}' not saved to profile.",
@@ -4154,7 +4154,7 @@ impl App {
                 }
 
                 commands.push(Command::UpdateSessionMusicRate(po_state.music_rate));
-                info!("Session music rate set to {:.2}x", po_state.music_rate);
+                debug!("Session music rate set to {:.2}x", po_state.music_rate);
 
                 let preferred_idx = match play_style {
                     profile::PlayStyle::Versus => po_state.chart_difficulty_index[0],
@@ -4168,7 +4168,7 @@ impl App {
                 };
                 self.state.session.preferred_difficulty_index = preferred_idx;
                 commands.push(Command::UpdatePreferredDifficulty(preferred_idx));
-                info!(
+                debug!(
                     "Updated preferred difficulty index to {} from PlayerOptions",
                     self.state.session.preferred_difficulty_index
                 );
@@ -4837,7 +4837,7 @@ impl App {
                 self.state.session.session_start_time = Some(Instant::now());
                 self.state.session.played_stages.clear();
                 self.state.session.course_individual_stage_indices.clear();
-                info!("Session timer started.");
+                debug!("Session timer started.");
             }
 
             match prev {
@@ -5097,7 +5097,7 @@ impl App {
                 self.state.session.session_start_time = Some(Instant::now());
                 self.state.session.played_stages.clear();
                 self.state.session.course_individual_stage_indices.clear();
-                info!("Session timer started.");
+                debug!("Session timer started.");
             }
 
             match prev {
@@ -5163,7 +5163,7 @@ impl ApplicationHandler<UserEvent> for App {
                         initial,
                         ..
                     } => {
-                        info!(
+                        debug!(
                             "Gamepad connected: {} (ID: {}) via {:?}",
                             name,
                             usize::from(*id),
@@ -5188,7 +5188,7 @@ impl ApplicationHandler<UserEvent> for App {
                         initial,
                         ..
                     } => {
-                        info!(
+                        debug!(
                             "Gamepad disconnected: {} (ID: {}) via {:?}",
                             name,
                             usize::from(*id),
