@@ -3362,17 +3362,6 @@ fn refresh_active_attack_masks(state: &mut State) {
 }
 
 #[inline(always)]
-pub fn effective_accel_mask_for_player(state: &State, player_idx: usize) -> u8 {
-    if player_idx >= state.num_players {
-        return 0;
-    }
-    profile::normalize_accel_effects_mask(
-        state.player_profiles[player_idx].accel_effects_active_mask
-            | state.active_attack_accel_mask[player_idx],
-    )
-}
-
-#[inline(always)]
 pub fn effective_visual_mask_for_player(state: &State, player_idx: usize) -> u16 {
     if player_idx >= state.num_players {
         return 0;
@@ -3380,17 +3369,6 @@ pub fn effective_visual_mask_for_player(state: &State, player_idx: usize) -> u16
     profile::normalize_visual_effects_mask(
         state.player_profiles[player_idx].visual_effects_active_mask
             | state.active_attack_visual_mask[player_idx],
-    )
-}
-
-#[inline(always)]
-pub fn effective_appearance_mask_for_player(state: &State, player_idx: usize) -> u8 {
-    if player_idx >= state.num_players {
-        return 0;
-    }
-    profile::normalize_appearance_effects_mask(
-        state.player_profiles[player_idx].appearance_effects_active_mask
-            | state.active_attack_appearance_mask[player_idx],
     )
 }
 
