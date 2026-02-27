@@ -1,10 +1,17 @@
 use crate::act;
 use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::{screen_center_x, screen_center_y, screen_width};
+use crate::core::space::{
+    screen_center_x, screen_center_y, screen_height, screen_width, widescale,
+};
+use crate::game::parsing::{noteskin, simfile as song_loading};
 use crate::screens::components::heart_bg;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
+use log::warn;
+use std::path::PathBuf;
+use std::sync::mpsc;
+use std::time::Instant;
 
 /* ----------------------- timing & layout ----------------------- */
 
@@ -28,6 +35,62 @@ const SQUISH_START_DELAY: f32 = 0.50; // after PRE_ROLL
 const SQUISH_IN_DURATION: f32 = 0.35; // 1.0 -> 0.0
 pub const BAR_SQUISH_DURATION: f32 = 0.35;
 
+const LOADING_BAR_H: f32 = 30.0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LoadingPhase {
+    Songs,
+    Courses,
+    Finalizing,
+}
+
+enum LoadingMsg {
+    Phase(LoadingPhase),
+    Song {
+        done: usize,
+        total: usize,
+        pack: String,
+        song: String,
+    },
+    Course {
+        done: usize,
+        total: usize,
+        group: String,
+        course: String,
+    },
+    Done,
+}
+
+struct LoadingState {
+    phase: LoadingPhase,
+    line2: String,
+    line3: String,
+    songs_done: usize,
+    songs_total: usize,
+    courses_done: usize,
+    courses_total: usize,
+    done: bool,
+    started_at: Instant,
+    rx: mpsc::Receiver<LoadingMsg>,
+}
+
+impl LoadingState {
+    fn new(rx: mpsc::Receiver<LoadingMsg>) -> Self {
+        Self {
+            phase: LoadingPhase::Songs,
+            line2: String::new(),
+            line3: String::new(),
+            songs_done: 0,
+            songs_total: 0,
+            courses_done: 0,
+            courses_total: 0,
+            done: false,
+            started_at: Instant::now(),
+            rx,
+        }
+    }
+}
+
 /* ----------------------- auto-advance ----------------------- */
 #[inline(always)]
 fn arrows_finished_at() -> f32 {
@@ -50,6 +113,7 @@ fn remaining(from_time: f32, now: f32) -> f32 {
 
 #[derive(PartialEq, Eq)]
 enum InitPhase {
+    Loading,
     Playing,
     FadingOut,
 }
@@ -57,6 +121,8 @@ enum InitPhase {
 pub struct State {
     elapsed: f32,
     phase: InitPhase,
+    loader_started: bool,
+    loading: Option<LoadingState>,
     pub active_color_index: i32,
     bg: heart_bg::State,
 }
@@ -64,15 +130,129 @@ pub struct State {
 pub fn init() -> State {
     State {
         elapsed: 0.0,
-        phase: InitPhase::Playing,
+        phase: InitPhase::Loading,
+        loader_started: false,
+        loading: None,
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: heart_bg::State::new(),
     }
 }
 
+fn collect_banner_cache_paths() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    {
+        let song_cache = crate::game::song::get_song_cache();
+        for pack in song_cache.iter() {
+            if let Some(path) = pack.banner_path.as_ref() {
+                out.push(path.clone());
+            }
+            for song in &pack.songs {
+                if let Some(path) = song.banner_path.as_ref() {
+                    out.push(path.clone());
+                }
+            }
+        }
+    }
+    {
+        let course_cache = crate::game::course::get_course_cache();
+        for (course_path, course) in course_cache.iter() {
+            if let Some(path) =
+                rssp::course::resolve_course_banner_path(course_path, &course.banner)
+            {
+                out.push(path);
+            }
+        }
+    }
+    out
+}
+
+fn start_loading_thread(state: &mut State) {
+    let (tx, rx) = mpsc::channel::<LoadingMsg>();
+    state.loading = Some(LoadingState::new(rx));
+
+    std::thread::spawn(move || {
+        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Songs));
+        let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
+            let _ = tx.send(LoadingMsg::Song {
+                done,
+                total,
+                pack: pack.to_owned(),
+                song: song.to_owned(),
+            });
+        };
+        song_loading::scan_and_load_songs_with_progress_counts("songs", &mut on_song);
+
+        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Courses));
+        let mut on_course = |done: usize, total: usize, group: &str, course: &str| {
+            let _ = tx.send(LoadingMsg::Course {
+                done,
+                total,
+                group: group.to_owned(),
+                course: course.to_owned(),
+            });
+        };
+        song_loading::scan_and_load_courses_with_progress_counts(
+            "courses",
+            "songs",
+            &mut on_course,
+        );
+
+        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Finalizing));
+        crate::assets::prewarm_banner_cache(&collect_banner_cache_paths());
+        std::thread::spawn(|| {
+            if std::panic::catch_unwind(noteskin::prewarm_itg_preview_cache).is_err() {
+                warn!("noteskin prewarm thread panicked; first-use preview hitches may occur");
+            }
+        });
+        let _ = tx.send(LoadingMsg::Done);
+    });
+}
+
+fn poll_loading_state(loading: &mut LoadingState) {
+    while let Ok(msg) = loading.rx.try_recv() {
+        match msg {
+            LoadingMsg::Phase(phase) => {
+                loading.phase = phase;
+                loading.line2.clear();
+                loading.line3.clear();
+            }
+            LoadingMsg::Song {
+                done,
+                total,
+                pack,
+                song,
+            } => {
+                loading.phase = LoadingPhase::Songs;
+                loading.songs_done = done;
+                loading.songs_total = total;
+                loading.line2 = pack;
+                loading.line3 = song;
+            }
+            LoadingMsg::Course {
+                done,
+                total,
+                group,
+                course,
+            } => {
+                loading.phase = LoadingPhase::Courses;
+                loading.courses_done = done;
+                loading.courses_total = total;
+                loading.line2 = group;
+                loading.line3 = course;
+            }
+            LoadingMsg::Done => {
+                loading.done = true;
+            }
+        }
+    }
+}
+
 /* -------------------------- input -> nav ----------------------- */
 
-pub const fn handle_input(_: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if state.phase == InitPhase::Loading {
+        return ScreenAction::None;
+    }
     if ev.pressed {
         match ev.action {
             VirtualAction::p1_start | VirtualAction::p1_back => {
@@ -87,7 +267,28 @@ pub const fn handle_input(_: &mut State, ev: &InputEvent) -> ScreenAction {
 /* ---------------------------- update --------------------------- */
 
 pub fn update(state: &mut State, dt: f32) -> ScreenAction {
-    state.elapsed += dt;
+    if state.phase == InitPhase::Loading {
+        if !state.loader_started {
+            state.loader_started = true;
+            start_loading_thread(state);
+        }
+
+        let done = if let Some(loading) = state.loading.as_mut() {
+            poll_loading_state(loading);
+            loading.done
+        } else {
+            false
+        };
+
+        if done {
+            state.loading = None;
+            state.phase = InitPhase::Playing;
+            state.elapsed = 0.0;
+        }
+        return ScreenAction::None;
+    }
+
+    state.elapsed += dt.max(0.0);
 
     if state.phase == InitPhase::Playing && state.elapsed >= arrows_finished_at() {
         state.phase = InitPhase::FadingOut;
@@ -159,6 +360,173 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     (vec![actor], 0.35)
 }
 
+fn loading_progress(loading: Option<&LoadingState>) -> (usize, usize, f32) {
+    let Some(loading) = loading else {
+        return (0, 0, 0.0);
+    };
+    let done = loading.songs_done.saturating_add(loading.courses_done);
+    let mut total = loading.songs_total.saturating_add(loading.courses_total);
+    if total < done {
+        total = done;
+    }
+    let mut progress = if total > 0 {
+        (done as f32 / total as f32).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    if !loading.done && total > 0 && progress >= 1.0 {
+        progress = 0.999;
+    }
+    (done, total, progress)
+}
+
+fn loading_phase_label(phase: LoadingPhase) -> &'static str {
+    match phase {
+        LoadingPhase::Songs => "Loading songs...",
+        LoadingPhase::Courses => "Loading courses...",
+        LoadingPhase::Finalizing => "Finalizing cache...",
+    }
+}
+
+fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>) {
+    let loading = state.loading.as_ref();
+    let phase = loading.map(|l| l.phase).unwrap_or(LoadingPhase::Songs);
+    let (line2, line3) = if let Some(loading) = loading {
+        (loading.line2.clone(), loading.line3.clone())
+    } else {
+        (String::new(), String::new())
+    };
+    let started = loading.map(|l| l.started_at).unwrap_or_else(Instant::now);
+    let elapsed = started.elapsed().as_secs_f32().max(0.0);
+    let (done, total, progress) = loading_progress(loading);
+    let finished = loading.is_some_and(|l| l.done);
+    let count_text = if total == 0 {
+        String::new()
+    } else {
+        let pct = 100.0 * progress;
+        format!("{done}/{total} ({pct:.1}%)")
+    };
+    let speed_text = if total > 0 && done >= total && !finished {
+        "Current speed: finalizing...".to_string()
+    } else if elapsed > 0.0 && total > 0 {
+        format!("Current speed: {:.1} items/s", done as f32 / elapsed)
+    } else {
+        "Current speed: 0.0 items/s".to_string()
+    };
+    let fill = color::decorative_rgba(state.active_color_index);
+
+    let bar_w = widescale(360.0, 520.0);
+    let bar_h = LOADING_BAR_H;
+    let bar_cx = screen_center_x();
+    let bar_cy = screen_center_y() + 34.0;
+    let fill_w = (bar_w - 4.0) * progress.clamp(0.0, 1.0);
+
+    actors.push(act!(quad:
+        align(0.0, 0.0):
+        xy(0.0, 0.0):
+        zoomto(screen_width(), screen_height()):
+        diffuse(0.0, 0.0, 0.0, 0.8):
+        z(104.0)
+    ));
+    actors.push(act!(text:
+        font("wendy"):
+        settext("DEAD SYNC"):
+        align(0.5, 0.5):
+        xy(screen_center_x(), bar_cy - 136.0):
+        zoom(0.82):
+        horizalign(center):
+        z(110.0)
+    ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(if total == 0 { "Initilizing..." } else { loading_phase_label(phase) }):
+        align(0.5, 0.5):
+        xy(screen_center_x(), bar_cy - 96.0):
+        zoom(1.05):
+        horizalign(center):
+        z(110.0)
+    ));
+    if !line2.is_empty() {
+        actors.push(act!(text:
+            font("miso"):
+            settext(line2):
+            align(0.5, 0.5):
+            xy(screen_center_x(), bar_cy - 72.0):
+            zoom(0.95):
+            maxwidth(screen_width() * 0.9):
+            horizalign(center):
+            z(110.0)
+        ));
+    }
+    if !line3.is_empty() {
+        actors.push(act!(text:
+            font("miso"):
+            settext(line3):
+            align(0.5, 0.5):
+            xy(screen_center_x(), bar_cy - 48.0):
+            zoom(0.95):
+            maxwidth(screen_width() * 0.9):
+            horizalign(center):
+            z(110.0)
+        ));
+    }
+
+    let mut bar_children = Vec::with_capacity(4);
+    bar_children.push(act!(quad:
+        align(0.5, 0.5):
+        xy(bar_w / 2.0, bar_h / 2.0):
+        zoomto(bar_w, bar_h):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(0)
+    ));
+    bar_children.push(act!(quad:
+        align(0.5, 0.5):
+        xy(bar_w / 2.0, bar_h / 2.0):
+        zoomto(bar_w - 4.0, bar_h - 4.0):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        z(1)
+    ));
+    if fill_w > 0.0 {
+        bar_children.push(act!(quad:
+            align(0.0, 0.5):
+            xy(2.0, bar_h / 2.0):
+            zoomto(fill_w, bar_h - 4.0):
+            diffuse(fill[0], fill[1], fill[2], 1.0):
+            z(2)
+        ));
+    }
+    bar_children.push(act!(text:
+        font("miso"):
+        settext(count_text):
+        align(0.5, 0.5):
+        xy(bar_w / 2.0, bar_h / 2.0):
+        zoom(0.9):
+        horizalign(center):
+        z(3)
+    ));
+    actors.push(Actor::Frame {
+        align: [0.5, 0.5],
+        offset: [bar_cx, bar_cy],
+        size: [
+            crate::ui::actors::SizeSpec::Px(bar_w),
+            crate::ui::actors::SizeSpec::Px(bar_h),
+        ],
+        background: None,
+        z: 110,
+        children: bar_children,
+    });
+
+    actors.push(act!(text:
+        font("miso"):
+        settext(speed_text):
+        align(0.5, 0.5):
+        xy(screen_center_x(), bar_cy + 36.0):
+        zoom(0.9):
+        horizalign(center):
+        z(110.0)
+    ));
+}
+
 /* --------------------------- combined build --------------------------- */
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
@@ -170,6 +538,11 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
     }));
+
+    if state.phase == InitPhase::Loading {
+        push_loading_overlay(state, &mut actors);
+        return actors;
+    }
 
     /* If we’re still in pre-roll, stop here: no squish/backdrop/arrows yet. */
     if state.elapsed < PRE_ROLL {

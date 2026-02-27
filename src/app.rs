@@ -5,7 +5,7 @@ use crate::core::display;
 use crate::core::gfx::{self as renderer, BackendType, create_backend};
 use crate::core::input::{self, InputEvent};
 use crate::core::space::{self as space, Metrics};
-use crate::game::parsing::{noteskin, simfile as song_loading};
+use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::{
     Screen as CurrentScreen, ScreenAction, credits, evaluation, evaluation_summary, gameover,
@@ -5559,15 +5559,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let show_stats_mode = config.show_stats_mode.min(2);
     let color_index = config.simply_love_color;
     let profile_data = profile::get();
-
-    song_loading::scan_and_load_songs("songs");
-    song_loading::scan_and_load_courses("courses", "songs");
-    crate::assets::prewarm_banner_cache(&collect_banner_cache_paths());
-    std::thread::spawn(|| {
-        if std::panic::catch_unwind(noteskin::prewarm_itg_preview_cache).is_err() {
-            warn!("noteskin prewarm thread panicked; first-use preview hitches may occur");
-        }
-    });
     let event_loop: EventLoop<UserEvent> = EventLoop::<UserEvent>::with_user_event().build()?;
 
     // Spawn background thread to pump pad input and emit user events; decoupled from frame rate.
@@ -5594,32 +5585,4 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     );
     event_loop.run_app(&mut app)?;
     Ok(())
-}
-
-fn collect_banner_cache_paths() -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    {
-        let song_cache = crate::game::song::get_song_cache();
-        for pack in song_cache.iter() {
-            if let Some(path) = pack.banner_path.as_ref() {
-                out.push(path.clone());
-            }
-            for song in &pack.songs {
-                if let Some(path) = song.banner_path.as_ref() {
-                    out.push(path.clone());
-                }
-            }
-        }
-    }
-    {
-        let course_cache = crate::game::course::get_course_cache();
-        for (course_path, course) in course_cache.iter() {
-            if let Some(path) =
-                rssp::course::resolve_course_banner_path(course_path, &course.banner)
-            {
-                out.push(path);
-            }
-        }
-    }
-    out
 }

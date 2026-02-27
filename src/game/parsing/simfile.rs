@@ -886,20 +886,30 @@ pub fn reload_song_in_cache(simfile_path: &Path) -> Result<Arc<SongData>, String
 
 /// Scans the provided root directory (e.g., "songs/") for simfiles,
 /// parses them, and populates the global cache. This should be run once at startup.
+#[allow(dead_code)]
 pub fn scan_and_load_songs(root_path_str: &'static str) {
-    scan_and_load_songs_impl::<fn(&str, &str)>(root_path_str, None);
+    scan_and_load_songs_impl::<fn(usize, usize, &str, &str)>(root_path_str, None);
 }
 
+#[allow(dead_code)]
 pub fn scan_and_load_songs_with_progress<F>(root_path_str: &'static str, progress: &mut F)
 where
     F: FnMut(&str, &str),
+{
+    let mut with_counts = |_: usize, _: usize, pack: &str, song: &str| progress(pack, song);
+    scan_and_load_songs_impl(root_path_str, Some(&mut with_counts));
+}
+
+pub fn scan_and_load_songs_with_progress_counts<F>(root_path_str: &'static str, progress: &mut F)
+where
+    F: FnMut(usize, usize, &str, &str),
 {
     scan_and_load_songs_impl(root_path_str, Some(progress));
 }
 
 fn scan_and_load_songs_impl<F>(root_path_str: &'static str, mut progress: Option<&mut F>)
 where
-    F: FnMut(&str, &str),
+    F: FnMut(usize, usize, &str, &str),
 {
     info!("Starting simfile scan in '{root_path_str}'...");
 
@@ -950,6 +960,8 @@ where
             return;
         }
     };
+    let total_songs = packs.iter().map(|pack| pack.songs.len()).sum::<usize>();
+    let mut songs_seen = 0usize;
 
     // (pack_idx, simfile_path, result(song_data, is_cache_hit))
     type ParseMsg = (usize, PathBuf, Result<(Arc<SongData>, bool), String>);
@@ -1023,6 +1035,7 @@ where
 
         for song in pack.songs {
             let simfile_path = song.simfile;
+            songs_seen = songs_seen.saturating_add(1);
             if let Some(cb) = progress.as_mut() {
                 let song_display = simfile_path
                     .parent()
@@ -1035,7 +1048,7 @@ where
                             .and_then(|n| n.to_str())
                             .unwrap_or_default()
                     });
-                cb(pack_display.as_str(), song_display);
+                cb(songs_seen, total_songs, pack_display.as_str(), song_display);
             }
 
             if parallel_parsing {
@@ -1359,16 +1372,33 @@ fn autogen_nonstop_group_courses() -> Vec<(PathBuf, rssp::course::CourseFile)> {
     out
 }
 
+#[allow(dead_code)]
 pub fn scan_and_load_courses(courses_root_str: &'static str, songs_root_str: &'static str) {
-    scan_and_load_courses_impl::<fn(&str, &str)>(courses_root_str, songs_root_str, None);
+    scan_and_load_courses_impl::<fn(usize, usize, &str, &str)>(
+        courses_root_str,
+        songs_root_str,
+        None,
+    );
 }
 
+#[allow(dead_code)]
 pub fn scan_and_load_courses_with_progress<F>(
     courses_root_str: &'static str,
     songs_root_str: &'static str,
     progress: &mut F,
 ) where
     F: FnMut(&str, &str),
+{
+    let mut with_counts = |_: usize, _: usize, group: &str, course: &str| progress(group, course);
+    scan_and_load_courses_impl(courses_root_str, songs_root_str, Some(&mut with_counts));
+}
+
+pub fn scan_and_load_courses_with_progress_counts<F>(
+    courses_root_str: &'static str,
+    songs_root_str: &'static str,
+    progress: &mut F,
+) where
+    F: FnMut(usize, usize, &str, &str),
 {
     scan_and_load_courses_impl(courses_root_str, songs_root_str, Some(progress));
 }
@@ -1378,7 +1408,7 @@ fn scan_and_load_courses_impl<F>(
     songs_root_str: &'static str,
     mut progress: Option<&mut F>,
 ) where
-    F: FnMut(&str, &str),
+    F: FnMut(usize, usize, &str, &str),
 {
     info!("Starting course scan in '{courses_root_str}'...");
     let started = Instant::now();
@@ -1407,8 +1437,12 @@ fn scan_and_load_courses_impl<F>(
             .map(|pack| pack.songs.len())
             .sum::<usize>()
     };
+    let course_paths = collect_course_paths(courses_root);
+    let total_courses = course_paths.len();
+    let mut courses_seen = 0usize;
 
-    for course_path in collect_course_paths(courses_root) {
+    for course_path in course_paths {
+        courses_seen = courses_seen.saturating_add(1);
         if let Some(cb) = progress.as_mut() {
             let group_display = course_path
                 .parent()
@@ -1421,7 +1455,7 @@ fn scan_and_load_courses_impl<F>(
                 .and_then(|n| n.to_str())
                 .filter(|s| !s.is_empty())
                 .unwrap_or_default();
-            cb(group_display, course_display);
+            cb(courses_seen, total_courses, group_display, course_display);
         }
         let data = match fs::read(&course_path) {
             Ok(d) => d,

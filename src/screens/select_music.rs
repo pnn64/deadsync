@@ -37,6 +37,7 @@ use winit::keyboard::KeyCode;
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;
 const TRANSITION_OUT_DURATION: f32 = 0.3;
+const RELOAD_BAR_H: f32 = 30.0;
 
 // ITGmania metric: ScreenSelectMusic ShowOptionsMessageSeconds (fallback: 1.5).
 const SHOW_OPTIONS_MESSAGE_SECONDS: f32 = 1.5;
@@ -587,8 +588,18 @@ enum ReloadPhase {
 
 enum ReloadMsg {
     Phase(ReloadPhase),
-    Song { pack: String, song: String },
-    Course { group: String, course: String },
+    Song {
+        done: usize,
+        total: usize,
+        pack: String,
+        song: String,
+    },
+    Course {
+        done: usize,
+        total: usize,
+        group: String,
+        course: String,
+    },
     Done,
 }
 
@@ -596,7 +607,12 @@ struct ReloadUiState {
     phase: ReloadPhase,
     line2: String,
     line3: String,
+    songs_done: usize,
+    songs_total: usize,
+    courses_done: usize,
+    courses_total: usize,
     done: bool,
+    started_at: Instant,
     rx: mpsc::Receiver<ReloadMsg>,
 }
 
@@ -606,7 +622,12 @@ impl ReloadUiState {
             phase: ReloadPhase::Songs,
             line2: String::new(),
             line3: String::new(),
+            songs_done: 0,
+            songs_total: 0,
+            courses_done: 0,
+            courses_total: 0,
             done: false,
+            started_at: Instant::now(),
             rx,
         }
     }
@@ -2403,36 +2424,31 @@ fn start_reload_songs_and_courses(state: &mut State) {
     std::thread::spawn(move || {
         let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Songs));
 
-        let interval = Duration::from_millis(50);
-        let mut last_sent = Instant::now() - interval;
-        let mut on_song = |pack: &str, song: &str| {
-            let now = Instant::now();
-            if now.duration_since(last_sent) < interval {
-                return;
-            }
-            last_sent = now;
+        let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
             let _ = tx.send(ReloadMsg::Song {
+                done,
+                total,
                 pack: pack.to_owned(),
                 song: song.to_owned(),
             });
         };
-        song_loading::scan_and_load_songs_with_progress("songs", &mut on_song);
+        song_loading::scan_and_load_songs_with_progress_counts("songs", &mut on_song);
 
         let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Courses));
 
-        let mut last_sent = Instant::now() - interval;
-        let mut on_course = |group: &str, course: &str| {
-            let now = Instant::now();
-            if now.duration_since(last_sent) < interval {
-                return;
-            }
-            last_sent = now;
+        let mut on_course = |done: usize, total: usize, group: &str, course: &str| {
             let _ = tx.send(ReloadMsg::Course {
+                done,
+                total,
                 group: group.to_owned(),
                 course: course.to_owned(),
             });
         };
-        song_loading::scan_and_load_courses_with_progress("courses", "songs", &mut on_course);
+        song_loading::scan_and_load_courses_with_progress_counts(
+            "courses",
+            "songs",
+            &mut on_course,
+        );
 
         let _ = tx.send(ReloadMsg::Done);
     });
@@ -2446,13 +2462,27 @@ fn poll_reload_ui(reload: &mut ReloadUiState) {
                 reload.line2.clear();
                 reload.line3.clear();
             }
-            ReloadMsg::Song { pack, song } => {
+            ReloadMsg::Song {
+                done,
+                total,
+                pack,
+                song,
+            } => {
                 reload.phase = ReloadPhase::Songs;
+                reload.songs_done = done;
+                reload.songs_total = total;
                 reload.line2 = pack;
                 reload.line3 = song;
             }
-            ReloadMsg::Course { group, course } => {
+            ReloadMsg::Course {
+                done,
+                total,
+                group,
+                course,
+            } => {
                 reload.phase = ReloadPhase::Courses;
+                reload.courses_done = done;
+                reload.courses_total = total;
                 reload.line2 = group;
                 reload.line3 = course;
             }
@@ -2461,6 +2491,155 @@ fn poll_reload_ui(reload: &mut ReloadUiState) {
             }
         }
     }
+}
+
+#[inline(always)]
+fn reload_progress(reload: &ReloadUiState) -> (usize, usize, f32) {
+    let done = reload.songs_done.saturating_add(reload.courses_done);
+    let mut total = reload.songs_total.saturating_add(reload.courses_total);
+    if total < done {
+        total = done;
+    }
+    let mut progress = if total > 0 {
+        (done as f32 / total as f32).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    if !reload.done && total > 0 && progress >= 1.0 {
+        progress = 0.999;
+    }
+    (done, total, progress)
+}
+
+#[inline(always)]
+const fn reload_phase_label(phase: ReloadPhase) -> &'static str {
+    match phase {
+        ReloadPhase::Songs => "Loading songs...",
+        ReloadPhase::Courses => "Loading courses...",
+    }
+}
+
+fn reload_detail_lines(reload: &ReloadUiState) -> (String, String) {
+    (reload.line2.clone(), reload.line3.clone())
+}
+
+fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_color_index: i32) {
+    let (done, total, progress) = reload_progress(reload);
+    let elapsed = reload.started_at.elapsed().as_secs_f32().max(0.0);
+    let count_text = if total == 0 {
+        String::new()
+    } else {
+        let pct = 100.0 * progress;
+        format!("{done}/{total} ({pct:.1}%)")
+    };
+    let speed_text = if total > 0 && done >= total && !reload.done {
+        "Current speed: finalizing...".to_string()
+    } else if elapsed > 0.0 && total > 0 {
+        format!("Current speed: {:.1} items/s", done as f32 / elapsed)
+    } else {
+        "Current speed: 0.0 items/s".to_string()
+    };
+    let (line2, line3) = reload_detail_lines(reload);
+    let fill = color::decorative_rgba(active_color_index);
+
+    let bar_w = widescale(360.0, 520.0);
+    let bar_h = RELOAD_BAR_H;
+    let bar_cx = screen_center_x();
+    let bar_cy = screen_center_y() + 34.0;
+    let fill_w = (bar_w - 4.0) * progress.clamp(0.0, 1.0);
+
+    actors.push(act!(quad:
+        align(0.0, 0.0):
+        xy(0.0, 0.0):
+        zoomto(screen_width(), screen_height()):
+        diffuse(0.0, 0.0, 0.0, 0.8):
+        z(1450)
+    ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(if total == 0 { "Initilizing..." } else { reload_phase_label(reload.phase) }):
+        align(0.5, 0.5):
+        xy(screen_center_x(), bar_cy - 98.0):
+        zoom(1.05):
+        horizalign(center):
+        z(1451)
+    ));
+    if !line2.is_empty() {
+        actors.push(act!(text:
+            font("miso"):
+            settext(line2):
+            align(0.5, 0.5):
+            xy(screen_center_x(), bar_cy - 74.0):
+            zoom(0.95):
+            maxwidth(screen_width() * 0.9):
+            horizalign(center):
+            z(1451)
+        ));
+    }
+    if !line3.is_empty() {
+        actors.push(act!(text:
+            font("miso"):
+            settext(line3):
+            align(0.5, 0.5):
+            xy(screen_center_x(), bar_cy - 50.0):
+            zoom(0.95):
+            maxwidth(screen_width() * 0.9):
+            horizalign(center):
+            z(1451)
+        ));
+    }
+
+    let mut bar_children = Vec::with_capacity(4);
+    bar_children.push(act!(quad:
+        align(0.5, 0.5):
+        xy(bar_w / 2.0, bar_h / 2.0):
+        zoomto(bar_w, bar_h):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(0)
+    ));
+    bar_children.push(act!(quad:
+        align(0.5, 0.5):
+        xy(bar_w / 2.0, bar_h / 2.0):
+        zoomto(bar_w - 4.0, bar_h - 4.0):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        z(1)
+    ));
+    if fill_w > 0.0 {
+        bar_children.push(act!(quad:
+            align(0.0, 0.5):
+            xy(2.0, bar_h / 2.0):
+            zoomto(fill_w, bar_h - 4.0):
+            diffuse(fill[0], fill[1], fill[2], 1.0):
+            z(2)
+        ));
+    }
+    bar_children.push(act!(text:
+        font("miso"):
+        settext(count_text):
+        align(0.5, 0.5):
+        xy(bar_w / 2.0, bar_h / 2.0):
+        zoom(0.9):
+        horizalign(center):
+        z(3)
+    ));
+    actors.push(Actor::Frame {
+        align: [0.5, 0.5],
+        offset: [bar_cx, bar_cy],
+        size: [SizeSpec::Px(bar_w), SizeSpec::Px(bar_h)],
+        background: None,
+        z: 1451,
+        children: bar_children,
+    });
+
+    actors.push(act!(text:
+        font("miso"):
+        settext(speed_text):
+        align(0.5, 0.5):
+        xy(screen_center_x(), bar_cy + 36.0):
+        zoom(0.9):
+        horizalign(center):
+        z(1451)
+    ));
 }
 
 fn refresh_after_reload(state: &mut State) {
@@ -5198,37 +5377,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     if let Some(reload) = &state.reload_ui {
-        let header = match reload.phase {
-            ReloadPhase::Songs => "Loading songs...",
-            ReloadPhase::Courses => "Loading courses...",
-        };
-        let text = if reload.line2.is_empty() && reload.line3.is_empty() {
-            header.to_string()
-        } else if reload.line2.is_empty() {
-            format!("{header}\n{}", reload.line3)
-        } else if reload.line3.is_empty() {
-            format!("{header}\n{}", reload.line2)
-        } else {
-            format!("{header}\n{}\n{}", reload.line2, reload.line3)
-        };
-
-        actors.push(act!(quad:
-            align(0.0, 0.0):
-            xy(0.0, 0.0):
-            zoomto(screen_width(), screen_height()):
-            diffuse(0.0, 0.0, 0.0, 0.8):
-            z(1450)
-        ));
-        actors.push(act!(text:
-            align(0.5, 0.5):
-            xy(screen_center_x(), screen_center_y()):
-            zoom(1.0):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            font("miso"):
-            settext(text):
-            horizalign(center):
-            z(1451)
-        ));
+        push_reload_overlay(&mut actors, reload, state.active_color_index);
         return actors;
     }
 
