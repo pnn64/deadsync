@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.1.852"
+version = "0.1.853"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -92,7 +92,10 @@ shaderc = "0.10.1"
 winres = "0.1.12"
 
 [profile.release]
-debug-assertions = true
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
