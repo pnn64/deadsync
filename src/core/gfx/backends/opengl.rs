@@ -180,6 +180,7 @@ pub fn init(
 
     let (gl_surface, gl_context, gl) =
         create_opengl_context(&window, vsync_enabled, gfx_debug_enabled)?;
+    log_opengl_driver_info(&gl);
     let (
         program,
         mvp_location,
@@ -420,6 +421,28 @@ pub fn init(
 
     info!("OpenGL backend initialized successfully.");
     Ok(state)
+}
+
+fn log_opengl_driver_info(gl: &glow::Context) {
+    #[inline(always)]
+    fn norm(value: String) -> String {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            "<unknown>".to_string()
+        } else {
+            trimmed.to_string()
+        }
+    }
+    unsafe {
+        let vendor = norm(gl.get_parameter_string(glow::VENDOR));
+        let renderer = norm(gl.get_parameter_string(glow::RENDERER));
+        let version = norm(gl.get_parameter_string(glow::VERSION));
+        let glsl = norm(gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION));
+        info!(
+            "OpenGL driver: {} [{}], {}, GLSL {}",
+            renderer, vendor, version, glsl
+        );
+    }
 }
 
 pub fn create_texture(

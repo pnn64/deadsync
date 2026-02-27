@@ -366,6 +366,7 @@ fn init(
         force_fallback_adapter: false,
     }))
     .map_err(|e| format!("No suitable {} adapter found: {e}", api.name()))?;
+    log_wgpu_adapter_info(api, &adapter);
 
     let want_immediates = matches!(api, Api::Vulkan);
     let use_immediates = want_immediates && adapter.features().contains(wgpu::Features::IMMEDIATES);
@@ -569,6 +570,58 @@ fn init(
         screenshot_requested: false,
         captured_frame: None,
     })
+}
+
+#[inline(always)]
+const fn wgpu_vendor_name(vendor_id: u32) -> &'static str {
+    match vendor_id {
+        0x10DE => "NVIDIA",
+        0x1002 | 0x1022 => "AMD",
+        0x8086 => "Intel",
+        0x13B5 => "ARM",
+        0x5143 => "Qualcomm",
+        0x1010 => "ImgTec",
+        0x106B => "Apple",
+        0x1414 => "Microsoft",
+        _ => "Unknown",
+    }
+}
+
+fn log_wgpu_adapter_info(api: Api, adapter: &wgpu::Adapter) {
+    let info_data = adapter.get_info();
+    let vendor_name = wgpu_vendor_name(info_data.vendor);
+    let name = {
+        let trimmed = info_data.name.trim();
+        if trimmed.is_empty() {
+            "<unknown>".to_string()
+        } else {
+            trimmed.to_string()
+        }
+    };
+    let driver = {
+        let a = info_data.driver.trim();
+        let b = info_data.driver_info.trim();
+        if a.is_empty() && b.is_empty() {
+            "unknown".to_string()
+        } else if b.is_empty() {
+            a.to_string()
+        } else if a.is_empty() {
+            b.to_string()
+        } else {
+            format!("{a}, {b}")
+        }
+    };
+    info!(
+        "{} adapter: {} [{}], driver {}, backend {:?} (vendor=0x{:04x}, device=0x{:04x}, type={:?})",
+        api.name(),
+        name,
+        vendor_name,
+        driver,
+        info_data.backend,
+        info_data.vendor,
+        info_data.device,
+        info_data.device_type
+    );
 }
 
 fn init_uniform_proj(

@@ -246,6 +246,7 @@ pub fn init(
     let surface = create_surface(&entry, &instance, window)?;
     let surface_loader = surface::Instance::new(&entry, &instance);
     let pdevice = select_physical_device(&instance, &surface_loader, surface)?;
+    log_selected_device(&instance, pdevice);
     let (device, queue, queue_family_index) =
         create_logical_device(&instance, pdevice, &surface_loader, surface)?;
     let device = Some(Arc::new(device));
@@ -3069,6 +3070,56 @@ fn select_physical_device(
         .into_iter()
         .find(|pdevice| is_device_suitable(instance, *pdevice, surface_loader, surface))
         .ok_or_else(|| "Failed to find a suitable GPU!".into())
+}
+
+#[inline(always)]
+fn vk_vendor_name(vendor_id: u32) -> &'static str {
+    match vendor_id {
+        0x10DE => "NVIDIA",
+        0x1002 | 0x1022 => "AMD",
+        0x8086 => "Intel",
+        0x13B5 => "ARM",
+        0x5143 => "Qualcomm",
+        0x1010 => "ImgTec",
+        0x106B => "Apple",
+        _ => "Unknown",
+    }
+}
+
+#[inline(always)]
+fn decode_driver_version(vendor_id: u32, driver_version: u32) -> String {
+    if vendor_id == 0x10DE {
+        let a = (driver_version >> 22) & 0x3ff;
+        let b = (driver_version >> 14) & 0x0ff;
+        let c = (driver_version >> 6) & 0x0ff;
+        let d = driver_version & 0x03f;
+        return format!("{a}.{b}.{c}.{d} (raw=0x{driver_version:08x})");
+    }
+    let major = vk::api_version_major(driver_version);
+    let minor = vk::api_version_minor(driver_version);
+    let patch = vk::api_version_patch(driver_version);
+    format!("{major}.{minor}.{patch} (raw=0x{driver_version:08x})")
+}
+
+fn log_selected_device(instance: &Instance, pdevice: vk::PhysicalDevice) {
+    let props = unsafe { instance.get_physical_device_properties(pdevice) };
+    let name = unsafe { ffi::CStr::from_ptr(props.device_name.as_ptr()) }.to_string_lossy();
+    let api_major = vk::api_version_major(props.api_version);
+    let api_minor = vk::api_version_minor(props.api_version);
+    let api_patch = vk::api_version_patch(props.api_version);
+    let vendor_name = vk_vendor_name(props.vendor_id);
+    let driver = decode_driver_version(props.vendor_id, props.driver_version);
+    info!(
+        "Vulkan GPU: {} [{}], driver {}, API {}.{}.{} (pci ven=0x{:04x} dev=0x{:04x})",
+        name,
+        vendor_name,
+        driver,
+        api_major,
+        api_minor,
+        api_patch,
+        props.vendor_id,
+        props.device_id
+    );
 }
 
 fn is_device_suitable(

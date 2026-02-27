@@ -1,4 +1,4 @@
-use log::{debug, warn};
+use log::{debug, info, warn};
 use serde::Deserialize;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -143,13 +143,15 @@ fn perform_check() {
             match body.read_json::<ApiResponse>() {
                 Ok(data) => {
                     if data.services_result == "OK" {
-                        println!("Connected to {service_name}!"); // per your requirement
-                        debug!("Successfully connected to {service_name}.");
                         let services = Services {
                             get_scores: data.services_allowed.player_scores,
                             leaderboard: data.services_allowed.player_leaderboards,
                             auto_submit: data.services_allowed.score_submit,
                         };
+                        info!(
+                            "Connected to {service_name} (scores={}, leaderboards={}, autosubmit={}).",
+                            services.get_scores, services.leaderboard, services.auto_submit
+                        );
                         set_status(ConnectionStatus::Connected(services));
                     } else {
                         warn!("servicesResult != OK");
@@ -175,7 +177,7 @@ fn perform_arrowcloud_check() {
     let agent = get_agent();
     match agent.get(ARROWCLOUD_API_URL).call() {
         Ok(_) => {
-            debug!("Successfully connected to ArrowCloud.");
+            info!("Connected to ArrowCloud.");
             set_arrowcloud_status(ArrowCloudConnectionStatus::Connected);
         }
         Err(e) => {
