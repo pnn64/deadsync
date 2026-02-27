@@ -265,6 +265,52 @@ impl FromStr for LanguageFlag {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl LogLevel {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "Error",
+            Self::Warn => "Warn",
+            Self::Info => "Info",
+            Self::Debug => "Debug",
+            Self::Trace => "Trace",
+        }
+    }
+
+    pub const fn as_level_filter(self) -> log::LevelFilter {
+        match self {
+            Self::Error => log::LevelFilter::Error,
+            Self::Warn => log::LevelFilter::Warn,
+            Self::Info => log::LevelFilter::Info,
+            Self::Debug => log::LevelFilter::Debug,
+            Self::Trace => log::LevelFilter::Trace,
+        }
+    }
+}
+
+impl FromStr for LogLevel {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "error" | "err" => Ok(Self::Error),
+            "warn" | "warning" => Ok(Self::Warn),
+            "info" => Ok(Self::Info),
+            "debug" => Ok(Self::Debug),
+            "trace" => Ok(Self::Trace),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisplayMode {
     Windowed,
     Fullscreen(FullscreenType),
@@ -281,6 +327,7 @@ pub struct Config {
     pub game_flag: GameFlag,
     pub theme_flag: ThemeFlag,
     pub language_flag: LanguageFlag,
+    pub log_level: LogLevel,
     /// 0=Off, 1=FPS, 2=FPS+Stutter.
     pub show_stats_mode: u8,
     pub translated_titles: bool,
@@ -386,6 +433,7 @@ impl Default for Config {
             game_flag: GameFlag::Dance,
             theme_flag: ThemeFlag::SimplyLove,
             language_flag: LanguageFlag::English,
+            log_level: LogLevel::Warn,
             show_stats_mode: 0,
             translated_titles: false,
             mine_hit_sound: true,
@@ -688,6 +736,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         default.global_offset_seconds
     ));
     content.push_str(&format!("Language={}\n", default.language_flag.as_str()));
+    content.push_str(&format!("LogLevel={}\n", default.log_level.as_str()));
     content.push_str(&format!("MaxFps={}\n", default.max_fps));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
@@ -1133,6 +1182,10 @@ pub fn load() {
                     .get("Options", "Language")
                     .and_then(|v| LanguageFlag::from_str(&v).ok())
                     .unwrap_or(default.language_flag);
+                cfg.log_level = conf
+                    .get("Options", "LogLevel")
+                    .and_then(|v| LogLevel::from_str(&v).ok())
+                    .unwrap_or(default.log_level);
                 cfg.visual_delay_seconds = conf
                     .get("Options", "VisualDelaySeconds")
                     .and_then(|v| v.parse().ok())
@@ -1526,6 +1579,7 @@ pub fn load() {
                     "GfxDebug",
                     "GlobalOffsetSeconds",
                     "Language",
+                    "LogLevel",
                     "MaxFps",
                     "MasterVolume",
                     "MenuMusic",
@@ -2331,6 +2385,7 @@ fn save_without_keymaps() {
         cfg.global_offset_seconds
     ));
     content.push_str(&format!("Language={}\n", cfg.language_flag.as_str()));
+    content.push_str(&format!("LogLevel={}\n", cfg.log_level.as_str()));
     content.push_str(&format!("MaxFps={}\n", cfg.max_fps));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
@@ -2710,6 +2765,18 @@ pub fn update_show_stats_mode(mode: u8) {
             return;
         }
         cfg.show_stats_mode = mode;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_log_level(level: LogLevel) {
+    log::set_max_level(level.as_level_filter());
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.log_level == level {
+            return;
+        }
+        cfg.log_level = level;
     }
     save_without_keymaps();
 }

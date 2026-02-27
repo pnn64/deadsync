@@ -5,8 +5,8 @@ use crate::core::gfx::BackendType;
 use crate::core::space::{screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::config::{
-    self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, SelectMusicPatternInfoMode,
-    SimpleIni,
+    self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
+    SelectMusicPatternInfoMode, SimpleIni,
 };
 use crate::core::audio;
 #[cfg(target_os = "windows")]
@@ -571,6 +571,11 @@ pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
         inline: false,
     },
     SubRow {
+        label: "Log Level",
+        choices: &["Error", "Warn", "Info", "Debug", "Trace"],
+        inline: false,
+    },
+    SubRow {
         label: "Default NoteSkin",
         choices: &[profile::NoteSkin::DEFAULT_NAME],
         inline: false,
@@ -592,6 +597,13 @@ pub const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
         name: "Language",
         help: &[
             "Stored in deadsync.ini for compatibility; runtime language switching is not implemented yet.",
+        ],
+    },
+    Item {
+        name: "Log Level",
+        help: &[
+            "Set application log verbosity.",
+            "Applies immediately and is saved to deadsync.ini.",
         ],
     },
     Item {
@@ -2800,6 +2812,26 @@ const fn select_music_pattern_info_from_choice(idx: usize) -> SelectMusicPattern
     }
 }
 
+const fn log_level_choice_index(level: LogLevel) -> usize {
+    match level {
+        LogLevel::Error => 0,
+        LogLevel::Warn => 1,
+        LogLevel::Info => 2,
+        LogLevel::Debug => 3,
+        LogLevel::Trace => 4,
+    }
+}
+
+const fn log_level_from_choice(idx: usize) -> LogLevel {
+    match idx {
+        0 => LogLevel::Error,
+        1 => LogLevel::Warn,
+        2 => LogLevel::Info,
+        3 => LogLevel::Debug,
+        _ => LogLevel::Trace,
+    }
+}
+
 pub struct State {
     pub selected: usize,
     prev_selected: usize,
@@ -3036,6 +3068,12 @@ pub fn init() -> State {
         SYSTEM_OPTIONS_ROWS,
         "Language",
         0,
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_system,
+        SYSTEM_OPTIONS_ROWS,
+        "Log Level",
+        log_level_choice_index(cfg.log_level),
     );
     if let Some(noteskin_row_idx) = SYSTEM_OPTIONS_ROWS
         .iter()
@@ -4283,6 +4321,7 @@ fn apply_submenu_choice_delta(
             "Game" => config::update_game_flag(config::GameFlag::Dance),
             "Theme" => config::update_theme_flag(config::ThemeFlag::SimplyLove),
             "Language" => config::update_language_flag(config::LanguageFlag::English),
+            "Log Level" => config::update_log_level(log_level_from_choice(new_index)),
             "Default NoteSkin" => {
                 if let Some(skin_name) = selected_choice.as_deref() {
                     profile::update_machine_default_noteskin(profile::NoteSkin::new(skin_name));
