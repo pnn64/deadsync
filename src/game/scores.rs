@@ -2032,60 +2032,6 @@ fn arrowcloud_payload_for_player(
 }
 
 #[inline(always)]
-fn arrowcloud_safe_hash(hash: &str) -> String {
-    let mut out = String::with_capacity(hash.len());
-    for ch in hash.chars() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch.to_ascii_lowercase());
-        }
-    }
-    if out.is_empty() {
-        out.push_str("unknownhash");
-    }
-    out
-}
-
-fn write_arrowcloud_payload_dump(
-    side: profile::PlayerSide,
-    chart_hash: &str,
-    payload: &ArrowCloudPayload,
-) -> Result<PathBuf, String> {
-    let side_tag = match side {
-        profile::PlayerSide::P1 => "p1",
-        profile::PlayerSide::P2 => "p2",
-    };
-    let timestamp = Local::now().format("%Y%m%d-%H%M%S-%3f");
-    let safe_hash = arrowcloud_safe_hash(chart_hash);
-    let base_dir = PathBuf::from("save").join("arrowcloud");
-    let payload_dir = base_dir.join("payloads");
-    let payload_path = payload_dir.join(format!("{timestamp}-{side_tag}-{safe_hash}.json"));
-    let latest_path = base_dir.join(format!("latest-{side_tag}.json"));
-
-    fs::create_dir_all(&payload_dir).map_err(|e| {
-        format!(
-            "failed to create ArrowCloud payload dir '{}': {e}",
-            payload_dir.display()
-        )
-    })?;
-    let bytes = serde_json::to_vec_pretty(payload)
-        .map_err(|e| format!("failed to serialize ArrowCloud payload JSON: {e}"))?;
-    fs::write(&payload_path, &bytes).map_err(|e| {
-        format!(
-            "failed to write ArrowCloud payload dump '{}': {e}",
-            payload_path.display()
-        )
-    })?;
-    if let Err(e) = fs::write(&latest_path, &bytes) {
-        warn!(
-            "Failed to update ArrowCloud latest payload '{}' : {e}",
-            latest_path.display()
-        );
-    }
-
-    Ok(payload_path)
-}
-
-#[inline(always)]
 fn arrowcloud_submit_url(chart_hash: &str) -> Option<String> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -2186,31 +2132,6 @@ fn submit_arrowcloud_payload(
             status: status_kind,
             message: format!("HTTP {status_code}: {}", snippet.as_str()),
         })
-    }
-}
-
-pub fn dump_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
-    if !crate::config::get().enable_arrowcloud || gs.num_players == 0 {
-        return;
-    }
-
-    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
-        let Some(payload) = arrowcloud_payload_for_player(gs, player_idx) else {
-            continue;
-        };
-        let side = gameplay_side_for_player(gs, player_idx);
-        match write_arrowcloud_payload_dump(side, payload.hash.as_str(), &payload) {
-            Ok(path) => debug!(
-                "Saved ArrowCloud payload dump for {:?} ({}) to '{}'",
-                side,
-                payload.hash,
-                path.display()
-            ),
-            Err(e) => warn!(
-                "Failed to save ArrowCloud payload dump for {:?} ({}) : {}",
-                side, payload.hash, e
-            ),
-        }
     }
 }
 
