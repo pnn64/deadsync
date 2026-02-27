@@ -11,6 +11,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=src/core/gfx/shaders");
     println!("cargo:rerun-if-changed=assets");
 
+    embed_windows_icon()?;
+
     let mut compiler = Compiler::new()?;
 
     // OUT_DIR used by include_bytes! in Vulkan source
@@ -23,6 +25,24 @@ fn main() -> Result<(), Box<dyn Error>> {
     let target_dir = compute_target_dir()?;
     copy_assets(&target_dir)?;
 
+    Ok(())
+}
+
+#[cfg(windows)]
+fn embed_windows_icon() -> Result<(), Box<dyn Error>> {
+    const WINDOWS_ICON_PATH: &str = "assets/graphics/icon/icon.ico";
+    println!("cargo:rerun-if-changed={WINDOWS_ICON_PATH}");
+    if fs::metadata(WINDOWS_ICON_PATH).is_err() {
+        return Err(format!("missing Windows icon file: {WINDOWS_ICON_PATH}").into());
+    }
+    let mut res = winres::WindowsResource::new();
+    res.set_icon(WINDOWS_ICON_PATH);
+    res.compile()?;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn embed_windows_icon() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
@@ -119,7 +139,8 @@ fn compile_vulkan_shaders(compiler: &mut Compiler, out_dir: &Path) -> Result<(),
 fn compute_target_dir() -> Result<PathBuf, Box<dyn Error>> {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
     let profile = std::env::var("PROFILE")?;
-    let base = std::env::var("CARGO_TARGET_DIR").map_or_else(|_| manifest_dir.join("target"), PathBuf::from);
+    let base = std::env::var("CARGO_TARGET_DIR")
+        .map_or_else(|_| manifest_dir.join("target"), PathBuf::from);
     Ok(base.join(profile))
 }
 

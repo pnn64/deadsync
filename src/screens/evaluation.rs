@@ -2384,7 +2384,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     // Auto-submit status text (SL/zmod parity with AutoSubmitScore.lua SubmitText actors):
-    // Common Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
+    // Common Normal/ThemeFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
+    // In SL/zmod, Common Normal.redir points to Miso/_miso light.
     {
         for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
             if !profile::is_session_side_joined(side) {
@@ -2415,7 +2416,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 screen_width() * 0.75
             };
             actors.push(act!(text:
-                font("wendy"):
+                font("miso"):
                 settext(status_text):
                 align(0.5, 0.5):
                 xy(x, screen_height() - 15.0):

@@ -21,7 +21,7 @@ use winit::{
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     monitor::MonitorHandle,
-    window::Window,
+    window::{Icon, Window},
 };
 
 use log::{error, info, warn};
@@ -287,6 +287,51 @@ fn frame_interval_for_max_fps(max_fps: u16) -> Option<Duration> {
         Some(Duration::from_secs_f64(1.0 / f64::from(max_fps)))
     }
 }
+
+fn load_window_icon() -> Option<Icon> {
+    const WINDOW_ICON_PATHS: [&str; 2] = [
+        "assets/graphics/icon/icon-256.png",
+        "assets/graphics/icon/icon.png",
+    ];
+    for path in WINDOW_ICON_PATHS {
+        let Ok(img) = image::open(Path::new(path)) else {
+            continue;
+        };
+        let rgba = img.into_rgba8();
+        let (width, height) = rgba.dimensions();
+        if let Ok(icon) = Icon::from_rgba(rgba.into_raw(), width, height) {
+            return Some(icon);
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn set_macos_app_icon() {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSApplication, NSImage};
+    use objc2_foundation::NSString;
+
+    const MACOS_APP_ICON_PATHS: [&str; 2] = [
+        "assets/graphics/icon/icon.icns",
+        "assets/graphics/icon/icon-512.png",
+    ];
+
+    let app = NSApplication::sharedApplication(unsafe { MainThreadMarker::new_unchecked() });
+    for path in MACOS_APP_ICON_PATHS {
+        let ns_path = NSString::from_str(path);
+        let icon_image = NSImage::initWithContentsOfFile(NSImage::alloc(), &ns_path);
+        if let Some(icon_image) = icon_image {
+            unsafe {
+                app.setApplicationIconImage(Some(&icon_image));
+            }
+            return;
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_macos_app_icon() {}
 
 /// Active screen data bundle.
 pub struct ScreensState {
@@ -3395,6 +3440,10 @@ impl App {
             // Keep the window hidden until startup assets are ready so the first
             // visible frame starts Init animations at t=0.
             .with_visible(false);
+        set_macos_app_icon();
+        if let Some(icon) = load_window_icon() {
+            window_attributes = window_attributes.with_window_icon(Some(icon));
+        }
 
         let window_width = self.state.shell.display_width;
         let window_height = self.state.shell.display_height;
