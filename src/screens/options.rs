@@ -116,12 +116,27 @@ const VISIBLE_ROWS: usize = 10; // how many rows are shown at once
 // Match player_options.rs row height.
 const ROW_H: f32 = 33.0;
 const ROW_GAP: f32 = 2.5;
-const LIST_W: f32 = 509.0;
-
 const SEP_W: f32 = 2.5; // gap/stripe between rows and description
-const DESC_W: f32 = 292.0; // description panel width (WideScale(287,292) in SL)
+// Match SL non-wide/wide block sizing used by ScreenPlayerOptions underlay.
+const OPTIONS_BLOCK_W_43: f32 = 614.0;
+const OPTIONS_BLOCK_W_169: f32 = 792.0;
+const DESC_W_43: f32 = 287.0; // ScreenOptionsService overlay.lua: WideScale(287,292)
+const DESC_W_169: f32 = 292.0;
 // derive description height from visible rows so it never includes a trailing gap
 const DESC_H: f32 = (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
+
+#[inline(always)]
+fn desc_w_unscaled() -> f32 {
+    widescale(DESC_W_43, DESC_W_169)
+}
+
+#[inline(always)]
+fn list_w_unscaled() -> f32 {
+    widescale(
+        OPTIONS_BLOCK_W_43 - SEP_W - DESC_W_43,
+        OPTIONS_BLOCK_W_169 - SEP_W - DESC_W_169,
+    )
+}
 
 /// Left margin for row labels (in content-space pixels).
 const TEXT_LEFT_PAD: f32 = 40.66;
@@ -4506,7 +4521,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 state.advanced_prev_visible_rows.clear();
                 state.select_music_prev_visible_rows.clear();
             }
-            let list_w = LIST_W * s;
+            let list_w = list_w_unscaled() * s;
             if let Some((to_x, to_y, to_w, to_h)) =
                 submenu_cursor_dest(state, asset_manager, kind, s, list_x, list_y, list_w)
             {
@@ -5304,7 +5319,7 @@ pub fn handle_input(
 /// honoring LEFT, RIGHT and TOP margins in *screen pixels*.
 /// Returns (scale, `origin_x`, `origin_y`).
 fn scaled_block_origin_with_margins() -> (f32, f32, f32) {
-    let total_w = LIST_W + SEP_W + DESC_W;
+    let total_w = list_w_unscaled() + SEP_W + desc_w_unscaled();
     let total_h = DESC_H;
 
     let sw = screen_width();
@@ -6073,9 +6088,9 @@ pub fn get_actors(
     let (s, list_x, list_y) = scaled_block_origin_with_margins();
 
     // Geometry (scaled)
-    let list_w = LIST_W * s;
+    let list_w = list_w_unscaled() * s;
     let sep_w = SEP_W * s;
-    let desc_w = DESC_W * s;
+    let desc_w = desc_w_unscaled() * s;
     let desc_h = DESC_H * s;
 
     // Separator immediately to the RIGHT of the rows, aligned to the FIRST row top
@@ -6734,7 +6749,7 @@ pub fn get_actors(
             (help[0], &help[1..])
         };
 
-        let title_max_width_px = DESC_W.mul_add(s, -(2.0 * title_side_pad));
+        let title_max_width_px = desc_w_unscaled().mul_add(s, -(2.0 * title_side_pad));
         let wrapped_title = wrap_miso_text(
             asset_manager,
             raw_title_text,
@@ -6758,8 +6773,8 @@ pub fn get_actors(
         if !bullet_lines.is_empty() {
             let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
             let mut bullet_text = String::new();
-            let bullet_max_width_px =
-                DESC_W.mul_add(s, -((2.0 * bullet_side_pad) + DESC_BULLET_INDENT_PX * s));
+            let bullet_max_width_px = desc_w_unscaled()
+                .mul_add(s, -((2.0 * bullet_side_pad) + DESC_BULLET_INDENT_PX * s));
             for line in bullet_lines {
                 let trimmed = line.trim();
                 if trimmed.is_empty() {
