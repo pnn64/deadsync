@@ -3328,9 +3328,7 @@ pub fn update_player_initials_for_side(side: PlayerSide, initials: &str) {
 }
 
 pub fn update_scroll_speed_for_side(side: PlayerSide, setting: ScrollSpeedSetting) {
-    if session_side_is_guest(side) {
-        return;
-    }
+    // Guest changes should persist for the active session; save_* no-ops for guests.
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3343,9 +3341,6 @@ pub fn update_scroll_speed_for_side(side: PlayerSide, setting: ScrollSpeedSettin
 }
 
 pub fn update_background_filter_for_side(side: PlayerSide, setting: BackgroundFilter) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3358,9 +3353,6 @@ pub fn update_background_filter_for_side(side: PlayerSide, setting: BackgroundFi
 }
 
 pub fn update_hold_judgment_graphic_for_side(side: PlayerSide, setting: HoldJudgmentGraphic) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3373,9 +3365,6 @@ pub fn update_hold_judgment_graphic_for_side(side: PlayerSide, setting: HoldJudg
 }
 
 pub fn update_judgment_graphic_for_side(side: PlayerSide, setting: JudgmentGraphic) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3388,9 +3377,6 @@ pub fn update_judgment_graphic_for_side(side: PlayerSide, setting: JudgmentGraph
 }
 
 pub fn update_combo_font_for_side(side: PlayerSide, setting: ComboFont) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3403,9 +3389,6 @@ pub fn update_combo_font_for_side(side: PlayerSide, setting: ComboFont) {
 }
 
 pub fn update_combo_colors_for_side(side: PlayerSide, setting: ComboColors) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3418,9 +3401,6 @@ pub fn update_combo_colors_for_side(side: PlayerSide, setting: ComboColors) {
 }
 
 pub fn update_combo_mode_for_side(side: PlayerSide, setting: ComboMode) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3433,9 +3413,6 @@ pub fn update_combo_mode_for_side(side: PlayerSide, setting: ComboMode) {
 }
 
 pub fn update_carry_combo_between_songs_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3448,9 +3425,6 @@ pub fn update_carry_combo_between_songs_for_side(side: PlayerSide, enabled: bool
 }
 
 pub fn update_current_combo_for_side(side: PlayerSide, combo: u32) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3463,9 +3437,6 @@ pub fn update_current_combo_for_side(side: PlayerSide, combo: u32) {
 }
 
 pub fn update_scroll_option_for_side(side: PlayerSide, setting: ScrollOption) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3480,9 +3451,6 @@ pub fn update_scroll_option_for_side(side: PlayerSide, setting: ScrollOption) {
 }
 
 pub fn update_turn_option_for_side(side: PlayerSide, setting: TurnOption) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3495,9 +3463,6 @@ pub fn update_turn_option_for_side(side: PlayerSide, setting: TurnOption) {
 }
 
 pub fn update_insert_mask_for_side(side: PlayerSide, mask: u8) {
-    if session_side_is_guest(side) {
-        return;
-    }
     let mask = normalize_insert_mask(mask);
     {
         let mut profiles = PROFILES.lock().unwrap();
@@ -3511,9 +3476,6 @@ pub fn update_insert_mask_for_side(side: PlayerSide, mask: u8) {
 }
 
 pub fn update_remove_mask_for_side(side: PlayerSide, mask: u8) {
-    if session_side_is_guest(side) {
-        return;
-    }
     let mask = normalize_remove_mask(mask);
     {
         let mut profiles = PROFILES.lock().unwrap();
@@ -3527,9 +3489,6 @@ pub fn update_remove_mask_for_side(side: PlayerSide, mask: u8) {
 }
 
 pub fn update_holds_mask_for_side(side: PlayerSide, mask: u8) {
-    if session_side_is_guest(side) {
-        return;
-    }
     let mask = normalize_holds_mask(mask);
     {
         let mut profiles = PROFILES.lock().unwrap();
@@ -3543,9 +3502,6 @@ pub fn update_holds_mask_for_side(side: PlayerSide, mask: u8) {
 }
 
 pub fn update_accel_effects_mask_for_side(side: PlayerSide, mask: u8) {
-    if session_side_is_guest(side) {
-        return;
-    }
     let mask = normalize_accel_effects_mask(mask);
     {
         let mut profiles = PROFILES.lock().unwrap();
@@ -3559,9 +3515,6 @@ pub fn update_accel_effects_mask_for_side(side: PlayerSide, mask: u8) {
 }
 
 pub fn update_visual_effects_mask_for_side(side: PlayerSide, mask: u16) {
-    if session_side_is_guest(side) {
-        return;
-    }
     let mask = normalize_visual_effects_mask(mask);
     {
         let mut profiles = PROFILES.lock().unwrap();
@@ -3575,9 +3528,6 @@ pub fn update_visual_effects_mask_for_side(side: PlayerSide, mask: u16) {
 }
 
 pub fn update_appearance_effects_mask_for_side(side: PlayerSide, mask: u8) {
-    if session_side_is_guest(side) {
-        return;
-    }
     let mask = normalize_appearance_effects_mask(mask);
     {
         let mut profiles = PROFILES.lock().unwrap();
@@ -3591,9 +3541,6 @@ pub fn update_appearance_effects_mask_for_side(side: PlayerSide, mask: u8) {
 }
 
 pub fn update_attack_mode_for_side(side: PlayerSide, setting: AttackMode) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3606,9 +3553,6 @@ pub fn update_attack_mode_for_side(side: PlayerSide, setting: AttackMode) {
 }
 
 pub fn update_hide_light_type_for_side(side: PlayerSide, setting: HideLightType) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3621,9 +3565,6 @@ pub fn update_hide_light_type_for_side(side: PlayerSide, setting: HideLightType)
 }
 
 pub fn update_rescore_early_hits_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3636,9 +3577,6 @@ pub fn update_rescore_early_hits_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_early_dw_options_for_side(side: PlayerSide, hide_judgments: bool, hide_flash: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3663,9 +3601,6 @@ pub fn update_hide_options_for_side(
     hide_danger: bool,
     hide_combo_explosions: bool,
 ) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3697,9 +3632,6 @@ pub fn update_gameplay_extras_for_side(
     pacemaker: bool,
     nps_graph_at_top: bool,
 ) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3729,9 +3661,6 @@ pub fn update_gameplay_extras_for_side(
 }
 
 pub fn update_transparent_density_graph_bg_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3744,9 +3673,6 @@ pub fn update_transparent_density_graph_bg_for_side(side: PlayerSide, enabled: b
 }
 
 pub fn update_mini_indicator_for_side(side: PlayerSide, setting: MiniIndicator) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3759,9 +3685,6 @@ pub fn update_mini_indicator_for_side(side: PlayerSide, setting: MiniIndicator) 
 }
 
 pub fn update_noteskin_for_side(side: PlayerSide, setting: NoteSkin) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3774,9 +3697,6 @@ pub fn update_noteskin_for_side(side: PlayerSide, setting: NoteSkin) {
 }
 
 pub fn update_notefield_offset_x_for_side(side: PlayerSide, offset: i32) {
-    if session_side_is_guest(side) {
-        return;
-    }
     let clamped = offset.clamp(0, 50);
     {
         let mut profiles = PROFILES.lock().unwrap();
@@ -3790,9 +3710,6 @@ pub fn update_notefield_offset_x_for_side(side: PlayerSide, offset: i32) {
 }
 
 pub fn update_notefield_offset_y_for_side(side: PlayerSide, offset: i32) {
-    if session_side_is_guest(side) {
-        return;
-    }
     let clamped = offset.clamp(-50, 50);
     {
         let mut profiles = PROFILES.lock().unwrap();
@@ -3806,9 +3723,6 @@ pub fn update_notefield_offset_y_for_side(side: PlayerSide, offset: i32) {
 }
 
 pub fn update_mini_percent_for_side(side: PlayerSide, percent: i32) {
-    if session_side_is_guest(side) {
-        return;
-    }
     // Mirror Simply Love's range: -100% to +150%.
     let clamped = percent.clamp(-100, 150);
     {
@@ -3835,9 +3749,6 @@ pub fn update_perspective_for_side(side: PlayerSide, perspective: Perspective) {
 }
 
 pub fn update_visual_delay_ms_for_side(side: PlayerSide, ms: i32) {
-    if session_side_is_guest(side) {
-        return;
-    }
     // Mirror Simply Love's range: -100ms to +100ms.
     let clamped = ms.clamp(-100, 100);
     {
@@ -3852,9 +3763,6 @@ pub fn update_visual_delay_ms_for_side(side: PlayerSide, ms: i32) {
 }
 
 pub fn update_show_fa_plus_window_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3867,9 +3775,6 @@ pub fn update_show_fa_plus_window_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_show_ex_score_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3882,9 +3787,6 @@ pub fn update_show_ex_score_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_show_hard_ex_score_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3897,9 +3799,6 @@ pub fn update_show_hard_ex_score_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_show_fa_plus_pane_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3912,9 +3811,6 @@ pub fn update_show_fa_plus_pane_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_fa_plus_10ms_blue_window_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3927,9 +3823,6 @@ pub fn update_fa_plus_10ms_blue_window_for_side(side: PlayerSide, enabled: bool)
 }
 
 pub fn update_custom_fantastic_window_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3942,9 +3835,6 @@ pub fn update_custom_fantastic_window_for_side(side: PlayerSide, enabled: bool) 
 }
 
 pub fn update_custom_fantastic_window_ms_for_side(side: PlayerSide, ms: u8) {
-    if session_side_is_guest(side) {
-        return;
-    }
     let clamped = clamp_custom_fantastic_window_ms(ms);
     {
         let mut profiles = PROFILES.lock().unwrap();
@@ -3958,9 +3848,6 @@ pub fn update_custom_fantastic_window_ms_for_side(side: PlayerSide, ms: u8) {
 }
 
 pub fn update_judgment_tilt_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3973,9 +3860,6 @@ pub fn update_judgment_tilt_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_column_cues_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -3988,9 +3872,6 @@ pub fn update_column_cues_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_error_ms_display_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -4003,9 +3884,6 @@ pub fn update_error_ms_display_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_display_scorebox_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -4018,9 +3896,6 @@ pub fn update_display_scorebox_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_rainbow_max_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -4033,9 +3908,6 @@ pub fn update_rainbow_max_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_responsive_colors_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -4048,9 +3920,6 @@ pub fn update_responsive_colors_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_show_life_percent_for_side(side: PlayerSide, enabled: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -4063,9 +3932,6 @@ pub fn update_show_life_percent_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_tilt_multiplier_for_side(side: PlayerSide, multiplier: f32) {
-    if session_side_is_guest(side) {
-        return;
-    }
     if !multiplier.is_finite() {
         return;
     }
@@ -4081,9 +3947,6 @@ pub fn update_tilt_multiplier_for_side(side: PlayerSide, multiplier: f32) {
 }
 
 pub fn update_error_bar_mask_for_side(side: PlayerSide, mask: u8) {
-    if session_side_is_guest(side) {
-        return;
-    }
     let mask = normalize_error_bar_mask(mask);
     let style = error_bar_style_from_mask(mask);
     let text = error_bar_text_from_mask(mask);
@@ -4101,9 +3964,6 @@ pub fn update_error_bar_mask_for_side(side: PlayerSide, mask: u8) {
 }
 
 pub fn update_error_bar_trim_for_side(side: PlayerSide, setting: ErrorBarTrim) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -4116,9 +3976,6 @@ pub fn update_error_bar_trim_for_side(side: PlayerSide, setting: ErrorBarTrim) {
 }
 
 pub fn update_data_visualizations_for_side(side: PlayerSide, setting: DataVisualizations) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -4131,9 +3988,6 @@ pub fn update_data_visualizations_for_side(side: PlayerSide, setting: DataVisual
 }
 
 pub fn update_target_score_for_side(side: PlayerSide, setting: TargetScoreSetting) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -4146,9 +4000,6 @@ pub fn update_target_score_for_side(side: PlayerSide, setting: TargetScoreSettin
 }
 
 pub fn update_lifemeter_type_for_side(side: PlayerSide, setting: LifeMeterType) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -4161,9 +4012,6 @@ pub fn update_lifemeter_type_for_side(side: PlayerSide, setting: LifeMeterType) 
 }
 
 pub fn update_error_bar_options_for_side(side: PlayerSide, up: bool, multi_tick: bool) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -4177,9 +4025,6 @@ pub fn update_error_bar_options_for_side(side: PlayerSide, up: bool, multi_tick:
 }
 
 pub fn update_measure_counter_for_side(side: PlayerSide, setting: MeasureCounter) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -4192,9 +4037,6 @@ pub fn update_measure_counter_for_side(side: PlayerSide, setting: MeasureCounter
 }
 
 pub fn update_measure_counter_lookahead_for_side(side: PlayerSide, lookahead: u8) {
-    if session_side_is_guest(side) {
-        return;
-    }
     let lookahead = lookahead.min(4);
     {
         let mut profiles = PROFILES.lock().unwrap();
@@ -4215,9 +4057,6 @@ pub fn update_measure_counter_options_for_side(
     broken_run: bool,
     run_timer: bool,
 ) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
@@ -4239,9 +4078,6 @@ pub fn update_measure_counter_options_for_side(
 }
 
 pub fn update_measure_lines_for_side(side: PlayerSide, setting: MeasureLines) {
-    if session_side_is_guest(side) {
-        return;
-    }
     {
         let mut profiles = PROFILES.lock().unwrap();
         let profile = &mut profiles[side_ix(side)];
