@@ -547,6 +547,23 @@ const fn machine_startup_screen_enabled(cfg: &config::Config, screen: CurrentScr
     }
 }
 
+#[inline(always)]
+const fn machine_preferred_style(style: config::MachinePreferredPlayStyle) -> profile::PlayStyle {
+    match style {
+        config::MachinePreferredPlayStyle::Single => profile::PlayStyle::Single,
+        config::MachinePreferredPlayStyle::Versus => profile::PlayStyle::Versus,
+        config::MachinePreferredPlayStyle::Double => profile::PlayStyle::Double,
+    }
+}
+
+#[inline(always)]
+const fn machine_preferred_mode(mode: config::MachinePreferredPlayMode) -> profile::PlayMode {
+    match mode {
+        config::MachinePreferredPlayMode::Regular => profile::PlayMode::Regular,
+        config::MachinePreferredPlayMode::Marathon => profile::PlayMode::Marathon,
+    }
+}
+
 fn machine_resolve_startup_target(cfg: &config::Config, target: CurrentScreen) -> CurrentScreen {
     let order = [
         CurrentScreen::SelectProfile,
@@ -1982,6 +1999,18 @@ impl App {
             target = machine_resolve_startup_target(&cfg, target);
         }
         target = machine_resolve_post_select_target(&cfg, target);
+        if startup_flow {
+            if !cfg.machine_show_select_style
+                && matches!(target, CurrentScreen::SelectPlayMode | CurrentScreen::ProfileLoad)
+            {
+                profile::set_session_play_style(machine_preferred_style(cfg.machine_preferred_style));
+            }
+            if !cfg.machine_show_select_play_mode && target == CurrentScreen::ProfileLoad {
+                profile::set_session_play_mode(machine_preferred_mode(
+                    cfg.machine_preferred_play_mode,
+                ));
+            }
+        }
 
         // If Select Profile is disabled and gameplay was started from Menu,
         // initialize joined/session-side defaults from the Start button used on Menu.

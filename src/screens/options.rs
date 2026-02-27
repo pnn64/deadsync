@@ -6,7 +6,7 @@ use crate::core::space::{screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
-    SelectMusicPatternInfoMode, SimpleIni,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, SelectMusicPatternInfoMode, SimpleIni,
 };
 use crate::core::audio;
 #[cfg(target_os = "windows")]
@@ -500,7 +500,9 @@ const SELECT_MUSIC_ROW_SHOW_RIVALS: &str = "Show Rivals";
 const MACHINE_ROW_SELECT_PROFILE: &str = "Select Profile";
 const MACHINE_ROW_SELECT_COLOR: &str = "Select Color";
 const MACHINE_ROW_SELECT_STYLE: &str = "Select Style";
+const MACHINE_ROW_PREFERRED_STYLE: &str = "Preferred Style";
 const MACHINE_ROW_SELECT_PLAY_MODE: &str = "Select Play Mode";
+const MACHINE_ROW_PREFERRED_MODE: &str = "Preferred Mode";
 const MACHINE_ROW_EVAL_SUMMARY: &str = "Eval Summary";
 const MACHINE_ROW_NAME_ENTRY: &str = "Name Entry";
 const MACHINE_ROW_GAMEOVER: &str = "Gameover Screen";
@@ -668,6 +670,10 @@ const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 1;
 const SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX: usize = 2;
 const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 9;
 const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 10;
+const MACHINE_SELECT_STYLE_ROW_INDEX: usize = 2;
+const MACHINE_PREFERRED_STYLE_ROW_INDEX: usize = 3;
+const MACHINE_SELECT_PLAY_MODE_ROW_INDEX: usize = 4;
+const MACHINE_PREFERRED_MODE_ROW_INDEX: usize = 5;
 const ADVANCED_BANNER_CACHE_ROW_INDEX: usize = 1;
 const ADVANCED_BANNER_COLOR_DEPTH_ROW_INDEX: usize = 2;
 const ADVANCED_BANNER_MIN_DIMENSION_ROW_INDEX: usize = 3;
@@ -924,8 +930,18 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: MACHINE_ROW_PREFERRED_STYLE,
+        choices: &["1 Player", "2 Players", "Double"],
+        inline: true,
+    },
+    SubRow {
         label: MACHINE_ROW_SELECT_PLAY_MODE,
         choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: MACHINE_ROW_PREFERRED_MODE,
+        choices: &["Regular", "Marathon"],
         inline: true,
     },
     SubRow {
@@ -969,8 +985,16 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &["Show or skip Select Style during startup."],
     },
     Item {
+        name: MACHINE_ROW_PREFERRED_STYLE,
+        help: &["Applied when Select Style is Off."],
+    },
+    Item {
         name: MACHINE_ROW_SELECT_PLAY_MODE,
         help: &["Show or skip Select Play Mode during startup."],
+    },
+    Item {
+        name: MACHINE_ROW_PREFERRED_MODE,
+        help: &["Applied when Select Play Mode is Off."],
     },
     Item {
         name: MACHINE_ROW_EVAL_SUMMARY,
@@ -1837,6 +1861,32 @@ fn submenu_visible_row_indices(
                     if idx == SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX && !show_breakdown {
                         None
                     } else if idx == SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX && !show_previews {
+                        None
+                    } else {
+                        Some(idx)
+                    }
+                })
+                .collect()
+        }
+        SubmenuKind::Machine => {
+            let show_preferred_style = state
+                .sub_choice_indices_machine
+                .get(MACHINE_SELECT_STYLE_ROW_INDEX)
+                .copied()
+                .unwrap_or(1)
+                == 0;
+            let show_preferred_mode = state
+                .sub_choice_indices_machine
+                .get(MACHINE_SELECT_PLAY_MODE_ROW_INDEX)
+                .copied()
+                .unwrap_or(1)
+                == 0;
+            rows.iter()
+                .enumerate()
+                .filter_map(|(idx, _)| {
+                    if idx == MACHINE_PREFERRED_STYLE_ROW_INDEX && !show_preferred_style {
+                        None
+                    } else if idx == MACHINE_PREFERRED_MODE_ROW_INDEX && !show_preferred_mode {
                         None
                     } else {
                         Some(idx)
@@ -2812,6 +2862,36 @@ const fn select_music_pattern_info_from_choice(idx: usize) -> SelectMusicPattern
     }
 }
 
+const fn machine_preferred_style_choice_index(style: MachinePreferredPlayStyle) -> usize {
+    match style {
+        MachinePreferredPlayStyle::Single => 0,
+        MachinePreferredPlayStyle::Versus => 1,
+        MachinePreferredPlayStyle::Double => 2,
+    }
+}
+
+const fn machine_preferred_style_from_choice(idx: usize) -> MachinePreferredPlayStyle {
+    match idx {
+        1 => MachinePreferredPlayStyle::Versus,
+        2 => MachinePreferredPlayStyle::Double,
+        _ => MachinePreferredPlayStyle::Single,
+    }
+}
+
+const fn machine_preferred_mode_choice_index(mode: MachinePreferredPlayMode) -> usize {
+    match mode {
+        MachinePreferredPlayMode::Regular => 0,
+        MachinePreferredPlayMode::Marathon => 1,
+    }
+}
+
+const fn machine_preferred_mode_from_choice(idx: usize) -> MachinePreferredPlayMode {
+    match idx {
+        1 => MachinePreferredPlayMode::Marathon,
+        _ => MachinePreferredPlayMode::Regular,
+    }
+}
+
 const fn log_level_choice_index(level: LogLevel) -> usize {
     match level {
         LogLevel::Error => 0,
@@ -3140,8 +3220,20 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_PREFERRED_STYLE,
+        machine_preferred_style_choice_index(cfg.machine_preferred_style),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
         MACHINE_ROW_SELECT_PLAY_MODE,
         usize::from(cfg.machine_show_select_play_mode),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_PREFERRED_MODE,
+        machine_preferred_mode_choice_index(cfg.machine_preferred_play_mode),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_machine,
@@ -4371,7 +4463,17 @@ fn apply_submenu_choice_delta(
             MACHINE_ROW_SELECT_PROFILE => config::update_machine_show_select_profile(enabled),
             MACHINE_ROW_SELECT_COLOR => config::update_machine_show_select_color(enabled),
             MACHINE_ROW_SELECT_STYLE => config::update_machine_show_select_style(enabled),
+            MACHINE_ROW_PREFERRED_STYLE => {
+                config::update_machine_preferred_style(machine_preferred_style_from_choice(
+                    new_index,
+                ))
+            }
             MACHINE_ROW_SELECT_PLAY_MODE => config::update_machine_show_select_play_mode(enabled),
+            MACHINE_ROW_PREFERRED_MODE => {
+                config::update_machine_preferred_play_mode(machine_preferred_mode_from_choice(
+                    new_index,
+                ))
+            }
             MACHINE_ROW_EVAL_SUMMARY => config::update_machine_show_eval_summary(enabled),
             MACHINE_ROW_NAME_ENTRY => config::update_machine_show_name_entry(enabled),
             MACHINE_ROW_GAMEOVER => config::update_machine_show_gameover(enabled),

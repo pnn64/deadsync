@@ -186,6 +186,71 @@ impl FromStr for SelectMusicPatternInfoMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MachinePreferredPlayStyle {
+    #[default]
+    Single,
+    Versus,
+    Double,
+}
+
+impl MachinePreferredPlayStyle {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Single => "Single",
+            Self::Versus => "Versus",
+            Self::Double => "Double",
+        }
+    }
+}
+
+impl FromStr for MachinePreferredPlayStyle {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "single" | "1player" | "oneplayer" => Ok(Self::Single),
+            "versus" | "2player" | "2players" | "twoplayer" | "twoplayers" => Ok(Self::Versus),
+            "double" => Ok(Self::Double),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MachinePreferredPlayMode {
+    #[default]
+    Regular,
+    Marathon,
+}
+
+impl MachinePreferredPlayMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Regular => "Regular",
+            Self::Marathon => "Marathon",
+        }
+    }
+}
+
+impl FromStr for MachinePreferredPlayMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "regular" => Ok(Self::Regular),
+            "marathon" => Ok(Self::Marathon),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameFlag {
     Dance,
@@ -382,6 +447,10 @@ pub struct Config {
     pub machine_show_select_style: bool,
     /// Startup flow: show Select Play Mode before continuing.
     pub machine_show_select_play_mode: bool,
+    /// Startup flow fallback style used when Select Style is disabled.
+    pub machine_preferred_style: MachinePreferredPlayStyle,
+    /// Startup flow fallback mode used when Select Play Mode is disabled.
+    pub machine_preferred_play_mode: MachinePreferredPlayMode,
     /// Post-session flow from Select Music/Course: show Evaluation Summary.
     pub machine_show_eval_summary: bool,
     /// Post-session flow from Select Music/Course: show Name Entry.
@@ -465,6 +534,8 @@ impl Default for Config {
             machine_show_select_color: true,
             machine_show_select_style: true,
             machine_show_select_play_mode: true,
+            machine_preferred_style: MachinePreferredPlayStyle::Single,
+            machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
             machine_show_eval_summary: true,
             machine_show_name_entry: true,
             machine_show_gameover: true,
@@ -969,6 +1040,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "MachinePreferredStyle={}\n",
+        default.machine_preferred_style.as_str()
+    ));
+    content.push_str(&format!(
+        "MachinePreferredPlayMode={}\n",
+        default.machine_preferred_play_mode.as_str()
     ));
     content.push_str(&format!(
         "ShowSelectMusicGameplayTimer={}\n",
@@ -1496,6 +1575,14 @@ pub fn load() {
                         }
                     })
                     .unwrap_or(default.machine_show_select_play_mode);
+                cfg.machine_preferred_style = conf
+                    .get("Theme", "MachinePreferredStyle")
+                    .and_then(|v| MachinePreferredPlayStyle::from_str(&v).ok())
+                    .unwrap_or(default.machine_preferred_style);
+                cfg.machine_preferred_play_mode = conf
+                    .get("Theme", "MachinePreferredPlayMode")
+                    .and_then(|v| MachinePreferredPlayMode::from_str(&v).ok())
+                    .unwrap_or(default.machine_preferred_play_mode);
                 cfg.zmod_rating_box_text = conf
                     .get("Theme", "ZmodRatingBoxText")
                     .map(|v| v.trim().to_string())
@@ -1644,6 +1731,12 @@ pub fn load() {
                     miss = true;
                 }
                 if !miss && !has("Theme", "MachineShowSelectStyle") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "MachinePreferredStyle") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "MachinePreferredPlayMode") {
                     miss = true;
                 }
                 if !miss && !has("Theme", "ZmodRatingBoxText") {
@@ -2590,6 +2683,14 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "MachinePreferredStyle={}\n",
+        cfg.machine_preferred_style.as_str()
+    ));
+    content.push_str(&format!(
+        "MachinePreferredPlayMode={}\n",
+        cfg.machine_preferred_play_mode.as_str()
+    ));
+    content.push_str(&format!(
         "ShowSelectMusicGameplayTimer={}\n",
         if cfg.show_select_music_gameplay_timer {
             "1"
@@ -3270,6 +3371,28 @@ pub fn update_machine_show_select_play_mode(enabled: bool) {
             return;
         }
         cfg.machine_show_select_play_mode = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_machine_preferred_style(style: MachinePreferredPlayStyle) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.machine_preferred_style == style {
+            return;
+        }
+        cfg.machine_preferred_style = style;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_machine_preferred_play_mode(mode: MachinePreferredPlayMode) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.machine_preferred_play_mode == mode {
+            return;
+        }
+        cfg.machine_preferred_play_mode = mode;
     }
     save_without_keymaps();
 }
