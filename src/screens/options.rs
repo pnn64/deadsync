@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::core::display::{self, MonitorSpec};
 use crate::core::gfx::BackendType;
-use crate::core::space::{screen_height, screen_width, widescale};
+use crate::core::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
@@ -178,6 +178,21 @@ const DESC_BODY_ZOOM: f32 = 1.0; // body/bullet text zoom (similar to help text)
 fn desc_wrap_extra_pad_unscaled() -> f32 {
     // Slightly tighter wrap in 4:3 to avoid edge clipping from font metric/render mismatch.
     widescale(6.0, 0.0)
+}
+
+#[inline(always)]
+fn submenu_inline_widths_fit(widths: &[f32]) -> bool {
+    if widths.is_empty() {
+        return false;
+    }
+    if is_wide() {
+        return true;
+    }
+    let total_w = widths.iter().copied().sum::<f32>()
+        + INLINE_SPACING * (widths.len().saturating_sub(1) as f32);
+    let item_col_w = (list_w_unscaled() - SUB_LABEL_COL_W).max(0.0);
+    let inline_w = (item_col_w - SUB_INLINE_ITEMS_LEFT_PAD).max(0.0);
+    total_w <= inline_w
 }
 
 pub const ITEMS: &[Item] = &[
@@ -2713,8 +2728,7 @@ fn submenu_inline_choice_centers(
         choice_texts[0] = Cow::Owned(format_ms(state.visual_delay_ms));
     }
     let value_zoom = 0.835_f32;
-    let mut centers: Vec<f32> = Vec::with_capacity(choice_texts.len());
-    let mut x = 0.0_f32;
+    let mut widths: Vec<f32> = Vec::with_capacity(choice_texts.len());
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font("miso", |metrics_font| {
             for text in &choice_texts {
@@ -2723,12 +2737,19 @@ fn submenu_inline_choice_centers(
                 if !w.is_finite() || w <= 0.0 {
                     w = 1.0;
                 }
-                let draw_w = w * value_zoom;
-                centers.push(draw_w.mul_add(0.5, x));
-                x += draw_w + INLINE_SPACING;
+                widths.push(w * value_zoom);
             }
         });
     });
+    if !submenu_inline_widths_fit(&widths) {
+        return Vec::new();
+    }
+    let mut centers: Vec<f32> = Vec::with_capacity(widths.len());
+    let mut x = 0.0_f32;
+    for draw_w in widths {
+        centers.push(draw_w.mul_add(0.5, x));
+        x += draw_w + INLINE_SPACING;
+    }
     centers
 }
 
@@ -4733,11 +4754,9 @@ fn apply_submenu_choice_delta(
 
     submenu_choice_indices_mut(state, kind)[row_index] = new_index;
     submenu_cursor_indices_mut(state, kind)[row_index] = new_index;
-    if rows.get(row_index).is_some_and(|row| row.inline) {
-        let centers = submenu_inline_choice_centers(state, asset_manager, kind, row_index);
-        if let Some(&x) = centers.get(new_index) {
-            state.sub_inline_x = x;
-        }
+    let centers = submenu_inline_choice_centers(state, asset_manager, kind, row_index);
+    if let Some(&x) = centers.get(new_index) {
+        state.sub_inline_x = x;
     }
     audio::play_sfx("assets/sounds/change_value.ogg");
 
@@ -5903,7 +5922,7 @@ fn submenu_cursor_dest(
     }
 
     let draw_w = widths[selected_choice.min(widths.len().saturating_sub(1))];
-    let center_x = if row.inline {
+    let center_x = if row.inline && submenu_inline_widths_fit(&widths) {
         let choice_inner_left = SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
         let mut x = choice_inner_left;
         for width in widths.iter().take(selected_choice) {
@@ -6364,13 +6383,14 @@ pub fn get_actors(
                         return list_w.mul_add(0.5, list_x);
                     };
                     let row = &rows[actual_row_idx];
+                    let item_col_left = list_x + label_bg_w;
+                    let item_col_w = list_w - label_bg_w;
+                    let single_center_x =
+                        item_col_w.mul_add(0.5, item_col_left) + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
                     // Non-inline rows behave as single-value rows: keep the cursor centered
                     // on the center of the available items column (row width minus label column).
                     if !row.inline {
-                        let item_col_left = list_x + label_bg_w;
-                        let item_col_w = list_w - label_bg_w;
-                        return item_col_w.mul_add(0.5, item_col_left)
-                            + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
+                        return single_center_x;
                     }
                     let choices = row_choices(state, kind, rows, actual_row_idx);
                     if choices.is_empty() {
@@ -6397,6 +6417,9 @@ pub fn get_actors(
                     });
                     if widths.is_empty() {
                         return list_w.mul_add(0.5, list_x);
+                    }
+                    if !submenu_inline_widths_fit(&widths) {
+                        return single_center_x;
                     }
                     let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
                     let mut x = choice_inner_left;
@@ -6464,7 +6487,6 @@ pub fn get_actors(
                         ));
 
                         let row = &rows[actual_row_idx];
-                        let inline_row = row.inline;
                         let label = row.label;
                         let title_color = if is_active {
                             let mut c = col_active_text;
@@ -6526,6 +6548,7 @@ pub fn get_actors(
                                     }
                                 });
                             });
+                            let inline_row = row.inline && submenu_inline_widths_fit(&widths);
 
                             let selected_choice = choice_indices
                                 .get(actual_row_idx)
