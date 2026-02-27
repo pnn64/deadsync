@@ -45,9 +45,10 @@ fn gs_player_name(entry: &scores::LeaderboardEntry) -> String {
     GS_ROW_PLACEHOLDER_NAME.to_string()
 }
 
-pub fn build_gs_records_pane(
+fn build_records_pane(
     controller: profile::PlayerSide,
     snapshot: Option<&scores::CachedPlayerLeaderboardData>,
+    arrowcloud: bool,
 ) -> Vec<Actor> {
     let pane_origin_x = pane_origin_x(controller);
     let pane_origin_y = crate::core::space::screen_center_y() - 62.0;
@@ -97,12 +98,16 @@ pub fn build_gs_records_pane(
             ));
         }
         Some(snapshot) => {
-            let gs_pane = snapshot.data.as_ref().and_then(|data| {
-                data.panes
-                    .iter()
-                    .find(|pane| pane.name.eq_ignore_ascii_case("GrooveStats"))
+            let records_pane = snapshot.data.as_ref().and_then(|data| {
+                data.panes.iter().find(|pane| {
+                    if arrowcloud {
+                        pane.is_arrowcloud()
+                    } else {
+                        pane.is_groovestats()
+                    }
+                })
             });
-            if let Some(pane) = gs_pane {
+            if let Some(pane) = records_pane {
                 if pane.entries.is_empty() {
                     rows.push((
                         String::new(),
@@ -123,6 +128,8 @@ pub fn build_gs_records_pane(
                         };
                         let mut score_col = if pane.is_ex {
                             color::JUDGMENT_RGBA[0]
+                        } else if pane.is_hard_ex() {
+                            color::HARD_EX_SCORE_RGBA
                         } else {
                             base_col
                         };
@@ -164,10 +171,16 @@ pub fn build_gs_records_pane(
     }
 
     let mut children = Vec::with_capacity(GS_RECORD_ROWS * 4 + 1);
-    children.push(act!(sprite("GrooveStats.png"):
+    let logo = if arrowcloud {
+        "arrowcloud.png"
+    } else {
+        "GrooveStats.png"
+    };
+    let logo_zoom = if arrowcloud { 0.22 } else { 1.5 * pane_zoom };
+    children.push(act!(sprite(logo):
         align(0.5, 0.5):
         xy(0.0, 100.0 * pane_zoom):
-        zoom(1.5 * pane_zoom):
+        zoom(logo_zoom):
         diffuse(1.0, 1.0, 1.0, 0.5):
         z(100)
     ));
@@ -225,4 +238,18 @@ pub fn build_gs_records_pane(
         z: 101,
         children,
     }]
+}
+
+pub fn build_gs_records_pane(
+    controller: profile::PlayerSide,
+    snapshot: Option<&scores::CachedPlayerLeaderboardData>,
+) -> Vec<Actor> {
+    build_records_pane(controller, snapshot, false)
+}
+
+pub fn build_arrowcloud_records_pane(
+    controller: profile::PlayerSide,
+    snapshot: Option<&scores::CachedPlayerLeaderboardData>,
+) -> Vec<Actor> {
+    build_records_pane(controller, snapshot, true)
 }

@@ -9,6 +9,7 @@ pub mod pane_timing;
 mod utils;
 
 pub use pane_column::build_column_judgments_pane;
+pub use pane_gs_records::build_arrowcloud_records_pane;
 pub use pane_gs_records::build_gs_records_pane;
 pub use pane_machine_records::build_machine_records_pane;
 pub use pane_modifiers::build_modifiers_pane;

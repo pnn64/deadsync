@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets;
 use crate::game::{profile, scores};
 use crate::ui::actors::Actor;
 use crate::ui::color;
@@ -21,8 +22,14 @@ const SCOREBOX_RIVAL: [f32; 4] = color::rgba_hex("#C29CFF");
 const SCOREBOX_MODE_ALPHA: f32 = 0.35;
 const SCOREBOX_GS_LOGO_ALPHA: f32 = 0.5;
 const SCOREBOX_EX_TEXT_ALPHA: f32 = 0.3;
+const SCOREBOX_HARD_EX_TEXT_ALPHA: f32 = 0.32;
+const SCOREBOX_ARROWCLOUD_LOGO_ALPHA: f32 = 0.5;
+const SCOREBOX_ARROWCLOUD_LOGO_ZOOM: f32 = 0.06;
 const SCOREBOX_RPG_LOGO_ALPHA: f32 = 0.5;
 const SCOREBOX_ITL_LOGO_ALPHA: f32 = 0.2;
+const SCOREBOX_LOGO_MAX_W_FRAC: f32 = 0.94;
+const SCOREBOX_LOGO_MAX_H_FRAC: f32 = 0.94;
+const SCOREBOX_HARD_EX_BORDER_TINT: f32 = 0.35;
 const TEXT_CACHE_LIMIT: usize = 8192;
 
 type TextCache<K> = HashMap<K, Arc<str>>;
@@ -107,6 +114,7 @@ struct ScoreboxCycleState {
 enum PaneKind {
     Gs,
     Ex,
+    HardEx,
     Rpg,
     Itl,
     Other,
@@ -136,7 +144,10 @@ fn error_text(error: &str) -> String {
 
 #[inline(always)]
 fn pane_kind(pane: &scores::LeaderboardPane) -> PaneKind {
-    if pane.name.eq_ignore_ascii_case("GrooveStats") {
+    if pane.is_arrowcloud() {
+        return PaneKind::HardEx;
+    }
+    if pane.is_groovestats() {
         return if pane.is_ex {
             PaneKind::Ex
         } else {
@@ -160,6 +171,7 @@ fn pane_mode_text(kind: PaneKind, pane: &scores::LeaderboardPane) -> String {
     match kind {
         PaneKind::Gs => "ITG".to_string(),
         PaneKind::Ex => "EX".to_string(),
+        PaneKind::HardEx => "H.EX".to_string(),
         PaneKind::Rpg => "RPG".to_string(),
         PaneKind::Itl => "ITL".to_string(),
         PaneKind::Other => pane.name.clone(),
@@ -170,6 +182,15 @@ fn pane_mode_text(kind: PaneKind, pane: &scores::LeaderboardPane) -> String {
 fn pane_color(kind: PaneKind) -> [f32; 4] {
     match kind {
         PaneKind::Gs | PaneKind::Ex | PaneKind::Other => SCOREBOX_GS_BLUE,
+        PaneKind::HardEx => [
+            SCOREBOX_GS_BLUE[0]
+                + (color::HARD_EX_SCORE_RGBA[0] - SCOREBOX_GS_BLUE[0]) * SCOREBOX_HARD_EX_BORDER_TINT,
+            SCOREBOX_GS_BLUE[1]
+                + (color::HARD_EX_SCORE_RGBA[1] - SCOREBOX_GS_BLUE[1]) * SCOREBOX_HARD_EX_BORDER_TINT,
+            SCOREBOX_GS_BLUE[2]
+                + (color::HARD_EX_SCORE_RGBA[2] - SCOREBOX_GS_BLUE[2]) * SCOREBOX_HARD_EX_BORDER_TINT,
+            1.0,
+        ],
         PaneKind::Rpg => SCOREBOX_RPG_YELLOW,
         PaneKind::Itl => SCOREBOX_ITL_PINK,
     }
@@ -375,7 +396,7 @@ fn gameplay_status_pane(side: profile::PlayerSide, text: &str) -> GameplayScoreb
 
 fn gameplay_row_from_entry(
     entry: &scores::LeaderboardEntry,
-    pane_is_ex: bool,
+    kind: PaneKind,
 ) -> GameplayScoreboxRow {
     let mut rank_color = [1.0; 4];
     let mut name_color = [1.0; 4];
@@ -389,8 +410,10 @@ fn gameplay_row_from_entry(
 
     let score_color = if entry.is_fail {
         [1.0, 0.0, 0.0, 1.0]
-    } else if pane_is_ex {
+    } else if matches!(kind, PaneKind::Ex) {
         color::JUDGMENT_RGBA[0]
+    } else if matches!(kind, PaneKind::HardEx) {
+        color::HARD_EX_SCORE_RGBA
     } else if entry.is_self {
         SCOREBOX_SELF
     } else if entry.is_rival {
@@ -424,7 +447,7 @@ fn gameplay_pane_from_leaderboard(pane: &scores::LeaderboardPane) -> GameplaySco
         rows.push(gameplay_status_row("No Scores"));
     } else {
         for entry in pane.entries.iter().take(SCOREBOX_NUM_ENTRIES) {
-            rows.push(gameplay_row_from_entry(entry, pane.is_ex));
+            rows.push(gameplay_row_from_entry(entry, kind));
         }
     }
 
@@ -496,6 +519,15 @@ fn is_gs_logo(kind: PaneKind) -> bool {
 #[inline(always)]
 fn is_ex_text(kind: PaneKind) -> bool {
     matches!(kind, PaneKind::Ex)
+}
+
+fn is_arrowcloud_logo(kind: PaneKind) -> bool {
+    matches!(kind, PaneKind::HardEx)
+}
+
+#[inline(always)]
+fn is_hard_ex_text(kind: PaneKind) -> bool {
+    matches!(kind, PaneKind::HardEx)
 }
 
 #[inline(always)]
@@ -633,31 +665,43 @@ fn push_centered_logo(
     if alpha <= 0.0 {
         return;
     }
+    let dims = assets::texture_dims(texture).unwrap_or(assets::TexMeta { w: 1, h: 1 });
+    let mut width = dims.w.max(1) as f32 * sprite_zoom * zoom;
+    let mut height = dims.h.max(1) as f32 * sprite_zoom * zoom;
+    let max_width = SCOREBOX_W * SCOREBOX_LOGO_MAX_W_FRAC * zoom;
+    let max_height = SCOREBOX_H * SCOREBOX_LOGO_MAX_H_FRAC * zoom;
+    if width > 0.0 && height > 0.0 {
+        let fit = (max_width / width).min(max_height / height).min(1.0);
+        width *= fit;
+        height *= fit;
+    }
     let c = color_with_alpha([1.0; 4], alpha);
     actors.push(act!(sprite(texture):
         align(0.5, 0.5):
         xy(center_x, center_y):
-        zoom(sprite_zoom * zoom):
+        setsize(width, height):
         diffuse(c[0], c[1], c[2], c[3]):
         z(z_base + 2)
     ));
 }
 
-fn push_ex_overlay(
+fn push_mode_overlay(
     actors: &mut Vec<Actor>,
+    text: &str,
+    rgba: [f32; 4],
     center_x: f32,
     center_y: f32,
     zoom: f32,
     z_base: i16,
     alpha: f32,
 ) {
-    if alpha <= 0.0 {
+    if alpha <= 0.0 || text.is_empty() {
         return;
     }
-    let c = color_with_alpha([1.0; 4], alpha);
+    let c = color_with_alpha(rgba, alpha);
     actors.push(act!(text:
         font("miso"):
-        settext("EX"):
+        settext(text):
         align(0.5, 0.5):
         xy(center_x + 2.0 * zoom, center_y - 5.0 * zoom):
         zoom(0.9 * zoom):
@@ -730,6 +774,35 @@ fn push_gs_logo_overlay(
     );
 }
 
+fn push_arrowcloud_logo_overlay(
+    actors: &mut Vec<Actor>,
+    cycle: ScoreboxCycleState,
+    cur: PaneKind,
+    next: PaneKind,
+    center_x: f32,
+    center_y: f32,
+    zoom: f32,
+    z_base: i16,
+) {
+    let alpha = logo_alpha(
+        cycle,
+        is_arrowcloud_logo(cur),
+        is_arrowcloud_logo(next),
+        SCOREBOX_ARROWCLOUD_LOGO_ALPHA,
+        true,
+    );
+    push_centered_logo(
+        actors,
+        "arrowcloud.png",
+        center_x,
+        center_y,
+        zoom,
+        SCOREBOX_ARROWCLOUD_LOGO_ZOOM,
+        z_base,
+        alpha,
+    );
+}
+
 fn push_ex_header_overlay(
     actors: &mut Vec<Actor>,
     cycle: ScoreboxCycleState,
@@ -747,7 +820,38 @@ fn push_ex_header_overlay(
         SCOREBOX_EX_TEXT_ALPHA,
         true,
     );
-    push_ex_overlay(actors, center_x, center_y, zoom, z_base, alpha);
+    push_mode_overlay(
+        actors, "EX", [1.0; 4], center_x, center_y, zoom, z_base, alpha,
+    );
+}
+
+fn push_hard_ex_header_overlay(
+    actors: &mut Vec<Actor>,
+    cycle: ScoreboxCycleState,
+    cur: PaneKind,
+    next: PaneKind,
+    center_x: f32,
+    center_y: f32,
+    zoom: f32,
+    z_base: i16,
+) {
+    let alpha = logo_alpha(
+        cycle,
+        is_hard_ex_text(cur),
+        is_hard_ex_text(next),
+        SCOREBOX_HARD_EX_TEXT_ALPHA,
+        true,
+    );
+    push_mode_overlay(
+        actors,
+        "H.EX",
+        color::HARD_EX_SCORE_RGBA,
+        center_x,
+        center_y,
+        zoom,
+        z_base,
+        alpha,
+    );
 }
 
 fn push_rpg_logo_overlay(
@@ -816,7 +920,13 @@ fn push_header_overlays(
     push_gs_logo_overlay(
         actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
     );
+    push_arrowcloud_logo_overlay(
+        actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
+    );
     push_ex_header_overlay(
+        actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
+    );
+    push_hard_ex_header_overlay(
         actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
     );
     push_rpg_logo_overlay(

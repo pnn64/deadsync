@@ -923,10 +923,10 @@ pub(crate) fn steps_index_for_chart_hash(
     chart_type: &str,
     chart_hash: &str,
 ) -> Option<usize> {
-    let chart = song.charts.iter().find(|c| {
-        c.chart_type.eq_ignore_ascii_case(chart_type)
-            && c.short_hash == chart_hash
-    })?;
+    let chart = song
+        .charts
+        .iter()
+        .find(|c| c.chart_type.eq_ignore_ascii_case(chart_type) && c.short_hash == chart_hash)?;
 
     if let Some(std_idx) = color::FILE_DIFFICULTY_NAMES
         .iter()
@@ -3704,7 +3704,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
 
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
             let target_chart_type = profile::get_session_play_style().chart_type();
-            if let Some(idx) = best_steps_index(song, target_chart_type, state.preferred_difficulty_index)
+            if let Some(idx) =
+                best_steps_index(song, target_chart_type, state.preferred_difficulty_index)
             {
                 state.selected_steps_index = idx;
                 if idx < color::FILE_DIFFICULTY_NAMES.len() {

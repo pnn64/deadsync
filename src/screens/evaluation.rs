@@ -313,6 +313,7 @@ pub(crate) enum EvalPane {
     MachineRecords,
     QrCode,
     GrooveStats,
+    ArrowCloud,
     Timing,
     TimingEx,
     TimingHardEx,
@@ -333,31 +334,66 @@ fn eval_pane_next(
     has_hard_ex: bool,
     has_online_panes: bool,
     has_gs: bool,
+    has_arrowcloud: bool,
 ) -> EvalPane {
     // Order (per user parity request):
-    // ITG -> EX -> H.EX -> Arrow breakdown -> Machine -> (QR) -> GS -> Timing -> Timing EX -> Timing H.EX -> ITG
-    match (pane, has_hard_ex, has_online_panes, has_gs) {
-        (EvalPane::Standard, _, _, _) => EvalPane::FaPlus,
-        (EvalPane::FaPlus, true, _, _) => EvalPane::HardEx,
-        (EvalPane::FaPlus, false, _, _) => EvalPane::Column,
-        (EvalPane::HardEx, true, _, _) => EvalPane::Column,
-        (EvalPane::HardEx, false, _, _) => EvalPane::Standard,
-        (EvalPane::Column, _, _, _) => EvalPane::MachineRecords,
-        (EvalPane::MachineRecords, _, true, true) => {
-            if ENABLE_GS_QR_PANE {
-                EvalPane::QrCode
+    // ITG -> EX -> H.EX -> Arrow breakdown -> Machine -> (QR) -> GS -> AC -> Timing -> Timing EX -> Timing H.EX -> ITG
+    let has_gs = has_online_panes && has_gs;
+    let has_arrowcloud = has_online_panes && has_arrowcloud;
+    match pane {
+        EvalPane::Standard => EvalPane::FaPlus,
+        EvalPane::FaPlus => {
+            if has_hard_ex {
+                EvalPane::HardEx
             } else {
-                EvalPane::GrooveStats
+                EvalPane::Column
             }
         }
-        (EvalPane::MachineRecords, _, _, _) => EvalPane::Timing,
-        (EvalPane::QrCode, _, true, true) => EvalPane::GrooveStats,
-        (EvalPane::QrCode, _, _, _) => EvalPane::Timing,
-        (EvalPane::GrooveStats, _, _, _) => EvalPane::Timing,
-        (EvalPane::Timing, _, _, _) => EvalPane::TimingEx,
-        (EvalPane::TimingEx, true, _, _) => EvalPane::TimingHardEx,
-        (EvalPane::TimingEx, false, _, _) => EvalPane::Standard,
-        (EvalPane::TimingHardEx, _, _, _) => EvalPane::Standard,
+        EvalPane::HardEx => {
+            if has_hard_ex {
+                EvalPane::Column
+            } else {
+                EvalPane::Standard
+            }
+        }
+        EvalPane::Column => EvalPane::MachineRecords,
+        EvalPane::MachineRecords => {
+            if ENABLE_GS_QR_PANE && has_gs {
+                EvalPane::QrCode
+            } else if has_gs {
+                EvalPane::GrooveStats
+            } else if has_arrowcloud {
+                EvalPane::ArrowCloud
+            } else {
+                EvalPane::Timing
+            }
+        }
+        EvalPane::QrCode => {
+            if has_gs {
+                EvalPane::GrooveStats
+            } else if has_arrowcloud {
+                EvalPane::ArrowCloud
+            } else {
+                EvalPane::Timing
+            }
+        }
+        EvalPane::GrooveStats => {
+            if has_arrowcloud {
+                EvalPane::ArrowCloud
+            } else {
+                EvalPane::Timing
+            }
+        }
+        EvalPane::ArrowCloud => EvalPane::Timing,
+        EvalPane::Timing => EvalPane::TimingEx,
+        EvalPane::TimingEx => {
+            if has_hard_ex {
+                EvalPane::TimingHardEx
+            } else {
+                EvalPane::Standard
+            }
+        }
+        EvalPane::TimingHardEx => EvalPane::Standard,
     }
 }
 
@@ -367,36 +403,64 @@ fn eval_pane_prev(
     has_hard_ex: bool,
     has_online_panes: bool,
     has_gs: bool,
+    has_arrowcloud: bool,
 ) -> EvalPane {
-    match (pane, has_hard_ex, has_online_panes, has_gs) {
-        (EvalPane::Standard, true, _, _) => EvalPane::TimingHardEx,
-        (EvalPane::Standard, false, _, _) => EvalPane::TimingEx,
-        (EvalPane::TimingHardEx, _, _, _) => EvalPane::TimingEx,
-        (EvalPane::TimingEx, _, _, _) => EvalPane::Timing,
-        (EvalPane::Timing, _, true, true) => {
-            if ENABLE_GS_QR_PANE {
-                EvalPane::QrCode
+    let has_gs = has_online_panes && has_gs;
+    let has_arrowcloud = has_online_panes && has_arrowcloud;
+    match pane {
+        EvalPane::Standard => {
+            if has_hard_ex {
+                EvalPane::TimingHardEx
             } else {
-                EvalPane::GrooveStats
+                EvalPane::TimingEx
             }
         }
-        (EvalPane::Timing, _, false, _) => EvalPane::MachineRecords,
-        (EvalPane::Timing, _, true, false) => EvalPane::MachineRecords,
-        (EvalPane::GrooveStats, _, true, _) => {
-            if ENABLE_GS_QR_PANE {
+        EvalPane::TimingHardEx => EvalPane::TimingEx,
+        EvalPane::TimingEx => EvalPane::Timing,
+        EvalPane::Timing => {
+            if has_arrowcloud {
+                EvalPane::ArrowCloud
+            } else if has_gs {
+                if ENABLE_GS_QR_PANE {
+                    EvalPane::QrCode
+                } else {
+                    EvalPane::GrooveStats
+                }
+            } else {
+                EvalPane::MachineRecords
+            }
+        }
+        EvalPane::ArrowCloud => {
+            if has_gs {
+                EvalPane::GrooveStats
+            } else {
+                EvalPane::MachineRecords
+            }
+        }
+        EvalPane::GrooveStats => {
+            if ENABLE_GS_QR_PANE && has_gs {
                 EvalPane::QrCode
             } else {
                 EvalPane::MachineRecords
             }
         }
-        (EvalPane::GrooveStats, _, false, _) => EvalPane::MachineRecords,
-        (EvalPane::QrCode, _, _, _) => EvalPane::MachineRecords,
-        (EvalPane::MachineRecords, _, _, _) => EvalPane::Column,
-        (EvalPane::Column, true, _, _) => EvalPane::HardEx,
-        (EvalPane::Column, false, _, _) => EvalPane::FaPlus,
-        (EvalPane::HardEx, true, _, _) => EvalPane::FaPlus,
-        (EvalPane::HardEx, false, _, _) => EvalPane::Standard,
-        (EvalPane::FaPlus, _, _, _) => EvalPane::Standard,
+        EvalPane::QrCode => EvalPane::MachineRecords,
+        EvalPane::MachineRecords => EvalPane::Column,
+        EvalPane::Column => {
+            if has_hard_ex {
+                EvalPane::HardEx
+            } else {
+                EvalPane::FaPlus
+            }
+        }
+        EvalPane::HardEx => {
+            if has_hard_ex {
+                EvalPane::FaPlus
+            } else {
+                EvalPane::Standard
+            }
+        }
+        EvalPane::FaPlus => EvalPane::Standard,
     }
 }
 
@@ -1244,13 +1308,24 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         } else {
             profile::get_session_player_side()
         };
-        let has_gs = has_online_panes
-            && scores::get_or_fetch_player_leaderboards_for_side(
+        let leaderboard_snapshot = if has_online_panes {
+            scores::get_or_fetch_player_leaderboards_for_side(
                 &si.chart.short_hash,
                 gs_side,
                 GS_RECORD_ROWS,
             )
-            .is_some();
+        } else {
+            None
+        };
+        let has_gs = leaderboard_snapshot.is_some();
+        let has_arrowcloud = leaderboard_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.data.as_ref())
+            .is_some_and(|data| {
+                data.panes
+                    .iter()
+                    .any(scores::LeaderboardPane::is_arrowcloud)
+            });
 
         state.active_pane[controller_idx] = if dir >= 0 {
             eval_pane_next(
@@ -1258,6 +1333,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 has_hard_ex,
                 has_online_panes,
                 has_gs,
+                has_arrowcloud,
             )
         } else {
             eval_pane_prev(
@@ -1265,6 +1341,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 has_hard_ex,
                 has_online_panes,
                 has_gs,
+                has_arrowcloud,
             )
         };
 
@@ -1278,6 +1355,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         has_hard_ex,
                         has_online_panes,
                         has_gs,
+                        has_arrowcloud,
                     )
                 } else {
                     eval_pane_prev(
@@ -1285,6 +1363,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         has_hard_ex,
                         has_online_panes,
                         has_gs,
+                        has_arrowcloud,
                     )
                 };
             }
@@ -1983,6 +2062,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     )
                     .as_ref(),
                 )),
+                EvalPane::ArrowCloud => actors.extend(eval_panes::build_arrowcloud_records_pane(
+                    controller,
+                    scores::get_or_fetch_player_leaderboards_for_side(
+                        &si.chart.short_hash,
+                        gs_side,
+                        GS_RECORD_ROWS,
+                    )
+                    .as_ref(),
+                )),
                 EvalPane::MachineRecords => actors.extend(eval_panes::build_machine_records_pane(
                     si,
                     controller,
@@ -2392,16 +2480,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 continue;
             }
             let player_idx = if play_style == profile::PlayStyle::Versus {
-                if side == profile::PlayerSide::P1 { 0 } else { 1 }
+                if side == profile::PlayerSide::P1 {
+                    0
+                } else {
+                    1
+                }
             } else {
                 0
             };
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;
             };
-            let Some(status) =
-                scores::get_arrowcloud_submit_ui_status_for_side(si.chart.short_hash.as_str(), side)
-            else {
+            let Some(status) = scores::get_arrowcloud_submit_ui_status_for_side(
+                si.chart.short_hash.as_str(),
+                side,
+            ) else {
                 continue;
             };
             let status_text = match status {

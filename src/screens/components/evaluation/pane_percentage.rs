@@ -19,6 +19,7 @@ pub fn build_pane_percentage_display(
             | EvalPane::MachineRecords
             | EvalPane::QrCode
             | EvalPane::GrooveStats
+            | EvalPane::ArrowCloud
     ) {
         return vec![];
     }
@@ -48,6 +49,7 @@ pub fn build_pane_percentage_display(
         EvalPane::MachineRecords => {}
         EvalPane::QrCode => {}
         EvalPane::GrooveStats => {}
+        EvalPane::ArrowCloud => {}
         EvalPane::Column => {
             // Pane3 percentage container: small and not mirrored.
             frame_x = pane_origin_x - 115.0;

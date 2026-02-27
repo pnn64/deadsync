@@ -76,42 +76,35 @@ const CREDITS: &[CreditLine] = &[
     name("Lead Developer & Project Maintainer"),
     spacer(),
     spacer(),
-
     section("DeadSync Contributors"),
     name("Mason Boeman (maboesanman)"),
     name("DolphinChips"),
     name("rehtlaw"),
     spacer(),
     spacer(),
-
     section("rssp Contributors"),
     name("Celeste Clark (celex3)"),
     spacer(),
     spacer(),
-
     section("Acknowledgements"),
     name("DeadSync stands on decades of work"),
     name("from the StepMania and ITG communities."),
     spacer(),
-
     subsection("StepMania"),
     name("To StepMania and its contributors:"),
     name("for creating the engine foundation,"),
     name("and for the many years of continued development."),
     spacer(),
-
     subsection("ITGmania"),
     name("To ITGmania and its developers:"),
     name("for shaping the modern ITG machine experience,"),
     name("and keeping the torch burning."),
     spacer(),
-
     subsection("Simply Love"),
     name("To Simply Love, its maintainers, and forks:"),
     name("for defining a huge part of how ITG is played today."),
     name("Special thanks to zmod (Zarzob and Zankoku)."),
     spacer(),
-
     subsection("Community Projects"),
     name("Stamina Nation"),
     name("ITC (International Timing Collective)"),
@@ -119,12 +112,10 @@ const CREDITS: &[CreditLine] = &[
     name("Rafal Florczak (florczakraf) for BoogieStats"),
     name("...and all contributors to the above projects."),
     spacer(),
-
     name("And to everyone who has created themes, noteskins,"),
     name("tools, charts, and simfiles over the years."),
     spacer(),
     spacer(),
-
     section("Special Thanks"),
     name("Cabinet operators and tournament organizers"),
     name("Theme and tool authors"),
@@ -132,7 +123,6 @@ const CREDITS: &[CreditLine] = &[
     name("The rhythm game community"),
     spacer(),
     spacer(),
-
     section("Copyright"),
     name("DeadSync is released under the GPL-3.0 license."),
     name("Upstream projects are licensed under their respective terms."),

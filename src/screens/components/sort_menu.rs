@@ -1136,15 +1136,15 @@ pub fn handle_leaderboard_input(
 }
 
 fn format_groovestats_date(date: &str) -> String {
-    if date.trim().is_empty() {
+    let trimmed = date.trim();
+    if trimmed.is_empty() {
         return String::new();
     }
-    let Some((ymd, _time)) = date.split_once(' ') else {
-        return date.to_string();
-    };
+    let ymd = trimmed.split_once(' ').map_or(trimmed, |(value, _)| value);
+    let ymd = ymd.split_once('T').map_or(ymd, |(value, _)| value);
     let mut parts = ymd.split('-');
     let (Some(year), Some(month), Some(day)) = (parts.next(), parts.next(), parts.next()) else {
-        return date.to_string();
+        return trimmed.to_string();
     };
     let month_txt = match month {
         "01" => "Jan",
@@ -1159,11 +1159,11 @@ fn format_groovestats_date(date: &str) -> String {
         "10" => "Oct",
         "11" => "Nov",
         "12" => "Dec",
-        _ => return date.to_string(),
+        _ => return trimmed.to_string(),
     };
     let day_num = day.parse::<u32>().unwrap_or(0);
     if day_num == 0 {
-        return date.to_string();
+        return trimmed.to_string();
     }
     format!("{month_txt} {day_num}, {year}")
 }
@@ -1229,6 +1229,9 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
         let show_ex = !side.loading
             && side.error_text.is_none()
             && pane.is_some_and(|p| p.is_ex && !p.disabled);
+        let show_hard_ex = !side.loading
+            && side.error_text.is_none()
+            && pane.is_some_and(|p| p.is_hard_ex() && !p.disabled);
         let is_disabled = !side.loading && pane.is_some_and(|p| p.disabled);
 
         actors.push(act!(quad:
@@ -1282,6 +1285,18 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
                 z(GS_LEADERBOARD_Z + 6):
                 horizalign(right)
             ));
+        } else if show_hard_ex {
+            let hex = color::HARD_EX_SCORE_RGBA;
+            actors.push(act!(text:
+                font("wendy"):
+                settext("H.EX"):
+                align(1.0, 0.5):
+                xy(center_x + pane_width * 0.5 - 16.0, header_y):
+                zoom(0.5):
+                diffuse(hex[0], hex[1], hex[2], hex[3]):
+                z(GS_LEADERBOARD_Z + 6):
+                horizalign(right)
+            ));
         }
 
         let rank_x = center_x - pane_width * 0.5 + 32.0;
@@ -1303,7 +1318,11 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
             let mut highlight_rgb = [0.0, 0.0, 0.0];
             let mut rank_col = [1.0, 1.0, 1.0, 1.0];
             let mut name_col = [1.0, 1.0, 1.0, 1.0];
-            let mut score_col = [1.0, 1.0, 1.0, 1.0];
+            let mut score_col = if show_hard_ex {
+                color::HARD_EX_SCORE_RGBA
+            } else {
+                [1.0, 1.0, 1.0, 1.0]
+            };
             let mut date_col = [1.0, 1.0, 1.0, 1.0];
 
             if side.loading {

@@ -20,6 +20,7 @@ pub(super) fn format_machine_record_date(date: &str) -> String {
     }
 
     let ymd = trimmed.split_once(' ').map_or(trimmed, |(d, _)| d);
+    let ymd = ymd.split_once('T').map_or(ymd, |(d, _)| d);
     let mut parts = ymd.split('-');
     let (Some(year), Some(month), Some(day)) = (parts.next(), parts.next(), parts.next()) else {
         return trimmed.to_string();

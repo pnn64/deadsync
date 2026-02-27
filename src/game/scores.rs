@@ -8,6 +8,7 @@ use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
 use chrono::{Local, TimeZone};
 use log::{info, warn};
+use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -1524,8 +1525,7 @@ const ARROWCLOUD_EFFECT_NAMES: [&str; 10] = [
     "Bumpy",
     "Beat",
 ];
-const ARROWCLOUD_APPEARANCE_NAMES: [&str; 5] =
-    ["Hidden", "Sudden", "Stealth", "Blink", "R.Vanish"];
+const ARROWCLOUD_APPEARANCE_NAMES: [&str; 5] = ["Hidden", "Sudden", "Stealth", "Blink", "R.Vanish"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArrowCloudSubmitUiStatus {
@@ -1542,8 +1542,9 @@ struct ArrowCloudSubmitUiEntry {
     status: ArrowCloudSubmitUiStatus,
 }
 
-static ARROWCLOUD_SUBMIT_UI_STATUS: std::sync::LazyLock<Mutex<[Option<ArrowCloudSubmitUiEntry>; 2]>> =
-    std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
+static ARROWCLOUD_SUBMIT_UI_STATUS: std::sync::LazyLock<
+    Mutex<[Option<ArrowCloudSubmitUiEntry>; 2]>,
+> = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
 static ARROWCLOUD_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
 
 #[inline(always)]
@@ -1790,9 +1791,9 @@ fn arrowcloud_turn_label(turn: profile::TurnOption) -> &'static str {
         profile::TurnOption::Right => "Right",
         profile::TurnOption::LRMirror => "LR-Mirror",
         profile::TurnOption::UDMirror => "UD-Mirror",
-        profile::TurnOption::Shuffle | profile::TurnOption::Blender | profile::TurnOption::Random => {
-            "Shuffle"
-        }
+        profile::TurnOption::Shuffle
+        | profile::TurnOption::Blender
+        | profile::TurnOption::Random => "Shuffle",
     }
 }
 
@@ -1984,7 +1985,10 @@ fn arrowcloud_nps_info(gs: &gameplay::State, player_idx: usize) -> ArrowCloudNps
 }
 
 #[inline(always)]
-fn arrowcloud_payload_for_player(gs: &gameplay::State, player_idx: usize) -> Option<ArrowCloudPayload> {
+fn arrowcloud_payload_for_player(
+    gs: &gameplay::State,
+    player_idx: usize,
+) -> Option<ArrowCloudPayload> {
     if player_idx >= gs.num_players {
         return None;
     }
@@ -2152,7 +2156,10 @@ fn submit_arrowcloud_payload(
         if !snippet.is_empty() {
             info!(
                 "ArrowCloud submit success for {:?} ({}) status={} body='{}'",
-                side, payload.hash, status_code, snippet.as_str()
+                side,
+                payload.hash,
+                status_code,
+                snippet.as_str()
             );
         } else {
             info!(
@@ -2389,6 +2396,23 @@ pub struct LeaderboardPane {
     pub disabled: bool,
 }
 
+impl LeaderboardPane {
+    #[inline(always)]
+    pub fn is_groovestats(&self) -> bool {
+        self.name.eq_ignore_ascii_case("GrooveStats")
+    }
+
+    #[inline(always)]
+    pub fn is_arrowcloud(&self) -> bool {
+        self.name.eq_ignore_ascii_case("ArrowCloud")
+    }
+
+    #[inline(always)]
+    pub fn is_hard_ex(&self) -> bool {
+        self.is_arrowcloud()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PlayerLeaderboardData {
     pub panes: Vec<LeaderboardPane>,
@@ -2405,6 +2429,8 @@ pub struct CachedPlayerLeaderboardData {
 struct PlayerLeaderboardCacheKey {
     chart_hash: String,
     api_key: String,
+    arrowcloud_api_key: String,
+    include_arrowcloud: bool,
     show_ex_score: bool,
     max_entries: usize,
 }
@@ -2432,11 +2458,83 @@ static PLAYER_LEADERBOARD_CACHE: std::sync::LazyLock<Mutex<PlayerLeaderboardCach
 
 const PLAYER_LEADERBOARD_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
 const PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
+const ARROWCLOUD_LEADERBOARDS_BASE_URL: &str = "https://api.arrowcloud.dance";
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct LeaderboardsApiResponse {
     player1: Option<LeaderboardApiPlayer>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ArrowCloudLeaderboardsApiResponse {
+    #[serde(default)]
+    leaderboards: Vec<ArrowCloudLeaderboardPane>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ArrowCloudLeaderboardPane {
+    #[serde(default)]
+    r#type: String,
+    #[serde(default)]
+    scores: Vec<ArrowCloudLeaderboardEntry>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ArrowCloudLeaderboardEntry {
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    rank: u32,
+    #[serde(default, deserialize_with = "de_f64_from_string_or_number")]
+    score: f64, // 0..100
+    #[serde(default)]
+    alias: String,
+    #[serde(default)]
+    date: String,
+    #[serde(default)]
+    is_rival: bool,
+    #[serde(default)]
+    is_self: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum U32OrString {
+    U32(u32),
+    F64(f64),
+    String(String),
+}
+
+fn de_u32_from_string_or_number<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<U32OrString>::deserialize(deserializer)? {
+        Some(U32OrString::U32(v)) => Ok(v),
+        Some(U32OrString::F64(v)) => Ok(v.max(0.0).floor() as u32),
+        Some(U32OrString::String(text)) => Ok(text.trim().parse::<u32>().unwrap_or(0)),
+        None => Ok(0),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum F64OrString {
+    F64(f64),
+    String(String),
+}
+
+fn de_f64_from_string_or_number<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<F64OrString>::deserialize(deserializer)? {
+        Some(F64OrString::F64(v)) => Ok(v),
+        Some(F64OrString::String(text)) => Ok(text.trim().parse::<f64>().unwrap_or(0.0)),
+        None => Ok(0.0),
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -2595,9 +2693,98 @@ fn cache_gs_score_from_leaderboard(
     cache_gs_score_for_profile(profile_id, chart_hash, score, username);
 }
 
+#[inline(always)]
+fn arrowcloud_lb_type_is_hard_ex(lb_type: &str) -> bool {
+    if lb_type.is_empty() {
+        return false;
+    }
+    let mut compact = String::with_capacity(lb_type.len());
+    for ch in lb_type.chars() {
+        if ch.is_ascii_alphanumeric() {
+            compact.push(ch.to_ascii_lowercase());
+        }
+    }
+    compact == "hardex" || compact == "hex"
+}
+
+fn arrowcloud_entries_from_api(entries: Vec<ArrowCloudLeaderboardEntry>) -> Vec<LeaderboardEntry> {
+    let mut out = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let score = if entry.score.is_finite() {
+            (entry.score * 100.0).clamp(0.0, 10000.0)
+        } else {
+            0.0
+        };
+        out.push(LeaderboardEntry {
+            rank: entry.rank,
+            name: entry.alias,
+            machine_tag: None,
+            score,
+            date: entry.date,
+            is_rival: entry.is_rival,
+            is_self: entry.is_self,
+            is_fail: false,
+        });
+    }
+    out
+}
+
+fn fetch_arrowcloud_hard_ex_pane(
+    chart_hash: &str,
+    api_key: &str,
+    max_entries: usize,
+) -> Result<Option<LeaderboardPane>, Box<dyn Error + Send + Sync>> {
+    let chart_hash = chart_hash.trim();
+    let api_key = api_key.trim();
+    if chart_hash.is_empty() || api_key.is_empty() {
+        return Ok(None);
+    }
+
+    let max_entries = max_entries.max(1).to_string();
+    let api_url = format!(
+        "{}/v1/chart/{chart_hash}/leaderboards",
+        ARROWCLOUD_LEADERBOARDS_BASE_URL.trim_end_matches('/')
+    );
+    let bearer = format!("Bearer {api_key}");
+    let response = network::get_agent()
+        .get(&api_url)
+        .header("Authorization", &bearer)
+        .header("x-api-key-player-1", api_key)
+        .query("page", "1")
+        .query("perPage", max_entries.as_str())
+        .call()?;
+
+    if response.status() != 200 {
+        return Err(format!(
+            "ArrowCloud leaderboard API returned status {}",
+            response.status()
+        )
+        .into());
+    }
+
+    let decoded: ArrowCloudLeaderboardsApiResponse = response.into_body().read_json()?;
+    let hard_ex = decoded
+        .leaderboards
+        .into_iter()
+        .find(|pane| arrowcloud_lb_type_is_hard_ex(pane.r#type.as_str()));
+    let Some(hard_ex) = hard_ex else {
+        return Ok(None);
+    };
+    if hard_ex.scores.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(LeaderboardPane {
+        name: "ArrowCloud".to_string(),
+        entries: arrowcloud_entries_from_api(hard_ex.scores),
+        is_ex: false,
+        disabled: false,
+    }))
+}
+
 fn fetch_player_leaderboards_internal(
     chart_hash: &str,
     api_key: &str,
+    arrowcloud_api_key: Option<&str>,
     show_ex_score: bool,
     max_entries: usize,
 ) -> Result<FetchedPlayerLeaderboards, Box<dyn Error + Send + Sync>> {
@@ -2624,49 +2811,57 @@ fn fetch_player_leaderboards_internal(
     }
 
     let decoded: LeaderboardsApiResponse = response.into_body().read_json()?;
-    let Some(player) = decoded.player1 else {
-        return Ok(FetchedPlayerLeaderboards {
-            data: PlayerLeaderboardData { panes: Vec::new() },
-            gs_entries: Vec::new(),
-        });
-    };
-    let LeaderboardApiPlayer {
-        is_ranked: _is_ranked,
-        gs_leaderboard,
-        ex_leaderboard,
-        rpg,
-        itl,
-    } = player;
+    let mut panes = Vec::with_capacity(5);
+    let mut gs_entries = Vec::new();
+    if let Some(player) = decoded.player1 {
+        let LeaderboardApiPlayer {
+            is_ranked: _is_ranked,
+            gs_leaderboard,
+            ex_leaderboard,
+            rpg,
+            itl,
+        } = player;
 
-    let gs_entries = gs_leaderboard.clone();
-    let mut panes = Vec::with_capacity(4);
-    if show_ex_score {
-        push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
-        push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);
-    } else {
-        push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);
-        push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
+        gs_entries = gs_leaderboard.clone();
+        if show_ex_score {
+            push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
+            push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);
+        } else {
+            push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);
+            push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
+        }
+
+        if let Some(rpg) = rpg
+            && !rpg.rpg_leaderboard.is_empty()
+        {
+            let name = if rpg.name.trim().is_empty() {
+                "RPG"
+            } else {
+                rpg.name.as_str()
+            };
+            push_leaderboard_pane(&mut panes, name, rpg.rpg_leaderboard, false);
+        }
+        if let Some(itl) = itl
+            && !itl.itl_leaderboard.is_empty()
+        {
+            let name = if itl.name.trim().is_empty() {
+                "ITL"
+            } else {
+                itl.name.as_str()
+            };
+            push_leaderboard_pane(&mut panes, name, itl.itl_leaderboard, true);
+        }
     }
 
-    if let Some(rpg) = rpg
-        && !rpg.rpg_leaderboard.is_empty()
-    {
-        let name = if rpg.name.trim().is_empty() {
-            "RPG"
-        } else {
-            rpg.name.as_str()
-        };
-        push_leaderboard_pane(&mut panes, name, rpg.rpg_leaderboard, false);
-    }
-    if let Some(itl) = itl
-        && !itl.itl_leaderboard.is_empty()
-    {
-        let name = if itl.name.trim().is_empty() {
-            "ITL"
-        } else {
-            itl.name.as_str()
-        };
-        push_leaderboard_pane(&mut panes, name, itl.itl_leaderboard, true);
+    if let Some(arrowcloud_api_key) = arrowcloud_api_key {
+        match fetch_arrowcloud_hard_ex_pane(chart_hash, arrowcloud_api_key, max_entries) {
+            Ok(Some(pane)) => panes.insert(2.min(panes.len()), pane),
+            Ok(None) => {}
+            Err(error) => warn!(
+                "ArrowCloud H.EX leaderboard fetch failed for chart {}: {}",
+                chart_hash, error
+            ),
+        }
     }
 
     Ok(FetchedPlayerLeaderboards {
@@ -2727,9 +2922,17 @@ pub fn get_or_fetch_player_leaderboards_for_side(
     }
 
     let side_profile = profile::get_for_side(side);
-    if side_profile.groovestats_api_key.trim().is_empty() {
+    let gs_api_key = side_profile.groovestats_api_key.trim();
+    if gs_api_key.is_empty() {
         return None;
     }
+    let arrowcloud_api_key = side_profile.arrowcloud_api_key.trim().to_string();
+    let include_arrowcloud = cfg.enable_arrowcloud
+        && !arrowcloud_api_key.is_empty()
+        && matches!(
+            network::get_arrowcloud_status(),
+            network::ArrowCloudConnectionStatus::Connected
+        );
     let auto_populate = cfg.auto_populate_gs_scores;
     let auto_profile_id = if auto_populate {
         profile::active_local_profile_id_for_side(side)
@@ -2742,7 +2945,9 @@ pub fn get_or_fetch_player_leaderboards_for_side(
 
     let key = PlayerLeaderboardCacheKey {
         chart_hash: chart_hash.to_string(),
-        api_key: side_profile.groovestats_api_key.clone(),
+        api_key: gs_api_key.to_string(),
+        arrowcloud_api_key,
+        include_arrowcloud,
         show_ex_score: side_profile.show_ex_score,
         max_entries,
     };
@@ -2798,6 +3003,11 @@ pub fn get_or_fetch_player_leaderboards_for_side(
             let fetched = fetch_player_leaderboards_internal(
                 &key.chart_hash,
                 &key.api_key,
+                if key.include_arrowcloud {
+                    Some(key.arrowcloud_api_key.as_str())
+                } else {
+                    None
+                },
                 key.show_ex_score,
                 key.max_entries,
             );
