@@ -2558,7 +2558,7 @@ fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_c
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(if total == 0 { "Initilizing..." } else { reload_phase_label(reload.phase) }):
+        settext(if total == 0 { "Iinitializing..." } else { reload_phase_label(reload.phase) }):
         align(0.5, 0.5):
         xy(screen_center_x(), bar_cy - 98.0):
         zoom(1.05):

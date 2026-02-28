@@ -4105,7 +4105,7 @@ fn build_reload_overlay_actors(reload: &ReloadUiState, active_color_index: i32) 
     ));
     out.push(act!(text:
         font("miso"):
-        settext(if total == 0 { "Initilizing..." } else { reload_phase_label(reload.phase) }):
+        settext(if total == 0 { "initializing..." } else { reload_phase_label(reload.phase) }):
         align(0.5, 0.5):
         xy(screen_width() * 0.5, bar_cy - 98.0):
         zoom(1.05):
