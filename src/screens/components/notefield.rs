@@ -360,6 +360,17 @@ const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
 }
 
 #[inline(always)]
+fn note_scale_height(slot: &SpriteSlot) -> f32 {
+    if let Some(model) = slot.model.as_ref() {
+        let model_h = model.size()[1];
+        if model_h > f32::EPSILON {
+            return model_h;
+        }
+    }
+    slot.logical_size()[1].max(1.0)
+}
+
+#[inline(always)]
 fn model_tint(color: [f32; 4], draw: ModelDrawState) -> [f32; 4] {
     [
         color[0] * draw.tint[0],
@@ -2985,14 +2996,11 @@ pub fn build(
                         head_slot.uv_for_frame_at(frame, uv_elapsed),
                         ns.part_uv_translation(hold_head_part, note.beat, false),
                     );
-                    let slot_size = logical_slot_size(head_slot);
-                    let note_scale = {
-                        let h = slot_size[1].max(1.0);
-                        if h > f32::EPSILON {
-                            target_arrow_px / h
-                        } else {
-                            1.0
-                        }
+                    let h = note_scale_height(head_slot);
+                    let note_scale = if h > f32::EPSILON {
+                        target_arrow_px / h
+                    } else {
+                        1.0
                     };
                     let base_size = scaled_note_slot_size(head_slot, note_scale);
                     let local_offset = [draw.pos[0] * note_scale, draw.pos[1] * note_scale];
@@ -3072,7 +3080,7 @@ pub fn build(
                 } else if let Some(note_slots) = ns.note_layers.get(note_idx) {
                     let primary_h = note_slots
                         .first()
-                        .map(|slot| logical_slot_size(slot)[1].max(1.0))
+                        .map(note_scale_height)
                         .unwrap_or(1.0);
                     let note_scale = if primary_h > f32::EPSILON {
                         target_arrow_px / primary_h
@@ -3468,14 +3476,11 @@ pub fn build(
                             head_slot.uv_for_frame_at(note_frame, uv_elapsed),
                             ns.part_uv_translation(part, note.beat, false),
                         );
-                        let slot_size = logical_slot_size(head_slot);
-                        let note_scale = {
-                            let h = slot_size[1].max(1.0);
-                            if h > f32::EPSILON {
-                                target_arrow_px / h
-                            } else {
-                                1.0
-                            }
+                        let h = note_scale_height(head_slot);
+                        let note_scale = if h > f32::EPSILON {
+                            target_arrow_px / h
+                        } else {
+                            1.0
                         };
                         let note_size = scaled_note_slot_size(head_slot, note_scale);
                         let center = [playfield_center_x + col_x_offset, y_pos];
@@ -3515,7 +3520,7 @@ pub fn build(
                         ns.part_uv_phase(tap_note_part, elapsed, current_beat, note.beat);
                     let primary_h = note_slots
                         .first()
-                        .map(|slot| logical_slot_size(slot)[1].max(1.0))
+                        .map(note_scale_height)
                         .unwrap_or(1.0);
                     let note_scale = if primary_h > f32::EPSILON {
                         target_arrow_px / primary_h
@@ -4712,4 +4717,45 @@ pub fn build(
     out.extend(hud_actors);
     out.extend(actors);
     (out, layout_center_x)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::note_scale_height;
+    use crate::game::parsing::noteskin::{Style, load_itg_skin};
+
+    #[test]
+    fn cyber_model_tap_scale_uses_model_height_not_logical_height() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "cyber")
+            .expect("dance/cyber should load from assets/noteskins");
+        let slot = ns
+            .note_layers
+            .first()
+            .and_then(|layers| layers.iter().find(|slot| slot.model.is_some()))
+            .expect("cyber should expose model-backed tap-note layer for 4th notes");
+
+        let logical_h = slot.logical_size()[1].max(1.0);
+        let model_h = slot
+            .model
+            .as_ref()
+            .map(|model| model.size()[1])
+            .expect("cyber tap slot should be model-backed");
+        assert!(
+            model_h > f32::EPSILON,
+            "cyber model-backed tap slot should have positive model height"
+        );
+        assert!(
+            logical_h / model_h > 1.5,
+            "regression guard: cyber logical height must stay larger than model height so this test catches logical-height scaling; logical={logical_h}, model={model_h}"
+        );
+        let scale_h = note_scale_height(slot);
+        assert!(
+            (scale_h - model_h).abs() <= 1e-4,
+            "model-backed tap notes must scale by model height; got scale_h={scale_h}, model_h={model_h}"
+        );
+    }
 }
