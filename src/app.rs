@@ -1834,7 +1834,7 @@ impl App {
         if self.state.gameplay_offset_save_prompt.is_some() {
             return true;
         }
-        if from != CurrentScreen::Gameplay || target == CurrentScreen::Gameplay {
+        if from != CurrentScreen::Gameplay {
             return false;
         }
         // ITG parity: no save-sync prompt while playing a course.
