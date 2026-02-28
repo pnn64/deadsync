@@ -37,7 +37,7 @@ const PANE_FADE_SECONDS: f32 = 0.2;
 // Spacing between inline items in OptionRows (pixels at current zoom)
 const INLINE_SPACING: f32 = 15.75;
 const TILT_INTENSITY_MIN: f32 = 0.05;
-const TILT_INTENSITY_MAX: f32 = 3.00;
+const TILT_INTENSITY_MAX: f32 = 10.00;
 const TILT_INTENSITY_STEP: f32 = 0.05;
 
 // Match Simply Love / ScreenOptions defaults.
@@ -449,10 +449,13 @@ fn fmt_tilt_intensity(value: f32) -> String {
 }
 
 fn tilt_intensity_choices() -> Vec<String> {
-    let count = (TILT_INTENSITY_MAX / TILT_INTENSITY_STEP).round() as usize;
+    let count =
+        ((TILT_INTENSITY_MAX - TILT_INTENSITY_MIN) / TILT_INTENSITY_STEP).round() as usize + 1;
     let mut out = Vec::with_capacity(count);
-    for i in 1..=count {
-        out.push(fmt_tilt_intensity(i as f32 * TILT_INTENSITY_STEP));
+    for i in 0..count {
+        out.push(fmt_tilt_intensity(
+            TILT_INTENSITY_MIN + i as f32 * TILT_INTENSITY_STEP,
+        ));
     }
     out
 }
