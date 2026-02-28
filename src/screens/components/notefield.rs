@@ -390,21 +390,17 @@ const fn model_blend(draw: ModelDrawState, blend: BlendMode) -> BlendMode {
 }
 
 #[inline(always)]
-fn with_sprite_local_offset(
-    mut actor: Actor,
+fn offset_center(
+    center: [f32; 2],
     local_offset: [f32; 2],
     local_offset_rot_sin_cos: [f32; 2],
-) -> Actor {
-    if let Actor::Sprite {
-        local_offset: actor_offset,
-        local_offset_rot_sin_cos: actor_rot,
-        ..
-    } = &mut actor
-    {
-        *actor_offset = local_offset;
-        *actor_rot = local_offset_rot_sin_cos;
-    }
-    actor
+) -> [f32; 2] {
+    let [sin_r, cos_r] = local_offset_rot_sin_cos;
+    let offset = [
+        local_offset[0] * cos_r - local_offset[1] * sin_r,
+        local_offset[0] * sin_r + local_offset[1] * cos_r,
+    ];
+    [center[0] + offset[0], center[1] + offset[1]]
 }
 
 #[inline(always)]
@@ -3047,10 +3043,12 @@ pub fn build(
                     ) {
                         actors.push(model_actor);
                     } else if draw.blend_add {
-                        actors.push(with_sprite_local_offset(
+                        let sprite_center =
+                            offset_center(head_center, local_offset, local_offset_rot_sin_cos);
+                        actors.push(
                             act!(sprite(head_slot.texture_key().to_string()):
                                 align(0.5, 0.5):
-                                xy(head_center[0], head_center[1]):
+                                xy(sprite_center[0], sprite_center[1]):
                                 setsize(size[0], size[1]):
                                 rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + hold_head_rot):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -3058,14 +3056,14 @@ pub fn build(
                                 blend(add):
                                 z(Z_TAP_NOTE)
                             ),
-                            local_offset,
-                            local_offset_rot_sin_cos,
-                        ));
+                        );
                     } else {
-                        actors.push(with_sprite_local_offset(
+                        let sprite_center =
+                            offset_center(head_center, local_offset, local_offset_rot_sin_cos);
+                        actors.push(
                             act!(sprite(head_slot.texture_key().to_string()):
                                 align(0.5, 0.5):
-                                xy(head_center[0], head_center[1]):
+                                xy(sprite_center[0], sprite_center[1]):
                                 setsize(size[0], size[1]):
                                 rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + hold_head_rot):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -3073,9 +3071,7 @@ pub fn build(
                                 blend(normal):
                                 z(Z_TAP_NOTE)
                             ),
-                            local_offset,
-                            local_offset_rot_sin_cos,
-                        ));
+                        );
                     }
                 } else if let Some(note_slots) = ns.note_layers.get(note_idx) {
                     let primary_h = note_slots
@@ -3149,10 +3145,12 @@ pub fn build(
                         ) {
                             actors.push(model_actor);
                         } else if draw.blend_add {
-                            actors.push(with_sprite_local_offset(
+                            let sprite_center =
+                                offset_center(head_center, local_offset, local_offset_rot_sin_cos);
+                            actors.push(
                                 act!(sprite(note_slot.texture_key().to_string()):
                                     align(0.5, 0.5):
-                                    xy(head_center[0], head_center[1]):
+                                    xy(sprite_center[0], sprite_center[1]):
                                     setsize(size[0], size[1]):
                                     rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + hold_head_rot):
                                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -3160,14 +3158,14 @@ pub fn build(
                                     blend(add):
                                     z(layer_z)
                                 ),
-                                local_offset,
-                                local_offset_rot_sin_cos,
-                            ));
+                            );
                         } else {
-                            actors.push(with_sprite_local_offset(
+                            let sprite_center =
+                                offset_center(head_center, local_offset, local_offset_rot_sin_cos);
+                            actors.push(
                                 act!(sprite(note_slot.texture_key().to_string()):
                                     align(0.5, 0.5):
-                                    xy(head_center[0], head_center[1]):
+                                    xy(sprite_center[0], sprite_center[1]):
                                     setsize(size[0], size[1]):
                                     rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + hold_head_rot):
                                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
@@ -3175,9 +3173,7 @@ pub fn build(
                                     blend(normal):
                                     z(layer_z)
                                 ),
-                                local_offset,
-                                local_offset_rot_sin_cos,
-                            ));
+                            );
                         }
                     }
                 } else if let Some(note_slot) = ns.notes.get(note_idx) {
@@ -3589,28 +3585,30 @@ pub fn build(
                         ) {
                             actors.push(model_actor);
                         } else {
+                            let sprite_center =
+                                offset_center(note_center, local_offset, local_offset_rot_sin_cos);
                             if draw.blend_add {
-                                actors.push(with_sprite_local_offset(act!(sprite(note_slot.texture_key().to_string()):
+                                actors.push(act!(sprite(note_slot.texture_key().to_string()):
                                     align(0.5, 0.5):
-                                    xy(note_center[0], note_center[1]):
+                                    xy(sprite_center[0], sprite_center[1]):
                                     setsize(note_size[0], note_size[1]):
                                     rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + note_rot):
                                     customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                                     diffuse(color[0], color[1], color[2], color[3]):
                                     blend(add):
                                     z(layer_z)
-                                ), local_offset, local_offset_rot_sin_cos));
+                                ));
                             } else {
-                                actors.push(with_sprite_local_offset(act!(sprite(note_slot.texture_key().to_string()):
+                                actors.push(act!(sprite(note_slot.texture_key().to_string()):
                                     align(0.5, 0.5):
-                                    xy(note_center[0], note_center[1]):
+                                    xy(sprite_center[0], sprite_center[1]):
                                     setsize(note_size[0], note_size[1]):
                                     rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + note_rot):
                                     customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                                     diffuse(color[0], color[1], color[2], color[3]):
                                     blend(normal):
                                     z(layer_z)
-                                ), local_offset, local_offset_rot_sin_cos));
+                                ));
                             }
                         }
                     }
@@ -4721,8 +4719,8 @@ pub fn build(
 
 #[cfg(test)]
 mod tests {
-    use super::note_scale_height;
-    use crate::game::parsing::noteskin::{Style, load_itg_skin};
+    use super::{note_scale_height, offset_center};
+    use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Quantization, Style, load_itg_skin};
 
     #[test]
     fn cyber_model_tap_scale_uses_model_height_not_logical_height() {
@@ -4757,5 +4755,83 @@ mod tests {
             (scale_h - model_h).abs() <= 1e-4,
             "model-backed tap notes must scale by model height; got scale_h={scale_h}, model_h={model_h}"
         );
+    }
+
+    #[test]
+    fn default_tap_circles_stay_inside_arrow_in_gameplay_layout() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        const TARGET_ARROW_PX: f32 = 64.0;
+        const EPSILON: f32 = 1e-3;
+
+        for col in 0..style.num_cols {
+            let note_idx = col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+            let layers = ns
+                .note_layers
+                .get(note_idx)
+                .expect("default should expose Q4th tap layers for each column");
+
+            let primary_h = layers.first().map(note_scale_height).unwrap_or(1.0);
+            let note_scale = if primary_h > f32::EPSILON {
+                TARGET_ARROW_PX / primary_h
+            } else {
+                1.0
+            };
+
+            let mut arrow_bounds: Option<(f32, f32, f32, f32)> = None;
+            let mut circle_bounds = Vec::new();
+
+            for slot in layers.iter() {
+                let draw = slot.model_draw_at(0.0, 0.0);
+                if !draw.visible {
+                    continue;
+                }
+                let logical = slot.logical_size();
+                let size = [
+                    logical[0] * note_scale * draw.zoom[0].max(0.0),
+                    logical[1] * note_scale * draw.zoom[1].max(0.0),
+                ];
+                if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+                    continue;
+                }
+                let local_offset = [draw.pos[0] * note_scale, draw.pos[1] * note_scale];
+                let center = offset_center([0.0, 0.0], local_offset, slot.base_rot_sin_cos());
+                let half_w = size[0] * 0.5;
+                let half_h = size[1] * 0.5;
+                let bounds = (
+                    center[0] - half_w,
+                    center[0] + half_w,
+                    center[1] - half_h,
+                    center[1] + half_h,
+                );
+                let key = slot.texture_key().to_ascii_lowercase();
+                if key.contains("_arrow") {
+                    arrow_bounds = Some(bounds);
+                } else if key.contains("_circle") {
+                    circle_bounds.push(bounds);
+                }
+            }
+
+            let (ax0, ax1, ay0, ay1) =
+                arrow_bounds.expect("default tap layers should include arrow layer");
+            assert_eq!(
+                circle_bounds.len(),
+                4,
+                "default tap layers should include four circle layers"
+            );
+            for (idx, (cx0, cx1, cy0, cy1)) in circle_bounds.into_iter().enumerate() {
+                assert!(
+                    cx0 >= ax0 - EPSILON
+                        && cx1 <= ax1 + EPSILON
+                        && cy0 >= ay0 - EPSILON
+                        && cy1 <= ay1 + EPSILON,
+                    "column {col} circle {idx} escaped arrow bounds: circle=({cx0},{cx1},{cy0},{cy1}), arrow=({ax0},{ax1},{ay0},{ay1})"
+                );
+            }
+        }
     }
 }
