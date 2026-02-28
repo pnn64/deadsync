@@ -587,6 +587,8 @@ static CONFIG: std::sync::LazyLock<Mutex<Config>> =
     std::sync::LazyLock::new(|| Mutex::new(Config::default()));
 static MACHINE_DEFAULT_NOTESKIN: std::sync::LazyLock<Mutex<String>> =
     std::sync::LazyLock::new(|| Mutex::new(DEFAULT_MACHINE_NOTESKIN.to_string()));
+static ADDITIONAL_SONG_FOLDERS: std::sync::LazyLock<Mutex<String>> =
+    std::sync::LazyLock::new(|| Mutex::new(String::new()));
 static SAVE_TX: std::sync::LazyLock<Option<mpsc::Sender<SaveReq>>> =
     std::sync::LazyLock::new(start_save_worker);
 
@@ -686,6 +688,47 @@ fn normalize_machine_default_noteskin(raw: &str) -> String {
     trimmed.to_ascii_lowercase()
 }
 
+fn normalize_additional_song_folders(raw: &str) -> String {
+    let mut out = String::new();
+    for path in raw.split(',').map(str::trim).filter(|path| !path.is_empty()) {
+        if !out.is_empty() {
+            out.push(',');
+        }
+        out.push_str(path);
+    }
+    out
+}
+
+fn load_additional_song_folders(conf: &SimpleIni) -> String {
+    let read_only = conf
+        .get("Options", "AdditionalSongFoldersReadOnly")
+        .unwrap_or_default();
+    let writable_raw = conf
+        .get("Options", "AdditionalSongFoldersWritable")
+        .unwrap_or_default();
+    let deprecated = conf
+        .get("Options", "AdditionalSongFolders")
+        .unwrap_or_default();
+    let writable = if writable_raw.trim().is_empty() {
+        deprecated
+    } else {
+        writable_raw
+    };
+
+    if read_only.trim().is_empty() {
+        return normalize_additional_song_folders(&writable);
+    }
+    if writable.trim().is_empty() {
+        return normalize_additional_song_folders(&read_only);
+    }
+
+    let mut combined = String::with_capacity(read_only.len() + writable.len() + 1);
+    combined.push_str(&read_only);
+    combined.push(',');
+    combined.push_str(&writable);
+    normalize_additional_song_folders(&combined)
+}
+
 fn create_default_config_file() -> Result<(), std::io::Error> {
     info!("'{CONFIG_PATH}' not found, creating with default values.");
     let default = Config::default();
@@ -696,6 +739,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str("[Options]\n");
     content.push_str("AudioOutputDevice=Auto\n");
     content.push_str("AudioSampleRateHz=Auto\n");
+    content.push_str("AdditionalSongFolders=\n");
     content.push_str(&format!(
         "AutoPopulateGrooveStatsScores={}\n",
         if default.auto_populate_gs_scores {
@@ -1096,6 +1140,7 @@ pub fn load() {
                     .map(|v| normalize_machine_default_noteskin(&v))
                     .unwrap_or_else(|| DEFAULT_MACHINE_NOTESKIN.to_string());
                 *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = noteskin;
+                *ADDITIONAL_SONG_FOLDERS.lock().unwrap() = load_additional_song_folders(&conf);
             }
 
             // This block populates the global CONFIG struct from the file,
@@ -1655,6 +1700,7 @@ pub fn load() {
                 let options_keys = [
                     "AudioOutputDevice",
                     "AudioSampleRateHz",
+                    "AdditionalSongFolders",
                     "AutoPopulateGrooveStatsScores",
                     "BGBrightness",
                     "BannerCache",
@@ -1773,6 +1819,7 @@ pub fn load() {
         Err(e) => {
             warn!("Failed to load '{CONFIG_PATH}': {e}. Using default values.");
             *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = DEFAULT_MACHINE_NOTESKIN.to_string();
+            *ADDITIONAL_SONG_FOLDERS.lock().unwrap() = String::new();
         }
     }
 }
@@ -2374,6 +2421,7 @@ fn save_without_keymaps() {
     let cfg = *CONFIG.lock().unwrap();
     let keymap = crate::core::input::get_keymap();
     let machine_default_noteskin = MACHINE_DEFAULT_NOTESKIN.lock().unwrap().clone();
+    let additional_song_folders = ADDITIONAL_SONG_FOLDERS.lock().unwrap().clone();
 
     let mut content = String::new();
 
@@ -2388,6 +2436,9 @@ fn save_without_keymaps() {
         Some(hz) => hz.to_string(),
     };
     content.push_str(&format!("AudioSampleRateHz={audio_rate_str}\n"));
+    content.push_str(&format!(
+        "AdditionalSongFolders={additional_song_folders}\n"
+    ));
     content.push_str(&format!(
         "AutoPopulateGrooveStatsScores={}\n",
         if cfg.auto_populate_gs_scores {
@@ -2738,6 +2789,10 @@ pub fn get() -> Config {
 
 pub fn machine_default_noteskin() -> String {
     MACHINE_DEFAULT_NOTESKIN.lock().unwrap().clone()
+}
+
+pub fn additional_song_folders() -> String {
+    ADDITIONAL_SONG_FOLDERS.lock().unwrap().clone()
 }
 
 pub fn update_display_mode(mode: DisplayMode) {

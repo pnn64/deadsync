@@ -907,11 +907,52 @@ where
     scan_and_load_songs_impl(root_path_str, Some(progress));
 }
 
+fn collect_song_scan_roots(root_path_str: &str) -> Vec<PathBuf> {
+    fn push_unique_root(path: PathBuf, roots: &mut Vec<PathBuf>, keys: &mut Vec<String>) {
+        let mut key = path.to_string_lossy().into_owned();
+        if cfg!(windows) {
+            key.make_ascii_lowercase();
+        }
+        if keys.iter().any(|existing| existing == &key) {
+            return;
+        }
+        keys.push(key);
+        roots.push(path);
+    }
+
+    let mut roots = Vec::with_capacity(4);
+    let mut keys: Vec<String> = Vec::with_capacity(4);
+    let root_path = PathBuf::from(root_path_str);
+    if root_path.is_dir() {
+        push_unique_root(root_path, &mut roots, &mut keys);
+    } else {
+        warn!("Songs directory '{root_path_str}' not found.");
+    }
+
+    let additional_folders = crate::config::additional_song_folders();
+    for raw in additional_folders.split(',') {
+        let path = raw.trim();
+        if path.is_empty() {
+            continue;
+        }
+        let extra_root = PathBuf::from(path);
+        if extra_root.is_dir() {
+            push_unique_root(extra_root, &mut roots, &mut keys);
+        } else {
+            warn!(
+                "AdditionalSongFolders entry '{}' is not a directory; skipping.",
+                path
+            );
+        }
+    }
+    roots
+}
+
 fn scan_and_load_songs_impl<F>(root_path_str: &'static str, mut progress: Option<&mut F>)
 where
     F: FnMut(usize, usize, &str, &str),
 {
-    info!("Starting simfile scan in '{root_path_str}'...");
+    info!("Starting simfile scan (base songs root '{root_path_str}')...");
 
     let started = Instant::now();
     let config = crate::config::get();
@@ -942,9 +983,10 @@ where
         );
     }
 
-    let root_path = Path::new(root_path_str);
-    if !root_path.exists() || !root_path.is_dir() {
-        warn!("Songs directory '{root_path_str}' not found. No songs will be loaded.");
+    let song_roots = collect_song_scan_roots(root_path_str);
+    if song_roots.is_empty() {
+        warn!("No valid song roots found. No songs will be loaded.");
+        set_song_cache(Vec::new());
         return;
     }
 
@@ -953,13 +995,13 @@ where
     let mut songs_parsed = 0usize;
     let mut songs_failed = 0usize;
 
-    let packs = match rssp::pack::scan_songs_dir(root_path, rssp::pack::ScanOpt::default()) {
-        Ok(p) => p,
-        Err(e) => {
-            warn!("Could not scan songs dir '{root_path_str}': {e:?}");
-            return;
+    let mut packs = Vec::new();
+    for songs_root in &song_roots {
+        match rssp::pack::scan_songs_dir(songs_root, rssp::pack::ScanOpt::default()) {
+            Ok(mut found) => packs.append(&mut found),
+            Err(e) => warn!("Could not scan songs dir '{}': {e:?}", songs_root.display()),
         }
-    };
+    }
     let total_songs = packs.iter().map(|pack| pack.songs.len()).sum::<usize>();
     let mut songs_seen = 0usize;
 
@@ -1229,13 +1271,13 @@ fn collect_course_paths(root: &Path) -> Vec<PathBuf> {
 }
 
 fn resolve_song_dir(
-    songs_dir: &Path,
+    song_roots: &[PathBuf],
     group_dirs: &mut HashMap<String, PathBuf>,
     group: Option<&str>,
     song: &str,
 ) -> Option<PathBuf> {
     fn resolve_group_dir(
-        songs_dir: &Path,
+        song_roots: &[PathBuf],
         group_dirs: &mut HashMap<String, PathBuf>,
         group: &str,
     ) -> Option<PathBuf> {
@@ -1244,12 +1286,19 @@ fn resolve_song_dir(
             return None;
         }
         if !group_dirs.contains_key(&key) {
-            let direct = songs_dir.join(group);
-            let path = if direct.is_dir() {
-                Some(direct)
-            } else {
-                is_dir_ci(songs_dir, group)
-            }?;
+            let mut path = None;
+            for songs_root in song_roots {
+                let direct = songs_root.join(group);
+                path = if direct.is_dir() {
+                    Some(direct)
+                } else {
+                    is_dir_ci(songs_root, group)
+                };
+                if path.is_some() {
+                    break;
+                }
+            }
+            let path = path?;
             group_dirs.insert(key.clone(), path);
         }
         group_dirs.get(&key).cloned()
@@ -1261,7 +1310,7 @@ fn resolve_song_dir(
     }
 
     if let Some(group) = group.map(str::trim).filter(|g| !g.is_empty()) {
-        let group_dir = resolve_group_dir(songs_dir, group_dirs, group)?;
+        let group_dir = resolve_group_dir(song_roots, group_dirs, group)?;
         let direct = group_dir.join(song);
         return if direct.is_dir() {
             Some(direct)
@@ -1270,27 +1319,29 @@ fn resolve_song_dir(
         };
     }
 
-    let Ok(entries) = fs::read_dir(songs_dir) else {
-        return None;
-    };
-    for entry in entries.flatten() {
-        let group_dir = entry.path();
-        if !group_dir.is_dir() {
+    for songs_root in song_roots {
+        let Ok(entries) = fs::read_dir(songs_root) else {
             continue;
-        }
-        let direct = group_dir.join(song);
-        if direct.is_dir() {
-            return Some(direct);
-        }
-        if let Some(found) = is_dir_ci(&group_dir, song) {
-            return Some(found);
+        };
+        for entry in entries.flatten() {
+            let group_dir = entry.path();
+            if !group_dir.is_dir() {
+                continue;
+            }
+            let direct = group_dir.join(song);
+            if direct.is_dir() {
+                return Some(direct);
+            }
+            if let Some(found) = is_dir_ci(&group_dir, song) {
+                return Some(found);
+            }
         }
     }
     None
 }
 
 fn resolve_course_group_dir(
-    songs_dir: &Path,
+    song_roots: &[PathBuf],
     group_dirs: &mut HashMap<String, PathBuf>,
     group: &str,
 ) -> Option<PathBuf> {
@@ -1301,12 +1352,19 @@ fn resolve_course_group_dir(
     if let Some(path) = group_dirs.get(&key) {
         return Some(path.clone());
     }
-    let direct = songs_dir.join(group);
-    let path = if direct.is_dir() {
-        Some(direct)
-    } else {
-        is_dir_ci(songs_dir, group)
-    }?;
+    let mut path = None;
+    for songs_root in song_roots {
+        let direct = songs_root.join(group);
+        path = if direct.is_dir() {
+            Some(direct)
+        } else {
+            is_dir_ci(songs_root, group)
+        };
+        if path.is_some() {
+            break;
+        }
+    }
+    let path = path?;
     group_dirs.insert(key, path.clone());
     Some(path)
 }
@@ -1420,9 +1478,9 @@ fn scan_and_load_courses_impl<F>(
         return;
     }
 
-    let songs_root = Path::new(songs_root_str);
-    if !songs_root.is_dir() {
-        warn!("Songs directory '{songs_root_str}' not found. No courses will be loaded.");
+    let song_roots = collect_song_scan_roots(songs_root_str);
+    if song_roots.is_empty() {
+        warn!("No valid song roots found. No courses will be loaded.");
         set_course_cache(Vec::new());
         return;
     }
@@ -1480,7 +1538,7 @@ fn scan_and_load_courses_impl<F>(
             match &entry.song {
                 rssp::course::CourseSong::Fixed { group, song } => {
                     let Some(song_dir) =
-                        resolve_song_dir(songs_root, &mut group_dirs, group.as_deref(), song)
+                        resolve_song_dir(&song_roots, &mut group_dirs, group.as_deref(), song)
                     else {
                         warn!(
                             "Course '{}' entry {} references missing song '{}{}'.",
@@ -1557,7 +1615,7 @@ fn scan_and_load_courses_impl<F>(
                 }
                 rssp::course::CourseSong::RandomAny => {}
                 rssp::course::CourseSong::RandomWithinGroup { group } => {
-                    if resolve_course_group_dir(songs_root, &mut group_dirs, group).is_none() {
+                    if resolve_course_group_dir(&song_roots, &mut group_dirs, group).is_none() {
                         warn!(
                             "Course '{}' entry {} references missing group '{}/*'.",
                             course.name,
