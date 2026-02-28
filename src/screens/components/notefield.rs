@@ -93,6 +93,18 @@ const Z_TAP_NOTE: i32 = 140;
 const Z_COLUMN_CUE: i32 = 90;
 const MINE_CORE_SIZE_RATIO: f32 = 0.45;
 const Z_MEASURE_LINES: i32 = 80;
+const Z_JUDGMENT_FRONT: i16 = 200;
+const Z_JUDGMENT_BACK: i16 = 95;
+const Z_ERROR_BAR_BG_FRONT: i16 = 180;
+const Z_ERROR_BAR_BG_BACK: i16 = 86;
+const Z_ERROR_BAR_BAND_FRONT: i16 = 181;
+const Z_ERROR_BAR_BAND_BACK: i16 = 87;
+const Z_ERROR_BAR_LINE_FRONT: i16 = 182;
+const Z_ERROR_BAR_LINE_BACK: i16 = 88;
+const Z_ERROR_BAR_TICK_FRONT: i16 = 183;
+const Z_ERROR_BAR_TICK_BACK: i16 = 89;
+const Z_ERROR_BAR_TEXT_FRONT: i16 = 184;
+const Z_ERROR_BAR_TEXT_BACK: i16 = 90;
 
 const VISUAL_MASK_DIZZY: u16 = 1 << 1;
 const VISUAL_MASK_CONFUSION: u16 = 1 << 2;
@@ -3907,6 +3919,36 @@ pub fn build(
     } else {
         (judgment_y + ERROR_BAR_OFFSET_FROM_JUDGMENT, 10.0_f32)
     };
+    let judgment_z = if profile.judgment_back {
+        Z_JUDGMENT_BACK
+    } else {
+        Z_JUDGMENT_FRONT
+    };
+    let error_bar_bg_z = if profile.judgment_back {
+        Z_ERROR_BAR_BG_BACK
+    } else {
+        Z_ERROR_BAR_BG_FRONT
+    };
+    let error_bar_band_z = if profile.judgment_back {
+        Z_ERROR_BAR_BAND_BACK
+    } else {
+        Z_ERROR_BAR_BAND_FRONT
+    };
+    let error_bar_line_z = if profile.judgment_back {
+        Z_ERROR_BAR_LINE_BACK
+    } else {
+        Z_ERROR_BAR_LINE_FRONT
+    };
+    let error_bar_tick_z = if profile.judgment_back {
+        Z_ERROR_BAR_TICK_BACK
+    } else {
+        Z_ERROR_BAR_TICK_FRONT
+    };
+    let error_bar_text_z = if profile.judgment_back {
+        Z_ERROR_BAR_TEXT_BACK
+    } else {
+        Z_ERROR_BAR_TEXT_FRONT
+    };
 
     // zmod ExtraAesthetics: offset indicator text (ErrorMSDisplay).
     if profile.error_ms_display
@@ -3927,7 +3969,7 @@ pub fn build(
                 align(0.5, 0.5): xy(playfield_center_x, offset_y):
                 zoom(0.25): shadowlength(1.0):
                 diffuse(c[0], c[1], c[2], 1.0):
-                z(184)
+                z(error_bar_text_z)
             ));
         }
     }
@@ -3987,7 +4029,7 @@ pub fn build(
                             align(0.5, 0.5): xy(playfield_center_x, error_bar_y):
                             zoomto(ERROR_BAR_WIDTH_MONOCHROME + 2.0, bar_h + 2.0):
                             diffuse(0.0, 0.0, 0.0, bg_alpha):
-                            z(180)
+                            z(error_bar_bg_z)
                         ));
                     }
 
@@ -3995,7 +4037,7 @@ pub fn build(
                         align(0.5, 0.5): xy(playfield_center_x, error_bar_y):
                         zoomto(2.0, bar_h):
                         diffuse(0.5, 0.5, 0.5, 1.0):
-                        z(181)
+                        z(error_bar_band_z)
                     ));
 
                     let line_alpha = if elapsed_screen < ERROR_BAR_LINES_FADE_START_S {
@@ -4020,7 +4062,7 @@ pub fn build(
                                 align(0.5, 0.5): xy(playfield_center_x + sx * offset, error_bar_y):
                                 zoomto(1.0, bar_h):
                                 diffuse(1.0, 1.0, 1.0, line_alpha):
-                                z(182)
+                                z(error_bar_line_z)
                             ));
                             }
                         }
@@ -4045,13 +4087,13 @@ pub fn build(
                             font("game"): settext("Early"):
                             align(0.5, 0.5): xy(playfield_center_x - x_off, error_bar_y):
                             zoom(0.7): diffuse(1.0, 1.0, 1.0, label_alpha):
-                            z(184)
+                            z(error_bar_text_z)
                         ));
                         hud_actors.push(act!(text:
                             font("game"): settext("Late"):
                             align(0.5, 0.5): xy(playfield_center_x + x_off, error_bar_y):
                             zoom(0.7): diffuse(1.0, 1.0, 1.0, label_alpha):
-                            z(184)
+                            z(error_bar_text_z)
                         ));
                     }
 
@@ -4081,7 +4123,7 @@ pub fn build(
                                 align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
                                 zoomto(ERROR_BAR_TICK_WIDTH, bar_h):
                                 diffuse(c[0], c[1], c[2], alpha):
-                                z(183)
+                                z(error_bar_tick_z)
                             ));
                         }
                     }
@@ -4114,7 +4156,7 @@ pub fn build(
                             align(0.5, 0.5): xy(playfield_center_x, error_bar_y):
                             zoomto(ERROR_BAR_WIDTH_COLORFUL + 4.0, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
                             diffuse(0.0, 0.0, 0.0, 1.0):
-                            z(180)
+                            z(error_bar_bg_z)
                         ));
 
                         let base = if profile.show_fa_plus_window {
@@ -4139,13 +4181,13 @@ pub fn build(
                                 align(0.5, 0.5): xy(playfield_center_x + cx_early, error_bar_y):
                                 zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
                                 diffuse(c[0], c[1], c[2], 1.0):
-                                z(181)
+                                z(error_bar_band_z)
                             ));
                             hud_actors.push(act!(quad:
                                 align(0.5, 0.5): xy(playfield_center_x + cx_late, error_bar_y):
                                 zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
                                 diffuse(c[0], c[1], c[2], 1.0):
-                                z(181)
+                                z(error_bar_band_z)
                             ));
 
                             lastx = x;
@@ -4174,7 +4216,7 @@ pub fn build(
                             align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
                             zoomto(ERROR_BAR_TICK_WIDTH, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
                             diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
-                            z(182)
+                            z(error_bar_line_z)
                         ));
                         }
                     }
@@ -4207,7 +4249,7 @@ pub fn build(
                             align(0.5, 0.5): xy(playfield_center_x, error_bar_y):
                             zoomto(ERROR_BAR_WIDTH_COLORFUL + 4.0, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
                             diffuse(0.0, 0.0, 0.0, 1.0):
-                            z(180)
+                            z(error_bar_bg_z)
                         ));
 
                         let base = if profile.show_fa_plus_window {
@@ -4244,13 +4286,13 @@ pub fn build(
                                 align(0.5, 0.5): xy(playfield_center_x + cx_early, error_bar_y):
                                 zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
                                 diffuse(c[0], c[1], c[2], early_a):
-                                z(181)
+                                z(error_bar_band_z)
                             ));
                             hud_actors.push(act!(quad:
                                 align(0.5, 0.5): xy(playfield_center_x + cx_late, error_bar_y):
                                 zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
                                 diffuse(c[0], c[1], c[2], late_a):
-                                z(181)
+                                z(error_bar_band_z)
                             ));
 
                             lastx = x;
@@ -4279,7 +4321,7 @@ pub fn build(
                             align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
                             zoomto(ERROR_BAR_TICK_WIDTH, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
                             diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
-                            z(182)
+                            z(error_bar_line_z)
                         ));
                         }
                     }
@@ -4324,7 +4366,7 @@ pub fn build(
                             align(0.5, 0.5): xy(playfield_center_x + x, avg_y):
                             zoomto(ERROR_BAR_TICK_WIDTH, tick_h):
                             diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
-                            z(182)
+                            z(error_bar_line_z)
                         ));
                         }
                     }
@@ -4343,7 +4385,7 @@ pub fn build(
                     align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
                     zoom(0.25): shadowlength(1.0):
                     diffuse(1.0, 1.0, 1.0, 1.0):
-                    z(184)
+                    z(error_bar_text_z)
                 ));
             }
         }
@@ -4644,7 +4686,7 @@ pub fn build(
                 };
                 hud_actors.push(act!(sprite(judgment_texture):
                     align(0.5, 0.5): xy(playfield_center_x, judgment_y):
-                    z(200): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
+                    z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
                 ));
             }
         }

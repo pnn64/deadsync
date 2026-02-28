@@ -1186,6 +1186,8 @@ pub struct Profile {
     // Judgment tilt (Simply Love semantics).
     pub judgment_tilt: bool,
     pub column_cues: bool,
+    // zmod ExtraAesthetics: draw judgments/error timing HUD behind notes.
+    pub judgment_back: bool,
     // zmod ExtraAesthetics: offset indicator (ErrorMSDisplay).
     pub error_ms_display: bool,
     pub display_scorebox: bool,
@@ -1299,6 +1301,7 @@ impl Default for Profile {
             custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
             judgment_tilt: false,
             column_cues: false,
+            judgment_back: false,
             error_ms_display: false,
             display_scorebox: true,
             rainbow_max: false,
@@ -1647,6 +1650,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             i32::from(default_profile.column_cues)
         ));
         content.push_str(&format!(
+            "JudgmentBack = {}\n",
+            i32::from(default_profile.judgment_back)
+        ));
+        content.push_str(&format!(
             "ErrorMSDisplay = {}\n",
             i32::from(default_profile.error_ms_display)
         ));
@@ -1956,6 +1963,7 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         i32::from(profile.judgment_tilt)
     ));
     content.push_str(&format!("ColumnCues={}\n", i32::from(profile.column_cues)));
+    content.push_str(&format!("JudgmentBack={}\n", i32::from(profile.judgment_back)));
     content.push_str(&format!(
         "ErrorMSDisplay={}\n",
         i32::from(profile.error_ms_display)
@@ -2369,6 +2377,10 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "ColumnCues")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.column_cues, |v| v != 0);
+            profile.judgment_back = profile_conf
+                .get("PlayerOptions", "JudgmentBack")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.judgment_back, |v| v != 0);
             profile.error_ms_display = profile_conf
                 .get("PlayerOptions", "ErrorMSDisplay")
                 .and_then(|s| s.parse::<u8>().ok())
@@ -3867,6 +3879,18 @@ pub fn update_column_cues_for_side(side: PlayerSide, enabled: bool) {
             return;
         }
         profile.column_cues = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_judgment_back_for_side(side: PlayerSide, enabled: bool) {
+    {
+        let mut profiles = PROFILES.lock().unwrap();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.judgment_back == enabled {
+            return;
+        }
+        profile.judgment_back = enabled;
     }
     save_profile_ini_for_side(side);
 }

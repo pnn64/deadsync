@@ -1203,6 +1203,16 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
+            name: ROW_JUDGMENT_BACK.to_string(),
+            choices: vec!["Off".to_string(), "On".to_string()],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![
+                "Render judgment text, offset indicator, and error bar behind arrows."
+                    .to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
             name: "Offset Indicator".to_string(),
             choices: vec!["Off".to_string(), "On".to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
@@ -1758,6 +1768,9 @@ fn apply_profile_defaults(
             .position(|c| c == &needle)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == ROW_JUDGMENT_BACK) {
+        row.selected_choice_index[player_idx] = if profile.judgment_back { 1 } else { 0 };
     }
     // Initialize Error Bar rows from profile (Simply Love semantics).
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Offset Indicator") {
@@ -2536,6 +2549,7 @@ const ROW_MEASURE_COUNTER_LOOKAHEAD: &str = "Measure Counter Lookahead";
 const ROW_MEASURE_COUNTER_OPTIONS: &str = "Measure Counter Options";
 const ROW_JUDGMENT_TILT: &str = "Judgment Tilt";
 const ROW_JUDGMENT_TILT_INTENSITY: &str = "Judgment Tilt Intensity";
+const ROW_JUDGMENT_BACK: &str = "Judgment Behind Arrows";
 const ROW_ERROR_BAR: &str = "Error Bar";
 const ROW_ERROR_BAR_TRIM: &str = "Error Bar Trim";
 const ROW_ERROR_BAR_OPTIONS: &str = "Error Bar Options";
@@ -2908,6 +2922,7 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "Error Bar Trim"
         || row_name == "Error Bar Options"
         || row_name == "Offset Indicator"
+        || row_name == ROW_JUDGMENT_BACK
         || row_name == "Measure Counter"
         || row_name == "Measure Counter Lookahead"
         || row_name == "Measure Counter Options"
@@ -3650,6 +3665,12 @@ fn change_choice_for_player(
             if should_persist {
                 crate::game::profile::update_tilt_multiplier_for_side(persist_side, mult);
             }
+        }
+    } else if row_name == ROW_JUDGMENT_BACK {
+        let enabled = row.selected_choice_index[player_idx] != 0;
+        state.player_profiles[player_idx].judgment_back = enabled;
+        if should_persist {
+            crate::game::profile::update_judgment_back_for_side(persist_side, enabled);
         }
     } else if row_name == "LifeMeter Type" {
         let setting = match row.selected_choice_index[player_idx] {
