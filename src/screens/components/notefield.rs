@@ -404,6 +404,35 @@ fn offset_center(
 }
 
 #[inline(always)]
+fn hold_tail_cap_bounds(
+    head_is_top: bool,
+    body_tail_y: f32,
+    cap_height: f32,
+    rendered_body_top: Option<f32>,
+    rendered_body_bottom: Option<f32>,
+) -> Option<(f32, f32)> {
+    let (rt, rb) = match (rendered_body_top, rendered_body_bottom) {
+        (Some(t), Some(b)) if b > t + 0.5 => (t, b),
+        _ => return None,
+    };
+
+    let dist = if head_is_top {
+        body_tail_y - rb
+    } else {
+        rt - body_tail_y
+    };
+    if dist < -2.0 || dist > cap_height + 2.0 {
+        return None;
+    }
+
+    Some(if head_is_top {
+        (rb, rb + cap_height)
+    } else {
+        (rt - cap_height, rt)
+    })
+}
+
+#[inline(always)]
 fn build_model_vertices(
     slot: &SpriteSlot,
     model: &ModelMesh,
@@ -2485,8 +2514,10 @@ pub fn build(
             let head_y = lane_y_from_travel(local_col, lane_receptor_y, dir, head_travel_offset);
             let tail_y = lane_y_from_travel(local_col, lane_receptor_y, dir, tail_travel_offset);
             let note_display = ns.note_display_metrics;
-            let visual_reverse = head_y > tail_y;
-            let body_flipped = visual_reverse && note_display.flip_hold_body_when_reverse;
+            // ITG gates reverse noteskin metrics by lane reverse state, not by
+            // temporary visual inversion from scroll gimmicks.
+            let lane_reverse = col_dir < 0.0;
+            let body_flipped = lane_reverse && note_display.flip_hold_body_when_reverse;
             let (body_head_y, body_tail_y) = if body_flipped {
                 (
                     head_y - note_display.stop_drawing_hold_body_offset_from_tail,
@@ -2523,7 +2554,7 @@ pub fn build(
             let hold_color_scale = let_go_gray + (1.0 - let_go_gray) * hold_life;
             let hold_diffuse = [hold_color_scale, hold_color_scale, hold_color_scale, 1.0];
             let use_tail_for_head_anchor =
-                visual_reverse && !note_display.flip_head_and_tail_when_reverse;
+                lane_reverse && !note_display.flip_head_and_tail_when_reverse;
             let head_anchor_y = if use_tail_for_head_anchor {
                 tail_y
             } else {
@@ -2670,7 +2701,7 @@ pub fn build(
                     // run the same segmentation logic, then mirror back to screen space.
 
                     // Transform to "forward space" if reverse scroll (mirror around receptor)
-                    let (eff_head_y, eff_tail_y, eff_body_top, eff_body_bottom) = if visual_reverse
+                    let (eff_head_y, eff_tail_y, eff_body_top, eff_body_bottom) = if lane_reverse
                     {
                         (
                             2.0 * receptor - body_head_y,
@@ -2711,7 +2742,7 @@ pub fn build(
                         // Phase offset: shifts fractional remainder to first segment so the
                         // final segment aligns with the tail cap. Only applies when head is on top.
                         let anchor_to_top =
-                            visual_reverse && note_display.top_hold_anchor_when_reverse;
+                            lane_reverse && note_display.top_hold_anchor_when_reverse;
                         let phase_offset = if eff_head_is_top && !anchor_to_top {
                             let total_phase = hold_length / segment_height;
                             if total_phase >= 1.0 + SEGMENT_PHASE_EPS {
@@ -2794,7 +2825,7 @@ pub fn build(
                                 segment_size_screen,
                                 seg_top_screen,
                                 seg_bottom_screen,
-                            ) = if visual_reverse {
+                            ) = if lane_reverse {
                                 let top_scr = 2.0 * receptor - segment_bottom_eff;
                                 let bottom_scr = 2.0 * receptor - segment_top_eff;
                                 (
@@ -2812,7 +2843,7 @@ pub fn build(
                                 )
                             };
 
-                            let rotation = if visual_reverse { 180.0 } else { 0.0 };
+                            let rotation = if lane_reverse { 180.0 } else { 0.0 };
 
                             // Track rendered bounds in screen space
                             rendered_body_top = Some(match rendered_body_top {
@@ -2865,38 +2896,16 @@ pub fn build(
                     let u1 = cap_uv[2];
                     let mut v0 = cap_uv[1];
                     let mut v1 = cap_uv[3];
-                    let body_anchor = match (rendered_body_top, rendered_body_bottom) {
-                        (Some(t), Some(b)) if b > t + 0.5 => Some((t, b)),
-                        _ => None,
-                    };
-                    // ITG always draws the tail cap path (DrawHoldBodyInternal -> hpt_bottom),
-                    // even when no body strip vertices are emitted. Keep body-edge anchoring
-                    // when available, but fall back to tail-based placement otherwise so
-                    // very short holds remain visible.
-                    let (mut cap_top, mut cap_bottom) = if let Some((rt, rb)) = body_anchor {
-                        let cap_adjacent_ok = if head_is_top {
-                            // Tail visually below; ensure the drawn body bottom is near the tail.
-                            let dist = body_tail_y - rb;
-                            dist >= -2.0 && dist <= cap_height + 2.0
-                        } else {
-                            // Tail visually above; ensure the drawn body top is near the tail.
-                            let dist = rt - body_tail_y;
-                            dist >= -2.0 && dist <= cap_height + 2.0
-                        };
-                        if !cap_adjacent_ok {
-                            continue;
-                        }
-                        // Anchor cap join to the actual rendered body edge. This avoids
-                        // sub-pixel drift leaving a 1px seam at the body/cap boundary.
-                        if head_is_top {
-                            (rb, rb + cap_height)
-                        } else {
-                            (rt - cap_height, rt)
-                        }
-                    } else if head_is_top {
-                        (body_tail_y, body_tail_y + cap_height)
-                    } else {
-                        (body_tail_y - cap_height, body_tail_y)
+                    // Cap should only render when body reaches tail side, and must
+                    // connect exactly at the rendered body edge.
+                    let Some((mut cap_top, mut cap_bottom)) = hold_tail_cap_bounds(
+                        head_is_top,
+                        body_tail_y,
+                        cap_height,
+                        rendered_body_top,
+                        rendered_body_bottom,
+                    ) else {
+                        continue;
                     };
                     let mut cap_center = (cap_top + cap_bottom) * 0.5;
                     if cap_height > f32::EPSILON {
@@ -2943,7 +2952,7 @@ pub fn build(
                                 hold_diffuse[2],
                                 hold_diffuse[3]
                             ):
-                            rotationz(if visual_reverse { 180.0 } else { 0.0 }):
+                            rotationz(if lane_reverse { 180.0 } else { 0.0 }):
                             z(Z_HOLD_CAP)
                         ));
                     }
@@ -4719,8 +4728,41 @@ pub fn build(
 
 #[cfg(test)]
 mod tests {
-    use super::{note_scale_height, offset_center};
+    use super::{hold_tail_cap_bounds, note_scale_height, offset_center};
     use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Quantization, Style, load_itg_skin};
+
+    #[test]
+    fn hold_tail_cap_bounds_join_at_body_bottom_for_normal_scroll() {
+        let body_tail_y = 100.0;
+        let cap_height = 24.0;
+        let (top, bottom) =
+            hold_tail_cap_bounds(true, body_tail_y, cap_height, Some(20.0), Some(96.0))
+                .expect("cap should connect when rendered body reaches tail side");
+        assert!((top - 96.0).abs() <= 1e-6);
+        assert!((bottom - 120.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn hold_tail_cap_bounds_join_at_body_top_for_reverse_scroll() {
+        let body_tail_y = 100.0;
+        let cap_height = 24.0;
+        let (top, bottom) =
+            hold_tail_cap_bounds(false, body_tail_y, cap_height, Some(104.0), Some(160.0))
+                .expect("cap should connect when rendered body reaches tail side");
+        assert!((top - 80.0).abs() <= 1e-6);
+        assert!((bottom - 104.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn hold_tail_cap_bounds_skip_when_body_does_not_reach_tail() {
+        let body_tail_y = 100.0;
+        let cap_height = 24.0;
+        assert!(hold_tail_cap_bounds(true, body_tail_y, cap_height, Some(20.0), Some(70.0))
+            .is_none());
+        assert!(hold_tail_cap_bounds(false, body_tail_y, cap_height, Some(140.0), Some(200.0))
+            .is_none());
+        assert!(hold_tail_cap_bounds(true, body_tail_y, cap_height, None, Some(95.0)).is_none());
+    }
 
     #[test]
     fn cyber_model_tap_scale_uses_model_height_not_logical_height() {
