@@ -445,7 +445,7 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>) {
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(if total == 0 { "Initilizing..." } else { loading_phase_label(phase) }):
+        settext(if total == 0 { "Initializing..." } else { loading_phase_label(phase) }):
         align(0.5, 0.5):
         xy(screen_center_x(), bar_cy - 96.0):
         zoom(1.05):

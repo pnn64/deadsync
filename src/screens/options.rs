@@ -3752,6 +3752,27 @@ pub fn init() -> State {
     state
 }
 
+pub fn open_input_submenu(state: &mut State) {
+    state.view = OptionsView::Submenu(SubmenuKind::Input);
+    state.pending_submenu_kind = None;
+    state.pending_submenu_parent_kind = None;
+    state.submenu_parent_kind = None;
+    state.submenu_transition = SubmenuTransition::None;
+    state.submenu_fade_t = 0.0;
+    state.content_alpha = 1.0;
+    state.sub_selected = 0;
+    state.sub_prev_selected = 0;
+    state.sub_inline_x = f32::NAN;
+    sync_submenu_cursor_indices(state);
+    state.cursor_initialized = false;
+    state.cursor_t = 1.0;
+    state.row_tweens.clear();
+    state.graphics_prev_visible_rows.clear();
+    state.advanced_prev_visible_rows.clear();
+    state.select_music_prev_visible_rows.clear();
+    clear_navigation_holds(state);
+}
+
 fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {
     match kind {
         SubmenuKind::System => &state.sub_choice_indices_system,
@@ -4153,7 +4174,7 @@ fn build_reload_overlay_actors(reload: &ReloadUiState, active_color_index: i32) 
     ));
     out.push(act!(text:
         font("miso"):
-        settext(if total == 0 { "initializing..." } else { reload_phase_label(reload.phase) }):
+        settext(if total == 0 { "Initializing..." } else { reload_phase_label(reload.phase) }):
         align(0.5, 0.5):
         xy(screen_width() * 0.5, bar_cy - 98.0):
         zoom(1.05):

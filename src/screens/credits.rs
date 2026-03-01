@@ -78,7 +78,7 @@ const CREDITS: &[CreditLine] = &[
     spacer(),
     section("DeadSync Contributors"),
     name("Mason Boeman (maboesanman)"),
-    name("adstep"),    
+    name("adstep"),
     name("DolphinChips"),
     name("rehtlaw"),
     spacer(),

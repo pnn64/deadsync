@@ -1517,6 +1517,15 @@ impl App {
         options::update_monitor_specs(&mut self.state.screens.options_state, specs);
     }
 
+    fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
+        let current_color_index = self.state.screens.options_state.active_color_index;
+        self.state.screens.options_state = options::init();
+        self.state.screens.options_state.active_color_index = current_color_index;
+        if matches!(from, CurrentScreen::Mappings | CurrentScreen::Input) {
+            options::open_input_submenu(&mut self.state.screens.options_state);
+        }
+    }
+
     fn new(
         backend_type: BackendType,
         overlay_mode: u8,
@@ -2505,11 +2514,15 @@ impl App {
         if self.try_handle_late_join(&ev) {
             return Ok(());
         }
-        if config::get().only_dedicated_menu_buttons
-            && ev.action.is_gameplay_arrow()
-            && self.state.screens.current_screen != CurrentScreen::Gameplay
-        {
-            return Ok(());
+        if config::get().only_dedicated_menu_buttons && ev.action.is_gameplay_arrow() {
+            let allow_gameplay_arrow = match self.state.screens.current_screen {
+                CurrentScreen::Gameplay | CurrentScreen::Input => true,
+                CurrentScreen::SelectMusic => self.state.screens.select_music_state.test_input_overlay_visible,
+                _ => false,
+            };
+            if !allow_gameplay_arrow {
+                return Ok(());
+            }
         }
         if ev.pressed
             && matches!(
@@ -4247,9 +4260,7 @@ impl App {
             self.state.screens.menu_state = menu::init();
             self.state.screens.menu_state.active_color_index = current_color_index;
         } else if target == CurrentScreen::Options {
-            let current_color_index = self.state.screens.options_state.active_color_index;
-            self.state.screens.options_state = options::init();
-            self.state.screens.options_state.active_color_index = current_color_index;
+            self.reset_options_state_for_entry(prev);
         } else if target == CurrentScreen::Credits {
             self.state.screens.credits_state = credits::init();
             self.state.screens.credits_state.active_color_index =
@@ -5374,11 +5385,7 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.state.screens.menu_state.active_color_index =
                                     current_color_index;
                             } else if target_screen == CurrentScreen::Options {
-                                let current_color_index =
-                                    self.state.screens.options_state.active_color_index;
-                                self.state.screens.options_state = options::init();
-                                self.state.screens.options_state.active_color_index =
-                                    current_color_index;
+                                self.reset_options_state_for_entry(prev);
                             } else if target_screen == CurrentScreen::ManageLocalProfiles {
                                 let color_index =
                                     self.state.screens.options_state.active_color_index;
