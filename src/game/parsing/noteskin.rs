@@ -916,6 +916,8 @@ pub struct HoldVisuals {
     pub head_active: Option<SpriteSlot>,
     pub body_inactive: Option<SpriteSlot>,
     pub body_active: Option<SpriteSlot>,
+    pub topcap_inactive: Option<SpriteSlot>,
+    pub topcap_active: Option<SpriteSlot>,
     pub bottomcap_inactive: Option<SpriteSlot>,
     pub bottomcap_active: Option<SpriteSlot>,
     pub explosion: Option<SpriteSlot>,
@@ -1151,6 +1153,8 @@ impl Noteskin {
                 h.head_active.as_ref(),
                 h.body_inactive.as_ref(),
                 h.body_active.as_ref(),
+                h.topcap_inactive.as_ref(),
+                h.topcap_active.as_ref(),
                 h.bottomcap_inactive.as_ref(),
                 h.bottomcap_active.as_ref(),
             ] {
@@ -1838,6 +1842,9 @@ fn load_itg_sprite_noteskin(
             .next()
             .map(|s| s.slot)
             .or_else(|| {
+                if behavior.blank.contains(&element.to_ascii_lowercase()) {
+                    return None;
+                }
                 data.resolve_path(button, element)
                     .and_then(|p| itg_slot_from_path(&p))
             })
@@ -1969,6 +1976,8 @@ fn load_itg_sprite_noteskin(
         };
         let hold_body_inactive = resolve_single_slot(button, "Hold Body Inactive");
         let hold_body_active = resolve_single_slot(button, "Hold Body Active");
+        let hold_topcap_inactive = resolve_single_slot(button, "Hold TopCap Inactive");
+        let hold_topcap_active = resolve_single_slot(button, "Hold TopCap Active");
         let hold_bottomcap_inactive = resolve_single_slot(button, "Hold BottomCap Inactive");
         let hold_bottomcap_active = resolve_single_slot(button, "Hold BottomCap Active");
 
@@ -1977,6 +1986,8 @@ fn load_itg_sprite_noteskin(
             head_active: hold_head_active.or(hold_head_inactive.clone()),
             body_inactive: hold_body_inactive.clone(),
             body_active: hold_body_active.or(hold_body_inactive.clone()),
+            topcap_inactive: hold_topcap_inactive.clone(),
+            topcap_active: hold_topcap_active.or(hold_topcap_inactive.clone()),
             bottomcap_inactive: hold_bottomcap_inactive.clone(),
             bottomcap_active: hold_bottomcap_active.or(hold_bottomcap_inactive.clone()),
             explosion: None,
@@ -1994,6 +2005,8 @@ fn load_itg_sprite_noteskin(
         };
         let roll_body_inactive = resolve_single_slot(button, "Roll Body Inactive");
         let roll_body_active = resolve_single_slot(button, "Roll Body Active");
+        let roll_topcap_inactive = resolve_single_slot(button, "Roll TopCap Inactive");
+        let roll_topcap_active = resolve_single_slot(button, "Roll TopCap Active");
         let roll_bottomcap_inactive = resolve_single_slot(button, "Roll BottomCap Inactive");
         let roll_bottomcap_active = resolve_single_slot(button, "Roll BottomCap Active");
 
@@ -2012,6 +2025,13 @@ fn load_itg_sprite_noteskin(
                 .or(roll_body_inactive)
                 .or(hold_visual.body_active.clone())
                 .or(hold_visual.body_inactive.clone()),
+            topcap_inactive: roll_topcap_inactive
+                .clone()
+                .or(hold_visual.topcap_inactive.clone()),
+            topcap_active: roll_topcap_active
+                .or(roll_topcap_inactive)
+                .or(hold_visual.topcap_active.clone())
+                .or(hold_visual.topcap_inactive.clone()),
             bottomcap_inactive: roll_bottomcap_inactive
                 .clone()
                 .or(hold_visual.bottomcap_inactive.clone()),
@@ -2042,6 +2062,8 @@ fn load_itg_sprite_noteskin(
             head_active: hold.head_active.clone(),
             body_inactive: hold.body_inactive.clone(),
             body_active: hold.body_active.clone(),
+            topcap_inactive: hold.topcap_inactive.clone(),
+            topcap_active: hold.topcap_active.clone(),
             bottomcap_inactive: hold.bottomcap_inactive.clone(),
             bottomcap_active: hold.bottomcap_active.clone(),
             explosion: None,
@@ -6323,6 +6345,38 @@ mod tests {
         let cel_roll_head_8th = cel_ns.part_uv_translation(NoteAnimPart::RollHead, 0.5, false);
         assert!((cel_roll_head_8th[0] - 0.03125).abs() <= 1e-6);
         assert!(cel_roll_head_8th[1].abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn default_and_cel_resolve_hold_topcaps() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let default_ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        let default_visuals = default_ns.hold_visuals_for_col(0, false);
+        assert!(
+            default_visuals.topcap_inactive.is_some() || default_visuals.topcap_active.is_some(),
+            "dance/default should resolve hold topcap visuals"
+        );
+        assert!(
+            default_visuals.bottomcap_inactive.is_some()
+                || default_visuals.bottomcap_active.is_some(),
+            "dance/default should resolve hold bottomcap visuals"
+        );
+
+        let cel_ns = load_itg_skin(&style, "cel")
+            .expect("dance/cel should load from assets/noteskins");
+        let cel_visuals = cel_ns.hold_visuals_for_col(0, false);
+        assert!(
+            cel_visuals.topcap_inactive.is_none() && cel_visuals.topcap_active.is_none(),
+            "dance/cel should honor ret.Blank and keep hold topcap visuals unresolved"
+        );
+        assert!(
+            cel_visuals.bottomcap_inactive.is_some() || cel_visuals.bottomcap_active.is_some(),
+            "dance/cel should still resolve hold bottomcap visuals"
+        );
     }
 
     #[test]
