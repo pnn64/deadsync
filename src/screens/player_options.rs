@@ -1207,8 +1207,7 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             choices: vec!["Off".to_string(), "On".to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![
-                "Render judgment text, offset indicator, and error bar behind arrows."
-                    .to_string(),
+                "Render judgment text, offset indicator, and error bar behind arrows.".to_string(),
             ],
             choice_difficulty_indices: None,
         },
@@ -2590,7 +2589,9 @@ fn row_visible_with_flags(row_name: &str, visibility: RowVisibility) -> bool {
     if row_name == "Density Graph Background" {
         return visibility.show_density_graph_background;
     }
-    if row_name == ROW_COMBO_COLORS || row_name == ROW_COMBO_COLOR_MODE || row_name == ROW_CARRY_COMBO
+    if row_name == ROW_COMBO_COLORS
+        || row_name == ROW_COMBO_COLOR_MODE
+        || row_name == ROW_CARRY_COMBO
     {
         return visibility.show_combo_rows;
     }
@@ -2737,7 +2738,10 @@ fn combo_rows_visible(active: [bool; PLAYER_SLOTS], hide_active_mask: [u8; PLAYE
     !any_active
 }
 
-fn lifebar_rows_visible(active: [bool; PLAYER_SLOTS], hide_active_mask: [u8; PLAYER_SLOTS]) -> bool {
+fn lifebar_rows_visible(
+    active: [bool; PLAYER_SLOTS],
+    hide_active_mask: [u8; PLAYER_SLOTS],
+) -> bool {
     let mut any_active = false;
     for player_idx in 0..PLAYER_SLOTS {
         if !active[player_idx] {

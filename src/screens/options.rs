@@ -206,6 +206,7 @@ pub const ITEMS: &[Item] = &[
             "Game",
             "Theme",
             "Language",
+            "Log File",
             "Default NoteSkin",
         ],
     },
@@ -535,6 +536,7 @@ pub struct SubRow<'a> {
 const GS_ROW_ENABLE: &str = "Enable GrooveStats";
 const GS_ROW_ENABLE_BOOGIE: &str = "Enable BoogieStats";
 const GS_ROW_AUTO_POPULATE: &str = "Auto Populate GS Scores";
+const SYSTEM_ROW_LOG_FILE: &str = "Log File";
 const INPUT_ROW_CONFIGURE_MAPPINGS: &str = "Configure Keyboard/Pad Mappings";
 const INPUT_ROW_TEST: &str = "Test Input";
 const INPUT_ROW_OPTIONS: &str = "Input Options";
@@ -675,6 +677,11 @@ pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
         inline: false,
     },
     SubRow {
+        label: SYSTEM_ROW_LOG_FILE,
+        choices: &["Off", "On"],
+        inline: false,
+    },
+    SubRow {
         label: "Default NoteSkin",
         choices: &[profile::NoteSkin::DEFAULT_NAME],
         inline: false,
@@ -703,6 +710,13 @@ pub const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             "Set application log verbosity.",
             "Applies immediately and is saved to deadsync.ini.",
+        ],
+    },
+    Item {
+        name: SYSTEM_ROW_LOG_FILE,
+        help: &[
+            "Mirror application logs to deadsync.log in the game root folder.",
+            "Off keeps logs in the command line only.",
         ],
     },
     Item {
@@ -3390,6 +3404,12 @@ pub fn init() -> State {
         "Log Level",
         log_level_choice_index(cfg.log_level),
     );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_system,
+        SYSTEM_OPTIONS_ROWS,
+        SYSTEM_ROW_LOG_FILE,
+        usize::from(cfg.log_to_file),
+    );
     if let Some(noteskin_row_idx) = SYSTEM_OPTIONS_ROWS
         .iter()
         .position(|row| row.label == "Default NoteSkin")
@@ -4848,6 +4868,7 @@ fn apply_submenu_choice_delta(
             "Theme" => config::update_theme_flag(config::ThemeFlag::SimplyLove),
             "Language" => config::update_language_flag(config::LanguageFlag::English),
             "Log Level" => config::update_log_level(log_level_from_choice(new_index)),
+            SYSTEM_ROW_LOG_FILE => config::update_log_to_file(new_index == 1),
             "Default NoteSkin" => {
                 if let Some(skin_name) = selected_choice.as_deref() {
                     profile::update_machine_default_noteskin(profile::NoteSkin::new(skin_name));

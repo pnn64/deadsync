@@ -1963,7 +1963,10 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         i32::from(profile.judgment_tilt)
     ));
     content.push_str(&format!("ColumnCues={}\n", i32::from(profile.column_cues)));
-    content.push_str(&format!("JudgmentBack={}\n", i32::from(profile.judgment_back)));
+    content.push_str(&format!(
+        "JudgmentBack={}\n",
+        i32::from(profile.judgment_back)
+    ));
     content.push_str(&format!(
         "ErrorMSDisplay={}\n",
         i32::from(profile.error_ms_display)

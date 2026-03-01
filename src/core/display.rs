@@ -467,8 +467,7 @@ mod platform {
     use objc2_app_kit::NSScreen;
     use objc2_core_foundation::CGPoint;
     use objc2_core_graphics::{
-        CGDirectDisplayID, CGDisplayBounds, CGError, CGGetActiveDisplayList,
-        CGGetDisplaysWithPoint,
+        CGDirectDisplayID, CGDisplayBounds, CGError, CGGetActiveDisplayList, CGGetDisplaysWithPoint,
     };
     use objc2_foundation::{NSNumber, NSString};
 

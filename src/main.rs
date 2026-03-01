@@ -25,9 +25,8 @@ fn set_runtime_dir() -> Result<(), Box<dyn std::error::Error>> {
         || exe_dir.join("Songs").is_dir()
         || exe_dir.join("save").is_dir()
         || exe_dir.join("deadsync.ini").is_file();
-    let cwd_has_markers = cwd.join("assets").is_dir()
-        || cwd.join("songs").is_dir()
-        || cwd.join("Songs").is_dir();
+    let cwd_has_markers =
+        cwd.join("assets").is_dir() || cwd.join("songs").is_dir() || cwd.join("Songs").is_dir();
     if exe_has_markers || !cwd_has_markers {
         std::env::set_current_dir(exe_dir)?;
     }
@@ -51,9 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     set_runtime_dir()?;
 
     // Install logger immediately, then set runtime max level from config after loading it.
-    let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Trace)
-        .try_init();
+    core::logging::init(config::bootstrap_log_to_file());
     // Startup default when config is missing or malformed.
     log::set_max_level(log::LevelFilter::Warn);
 

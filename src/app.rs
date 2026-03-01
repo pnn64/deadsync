@@ -2517,7 +2517,12 @@ impl App {
         if config::get().only_dedicated_menu_buttons && ev.action.is_gameplay_arrow() {
             let allow_gameplay_arrow = match self.state.screens.current_screen {
                 CurrentScreen::Gameplay | CurrentScreen::Input => true,
-                CurrentScreen::SelectMusic => self.state.screens.select_music_state.test_input_overlay_visible,
+                CurrentScreen::SelectMusic => {
+                    self.state
+                        .screens
+                        .select_music_state
+                        .test_input_overlay_visible
+                }
                 _ => false,
             };
             if !allow_gameplay_arrow {

@@ -2,6 +2,7 @@ use crate::core::gfx::BackendType;
 use crate::core::input::{
     GamepadCodeBinding, InputBinding, Keymap, PadDir, VirtualAction, WindowsPadBackend,
 };
+use crate::core::logging;
 use log::{info, warn};
 use std::collections::HashMap;
 use std::path::Path;
@@ -393,6 +394,7 @@ pub struct Config {
     pub theme_flag: ThemeFlag,
     pub language_flag: LanguageFlag,
     pub log_level: LogLevel,
+    pub log_to_file: bool,
     /// 0=Off, 1=FPS, 2=FPS+Stutter.
     pub show_stats_mode: u8,
     pub translated_titles: bool,
@@ -510,6 +512,7 @@ impl Default for Config {
             theme_flag: ThemeFlag::SimplyLove,
             language_flag: LanguageFlag::English,
             log_level: LogLevel::Warn,
+            log_to_file: true,
             show_stats_mode: 0,
             translated_titles: false,
             mine_hit_sound: true,
@@ -710,6 +713,14 @@ fn normalize_additional_song_folders(raw: &str) -> String {
     out
 }
 
+fn parse_bool_str(raw: &str) -> Option<bool> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
 fn load_additional_song_folders(conf: &SimpleIni) -> String {
     let read_only = conf
         .get("Options", "AdditionalSongFoldersReadOnly")
@@ -738,6 +749,17 @@ fn load_additional_song_folders(conf: &SimpleIni) -> String {
     combined.push(',');
     combined.push_str(&writable);
     normalize_additional_song_folders(&combined)
+}
+
+pub fn bootstrap_log_to_file() -> bool {
+    let mut conf = SimpleIni::new();
+    let default = Config::default().log_to_file;
+    if conf.load(CONFIG_PATH).is_err() {
+        return default;
+    }
+    conf.get("Options", "LogToFile")
+        .and_then(|v| parse_bool_str(&v))
+        .unwrap_or(default)
 }
 
 fn create_default_config_file() -> Result<(), std::io::Error> {
@@ -867,6 +889,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     ));
     content.push_str(&format!("Language={}\n", default.language_flag.as_str()));
     content.push_str(&format!("LogLevel={}\n", default.log_level.as_str()));
+    content.push_str(&format!(
+        "LogToFile={}\n",
+        if default.log_to_file { "1" } else { "0" }
+    ));
     content.push_str(&format!("MaxFps={}\n", default.max_fps));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
@@ -1337,6 +1363,10 @@ pub fn load() {
                     .get("Options", "LogLevel")
                     .and_then(|v| LogLevel::from_str(&v).ok())
                     .unwrap_or(default.log_level);
+                cfg.log_to_file = conf
+                    .get("Options", "LogToFile")
+                    .and_then(|v| parse_bool_str(&v))
+                    .unwrap_or(default.log_to_file);
                 cfg.visual_delay_seconds = conf
                     .get("Options", "VisualDelaySeconds")
                     .and_then(|v| v.parse().ok())
@@ -1734,6 +1764,7 @@ pub fn load() {
                     })
                     .unwrap_or(default.show_bpm_decimal);
 
+                logging::set_file_logging_enabled(cfg.log_to_file);
                 info!("Configuration loaded from '{CONFIG_PATH}'.");
             } // Lock on CONFIG is released here.
 
@@ -1777,6 +1808,7 @@ pub fn load() {
                     "GlobalOffsetSeconds",
                     "Language",
                     "LogLevel",
+                    "LogToFile",
                     "MaxFps",
                     "MasterVolume",
                     "MenuMusic",
@@ -2618,6 +2650,10 @@ fn save_without_keymaps() {
     ));
     content.push_str(&format!("Language={}\n", cfg.language_flag.as_str()));
     content.push_str(&format!("LogLevel={}\n", cfg.log_level.as_str()));
+    content.push_str(&format!(
+        "LogToFile={}\n",
+        if cfg.log_to_file { "1" } else { "0" }
+    ));
     content.push_str(&format!("MaxFps={}\n", cfg.max_fps));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
@@ -3033,6 +3069,18 @@ pub fn update_log_level(level: LogLevel) {
             return;
         }
         cfg.log_level = level;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_log_to_file(enabled: bool) {
+    logging::set_file_logging_enabled(enabled);
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.log_to_file == enabled {
+            return;
+        }
+        cfg.log_to_file = enabled;
     }
     save_without_keymaps();
 }

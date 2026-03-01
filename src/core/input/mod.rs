@@ -667,7 +667,10 @@ pub struct InputEvent {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum DebounceBinding {
     Keyboard(KeyCode),
-    PadDir { id: PadId, dir: PadDir },
+    PadDir {
+        id: PadId,
+        dir: PadDir,
+    },
     PadButton {
         id: PadId,
         code: PadCode,
@@ -697,7 +700,8 @@ fn debounce_emit_if_due(
     now: Instant,
     window: Duration,
 ) -> Option<(bool, Instant)> {
-    if state.held_raw == state.held_reported || now.duration_since(state.last_report_time) < window {
+    if state.held_raw == state.held_reported || now.duration_since(state.last_report_time) < window
+    {
         return None;
     }
     state.last_report_time = now;
@@ -714,7 +718,11 @@ fn debounce_binding_source(binding: DebounceBinding) -> InputSource {
 }
 
 #[inline(always)]
-fn debounce_binding_actions(km: &Keymap, binding: DebounceBinding, pressed: bool) -> Vec<(VirtualAction, bool)> {
+fn debounce_binding_actions(
+    km: &Keymap,
+    binding: DebounceBinding,
+    pressed: bool,
+) -> Vec<(VirtualAction, bool)> {
     match binding {
         DebounceBinding::Keyboard(code) => km.actions_for_key_code(code, pressed),
         DebounceBinding::PadDir { id, dir } => km.actions_for_pad_dir(id, dir, pressed),
@@ -746,14 +754,13 @@ fn debounce_input_edge(
         });
         state.held_raw = pressed;
         state.last_raw_change_time = timestamp;
-        let edge = debounce_emit_if_due(state, now, window).map(|(debounced_pressed, ts)| {
-            DebouncedEdge {
+        let edge =
+            debounce_emit_if_due(state, now, window).map(|(debounced_pressed, ts)| DebouncedEdge {
                 binding,
                 pressed: debounced_pressed,
                 source: debounce_binding_source(binding),
                 timestamp: ts,
-            }
-        });
+            });
         (edge, should_prune_debounce_state(*state, now, window))
     };
     if prune {
@@ -813,7 +820,9 @@ pub fn map_key_event(ev: &KeyEvent) -> Vec<InputEvent> {
         return Vec::new();
     };
     let pressed = ev.state == ElementState::Pressed;
-    if let Some(edge) = debounce_input_edge(DebounceBinding::Keyboard(code), pressed, Instant::now()) {
+    if let Some(edge) =
+        debounce_input_edge(DebounceBinding::Keyboard(code), pressed, Instant::now())
+    {
         return input_events_from_debounced_edge(edge);
     }
     Vec::new()
