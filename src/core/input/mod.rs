@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::sync::RwLock;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Instant;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Mutex, RwLock};
+use std::time::{Duration, Instant};
 
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
@@ -298,6 +298,21 @@ impl VirtualAction {
     }
 
     #[inline(always)]
+    pub const fn is_gameplay_arrow(self) -> bool {
+        matches!(
+            self,
+            Self::p1_up
+                | Self::p1_down
+                | Self::p1_left
+                | Self::p1_right
+                | Self::p2_up
+                | Self::p2_down
+                | Self::p2_left
+                | Self::p2_right
+        )
+    }
+
+    #[inline(always)]
     pub const fn secondary_menu(self) -> Option<Self> {
         match self {
             Self::p1_up => Some(Self::p1_menu_up),
@@ -364,6 +379,11 @@ impl Default for Keymap {
 static KEYMAP: std::sync::LazyLock<RwLock<Keymap>> =
     std::sync::LazyLock::new(|| RwLock::new(Keymap::default()));
 static ONLY_DEDICATED_MENU_BUTTONS: AtomicBool = AtomicBool::new(false);
+static INPUT_DEBOUNCE_SECONDS_BITS: AtomicU32 = AtomicU32::new((0.02f32).to_bits());
+static INPUT_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<HashMap<DebounceBinding, DebounceState>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
+const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
 
 #[inline(always)]
 pub fn with_keymap<R>(f: impl FnOnce(&Keymap) -> R) -> R {
@@ -378,11 +398,33 @@ pub fn get_keymap() -> Keymap {
 #[inline(always)]
 pub fn set_keymap(new_map: Keymap) {
     *KEYMAP.write().unwrap() = new_map;
+    INPUT_DEBOUNCE_STATE.lock().unwrap().clear();
+}
+
+#[inline(always)]
+pub fn clear_debounce_state() {
+    INPUT_DEBOUNCE_STATE.lock().unwrap().clear();
 }
 
 #[inline(always)]
 pub fn set_only_dedicated_menu_buttons(enabled: bool) {
     ONLY_DEDICATED_MENU_BUTTONS.store(enabled, Ordering::Relaxed);
+}
+
+#[inline(always)]
+pub fn set_input_debounce_seconds(seconds: f32) {
+    let clamped = seconds.clamp(0.0, INPUT_DEBOUNCE_MAX_SECONDS);
+    INPUT_DEBOUNCE_SECONDS_BITS.store(clamped.to_bits(), Ordering::Relaxed);
+}
+
+#[inline(always)]
+pub fn input_debounce_seconds() -> f32 {
+    f32::from_bits(INPUT_DEBOUNCE_SECONDS_BITS.load(Ordering::Relaxed))
+}
+
+#[inline(always)]
+fn input_debounce_window() -> Duration {
+    Duration::from_secs_f32(input_debounce_seconds())
 }
 
 // Defaults are provided by config.rs; keep this module free of config.
@@ -487,25 +529,18 @@ impl Keymap {
 
     #[inline(always)]
     pub fn actions_for_key_event(&self, ev: &KeyEvent) -> Vec<(VirtualAction, bool)> {
-        let pressed = ev.state == ElementState::Pressed;
         let PhysicalKey::Code(code) = ev.physical_key else {
             return Vec::new();
         };
+        self.actions_for_key_code(code, ev.state == ElementState::Pressed)
+    }
+
+    #[inline(always)]
+    pub fn actions_for_key_code(&self, code: KeyCode, pressed: bool) -> Vec<(VirtualAction, bool)> {
         let Some(actions) = self.key_rev.get(&code) else {
             return Vec::new();
         };
-
-        let mut out = Vec::with_capacity(actions.len());
-        let mut seen: u32 = 0;
-        for &act in actions {
-            let bit = 1u32 << (act.ix() as u32);
-            if (seen & bit) != 0 {
-                continue;
-            }
-            seen |= bit;
-            out.push((act, pressed));
-        }
-        out
+        dedup_actions(actions, pressed)
     }
 
     #[inline(always)]
@@ -513,71 +548,14 @@ impl Keymap {
         match *ev {
             PadEvent::Dir {
                 id, dir, pressed, ..
-            } => {
-                let dev = usize::from(id);
-                let any = &self.pad_dir_rev[dir.ix()];
-                let on = self.pad_dir_on_rev.get(&(dev, dir));
-                if any.is_empty() && on.is_none() {
-                    return Vec::new();
-                }
-
-                let mut out = Vec::with_capacity(any.len() + on.map_or(0, |v| v.len()));
-                let mut seen: u32 = 0;
-                for &act in any {
-                    let bit = 1u32 << (act.ix() as u32);
-                    if (seen & bit) != 0 {
-                        continue;
-                    }
-                    seen |= bit;
-                    out.push((act, pressed));
-                }
-                if let Some(v) = on {
-                    for &act in v {
-                        let bit = 1u32 << (act.ix() as u32);
-                        if (seen & bit) != 0 {
-                            continue;
-                        }
-                        seen |= bit;
-                        out.push((act, pressed));
-                    }
-                }
-                out
-            }
+            } => self.actions_for_pad_dir(id, dir, pressed),
             PadEvent::RawButton {
                 id,
                 code,
                 uuid,
                 pressed,
                 ..
-            } => {
-                let dev = usize::from(id);
-                let code_u32 = code.into_u32();
-                let Some(entries) = self.pad_code_rev.get(&code_u32) else {
-                    return Vec::new();
-                };
-
-                let mut out = Vec::with_capacity(entries.len().min(4));
-                let mut seen: u32 = 0;
-                for e in entries {
-                    if let Some(d_expected) = e.device
-                        && d_expected != dev
-                    {
-                        continue;
-                    }
-                    if let Some(u_expected) = e.uuid
-                        && u_expected != uuid
-                    {
-                        continue;
-                    }
-                    let bit = 1u32 << (e.act.ix() as u32);
-                    if (seen & bit) != 0 {
-                        continue;
-                    }
-                    seen |= bit;
-                    out.push((e.act, pressed));
-                }
-                out
-            }
+            } => self.actions_for_pad_button(id, code, uuid, pressed),
             PadEvent::RawAxis { .. } => {
                 // Axis events are exposed for debugging but are not yet
                 // mapped directly to virtual actions.
@@ -585,6 +563,93 @@ impl Keymap {
             }
         }
     }
+
+    #[inline(always)]
+    pub fn actions_for_pad_dir(
+        &self,
+        id: PadId,
+        dir: PadDir,
+        pressed: bool,
+    ) -> Vec<(VirtualAction, bool)> {
+        let dev = usize::from(id);
+        let any = &self.pad_dir_rev[dir.ix()];
+        let on = self.pad_dir_on_rev.get(&(dev, dir));
+        if any.is_empty() && on.is_none() {
+            return Vec::new();
+        }
+        let mut out = Vec::with_capacity(any.len() + on.map_or(0, |v| v.len()));
+        let mut seen: u32 = 0;
+        for &act in any {
+            let bit = 1u32 << (act.ix() as u32);
+            if (seen & bit) != 0 {
+                continue;
+            }
+            seen |= bit;
+            out.push((act, pressed));
+        }
+        if let Some(v) = on {
+            for &act in v {
+                let bit = 1u32 << (act.ix() as u32);
+                if (seen & bit) != 0 {
+                    continue;
+                }
+                seen |= bit;
+                out.push((act, pressed));
+            }
+        }
+        out
+    }
+
+    #[inline(always)]
+    pub fn actions_for_pad_button(
+        &self,
+        id: PadId,
+        code: PadCode,
+        uuid: [u8; 16],
+        pressed: bool,
+    ) -> Vec<(VirtualAction, bool)> {
+        let dev = usize::from(id);
+        let code_u32 = code.into_u32();
+        let Some(entries) = self.pad_code_rev.get(&code_u32) else {
+            return Vec::new();
+        };
+        let mut out = Vec::with_capacity(entries.len().min(4));
+        let mut seen: u32 = 0;
+        for e in entries {
+            if let Some(d_expected) = e.device
+                && d_expected != dev
+            {
+                continue;
+            }
+            if let Some(u_expected) = e.uuid
+                && u_expected != uuid
+            {
+                continue;
+            }
+            let bit = 1u32 << (e.act.ix() as u32);
+            if (seen & bit) != 0 {
+                continue;
+            }
+            seen |= bit;
+            out.push((e.act, pressed));
+        }
+        out
+    }
+}
+
+#[inline(always)]
+fn dedup_actions(actions: &[VirtualAction], pressed: bool) -> Vec<(VirtualAction, bool)> {
+    let mut out = Vec::with_capacity(actions.len());
+    let mut seen: u32 = 0;
+    for &act in actions {
+        let bit = 1u32 << (act.ix() as u32);
+        if (seen & bit) != 0 {
+            continue;
+        }
+        seen |= bit;
+        out.push((act, pressed));
+    }
+    out
 }
 
 // INI parsing and default emission moved to config.rs
@@ -599,52 +664,194 @@ pub struct InputEvent {
     pub timestamp: Instant,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum DebounceBinding {
+    Keyboard(KeyCode),
+    PadDir { id: PadId, dir: PadDir },
+    PadButton {
+        id: PadId,
+        code: PadCode,
+        uuid: [u8; 16],
+    },
+}
+
+#[derive(Clone, Copy, Debug)]
+struct DebounceState {
+    held_raw: bool,
+    held_reported: bool,
+    last_raw_change_time: Instant,
+    last_report_time: Instant,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct DebouncedEdge {
+    binding: DebounceBinding,
+    pressed: bool,
+    source: InputSource,
+    timestamp: Instant,
+}
+
 #[inline(always)]
-pub fn map_key_event(ev: &KeyEvent) -> Vec<InputEvent> {
-    let mut out = Vec::with_capacity(2);
-    // Ignore OS key auto-repeat for pressed events (prevents resetting hold timers)
-    if ev.state == ElementState::Pressed && ev.repeat {
-        return out;
+fn debounce_emit_if_due(
+    state: &mut DebounceState,
+    now: Instant,
+    window: Duration,
+) -> Option<(bool, Instant)> {
+    if state.held_raw == state.held_reported || now.duration_since(state.last_report_time) < window {
+        return None;
     }
-    let mut actions = with_keymap(|km| km.actions_for_key_event(ev));
-    append_secondary_menu_actions(&mut actions);
-    dedup_action_pairs(&mut actions);
-    if actions.is_empty() {
-        return out;
+    state.last_report_time = now;
+    state.held_reported = state.held_raw;
+    Some((state.held_reported, state.last_raw_change_time))
+}
+
+#[inline(always)]
+fn debounce_binding_source(binding: DebounceBinding) -> InputSource {
+    match binding {
+        DebounceBinding::Keyboard(_) => InputSource::Keyboard,
+        DebounceBinding::PadDir { .. } | DebounceBinding::PadButton { .. } => InputSource::Gamepad,
     }
-    let timestamp = Instant::now();
-    for (act, pressed) in actions {
-        out.push(InputEvent {
-            action: act,
-            pressed,
-            source: InputSource::Keyboard,
-            timestamp,
+}
+
+#[inline(always)]
+fn debounce_binding_actions(km: &Keymap, binding: DebounceBinding, pressed: bool) -> Vec<(VirtualAction, bool)> {
+    match binding {
+        DebounceBinding::Keyboard(code) => km.actions_for_key_code(code, pressed),
+        DebounceBinding::PadDir { id, dir } => km.actions_for_pad_dir(id, dir, pressed),
+        DebounceBinding::PadButton { id, code, uuid } => {
+            km.actions_for_pad_button(id, code, uuid, pressed)
+        }
+    }
+}
+
+#[inline(always)]
+fn should_prune_debounce_state(state: DebounceState, now: Instant, window: Duration) -> bool {
+    !state.held_raw && !state.held_reported && now.duration_since(state.last_report_time) >= window
+}
+
+fn debounce_input_edge(
+    binding: DebounceBinding,
+    pressed: bool,
+    timestamp: Instant,
+) -> Option<DebouncedEdge> {
+    let now = Instant::now();
+    let window = input_debounce_window();
+    let mut states = INPUT_DEBOUNCE_STATE.lock().unwrap();
+    let (edge, prune) = {
+        let state = states.entry(binding).or_insert_with(|| DebounceState {
+            held_raw: false,
+            held_reported: false,
+            last_raw_change_time: timestamp,
+            last_report_time: now.checked_sub(window).unwrap_or(now),
         });
+        state.held_raw = pressed;
+        state.last_raw_change_time = timestamp;
+        let edge = debounce_emit_if_due(state, now, window).map(|(debounced_pressed, ts)| {
+            DebouncedEdge {
+                binding,
+                pressed: debounced_pressed,
+                source: debounce_binding_source(binding),
+                timestamp: ts,
+            }
+        });
+        (edge, should_prune_debounce_state(*state, now, window))
+    };
+    if prune {
+        states.remove(&binding);
+    }
+    edge
+}
+
+fn collect_due_debounce_edges(now: Instant) -> Vec<DebouncedEdge> {
+    let window = input_debounce_window();
+    let mut states = INPUT_DEBOUNCE_STATE.lock().unwrap();
+    let mut out: Vec<DebouncedEdge> = Vec::with_capacity(states.len().min(8));
+    let mut prune: Vec<DebounceBinding> = Vec::new();
+    for (&binding, state) in states.iter_mut() {
+        if let Some((pressed, timestamp)) = debounce_emit_if_due(state, now, window) {
+            out.push(DebouncedEdge {
+                binding,
+                pressed,
+                source: debounce_binding_source(binding),
+                timestamp,
+            });
+        }
+        if should_prune_debounce_state(*state, now, window) {
+            prune.push(binding);
+        }
+    }
+    for binding in prune {
+        states.remove(&binding);
     }
     out
 }
 
 #[inline(always)]
-pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
-    let mut out = Vec::with_capacity(2);
-    let mut actions = with_keymap(|km| km.actions_for_pad_event(ev));
+fn input_events_from_debounced_edge(edge: DebouncedEdge) -> Vec<InputEvent> {
+    let mut actions = with_keymap(|km| debounce_binding_actions(km, edge.binding, edge.pressed));
     append_secondary_menu_actions(&mut actions);
+    dedup_primary_vs_menu_alias(&mut actions);
     dedup_action_pairs(&mut actions);
-    if actions.is_empty() {
-        return out;
-    }
-    let timestamp = match *ev {
-        PadEvent::Dir { timestamp, .. }
-        | PadEvent::RawButton { timestamp, .. }
-        | PadEvent::RawAxis { timestamp, .. } => timestamp,
-    };
-    for (act, pressed) in actions {
-        out.push(InputEvent {
-            action: act,
+    actions
+        .into_iter()
+        .map(|(action, pressed)| InputEvent {
+            action,
             pressed,
-            source: InputSource::Gamepad,
+            source: edge.source,
+            timestamp: edge.timestamp,
+        })
+        .collect()
+}
+
+#[inline(always)]
+pub fn map_key_event(ev: &KeyEvent) -> Vec<InputEvent> {
+    // Ignore OS key auto-repeat for pressed events (prevents resetting hold timers)
+    if ev.state == ElementState::Pressed && ev.repeat {
+        return Vec::new();
+    }
+    let PhysicalKey::Code(code) = ev.physical_key else {
+        return Vec::new();
+    };
+    let pressed = ev.state == ElementState::Pressed;
+    if let Some(edge) = debounce_input_edge(DebounceBinding::Keyboard(code), pressed, Instant::now()) {
+        return input_events_from_debounced_edge(edge);
+    }
+    Vec::new()
+}
+
+#[inline(always)]
+pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
+    let edge = match *ev {
+        PadEvent::Dir {
+            id,
             timestamp,
-        });
+            dir,
+            pressed,
+        } => debounce_input_edge(DebounceBinding::PadDir { id, dir }, pressed, timestamp),
+        PadEvent::RawButton {
+            id,
+            timestamp,
+            code,
+            uuid,
+            pressed,
+            ..
+        } => debounce_input_edge(
+            DebounceBinding::PadButton { id, code, uuid },
+            pressed,
+            timestamp,
+        ),
+        PadEvent::RawAxis { .. } => None,
+    };
+    if let Some(edge) = edge {
+        return input_events_from_debounced_edge(edge);
+    }
+    Vec::new()
+}
+
+pub fn drain_debounced_events() -> Vec<InputEvent> {
+    let mut out: Vec<InputEvent> = Vec::with_capacity(4);
+    for edge in collect_due_debounce_edges(Instant::now()) {
+        out.extend(input_events_from_debounced_edge(edge));
     }
     out
 }
@@ -679,6 +886,44 @@ fn dedup_action_pairs(actions: &mut Vec<(VirtualAction, bool)>) {
             seen_released |= bit;
             keep
         }
+    });
+}
+
+#[inline(always)]
+const fn primary_from_menu_alias(act: VirtualAction) -> Option<VirtualAction> {
+    match act {
+        VirtualAction::p1_menu_up => Some(VirtualAction::p1_up),
+        VirtualAction::p1_menu_down => Some(VirtualAction::p1_down),
+        VirtualAction::p1_menu_left => Some(VirtualAction::p1_left),
+        VirtualAction::p1_menu_right => Some(VirtualAction::p1_right),
+        VirtualAction::p2_menu_up => Some(VirtualAction::p2_up),
+        VirtualAction::p2_menu_down => Some(VirtualAction::p2_down),
+        VirtualAction::p2_menu_left => Some(VirtualAction::p2_left),
+        VirtualAction::p2_menu_right => Some(VirtualAction::p2_right),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn dedup_primary_vs_menu_alias(actions: &mut Vec<(VirtualAction, bool)>) {
+    let mut pressed: u32 = 0;
+    for (act, is_pressed) in actions.iter().copied() {
+        let bit = 1u32 << (act.ix() as u32);
+        if is_pressed {
+            pressed |= bit;
+        }
+    }
+    actions.retain(|(act, is_pressed)| {
+        let Some(primary) = primary_from_menu_alias(*act) else {
+            return true;
+        };
+        if !*is_pressed {
+            // Keep release aliases so dedicated-menu filtering can still
+            // propagate a menu release if a primary action is suppressed.
+            return true;
+        }
+        let bit = 1u32 << (primary.ix() as u32);
+        (pressed & bit) == 0
     });
 }
 

@@ -54,6 +54,8 @@ const VISUAL_DELAY_MIN_MS: i32 = -1000;
 const VISUAL_DELAY_MAX_MS: i32 = 1000;
 const VOLUME_MIN_PERCENT: i32 = 0;
 const VOLUME_MAX_PERCENT: i32 = 100;
+const INPUT_DEBOUNCE_MIN_MS: i32 = 0;
+const INPUT_DEBOUNCE_MAX_MS: i32 = 200;
 
 // --- Monitor & Video Mode Data Structures ---
 
@@ -538,6 +540,7 @@ const INPUT_ROW_TEST: &str = "Test Input";
 const INPUT_ROW_OPTIONS: &str = "Input Options";
 const INPUT_ROW_BACKEND: &str = "Gamepad Backend";
 const INPUT_ROW_DEDICATED_MENU_BUTTONS: &str = "Menu Buttons";
+const INPUT_ROW_DEBOUNCE: &str = "Debounce (ms)";
 #[cfg(target_os = "windows")]
 const INPUT_BACKEND_CHOICES: &[&str] = &["W32 Raw Input", "WGI"];
 #[cfg(target_os = "macos")]
@@ -979,7 +982,11 @@ pub const INPUT_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         name: INPUT_ROW_OPTIONS,
-        help: &["Open additional input settings.", "Gamepad Backend"],
+        help: &[
+            "Open additional input settings.",
+            "Gamepad Backend",
+            INPUT_ROW_DEBOUNCE,
+        ],
     },
     Item {
         name: "Exit",
@@ -998,6 +1005,11 @@ pub const INPUT_BACKEND_OPTIONS_ROWS: &[SubRow] = &[
         choices: &["Use Gameplay Buttons", "Only Dedicated Buttons"],
         inline: true,
     },
+    SubRow {
+        label: INPUT_ROW_DEBOUNCE,
+        choices: &["20ms"],
+        inline: true,
+    },
 ];
 
 pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
@@ -1014,6 +1026,13 @@ pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
             "Choose whether to allow using gameplay buttons (e.g. directional arrows) for menu navigation. Please ensure your menu buttons are mapped before changing this setting otherwise you might get stuck.",
             "Use Gameplay Buttons - Navigate through the game using your dance pad.",
             "Only Dedicated Buttons - Navigate through the game using dedicated menu buttons, presumably on an arcade cabinet.",
+        ],
+    },
+    Item {
+        name: INPUT_ROW_DEBOUNCE,
+        help: &[
+            "Per-input debounce window used across keyboard and all gamepad drivers.",
+            "ITGmania default is 20ms. 50ms was common on older arcade pads.",
         ],
     },
     Item {
@@ -2742,6 +2761,8 @@ fn submenu_inline_choice_centers(
         choice_texts[0] = Cow::Owned(format_ms(state.global_offset_ms));
     } else if row.label == "Visual Delay (ms)" {
         choice_texts[0] = Cow::Owned(format_ms(state.visual_delay_ms));
+    } else if row.label == INPUT_ROW_DEBOUNCE {
+        choice_texts[0] = Cow::Owned(format_ms(state.input_debounce_ms));
     }
     let value_zoom = 0.835_f32;
     let mut widths: Vec<f32> = Vec::with_capacity(choice_texts.len());
@@ -3183,6 +3204,7 @@ pub struct State {
     music_volume_pct: i32,
     global_offset_ms: i32,
     visual_delay_ms: i32,
+    input_debounce_ms: i32,
     video_renderer_at_load: BackendType,
     display_mode_at_load: DisplayMode,
     display_monitor_at_load: usize,
@@ -3299,6 +3321,10 @@ pub fn init() -> State {
         visual_delay_ms: {
             let ms = (cfg.visual_delay_seconds * 1000.0).round() as i32;
             ms.clamp(VISUAL_DELAY_MIN_MS, VISUAL_DELAY_MAX_MS)
+        },
+        input_debounce_ms: {
+            let ms = (cfg.input_debounce_seconds * 1000.0).round() as i32;
+            ms.clamp(INPUT_DEBOUNCE_MIN_MS, INPUT_DEBOUNCE_MAX_MS)
         },
         video_renderer_at_load: cfg.video_renderer,
         display_mode_at_load: cfg.display_mode(),
@@ -4745,6 +4771,18 @@ fn apply_submenu_choice_delta(
             }
             return None;
         }
+        if matches!(kind, SubmenuKind::InputBackend) && row.label == INPUT_ROW_DEBOUNCE {
+            if adjust_ms_value(
+                &mut state.input_debounce_ms,
+                delta,
+                INPUT_DEBOUNCE_MIN_MS,
+                INPUT_DEBOUNCE_MAX_MS,
+            ) {
+                config::update_input_debounce_seconds(state.input_debounce_ms as f32 / 1000.0);
+                audio::play_sfx("assets/sounds/change_value.ogg");
+            }
+            return None;
+        }
     }
 
     let choices = row_choices(state, kind, rows, row_index);
@@ -5919,6 +5957,8 @@ fn submenu_cursor_dest(
         choice_texts[0] = Cow::Owned(format_percent(state.music_volume_pct));
     } else if row.label == "Visual Delay (ms)" {
         choice_texts[0] = Cow::Owned(format_ms(state.visual_delay_ms));
+    } else if row.label == INPUT_ROW_DEBOUNCE {
+        choice_texts[0] = Cow::Owned(format_ms(state.input_debounce_ms));
     }
 
     let selected_choice = submenu_cursor_indices(state, kind)
@@ -6553,6 +6593,9 @@ pub fn get_actors(
                                 choice_texts[0] = formatted;
                             } else if row.label == "Visual Delay (ms)" {
                                 let formatted = Cow::Owned(format_ms(state.visual_delay_ms));
+                                choice_texts[0] = formatted;
+                            } else if row.label == INPUT_ROW_DEBOUNCE {
+                                let formatted = Cow::Owned(format_ms(state.input_debounce_ms));
                                 choice_texts[0] = formatted;
                             }
 

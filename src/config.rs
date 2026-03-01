@@ -491,6 +491,8 @@ pub struct Config {
     pub cachesongs: bool,
     // Whether to apply Gaussian smoothing to the eval histogram (Simply Love style)
     pub smooth_histogram: bool,
+    /// ITGmania InputFilter parity: per-input debounce window in seconds.
+    pub input_debounce_seconds: f32,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
     /// menu navigation. Only explicitly-bound menu buttons (p*_menu_*) work in menus.
     pub only_dedicated_menu_buttons: bool,
@@ -571,6 +573,7 @@ impl Default for Config {
             fastload: true,
             cachesongs: true,
             smooth_histogram: true,
+            input_debounce_seconds: 0.02,
             only_dedicated_menu_buttons: false,
         }
     }
@@ -978,6 +981,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "SmoothHistogram={}\n",
         if default.smooth_histogram { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "InputDebounceTime={:.3}\n",
+        default.input_debounce_seconds
     ));
     content.push_str(&format!(
         "OnlyDedicatedMenuButtons={}\n",
@@ -1443,6 +1450,27 @@ pub fn load() {
                     .get("Options", "SmoothHistogram")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.smooth_histogram, |v| v != 0);
+                cfg.input_debounce_seconds = conf
+                    .get("Options", "InputDebounceTime")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            return None;
+                        }
+                        let lower = v.to_ascii_lowercase();
+                        if let Some(ms) = lower.strip_suffix("ms") {
+                            return ms
+                                .trim()
+                                .parse::<f32>()
+                                .ok()
+                                .map(|n| (n / 1000.0).clamp(0.0, 0.2));
+                        }
+                        v.parse::<f32>().ok().map(|n| {
+                            let secs = if n > 1.0 { n / 1000.0 } else { n };
+                            secs.clamp(0.0, 0.2)
+                        })
+                    })
+                    .unwrap_or(default.input_debounce_seconds);
                 cfg.only_dedicated_menu_buttons = conf
                     .get("Options", "OnlyDedicatedMenuButtons")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1770,6 +1798,7 @@ pub fn load() {
                     "ShowStats",
                     "ShowStatsMode",
                     "SmoothHistogram",
+                    "InputDebounceTime",
                     "OnlyDedicatedMenuButtons",
                     "SFXVolume",
                     "SoftwareRendererThreads",
@@ -1844,6 +1873,7 @@ pub fn load() {
         }
     }
     crate::core::input::set_only_dedicated_menu_buttons(get().only_dedicated_menu_buttons);
+    crate::core::input::set_input_debounce_seconds(get().input_debounce_seconds);
 }
 
 // --- Keymap defaults and parsing (kept in config to avoid coupling input.rs to config) ---
@@ -2301,6 +2331,24 @@ fn load_keymap_from_ini_local(conf: &SimpleIni) -> Keymap {
     }
 }
 
+#[inline(always)]
+fn first_editable_binding_slot(bindings: &[InputBinding]) -> usize {
+    if matches!(bindings.first(), Some(InputBinding::Key(_))) {
+        1
+    } else {
+        0
+    }
+}
+
+#[inline(always)]
+fn requested_to_actual_binding_slot(requested_index: usize, first_editable: usize) -> usize {
+    if first_editable == 0 {
+        requested_index.saturating_sub(1)
+    } else {
+        requested_index
+    }
+}
+
 /// Update a keyboard binding in Primary/Secondary slots, ensuring that the
 /// given key code is not used in any other Primary/Secondary slot for P1/P2.
 /// Default slots (index 0) are never modified.
@@ -2321,12 +2369,13 @@ pub fn update_keymap_binding_unique_keyboard(
             bindings.push(b);
             i += 1;
         }
+        let first_editable = first_editable_binding_slot(&bindings);
 
-        // Remove this key from all Primary/Secondary slots (index >= 1).
+        // Remove this key from all editable slots for this action.
         if !bindings.is_empty() {
             let mut filtered: Vec<InputBinding> = Vec::with_capacity(bindings.len());
             for (slot_idx, b) in bindings.iter().enumerate() {
-                if slot_idx >= 1
+                if slot_idx >= first_editable
                     && let InputBinding::Key(code) = b
                     && *code == keycode
                 {
@@ -2338,27 +2387,25 @@ pub fn update_keymap_binding_unique_keyboard(
         }
 
         if act == action {
-            // If Secondary requested but there is no Primary yet, collapse this
-            // to the first non-default slot so we don't implicitly duplicate
-            // defaults into Primary.
-            let slot_count_before = bindings.len();
-            let mut effective_index = index;
-            if index >= 2 && slot_count_before <= 1 {
-                effective_index = 1;
+            let mut effective_index = requested_to_actual_binding_slot(index, first_editable);
+            // If Secondary requested but there is no Primary yet, collapse to
+            // the first editable slot.
+            if effective_index > first_editable && bindings.len() <= first_editable {
+                effective_index = first_editable;
             }
 
             let new_binding = InputBinding::Key(keycode);
-            if effective_index == 0 {
+            if bindings.len() <= effective_index {
+                if bindings.is_empty() {
+                    bindings.push(new_binding);
+                } else {
+                    bindings.push(new_binding);
+                }
+            } else if effective_index == 0 {
                 if bindings.is_empty() {
                     bindings.push(new_binding);
                 } else {
                     bindings[0] = new_binding;
-                }
-            } else if bindings.len() <= effective_index {
-                if bindings.is_empty() {
-                    bindings.push(new_binding);
-                } else {
-                    bindings.push(new_binding);
                 }
             } else {
                 bindings[effective_index] = new_binding;
@@ -2390,12 +2437,13 @@ pub fn update_keymap_binding_unique_gamepad(
             bindings.push(b);
             i += 1;
         }
+        let first_editable = first_editable_binding_slot(&bindings);
 
-        // Remove this binding from all Primary/Secondary slots (index >= 1).
+        // Remove this binding from all editable slots for this action.
         if !bindings.is_empty() {
             let mut filtered: Vec<InputBinding> = Vec::with_capacity(bindings.len());
             for (slot_idx, b) in bindings.iter().enumerate() {
-                if slot_idx >= 1 && *b == binding {
+                if slot_idx >= first_editable && *b == binding {
                     continue;
                 }
                 filtered.push(*b);
@@ -2404,26 +2452,24 @@ pub fn update_keymap_binding_unique_gamepad(
         }
 
         if act == action {
-            // If Secondary requested but there is no Primary yet, collapse this
-            // to the first non-default slot so we don't implicitly duplicate
-            // defaults into Primary.
-            let slot_count_before = bindings.len();
-            let mut effective_index = index;
-            if index >= 2 && slot_count_before <= 1 {
-                effective_index = 1;
+            let mut effective_index = requested_to_actual_binding_slot(index, first_editable);
+            // If Secondary requested but there is no Primary yet, collapse to
+            // the first editable slot.
+            if effective_index > first_editable && bindings.len() <= first_editable {
+                effective_index = first_editable;
             }
 
-            if effective_index == 0 {
+            if bindings.len() <= effective_index {
+                if bindings.is_empty() {
+                    bindings.push(binding);
+                } else {
+                    bindings.push(binding);
+                }
+            } else if effective_index == 0 {
                 if bindings.is_empty() {
                     bindings.push(binding);
                 } else {
                     bindings[0] = binding;
-                }
-            } else if bindings.len() <= effective_index {
-                if bindings.is_empty() {
-                    bindings.push(binding);
-                } else {
-                    bindings.push(binding);
                 }
             } else {
                 bindings[effective_index] = binding;
@@ -2675,6 +2721,10 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "SmoothHistogram={}\n",
         if cfg.smooth_histogram { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "InputDebounceTime={:.3}\n",
+        cfg.input_debounce_seconds
     ));
     content.push_str(&format!(
         "OnlyDedicatedMenuButtons={}\n",
@@ -3433,6 +3483,19 @@ pub fn update_default_fail_type(fail_type: DefaultFailType) {
         }
         cfg.default_fail_type = fail_type;
     }
+    save_without_keymaps();
+}
+
+pub fn update_input_debounce_seconds(seconds: f32) {
+    let seconds = seconds.clamp(0.0, 0.2);
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if (cfg.input_debounce_seconds - seconds).abs() <= f32::EPSILON {
+            return;
+        }
+        cfg.input_debounce_seconds = seconds;
+    }
+    crate::core::input::set_input_debounce_seconds(seconds);
     save_without_keymaps();
 }
 

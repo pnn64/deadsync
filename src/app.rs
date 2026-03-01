@@ -2505,6 +2505,12 @@ impl App {
         if self.try_handle_late_join(&ev) {
             return Ok(());
         }
+        if config::get().only_dedicated_menu_buttons
+            && ev.action.is_gameplay_arrow()
+            && self.state.screens.current_screen != CurrentScreen::Gameplay
+        {
+            return Ok(());
+        }
         if ev.pressed
             && matches!(
                 self.state.screens.current_screen,
@@ -3954,6 +3960,7 @@ impl App {
         // Screen-specific Escape handling resides in per-screen raw handlers now
 
         if is_transitioning {
+            input::clear_debounce_state();
             return;
         }
 
@@ -3972,6 +3979,7 @@ impl App {
     fn handle_pad_event(&mut self, event_loop: &ActiveEventLoop, ev: PadEvent) {
         let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
         if is_transitioning || self.state.screens.current_screen == CurrentScreen::Init {
+            input::clear_debounce_state();
             return;
         }
         for iev in input::map_pad_event(&ev) {
@@ -5292,6 +5300,13 @@ impl ApplicationHandler<UserEvent> for App {
                 // --- Manage gamepad overlay lifetime ---
                 self.state.shell.update_gamepad_overlay(now);
                 self.update_stutter_samples(delta_time, total_elapsed);
+                for ev in input::drain_debounced_events() {
+                    if let Err(e) = self.route_input_event(event_loop, ev) {
+                        error!("Failed to handle debounced input: {e}");
+                        event_loop.exit();
+                        return;
+                    }
+                }
 
                 let mut finished_fading_out_to: Option<CurrentScreen> = None;
                 match &mut self.state.shell.transition {

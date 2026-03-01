@@ -801,6 +801,18 @@ fn format_binding_for_display(binding: InputBinding) -> String {
     }
 }
 
+#[inline(always)]
+fn editable_slot_indices_for_action(
+    keymap: &crate::core::input::Keymap,
+    action: VirtualAction,
+) -> (usize, usize) {
+    if keymap.first_key_binding(action).is_some() {
+        (1, 2)
+    } else {
+        (0, 1)
+    }
+}
+
 pub fn get_actors(
     state: &State,
     asset_manager: &AssetManager,
@@ -1120,18 +1132,21 @@ pub fn get_actors(
                 p1_default_text,
                 p2_default_text,
             ) = with_keymap(|keymap| {
-                // Config order: first = Default, second = Primary, third = Secondary.
+                // Actions with a default key use [default, primary, secondary].
+                // Actions without a default use [primary, secondary].
+                let p1_slots = p1_act_opt.map(|act| editable_slot_indices_for_action(keymap, act));
+                let p2_slots = p2_act_opt.map(|act| editable_slot_indices_for_action(keymap, act));
                 let p1_primary_text = p1_act_opt
-                    .and_then(|act| keymap.binding_at(act, 1))
+                    .and_then(|act| keymap.binding_at(act, p1_slots.map_or(1, |s| s.0)))
                     .map_or_else(|| "------".to_string(), format_binding_for_display);
                 let p1_secondary_text = p1_act_opt
-                    .and_then(|act| keymap.binding_at(act, 2))
+                    .and_then(|act| keymap.binding_at(act, p1_slots.map_or(2, |s| s.1)))
                     .map_or_else(|| "------".to_string(), format_binding_for_display);
                 let p2_primary_text = p2_act_opt
-                    .and_then(|act| keymap.binding_at(act, 1))
+                    .and_then(|act| keymap.binding_at(act, p2_slots.map_or(1, |s| s.0)))
                     .map_or_else(|| "------".to_string(), format_binding_for_display);
                 let p2_secondary_text = p2_act_opt
-                    .and_then(|act| keymap.binding_at(act, 2))
+                    .and_then(|act| keymap.binding_at(act, p2_slots.map_or(2, |s| s.1)))
                     .map_or_else(|| "------".to_string(), format_binding_for_display);
 
                 let p1_default_text = p1_act_opt
