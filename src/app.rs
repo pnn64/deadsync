@@ -1486,6 +1486,18 @@ impl AppState {
             gameplay_offset_save_prompt: None,
         }
     }
+
+    /// Returns `true` when the current screen is a menu context.
+    #[inline(always)]
+    fn is_menu_state(&self) -> bool {
+        match self.screens.current_screen {
+            CurrentScreen::Gameplay | CurrentScreen::Input => false,
+            CurrentScreen::SelectMusic => {
+                !self.screens.select_music_state.test_input_overlay_visible
+            }
+            _ => true,
+        }
+    }
 }
 
 pub struct App {
@@ -1509,21 +1521,6 @@ impl App {
                 | CurrentScreen::Mappings
                 | CurrentScreen::Input
         )
-    }
-
-    /// Returns `true` when the current screen is a menu context where gameplay
-    /// arrows should be blocked by the dedicated-menu-buttons gate.  Gameplay,
-    /// the standalone Test Input screen, and the select-music test-input overlay
-    /// are *not* considered menu screens.
-    #[inline(always)]
-    fn is_menu_screen(&self) -> bool {
-        match self.state.screens.current_screen {
-            CurrentScreen::Gameplay | CurrentScreen::Input => false,
-            CurrentScreen::SelectMusic => {
-                !self.state.screens.select_music_state.test_input_overlay_visible
-            }
-            _ => true,
-        }
     }
 
     fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
@@ -2545,7 +2542,7 @@ impl App {
         if config::get().only_dedicated_menu_buttons
             && ev.action.is_gameplay_arrow()
             && ev.pressed
-            && self.is_menu_screen()
+            && self.state.is_menu_state()
         {
             return Ok(());
         }
