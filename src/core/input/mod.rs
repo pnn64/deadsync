@@ -849,7 +849,10 @@ pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
             pressed,
             timestamp,
         ),
-        PadEvent::RawAxis { .. } => None,
+        PadEvent::RawAxis { timestamp, .. } => {
+            let _ = timestamp;
+            None
+        }
     };
     if let Some(edge) = edge {
         return input_events_from_debounced_edge(edge);

@@ -88,8 +88,6 @@ struct Dev {
     id: PadId,
     name: String,
     uuid: [u8; 16],
-    vendor_id: Option<u16>,
-    product_id: Option<u16>,
     last: HashMap<u32, i64>,
     dir: [bool; 4],
 }
@@ -105,7 +103,6 @@ struct Ctx {
     // CF strings (owned; we intentionally leak ctx).
     key_primary_usage_page: CFStringRef,
     key_primary_usage: CFStringRef,
-    key_product: CFStringRef,
     key_vendor_id: CFStringRef,
     key_product_id: CFStringRef,
     key_location_id: CFStringRef,
@@ -159,8 +156,6 @@ extern "C" fn on_match(
             id,
             name: name.clone(),
             uuid,
-            vendor_id,
-            product_id,
             last: HashMap::new(),
             dir: [false; 4],
         };
@@ -296,7 +291,6 @@ pub fn run(
             startup_complete_sent: false,
             key_primary_usage_page: cfstr("PrimaryUsagePage"),
             key_primary_usage: cfstr("PrimaryUsage"),
-            key_product: cfstr("Product"),
             key_vendor_id: cfstr("VendorID"),
             key_product_id: cfstr("ProductID"),
             key_location_id: cfstr("LocationID"),
