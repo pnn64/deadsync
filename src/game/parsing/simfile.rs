@@ -1974,11 +1974,8 @@ fn parse_and_process_song_file(
     );
     let cdtitle_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.cdtitle_path);
 
-    let music_path = if summary.music_path.is_empty() {
-        None
-    } else {
-        Some(simfile_dir.join(summary.music_path))
-    };
+    let music_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.music_path)
+        .or_else(|| rssp::assets::resolve_music_path_like_itg(simfile_dir, &summary.music_path));
 
     // Compute audio length (music file duration) in seconds, mirroring ITGmania's
     // m_fMusicLengthSeconds. This intentionally measures the full OGG length,
