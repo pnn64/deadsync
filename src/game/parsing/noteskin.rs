@@ -6357,8 +6357,8 @@ mod tests {
             .expect("dance/default should load from assets/noteskins");
         let default_visuals = default_ns.hold_visuals_for_col(0, false);
         assert!(
-            default_visuals.topcap_inactive.is_some() || default_visuals.topcap_active.is_some(),
-            "dance/default should resolve hold topcap visuals"
+            default_visuals.topcap_inactive.is_none() && default_visuals.topcap_active.is_none(),
+            "dance/default should honor ret.Blank and keep hold topcap visuals unresolved"
         );
         assert!(
             default_visuals.bottomcap_inactive.is_some()

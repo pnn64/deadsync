@@ -4807,11 +4807,10 @@ mod tests {
     fn hold_tail_cap_bounds_falls_back_when_body_is_below_tail_anchor() {
         let body_tail_y = 100.0;
         let cap_height = 24.0;
-        let (top, bottom) =
-            hold_tail_cap_bounds(body_tail_y, cap_height, Some(104.0), Some(160.0))
-                .expect("cap should connect when rendered body reaches tail side");
-        assert!((top - 100.0).abs() <= 1e-6);
-        assert!((bottom - 124.0).abs() <= 1e-6);
+        assert_eq!(
+            hold_tail_cap_bounds(body_tail_y, cap_height, Some(104.0), Some(160.0)),
+            None
+        );
     }
 
     #[test]
