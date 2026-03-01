@@ -4041,8 +4041,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
 
     // --- Delayed Updates ---
-    if cfg.show_select_music_previews && state.time_since_selection_change >= PREVIEW_DELAY_SECONDS
-    {
+    if cfg.show_select_music_previews && allow_gs_fetch_for_selection(state) {
         sync_preview_song(state, selected_song.as_ref(), cfg.select_music_preview_loop);
     } else if state.currently_playing_preview_path.is_some() {
         clear_preview(state);
