@@ -467,8 +467,8 @@ mod platform {
     use objc2_app_kit::NSScreen;
     use objc2_core_foundation::CGPoint;
     use objc2_core_graphics::{
-        CGDirectDisplayID, CGDisplayBounds, CGDisplayCopyDisplayMode, CGDisplayMode, CGError,
-        CGGetActiveDisplayList, CGGetDisplaysWithPoint,
+        CGDirectDisplayID, CGDisplayBounds, CGError, CGGetActiveDisplayList,
+        CGGetDisplaysWithPoint,
     };
     use objc2_foundation::{NSNumber, NSString};
 
@@ -483,33 +483,23 @@ mod platform {
                 .ok()?
                 .unsignedIntValue();
             if screen_id == display_id {
-                unsafe { return Some(screen.localizedName().to_string()) };
+                return Some(screen.localizedName().to_string());
             }
         }
         None
     }
 
     fn snapshot(display_id: CGDirectDisplayID) -> Result<DisplaySnapshot, String> {
-        unsafe {
-            let bounds = CGDisplayBounds(display_id);
-            let mode = CGDisplayCopyDisplayMode(display_id);
-            let pixel_width = CGDisplayMode::pixel_width(mode.as_deref());
-            let scale = if bounds.size.width > 0.0 {
-                pixel_width as f32 / bounds.size.width as f32
-            } else {
-                1.0
-            };
-
-            Ok(DisplaySnapshot {
-                x: bounds.origin.x as i32,
-                y: bounds.origin.y as i32,
-                width: bounds.size.width as u32,
-                height: bounds.size.height as u32,
-                name: format!("Display {display_id}"),
-                friendly_name: friendly_name(display_id)
-                    .unwrap_or_else(|| format!("Unknown Display {display_id}")),
-            })
-        }
+        let bounds = CGDisplayBounds(display_id);
+        Ok(DisplaySnapshot {
+            x: bounds.origin.x as i32,
+            y: bounds.origin.y as i32,
+            width: bounds.size.width as u32,
+            height: bounds.size.height as u32,
+            name: format!("Display {display_id}"),
+            friendly_name: friendly_name(display_id)
+                .unwrap_or_else(|| format!("Unknown Display {display_id}")),
+        })
     }
 
     pub fn displays() -> Result<Vec<DisplaySnapshot>, String> {

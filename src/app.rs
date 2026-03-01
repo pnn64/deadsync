@@ -308,7 +308,7 @@ fn load_window_icon() -> Option<Icon> {
 
 #[cfg(target_os = "macos")]
 fn set_macos_app_icon() {
-    use objc2::MainThreadMarker;
+    use objc2::{AnyThread, MainThreadMarker};
     use objc2_app_kit::{NSApplication, NSImage};
     use objc2_foundation::NSString;
 
