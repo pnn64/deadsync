@@ -728,6 +728,8 @@ pub struct State {
     p1_chord_down_pressed_at: Option<Instant>,
     p2_chord_up_pressed_at: Option<Instant>,
     p2_chord_down_pressed_at: Option<Instant>,
+    p1_select_held: bool,
+    p2_select_held: bool,
     menu_chord_left_pressed_at: Option<Instant>,
     menu_chord_right_pressed_at: Option<Instant>,
     last_steps_nav_dir_p1: Option<PadDir>,
@@ -1821,6 +1823,8 @@ pub fn init() -> State {
         p1_chord_down_pressed_at: None,
         p2_chord_up_pressed_at: None,
         p2_chord_down_pressed_at: None,
+        p1_select_held: false,
+        p2_select_held: false,
         menu_chord_left_pressed_at: None,
         menu_chord_right_pressed_at: None,
         last_steps_nav_dir_p1: None,
@@ -1991,6 +1995,8 @@ pub fn init_placeholder() -> State {
         p1_chord_down_pressed_at: None,
         p2_chord_up_pressed_at: None,
         p2_chord_down_pressed_at: None,
+        p1_select_held: false,
+        p2_select_held: false,
         menu_chord_left_pressed_at: None,
         menu_chord_right_pressed_at: None,
         last_steps_nav_dir_p1: None,
@@ -2195,6 +2201,29 @@ fn try_open_sort_menu(state: &mut State) -> bool {
         true
     } else {
         false
+    }
+}
+
+#[inline(always)]
+fn try_open_sort_menu_with_select_start(
+    state: &mut State,
+    select_held: bool,
+    pressed: bool,
+) -> bool {
+    if !pressed || !select_held {
+        return false;
+    }
+    // Simply Love parity: holding Select and pressing Start opens SortMenu.
+    show_sort_menu(state);
+    true
+}
+
+#[inline(always)]
+fn update_select_hold_state(state: &mut State, ev: &InputEvent) {
+    match ev.action {
+        VirtualAction::p1_select => state.p1_select_held = ev.pressed,
+        VirtualAction::p2_select => state.p2_select_held = ev.pressed,
+        _ => {}
     }
 }
 
@@ -3621,6 +3650,8 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    update_select_hold_state(state, ev);
+
     if state.reload_ui.is_some() {
         return ScreenAction::None;
     }
@@ -3702,7 +3733,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             VirtualAction::p1_down | VirtualAction::p1_menu_down => {
                 handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
-            VirtualAction::p1_start if ev.pressed => handle_confirm(state),
+            VirtualAction::p1_start if ev.pressed => {
+                if try_open_sort_menu_with_select_start(state, state.p1_select_held, ev.pressed) {
+                    ScreenAction::None
+                } else {
+                    handle_confirm(state)
+                }
+            }
             VirtualAction::p1_back if ev.pressed => {
                 begin_exit_prompt(state);
                 ScreenAction::None
@@ -3720,7 +3757,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             VirtualAction::p2_down | VirtualAction::p2_menu_down => {
                 handle_pad_dir_p2(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
-            VirtualAction::p2_start if ev.pressed => handle_confirm(state),
+            VirtualAction::p2_start if ev.pressed => {
+                if try_open_sort_menu_with_select_start(state, state.p2_select_held, ev.pressed) {
+                    ScreenAction::None
+                } else {
+                    handle_confirm(state)
+                }
+            }
             VirtualAction::p2_back if ev.pressed => {
                 begin_exit_prompt(state);
                 ScreenAction::None
@@ -3743,7 +3786,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             VirtualAction::p2_down | VirtualAction::p2_menu_down => {
                 handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
-            VirtualAction::p2_start if ev.pressed => handle_confirm(state),
+            VirtualAction::p2_start if ev.pressed => {
+                if try_open_sort_menu_with_select_start(state, state.p2_select_held, ev.pressed) {
+                    ScreenAction::None
+                } else {
+                    handle_confirm(state)
+                }
+            }
             VirtualAction::p2_back if ev.pressed => {
                 begin_exit_prompt(state);
                 ScreenAction::None
@@ -3763,7 +3812,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             VirtualAction::p1_down | VirtualAction::p1_menu_down => {
                 handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
-            VirtualAction::p1_start if ev.pressed => handle_confirm(state),
+            VirtualAction::p1_start if ev.pressed => {
+                if try_open_sort_menu_with_select_start(state, state.p1_select_held, ev.pressed) {
+                    ScreenAction::None
+                } else {
+                    handle_confirm(state)
+                }
+            }
             VirtualAction::p1_back if ev.pressed => {
                 begin_exit_prompt(state);
                 ScreenAction::None
