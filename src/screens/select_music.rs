@@ -696,7 +696,7 @@ pub struct State {
     song_search: sort_menu::SongSearchState,
     song_search_ignore_next_back_select: bool,
     replay_overlay: sort_menu::ReplayOverlayState,
-    test_input_overlay_visible: bool,
+    pub test_input_overlay_visible: bool,
     test_input_overlay: test_input::State,
     profile_switch_overlay: Option<profile_boxes::State>,
     pending_replay: Option<sort_menu::ReplayStartPayload>,

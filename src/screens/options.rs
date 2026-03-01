@@ -537,6 +537,7 @@ const INPUT_ROW_CONFIGURE_MAPPINGS: &str = "Configure Keyboard/Pad Mappings";
 const INPUT_ROW_TEST: &str = "Test Input";
 const INPUT_ROW_OPTIONS: &str = "Input Options";
 const INPUT_ROW_BACKEND: &str = "Gamepad Backend";
+const INPUT_ROW_DEDICATED_MENU_BUTTONS: &str = "Menu Buttons";
 #[cfg(target_os = "windows")]
 const INPUT_BACKEND_CHOICES: &[&str] = &["W32 Raw Input", "WGI"];
 #[cfg(target_os = "macos")]
@@ -986,11 +987,18 @@ pub const INPUT_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-pub const INPUT_BACKEND_OPTIONS_ROWS: &[SubRow] = &[SubRow {
-    label: INPUT_ROW_BACKEND,
-    choices: INPUT_BACKEND_CHOICES,
-    inline: INPUT_BACKEND_INLINE,
-}];
+pub const INPUT_BACKEND_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: INPUT_ROW_BACKEND,
+        choices: INPUT_BACKEND_CHOICES,
+        inline: INPUT_BACKEND_INLINE,
+    },
+    SubRow {
+        label: INPUT_ROW_DEDICATED_MENU_BUTTONS,
+        choices: &["Use Gameplay Buttons", "Only Dedicated Buttons"],
+        inline: true,
+    },
+];
 
 pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
     Item {
@@ -998,6 +1006,14 @@ pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             "Choose gamepad input backend. On Windows this switches between WGI and W32 Raw Input.",
             "Changing backend requires a restart.",
+        ],
+    },
+    Item {
+        name: INPUT_ROW_DEDICATED_MENU_BUTTONS,
+        help: &[
+            "Choose whether to allow using gameplay buttons (e.g. directional arrows) for menu navigation. Please ensure your menu buttons are mapped before changing this setting otherwise you might get stuck.",
+            "Use Gameplay Buttons - Navigate through the game using your dance pad.",
+            "Only Dedicated Buttons - Navigate through the game using dedicated menu buttons, presumably on an arcade cabinet.",
         ],
     },
     Item {
@@ -3393,6 +3409,12 @@ pub fn init() -> State {
         windows_backend_choice_index(cfg.windows_gamepad_backend),
     );
     set_choice_by_label(
+        &mut state.sub_choice_indices_input_backend,
+        INPUT_BACKEND_OPTIONS_ROWS,
+        INPUT_ROW_DEDICATED_MENU_BUTTONS,
+        usize::from(cfg.only_dedicated_menu_buttons),
+    );
+    set_choice_by_label(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
         MACHINE_ROW_SELECT_PROFILE,
@@ -4808,6 +4830,9 @@ fn apply_submenu_choice_delta(
             {
                 config::update_windows_gamepad_backend(windows_backend_from_choice(new_index));
             }
+        }
+        if row.label == INPUT_ROW_DEDICATED_MENU_BUTTONS {
+            config::update_only_dedicated_menu_buttons(new_index == 1);
         }
     } else if matches!(kind, SubmenuKind::Machine) {
         let row = &rows[row_index];
@@ -6317,7 +6342,7 @@ pub fn get_actors(
 
                     if row_idx < rows.len() {
                         let row = &rows[row_idx];
-                        if row.label == INPUT_ROW_BACKEND {
+                        if row.inline {
                             let choices = row_choices(state, kind, rows, row_idx);
                             if !choices.is_empty() {
                                 let choice_idx = choice_indices
