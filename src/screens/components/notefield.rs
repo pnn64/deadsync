@@ -2355,66 +2355,64 @@ pub fn build(
                 }
             }
         }
-        // Tap explosions
-        if !profile.hide_combo_explosions {
-            for i in 0..num_cols {
-                let col = col_start + i;
-                if let Some(active) = state.tap_explosions[col].as_ref()
-                    && let Some(explosion) = ns.tap_explosions.get(&active.window)
-                {
-                    let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
-                    let receptor_y_lane = column_receptor_ys[i];
-                    let anim_time = active.elapsed;
-                    let slot = &explosion.slot;
-                    let beat_for_anim = if slot.source.is_beat_based() {
-                        (state.current_beat - active.start_beat).max(0.0)
-                    } else {
-                        state.current_beat
-                    };
-                    let frame = slot.frame_index(anim_time, beat_for_anim);
-                    let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
-                    let size = scale_explosion(logical_slot_size(slot));
-                    let visual = explosion.animation.state_at(active.elapsed);
-                    if !visual.visible {
-                        continue;
-                    }
-                    let rotation_deg = ns
-                        .receptor_off
-                        .get(i)
-                        .map(|slot| slot.def.rotation_deg)
-                        .unwrap_or(0);
+        // Tap explosions (receptor noteflash / GhostArrow) are independent of
+        // the "Hide Combo Explosions" UI option, which only affects combo splodes.
+        for i in 0..num_cols {
+            let col = col_start + i;
+            if let Some(active) = state.tap_explosions[col].as_ref()
+                && let Some(explosion) = ns.tap_explosions.get(&active.window)
+            {
+                let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
+                let receptor_y_lane = column_receptor_ys[i];
+                let anim_time = active.elapsed;
+                let slot = &explosion.slot;
+                let beat_for_anim = if slot.source.is_beat_based() {
+                    (state.current_beat - active.start_beat).max(0.0)
+                } else {
+                    state.current_beat
+                };
+                let frame = slot.frame_index(anim_time, beat_for_anim);
+                let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
+                let size = scale_explosion(logical_slot_size(slot));
+                let visual = explosion.animation.state_at(active.elapsed);
+                if !visual.visible {
+                    continue;
+                }
+                let rotation_deg = ns
+                    .receptor_off
+                    .get(i)
+                    .map(|slot| slot.def.rotation_deg)
+                    .unwrap_or(0);
+                actors.push(act!(sprite(slot.texture_key().to_string()):
+                    align(0.5, 0.5):
+                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                    setsize(size[0], size[1]):
+                    zoom(visual.zoom):
+                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                    diffuse(
+                        visual.diffuse[0],
+                        visual.diffuse[1],
+                        visual.diffuse[2],
+                        visual.diffuse[3]
+                    ):
+                    rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
+                    blend(normal):
+                    z(Z_TAP_EXPLOSION)
+                ));
+                let glow = visual.glow;
+                let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
+                if glow_strength > f32::EPSILON {
                     actors.push(act!(sprite(slot.texture_key().to_string()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset, receptor_y_lane):
                         setsize(size[0], size[1]):
                         zoom(visual.zoom):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                        diffuse(
-                            visual.diffuse[0],
-                            visual.diffuse[1],
-                            visual.diffuse[2],
-                            visual.diffuse[3]
-                        ):
+                        diffuse(glow[0], glow[1], glow[2], glow[3]):
                         rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
-                        blend(normal):
+                        blend(add):
                         z(Z_TAP_EXPLOSION)
                     ));
-                    let glow = visual.glow;
-                    let glow_strength =
-                        glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
-                    if glow_strength > f32::EPSILON {
-                        actors.push(act!(sprite(slot.texture_key().to_string()):
-                            align(0.5, 0.5):
-                            xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                            setsize(size[0], size[1]):
-                            zoom(visual.zoom):
-                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                            diffuse(glow[0], glow[1], glow[2], glow[3]):
-                            rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
-                            blend(add):
-                            z(Z_TAP_EXPLOSION)
-                        ));
-                    }
                 }
             }
         }
