@@ -56,11 +56,7 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Sc
         VirtualAction::p1_menu_left
         | VirtualAction::p1_menu_up
         | VirtualAction::p2_menu_left
-        | VirtualAction::p2_menu_up
-        | VirtualAction::p1_left
-        | VirtualAction::p1_up
-        | VirtualAction::p2_left
-        | VirtualAction::p2_up => {
+        | VirtualAction::p2_menu_up => {
             let pages = pages_for(num_stages);
             if pages > 1 && state.page > 1 {
                 state.page = state.page.saturating_sub(1).max(1);
@@ -71,11 +67,7 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Sc
         VirtualAction::p1_menu_right
         | VirtualAction::p1_menu_down
         | VirtualAction::p2_menu_right
-        | VirtualAction::p2_menu_down
-        | VirtualAction::p1_right
-        | VirtualAction::p1_down
-        | VirtualAction::p2_right
-        | VirtualAction::p2_down => {
+        | VirtualAction::p2_menu_down => {
             let pages = pages_for(num_stages);
             if pages > 1 {
                 state.page = (state.page + 1).min(pages.max(1));

@@ -621,7 +621,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_back if ev.pressed => {
             return ScreenAction::Navigate(Screen::Options);
         }
-        VirtualAction::p1_up | VirtualAction::p1_menu_up => {
+        VirtualAction::p1_menu_up => {
             if ev.pressed {
                 move_selection(state, NavDirection::Up);
                 on_nav_press(state, NavDirection::Up);
@@ -629,7 +629,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 on_nav_release(state, NavDirection::Up);
             }
         }
-        VirtualAction::p1_down | VirtualAction::p1_menu_down => {
+        VirtualAction::p1_menu_down => {
             if ev.pressed {
                 move_selection(state, NavDirection::Down);
                 on_nav_press(state, NavDirection::Down);
@@ -637,7 +637,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 on_nav_release(state, NavDirection::Down);
             }
         }
-        VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+        VirtualAction::p1_menu_left => {
             if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
                 let old_slot = state.active_slot;
                 let new_slot = active_slot_prev(state.active_slot);
@@ -650,7 +650,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 audio::play_sfx("assets/sounds/change_value.ogg");
             }
         }
-        VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+        VirtualAction::p1_menu_right => {
             if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
                 let old_slot = state.active_slot;
                 let new_slot = active_slot_next(state.active_slot);

@@ -694,7 +694,11 @@ fn normalize_machine_default_noteskin(raw: &str) -> String {
 
 fn normalize_additional_song_folders(raw: &str) -> String {
     let mut out = String::new();
-    for path in raw.split(',').map(str::trim).filter(|path| !path.is_empty()) {
+    for path in raw
+        .split(',')
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+    {
         if !out.is_empty() {
             out.push(',');
         }
@@ -977,7 +981,11 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     ));
     content.push_str(&format!(
         "OnlyDedicatedMenuButtons={}\n",
-        if default.only_dedicated_menu_buttons { "1" } else { "0" }
+        if default.only_dedicated_menu_buttons {
+            "1"
+        } else {
+            "0"
+        }
     ));
     content.push_str(&format!(
         "SongParsingThreads={}\n",
@@ -1762,6 +1770,7 @@ pub fn load() {
                     "ShowStats",
                     "ShowStatsMode",
                     "SmoothHistogram",
+                    "OnlyDedicatedMenuButtons",
                     "SFXVolume",
                     "SoftwareRendererThreads",
                     "Theme",
@@ -1834,6 +1843,7 @@ pub fn load() {
             *ADDITIONAL_SONG_FOLDERS.lock().unwrap() = String::new();
         }
     }
+    crate::core::input::set_only_dedicated_menu_buttons(get().only_dedicated_menu_buttons);
 }
 
 // --- Keymap defaults and parsing (kept in config to avoid coupling input.rs to config) ---
@@ -2668,7 +2678,11 @@ fn save_without_keymaps() {
     ));
     content.push_str(&format!(
         "OnlyDedicatedMenuButtons={}\n",
-        if cfg.only_dedicated_menu_buttons { "1" } else { "0" }
+        if cfg.only_dedicated_menu_buttons {
+            "1"
+        } else {
+            "0"
+        }
     ));
     content.push_str(&format!("DisplayMonitor={}\n", cfg.display_monitor));
     content.push_str(&format!(
@@ -3430,6 +3444,7 @@ pub fn update_only_dedicated_menu_buttons(enabled: bool) {
         }
         cfg.only_dedicated_menu_buttons = enabled;
     }
+    crate::core::input::set_only_dedicated_menu_buttons(enabled);
     save_without_keymaps();
 }
 

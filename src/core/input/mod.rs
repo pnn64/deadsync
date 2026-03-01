@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use winit::event::{ElementState, KeyEvent};
@@ -311,6 +312,21 @@ impl VirtualAction {
                 | Self::p2_right
         )
     }
+
+    #[inline(always)]
+    pub const fn secondary_menu(self) -> Option<Self> {
+        match self {
+            Self::p1_up => Some(Self::p1_menu_up),
+            Self::p1_down => Some(Self::p1_menu_down),
+            Self::p1_left => Some(Self::p1_menu_left),
+            Self::p1_right => Some(Self::p1_menu_right),
+            Self::p2_up => Some(Self::p2_menu_up),
+            Self::p2_down => Some(Self::p2_menu_down),
+            Self::p2_left => Some(Self::p2_menu_left),
+            Self::p2_right => Some(Self::p2_menu_right),
+            _ => None,
+        }
+    }
 }
 
 /// Low-level gamepad binding to a platform-specific element code.
@@ -363,6 +379,7 @@ impl Default for Keymap {
 
 static KEYMAP: std::sync::LazyLock<RwLock<Keymap>> =
     std::sync::LazyLock::new(|| RwLock::new(Keymap::default()));
+static ONLY_DEDICATED_MENU_BUTTONS: AtomicBool = AtomicBool::new(false);
 
 #[inline(always)]
 pub fn with_keymap<R>(f: impl FnOnce(&Keymap) -> R) -> R {
@@ -377,6 +394,11 @@ pub fn get_keymap() -> Keymap {
 #[inline(always)]
 pub fn set_keymap(new_map: Keymap) {
     *KEYMAP.write().unwrap() = new_map;
+}
+
+#[inline(always)]
+pub fn set_only_dedicated_menu_buttons(enabled: bool) {
+    ONLY_DEDICATED_MENU_BUTTONS.store(enabled, Ordering::Relaxed);
 }
 
 // Defaults are provided by config.rs; keep this module free of config.
@@ -601,7 +623,8 @@ pub fn map_key_event(ev: &KeyEvent) -> Vec<InputEvent> {
         return out;
     }
     let mut actions = with_keymap(|km| km.actions_for_key_event(ev));
-    dedup_menu_variants(&mut actions);
+    append_secondary_menu_actions(&mut actions);
+    dedup_action_pairs(&mut actions);
     if actions.is_empty() {
         return out;
     }
@@ -621,7 +644,8 @@ pub fn map_key_event(ev: &KeyEvent) -> Vec<InputEvent> {
 pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
     let mut out = Vec::with_capacity(2);
     let mut actions = with_keymap(|km| km.actions_for_pad_event(ev));
-    dedup_menu_variants(&mut actions);
+    append_secondary_menu_actions(&mut actions);
+    dedup_action_pairs(&mut actions);
     if actions.is_empty() {
         return out;
     }
@@ -657,42 +681,38 @@ pub const fn lane_from_action(act: VirtualAction) -> Option<Lane> {
 }
 
 #[inline(always)]
-fn dedup_menu_variants(actions: &mut Vec<(VirtualAction, bool)>) {
-    use VirtualAction as A;
-    // If both menu and non-menu variants for the same direction are present with the same
-    // pressed state, drop the menu variant to avoid double-triggering navigation.
-    let mut p1 = [[false; 2]; 4];
-    let mut p2 = [[false; 2]; 4];
-
-    for (act, pressed) in actions.iter() {
-        let idx = usize::from(*pressed);
-        match *act {
-            A::p1_up => p1[0][idx] = true,
-            A::p1_down => p1[1][idx] = true,
-            A::p1_left => p1[2][idx] = true,
-            A::p1_right => p1[3][idx] = true,
-            A::p2_up => p2[0][idx] = true,
-            A::p2_down => p2[1][idx] = true,
-            A::p2_left => p2[2][idx] = true,
-            A::p2_right => p2[3][idx] = true,
-            _ => {}
-        }
-    }
-
+fn dedup_action_pairs(actions: &mut Vec<(VirtualAction, bool)>) {
+    let mut seen_pressed: u32 = 0;
+    let mut seen_released: u32 = 0;
     actions.retain(|(act, pressed)| {
-        let idx = usize::from(*pressed);
-        match *act {
-            A::p1_menu_up => !p1[0][idx],
-            A::p1_menu_down => !p1[1][idx],
-            A::p1_menu_left => !p1[2][idx],
-            A::p1_menu_right => !p1[3][idx],
-            A::p2_menu_up => !p2[0][idx],
-            A::p2_menu_down => !p2[1][idx],
-            A::p2_menu_left => !p2[2][idx],
-            A::p2_menu_right => !p2[3][idx],
-            _ => true,
+        let bit = 1u32 << (act.ix() as u32);
+        if *pressed {
+            let keep = (seen_pressed & bit) == 0;
+            seen_pressed |= bit;
+            keep
+        } else {
+            let keep = (seen_released & bit) == 0;
+            seen_released |= bit;
+            keep
         }
     });
+}
+
+#[inline(always)]
+fn append_secondary_menu_actions(actions: &mut Vec<(VirtualAction, bool)>) {
+    let only_dedicated = ONLY_DEDICATED_MENU_BUTTONS.load(Ordering::Relaxed);
+    let original_len = actions.len();
+    for i in 0..original_len {
+        let (act, pressed) = actions[i];
+        // Keep releasing secondary menu aliases even in dedicated-only mode so
+        // menu hold/repeat state cannot get orphaned if the preference changes
+        // while an arrow is held.
+        if let Some(menu_act) = act.secondary_menu()
+            && (!only_dedicated || !pressed)
+        {
+            actions.push((menu_act, pressed));
+        }
+    }
 }
 
 /* ------------------------ Platform pad backends ------------------------ */
