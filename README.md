@@ -17,6 +17,11 @@ Before building, ensure you have the following installed on your system:
 1.  **Rust**: Install via [rustup](https://rustup.rs/).
 2.  **Vulkan SDK**: Download and install the SDK for your operating system from the [LunarG website](https://www.lunarg.com/vulkan-sdk/).
 
+### Windows build dependencies
+
+-   **CMake**: Install from [cmake.org](https://cmake.org/download/).
+-   **Ninja**: Install from [ninja-build.org](https://ninja-build.org/).
+
 ### Linux build dependencies (Ubuntu/Debian)
 ```bash
 sudo apt update
