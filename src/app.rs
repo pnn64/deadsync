@@ -1511,6 +1511,21 @@ impl App {
         )
     }
 
+    /// Returns `true` when the current screen is a menu context where gameplay
+    /// arrows should be blocked by the dedicated-menu-buttons gate.  Gameplay,
+    /// the standalone Test Input screen, and the select-music test-input overlay
+    /// are *not* considered menu screens.
+    #[inline(always)]
+    fn is_menu_screen(&self) -> bool {
+        match self.state.screens.current_screen {
+            CurrentScreen::Gameplay | CurrentScreen::Input => false,
+            CurrentScreen::SelectMusic => {
+                !self.state.screens.select_music_state.test_input_overlay_visible
+            }
+            _ => true,
+        }
+    }
+
     fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
         let monitors: Vec<MonitorHandle> = event_loop.available_monitors().collect();
         let specs = display::monitor_specs(&monitors);
@@ -2521,6 +2536,17 @@ impl App {
                 input::VirtualAction::p2_select => Some(profile::PlayerSide::P2),
                 _ => None,
             };
+            return Ok(());
+        }
+        // Dedicated menu buttons gate: when enabled, block gameplay arrow *presses*
+        // from reaching menu screens so only dedicated menu buttons navigate menus.
+        // Release events are always allowed through so that held-state trackers
+        // (e.g. options hold-to-repeat) are properly cleared.
+        if config::get().only_dedicated_menu_buttons
+            && ev.action.is_gameplay_arrow()
+            && ev.pressed
+            && self.is_menu_screen()
+        {
             return Ok(());
         }
         let action = match self.state.screens.current_screen {

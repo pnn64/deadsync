@@ -491,6 +491,9 @@ pub struct Config {
     pub cachesongs: bool,
     // Whether to apply Gaussian smoothing to the eval histogram (Simply Love style)
     pub smooth_histogram: bool,
+    /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
+    /// menu navigation. Only explicitly-bound menu buttons (p*_menu_*) work in menus.
+    pub only_dedicated_menu_buttons: bool,
 }
 
 impl Default for Config {
@@ -568,6 +571,7 @@ impl Default for Config {
             fastload: true,
             cachesongs: true,
             smooth_histogram: true,
+            only_dedicated_menu_buttons: false,
         }
     }
 }
@@ -970,6 +974,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "SmoothHistogram={}\n",
         if default.smooth_histogram { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "OnlyDedicatedMenuButtons={}\n",
+        if default.only_dedicated_menu_buttons { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "SongParsingThreads={}\n",
@@ -1427,6 +1435,10 @@ pub fn load() {
                     .get("Options", "SmoothHistogram")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.smooth_histogram, |v| v != 0);
+                cfg.only_dedicated_menu_buttons = conf
+                    .get("Options", "OnlyDedicatedMenuButtons")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.only_dedicated_menu_buttons, |v| v != 0);
                 cfg.theme_flag = conf
                     .get("Options", "Theme")
                     .and_then(|v| ThemeFlag::from_str(&v).ok())
@@ -2654,6 +2666,10 @@ fn save_without_keymaps() {
         "SmoothHistogram={}\n",
         if cfg.smooth_histogram { "1" } else { "0" }
     ));
+    content.push_str(&format!(
+        "OnlyDedicatedMenuButtons={}\n",
+        if cfg.only_dedicated_menu_buttons { "1" } else { "0" }
+    ));
     content.push_str(&format!("DisplayMonitor={}\n", cfg.display_monitor));
     content.push_str(&format!(
         "SongParsingThreads={}\n",
@@ -3402,6 +3418,17 @@ pub fn update_default_fail_type(fail_type: DefaultFailType) {
             return;
         }
         cfg.default_fail_type = fail_type;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_only_dedicated_menu_buttons(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.only_dedicated_menu_buttons == enabled {
+            return;
+        }
+        cfg.only_dedicated_menu_buttons = enabled;
     }
     save_without_keymaps();
 }

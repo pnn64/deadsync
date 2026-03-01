@@ -295,6 +295,22 @@ impl VirtualAction {
     pub const fn ix(self) -> usize {
         self as usize
     }
+
+    /// Returns `true` for gameplay arrow actions (p1/p2 up/down/left/right).
+    #[inline(always)]
+    pub const fn is_gameplay_arrow(self) -> bool {
+        matches!(
+            self,
+            Self::p1_up
+                | Self::p1_down
+                | Self::p1_left
+                | Self::p1_right
+                | Self::p2_up
+                | Self::p2_down
+                | Self::p2_left
+                | Self::p2_right
+        )
+    }
 }
 
 /// Low-level gamepad binding to a platform-specific element code.
