@@ -297,10 +297,6 @@ pub const ITEMS: &[Item] = &[
             "Adjust machine-level fail and cache/parsing behavior.",
             "Default Fail Type",
             "Banner Cache",
-            "Banner Cache Color Depth",
-            "Banner Cache Min Dimension",
-            "Banner Cache Pow2",
-            "Banner Cache Scale Divisor",
             "Song Parsing Threads",
             "Cache Songs",
             "Fast Load",
@@ -581,10 +577,6 @@ const MACHINE_ROW_MENU_MUSIC: &str = "Menu Music";
 const MACHINE_ROW_KEYBOARD_FEATURES: &str = "Keyboard Features";
 const ADVANCED_ROW_DEFAULT_FAIL_TYPE: &str = "Default Fail Type";
 const ADVANCED_ROW_BANNER_CACHE: &str = "Banner Cache";
-const ADVANCED_ROW_BANNER_COLOR_DEPTH: &str = "Banner Cache Color Depth";
-const ADVANCED_ROW_BANNER_MIN_DIMENSION: &str = "Banner Cache Min Dimension";
-const ADVANCED_ROW_BANNER_POW2: &str = "Banner Cache Pow2";
-const ADVANCED_ROW_BANNER_SCALE_DIVISOR: &str = "Banner Cache Scale Divisor";
 const ADVANCED_ROW_SONG_PARSING_THREADS: &str = "Song Parsing Threads";
 const ADVANCED_ROW_CACHE_SONGS: &str = "Cache Songs";
 const ADVANCED_ROW_FAST_LOAD: &str = "Fast Load";
@@ -785,12 +777,7 @@ const MACHINE_SELECT_STYLE_ROW_INDEX: usize = 2;
 const MACHINE_PREFERRED_STYLE_ROW_INDEX: usize = 3;
 const MACHINE_SELECT_PLAY_MODE_ROW_INDEX: usize = 4;
 const MACHINE_PREFERRED_MODE_ROW_INDEX: usize = 5;
-const ADVANCED_BANNER_CACHE_ROW_INDEX: usize = 1;
-const ADVANCED_BANNER_COLOR_DEPTH_ROW_INDEX: usize = 2;
-const ADVANCED_BANNER_MIN_DIMENSION_ROW_INDEX: usize = 3;
-const ADVANCED_BANNER_POW2_ROW_INDEX: usize = 4;
-const ADVANCED_BANNER_SCALE_DIVISOR_ROW_INDEX: usize = 5;
-const ADVANCED_SONG_PARSING_THREADS_ROW_INDEX: usize = 6;
+const ADVANCED_SONG_PARSING_THREADS_ROW_INDEX: usize = 2;
 
 const BG_BRIGHTNESS_CHOICES: [&str; 11] = [
     "0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%",
@@ -799,12 +786,6 @@ const MAX_FPS_MIN: u16 = 5;
 const MAX_FPS_MAX: u16 = 1000;
 const MAX_FPS_STEP: u16 = 5;
 const CENTERED_P1_NOTEFIELD_CHOICES: [&str; 2] = ["Off", "On"];
-const ADVANCED_BANNER_COLOR_DEPTH_CHOICES: [&str; 3] = ["8", "16", "32"];
-const ADVANCED_BANNER_MIN_DIMENSION_CHOICES: [&str; 6] = ["16", "32", "64", "128", "256", "512"];
-const ADVANCED_BANNER_SCALE_DIVISOR_CHOICES: [&str; 8] = ["1", "2", "3", "4", "5", "6", "7", "8"];
-const ADVANCED_BANNER_COLOR_DEPTH_VALUES: [u8; 3] = [8, 16, 32];
-const ADVANCED_BANNER_MIN_DIMENSION_VALUES: [u16; 6] = [16, 32, 64, 128, 256, 512];
-const ADVANCED_BANNER_SCALE_DIVISOR_VALUES: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 const MUSIC_WHEEL_SCROLL_SPEED_CHOICES: [&str; 7] = [
     "Slow",
     "Normal",
@@ -1497,26 +1478,6 @@ pub const ADVANCED_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        label: ADVANCED_ROW_BANNER_COLOR_DEPTH,
-        choices: &ADVANCED_BANNER_COLOR_DEPTH_CHOICES,
-        inline: true,
-    },
-    SubRow {
-        label: ADVANCED_ROW_BANNER_MIN_DIMENSION,
-        choices: &ADVANCED_BANNER_MIN_DIMENSION_CHOICES,
-        inline: true,
-    },
-    SubRow {
-        label: ADVANCED_ROW_BANNER_POW2,
-        choices: &["Off", "On"],
-        inline: true,
-    },
-    SubRow {
-        label: ADVANCED_ROW_BANNER_SCALE_DIVISOR,
-        choices: &ADVANCED_BANNER_SCALE_DIVISOR_CHOICES,
-        inline: true,
-    },
-    SubRow {
         label: ADVANCED_ROW_SONG_PARSING_THREADS,
         choices: &["Auto"],
         inline: false,
@@ -1548,35 +1509,6 @@ pub const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             "Enable or disable the wheel banner cache on disk.",
             "Default: On (BannerCache=1).",
-            "When Off, banner cache sub-options are hidden.",
-        ],
-    },
-    Item {
-        name: ADVANCED_ROW_BANNER_COLOR_DEPTH,
-        help: &[
-            "Set cached banner color depth in bits (8/16/32).",
-            "Default: 16 (BannerCacheColorDepth=16).",
-        ],
-    },
-    Item {
-        name: ADVANCED_ROW_BANNER_MIN_DIMENSION,
-        help: &[
-            "Set the minimum cached banner dimension in pixels.",
-            "Default: 32 (BannerCacheMinDimension=32).",
-        ],
-    },
-    Item {
-        name: ADVANCED_ROW_BANNER_POW2,
-        help: &[
-            "Round cached banner dimensions to power-of-two sizes.",
-            "Default: On (BannerCachePow2=1).",
-        ],
-    },
-    Item {
-        name: ADVANCED_ROW_BANNER_SCALE_DIVISOR,
-        help: &[
-            "Set banner downscale divisor used by cache generation.",
-            "Default: 2 (BannerCacheScaleDivisor=2).",
         ],
     },
     Item {
@@ -1971,32 +1903,7 @@ fn submenu_visible_row_indices(
                 })
                 .collect()
         }
-        SubmenuKind::Advanced => {
-            let show_banner_cache_rows = state
-                .sub_choice_indices_advanced
-                .get(ADVANCED_BANNER_CACHE_ROW_INDEX)
-                .copied()
-                .unwrap_or(1)
-                == 1;
-            rows.iter()
-                .enumerate()
-                .filter_map(|(idx, _)| {
-                    if !show_banner_cache_rows
-                        && matches!(
-                            idx,
-                            ADVANCED_BANNER_COLOR_DEPTH_ROW_INDEX
-                                | ADVANCED_BANNER_MIN_DIMENSION_ROW_INDEX
-                                | ADVANCED_BANNER_POW2_ROW_INDEX
-                                | ADVANCED_BANNER_SCALE_DIVISOR_ROW_INDEX
-                        )
-                    {
-                        None
-                    } else {
-                        Some(idx)
-                    }
-                })
-                .collect()
-        }
+        SubmenuKind::Advanced => rows.iter().enumerate().map(|(idx, _)| idx).collect(),
         SubmenuKind::SelectMusic => {
             let show_breakdown = state
                 .sub_choice_indices_select_music
@@ -3035,50 +2942,6 @@ const fn default_fail_type_from_choice(idx: usize) -> DefaultFailType {
     }
 }
 
-fn banner_color_depth_choice_index(depth: u8) -> usize {
-    ADVANCED_BANNER_COLOR_DEPTH_VALUES
-        .iter()
-        .enumerate()
-        .min_by_key(|(_, value)| value.abs_diff(depth))
-        .map_or(1, |(idx, _)| idx)
-}
-
-fn banner_color_depth_from_choice(idx: usize) -> u8 {
-    ADVANCED_BANNER_COLOR_DEPTH_VALUES
-        .get(idx)
-        .copied()
-        .unwrap_or(16)
-}
-
-fn banner_min_dimension_choice_index(min_dimension: u16) -> usize {
-    ADVANCED_BANNER_MIN_DIMENSION_VALUES
-        .iter()
-        .enumerate()
-        .min_by_key(|(_, value)| value.abs_diff(min_dimension))
-        .map_or(1, |(idx, _)| idx)
-}
-
-fn banner_min_dimension_from_choice(idx: usize) -> u16 {
-    ADVANCED_BANNER_MIN_DIMENSION_VALUES
-        .get(idx)
-        .copied()
-        .unwrap_or(32)
-}
-
-fn banner_scale_divisor_choice_index(scale_divisor: u8) -> usize {
-    ADVANCED_BANNER_SCALE_DIVISOR_VALUES
-        .iter()
-        .position(|value| *value == scale_divisor)
-        .unwrap_or(1)
-}
-
-fn banner_scale_divisor_from_choice(idx: usize) -> u8 {
-    ADVANCED_BANNER_SCALE_DIVISOR_VALUES
-        .get(idx)
-        .copied()
-        .unwrap_or(2)
-}
-
 const fn translated_titles_choice_index(translated_titles: bool) -> usize {
     if translated_titles { 0 } else { 1 }
 }
@@ -3537,30 +3400,6 @@ pub fn init() -> State {
         ADVANCED_OPTIONS_ROWS,
         ADVANCED_ROW_BANNER_CACHE,
         usize::from(cfg.banner_cache),
-    );
-    set_choice_by_label(
-        &mut state.sub_choice_indices_advanced,
-        ADVANCED_OPTIONS_ROWS,
-        ADVANCED_ROW_BANNER_COLOR_DEPTH,
-        banner_color_depth_choice_index(cfg.banner_cache_color_depth),
-    );
-    set_choice_by_label(
-        &mut state.sub_choice_indices_advanced,
-        ADVANCED_OPTIONS_ROWS,
-        ADVANCED_ROW_BANNER_MIN_DIMENSION,
-        banner_min_dimension_choice_index(cfg.banner_cache_min_dimension),
-    );
-    set_choice_by_label(
-        &mut state.sub_choice_indices_advanced,
-        ADVANCED_OPTIONS_ROWS,
-        ADVANCED_ROW_BANNER_POW2,
-        usize::from(cfg.banner_cache_pow2),
-    );
-    set_choice_by_label(
-        &mut state.sub_choice_indices_advanced,
-        ADVANCED_OPTIONS_ROWS,
-        ADVANCED_ROW_BANNER_SCALE_DIVISOR,
-        banner_scale_divisor_choice_index(cfg.banner_cache_scale_divisor),
     );
     if let Some(slot) = state
         .sub_choice_indices_advanced
@@ -4941,14 +4780,6 @@ fn apply_submenu_choice_delta(
             config::update_default_fail_type(default_fail_type_from_choice(new_index));
         } else if row.label == ADVANCED_ROW_BANNER_CACHE {
             config::update_banner_cache(new_index == 1);
-        } else if row.label == ADVANCED_ROW_BANNER_COLOR_DEPTH {
-            config::update_banner_cache_color_depth(banner_color_depth_from_choice(new_index));
-        } else if row.label == ADVANCED_ROW_BANNER_MIN_DIMENSION {
-            config::update_banner_cache_min_dimension(banner_min_dimension_from_choice(new_index));
-        } else if row.label == ADVANCED_ROW_BANNER_POW2 {
-            config::update_banner_cache_pow2(new_index == 1);
-        } else if row.label == ADVANCED_ROW_BANNER_SCALE_DIVISOR {
-            config::update_banner_cache_scale_divisor(banner_scale_divisor_from_choice(new_index));
         } else if row.label == ADVANCED_ROW_SONG_PARSING_THREADS {
             let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
             config::update_song_parsing_threads(threads);
@@ -5663,13 +5494,8 @@ fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
 }
 
 const fn advanced_parent_row(actual_idx: usize) -> Option<usize> {
-    match actual_idx {
-        ADVANCED_BANNER_COLOR_DEPTH_ROW_INDEX
-        | ADVANCED_BANNER_MIN_DIMENSION_ROW_INDEX
-        | ADVANCED_BANNER_POW2_ROW_INDEX
-        | ADVANCED_BANNER_SCALE_DIVISOR_ROW_INDEX => Some(ADVANCED_BANNER_CACHE_ROW_INDEX),
-        _ => None,
-    }
+    let _ = actual_idx;
+    None
 }
 
 fn update_advanced_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
