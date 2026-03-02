@@ -24,7 +24,7 @@ use crate::game::{
 use crate::screens::components::density_graph::DensityHistCache;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
-use log::debug;
+use log::{debug, warn};
 use rssp::streams::StreamSegment;
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
@@ -8168,7 +8168,18 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     let stream_pos = crate::core::audio::get_music_stream_position_seconds();
     let lead_in = state.audio_lead_in_seconds.max(0.0);
     let previous_music_time = state.current_music_time;
-    let music_time_sec = (stream_pos - lead_in).mul_add(rate, anchor * (1.0 - rate));
+    let mut music_time_sec = (stream_pos - lead_in).mul_add(rate, anchor * (1.0 - rate));
+    let is_first_update = state.total_elapsed_in_screen <= f32::EPSILON;
+    if is_first_update {
+        const STARTUP_MAX_FORWARD_JUMP_S: f32 = 1.0;
+        let jump_s = music_time_sec - previous_music_time;
+        if jump_s > STARTUP_MAX_FORWARD_JUMP_S {
+            warn!(
+                "Discarding anomalous first-frame music time jump ({jump_s:.3}s): prev={previous_music_time:.3}, now={music_time_sec:.3}, stream_pos={stream_pos:.3}, lead_in={lead_in:.3}"
+            );
+            music_time_sec = previous_music_time;
+        }
+    }
     state.current_music_time = music_time_sec;
 
     if let (Some(key), Some(start_time)) = (state.hold_to_exit_key, state.hold_to_exit_start) {

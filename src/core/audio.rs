@@ -144,6 +144,19 @@ pub fn preload_sfx(path: &str) {
     }
 }
 
+#[inline(always)]
+fn reset_music_stream_clock() {
+    // Reset immediately on the caller thread so async command handoff can't
+    // leak the previous track's stream position into gameplay timing.
+    let total = MUSIC_TOTAL_FRAMES.load(Ordering::Acquire);
+    MUSIC_TRACK_START_FRAME.store(total, Ordering::Release);
+    MUSIC_TRACK_HAS_STARTED.store(false, Ordering::Release);
+    MUSIC_TRACK_ACTIVE.store(false, Ordering::Release);
+    LAST_CALLBACK_BASE_FRAMES.store(total, Ordering::Release);
+    LAST_CALLBACK_FRAMES.store(0, Ordering::Release);
+    *LAST_CALLBACK_INSTANT.lock().unwrap() = None;
+}
+
 /// Plays a music track from a file path.
 pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
     let rate = if rate.is_finite() && rate > 0.0 {
@@ -151,6 +164,7 @@ pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
     } else {
         1.0
     };
+    reset_music_stream_clock();
     let _ = ENGINE
         .command_sender
         .send(AudioCommand::PlayMusic(path, cut, looping, rate));
@@ -158,6 +172,7 @@ pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
 
 /// Stops the currently playing music track.
 pub fn stop_music() {
+    reset_music_stream_clock();
     let _ = ENGINE.command_sender.send(AudioCommand::StopMusic);
 }
 
