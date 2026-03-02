@@ -5386,7 +5386,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let pane_scorebox_zoom = widescale(0.60, 0.64);
             let pane_scorebox_width = 162.0 * pane_scorebox_zoom;
             let pane_scorebox_center_y = pane_layout.pane_top + pane_layout.pane_height * 0.5;
-            let pane_right_inset = 6.0;
+            let pane_right_inset = 4.0;
             let pane_box_center_x = |pane_cx: f32| {
                 pane_cx + pane_layout.pane_width * 0.5
                     - pane_scorebox_width * 0.5
