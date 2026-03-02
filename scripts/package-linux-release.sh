@@ -29,21 +29,24 @@ arch="$(map_arch "${arch_raw}")"
 target="${3:-native}"
 if [ "${target}" = "native" ]; then
   bin_path="target/release/deadsync"
-  assets_path="target/release/assets"
 else
   bin_path="target/${target}/release/deadsync"
-  assets_path="target/${target}/release/assets"
-  if [ ! -d "${assets_path}" ]; then
-    assets_path="target/release/assets"
-  fi
 fi
 
 if [ ! -x "${bin_path}" ]; then
   echo "missing executable: ${bin_path}" >&2
   exit 1
 fi
-if [ ! -d "${assets_path}" ]; then
-  echo "missing assets directory: ${assets_path}" >&2
+if [ ! -d "assets" ]; then
+  echo "missing assets directory: assets" >&2
+  exit 1
+fi
+if [ ! -d "songs" ]; then
+  echo "missing songs directory: songs" >&2
+  exit 1
+fi
+if [ ! -d "courses" ]; then
+  echo "missing courses directory: courses" >&2
   exit 1
 fi
 
@@ -51,25 +54,19 @@ dist_dir="dist"
 pkg_name="deadsync-${tag}-${arch}-linux"
 stage_dir="${dist_dir}/${pkg_name}"
 archive_path="${dist_dir}/${pkg_name}.tar.gz"
-checksum_path="${archive_path}.sha256"
 
 rm -rf "${stage_dir}"
 mkdir -p "${stage_dir}"
 
-cp "${bin_path}" "${stage_dir}/deadsync"
-cp -r "${assets_path}" "${stage_dir}/assets"
+cp "${bin_path}" "${stage_dir}/binary"
+cp -r assets songs courses "${stage_dir}/"
 cp README.md LICENSE "${stage_dir}/"
-if [ -f "deadsync.ini" ]; then
-  cp deadsync.ini "${stage_dir}/deadsync.ini"
-fi
 
 tar -C "${dist_dir}" -czf "${archive_path}" "${pkg_name}"
-sha256sum "${archive_path}" > "${checksum_path}"
 
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   {
     echo "archive=${archive_path}"
-    echo "checksum=${checksum_path}"
     echo "stage=${stage_dir}"
   } >> "${GITHUB_OUTPUT}"
 fi

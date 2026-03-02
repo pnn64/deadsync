@@ -4,6 +4,17 @@ on:
   push:
     tags:
       - "v*"
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag (example: v0.2.22)"
+        required: true
+        type: string
+      arch:
+        description: "Build target arch"
+        required: false
+        default: all
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -33,7 +44,7 @@ jobs:
           - arch: arm64
             runner: macos-15
           - arch: x86_64
-            runner: macos-15
+            runner: macos-13
     runs-on: ${{ matrix.runner }}
     env:
       CARGO_TERM_COLOR: always
@@ -51,6 +62,8 @@ jobs:
           selected="all"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             selected="${{ github.event.inputs.arch }}"
+          elif [ "${{ github.event_name }}" = "workflow_call" ]; then
+            selected="${{ inputs.arch }}"
           fi
           if [ "${selected}" = "all" ] || [ "${selected}" = "${{ matrix.arch }}" ]; then
             echo "enabled=true" >> "${GITHUB_OUTPUT}"
@@ -83,6 +96,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             tag="${{ github.event.inputs.tag }}"
+          elif [ "${{ github.event_name }}" = "workflow_call" ]; then
+            tag="${{ inputs.tag }}"
           else
             tag="${GITHUB_REF_NAME}"
           fi
@@ -113,9 +128,7 @@ jobs:
         with:
           name: deadsync-macos-${{ steps.tag.outputs.tag }}-${{ matrix.arch }}
           if-no-files-found: error
-          path: |
-            ${{ steps.package.outputs.archive }}
-            ${{ steps.package.outputs.checksum }}
+          path: ${{ steps.package.outputs.archive }}
 
       - name: Publish GitHub release
         if: steps.select_arch.outputs.enabled == 'true'
@@ -123,9 +136,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          files: |
-            ${{ steps.package.outputs.archive }}
-            ${{ steps.package.outputs.checksum }}
+          files: ${{ steps.package.outputs.archive }}
           generate_release_notes: true
           prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
           fail_on_unmatched_files: true

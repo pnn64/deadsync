@@ -4,6 +4,17 @@ on:
   push:
     tags:
       - "v*"
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag (example: v0.2.22)"
+        required: true
+        type: string
+      arch:
+        description: "Build target arch"
+        required: false
+        default: all
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -53,6 +64,8 @@ jobs:
           selected="all"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             selected="${{ github.event.inputs.arch }}"
+          elif [ "${{ github.event_name }}" = "workflow_call" ]; then
+            selected="${{ inputs.arch }}"
           fi
           if [ "${selected}" = "all" ] || [ "${selected}" = "${{ matrix.arch }}" ]; then
             echo "enabled=true" >> "${GITHUB_OUTPUT}"
@@ -68,6 +81,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             tag="${{ github.event.inputs.tag }}"
+          elif [ "${{ github.event_name }}" = "workflow_call" ]; then
+            tag="${{ inputs.tag }}"
           else
             tag="${GITHUB_REF_NAME}"
           fi
@@ -142,22 +157,22 @@ jobs:
                 else
                   sudo sed -i '/^Suites:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
                 fi
-                sudo tee /etc/apt/sources.list.d/ubuntu-arm64.sources >/dev/null <<EOF
-          Types: deb
-          URIs: http://ports.ubuntu.com/ubuntu-ports
-          Suites: ${codename} ${codename}-updates ${codename}-backports ${codename}-security
-          Components: main restricted universe multiverse
-          Architectures: arm64
-          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-          EOF
+                printf '%s\n' \
+                  "Types: deb" \
+                  "URIs: http://ports.ubuntu.com/ubuntu-ports" \
+                  "Suites: ${codename} ${codename}-updates ${codename}-backports ${codename}-security" \
+                  "Components: main restricted universe multiverse" \
+                  "Architectures: arm64" \
+                  "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" \
+                  | sudo tee /etc/apt/sources.list.d/ubuntu-arm64.sources >/dev/null
               elif [ -f /etc/apt/sources.list ]; then
                 sudo sed -Ei '/^[[:space:]]*deb[[:space:]]+/ { /\[arch=/! s|^[[:space:]]*deb[[:space:]]+|deb [arch=amd64] | }' /etc/apt/sources.list
-                sudo tee /etc/apt/sources.list.d/ubuntu-arm64.list >/dev/null <<EOF
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename} main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-updates main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-backports main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-security main restricted universe multiverse
-          EOF
+                printf '%s\n' \
+                  "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename} main restricted universe multiverse" \
+                  "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-updates main restricted universe multiverse" \
+                  "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-backports main restricted universe multiverse" \
+                  "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-security main restricted universe multiverse" \
+                  | sudo tee /etc/apt/sources.list.d/ubuntu-arm64.list >/dev/null
               fi
             fi
           fi
@@ -255,9 +270,7 @@ jobs:
         with:
           name: deadsync-linux-${{ steps.tag.outputs.tag }}-${{ matrix.arch }}
           if-no-files-found: error
-          path: |
-            ${{ steps.package.outputs.archive }}
-            ${{ steps.package.outputs.checksum }}
+          path: ${{ steps.package.outputs.archive }}
 
       - name: Publish GitHub release
         if: steps.select_arch.outputs.enabled == 'true'
@@ -265,9 +278,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          files: |
-            ${{ steps.package.outputs.archive }}
-            ${{ steps.package.outputs.checksum }}
+          files: ${{ steps.package.outputs.archive }}
           generate_release_notes: true
           prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
           fail_on_unmatched_files: true
