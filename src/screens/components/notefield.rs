@@ -2124,9 +2124,13 @@ pub fn build(
                                 let x = playfield_center_x
                                     + ns.column_xs[local_col] as f32 * field_zoom;
                                 let y = if column_dirs[local_col] < 0.0 {
-                                    COLUMN_CUE_TEXT_REVERSE_Y + notefield_offset_y
+                                    COLUMN_CUE_TEXT_REVERSE_Y
+                                        + COLUMN_CUE_Y_OFFSET
+                                        + notefield_offset_y
                                 } else {
-                                    COLUMN_CUE_TEXT_NORMAL_Y + notefield_offset_y
+                                    COLUMN_CUE_TEXT_NORMAL_Y
+                                        + COLUMN_CUE_Y_OFFSET
+                                        + notefield_offset_y
                                 };
                                 countdown_text = Some((x, y, remaining.round() as i32));
                             }
@@ -2146,7 +2150,8 @@ pub fn build(
                             [0.3, 1.0, 1.0, alpha]
                         };
                         if column_dirs[local_col] < 0.0 {
-                            let reverse_y = COLUMN_CUE_Y_OFFSET * 2.0
+                            let reverse_y = COLUMN_CUE_Y_OFFSET
+                                + COLUMN_CUE_Y_OFFSET * 2.0
                                 + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE
                                 + lane_width * 0.5
                                 + notefield_offset_y;
