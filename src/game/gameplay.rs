@@ -6415,7 +6415,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                                 });
                             }
                         }
-                        error_bar_register_tap(state, player, &judgment, current_time);
+                        // Zmod parity: provisional early W4/W5 (with Rescore Early Hits enabled)
+                        // should not add error-bar ticks before the final row judgment is known.
                         let expected_stream_for_note_s = row_note_time / rate
                             + lead_in_s
                             + global_offset_s * (1.0 - rate) / rate;
